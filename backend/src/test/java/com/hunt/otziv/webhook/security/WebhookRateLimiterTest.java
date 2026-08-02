@@ -14,6 +14,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WebhookRateLimiterTest {
 
     @Test
+    void exposesConservativeRetryAfterFromConfiguredWindow() {
+        assertEquals(90L, new WebhookRateLimiter(true, 1, Duration.ofSeconds(90)).retryAfterSeconds());
+        assertEquals(1L, new WebhookRateLimiter(true, 1, Duration.ofMillis(250)).retryAfterSeconds());
+    }
+
+    @Test
     void limitsRequestsPerClientWithinWindow() {
         WebhookRateLimiter limiter = new WebhookRateLimiter(true, 2, Duration.ofMinutes(1));
         Instant now = Instant.parse("2026-06-06T00:00:00Z");

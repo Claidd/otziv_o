@@ -5,6 +5,7 @@ import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.p_products.model.Order;
@@ -30,6 +31,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
 import java.util.List;
@@ -38,12 +42,16 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -97,6 +105,10 @@ class OrderDeletionServiceTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        TransactionSynchronizationManager.setActualTransactionActive(false);
     }
 
     @Test
@@ -108,7 +120,7 @@ class OrderDeletionServiceTest {
         Principal principal = () -> "admin";
 
         authenticateWithRole("ROLE_ADMIN");
-        when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(orderDetailsService.findByOrderId(10L)).thenReturn(List.of(firstDetail, secondDetail));
         when(badReviewTaskService.deleteAllByOrderId(10L)).thenReturn(3);
 
@@ -127,14 +139,16 @@ class OrderDeletionServiceTest {
                 entityManager,
                 orderRepository
         );
+        inOrder.verify(orderRepository).findByIdForCounterUpdate(10L);
+        inOrder.verify(commonInvoiceOrderRepository).findMembershipByOrderIdForRead(10L);
+        inOrder.verify(orderDetailsService).findByOrderId(10L);
+        inOrder.verify(paymentLinkArchiveService).archiveForDeletedOrder(10L);
         inOrder.verify(badReviewTaskService).deleteAllByOrderId(10L);
         inOrder.verify(reviewRecoveryTaskRepository).deleteByOrderId(10L);
         inOrder.verify(reviewRecoveryBatchRepository).deleteByOrderId(10L);
         inOrder.verify(nextOrderRequestRepository).deleteBySourceOrderId(10L);
-        inOrder.verify(commonInvoiceOrderRepository).deleteByOrderId(10L);
         inOrder.verify(reviewService).deleteAllByIdIn(List.of(1L, 2L));
         inOrder.verify(orderDetailsService).deleteAllByOrderId(10L);
-        inOrder.verify(paymentLinkArchiveService).archiveForDeletedOrder(10L);
         inOrder.verify(entityManager).flush();
         inOrder.verify(entityManager).clear();
         inOrder.verify(orderRepository).deleteById(10L);
@@ -148,6 +162,170 @@ class OrderDeletionServiceTest {
                 eq("deleted"),
                 anyString()
         );
+        verify(commonInvoiceOrderRepository, never()).deleteByOrderId(10L);
+    }
+
+    @Test
+    void rolledBackTransactionDoesNotWriteOrderDeletedAudit() {
+        OrderDeletionService service = service();
+        Order order = order(19L, "Архив");
+
+        authenticateWithRole("ROLE_ADMIN");
+        when(orderRepository.findByIdForCounterUpdate(19L)).thenReturn(Optional.of(order));
+        when(orderDetailsService.findByOrderId(19L)).thenReturn(List.of());
+        beginSynchronizedTransaction();
+
+        assertTrue(service.deleteOrder(19L, () -> "admin"));
+
+        List<TransactionSynchronization> synchronizations =
+                TransactionSynchronizationManager.getSynchronizations();
+        assertEquals(1, synchronizations.size());
+        verifyNoInteractions(businessAuditService);
+
+        synchronizations.get(0).afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+
+        verifyNoInteractions(businessAuditService);
+    }
+
+    @Test
+    void committedTransactionWritesOrderDeletedAuditExactlyOnceAndContainsCallbackFailure() {
+        OrderDeletionService service = service();
+        Order order = order(20L, "Архив");
+
+        authenticateWithRole("ROLE_ADMIN");
+        when(orderRepository.findByIdForCounterUpdate(20L)).thenReturn(Optional.of(order));
+        when(orderDetailsService.findByOrderId(20L)).thenReturn(List.of());
+        doThrow(new IllegalStateException("audit unavailable"))
+                .when(businessAuditService)
+                .recordSafely(
+                        eq("order_deleted"),
+                        eq("order"),
+                        eq(20L),
+                        eq(20L),
+                        isNull(),
+                        eq("Архив"),
+                        eq("deleted"),
+                        anyString()
+                );
+        beginSynchronizedTransaction();
+
+        assertTrue(service.deleteOrder(20L, () -> "admin"));
+
+        List<TransactionSynchronization> synchronizations =
+                TransactionSynchronizationManager.getSynchronizations();
+        assertEquals(1, synchronizations.size());
+        verifyNoInteractions(businessAuditService);
+
+        assertDoesNotThrow(synchronizations.get(0)::afterCommit);
+        synchronizations.get(0).afterCompletion(TransactionSynchronization.STATUS_COMMITTED);
+
+        verify(businessAuditService).recordSafely(
+                eq("order_deleted"),
+                eq("order"),
+                eq(20L),
+                eq(20L),
+                isNull(),
+                eq("Архив"),
+                eq("deleted"),
+                anyString()
+        );
+    }
+
+    @Test
+    void standaloneInvocationWithoutSynchronizationWritesAuditImmediately() {
+        OrderDeletionService service = service();
+        Order order = order(21L, "Архив");
+
+        authenticateWithRole("ROLE_ADMIN");
+        when(orderRepository.findByIdForCounterUpdate(21L)).thenReturn(Optional.of(order));
+        when(orderDetailsService.findByOrderId(21L)).thenReturn(List.of());
+
+        assertTrue(service.deleteOrder(21L, () -> "admin"));
+
+        verify(businessAuditService).recordSafely(
+                eq("order_deleted"),
+                eq("order"),
+                eq(21L),
+                eq(21L),
+                isNull(),
+                eq("Архив"),
+                eq("deleted"),
+                anyString()
+        );
+        assertFalse(TransactionSynchronizationManager.isSynchronizationActive());
+    }
+
+    @Test
+    void activeTransactionWithoutSynchronizationDoesNotWritePrematureAudit() {
+        OrderDeletionService service = service();
+        Order order = order(22L, "Архив");
+
+        authenticateWithRole("ROLE_ADMIN");
+        when(orderRepository.findByIdForCounterUpdate(22L)).thenReturn(Optional.of(order));
+        when(orderDetailsService.findByOrderId(22L)).thenReturn(List.of());
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+
+        assertTrue(service.deleteOrder(22L, () -> "admin"));
+
+        verifyNoInteractions(businessAuditService);
+        assertFalse(TransactionSynchronizationManager.isSynchronizationActive());
+    }
+
+    @Test
+    void linkedOrderFailsClosedBeforeAnyDependentRowsAreReadOrDeleted() {
+        OrderDeletionService service = service();
+        Order order = order(18L, "Архив");
+
+        authenticateWithRole("ROLE_ADMIN");
+        when(orderRepository.findByIdForCounterUpdate(18L)).thenReturn(Optional.of(order));
+        when(commonInvoiceOrderRepository.findMembershipByOrderIdForRead(18L))
+                .thenReturn(Optional.of(new CommonInvoiceOrder()));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.deleteOrder(18L, () -> "admin")
+        );
+
+        assertSame(org.springframework.http.HttpStatus.CONFLICT, exception.getStatusCode());
+        assertTrue(exception.getReason().contains("только вместе"));
+        InOrder lockOrder = inOrder(orderRepository, commonInvoiceOrderRepository);
+        lockOrder.verify(orderRepository).findByIdForCounterUpdate(18L);
+        lockOrder.verify(commonInvoiceOrderRepository).findMembershipByOrderIdForRead(18L);
+        verify(orderDetailsService, never()).findByOrderId(18L);
+        verify(paymentLinkArchiveService, never()).archiveForDeletedOrder(18L);
+        verify(badReviewTaskService, never()).deleteAllByOrderId(18L);
+        verify(reviewRecoveryTaskRepository, never()).deleteByOrderId(18L);
+        verify(reviewRecoveryBatchRepository, never()).deleteByOrderId(18L);
+        verify(nextOrderRequestRepository, never()).deleteBySourceOrderId(18L);
+        verify(commonInvoiceOrderRepository, never()).deleteByOrderId(18L);
+        verify(orderDetailsService, never()).deleteAllByOrderId(18L);
+        verify(orderRepository, never()).deleteById(18L);
+    }
+
+    @Test
+    void paymentArchiveBlockerStopsBeforeAnyDependentRowsAreDeleted() {
+        OrderDeletionService service = service();
+        Order order = order(17L, "Архив");
+
+        authenticateWithRole("ROLE_ADMIN");
+        when(orderRepository.findByIdForCounterUpdate(17L)).thenReturn(Optional.of(order));
+        when(orderDetailsService.findByOrderId(17L)).thenReturn(List.of());
+        when(paymentLinkArchiveService.archiveForDeletedOrder(17L))
+                .thenThrow(new IllegalStateException("payment side effect pending"));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> service.deleteOrder(17L, () -> "admin")
+        );
+
+        assertTrue(exception.getMessage().contains("payment side effect pending"));
+        verify(badReviewTaskService, never()).deleteAllByOrderId(17L);
+        verify(reviewRecoveryTaskRepository, never()).deleteByOrderId(17L);
+        verify(reviewRecoveryBatchRepository, never()).deleteByOrderId(17L);
+        verify(nextOrderRequestRepository, never()).deleteBySourceOrderId(17L);
+        verify(commonInvoiceOrderRepository, never()).deleteByOrderId(17L);
+        verify(orderDetailsService, never()).deleteAllByOrderId(17L);
+        verify(orderRepository, never()).deleteById(17L);
     }
 
     @Test
@@ -156,7 +334,7 @@ class OrderDeletionServiceTest {
         Order order = order(13L, "В проверку");
 
         authenticateWithRoles("ROLE_default-roles-otziv", "ROLE_ADMIN");
-        when(orderRepository.findById(13L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForCounterUpdate(13L)).thenReturn(Optional.of(order));
         when(orderDetailsService.findByOrderId(13L)).thenReturn(List.of());
 
         boolean result = service.deleteOrder(13L, () -> "admin");
@@ -175,7 +353,7 @@ class OrderDeletionServiceTest {
         Order order = order(11L, "Коррекция");
 
         authenticateWithRole("ROLE_manager");
-        when(orderRepository.findById(11L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForCounterUpdate(11L)).thenReturn(Optional.of(order));
         when(orderDetailsService.findByOrderId(11L)).thenReturn(List.of());
 
         boolean result = service.deleteOrder(11L, () -> "manager");
@@ -194,7 +372,7 @@ class OrderDeletionServiceTest {
         Order order = order(14L, "Публикация");
 
         authenticateWithRole("ROLE_MANAGER");
-        when(orderRepository.findById(14L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForCounterUpdate(14L)).thenReturn(Optional.of(order));
 
         boolean result = service.deleteOrder(14L, () -> "manager");
 
@@ -218,7 +396,7 @@ class OrderDeletionServiceTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(userDetails, "password")
         );
-        when(orderRepository.findById(12L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForCounterUpdate(12L)).thenReturn(Optional.of(order));
         when(orderDetailsService.findByOrderId(12L)).thenReturn(List.of());
 
         boolean result = service.deleteOrder(12L, () -> "manager");
@@ -240,7 +418,7 @@ class OrderDeletionServiceTest {
         order.setCompany(company);
 
         authenticateWithRole("ROLE_MANAGER");
-        when(orderRepository.findById(15L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForCounterUpdate(15L)).thenReturn(Optional.of(order));
         when(orderDetailsService.findByOrderId(15L)).thenReturn(List.of());
         when(orderRepository.existsActiveOrderByCompanyId(eq(100L), eq(Set.of("Оплачено", "Архив"))))
                 .thenReturn(false);
@@ -264,7 +442,7 @@ class OrderDeletionServiceTest {
         order.setCompany(company);
 
         authenticateWithRole("ROLE_MANAGER");
-        when(orderRepository.findById(16L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForCounterUpdate(16L)).thenReturn(Optional.of(order));
         when(orderDetailsService.findByOrderId(16L)).thenReturn(List.of());
         when(orderRepository.existsActiveOrderByCompanyId(eq(101L), eq(Set.of("Оплачено", "Архив"))))
                 .thenReturn(true);
@@ -294,6 +472,11 @@ class OrderDeletionServiceTest {
                 entityManager,
                 businessAuditService
         );
+    }
+
+    private void beginSynchronizedTransaction() {
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        TransactionSynchronizationManager.initSynchronization();
     }
 
     private void authenticateWithRole(String role) {

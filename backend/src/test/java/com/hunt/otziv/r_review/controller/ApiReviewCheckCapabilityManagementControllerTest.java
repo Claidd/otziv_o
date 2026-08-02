@@ -10,13 +10,10 @@ import static org.mockito.Mockito.when;
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService;
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService.ArchivedReviewCheck;
 import com.hunt.otziv.manager.services.ManagerAccessService;
-import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityMutationService;
 import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityService;
 import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityService.IssuedCapability;
-import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.repository.UserRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,40 +31,33 @@ import org.springframework.web.server.ResponseStatusException;
 class ApiReviewCheckCapabilityManagementControllerTest {
 
     private ReviewCheckCapabilityService capabilityService;
+    private ReviewCheckCapabilityMutationService mutationService;
     private OrderDetailsService orderDetailsService;
     private ReviewCheckArchiveService archiveService;
     private ManagerAccessService managerAccessService;
-    private UserRepository userRepository;
     private ApiReviewCheckCapabilityManagementController controller;
     private Authentication authentication;
 
     @BeforeEach
     void setUp() {
         capabilityService = mock(ReviewCheckCapabilityService.class);
+        mutationService = mock(ReviewCheckCapabilityMutationService.class);
         orderDetailsService = mock(OrderDetailsService.class);
         archiveService = mock(ReviewCheckArchiveService.class);
         managerAccessService = mock(ManagerAccessService.class);
-        userRepository = mock(UserRepository.class);
         controller = new ApiReviewCheckCapabilityManagementController(
                 capabilityService,
+                mutationService,
                 orderDetailsService,
                 archiveService,
-                managerAccessService,
-                userRepository
+                managerAccessService
         );
         authentication = new UsernamePasswordAuthenticationToken("manager", "unused");
-        when(userRepository.findByUsername("manager"))
-                .thenReturn(Optional.of(User.builder().id(77L).username("manager").build()));
     }
 
     @Test
-    void issueRequiresExactLiveOrderBindingAndManagerObjectAccess() {
+    void issueDelegatesAtomicAuthorizationAndMutationToService() {
         UUID orderDetailId = UUID.randomUUID();
-        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
-                .thenReturn(OrderDetails.builder()
-                        .id(orderDetailId)
-                        .order(Order.builder().id(11L).build())
-                        .build());
         IssuedCapability issued = new IssuedCapability(
                 91L,
                 orderDetailId,
@@ -75,7 +65,8 @@ class ApiReviewCheckCapabilityManagementControllerTest {
                 Set.of("VIEW"),
                 LocalDateTime.now().plusDays(1)
         );
-        when(capabilityService.issue(orderDetailId, Set.of("VIEW"), 1, 77L)).thenReturn(issued);
+        when(mutationService.issue(11L, orderDetailId, Set.of("VIEW"), 1, authentication))
+                .thenReturn(issued);
 
         var response = controller.issue(
                 11L,
@@ -90,18 +81,14 @@ class ApiReviewCheckCapabilityManagementControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
         assertThat(response.getBody()).isSameAs(issued);
-        verify(managerAccessService).requireOrderAccess(11L, authentication);
-        verify(capabilityService).issue(orderDetailId, Set.of("VIEW"), 1, 77L);
+        verify(mutationService).issue(11L, orderDetailId, Set.of("VIEW"), 1, authentication);
     }
 
     @Test
     void crossOrderDetailIsIndistinguishableFromMissingResource() {
         UUID orderDetailId = UUID.randomUUID();
-        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
-                .thenReturn(OrderDetails.builder()
-                        .id(orderDetailId)
-                        .order(Order.builder().id(12L).build())
-                        .build());
+        when(mutationService.issue(11L, orderDetailId, Set.of("VIEW"), 1, authentication))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Проверка отзывов не найдена"));
 
         assertThatThrownBy(() -> controller.issue(
                 11L,
@@ -112,12 +99,12 @@ class ApiReviewCheckCapabilityManagementControllerTest {
                 .satisfies(exception -> assertThat(((ResponseStatusException) exception).getStatusCode())
                         .isEqualTo(HttpStatus.NOT_FOUND));
 
-        verify(managerAccessService, never()).requireOrderAccess(12L, authentication);
+        verify(mutationService).issue(11L, orderDetailId, Set.of("VIEW"), 1, authentication);
         verify(capabilityService, never()).issue(orderDetailId, Set.of("VIEW"), 1, 77L);
     }
 
     @Test
-    void archivedCapabilityKeepsBindingAndUsesCompanyObjectAccess() {
+    void archivedCapabilityKeepsSnapshotAssignmentAccessAfterCompanyReassignment() {
         UUID orderDetailId = UUID.randomUUID();
         when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
                 .thenThrow(new UsernameNotFoundException("archived"));
@@ -125,6 +112,8 @@ class ApiReviewCheckCapabilityManagementControllerTest {
                 orderDetailId,
                 11L,
                 22L,
+                33L,
+                44L,
                 "Компания",
                 "Филиал",
                 "Архив",
@@ -138,10 +127,12 @@ class ApiReviewCheckCapabilityManagementControllerTest {
                 false,
                 List.of()
         )));
+        when(managerAccessService.canAccessArchivedOrder(33L, 44L, authentication)).thenReturn(true);
 
         controller.list(11L, orderDetailId, authentication);
 
-        verify(managerAccessService).requireCompanyAccess(22L, authentication);
+        verify(managerAccessService).canAccessArchivedOrder(33L, 44L, authentication);
+        verify(managerAccessService, never()).requireCompanyAccess(22L, authentication);
         verify(capabilityService).list(orderDetailId);
     }
 }

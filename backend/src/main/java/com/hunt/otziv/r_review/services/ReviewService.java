@@ -80,6 +80,9 @@ public interface ReviewService {
 
     boolean deleteReview(Long reviewId);
 
+    /** Deletes only a review already proven to belong to the caller's locked order aggregate. */
+    boolean deleteReviewFromLockedOrder(Long orderId, Long reviewId);
+
     List<Review> getReviewsAllByOrderDetailsId(UUID orderDetailsId);
 
     List<Long> getReviewByWorkerId(Long workerId);
@@ -100,7 +103,15 @@ public interface ReviewService {
 
     void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId);
 
+    /** Updates a shared review form from one canonical detail fetch. */
+    void updateOrderDetailAndReviews(OrderDetailsDTO orderDetailsDTO);
+
     boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO);
+
+    boolean updateOrderDetailsAndReviewsAndPublishDates(
+            Long orderId,
+            List<OrderDetailsDTO> orderDetails
+    );
 
     void changeBot(Long reviewId);
 

@@ -48,7 +48,7 @@ public class WorkerOrderController {
     public String BotAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
         String userRole = gerRole(principal);
 
-        if ("ROLE_ADMIN".equals(userRole)){
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)){
             log.info("Зашли список всех ботов для админа");
             model.addAttribute("TitleName", "Аккаунты");
             return "products/orders/bot_worker";
@@ -67,12 +67,13 @@ public class WorkerOrderController {
     } // Страница с кнопками "Добавить акк" и "Список всех аккаунтов"
 
     @GetMapping("/bot_list") // Страница "Список всех аккаунтов"
-    public String BotAllList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
+    public String BotAllList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal,
+                             Authentication authentication){
         String userRole = gerRole(principal);
 
-        if ("ROLE_ADMIN".equals(userRole)){
+        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)){
             log.info("Зашли список всех заказов для админа");
-            model.addAttribute("all_bots", botService.getAllBots().stream().sorted(Comparator.comparing(BotDTO:: getFio)));
+            model.addAttribute("all_bots", botService.getAllBots(authentication).stream().sorted(Comparator.comparing(BotDTO:: getFio)));
             model.addAttribute("TitleName", "Список аккаунтов");
             return "products/orders/bot_list";
         }
@@ -85,7 +86,7 @@ public class WorkerOrderController {
             log.info("Зашли список всех заказов для Работника: - {}", principal != null ? principal.getName() : "Гость");
             model.addAttribute("TitleName", "Список аккаунтов");
 //            model.addAttribute("promoTexts", promoTextService.getAllPromoTexts());
-            model.addAttribute("all_bots", botService.getAllBotsByWorkerActiveIsTrue(principal).stream().sorted(Comparator.comparing(BotDTO :: getFio)));
+            model.addAttribute("all_bots", botService.getAllBotsByWorkerActiveIsTrue(authentication).stream().sorted(Comparator.comparing(BotDTO :: getFio)));
             return "products/orders/bot_list";
         }
         else return "redirect:/";

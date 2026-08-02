@@ -10,12 +10,16 @@ import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCheckInSe
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestrictionFilter;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.controller.PublicPaymentController;
+import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
+import com.hunt.otziv.webhook.security.WebhookClientIpResolver;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.u_users.services.UserServiceImpl;
 import jakarta.servlet.Filter;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +29,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -39,6 +44,7 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -124,12 +130,30 @@ class PublicCapabilitySecurityContractTest {
     }
 
     @Test
+    void liveLogsRequireAdminOrOwnerEvenForAuthenticatedUsers() throws Exception {
+        stubJwt("worker-token", "WORKER");
+        stubJwt("owner-token", "OWNER");
+
+        mockMvc.perform(get("/ws/logs")
+                        .header("Authorization", "Bearer worker-token"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/ws/logs")
+                        .header("Authorization", "Bearer owner-token"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void anonymousPaymentLinkCanBeReadAndInitialized() throws Exception {
         mockMvc.perform(get("/api/payments/public/payment-token"))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/payments/public/payment-token/init")
                         .contentType("application/json")
                         .header("User-Agent", "contract-test")
+                        .header("X-Forwarded-For", "198.51.100.99")
+                        .with(request -> {
+                            request.setRemoteAddr("203.0.113.7");
+                            return request;
+                        })
                         .content(PAYMENT_REQUEST))
                 .andExpect(status().isOk());
 
@@ -141,9 +165,32 @@ class PublicCapabilitySecurityContractTest {
                 eq(true),
                 eq(true),
                 eq(true),
-                anyString(),
+                eq("203.0.113.7"),
                 eq("contract-test")
         );
+    }
+
+    @Test
+    void internalTbankStatusRequiresAdminOrOwnerAuthentication() throws Exception {
+        mockMvc.perform(get("/api/payments/public/tbank-status"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/admin/payments/tbank-status"))
+                .andExpect(status().isUnauthorized());
+
+        stubJwt("worker-token", "WORKER");
+        mockMvc.perform(get("/api/admin/payments/tbank-status")
+                        .header("Authorization", "Bearer worker-token"))
+                .andExpect(status().isForbidden());
+
+        stubJwt("owner-token", "OWNER");
+        TbankRuntimeSettingsService runtimeSettingsService = context.getBean(TbankRuntimeSettingsService.class);
+        PaymentProfileService paymentProfileService = context.getBean(PaymentProfileService.class);
+        when(runtimeSettingsService.runtimeMode()).thenReturn(TbankRuntimeMode.TEST);
+        when(paymentProfileService.defaultEntityProfile()).thenThrow(new IllegalStateException("use env fallback"));
+
+        mockMvc.perform(get("/api/admin/payments/tbank-status")
+                        .header("Authorization", "Bearer owner-token"))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -164,6 +211,19 @@ class PublicCapabilitySecurityContractTest {
                 true,
                 true
         );
+    }
+
+    private void stubJwt(String tokenValue, String role) {
+        Instant now = Instant.now();
+        Jwt jwt = Jwt.withTokenValue(tokenValue)
+                .header("alg", "RS256")
+                .subject(role.toLowerCase() + "-subject")
+                .issuedAt(now.minusSeconds(10))
+                .expiresAt(now.plusSeconds(300))
+                .claim("preferred_username", role.toLowerCase())
+                .claim("realm_access", Map.of("roles", List.of(role)))
+                .build();
+        when(context.getBean(JwtDecoder.class).decode(tokenValue)).thenReturn(jwt);
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -241,14 +301,21 @@ class PublicCapabilitySecurityContractTest {
                 PaymentLinkService paymentLinkService,
                 TbankPaymentProperties properties,
                 TbankRuntimeSettingsService runtimeSettingsService,
-                PaymentProfileService paymentProfileService
+                PaymentProfileService paymentProfileService,
+                WebhookClientIpResolver clientIpResolver
         ) {
             return new PublicPaymentController(
                     paymentLinkService,
                     properties,
                     runtimeSettingsService,
-                    paymentProfileService
+                    paymentProfileService,
+                    clientIpResolver
             );
+        }
+
+        @Bean
+        WebhookClientIpResolver webhookClientIpResolver() {
+            return new WebhookClientIpResolver("", 16, 2_048);
         }
 
         @Bean
@@ -308,6 +375,11 @@ class PublicCapabilitySecurityContractTest {
                 "/api/manager/orders/{orderId}/review-check-capabilities/{capabilityId}/rotate"
         })
         void manageSecureLink() {
+        }
+
+        @GetMapping("/ws/logs")
+        Map<String, String> liveLogsHandshake() {
+            return Map.of("status", "ok");
         }
     }
 }

@@ -19,9 +19,18 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
 
     Optional<CommonInvoicePaymentRef> findByTbankPaymentId(String tbankPaymentId);
 
+    /** Read-only parent discovery used before taking the payment-ref lock. */
+    @Query("""
+            select ref.invoice.id
+            from CommonInvoicePaymentRef ref
+            where ref.id = :id
+            """)
+    Optional<Long> findInvoiceIdById(@Param("id") Long id);
+
     @Query("""
             select ref
             from CommonInvoicePaymentRef ref
+            join fetch ref.invoice invoice
             where ref.status = :pendingStatus
                or (
                     ref.status = :legacyConflictStatus
@@ -85,6 +94,8 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
     );
 
     boolean existsByInvoice_Id(Long invoiceId);
+
+    boolean existsByInvoice_IdAndStatusIn(Long invoiceId, java.util.Collection<String> statuses);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""

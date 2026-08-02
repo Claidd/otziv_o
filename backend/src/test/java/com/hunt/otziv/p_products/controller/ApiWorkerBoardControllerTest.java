@@ -352,6 +352,7 @@ class ApiWorkerBoardControllerTest {
         assertTrue(order.isWaitingForClient());
         assertTrue(order.isClientTextExpected());
         assertTrue(order.getWaitingForClientChangedAt() != null);
+        verify(assignmentMutationGuardService).assertOrder(25_442L);
         verify(orderService).save(order);
         verify(scheduledClientMessageService).synchronizeClientTextReminderForOrder(order);
     }
@@ -540,6 +541,36 @@ class ApiWorkerBoardControllerTest {
                 "new", "", 0, 10, "desc", null, ownerPrincipal, ownerAuth);
 
         assertTrue(response.workerFilterAvailable());
+        assertEquals(1, response.workerOptions().size());
+        assertEquals(303L, response.workerOptions().getFirst().id());
+    }
+
+    @Test
+    void ownerAllManagersModeUsesWorkersFromEveryManager() {
+        Principal ownerPrincipal = () -> "owner-all";
+        Authentication ownerAuth = auth("ROLE_OWNER");
+        User owner = new User();
+        owner.setId(44L);
+        owner.setOwnerControlViewMode(" ALL_MANAGERS ");
+        Manager manager = new Manager();
+        manager.setId(33L);
+        Worker worker = workerOption(303L, "Олег Специалист");
+
+        when(userService.findByUserName("owner-all")).thenReturn(Optional.of(owner));
+        when(managerService.getAllManagers()).thenReturn(List.of(manager));
+        when(workerService.getAllWorkersToManagerList(anyList())).thenReturn(Set.of(worker));
+        when(orderService.getAllOrderDTOAndKeywordByOwner(
+                eq(ownerPrincipal),
+                eq(""),
+                eq("Новый"),
+                eq(0),
+                eq(10),
+                eq("desc")
+        )).thenReturn(emptyOrderPage());
+
+        ApiWorkerBoardController.WorkerBoardResponse response = controller.getBoard(
+                "new", "", 0, 10, "desc", null, ownerPrincipal, ownerAuth);
+
         assertEquals(1, response.workerOptions().size());
         assertEquals(303L, response.workerOptions().getFirst().id());
     }
@@ -1136,6 +1167,41 @@ class ApiWorkerBoardControllerTest {
 
         assertEquals(403, exception.getStatusCode().value());
         verify(badReviewTaskService, never()).reassignTask(any(), any());
+    }
+
+    @Test
+    void staleRecoveryManagerSnapshotCannotOverrideCurrentOrderManagerOnReassign() {
+        Principal managerPrincipal = () -> "old-manager";
+        Authentication managerAuth = auth("ROLE_MANAGER");
+        User managerUser = new User();
+        managerUser.setId(11L);
+        Manager oldManager = new Manager();
+        oldManager.setId(22L);
+        Manager currentOrderManager = new Manager();
+        currentOrderManager.setId(23L);
+        Order order = new Order();
+        order.setManager(currentOrderManager);
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .order(order)
+                .manager(oldManager)
+                .build();
+
+        when(userService.findByUserName("old-manager")).thenReturn(Optional.of(managerUser));
+        when(managerService.getManagerByUserId(11L)).thenReturn(oldManager);
+        when(reviewRecoveryTaskService.getTask(15L)).thenReturn(task);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.reassignRecoveryTask(
+                        15L,
+                        new ApiWorkerBoardController.WorkerAssignmentRequest(101L),
+                        managerPrincipal,
+                        managerAuth
+                )
+        );
+
+        assertEquals(403, exception.getStatusCode().value());
+        verify(reviewRecoveryTaskService, never()).reassignTask(any(), any());
     }
 
     @Test

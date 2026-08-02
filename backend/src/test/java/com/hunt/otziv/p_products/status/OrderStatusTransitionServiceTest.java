@@ -14,6 +14,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.review.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
@@ -65,6 +66,9 @@ class OrderStatusTransitionServiceTest {
 
     @Mock
     private OrderRepository orderRepository;
+
+    @Mock
+    private OrderAggregateMutationLockService orderAggregateMutationLockService;
 
     @Mock
     private OrderStatusService orderStatusService;
@@ -139,6 +143,9 @@ class OrderStatusTransitionServiceTest {
 
         assertTrue(service.changeStatusForOrder(1L, "Оплачено"));
 
+        InOrder lockOrder = inOrder(orderAggregateMutationLockService, orderRepository);
+        lockOrder.verify(orderAggregateMutationLockService).lock(1L);
+        lockOrder.verify(orderRepository).findByIdForMutation(1L);
         verify(manualPaymentAutoConfirmationService).ensureCanCloseOrderManually(order);
         verify(orderTransactionService).handlePaymentStatus(order);
         verify(manualPaymentAutoConfirmationService).confirmForPaidOrder(order);
@@ -1107,6 +1114,7 @@ class OrderStatusTransitionServiceTest {
     private OrderStatusTransitionService service() {
         return new OrderStatusTransitionService(
                 orderRepository,
+                orderAggregateMutationLockService,
                 orderStatusService,
                 orderTransactionService,
                 badReviewTaskService,

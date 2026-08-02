@@ -2,7 +2,9 @@ package com.hunt.otziv.p_products.next_order.repository;
 
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -19,6 +21,15 @@ public interface NextOrderRequestRepository extends CrudRepository<NextOrderRequ
     Optional<NextOrderRequest> findBySourceOrderId(Long sourceOrderId);
 
     List<NextOrderRequest> findByCreatedOrder_Id(Long createdOrderId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT request
+        FROM NextOrderRequest request
+        WHERE request.createdOrder.id = :createdOrderId
+        ORDER BY request.id ASC
+    """)
+    List<NextOrderRequest> findByCreatedOrderIdForUpdate(@Param("createdOrderId") Long createdOrderId);
 
     @Query("""
         SELECT r

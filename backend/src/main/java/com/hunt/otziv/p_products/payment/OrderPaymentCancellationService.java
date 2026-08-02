@@ -4,6 +4,7 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.p_products.deletion.OrderDeletionService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
@@ -61,6 +62,7 @@ public class OrderPaymentCancellationService {
     private final PaymentLinkService paymentLinkService;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final BusinessAuditService businessAuditService;
+    private final CommonBillingService commonBillingService;
 
     @Transactional
     public void cancelPayment(Long orderId, Principal principal) {
@@ -140,6 +142,7 @@ public class OrderPaymentCancellationService {
             Order createdOrder = request.getCreatedOrder();
             if (createdOrder != null && createdOrder.getId() != null) {
                 ensureCreatedOrderCanBeDeleted(createdOrder);
+                commonBillingService.detachOrderForDeletion(createdOrder.getId());
                 boolean deleted = orderDeletionService.deleteOrder(createdOrder.getId(), principal);
                 if (!deleted) {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Автосозданный следующий заказ не удалось удалить");

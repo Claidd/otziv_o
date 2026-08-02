@@ -25,8 +25,12 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
 import java.util.Collection;
@@ -91,33 +95,45 @@ public class OrderDeletionService {
 
         log.info("Начало удаления заказа ID: {}, инициатор: {}, роль: {}", orderId, username, userRole);
 
-        Order orderToDelete = orderRepository.findById(orderId)
+        Order orderToDelete = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> {
                     log.error("Заказ ID: {} не найден", orderId);
                     return new UsernameNotFoundException(String.format("Order '%d' not found", orderId));
                 });
 
         if (orderDeletionPolicy.canDelete(userRole, orderToDelete)) {
+            if (commonInvoiceOrderRepository.findMembershipByOrderIdForRead(orderId).isPresent()) {
+                log.warn("Заказ ID {} не удален: он включен в общий счет", orderId);
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Заказ включен в общий счет и может быть удален только вместе с ним"
+                );
+            }
+
             try {
                 Long companyId = orderToDelete.getCompany() == null ? null : orderToDelete.getCompany().getId();
                 String deletedOrderStatus = safeStatusTitle(orderToDelete);
                 List<OrderDetails> orderDetails = orderDetailsService.findByOrderId(orderId);
                 log.info("Найдено {} деталей заказа для удаления", orderDetails.size());
 
+                // Keep the canonical Order -> PaymentLink lock order used by
+                // public Init/Cancel/webhook flows and fail before destructive
+                // child cleanup if an external payment operation is in flight.
+                int archivedPaymentLinks = paymentLinkArchiveService.archiveForDeletedOrder(orderId);
+                log.info("Архивировано и удалено {} платежных ссылок заказа ID: {}", archivedPaymentLinks, orderId);
+
                 int deletedBadReviewTasks = badReviewTaskService.deleteAllByOrderId(orderId);
                 int deletedReviewRecoveryTasks = reviewRecoveryTaskRepository.deleteByOrderId(orderId);
                 int deletedReviewRecoveryBatches = reviewRecoveryBatchRepository.deleteByOrderId(orderId);
                 int deletedNextOrderRequests = nextOrderRequestRepository.deleteBySourceOrderId(orderId);
-                int deletedCommonInvoiceOrders = commonInvoiceOrderRepository.deleteByOrderId(orderId);
 
                 log.info(
-                        "Удалены зависимые записи заказа ID {}: badReviewTasks={}, recoveryTasks={}, recoveryBatches={}, nextOrderRequests={}, commonInvoiceOrders={}",
+                        "Удалены зависимые записи заказа ID {}: badReviewTasks={}, recoveryTasks={}, recoveryBatches={}, nextOrderRequests={}",
                         orderId,
                         deletedBadReviewTasks,
                         deletedReviewRecoveryTasks,
                         deletedReviewRecoveryBatches,
-                        deletedNextOrderRequests,
-                        deletedCommonInvoiceOrders
+                        deletedNextOrderRequests
                 );
 
                 int totalDeletedReviews = 0;
@@ -148,8 +164,6 @@ public class OrderDeletionService {
                 log.info("Успешно удалено {} деталей заказа", orderDetails.size());
 
                 nextOrderRequestService.cancelForDeletedCreatedOrder(orderToDelete);
-                int archivedPaymentLinks = paymentLinkArchiveService.archiveForDeletedOrder(orderId);
-                log.info("Архивировано и удалено {} платежных ссылок заказа ID: {}", archivedPaymentLinks, orderId);
 
                 clearPersistenceContextBeforeOrderDelete(orderId);
 
@@ -159,20 +173,15 @@ public class OrderDeletionService {
 
                 stopCompanyIfDeletedLastNewOrder(companyId, deletedOrderStatus, orderId);
 
-                businessAuditService.recordSafely(
-                        "order_deleted",
-                        "order",
+                recordDeletionAuditAfterCommit(
                         orderId,
-                        orderId,
-                        null,
                         deletedOrderStatus,
-                        "deleted",
-                        "initiator=" + username
-                                + "; role=" + userRole
-                                + "; companyId=" + companyId
-                                + "; details=" + orderDetails.size()
-                                + "; reviews=" + totalDeletedReviews
-                                + "; paymentLinksArchived=" + archivedPaymentLinks
+                        username,
+                        userRole,
+                        companyId,
+                        orderDetails.size(),
+                        totalDeletedReviews,
+                        archivedPaymentLinks
                 );
 
                 log.info("Успешное завершение удаления заказа ID: {}. Удалено: заказ, {} деталей, {} отзывов, {} плохих задач",
@@ -190,6 +199,93 @@ public class OrderDeletionService {
                 orderId, userRole, safeStatusTitle(orderToDelete));
 
         return false;
+    }
+
+    private void recordDeletionAuditAfterCommit(
+            Long orderId,
+            String deletedOrderStatus,
+            String username,
+            String userRole,
+            Long companyId,
+            int detailsCount,
+            int reviewsCount,
+            int archivedPaymentLinks
+    ) {
+        Runnable auditWrite = () -> writeDeletionAuditSafely(
+                orderId,
+                deletedOrderStatus,
+                username,
+                userRole,
+                companyId,
+                detailsCount,
+                reviewsCount,
+                archivedPaymentLinks
+        );
+
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+                // Never create a false durable audit while the business
+                // transaction can still roll back. Normal Spring transactions
+                // always have synchronization; fail closed if a custom manager
+                // disables it.
+                log.warn(
+                        "Аудит удаления заказа {} пропущен: активная транзакция не поддерживает afterCommit",
+                        orderId
+                );
+                return;
+            }
+            try {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        auditWrite.run();
+                    }
+                });
+            } catch (RuntimeException e) {
+                log.warn("Не удалось зарегистрировать afterCommit-аудит удаления заказа {}: {}", orderId, e.getMessage());
+                log.debug("Order deletion audit synchronization registration failed", e);
+            }
+            return;
+        }
+
+        // Preserve the existing behavior for direct/standalone invocations where
+        // Spring has no transaction lifecycle to which the audit can be attached.
+        auditWrite.run();
+    }
+
+    private void writeDeletionAuditSafely(
+            Long orderId,
+            String deletedOrderStatus,
+            String username,
+            String userRole,
+            Long companyId,
+            int detailsCount,
+            int reviewsCount,
+            int archivedPaymentLinks
+    ) {
+        try {
+            businessAuditService.recordSafely(
+                    "order_deleted",
+                    "order",
+                    orderId,
+                    orderId,
+                    null,
+                    deletedOrderStatus,
+                    "deleted",
+                    "initiator=" + username
+                            + "; role=" + userRole
+                            + "; companyId=" + companyId
+                            + "; details=" + detailsCount
+                            + "; reviews=" + reviewsCount
+                            + "; paymentLinksArchived=" + archivedPaymentLinks
+            );
+        } catch (RuntimeException e) {
+            // A post-commit audit failure must never make a successfully committed
+            // deletion look failed to the caller. BusinessAuditService is already
+            // best-effort; this boundary also protects against proxy/mock failures.
+            log.warn("Аудит удаления заказа {} не записан: {}", orderId, e.getMessage());
+            log.debug("Order deletion audit write failed", e);
+        }
     }
 
     private String getRole() {

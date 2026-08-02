@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -69,6 +70,7 @@ class CommonInvoiceArchiveServiceTest {
         when(repository.findOne(eq(com.hunt.otziv.archive.dto.ArchiveAccessScope.all()), eq(40L)))
                 .thenReturn(Optional.of(invoice));
         when(repository.findOrders(40L, "archive")).thenReturn(orders);
+        when(repository.lockAndCheckPaymentRefsRestorable(40L)).thenReturn(true);
         when(repository.archivedStatus(40L)).thenReturn("BAN");
         when(orderArchiveRestoreService.restoreOrder(eq(101L), eq("Оплачено"), eq("alex"), eq(true)))
                 .thenReturn(restoreResult(701L, 101L, "Оплачено"));
@@ -94,6 +96,7 @@ class CommonInvoiceArchiveServiceTest {
         when(repository.findOne(eq(com.hunt.otziv.archive.dto.ArchiveAccessScope.all()), eq(40L)))
                 .thenReturn(Optional.of(invoice));
         when(repository.findOrders(40L, "archive")).thenReturn(orders);
+        when(repository.lockAndCheckPaymentRefsRestorable(40L)).thenReturn(true);
         when(repository.archivedStatus(40L)).thenReturn("ARCHIVED");
         when(orderArchiveRestoreService.restoreOrder(eq(201L), eq("На проверке"), eq("alex"), eq(true)))
                 .thenReturn(restoreResult(801L, 201L, "На проверке"));
@@ -118,6 +121,7 @@ class CommonInvoiceArchiveServiceTest {
         when(repository.findOne(eq(com.hunt.otziv.archive.dto.ArchiveAccessScope.all()), eq(40L)))
                 .thenReturn(Optional.of(invoice));
         when(repository.findOrders(40L, "archive")).thenReturn(orders);
+        when(repository.lockAndCheckPaymentRefsRestorable(40L)).thenReturn(true);
         when(repository.archivedStatus(40L)).thenReturn("PAID");
         when(orderArchiveRestoreService.restoreOrder(eq(301L), eq("Оплачено"), eq("alex"), eq(true)))
                 .thenReturn(restoreResult(901L, 301L, "Оплачено"));
@@ -130,6 +134,24 @@ class CommonInvoiceArchiveServiceTest {
         verify(repository).restoreInvoice(eq(40L), anyString(), eq("alex"), eq(901L));
         verify(repository).refreshRestoredClosedRetention(40L, "alex");
         verify(repository, never()).reopenRestoredManualInvoice(40L);
+    }
+
+    @Test
+    void refusesPhysicalRestoreWhenLockedPaymentRegistryRecheckFindsNonterminalRefs() {
+        when(repository.findOne(eq(com.hunt.otziv.archive.dto.ArchiveAccessScope.all()), eq(40L)))
+                .thenReturn(Optional.of(archiveInvoice("PAID")));
+        when(repository.lockAndCheckPaymentRefsRestorable(40L)).thenReturn(false);
+
+        var error = assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.restore(40L, true, () -> "alex", authentication)
+        );
+
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, error.getStatusCode());
+        verify(repository, never()).findOrders(40L, "archive");
+        verify(repository, never()).restoreInvoice(eq(40L), anyString(), eq("alex"), eq(null));
+        verify(orderArchiveRestoreService, never())
+                .restoreOrder(eq(301L), eq("Оплачено"), eq("alex"), eq(true));
     }
 
     private CommonInvoiceArchiveListItem archiveInvoice(String status) {

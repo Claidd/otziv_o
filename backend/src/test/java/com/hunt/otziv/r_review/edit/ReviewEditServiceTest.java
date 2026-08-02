@@ -2,6 +2,7 @@ package com.hunt.otziv.r_review.edit;
 
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.review.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
@@ -32,6 +33,9 @@ class ReviewEditServiceTest {
     @Mock
     private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
+    @Mock
+    private OrderAggregateMutationLockService orderAggregateMutationLockService;
+
     @Test
     void updateReviewTextSavesReviewWhenReviewBelongsToOrder() {
         ReviewEditService service = service();
@@ -44,6 +48,7 @@ class ReviewEditServiceTest {
         assertTrue(updated);
         assertEquals("Новый текст", review.getText());
         verify(assignmentMutationGuardService).assertReview(5L);
+        verify(orderAggregateMutationLockService).lockForReview(5L);
         verify(reviewRepository).save(review);
     }
 
@@ -87,6 +92,7 @@ class ReviewEditServiceTest {
         boolean updated = service.updateReviewAnswer(10L, 5L, "Ответ");
 
         assertFalse(updated);
+        verify(orderAggregateMutationLockService).lockForReview(5L);
         verify(reviewRepository, never()).save(review);
     }
 
@@ -122,7 +128,8 @@ class ReviewEditServiceTest {
         return new ReviewEditService(
                 reviewRepository,
                 orderDetailsService,
-                assignmentMutationGuardService
+                assignmentMutationGuardService,
+                orderAggregateMutationLockService
         );
     }
 

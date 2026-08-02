@@ -9,6 +9,7 @@ import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.review.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.performers.service.PerformerPublicationRequestedEvent;
@@ -72,6 +73,7 @@ public class OrderStatusTransitionService {
     );
 
     private final OrderRepository orderRepository;
+    private final OrderAggregateMutationLockService orderAggregateMutationLockService;
     private final OrderStatusService orderStatusService;
     private final OrderTransactionService orderTransactionService;
     private final BadReviewTaskService badReviewTaskService;
@@ -120,6 +122,7 @@ public class OrderStatusTransitionService {
             boolean allowBanWithPendingBadTasks
     ) throws Exception {
         try {
+            orderAggregateMutationLockService.lock(orderID);
             Order order = orderRepository.findByIdForMutation(orderID)
                     .orElseThrow(() -> new NotFoundException("Order not found for orderID: " + orderID));
 

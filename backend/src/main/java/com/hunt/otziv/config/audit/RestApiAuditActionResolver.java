@@ -18,6 +18,8 @@ import java.util.regex.Pattern;
 public class RestApiAuditActionResolver {
 
     static final String REQUEST_BODY_ATTRIBUTE = RestApiAuditActionResolver.class.getName() + ".requestBody";
+    static final int MAX_DYNAMIC_VALUE_LENGTH = 160;
+    static final int MAX_ACTION_LENGTH = 512;
 
     private static final Pattern TEMPLATE_VARIABLE = Pattern.compile("\\{([a-zA-Z0-9_]+)}");
     private static final String ALL = "Все";
@@ -29,15 +31,15 @@ public class RestApiAuditActionResolver {
 
         Optional<String> specialAction = resolveSpecialAction(method, pattern, request);
         if (specialAction.isPresent()) {
-            return specialAction.get();
+            return sanitizeText(specialAction.get(), MAX_ACTION_LENGTH);
         }
 
         String action = ACTIONS.get(new ActionKey(method, pattern));
         if (action != null) {
-            return render(action, request);
+            return sanitizeText(render(action, request), MAX_ACTION_LENGTH);
         }
 
-        return fallbackAction(method, pattern, handlerMethod);
+        return sanitizeText(fallbackAction(method, pattern, handlerMethod), MAX_ACTION_LENGTH);
     }
 
     private Optional<String> resolveSpecialAction(String method, String pattern, HttpServletRequest request) {
@@ -133,22 +135,15 @@ public class RestApiAuditActionResolver {
         }
 
         Object value = map.get(name);
-        return value == null ? Optional.empty() : Optional.of(value.toString());
+        return auditValue(value);
     }
 
     private Optional<String> requestParam(HttpServletRequest request, String name) {
-        String value = request.getParameter(name);
-        return value == null || value.isBlank() ? Optional.empty() : Optional.of(value.trim());
+        return auditValue(request.getParameter(name));
     }
 
     private Optional<String> requestAttribute(String name, HttpServletRequest request) {
-        Object value = request.getAttribute(name);
-        if (value == null) {
-            return Optional.empty();
-        }
-
-        String text = value.toString();
-        return text.isBlank() ? Optional.empty() : Optional.of(text.trim());
+        return auditValue(request.getAttribute(name));
     }
 
     private Optional<String> bodyValue(String name, HttpServletRequest request) {
@@ -158,14 +153,56 @@ public class RestApiAuditActionResolver {
         }
 
         if (body instanceof Map<?, ?> map) {
-            Object value = map.get(name);
-            return value == null ? Optional.empty() : Optional.of(value.toString());
+            return auditValue(map.get(name));
         }
 
         return invokeAccessor(body, name)
                 .or(() -> readField(body, name))
-                .map(Object::toString)
-                .filter(value -> !value.isBlank());
+                .flatMap(this::auditValue);
+    }
+
+    private Optional<String> auditValue(Object value) {
+        if (value == null) {
+            return Optional.empty();
+        }
+
+        CharSequence text = value instanceof CharSequence sequence
+                ? sequence
+                : value.toString();
+        String sanitized = sanitizeText(text, MAX_DYNAMIC_VALUE_LENGTH).strip();
+        return sanitized.isBlank() ? Optional.empty() : Optional.of(sanitized);
+    }
+
+    /**
+     * Keeps one audit event on one bounded log line. The loop stops once the
+     * destination limit is reached, so hostile multi-megabyte values do not
+     * create equally large intermediate strings during sanitization.
+     */
+    private String sanitizeText(CharSequence value, int maxLength) {
+        if (value == null || maxLength <= 0) {
+            return "";
+        }
+
+        StringBuilder sanitized = new StringBuilder(Math.min(value.length(), maxLength));
+        for (int offset = 0; offset < value.length() && sanitized.length() < maxLength; ) {
+            int codePoint = Character.codePointAt(value, offset);
+            offset += Character.charCount(codePoint);
+
+            int charCount = Character.charCount(codePoint);
+            if (sanitized.length() + charCount > maxLength) {
+                break;
+            }
+
+            int type = Character.getType(codePoint);
+            if (Character.isISOControl(codePoint)
+                    || type == Character.LINE_SEPARATOR
+                    || type == Character.PARAGRAPH_SEPARATOR) {
+                sanitized.append(' ');
+            } else {
+                sanitized.appendCodePoint(codePoint);
+            }
+        }
+        return sanitized.toString();
     }
 
     private Optional<Object> invokeAccessor(Object target, String name) {
@@ -201,9 +238,9 @@ public class RestApiAuditActionResolver {
         return new String[]{name, "get" + capitalized, "is" + capitalized};
     }
 
-    private String bestPattern(HttpServletRequest request) {
+    String bestPattern(HttpServletRequest request) {
         Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-        return pattern == null ? request.getRequestURI() : pattern.toString();
+        return pattern == null ? "/unmatched-rest-route" : pattern.toString();
     }
 
     private String fallbackAction(String method, String pattern, HandlerMethod handlerMethod) {
@@ -423,17 +460,17 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/operator/leads/{id}/status/to-work", "смена статуса лида {id} на \"В работу\"");
         put(actions, "DELETE", "/api/admin/phones/{id}/device-tokens/{token}", "удаление токена устройства телефона {id}");
 
-        put(actions, "GET", "/api/review-check/{orderDetailId}", "загрузка проверки отзывов {orderDetailId}");
-        put(actions, "PUT", "/api/review-check/{orderDetailId}", "сохранение проверки отзывов {orderDetailId}");
+        put(actions, "GET", "/api/review-check/{orderDetailId}", "загрузка проверки отзывов по публичной ссылке");
+        put(actions, "PUT", "/api/review-check/{orderDetailId}", "сохранение проверки отзывов по публичной ссылке");
         put(actions, "PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/text", "редактирование текста отзыва {reviewId} при проверке");
         put(actions, "PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/answer", "редактирование ответа отзыва {reviewId} при проверке");
-        put(actions, "POST", "/api/review-check/{orderDetailId}/approve", "подтверждение отзывов {orderDetailId}");
-        put(actions, "POST", "/api/review-check/{orderDetailId}/correction", "отправка отзывов {orderDetailId} на коррекцию");
-        put(actions, "POST", "/api/review-check/{orderDetailId}/send-to-check", "отправка отзывов {orderDetailId} на проверку");
-        put(actions, "POST", "/api/review-check/{orderDetailId}/pay-ok", "подтверждение оплаты отзывов {orderDetailId}");
+        put(actions, "POST", "/api/review-check/{orderDetailId}/approve", "подтверждение отзывов по публичной ссылке");
+        put(actions, "POST", "/api/review-check/{orderDetailId}/correction", "отправка отзывов по публичной ссылке на коррекцию");
+        put(actions, "POST", "/api/review-check/{orderDetailId}/send-to-check", "отправка отзывов по публичной ссылке на проверку");
+        put(actions, "POST", "/api/review-check/{orderDetailId}/pay-ok", "подтверждение оплаты отзывов по публичной ссылке");
         put(actions, "PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/note", "редактирование заметки отзыва {reviewId}");
-        put(actions, "PUT", "/api/review-check/{orderDetailId}/order-note", "редактирование заметки заказа {orderDetailId}");
-        put(actions, "PUT", "/api/review-check/{orderDetailId}/company-note", "редактирование заметки компании {orderDetailId}");
+        put(actions, "PUT", "/api/review-check/{orderDetailId}/order-note", "редактирование заметки заказа по публичной ссылке");
+        put(actions, "PUT", "/api/review-check/{orderDetailId}/company-note", "редактирование заметки компании по публичной ссылке");
 
         put(actions, "POST", "/api/bots/{botId}/browser/open", "открытие браузера аккаунта {botId}");
         put(actions, "POST", "/api/bots/{botId}/browser/close", "закрытие браузера аккаунта {botId}");

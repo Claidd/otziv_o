@@ -28,19 +28,24 @@ import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
+import com.hunt.otziv.p_products.deletion.OrderDeletionService;
 import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.next_order.service.NextOrderFailureNotifier;
+import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
+import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
 import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.review.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.TbankCancelResponse;
+import com.hunt.otziv.payments.dto.TbankInitCommand;
 import com.hunt.otziv.payments.dto.TbankInitResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.model.PaymentProfile;
@@ -57,6 +62,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.services.service.UserService;
+import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -64,6 +70,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
@@ -82,6 +89,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -93,9 +102,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -123,6 +136,8 @@ class CommonBillingServiceTest {
     private CompanyRepository companyRepository;
     @Mock
     private OrderRepository orderRepository;
+    @Mock
+    private OrderAggregateMutationLockService orderAggregateMutationLockService;
     @Mock
     private PaymentLinkRepository paymentLinkRepository;
     @Mock
@@ -170,28 +185,80 @@ class CommonBillingServiceTest {
     @Mock
     private PlatformTransactionManager transactionManager;
     @Mock
+    private EntityManager entityManager;
+    @Mock
     private ReviewRecoveryGateService recoveryGateService;
     @Mock
     private OrderPublicationApprovalService publicationApprovalService;
     @Mock
     private ObjectProvider<OrderPublicationApprovalService> publicationApprovalServiceProvider;
     @Mock
+    private ObjectProvider<OrderDeletionService> orderDeletionServiceProvider;
+    @Mock
+    private OrderDeletionService orderDeletionService;
+    @Mock
     private R0ObservabilityMetrics observabilityMetrics;
 
     @InjectMocks
     private CommonBillingService service;
+    private final Map<Long, CommonInvoicePaymentRef> paymentRefStore = new LinkedHashMap<>();
+    private long nextPaymentRefId;
 
     @BeforeEach
     void setUpLazyDependencies() {
+        paymentRefStore.clear();
+        nextPaymentRefId = 10_000L;
         ReflectionTestUtils.setField(service, "orderTransactionService", orderTransactionService);
         ReflectionTestUtils.setField(service, "orderStatusTransitionService", orderStatusTransitionService);
         ReflectionTestUtils.setField(service, "nextOrderRequestService", nextOrderRequestService);
+        ReflectionTestUtils.setField(service, "publicationApprovalServiceProvider", publicationApprovalServiceProvider);
+        ReflectionTestUtils.setField(service, "orderDeletionServiceProvider", orderDeletionServiceProvider);
         lenient().when(publicationApprovalServiceProvider.getObject()).thenReturn(publicationApprovalService);
+        lenient().when(orderDeletionServiceProvider.getObject()).thenReturn(orderDeletionService);
+        lenient().when(transactionManager.getTransaction(any())).thenAnswer(ignored -> new SimpleTransactionStatus());
+        lenient().when(accountRepository.findByIdWithRelationsForUpdate(anyLong())).thenAnswer(invocation -> {
+            CommonBillingAccount locked = account();
+            locked.setId(invocation.getArgument(0));
+            return Optional.of(locked);
+        });
+        lenient().when(paymentRefRepository.save(any(CommonInvoicePaymentRef.class))).thenAnswer(invocation -> {
+            CommonInvoicePaymentRef ref = invocation.getArgument(0);
+            if (ref.getId() == null) {
+                ref.setId(nextPaymentRefId++);
+            }
+            paymentRefStore.put(ref.getId(), ref);
+            return ref;
+        });
+        lenient().when(paymentRefRepository.findByIdForUpdate(anyLong())).thenAnswer(invocation ->
+                Optional.ofNullable(paymentRefStore.get(invocation.getArgument(0)))
+        );
+        lenient().when(paymentRefRepository.findByTbankOrderId(anyString())).thenAnswer(invocation -> {
+            String orderId = invocation.getArgument(0);
+            return paymentRefStore.values().stream()
+                    .filter(ref -> orderId.equals(ref.getTbankOrderId()))
+                    .findFirst();
+        });
+        lenient().when(paymentRefRepository.findByTbankPaymentId(anyString())).thenAnswer(invocation -> {
+            String paymentId = invocation.getArgument(0);
+            return paymentRefStore.values().stream()
+                    .filter(ref -> paymentId.equals(ref.getTbankPaymentId()))
+                    .findFirst();
+        });
+        lenient().doAnswer(invocation -> {
+            CommonInvoicePaymentRef ref = invocation.getArgument(0);
+            if (ref != null && ref.getId() != null) {
+                paymentRefStore.remove(ref.getId());
+            }
+            return null;
+        }).when(paymentRefRepository).delete(any(CommonInvoicePaymentRef.class));
     }
 
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
@@ -299,6 +366,8 @@ class CommonBillingServiceTest {
         when(invoiceRepository.findByIdWithAccount(10L))
                 .thenReturn(Optional.of(invoice))
                 .thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(102L, 101L, 102L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(items);
         when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(firstItem));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
         when(badReviewTaskService.getPayableSum(secondOrder)).thenReturn(BigDecimal.valueOf(1000));
@@ -319,6 +388,124 @@ class CommonBillingServiceTest {
         verify(manualPaymentAutoConfirmationService).retireOpenLinksForPaidOrder(firstOrder);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(firstOrder, "Оплата общего счета");
         verify(nextOrderRequestService, never()).openForPaidOrder(any());
+
+        var lockOrder = inOrder(
+                invoiceOrderRepository,
+                orderAggregateMutationLockService,
+                invoiceRepository,
+                paymentLinkRepository,
+                orderTransactionService
+        );
+        lockOrder.verify(invoiceOrderRepository).findOrderIdsByInvoiceId(10L);
+        lockOrder.verify(orderAggregateMutationLockService).lock(101L);
+        lockOrder.verify(orderAggregateMutationLockService).lock(102L);
+        lockOrder.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
+        lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
+        lockOrder.verify(orderTransactionService).handlePaymentStatus(firstOrder, false);
+    }
+
+    @Test
+    void markOrderPaidRejectsBankInitReservedWhileWaitingForOrderLock() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentLink reservedLink = new PaymentLink();
+        reservedLink.setOrder(order);
+        reservedLink.setStatus(PaymentLinkStatus.CREATED);
+        reservedLink.setBankInitNonce("active-init");
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of(reservedLink));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markOrderPaid(10L, 101L)
+        );
+
+        assertEquals(409, exception.getStatusCode().value());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+
+        var lockOrder = inOrder(
+                orderAggregateMutationLockService,
+                invoiceRepository,
+                paymentLinkRepository
+        );
+        lockOrder.verify(orderAggregateMutationLockService).lock(101L);
+        lockOrder.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
+        lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
+    }
+
+    @Test
+    void markOrderPaidRejectsNeedsReconciliationWithoutProviderPaymentId() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentLink quarantinedLink = new PaymentLink();
+        quarantinedLink.setOrder(order);
+        quarantinedLink.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of(quarantinedLink));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markOrderPaid(10L, 101L)
+        );
+
+        assertEquals(409, exception.getStatusCode().value());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+        verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
+    }
+
+    @Test
+    void invoiceMutationRejectsMembershipDriftInsteadOfLockingNewOrderAfterInvoice() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        CommonInvoiceOrder observedItem = item(invoice, order(101L));
+        CommonInvoiceOrder concurrentlyAttachedItem = item(invoice, order(102L));
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L))
+                .thenReturn(List.of(observedItem, concurrentlyAttachedItem));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.invoice(10L)
+        );
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertTrue(exception.getReason().contains("common_invoice_membership_changed"));
+        verify(orderAggregateMutationLockService).lock(101L);
+        verify(orderAggregateMutationLockService, never()).lock(102L);
+        verify(invoiceOrderRepository, never()).findByInvoiceIdWithOrders(10L);
+        verify(paymentLinkRepository, never()).findByOrderIdForUpdate(any());
+    }
+
+    @Test
+    void fullPrepaymentSettlementIsDeferredUntilOwningTransactionCommits() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setAmountKopecks(100_000L);
+        when(paymentRefRepository.sumAmountKopecksByInvoiceIdAndStatus(10L, "PREPAID"))
+                .thenReturn(100_000L);
+        TransactionSynchronizationManager.initSynchronization();
+
+        Boolean deferred = ReflectionTestUtils.invokeMethod(
+                service,
+                "deferFullCommonInvoicePrepaymentUntilAfterCommit",
+                invoice
+        );
+
+        assertTrue(Boolean.TRUE.equals(deferred));
+        assertEquals(1, TransactionSynchronizationManager.getSynchronizations().size());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
     }
 
     @Test
@@ -374,6 +561,17 @@ class CommonBillingServiceTest {
         verify(manualPaymentAutoConfirmationService).retireOpenLinksForPaidOrder(paidOrder);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(paidOrder, "Оплата общего счета");
         verify(nextOrderRequestService, never()).openForPaidOrder(any());
+        verify(invoiceOrderRepository, never()).findOrderIdsByInvoiceId(10L);
+        verify(paymentLinkRepository, never())
+                .findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(
+                        102L,
+                        PaymentLinkStatus.CONFIRMED
+                );
+
+        var lockOrder = inOrder(orderAggregateMutationLockService, invoiceOrderRepository, invoiceRepository);
+        lockOrder.verify(orderAggregateMutationLockService).lock(101L);
+        lockOrder.verify(invoiceOrderRepository).findByOrderIdWithInvoice(101L);
+        lockOrder.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
     }
 
     @Test
@@ -876,7 +1074,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void publicInvoiceLocksInvoiceBeforeRefreshingAmounts() {
+    void publicInvoiceLocksOrdersInCanonicalOrderBeforeInvoice() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.COLLECTING);
@@ -885,14 +1083,129 @@ class CommonBillingServiceTest {
         CommonInvoiceOrder item = item(invoice, order);
         item.setReady(false);
 
+        when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
         when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceToken("token")).thenReturn(List.of(102L, 101L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L))
+                .thenReturn(List.of(item, item(invoice, order(102L))));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
 
         service.publicInvoice("token");
 
         verify(invoiceRepository).findByTokenWithAccountForUpdate("token");
-        verify(invoiceRepository, never()).findByTokenWithAccount("token");
+
+        var lockOrder = inOrder(
+                invoiceOrderRepository,
+                orderAggregateMutationLockService,
+                accountRepository,
+                invoiceRepository
+        );
+        lockOrder.verify(invoiceOrderRepository).findOrderIdsByInvoiceToken("token");
+        lockOrder.verify(orderAggregateMutationLockService).lock(101L);
+        lockOrder.verify(orderAggregateMutationLockService).lock(102L);
+        lockOrder.verify(accountRepository).findByIdWithRelationsForUpdate(1L);
+        lockOrder.verify(invoiceRepository).findByTokenWithAccountForUpdate("token");
+    }
+
+    @Test
+    void deleteInvoiceDetachesMembershipBeforeDelegatingStandaloneOrderDeletion() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        CommonInvoiceOrder first = item(invoice, order(101L));
+        CommonInvoiceOrder second = item(invoice, order(102L));
+        List<CommonInvoiceOrder> items = List.of(first, second);
+        java.security.Principal principal = () -> "admin";
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(102L, 101L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(items);
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
+        when(invoiceOrderRepository.deleteByInvoiceId(10L)).thenReturn(2);
+        when(orderDeletionService.deleteOrder(any(), eq(principal))).thenReturn(true);
+
+        service.deleteInvoiceWithOrders(10L, principal);
+
+        var deleteOrder = inOrder(invoiceOrderRepository, orderDeletionService);
+        deleteOrder.verify(invoiceOrderRepository).deleteByInvoiceId(10L);
+        deleteOrder.verify(orderDeletionService).deleteOrder(101L, principal);
+        deleteOrder.verify(orderDeletionService).deleteOrder(102L, principal);
+        verify(invoiceRepository).deleteById(10L);
+    }
+
+    @Test
+    void deleteInvoiceFailsClosedForRawInProgressOperationMarkers() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+
+        for (String marker : List.of("message_send_in_progress", "payment_init_in_progress")) {
+            invoice.setLastError(marker);
+            ResponseStatusException error = assertThrows(
+                    ResponseStatusException.class,
+                    () -> service.deleteInvoiceWithOrders(10L, () -> "admin")
+            );
+            assertEquals(409, error.getStatusCode().value());
+        }
+
+        verify(invoiceOrderRepository, never()).deleteByInvoiceId(any());
+        verify(orderDeletionService, never()).deleteOrder(any(), any());
+        verify(invoiceRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void detachOrderForDeletionUsesCanonicalLocksAndDisablesEmptyInvoice() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        Order createdOrder = order(101L);
+        createdOrder.setStatus(status("Новый"));
+        CommonInvoiceOrder item = item(invoice, createdOrder);
+        item.setReady(false);
+        NextOrderRequest request = new NextOrderRequest();
+        request.setStatus(NextOrderRequestStatus.CREATED);
+        request.setCreatedOrder(createdOrder);
+
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(createdOrder);
+        when(nextOrderRequestRepository.findByCreatedOrderIdForUpdate(101L)).thenReturn(List.of(request));
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByOrderIdForRead(101L)).thenReturn(Optional.of(item));
+        when(paymentRefRepository.existsByInvoice_IdAndStatusIn(eq(10L), any())).thenReturn(false);
+        when(invoiceOrderRepository.deleteByOrderId(101L)).thenReturn(1);
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
+
+        assertTrue(service.detachOrderForDeletion(101L));
+
+        assertEquals(CommonInvoiceStatus.DISABLED, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith("empty:"));
+        var lockOrder = inOrder(
+                orderAggregateMutationLockService,
+                invoiceOrderRepository,
+                invoiceRepository,
+                accountRepository,
+                paymentRefRepository
+        );
+        lockOrder.verify(orderAggregateMutationLockService).lock(101L);
+        lockOrder.verify(invoiceOrderRepository).findByOrderIdWithInvoice(101L);
+        lockOrder.verify(invoiceRepository).findByIdWithAccount(10L);
+        lockOrder.verify(accountRepository).findByIdWithRelationsForUpdate(1L);
+        lockOrder.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
+        lockOrder.verify(invoiceOrderRepository).findMembershipByOrderIdForRead(101L);
+        lockOrder.verify(paymentRefRepository).existsByInvoice_IdAndStatusIn(eq(10L), any());
+        lockOrder.verify(invoiceOrderRepository).deleteByOrderId(101L);
     }
 
     @Test
@@ -985,11 +1298,26 @@ class CommonBillingServiceTest {
         when(invoiceRepository.findBoardInvoices(any()))
                 .thenReturn(List.of(duplicateB, duplicateA, target))
                 .thenReturn(List.of(target));
+        when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(account));
         when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
-        when(invoiceRepository.findCurrentForAccountForUpdate(eq(1L), any(), any(Pageable.class)))
+        when(invoiceRepository.findCurrentForAccount(eq(1L), any(), any(Pageable.class)))
                 .thenReturn(List.of(duplicateB, duplicateA, target));
-        when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(37L, 36L)))
-                .thenReturn(List.of(movedItemB, movedItemA));
+        when(invoiceRepository.findByIdWithAccount(35L)).thenReturn(Optional.of(target));
+        when(invoiceRepository.findByIdWithAccount(36L)).thenReturn(Optional.of(duplicateA));
+        when(invoiceRepository.findByIdWithAccount(37L)).thenReturn(Optional.of(duplicateB));
+        when(invoiceRepository.findByIdWithAccountForUpdate(35L)).thenReturn(Optional.of(target));
+        when(invoiceRepository.findByIdWithAccountForUpdate(36L)).thenReturn(Optional.of(duplicateA));
+        when(invoiceRepository.findByIdWithAccountForUpdate(37L)).thenReturn(Optional.of(duplicateB));
+        when(invoiceOrderRepository.findBindingsByInvoiceIds(any())).thenReturn(List.of(
+                binding(101L, 35L, 1L),
+                binding(102L, 36L, 1L),
+                binding(103L, 37L, 1L)
+        ));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(targetItem.getOrder());
+        when(orderAggregateMutationLockService.lock(102L)).thenReturn(movedItemA.getOrder());
+        when(orderAggregateMutationLockService.lock(103L)).thenReturn(movedItemB.getOrder());
+        when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(36L, 37L)))
+                .thenReturn(List.of(movedItemA, movedItemB));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(35L)).thenReturn(mergedItems);
         when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(35L))).thenReturn(mergedItems);
 
@@ -1001,7 +1329,7 @@ class CommonBillingServiceTest {
         assertEquals(target, movedItemB.getInvoice());
         assertEquals(CommonInvoiceStatus.DISABLED, duplicateA.getStatus());
         assertEquals(CommonInvoiceStatus.DISABLED, duplicateB.getStatus());
-        verify(invoiceOrderRepository).saveAll(List.of(movedItemB, movedItemA));
+        verify(invoiceOrderRepository).saveAll(List.of(movedItemA, movedItemB));
     }
 
     @Test
@@ -1075,18 +1403,7 @@ class CommonBillingServiceTest {
         when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
         when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
         when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
-        when(tbankClient.init(any(), any())).thenReturn(new TbankInitResponse(
-                true,
-                "0",
-                null,
-                null,
-                "terminal",
-                "NEW",
-                "payment-collecting",
-                "order-collecting",
-                100_000L,
-                "https://pay/collecting"
-        ));
+        stubSuccessfulTbankInit("payment-collecting", "https://pay/collecting");
 
         var response = service.initPublicPayment(
                 "token",
@@ -1231,18 +1548,7 @@ class CommonBillingServiceTest {
         when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
         when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
         when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
-        when(tbankClient.init(any(), any())).thenReturn(new TbankInitResponse(
-                true,
-                "0",
-                null,
-                null,
-                "terminal",
-                "NEW",
-                "payment-lock",
-                "order-lock",
-                100_000L,
-                "https://pay/lock"
-        ));
+        stubSuccessfulTbankInit("payment-lock", "https://pay/lock");
 
         service.initPublicPayment(
                 "token",
@@ -1253,7 +1559,6 @@ class CommonBillingServiceTest {
         );
 
         verify(invoiceRepository).findByTokenWithAccountForUpdate("token");
-        verify(invoiceRepository, never()).findByTokenWithAccount("token");
     }
 
     @Test
@@ -1278,6 +1583,7 @@ class CommonBillingServiceTest {
         when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
         doAnswer(invocation -> {
             assertEquals("payment_init_in_progress", invoice.getLastError());
+            TbankInitCommand command = invocation.getArgument(1);
             return new TbankInitResponse(
                     true,
                     "0",
@@ -1286,8 +1592,8 @@ class CommonBillingServiceTest {
                     "terminal",
                     "NEW",
                     "payment-1",
-                    invocation.getArgument(1).toString(),
-                    100_000L,
+                    command.orderId(),
+                    command.amountKopecks(),
                     "https://pay/new"
             );
         }).when(tbankClient).init(any(), any());
@@ -1305,6 +1611,338 @@ class CommonBillingServiceTest {
         assertEquals("terminal", invoice.getTbankTerminalKey());
         assertEquals(100_000L, invoice.getTbankPaymentAmountKopecks());
         assertEquals(null, invoice.getLastError());
+    }
+
+    @Test
+    void initPublicPaymentCommitsDurablePreparedAnchorBeforeCallingProvider() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        CommonInvoicePaymentRef[] preparedAnchor = new CommonInvoicePaymentRef[1];
+
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceToken("token")).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+        doAnswer(invocation -> {
+            CommonInvoicePaymentRef ref = invocation.getArgument(0);
+            if ("INIT_PREPARED".equals(ref.getStatus()) && ref.getId() == null) {
+                ref.setId(77L);
+                preparedAnchor[0] = ref;
+            }
+            return ref;
+        }).when(paymentRefRepository).save(any(CommonInvoicePaymentRef.class));
+        when(paymentRefRepository.findByIdForUpdate(77L))
+                .thenAnswer(ignored -> Optional.ofNullable(preparedAnchor[0]));
+        doAnswer(invocation -> {
+            TbankInitCommand command = invocation.getArgument(1);
+            assertNotNull(preparedAnchor[0]);
+            assertEquals("INIT_PREPARED", preparedAnchor[0].getStatus());
+            assertEquals(command.orderId(), preparedAnchor[0].getTbankOrderId());
+            assertEquals(command.orderId(), invoice.getTbankOrderId());
+            assertEquals("payment_init_in_progress", invoice.getLastError());
+            verify(transactionManager, atLeastOnce()).commit(any());
+            return new TbankInitResponse(
+                    true,
+                    "0",
+                    null,
+                    null,
+                    "terminal",
+                    "NEW",
+                    "payment-durable",
+                    command.orderId(),
+                    command.amountKopecks(),
+                    "https://pay/durable"
+            );
+        }).when(tbankClient).init(any(), any());
+
+        var response = service.initPublicPayment(
+                "token",
+                "client@example.com",
+                true,
+                true,
+                true
+        );
+
+        assertEquals("https://pay/durable", response.paymentUrl());
+        assertEquals("payment-durable", invoice.getTbankPaymentId());
+        assertEquals("payment-durable", preparedAnchor[0].getTbankPaymentId());
+        assertEquals("CURRENT", preparedAnchor[0].getStatus());
+        verify(paymentRefRepository, never()).delete(preparedAnchor[0]);
+    }
+
+    @Test
+    void initPublicPaymentQuarantinesPaymentIdAlreadyBoundToForeignReference() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        CommonInvoicePaymentRef[] preparedAnchor = new CommonInvoicePaymentRef[1];
+        CommonInvoicePaymentRef foreignRef = new CommonInvoicePaymentRef();
+        foreignRef.setId(88L);
+        CommonInvoice foreignInvoice = invoice(account());
+        foreignInvoice.setId(11L);
+        foreignRef.setInvoice(foreignInvoice);
+        foreignRef.setTbankPaymentId("payment-collision");
+
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceToken("token")).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+        doAnswer(invocation -> {
+            CommonInvoicePaymentRef ref = invocation.getArgument(0);
+            if (ref.getId() == null) {
+                ref.setId(77L);
+                preparedAnchor[0] = ref;
+            }
+            return ref;
+        }).when(paymentRefRepository).save(any(CommonInvoicePaymentRef.class));
+        when(paymentRefRepository.findByIdForUpdate(77L))
+                .thenAnswer(ignored -> Optional.ofNullable(preparedAnchor[0]));
+        when(paymentRefRepository.findByTbankPaymentId("payment-collision"))
+                .thenReturn(Optional.of(foreignRef));
+        stubSuccessfulTbankInit("payment-collision", "https://pay/collision");
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.initPublicPayment("token", "client@example.com", true, true, true)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertNull(invoice.getTbankPaymentId());
+        assertNull(invoice.getPaymentUrl());
+        assertEquals("INIT_CONFLICT", preparedAnchor[0].getStatus());
+        assertTrue(preparedAnchor[0].getReason().contains("payment-collision"));
+    }
+
+    @Test
+    void initPublicPaymentQuarantinesCurrentRegistryConstraintAsConflict() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        int[] flushAttempts = {0};
+
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+        stubSuccessfulTbankInit("payment-current-collision", "https://pay/current-collision");
+        doAnswer(invocation -> {
+            if (flushAttempts[0]++ == 0) {
+                throw new DataIntegrityViolationException(
+                        "Duplicate entry for key uk_common_invoice_payment_refs_current_invoice"
+                );
+            }
+            return null;
+        }).when(entityManager).flush();
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.initPublicPayment("token", "client@example.com", true, true, true)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertNull(invoice.getPaymentUrl());
+        assertNull(invoice.getTbankPaymentId());
+        CommonInvoicePaymentRef ref = paymentRefStore.values().stream().findFirst().orElseThrow();
+        assertEquals("INIT_CONFLICT", ref.getStatus());
+        assertEquals("payment-current-collision", ref.getTbankPaymentId());
+        assertTrue(ref.getReason().startsWith("current_payment_registry_collision"));
+        assertTrue(invoice.getLastError().startsWith("payment_registry_collision"));
+        assertEquals(2, flushAttempts[0]);
+    }
+
+    @Test
+    void initPublicPaymentQuarantinesConcurrentPaymentIdUniqueCollision() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        CommonInvoice foreignInvoice = invoice(account());
+        foreignInvoice.setId(11L);
+        CommonInvoicePaymentRef foreignRef = paymentRef(
+                88L,
+                foreignInvoice,
+                "CURRENT",
+                "foreign-order",
+                "payment-race",
+                "terminal",
+                100_000L
+        );
+
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+        when(paymentRefRepository.findByTbankPaymentId("payment-race"))
+                .thenReturn(Optional.empty(), Optional.of(foreignRef));
+        stubSuccessfulTbankInit("payment-race", "https://pay/race");
+        doAnswer(invocation -> {
+            CommonInvoicePaymentRef preparedRef = paymentRefStore.values().stream()
+                    .filter(ref -> Objects.equals(invoice.getId(), ref.getInvoice().getId()))
+                    .findFirst()
+                    .orElseThrow();
+            preparedRef.setTbankPaymentId(null);
+            preparedRef.setStatus("INIT_PREPARED");
+            throw new DataIntegrityViolationException(
+                    "Duplicate entry for key uk_common_invoice_payment_ref_payment"
+            );
+        }).when(entityManager).flush();
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.initPublicPayment("token", "client@example.com", true, true, true)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertNull(invoice.getPaymentUrl());
+        assertNull(invoice.getTbankPaymentId());
+        CommonInvoicePaymentRef losingRef = paymentRefStore.values().stream()
+                .filter(ref -> Objects.equals(invoice.getId(), ref.getInvoice().getId()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("INIT_CONFLICT", losingRef.getStatus());
+        assertNull(losingRef.getTbankPaymentId());
+        assertTrue(losingRef.getReason().contains("payment-race"));
+    }
+
+    @Test
+    void initPublicPaymentAcceptsConfirmedWebhookArrivingBeforeInitResponse() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        CommonInvoicePaymentRef[] preparedAnchor = new CommonInvoicePaymentRef[1];
+
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceToken("token")).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(any(), eq("password"), eq("token"))).thenReturn(true);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+        doAnswer(invocation -> {
+            CommonInvoicePaymentRef ref = invocation.getArgument(0);
+            if ("INIT_PREPARED".equals(ref.getStatus()) && ref.getId() == null) {
+                ref.setId(77L);
+                preparedAnchor[0] = ref;
+            }
+            return ref;
+        }).when(paymentRefRepository).save(any(CommonInvoicePaymentRef.class));
+        when(paymentRefRepository.findByIdForUpdate(77L)).thenAnswer(ignored ->
+                Optional.ofNullable(preparedAnchor[0])
+        );
+        when(paymentRefRepository.findByTbankOrderId(any())).thenAnswer(ignored ->
+                Optional.ofNullable(preparedAnchor[0])
+        );
+        doAnswer(invocation -> {
+            TbankInitCommand command = invocation.getArgument(1);
+            Map<String, String> payload = confirmedWebhookPayload();
+            payload.put("OrderId", command.orderId());
+            payload.put("PaymentId", "payment-early");
+            assertTrue(service.handleTbankWebhook(payload));
+            return new TbankInitResponse(
+                    true,
+                    "0",
+                    null,
+                    null,
+                    "terminal",
+                    "NEW",
+                    "payment-early",
+                    command.orderId(),
+                    command.amountKopecks(),
+                    "https://pay/early"
+            );
+        }).when(tbankClient).init(any(), any());
+
+        var response = service.initPublicPayment(
+                "token",
+                "client@example.com",
+                true,
+                true,
+                true
+        );
+
+        assertEquals("payment-early", response.paymentId());
+        assertEquals("https://pay/early", response.paymentUrl());
+        assertEquals("CONFIRMED", response.status());
+        assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        assertNull(invoice.getTbankPaymentId());
+        assertNull(invoice.getLastError());
+        assertEquals("payment-early", preparedAnchor[0].getTbankPaymentId());
+        assertEquals("CONFIRMED", preparedAnchor[0].getStatus());
+        verify(paymentRefRepository, never()).delete(preparedAnchor[0]);
     }
 
     @Test
@@ -1327,20 +1965,7 @@ class CommonBillingServiceTest {
         when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
         when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
         when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
-        when(paymentRefRepository.findByTbankOrderId(any())).thenReturn(Optional.empty());
-        when(paymentRefRepository.findByTbankPaymentId("payment-unsafe-url")).thenReturn(Optional.empty());
-        when(tbankClient.init(any(), any())).thenReturn(new TbankInitResponse(
-                true,
-                "0",
-                null,
-                null,
-                "terminal",
-                "NEW",
-                "payment-unsafe-url",
-                "ignored",
-                100_000L,
-                "javascript:alert(document.cookie)"
-        ));
+        stubSuccessfulTbankInit("payment-unsafe-url", "javascript:alert(document.cookie)");
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -1349,12 +1974,81 @@ class CommonBillingServiceTest {
 
         assertEquals(502, exception.getStatusCode().value());
         ArgumentCaptor<CommonInvoicePaymentRef> captor = ArgumentCaptor.forClass(CommonInvoicePaymentRef.class);
-        verify(paymentRefRepository).save(captor.capture());
-        assertEquals("payment-unsafe-url", captor.getValue().getTbankPaymentId());
-        assertEquals("CANCEL_PENDING", captor.getValue().getStatus());
+        verify(paymentRefRepository, atLeastOnce()).save(captor.capture());
+        CommonInvoicePaymentRef savedRef = captor.getAllValues().getLast();
+        assertEquals("payment-unsafe-url", savedRef.getTbankPaymentId());
+        assertEquals("CANCEL_PENDING", savedRef.getStatus());
         assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
         assertTrue(invoice.getLastError().startsWith("payment_init_invalid_url"));
         assertEquals(null, invoice.getPaymentUrl());
+    }
+
+    @Test
+    void initPublicPaymentQuarantinesProviderResponseWithMismatchedBinding() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+        doAnswer(invocation -> {
+            TbankInitCommand command = invocation.getArgument(1);
+            return new TbankInitResponse(
+                    true,
+                    "0",
+                    null,
+                    null,
+                    "terminal",
+                    "NEW",
+                    "provider-payment",
+                    "different-order-id",
+                    command.amountKopecks(),
+                    "https://pay/must-not-be-returned"
+            );
+        }).when(tbankClient).init(any(), any());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.initPublicPayment("token", "client@example.com", true, true, true)
+        );
+
+        assertEquals(502, exception.getStatusCode().value());
+        ArgumentCaptor<CommonInvoicePaymentRef> captor = ArgumentCaptor.forClass(CommonInvoicePaymentRef.class);
+        verify(paymentRefRepository, atLeastOnce()).save(captor.capture());
+        CommonInvoicePaymentRef savedRef = captor.getAllValues().getLast();
+        assertTrue(savedRef.getTbankOrderId().startsWith("g10-"));
+        assertEquals("provider-payment", savedRef.getTbankPaymentId());
+        assertEquals("CANCEL_PENDING", savedRef.getStatus());
+        assertTrue(savedRef.getReason().contains("provider_order_mismatch=different-order-id"));
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith("payment_init_response_mismatch"));
+        assertNull(invoice.getPaymentUrl());
+        assertNull(invoice.getTbankPaymentId());
+
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        Map<String, String> webhook = confirmedWebhookPayload();
+        webhook.put("OrderId", "different-order-id");
+        webhook.put("PaymentId", "provider-payment");
+        webhook.put("Status", "AUTHORIZED");
+        when(tokenSigner.matches(webhook, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(webhook));
+        assertEquals("CANCEL_PENDING", savedRef.getStatus());
+        assertTrue(savedRef.getReason().contains("provider_order_mismatch=different-order-id"));
+        assertTrue(savedRef.getReason().contains("cancel_lifecycle_webhook:AUTHORIZED"));
     }
 
     @Test
@@ -1392,7 +2086,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void initPublicPaymentMarksAttentionAndStoresUnknownBankLinkWhenTbankInitFails() {
+    void initPublicPaymentDefersReplacementWhileExpiredPaymentIsBeingCancelled() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.READY);
@@ -1404,43 +2098,35 @@ class CommonBillingServiceTest {
         invoice.setPaymentUrl("https://pay/old");
         Order order = order(101L);
         CommonInvoiceOrder item = item(invoice, order);
-        PaymentProfile profile = paymentProfile();
-        TbankPaymentProfile runtimeProfile = runtimeProfile();
-
         when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
         when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
         when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
-        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
-        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
-        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
-        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
         when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
         when(paymentRefRepository.findByTbankOrderId(any())).thenReturn(Optional.empty());
-        when(tbankClient.init(any(), any())).thenThrow(new RuntimeException("bank down"));
 
-        assertThrows(RuntimeException.class, () -> service.initPublicPayment(
-                "token",
-                "client@example.com",
-                true,
-                true,
-                true
-        ));
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.initPublicPayment("token", "client@example.com", true, true, true)
+        );
 
-        assertEquals("old-order", invoice.getTbankOrderId());
-        assertEquals("old-payment", invoice.getTbankPaymentId());
-        assertEquals("https://pay/old", invoice.getPaymentUrl());
+        assertEquals(502, error.getStatusCode().value());
+        assertNull(invoice.getTbankOrderId());
+        assertNull(invoice.getTbankPaymentId());
+        assertNull(invoice.getPaymentUrl());
         assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
-        assertTrue(invoice.getLastError().contains("payment_init_exception"));
+        assertTrue(invoice.getLastError().contains("payment_init_conflict"));
         ArgumentCaptor<CommonInvoicePaymentRef> captor = ArgumentCaptor.forClass(CommonInvoicePaymentRef.class);
-        verify(paymentRefRepository).save(captor.capture());
-        CommonInvoicePaymentRef ref = captor.getValue();
-        assertTrue(ref.getTbankOrderId().startsWith("g10-"));
-        assertEquals(null, ref.getTbankPaymentId());
+        verify(paymentRefRepository, atLeastOnce()).save(captor.capture());
+        CommonInvoicePaymentRef ref = captor.getAllValues().getLast();
+        assertEquals("old-order", ref.getTbankOrderId());
+        assertEquals("old-payment", ref.getTbankPaymentId());
         assertEquals("terminal", ref.getTbankTerminalKey());
         assertEquals(100_000L, ref.getAmountKopecks());
-        assertEquals("INIT_CONFLICT", ref.getStatus());
+        assertEquals("CANCEL_PENDING", ref.getStatus());
+        assertEquals("payment_link_expired_before_replacement", ref.getReason());
+        verify(tbankClient, never()).init(any(), any());
     }
 
     @Test
@@ -1467,18 +2153,7 @@ class CommonBillingServiceTest {
         when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
         when(paymentRefRepository.findByTbankOrderId(any())).thenReturn(Optional.empty());
         when(paymentRefRepository.findByTbankPaymentId("payment-1")).thenReturn(Optional.empty());
-        when(tbankClient.init(any(), any())).thenReturn(new TbankInitResponse(
-                true,
-                "0",
-                null,
-                null,
-                "terminal",
-                "NEW",
-                "payment-1",
-                "ignored",
-                100_000L,
-                "https://pay/new"
-        ));
+        stubSuccessfulTbankInit("payment-1", "https://pay/new");
 
         assertThrows(ResponseStatusException.class, () -> service.initPublicPayment(
                 "token",
@@ -1489,8 +2164,8 @@ class CommonBillingServiceTest {
         ));
 
         ArgumentCaptor<CommonInvoicePaymentRef> captor = ArgumentCaptor.forClass(CommonInvoicePaymentRef.class);
-        verify(paymentRefRepository).save(captor.capture());
-        CommonInvoicePaymentRef ref = captor.getValue();
+        verify(paymentRefRepository, atLeastOnce()).save(captor.capture());
+        CommonInvoicePaymentRef ref = captor.getAllValues().getLast();
         assertTrue(ref.getTbankOrderId().startsWith("g10-"));
         assertEquals("payment-1", ref.getTbankPaymentId());
         assertEquals("CANCEL_PENDING", ref.getStatus());
@@ -1502,17 +2177,23 @@ class CommonBillingServiceTest {
     @Test
     void attachOrderStartsNewCycleWhenExistingInvoiceWasAlreadySent() {
         CommonBillingAccount account = account();
+        account.setEnabled(true);
         CommonBillingAccountCompany link = new CommonBillingAccountCompany();
         link.setAccount(account);
         link.setCompany(company());
         link.setEnabled(true);
         Order order = order(101L);
 
+        when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
         when(invoiceOrderRepository.findByOrder_Id(101L)).thenReturn(Optional.empty());
+        when(invoiceOrderRepository.findMembershipByOrderIdForRead(101L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L)).thenReturn(Optional.of(link));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
         when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
-        when(invoiceRepository.findCurrentForAccountForUpdate(any(), any(), any())).thenReturn(List.of());
+        when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of());
         doAnswer(invocation -> {
             CommonInvoice created = invocation.getArgument(0);
             created.setId(99L);
@@ -1528,7 +2209,7 @@ class CommonBillingServiceTest {
         ArgumentCaptor<Collection<CommonInvoiceStatus>> statuses =
                 ArgumentCaptor.forClass((Class) Collection.class);
         verify(accountRepository).findByIdWithRelationsForUpdate(1L);
-        verify(invoiceRepository).findCurrentForAccountForUpdate(any(), statuses.capture(), any());
+        verify(invoiceRepository, times(2)).findCurrentForAccount(any(), statuses.capture(), any());
         assertFalse(statuses.getValue().contains(CommonInvoiceStatus.INVOICED));
         assertFalse(statuses.getValue().contains(CommonInvoiceStatus.REMINDER));
         assertFalse(statuses.getValue().contains(CommonInvoiceStatus.PARTIALLY_PAID));
@@ -1537,6 +2218,7 @@ class CommonBillingServiceTest {
     @Test
     void attachOrderMergesDuplicateAttachableInvoicesBeforeAddingNewOrder() {
         CommonBillingAccount account = account();
+        account.setEnabled(true);
         CommonBillingAccountCompany link = new CommonBillingAccountCompany();
         link.setAccount(account);
         link.setCompany(company());
@@ -1551,11 +2233,23 @@ class CommonBillingServiceTest {
         CommonInvoiceOrder movedItem = item(duplicate, movedOrder);
         Order newOrder = order(101L);
 
+        when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
         when(invoiceOrderRepository.findByOrder_Id(101L)).thenReturn(Optional.empty());
+        when(invoiceOrderRepository.findMembershipByOrderIdForRead(101L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
-        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
-        when(invoiceRepository.findCurrentForAccountForUpdate(any(), any(), any()))
+        when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L)).thenReturn(Optional.of(link));
+        when(invoiceRepository.findCurrentForAccount(eq(1L), any(), any(Pageable.class)))
                 .thenReturn(List.of(duplicate, target));
+        when(invoiceRepository.findByIdWithAccount(35L)).thenReturn(Optional.of(target));
+        when(invoiceRepository.findByIdWithAccount(36L)).thenReturn(Optional.of(duplicate));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceRepository.findByIdWithAccountForUpdate(35L)).thenReturn(Optional.of(target));
+        when(invoiceRepository.findByIdWithAccountForUpdate(36L)).thenReturn(Optional.of(duplicate));
+        when(invoiceOrderRepository.findBindingsByInvoiceIds(any()))
+                .thenReturn(List.of(binding(201L, 36L, 1L)));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(newOrder);
+        when(orderAggregateMutationLockService.lock(201L)).thenReturn(movedOrder);
         when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(36L))).thenReturn(List.of(movedItem));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(35L)).thenReturn(List.of(movedItem));
         when(badReviewTaskService.getPayableSum(newOrder)).thenReturn(BigDecimal.valueOf(1000));
@@ -1586,6 +2280,11 @@ class CommonBillingServiceTest {
         oldDisabledLink.setAccount(oldAccount);
         oldDisabledLink.setCompany(company);
         oldDisabledLink.setEnabled(false);
+        CommonBillingAccountCompany targetLink = new CommonBillingAccountCompany();
+        targetLink.setId(700L);
+        targetLink.setAccount(newAccount);
+        targetLink.setCompany(company);
+        targetLink.setEnabled(false);
 
         CommonInvoice oldInvoice = invoice(oldAccount);
         oldInvoice.setId(90L);
@@ -1605,28 +2304,36 @@ class CommonBillingServiceTest {
         existingItem.setAmountKopecks(100_000L);
 
         when(accountRepository.findByIdWithRelations(57L)).thenReturn(Optional.of(newAccount));
+        when(accountRepository.findByIdWithRelations(56L)).thenReturn(Optional.of(oldAccount));
         when(companyRepository.findById(3041L)).thenReturn(Optional.of(company));
-        when(accountCompanyRepository.findEnabledLinksForCompany(3041L)).thenReturn(List.of());
-        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(57L, 3041L)).thenReturn(Optional.empty());
+        when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(3041L))
+                .thenAnswer(ignored -> targetLink.isEnabled() ? List.of(targetLink) : List.of());
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(57L, 3041L))
+                .thenReturn(Optional.of(targetLink));
+        when(accountCompanyRepository.findByIdForUpdate(700L)).thenReturn(Optional.of(targetLink));
+        when(accountRepository.findByIdWithRelationsForUpdate(56L)).thenReturn(Optional.of(oldAccount));
         when(accountRepository.findByIdWithRelationsForUpdate(57L)).thenReturn(Optional.of(newAccount));
-        when(invoiceRepository.findCurrentForAccountForUpdate(eq(57L), any(), any(Pageable.class))).thenReturn(List.of(newInvoice));
+        when(invoiceRepository.findCurrentForAccount(eq(57L), any(), any(Pageable.class)))
+                .thenReturn(List.of(newInvoice));
+        when(invoiceRepository.findByIdWithAccount(90L)).thenReturn(Optional.of(oldInvoice));
+        when(invoiceRepository.findByIdWithAccount(91L)).thenReturn(Optional.of(newInvoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(90L)).thenReturn(Optional.of(oldInvoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(91L)).thenReturn(Optional.of(newInvoice));
+        when(invoiceOrderRepository.findBindingsByInvoiceIds(any()))
+                .thenReturn(List.of(binding(24667L, 91L, 57L)));
+        when(invoiceOrderRepository.findMovableOpenBindingsForCompany(eq(3041L), eq(57L), any()))
+                .thenReturn(List.of(binding(24670L, 90L, 56L)));
         when(invoiceOrderRepository.findMovableOpenItemsForCompany(eq(3041L), eq(57L), any()))
                 .thenReturn(List.of(movedItem));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(91L)).thenReturn(List.of(existingItem, movedItem));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(90L)).thenReturn(List.of());
+        when(badReviewTaskService.getPayableSum(existingOrder)).thenReturn(BigDecimal.valueOf(1000));
+        when(badReviewTaskService.getPayableSum(movedOrder)).thenReturn(BigDecimal.valueOf(250));
         when(accountCompanyRepository.findByAccount_IdOrderByCompany_TitleAsc(56L)).thenReturn(List.of(oldDisabledLink));
-        when(orderRepository.findCommonBillingBackfillOrders(3041L, Set.of(
-                "Новый",
-                "Нагул",
-                "В проверку",
-                "Коррекция",
-                "На проверке",
-                "Публикация",
-                "Опубликовано",
-                "Выставлен счет",
-                "Напоминание",
-                "Ожидает общего счета"
-        ))).thenReturn(List.of());
+        when(accountCompanyRepository.findByAccount_IdOrderByCompany_TitleAsc(57L)).thenReturn(List.of(targetLink));
+        when(orderRepository.findCommonBillingBackfillOrderIds(eq(3041L), any())).thenReturn(List.of());
+        when(orderAggregateMutationLockService.lock(24667L)).thenReturn(existingOrder);
+        when(orderAggregateMutationLockService.lock(24670L)).thenReturn(movedOrder);
 
         service.addCompany(57L, 3041L);
 
@@ -1636,8 +2343,87 @@ class CommonBillingServiceTest {
         assertEquals(0L, oldInvoice.getAmountKopecks());
         assertEquals("merged_into: common_invoice_91", oldInvoice.getLastError());
         assertFalse(oldAccount.isEnabled());
+        assertFalse(targetLink.isReconcilePending());
         verify(invoiceOrderRepository).saveAll(List.of(movedItem));
         verify(accountRepository).save(oldAccount);
+        var moveLocks = inOrder(
+                invoiceOrderRepository,
+                orderAggregateMutationLockService,
+                accountRepository,
+                invoiceRepository
+        );
+        moveLocks.verify(invoiceOrderRepository)
+                .findMovableOpenBindingsForCompany(eq(3041L), eq(57L), any());
+        moveLocks.verify(orderAggregateMutationLockService).lock(24667L);
+        moveLocks.verify(orderAggregateMutationLockService).lock(24670L);
+        moveLocks.verify(accountRepository).findByIdWithRelationsForUpdate(56L);
+        moveLocks.verify(accountRepository).findByIdWithRelationsForUpdate(57L);
+        moveLocks.verify(invoiceRepository).findByIdWithAccountForUpdate(90L);
+        moveLocks.verify(invoiceRepository).findByIdWithAccountForUpdate(91L);
+        moveLocks.verify(invoiceOrderRepository)
+                .findMovableOpenItemsForCompany(eq(3041L), eq(57L), any());
+    }
+
+    @Test
+    void pendingCompanyReconcileReclaimsExpiredLeaseAfterCrash() {
+        CommonBillingAccount account = account();
+        account.setEnabled(true);
+        Company company = company();
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setId(701L);
+        link.setAccount(account);
+        link.setCompany(company);
+        link.setEnabled(true);
+        link.setReconcilePending(true);
+        link.setReconcileAttempts(3);
+        link.setReconcileNextAttemptAt(LocalDateTime.now().minusMinutes(5));
+        link.setReconcileLeaseToken("abandoned-lease");
+        link.setReconcileLeaseUntil(LocalDateTime.now().minusMinutes(1));
+
+        when(accountCompanyRepository.findPendingReconciliationIds(any(LocalDateTime.class), any(Pageable.class)))
+                .thenReturn(List.of(701L));
+        when(accountCompanyRepository.findByIdForUpdate(701L)).thenReturn(Optional.of(link));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L)).thenReturn(Optional.of(link));
+        when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+
+        int processed = service.reconcilePendingCompanyLinks(20);
+
+        assertEquals(1, processed);
+        assertFalse(link.isReconcilePending());
+        assertEquals(0, link.getReconcileAttempts());
+        assertNull(link.getReconcileLeaseToken());
+        assertNull(link.getReconcileLeaseUntil());
+        verify(accountCompanyRepository, times(2)).findByIdForUpdate(701L);
+    }
+
+    @Test
+    void pendingCompanyReconcileDisablesLinkAfterBoundedFinalFailure() {
+        CommonBillingAccount account = account();
+        account.setEnabled(true);
+        Company company = company();
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setId(702L);
+        link.setAccount(account);
+        link.setCompany(company);
+        link.setEnabled(true);
+        link.setReconcilePending(true);
+        link.setReconcileAttempts(19);
+        link.setReconcileNextAttemptAt(LocalDateTime.now().minusMinutes(1));
+
+        when(accountCompanyRepository.findPendingReconciliationIds(any(LocalDateTime.class), any(Pageable.class)))
+                .thenReturn(List.of(702L));
+        when(accountCompanyRepository.findByIdForUpdate(702L)).thenReturn(Optional.of(link));
+        when(accountRepository.findByIdWithRelations(1L)).thenThrow(new IllegalStateException("database unavailable"));
+
+        int processed = service.reconcilePendingCompanyLinks(20);
+
+        assertEquals(0, processed);
+        assertFalse(link.isEnabled());
+        assertFalse(link.isReconcilePending());
+        assertNull(link.getReconcileLeaseToken());
+        assertTrue(link.getReconcileLastError().startsWith("company_reconcile_failed_final"));
     }
 
     @Test
@@ -1755,6 +2541,7 @@ class CommonBillingServiceTest {
         account.setManager(visibleManager);
 
         when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
         when(accountCompanyRepository.findByAccount_IdOrderByCompany_TitleAsc(1L)).thenReturn(List.of());
         when(companyRepository.findById(22L)).thenReturn(Optional.of(company(22L, hiddenManager)));
 
@@ -2045,16 +2832,22 @@ class CommonBillingServiceTest {
     @Test
     void attachOrderMovesInvoiceToAttentionWhenAmountCannotBeCalculated() {
         CommonBillingAccount account = account();
+        account.setEnabled(true);
         CommonBillingAccountCompany link = new CommonBillingAccountCompany();
         link.setAccount(account);
         link.setCompany(company());
         link.setEnabled(true);
         Order order = order(101L);
 
+        when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
         when(invoiceOrderRepository.findByOrder_Id(101L)).thenReturn(Optional.empty());
+        when(invoiceOrderRepository.findMembershipByOrderIdForRead(101L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L)).thenReturn(Optional.of(link));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
         when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
-        when(invoiceRepository.findCurrentForAccountForUpdate(any(), any(), any())).thenReturn(List.of());
+        when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of());
         when(badReviewTaskService.getPayableSum(order)).thenThrow(new RuntimeException("bad tasks down"));
         CommonInvoice[] createdInvoice = new CommonInvoice[1];
         doAnswer(invocation -> {
@@ -2249,7 +3042,6 @@ class CommonBillingServiceTest {
         OrderStatus waitingStatus = status("Ожидает общего счета");
         CommonInvoiceOrder item = item(invoice, order);
 
-        when(invoiceOrderRepository.findByOrder_Id(101L)).thenReturn(Optional.of(item));
         when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
         when(orderStatusService.getOrderStatusByTitle("Ожидает общего счета")).thenReturn(waitingStatus);
 
@@ -2274,7 +3066,6 @@ class CommonBillingServiceTest {
         CommonInvoiceOrder item = item(invoice, order);
         item.setReady(false);
 
-        when(invoiceOrderRepository.findByOrder_Id(101L)).thenReturn(Optional.of(item));
         when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
         when(orderStatusService.getOrderStatusByTitle("Ожидает общего счета")).thenReturn(waitingStatus);
@@ -2431,6 +3222,16 @@ class CommonBillingServiceTest {
         invoice.setTbankTerminalKey("terminal");
         invoice.setTbankPaymentAmountKopecks(100_000L);
         invoice.setPaymentUrl("https://pay/current");
+        CommonInvoicePaymentRef currentRef = paymentRef(
+                44L,
+                invoice,
+                "CURRENT",
+                "old-order",
+                "old-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(currentRef.getId(), currentRef);
         Order order = order(101L);
         order.setStatus(status("Публикация"));
         order.setAmount(2);
@@ -2442,7 +3243,6 @@ class CommonBillingServiceTest {
         Map<String, String> payload = confirmedWebhookPayload();
         payload.put("Amount", "100000");
 
-        when(invoiceRepository.findByTbankOrderId("old-order")).thenReturn(Optional.of(invoice));
         when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
@@ -2453,14 +3253,271 @@ class CommonBillingServiceTest {
         assertTrue(service.handleTbankWebhook(payload));
 
         ArgumentCaptor<CommonInvoicePaymentRef> captor = ArgumentCaptor.forClass(CommonInvoicePaymentRef.class);
-        verify(paymentRefRepository).save(captor.capture());
-        CommonInvoicePaymentRef ref = captor.getValue();
+        verify(paymentRefRepository, atLeastOnce()).save(captor.capture());
+        CommonInvoicePaymentRef ref = captor.getAllValues().getLast();
         assertEquals("PREPAID", ref.getStatus());
         assertEquals("prepaid_waiting_common_invoice_ready", ref.getReason());
         assertNull(invoice.getTbankOrderId());
         assertNull(invoice.getTbankPaymentId());
         assertNull(invoice.getPaymentUrl());
         assertEquals(CommonInvoiceStatus.COLLECTING, invoice.getStatus());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void paymentIdOnlyConfirmedWebhookUsesDurableCurrentAnchor() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setTbankOrderId("current-order");
+        invoice.setTbankPaymentId("payment-only");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setPaymentUrl("https://pay/current");
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        CommonInvoicePaymentRef currentRef = paymentRef(
+                46L,
+                invoice,
+                "CURRENT",
+                "current-order",
+                "payment-only",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(currentRef.getId(), currentRef);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.remove("OrderId");
+        payload.put("PaymentId", "payment-only");
+
+        when(invoiceRepository.findIdsByTbankPaymentId("payment-only")).thenReturn(List.of(10L));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        assertNull(invoice.getTbankPaymentId());
+        assertEquals("CONFIRMED", currentRef.getStatus());
+        verify(orderTransactionService).handlePaymentStatus(order, false);
+    }
+
+    @Test
+    void terminalWebhookWithoutPaymentIdIsRejectedBeforeMutation() {
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.remove("PaymentId");
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.handleTbankWebhook(payload)
+        );
+
+        assertEquals(400, error.getStatusCode().value());
+        verify(invoiceRepository, never()).save(any());
+        verify(paymentRefRepository, never()).save(any());
+    }
+
+    @Test
+    void webhookCurrentRegistryConstraintIsQuarantinedAndAcknowledged() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setTbankOrderId("prepared-order");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setTbankPaymentCreatedAt(LocalDateTime.now());
+        invoice.setLastError("payment_init_in_progress");
+        CommonInvoicePaymentRef preparedRef = paymentRef(
+                49L,
+                invoice,
+                "INIT_PREPARED",
+                "prepared-order",
+                null,
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(preparedRef.getId(), preparedRef);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("OrderId", "prepared-order");
+        payload.put("PaymentId", "webhook-current-collision");
+        payload.put("Status", "AUTHORIZED");
+        int[] flushAttempts = {0};
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+        doAnswer(invocation -> {
+            if (flushAttempts[0]++ == 0) {
+                throw new DataIntegrityViolationException(
+                        "Duplicate entry for key uk_common_invoice_payment_refs_current_invoice"
+                );
+            }
+            return null;
+        }).when(entityManager).flush();
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(2, flushAttempts[0]);
+        assertEquals("INIT_CONFLICT", preparedRef.getStatus());
+        assertEquals("webhook-current-collision", preparedRef.getTbankPaymentId());
+        assertTrue(preparedRef.getReason().startsWith("webhook_current_registry_constraint"));
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertNull(invoice.getTbankOrderId());
+        assertNull(invoice.getTbankPaymentId());
+        assertTrue(invoice.getLastError().startsWith("payment_registry_collision"));
+    }
+
+    @Test
+    void paymentIdDuplicateAcrossLegacyInvoicesQuarantinesAllEvenWhenRegistryAnchorExists() {
+        CommonBillingAccount firstAccount = account();
+        CommonBillingAccount secondAccount = account();
+        secondAccount.setId(2L);
+        CommonInvoice first = invoice(firstAccount);
+        first.setPaymentUrl("https://pay/first");
+        first.setTbankPaymentId("duplicate-payment");
+        CommonInvoice second = invoice(secondAccount);
+        second.setId(11L);
+        second.setPaymentUrl("https://pay/second");
+        second.setTbankPaymentId("duplicate-payment");
+        CommonInvoicePaymentRef anchor = paymentRef(
+                47L,
+                first,
+                "CURRENT",
+                "first-order",
+                "duplicate-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(anchor.getId(), anchor);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.remove("OrderId");
+        payload.put("PaymentId", "duplicate-payment");
+
+        when(invoiceRepository.findIdsByTbankPaymentId("duplicate-payment"))
+                .thenReturn(List.of(10L, 11L));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(first));
+        when(invoiceRepository.findByIdWithAccount(11L)).thenReturn(Optional.of(second));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(first));
+        when(invoiceRepository.findByIdWithAccountForUpdate(11L)).thenReturn(Optional.of(second));
+        when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(firstAccount));
+        when(accountRepository.findByIdWithRelations(2L)).thenReturn(Optional.of(secondAccount));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(firstAccount));
+        when(accountRepository.findByIdWithRelationsForUpdate(2L)).thenReturn(Optional.of(secondAccount));
+        when(invoiceOrderRepository.findBindingsByInvoiceIds(any())).thenReturn(List.of());
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, first.getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, second.getStatus());
+        assertNull(first.getPaymentUrl());
+        assertNull(second.getPaymentUrl());
+        assertEquals("duplicate-payment", first.getTbankPaymentId());
+        assertEquals("duplicate-payment", second.getTbankPaymentId());
+        assertTrue(first.getLastError().contains("PaymentId duplicate-payment"));
+        assertTrue(second.getLastError().contains("PaymentId duplicate-payment"));
+        verify(paymentRefRepository, never()).save(any());
+    }
+
+    @Test
+    void orderIdDuplicateAcrossLegacyInvoicesQuarantinesAllBeforeRegistryRouting() {
+        CommonBillingAccount firstAccount = account();
+        CommonBillingAccount secondAccount = account();
+        secondAccount.setId(2L);
+        CommonInvoice first = invoice(firstAccount);
+        first.setTbankOrderId("duplicate-order");
+        first.setPaymentUrl("https://pay/first");
+        CommonInvoice second = invoice(secondAccount);
+        second.setId(11L);
+        second.setTbankOrderId("duplicate-order");
+        second.setPaymentUrl("https://pay/second");
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("OrderId", "duplicate-order");
+        payload.put("PaymentId", "new-payment");
+
+        when(invoiceRepository.findIdsByTbankOrderId("duplicate-order"))
+                .thenReturn(List.of(10L, 11L));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(first));
+        when(invoiceRepository.findByIdWithAccount(11L)).thenReturn(Optional.of(second));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(first));
+        when(invoiceRepository.findByIdWithAccountForUpdate(11L)).thenReturn(Optional.of(second));
+        when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(firstAccount));
+        when(accountRepository.findByIdWithRelations(2L)).thenReturn(Optional.of(secondAccount));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(firstAccount));
+        when(accountRepository.findByIdWithRelationsForUpdate(2L)).thenReturn(Optional.of(secondAccount));
+        when(invoiceOrderRepository.findBindingsByInvoiceIds(any())).thenReturn(List.of());
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, first.getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, second.getStatus());
+        assertNull(first.getPaymentUrl());
+        assertNull(second.getPaymentUrl());
+        assertEquals("duplicate-order", first.getTbankOrderId());
+        assertEquals("duplicate-order", second.getTbankOrderId());
+        assertTrue(first.getLastError().contains("OrderId duplicate-order"));
+        assertTrue(second.getLastError().contains("OrderId duplicate-order"));
+        verify(paymentRefRepository, never()).findByTbankOrderId(anyString());
+    }
+
+    @Test
+    void currentWebhookWithoutDurableAnchorFailsClosedAndPreservesProviderEvidence() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setTbankOrderId("missing-order");
+        invoice.setTbankPaymentId("missing-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setPaymentUrl("https://pay/missing");
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("OrderId", "missing-order");
+        payload.put("PaymentId", "missing-payment");
+
+        when(invoiceRepository.findIdsByTbankOrderId("missing-order")).thenReturn(List.of(10L));
+        when(invoiceRepository.findIdsByTbankPaymentId("missing-payment")).thenReturn(List.of(10L));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertNull(invoice.getPaymentUrl());
+        assertEquals("missing-order", invoice.getTbankOrderId());
+        assertEquals("missing-payment", invoice.getTbankPaymentId());
+        assertTrue(invoice.getLastError().startsWith("payment_registry_missing"));
         verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
     }
 
@@ -2481,8 +3538,6 @@ class CommonBillingServiceTest {
         TbankPaymentProfile runtimeProfile = runtimeProfile();
         Map<String, String> payload = confirmedWebhookPayload();
 
-        when(invoiceRepository.findByTbankOrderId("old-order")).thenReturn(Optional.empty());
-        when(invoiceRepository.findByTbankPaymentId("old-payment")).thenReturn(Optional.empty());
         when(paymentRefRepository.findByTbankOrderId("old-order")).thenReturn(Optional.of(ref));
         when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
         when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
@@ -2496,6 +3551,111 @@ class CommonBillingServiceTest {
         assertEquals(null, invoice.getLastError());
         verify(paymentRefRepository, never()).save(ref);
         verify(invoiceRepository, never()).save(invoice);
+    }
+
+    @Test
+    void archivedAuthorizedWebhookMovesCompleteInitAnchorToCancelPending() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("payment_init_conflict: interrupted Init");
+        CommonInvoicePaymentRef ref = paymentRef(
+                48L,
+                invoice,
+                "INIT_PREPARED",
+                "prepared-order",
+                "prepared-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(ref.getId(), ref);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("OrderId", "prepared-order");
+        payload.put("PaymentId", "prepared-payment");
+        payload.put("Status", "AUTHORIZED");
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals("CANCEL_PENDING", ref.getStatus());
+        assertTrue(ref.getReason().contains("init_webhook_cancel_pending:AUTHORIZED"));
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertNull(invoice.getPaymentUrl());
+    }
+
+    @Test
+    void nonterminalWebhookCannotLeaveArchivedProviderLinkInRawAuthorizedState() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        CommonInvoicePaymentRef ref = paymentRef(
+                50L,
+                invoice,
+                "ARCHIVED",
+                "archived-order",
+                "archived-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(ref.getId(), ref);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("OrderId", "archived-order");
+        payload.put("PaymentId", "archived-payment");
+        payload.put("Status", "AUTHORIZED");
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals("CANCEL_PENDING", ref.getStatus());
+        assertTrue(ref.getReason().contains("init_webhook_cancel_pending:AUTHORIZED"));
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertNull(invoice.getPaymentUrl());
+    }
+
+    @Test
+    void staleAuthorizedWebhookCannotDowngradeAppliedArchivedPayment() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        CommonInvoicePaymentRef ref = paymentRef(
+                51L,
+                invoice,
+                "APPLIED",
+                "applied-order",
+                "applied-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(ref.getId(), ref);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("OrderId", "applied-order");
+        payload.put("PaymentId", "applied-payment");
+        payload.put("Status", "AUTHORIZED");
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals("APPLIED", ref.getStatus());
+        assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        verify(paymentRefRepository, never()).save(ref);
     }
 
     @Test
@@ -2516,8 +3676,6 @@ class CommonBillingServiceTest {
         Map<String, String> payload = confirmedWebhookPayload();
         payload.put("Status", "REFUNDED");
 
-        when(invoiceRepository.findByTbankOrderId("old-order")).thenReturn(Optional.empty());
-        when(invoiceRepository.findByTbankPaymentId("old-payment")).thenReturn(Optional.empty());
         when(paymentRefRepository.findByTbankOrderId("old-order")).thenReturn(Optional.of(ref));
         when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
         when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
@@ -2543,6 +3701,16 @@ class CommonBillingServiceTest {
         invoice.setTbankTerminalKey("terminal");
         invoice.setTbankPaymentAmountKopecks(100_000L);
         invoice.setPaymentUrl("https://pay/old");
+        CommonInvoicePaymentRef currentRef = paymentRef(
+                45L,
+                invoice,
+                "CURRENT",
+                "old-order",
+                "old-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(currentRef.getId(), currentRef);
         Order order = order(101L);
         CommonInvoiceOrder item = item(invoice, order);
         CommonInvoicePaymentRef archivedRef = new CommonInvoicePaymentRef();
@@ -2571,8 +3739,6 @@ class CommonBillingServiceTest {
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(archivedRef));
         when(paymentRefRepository.findByTbankPaymentId("old-payment")).thenReturn(Optional.empty());
-        when(invoiceRepository.findByTbankOrderId("old-order")).thenReturn(Optional.empty());
-        when(invoiceRepository.findByTbankPaymentId("old-payment")).thenReturn(Optional.empty());
         when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
         when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
         when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
@@ -2653,11 +3819,18 @@ class CommonBillingServiceTest {
         payload.put("Success", "false");
         payload.put("Status", "REJECTED");
         payload.put("ErrorCode", "51");
+        CommonInvoicePaymentRef currentRef = paymentRef(
+                45L,
+                invoice,
+                "CURRENT",
+                "old-order",
+                "old-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(currentRef.getId(), currentRef);
 
-        when(invoiceRepository.findByTbankOrderId("old-order")).thenReturn(Optional.of(invoice));
         when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
-        when(paymentRefRepository.findByTbankOrderId("old-order")).thenReturn(Optional.empty());
-        when(paymentRefRepository.findByTbankPaymentId("old-payment")).thenReturn(Optional.empty());
         when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
         when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
         when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
@@ -2665,25 +3838,20 @@ class CommonBillingServiceTest {
         assertTrue(service.handleTbankWebhook(payload));
 
         ArgumentCaptor<CommonInvoicePaymentRef> captor = ArgumentCaptor.forClass(CommonInvoicePaymentRef.class);
-        verify(paymentRefRepository).save(captor.capture());
-        CommonInvoicePaymentRef ref = captor.getValue();
+        verify(paymentRefRepository, atLeastOnce()).save(captor.capture());
+        CommonInvoicePaymentRef ref = captor.getAllValues().getLast();
         assertEquals("old-order", ref.getTbankOrderId());
         assertEquals("old-payment", ref.getTbankPaymentId());
         assertEquals("REJECTED", ref.getStatus());
         assertEquals(null, invoice.getTbankOrderId());
         assertEquals(null, invoice.getTbankPaymentId());
         assertEquals(null, invoice.getPaymentUrl());
-        assertTrue(invoice.getLastError().startsWith("tbank_payment_rejected"));
+        assertEquals("tbank_payment_terminal: 51", invoice.getLastError());
     }
 
     @Test
     void webhookUsesArchivedRefWhenLockedInvoiceNoLongerHasMatchedPayment() throws Exception {
         CommonBillingAccount account = account();
-        CommonInvoice staleCandidate = invoice(account);
-        staleCandidate.setTbankOrderId("old-order");
-        staleCandidate.setTbankPaymentId("old-payment");
-        staleCandidate.setTbankTerminalKey("terminal");
-        staleCandidate.setTbankPaymentAmountKopecks(100_000L);
         CommonInvoice lockedInvoice = invoice(account);
         lockedInvoice.setStatus(CommonInvoiceStatus.BAN);
         CommonInvoicePaymentRef archivedRef = new CommonInvoicePaymentRef();
@@ -2697,7 +3865,6 @@ class CommonBillingServiceTest {
         TbankPaymentProfile runtimeProfile = runtimeProfile();
         Map<String, String> payload = confirmedWebhookPayload();
 
-        when(invoiceRepository.findByTbankOrderId("old-order")).thenReturn(Optional.of(staleCandidate));
         when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(lockedInvoice));
         when(paymentRefRepository.findByTbankOrderId("old-order")).thenReturn(Optional.of(archivedRef));
         when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
@@ -2738,8 +3905,6 @@ class CommonBillingServiceTest {
         TbankPaymentProfile runtimeProfile = runtimeProfile();
         Map<String, String> payload = confirmedWebhookPayload();
 
-        when(invoiceRepository.findByTbankOrderId("old-order")).thenReturn(Optional.empty());
-        when(invoiceRepository.findByTbankPaymentId("old-payment")).thenReturn(Optional.empty());
         when(paymentRefRepository.findByTbankOrderId("old-order")).thenReturn(Optional.of(candidateRef));
         when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
         when(paymentRefRepository.findByIdForUpdate(44L)).thenReturn(Optional.of(lockedRef));
@@ -2813,6 +3978,7 @@ class CommonBillingServiceTest {
         link.setEnabled(true);
 
         when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
         when(accountCompanyRepository.findByAccount_IdOrderByCompany_TitleAsc(1L)).thenReturn(List.of(link));
 
         CommonBillingAccountRequest request = new CommonBillingAccountRequest(
@@ -2877,7 +4043,14 @@ class CommonBillingServiceTest {
                 .thenReturn(Optional.of(account));
         when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
         when(accountCompanyRepository.findByAccount_IdOrderByCompany_TitleAsc(1L)).thenReturn(List.of(link));
-        when(invoiceRepository.findCurrentForAccount(eq(1L), any(), any(Pageable.class))).thenReturn(List.of(invoice));
+        when(invoiceRepository.findCurrentForAccount(eq(1L), any(), any(Pageable.class)))
+                .thenReturn(List.of(invoice))
+                .thenReturn(List.of());
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L))
                 .thenReturn(List.of(item))
                 .thenReturn(List.of());
@@ -2902,6 +4075,99 @@ class CommonBillingServiceTest {
         verify(invoiceOrderRepository).deleteAll(List.of(item));
         verify(orderRepository).save(order);
         verify(accountCompanyRepository).saveAndFlush(link);
+        var locksAndWrites = inOrder(
+                orderAggregateMutationLockService,
+                accountRepository,
+                invoiceRepository,
+                accountCompanyRepository
+        );
+        locksAndWrites.verify(orderAggregateMutationLockService).lock(101L);
+        locksAndWrites.verify(accountRepository).findByIdWithRelationsForUpdate(1L);
+        locksAndWrites.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
+        locksAndWrites.verify(accountRepository).save(account);
+        locksAndWrites.verify(accountCompanyRepository).saveAndFlush(link);
+    }
+
+    @Test
+    void removeCompanyDetachesUnderCanonicalLocksBeforeDisablingLink() {
+        CommonBillingAccount account = account();
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setId(55L);
+        link.setAccount(account);
+        link.setCompany(company());
+        link.setEnabled(true);
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setOriginalOrderStatusTitle("Публикация");
+
+        when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L)).thenReturn(Optional.of(link));
+        when(accountCompanyRepository.findByIdForUpdate(55L)).thenReturn(Optional.of(link));
+        when(accountCompanyRepository.findByAccount_IdOrderByCompany_TitleAsc(1L)).thenReturn(List.of(link));
+        when(invoiceRepository.findCurrentForAccount(eq(1L), any(), any(Pageable.class)))
+                .thenReturn(List.of(invoice));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L))
+                .thenReturn(List.of(item))
+                .thenReturn(List.of());
+        when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(status("Публикация"));
+
+        service.removeCompany(1L, 20L, true);
+
+        assertFalse(link.isEnabled());
+        assertEquals("Публикация", order.getStatus().getTitle());
+        assertEquals(CommonInvoiceStatus.DISABLED, invoice.getStatus());
+        var locksAndWrites = inOrder(
+                orderAggregateMutationLockService,
+                accountRepository,
+                invoiceRepository,
+                accountCompanyRepository
+        );
+        locksAndWrites.verify(orderAggregateMutationLockService).lock(101L);
+        locksAndWrites.verify(accountRepository).findByIdWithRelationsForUpdate(1L);
+        locksAndWrites.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
+        locksAndWrites.verify(accountCompanyRepository).findByIdForUpdate(55L);
+        locksAndWrites.verify(accountCompanyRepository).saveAndFlush(link);
+    }
+
+    @Test
+    void updateAccountRejectsConcurrentEnabledStateChangeInsteadOfOverwritingFreshAccount() {
+        CommonBillingAccount snapshot = account();
+        snapshot.setEnabled(false);
+        CommonBillingAccount lockedCurrent = account();
+        lockedCurrent.setEnabled(true);
+        lockedCurrent.setName("Параллельно изменено");
+
+        when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(snapshot));
+        when(invoiceRepository.findCurrentForAccount(eq(1L), any(), any(Pageable.class))).thenReturn(List.of());
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(lockedCurrent));
+
+        CommonBillingAccountRequest request = new CommonBillingAccountRequest(
+                "Сохранение старой формы",
+                null,
+                true,
+                null,
+                null,
+                null
+        );
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.updateAccount(1L, request)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals("Параллельно изменено", lockedCurrent.getName());
+        verify(entityManager).refresh(lockedCurrent);
+        verify(accountRepository, never()).save(any());
+        verify(accountCompanyRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -2911,8 +4177,9 @@ class CommonBillingServiceTest {
         company.setId(22L);
 
         when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
         when(companyRepository.findById(22L)).thenReturn(Optional.of(company));
-        when(accountCompanyRepository.findEnabledLinksForCompany(22L)).thenReturn(List.of());
+        when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(22L)).thenReturn(List.of());
         when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 22L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
 
@@ -2927,7 +4194,22 @@ class CommonBillingServiceTest {
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.READY);
         invoice.setLastError("payment_init_in_progress");
-        invoice.setUpdatedAt(LocalDateTime.now().minusMinutes(31));
+        invoice.setTbankOrderId("stale-order");
+        invoice.setTbankPaymentId("stale-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setTbankPaymentCreatedAt(LocalDateTime.now().minusMinutes(31));
+        invoice.setPaymentUrl("https://pay/stale");
+        CommonInvoicePaymentRef currentRef = paymentRef(
+                70L,
+                invoice,
+                "CURRENT",
+                "stale-order",
+                "stale-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(currentRef.getId(), currentRef);
         Order order = order(101L);
         CommonInvoiceOrder item = item(invoice, order);
 
@@ -2947,6 +4229,72 @@ class CommonBillingServiceTest {
 
         assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
         assertTrue(invoice.getLastError().startsWith("payment_init_stale"));
+        assertEquals("CANCEL_PENDING", currentRef.getStatus());
+        assertEquals("payment_init_stale_timeout", currentRef.getReason());
+        assertNull(invoice.getTbankOrderId());
+        assertNull(invoice.getTbankPaymentId());
+        assertNull(invoice.getPaymentUrl());
+        verify(tbankClient, never()).init(any(), any());
+    }
+
+    @Test
+    void authorizedWebhookClaimsPreparedAnchorAndStaleInitQueuesCancellation() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setLastError("payment_init_in_progress");
+        invoice.setTbankOrderId("crash-order");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setTbankPaymentCreatedAt(LocalDateTime.now());
+        CommonInvoicePaymentRef preparedRef = paymentRef(
+                71L,
+                invoice,
+                "INIT_PREPARED",
+                "crash-order",
+                null,
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(preparedRef.getId(), preparedRef);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("OrderId", "crash-order");
+        payload.put("PaymentId", "crash-payment");
+        payload.put("Status", "AUTHORIZED");
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+        assertEquals("CURRENT", preparedRef.getStatus());
+        assertEquals("crash-payment", preparedRef.getTbankPaymentId());
+        assertEquals("crash-payment", invoice.getTbankPaymentId());
+        assertEquals("payment_init_in_progress", invoice.getLastError());
+
+        invoice.setTbankPaymentCreatedAt(LocalDateTime.now().minusMinutes(31));
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.initPublicPayment("token", "client@example.com", true, true, true)
+        );
+
+        assertEquals("CANCEL_PENDING", preparedRef.getStatus());
+        assertEquals("payment_init_stale_timeout", preparedRef.getReason());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith("payment_init_stale"));
+        assertNull(invoice.getTbankOrderId());
+        assertNull(invoice.getTbankPaymentId());
         verify(tbankClient, never()).init(any(), any());
     }
 
@@ -2985,6 +4333,42 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
         assertEquals(null, invoice.getLastError());
         verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void confirmPaymentInitCheckBlocksEveryLiveCancelOrAppliedPaymentLifecycle() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("payment_init_conflict: нужна ручная сверка");
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
+        when(paymentRefRepository.existsByInvoice_IdAndStatusIn(eq(10L), any())).thenAnswer(invocation -> {
+            Collection<String> statuses = invocation.getArgument(1);
+            assertTrue(statuses.containsAll(Set.of(
+                    "CURRENT",
+                    "CANCEL_PENDING",
+                    "CANCELING",
+                    "CANCEL_FAILED",
+                    "CANCEL_FAILED_FINAL",
+                    "CONFIRMED",
+                    "PREPAID",
+                    "APPLYING",
+                    "APPLIED"
+            )));
+            return true;
+        });
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.confirmPaymentInitCheck(10L)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith("payment_init_conflict"));
+        verify(paymentRefRepository, never()).saveAll(any());
     }
 
     @Test
@@ -3202,6 +4586,9 @@ class CommonBillingServiceTest {
                 any(Pageable.class)
         ))
                 .thenReturn(List.of(ref));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
         when(paymentRefRepository.findByIdForUpdate(84L)).thenReturn(Optional.of(ref));
 
         int processed = service.cancelPendingArchivedPayments(20);
@@ -3211,6 +4598,17 @@ class CommonBillingServiceTest {
         assertEquals("paid_invoice_cancel_skipped", ref.getReason());
         verify(paymentRefRepository).save(ref);
         verify(tbankClient, never()).cancel(any(), any());
+        var lockOrder = inOrder(
+                invoiceOrderRepository,
+                accountRepository,
+                invoiceRepository,
+                paymentRefRepository
+        );
+        lockOrder.verify(invoiceOrderRepository).findOrderIdsByInvoiceId(10L);
+        lockOrder.verify(accountRepository).findByIdWithRelationsForUpdate(1L);
+        lockOrder.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
+        lockOrder.verify(invoiceOrderRepository).findMembershipByInvoiceIdForRead(10L);
+        lockOrder.verify(paymentRefRepository).findByIdForUpdate(84L);
     }
 
     @Test
@@ -3515,6 +4913,49 @@ class CommonBillingServiceTest {
         return item;
     }
 
+    private CommonInvoicePaymentRef paymentRef(
+            Long id,
+            CommonInvoice invoice,
+            String status,
+            String orderId,
+            String paymentId,
+            String terminalKey,
+            Long amountKopecks
+    ) {
+        CommonInvoicePaymentRef ref = new CommonInvoicePaymentRef();
+        ref.setId(id);
+        ref.setInvoice(invoice);
+        ref.setStatus(status);
+        ref.setTbankOrderId(orderId);
+        ref.setTbankPaymentId(paymentId);
+        ref.setTbankTerminalKey(terminalKey);
+        ref.setAmountKopecks(amountKopecks);
+        return ref;
+    }
+
+    private CommonInvoiceOrderRepository.OrderInvoiceBindingView binding(
+            Long orderId,
+            Long invoiceId,
+            Long accountId
+    ) {
+        return new CommonInvoiceOrderRepository.OrderInvoiceBindingView() {
+            @Override
+            public Long getOrderId() {
+                return orderId;
+            }
+
+            @Override
+            public Long getInvoiceId() {
+                return invoiceId;
+            }
+
+            @Override
+            public Long getAccountId() {
+                return accountId;
+            }
+        };
+    }
+
     private Order order(Long id) {
         Order order = new Order();
         order.setId(id);
@@ -3593,6 +5034,25 @@ class CommonBillingServiceTest {
         profile.setDefaultProfile(true);
         profile.setTestMode(false);
         return profile;
+    }
+
+    private void stubSuccessfulTbankInit(String paymentId, String paymentUrl) {
+        doAnswer(invocation -> {
+            TbankPaymentProfile profile = invocation.getArgument(0);
+            TbankInitCommand command = invocation.getArgument(1);
+            return new TbankInitResponse(
+                    true,
+                    "0",
+                    null,
+                    null,
+                    profile.terminalKey(),
+                    "NEW",
+                    paymentId,
+                    command.orderId(),
+                    command.amountKopecks(),
+                    paymentUrl
+            );
+        }).when(tbankClient).init(any(), any());
     }
 
     private TbankPaymentProfile runtimeProfile() {

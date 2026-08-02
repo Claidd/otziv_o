@@ -12,9 +12,11 @@ import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.review.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.ProductService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotChangeService;
 import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
@@ -46,6 +48,7 @@ import org.springframework.data.util.Pair;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -119,6 +122,12 @@ class ReviewServiceImplTest {
     @Mock
     private GamificationEventService gamificationEventService;
 
+    @Mock
+    private OrderAggregateMutationLockService orderAggregateMutationLockService;
+
+    @Mock
+    private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+
     @InjectMocks
     private ReviewServiceImpl reviewService;
 
@@ -147,6 +156,71 @@ class ReviewServiceImplTest {
         assertEquals(400, exception.getStatusCode().value());
         verify(reviewRepository, never()).save(org.mockito.ArgumentMatchers.any());
         verify(orderDetailsService, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void sharedFormBatchUsesOneCanonicalDetailFetchForManyReviews() {
+        UUID detailsId = UUID.randomUUID();
+        OrderDetails details = new OrderDetails();
+        details.setId(detailsId);
+        details.setComment("old comment");
+        List<Review> reviews = new ArrayList<>();
+        List<ReviewDTO> updates = new ArrayList<>();
+        for (long id = 1; id <= 50; id++) {
+            Review review = new Review();
+            review.setId(id);
+            review.setText("old " + id);
+            review.setAnswer("answer " + id);
+            review.setOrderDetails(details);
+            reviews.add(review);
+            updates.add(ReviewDTO.builder()
+                    .id(id)
+                    .text("new " + id)
+                    .answer("answer " + id)
+                    .build());
+        }
+        details.setReviews(reviews);
+        when(orderDetailsService.getOrderDetailById(detailsId)).thenReturn(details);
+
+        reviewService.updateOrderDetailAndReviews(OrderDetailsDTO.builder()
+                .id(detailsId)
+                .comment("new comment")
+                .reviews(updates)
+                .build());
+
+        assertEquals("new comment", details.getComment());
+        assertEquals("new 1", reviews.getFirst().getText());
+        assertEquals("new 50", reviews.getLast().getText());
+        verify(orderDetailsService).getOrderDetailById(detailsId);
+        verify(orderDetailsService).save(details);
+        verify(reviewRepository).saveAll(org.mockito.ArgumentMatchers.any());
+        verify(reviewRepository, never()).findById(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void sharedFormBatchRejectsForeignReviewBeforeWrites() {
+        UUID detailsId = UUID.randomUUID();
+        OrderDetails details = new OrderDetails();
+        details.setId(detailsId);
+        Review ownReview = new Review();
+        ownReview.setId(1L);
+        ownReview.setOrderDetails(details);
+        details.setReviews(List.of(ownReview));
+        when(orderDetailsService.getOrderDetailById(detailsId)).thenReturn(details);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> reviewService.updateOrderDetailAndReviews(OrderDetailsDTO.builder()
+                        .id(detailsId)
+                        .comment("tampered")
+                        .reviews(List.of(ReviewDTO.builder().id(2L).text("foreign").build()))
+                        .build())
+        );
+
+        assertEquals(400, exception.getStatusCode().value());
+        verify(orderDetailsService, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(reviewRepository, never()).saveAll(org.mockito.ArgumentMatchers.any());
+        verify(reviewRepository, never()).findById(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -421,7 +495,6 @@ class ReviewServiceImplTest {
                     .id(reviewId)
                     .text("Готовый текст отзыва " + reviewId)
                     .build());
-            when(reviewRepository.findById(reviewId)).thenReturn(Optional.of(review));
         }
 
         OrderDetails orderDetails = new OrderDetails();
@@ -440,6 +513,8 @@ class ReviewServiceImplTest {
         boolean updated = reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailsDTO);
 
         assertTrue(updated);
+        verify(reviewRepository).saveAll(org.mockito.ArgumentMatchers.any());
+        verify(reviewRepository, never()).findById(org.mockito.ArgumentMatchers.any());
         Set<LocalDate> uniqueDates = new HashSet<>();
         LocalDate earliestDate = reviews.stream()
                 .map(Review::getPublishedDate)
@@ -486,15 +561,92 @@ class ReviewServiceImplTest {
                 .build();
 
         when(orderDetailsService.getOrderDetailById(detailsId)).thenReturn(orderDetails);
-        when(reviewRepository.findById(1L)).thenReturn(Optional.of(first));
-        when(reviewRepository.findById(2L)).thenReturn(Optional.of(second));
-        when(reviewRepository.findById(3L)).thenReturn(Optional.of(third));
 
         boolean updated = reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailsDTO);
 
         assertTrue(updated);
         assertTrue(first.getPublishedDate().isBefore(second.getPublishedDate()));
         assertTrue(second.getPublishedDate().isBefore(third.getPublishedDate()));
+        verify(reviewRepository).saveAll(org.mockito.ArgumentMatchers.any());
+        verify(reviewRepository, never()).findById(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void wholeOrderPublicationUsesOneAggregateQueryAndOneReviewBatchWrite() {
+        UUID firstDetailsId = UUID.randomUUID();
+        UUID secondDetailsId = UUID.randomUUID();
+        Bot bot = new Bot();
+        bot.setCounter(3);
+
+        Review firstReview = reviewForPublicationScheduling(1L, bot, firstDetailsId);
+        Review secondReview = reviewForPublicationScheduling(2L, bot, secondDetailsId);
+        OrderDetails firstDetails = new OrderDetails();
+        firstDetails.setId(firstDetailsId);
+        firstDetails.setReviews(List.of(firstReview));
+        firstDetails.setComment("old first");
+        OrderDetails secondDetails = new OrderDetails();
+        secondDetails.setId(secondDetailsId);
+        secondDetails.setReviews(List.of(secondReview));
+        secondDetails.setComment("old second");
+        when(orderDetailsService.getOrderDetailsForReviewCheckByOrderId(101L))
+                .thenReturn(List.of(firstDetails, secondDetails));
+
+        boolean updated = reviewService.updateOrderDetailsAndReviewsAndPublishDates(
+                101L,
+                List.of(
+                        OrderDetailsDTO.builder()
+                                .id(firstDetailsId)
+                                .comment("new first")
+                                .reviews(List.of(publicationDto(1L)))
+                                .build(),
+                        OrderDetailsDTO.builder()
+                                .id(secondDetailsId)
+                                .comment("new second")
+                                .reviews(List.of(publicationDto(2L)))
+                                .build()
+                )
+        );
+
+        assertTrue(updated);
+        assertEquals("new first", firstDetails.getComment());
+        assertEquals("new second", secondDetails.getComment());
+        var ordered = org.mockito.Mockito.inOrder(
+                orderAggregateMutationLockService,
+                orderDetailsService,
+                reviewRepository
+        );
+        ordered.verify(orderAggregateMutationLockService).lock(101L);
+        ordered.verify(orderDetailsService).getOrderDetailsForReviewCheckByOrderId(101L);
+        ordered.verify(reviewRepository).saveAll(org.mockito.ArgumentMatchers.any());
+        verify(orderDetailsService, never()).getOrderDetailById(org.mockito.ArgumentMatchers.any());
+        verify(orderDetailsService, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void wholeOrderPublicationRejectsMissingReviewBeforeBatchWrite() {
+        UUID detailsId = UUID.randomUUID();
+        Bot bot = new Bot();
+        bot.setCounter(3);
+        Review first = reviewForPublicationScheduling(1L, bot, detailsId);
+        Review omitted = reviewForPublicationScheduling(2L, bot, detailsId);
+        OrderDetails liveDetails = new OrderDetails();
+        liveDetails.setId(detailsId);
+        liveDetails.setReviews(List.of(first, omitted));
+        when(orderDetailsService.getOrderDetailsForReviewCheckByOrderId(101L))
+                .thenReturn(List.of(liveDetails));
+
+        boolean updated = reviewService.updateOrderDetailsAndReviewsAndPublishDates(
+                101L,
+                List.of(OrderDetailsDTO.builder()
+                        .id(detailsId)
+                        .reviews(List.of(publicationDto(1L)))
+                        .build())
+        );
+
+        assertFalse(updated);
+        verify(reviewRepository, never()).saveAll(org.mockito.ArgumentMatchers.any());
+        assertEquals(null, first.getPublishedDate());
+        assertEquals(null, omitted.getPublishedDate());
     }
 
     private Review reviewForPublicationScheduling(Long id, Bot bot, UUID detailsId) {

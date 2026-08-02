@@ -71,6 +71,32 @@ class ManagerAccessServiceTest {
 
         assertTrue(service.canAccessOrder(10L, owner));
         assertFalse(service.canAccessCompany(20L, owner));
+        assertTrue(service.canAccessManager(7L, owner));
+        assertFalse(service.canAccessManager(9L, owner));
+    }
+
+    @Test
+    void ownerAllManagersModePreservesGlobalOwnerScope() {
+        Authentication owner = authentication("owner-all", "ROLE_OWNER");
+        User ownerUser = User.builder()
+                .id(2L)
+                .username("owner-all")
+                .ownerControlViewMode("ALL_MANAGERS")
+                .build();
+        when(userService.findByUserName("owner-all")).thenReturn(Optional.of(ownerUser));
+        when(orderRepository.existsById(10L)).thenReturn(true);
+        when(companyRepository.existsById(20L)).thenReturn(true);
+        when(managerService.getManagerById(9L)).thenReturn(manager(9L));
+
+        assertTrue(service.canAccessOrder(10L, owner));
+        assertTrue(service.canAccessCompany(20L, owner));
+        assertTrue(service.canAccessManager(9L, owner));
+        assertTrue(service.canAccessArchivedOrder(9L, 12L, owner));
+
+        assertFalse(service.canAccessOrder(11L, owner));
+        assertFalse(service.canAccessCompany(21L, owner));
+        assertFalse(service.canAccessManager(10L, owner));
+        assertFalse(service.canAccessArchivedOrder(null, 12L, owner));
     }
 
     @Test
@@ -84,6 +110,8 @@ class ManagerAccessServiceTest {
 
         assertTrue(service.canAccessOrder(10L, managerAuth));
         assertFalse(service.canAccessCompany(20L, managerAuth));
+        assertTrue(service.canAccessManager(9L, managerAuth));
+        assertFalse(service.canAccessManager(10L, managerAuth));
     }
 
     @Test
@@ -96,6 +124,31 @@ class ManagerAccessServiceTest {
 
         assertTrue(service.canAccessOrder(10L, workerAuth));
         assertFalse(service.canAccessCompany(20L, workerAuth));
+    }
+
+    @Test
+    void archivedAssignmentsPreserveTheSameRoleScopeWithoutALiveOrder() {
+        Authentication admin = authentication("admin", "ROLE_ADMIN");
+        assertTrue(service.canAccessArchivedOrder(null, null, admin));
+
+        Authentication owner = authentication("owner", "ROLE_OWNER");
+        when(userService.findManagersByUserName("owner")).thenReturn(Set.of(manager(7L)));
+        assertTrue(service.canAccessArchivedOrder(7L, 12L, owner));
+        assertFalse(service.canAccessArchivedOrder(8L, 12L, owner));
+
+        Authentication managerAuth = authentication("manager", "ROLE_MANAGER");
+        User managerUser = User.builder().id(3L).username("manager").build();
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(managerUser));
+        when(managerService.getManagerByUserId(3L)).thenReturn(manager(9L));
+        assertTrue(service.canAccessArchivedOrder(9L, 12L, managerAuth));
+        assertFalse(service.canAccessArchivedOrder(10L, 12L, managerAuth));
+
+        Authentication workerAuth = authentication("worker", "ROLE_WORKER");
+        User workerUser = User.builder().id(4L).username("worker").build();
+        when(userService.findByUserName("worker")).thenReturn(Optional.of(workerUser));
+        when(workerService.getWorkerByUserId(4L)).thenReturn(Worker.builder().id(12L).build());
+        assertTrue(service.canAccessArchivedOrder(9L, 12L, workerAuth));
+        assertFalse(service.canAccessArchivedOrder(9L, 13L, workerAuth));
     }
 
     @Test

@@ -4420,7 +4420,7 @@ export class ApiService {
   }
 
   getTbankStatus(): Observable<TbankPaymentStatus> {
-    return this.http.get<TbankPaymentStatus>(this.apiUrl('/api/payments/public/tbank-status'));
+    return this.http.get<TbankPaymentStatus>(this.apiUrl('/api/admin/payments/tbank-status'));
   }
 
   getPublicPaymentLink(token: string): Observable<PublicPaymentLink> {

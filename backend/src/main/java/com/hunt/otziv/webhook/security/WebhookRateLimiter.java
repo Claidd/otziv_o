@@ -49,6 +49,10 @@ public class WebhookRateLimiter {
         return tryAcquire(key, Instant.now());
     }
 
+    public long retryAfterSeconds() {
+        return Math.max(1L, window.toSeconds());
+    }
+
     boolean tryAcquire(String key, Instant now) {
         if (!enabled) {
             return true;

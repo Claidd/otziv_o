@@ -12,8 +12,10 @@ public interface OrderDetailsService {
     OrderDetails save(OrderDetails orderDetails);
 
     OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId);
+    List<OrderDetailsDTO> getOrderDetailDTOsByOrderIdForReviewCheck(Long orderId);
     OrderDetails getOrderDetailById(UUID orderDetailId);
     OrderDetails getOrderDetailForReviewCheckById(UUID orderDetailId);
+    List<OrderDetails> getOrderDetailsForReviewCheckByOrderId(Long orderId);
 
     void deleteOrderDetailsById(UUID orderDetailId);
 

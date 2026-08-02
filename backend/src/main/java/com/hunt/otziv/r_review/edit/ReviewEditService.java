@@ -1,13 +1,16 @@
 package com.hunt.otziv.r_review.edit;
 
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.review.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Objects;
 
@@ -18,22 +21,25 @@ public class ReviewEditService {
     private final ReviewRepository reviewRepository;
     private final OrderDetailsService orderDetailsService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+    private final OrderAggregateMutationLockService orderAggregateMutationLockService;
 
     @Transactional
     public boolean updateReviewText(Long orderId, Long reviewId, String text) {
-        assignmentMutationGuardService.assertReview(reviewId);
-        return updateReviewTextInternal(orderId, reviewId, text);
+        return updateReviewTextInternal(orderId, reviewId, text, true);
     }
 
     @Transactional
     public boolean updateReviewTextFromSharedCheck(Long orderId, Long reviewId, String text) {
-        return updateReviewTextInternal(orderId, reviewId, text);
+        return updateReviewTextInternal(orderId, reviewId, text, false);
     }
 
-    private boolean updateReviewTextInternal(Long orderId, Long reviewId, String text) {
+    private boolean updateReviewTextInternal(Long orderId, Long reviewId, String text, boolean requireAssignment) {
         Review review = findReviewForOrder(orderId, reviewId);
         if (review == null) {
             return false;
+        }
+        if (requireAssignment) {
+            assignmentMutationGuardService.assertReview(reviewId);
         }
 
         review.setText(text);
@@ -43,19 +49,21 @@ public class ReviewEditService {
 
     @Transactional
     public boolean updateReviewAnswer(Long orderId, Long reviewId, String answer) {
-        assignmentMutationGuardService.assertReview(reviewId);
-        return updateReviewAnswerInternal(orderId, reviewId, answer);
+        return updateReviewAnswerInternal(orderId, reviewId, answer, true);
     }
 
     @Transactional
     public boolean updateReviewAnswerFromSharedCheck(Long orderId, Long reviewId, String answer) {
-        return updateReviewAnswerInternal(orderId, reviewId, answer);
+        return updateReviewAnswerInternal(orderId, reviewId, answer, false);
     }
 
-    private boolean updateReviewAnswerInternal(Long orderId, Long reviewId, String answer) {
+    private boolean updateReviewAnswerInternal(Long orderId, Long reviewId, String answer, boolean requireAssignment) {
         Review review = findReviewForOrder(orderId, reviewId);
         if (review == null) {
             return false;
+        }
+        if (requireAssignment) {
+            assignmentMutationGuardService.assertReview(reviewId);
         }
 
         review.setAnswer(answer);
@@ -65,11 +73,11 @@ public class ReviewEditService {
 
     @Transactional
     public boolean updateReviewNote(Long orderId, Long reviewId, String comment) {
-        assignmentMutationGuardService.assertReview(reviewId);
         Review review = findReviewForOrder(orderId, reviewId);
         if (review == null || review.getOrderDetails() == null) {
             return false;
         }
+        assignmentMutationGuardService.assertReview(reviewId);
 
         OrderDetails orderDetails = review.getOrderDetails();
         orderDetails.setComment(comment);
@@ -78,6 +86,20 @@ public class ReviewEditService {
     }
 
     private Review findReviewForOrder(Long orderId, Long reviewId) {
+        if (orderId == null || reviewId == null) {
+            return null;
+        }
+        try {
+            // The review id determines the only parent row we ever lock. A
+            // mismatched caller-supplied order id is rejected afterwards, so
+            // crossed (order A, review B) requests cannot create A<->B cycles.
+            orderAggregateMutationLockService.lockForReview(reviewId);
+        } catch (ResponseStatusException exception) {
+            if (exception.getStatusCode() == HttpStatus.NOT_FOUND) {
+                return null;
+            }
+            throw exception;
+        }
         Review review = reviewRepository.findById(reviewId).orElse(null);
         if (review == null || review.getOrderDetails() == null || review.getOrderDetails().getOrder() == null) {
             return null;

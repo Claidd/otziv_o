@@ -5,6 +5,7 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.dto.BrowserBotMetadataResponse;
 import com.hunt.otziv.b_bots.services.BotBrowserAccessService;
+import com.hunt.otziv.b_bots.services.BotCrudAccessService;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.b_bots.services.StatusBotService;
 import com.hunt.otziv.b_bots.utils.BotValidation;
@@ -33,38 +34,44 @@ public class BotsController {
     private final StatusBotService statusBotService;
     private final BotValidation botValidation;
     private final BotBrowserAccessService botBrowserAccessService;
+    private final BotCrudAccessService botCrudAccessService;
 
     public BotsController(
             BotService botService,
             UserService userService,
             StatusBotService statusBotService,
             BotValidation botValidation,
-            BotBrowserAccessService botBrowserAccessService
+            BotBrowserAccessService botBrowserAccessService,
+            BotCrudAccessService botCrudAccessService
     ) {
         this.botService = botService;
         this.userService = userService;
         this.statusBotService = statusBotService;
         this.botValidation = botValidation;
         this.botBrowserAccessService = botBrowserAccessService;
+        this.botCrudAccessService = botCrudAccessService;
     }
 
     //Открываем страницу со списком ботов
     @GetMapping
-    public String bots(Model model){
-        model.addAttribute("all_bots", botService.getAllBots().stream().sorted(Comparator.comparing(BotDTO :: getFio)));
+    public String bots(Model model, Authentication authentication){
+        model.addAttribute("all_bots", botService.getAllBots(authentication).stream().sorted(Comparator.comparing(BotDTO :: getFio)));
         return "bots/bots_list";
     } //Открываем страницу со списком ботов
 
     //Открываем страницу добавления бота
     @GetMapping("/bot_add")
-    public String botAdd(Model model){
+    public String botAdd(Model model, Authentication authentication){
+            botCrudAccessService.requireCreateAccess(authentication);
             model.addAttribute("bot", new BotDTO());
     return "bots/bot_add";
     } //Открываем страницу добавления бота
 
     //Сохраняем нового бота
     @PostMapping ("/bot_add")
-    public String saveBot(Model model,@ModelAttribute("bot") @Valid BotDTO botsDto, BindingResult bindingResult, Principal principal, RedirectAttributes rm){
+    public String saveBot(Model model,@ModelAttribute("bot") @Valid BotDTO botsDto, BindingResult bindingResult,
+                          Principal principal, RedirectAttributes rm, Authentication authentication){
+        botCrudAccessService.requireCreateAccess(authentication);
         log.info("Валидация на совпадение логина");
         botValidation.validate(botsDto, bindingResult);
         log.info("Вход в общую валидацию");
@@ -73,7 +80,7 @@ public class BotsController {
             model.addAttribute("bot", botsDto);
             return "bots/bot_add";
         }
-        if (botService.createBot(botsDto, principal)){
+        if (botService.createBot(botsDto, authentication)){
             log.info("Новый бот сохранен");
             rm.addFlashAttribute("saveSuccess", "true");
             return "redirect:/bots/bot_add";
@@ -86,8 +93,9 @@ public class BotsController {
 
     //Редактирование бота
     @GetMapping("/edit/{id}")
-    public String editBot(@PathVariable(value = "id")  long id, Model model, BotDTO botsDto, Principal principal){
-        model.addAttribute("editBotDto", botService.findById(id));
+    public String editBot(@PathVariable(value = "id")  long id, Model model, BotDTO botsDto,
+                          Principal principal, Authentication authentication){
+        model.addAttribute("editBotDto", botService.findById(id, authentication));
         model.addAttribute("workers", userService.findByUserNameWithAssignments(principal.getName()).orElseThrow().getWorkers());
         model.addAttribute("statuses", statusBotService.findAllBotsStatus());
 //        System.out.println(botService.findById(id));
@@ -97,9 +105,14 @@ public class BotsController {
 
     //Обновление бота
     @PostMapping("/edit/{id}")
-    public String updateBot(@PathVariable(value = "id")  long id, Model model, @ModelAttribute("editBotDto") @Valid BotDTO botsDto, BindingResult bindingResult, Principal principal, RedirectAttributes rm){
+    public String updateBot(@PathVariable(value = "id")  long id, Model model,
+                            @ModelAttribute("editBotDto") @Valid BotDTO botsDto,
+                            BindingResult bindingResult, Principal principal,
+                            RedirectAttributes rm, Authentication authentication){
 //        System.out.println(botsDto.getWorker());
 //        System.out.println(botsDto);
+        BotCrudAccessService.AuthorizedCrudBot authorizedBot =
+                botCrudAccessService.requireAccess(id, authentication);
         /*Проверяем на ошибки*/
         if (bindingResult.hasErrors()) {
             log.info("Сработал биндинг - есть ошибка");
@@ -108,7 +121,8 @@ public class BotsController {
             model.addAttribute("statuses", statusBotService.findAllBotsStatus());
             return "bots/bot_edit";
         }
-        if (botService.updateBot(botsDto, id)){
+        botCrudAccessService.requireUpdateOwnership(authorizedBot, botsDto);
+        if (botService.updateBot(botsDto, id, authentication)){
             log.info("Бот обновлен. - " + principal.getName());
 //            return "redirect:/bots";
             rm.addFlashAttribute("saveSuccess", "true");
@@ -122,8 +136,10 @@ public class BotsController {
 
     //Удаление бота
     @PostMapping("/delete/{id}")
-    public String deleteBot(@PathVariable(value = "id")  long id, Model model, @ModelAttribute("bot") BotDTO botsDto){
-        botService.deleteBot(id);
+    public String deleteBot(@PathVariable(value = "id")  long id, Model model,
+                            @ModelAttribute("bot") BotDTO botsDto, Authentication authentication){
+        botCrudAccessService.requireAccess(id, authentication);
+        botService.deleteBot(id, authentication);
         return "redirect:/worker/bot_list";
 //       return "bots/bots_list";
     } //Удаление бота

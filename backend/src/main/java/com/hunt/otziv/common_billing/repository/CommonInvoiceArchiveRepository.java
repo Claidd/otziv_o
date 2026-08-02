@@ -22,6 +22,17 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class CommonInvoiceArchiveRepository {
 
+    private static final Set<String> TERMINAL_ARCHIVED_PAYMENT_REF_STATUSES = Set.of(
+            "APPLIED",
+            "ARCHIVED",
+            "CANCELED",
+            "REJECTED",
+            "REFUNDED",
+            "PARTIAL_REFUNDED",
+            "REVERSED",
+            "PARTIAL_REVERSED"
+    );
+
     private static final List<String> ARCHIVE_ONLY_COLUMNS = List.of(
             "archived_at",
             "archive_reason",
@@ -133,6 +144,33 @@ public class CommonInvoiceArchiveRepository {
                 WHERE invoice_id = :invoiceId
                   AND restored_at IS NULL
                 """, Map.of("invoiceId", invoiceId), String.class);
+    }
+
+    /**
+     * Serializes physical restores for one invoice and rechecks the archived payment registry
+     * immediately before any child orders are restored. Legacy archives may contain CURRENT or
+     * otherwise unfinished refs which must never be copied into the V200 live-only CURRENT guard.
+     */
+    public boolean lockAndCheckPaymentRefsRestorable(Long invoiceId) {
+        Map<String, Long> params = Map.of("invoiceId", invoiceId);
+        List<Long> lockedInvoices = jdbc.queryForList("""
+                SELECT invoice_id
+                FROM archive_common_invoices
+                WHERE invoice_id = :invoiceId
+                  AND restored_at IS NULL
+                FOR UPDATE
+                """, params, Long.class);
+        if (lockedInvoices.isEmpty()) {
+            return false;
+        }
+        List<String> statuses = jdbc.queryForList("""
+                SELECT status
+                FROM archive_common_invoice_payment_refs
+                WHERE invoice_id = :invoiceId
+                ORDER BY payment_ref_id
+                FOR UPDATE
+                """, params, String.class);
+        return statuses.stream().allMatch(this::isTerminalArchivedPaymentRefStatus);
     }
 
     public void restoreInvoice(Long invoiceId, String token, String restoredBy, Long restoreBatchId) {
@@ -255,7 +293,13 @@ public class CommonInvoiceArchiveRepository {
                     COALESCE(aci.close_reason, '') AS close_reason,
                     aci.archived_at,
                     'archive' AS source,
-                    TRUE AS restorable
+                    NOT EXISTS (
+                        SELECT 1
+                        FROM archive_common_invoice_payment_refs restore_ref
+                        WHERE restore_ref.invoice_id = aci.invoice_id
+                          AND UPPER(TRIM(COALESCE(restore_ref.status, '')))
+                              NOT IN (:terminalArchivedPaymentRefStatuses)
+                    ) AS restorable
                 """ : "DISTINCT aci.invoice_id";
         return """
                 SELECT
@@ -311,7 +355,8 @@ public class CommonInvoiceArchiveRepository {
         return new MapSqlParameterSource()
                 .addValue("keyword", normalized)
                 .addValue("keywordLike", "%" + normalized + "%")
-                .addValue("managerIds", managerIds);
+                .addValue("managerIds", managerIds)
+                .addValue("terminalArchivedPaymentRefStatuses", TERMINAL_ARCHIVED_PAYMENT_REF_STATUSES);
     }
 
     private CommonInvoiceArchiveListItem item(ResultSet rs) throws SQLException {
@@ -405,6 +450,11 @@ public class CommonInvoiceArchiveRepository {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private boolean isTerminalArchivedPaymentRefStatus(String status) {
+        return status != null
+                && TERMINAL_ARCHIVED_PAYMENT_REF_STATUSES.contains(status.trim().toUpperCase(Locale.ROOT));
     }
 
     private LocalDateTime localDateTime(ResultSet rs, String column) throws SQLException {

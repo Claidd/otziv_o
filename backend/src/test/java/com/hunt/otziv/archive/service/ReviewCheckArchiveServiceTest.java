@@ -4,6 +4,7 @@ import com.hunt.otziv.archive.exception.ArchiveRestoreConflictException;
 import java.sql.ResultSet;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -12,6 +13,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -29,6 +31,26 @@ class ReviewCheckArchiveServiceTest {
 
     @Mock
     private ResultSet resultSet;
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void archivedLookupLoadsCurrentCompanyCommentsForLaterAuthorization() {
+        AtomicReference<String> querySql = new AtomicReference<>();
+        when(jdbc.query(
+                anyString(),
+                any(MapSqlParameterSource.class),
+                any(RowMapper.class)
+        )).thenAnswer(invocation -> {
+            querySql.set(invocation.getArgument(0));
+            return List.of();
+        });
+
+        ReviewCheckArchiveService service = new ReviewCheckArchiveService(jdbc, restoreService);
+
+        assertThat(service.findByOrderDetailId(UUID.randomUUID())).isEmpty();
+        assertThat(querySql.get())
+                .contains("COALESCE(c.company_comments, '') AS company_comments");
+    }
 
     @Test
     @SuppressWarnings({"rawtypes", "unchecked"})

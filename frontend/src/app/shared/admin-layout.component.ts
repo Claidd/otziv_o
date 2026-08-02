@@ -42,6 +42,11 @@ type ShellLink = AppNavigationLink;
 
 const ALL_SHELL_LINKS = [...APP_PRIMARY_NAVIGATION, ...APP_NAVIGATION_LINKS];
 
+export function shouldShowAdminLayoutLoginControls(url: string): boolean {
+  const path = url.split(/[?#]/, 1)[0].replace(/\/+$/, '');
+  return path !== '/review/c';
+}
+
 function shellLinksById(ids: string[]): ShellLink[] {
   return ids.map((id) => {
     const link = ALL_SHELL_LINKS.find((item) => item.id === id);
@@ -93,6 +98,7 @@ export class AdminLayoutComponent {
   readonly headerProfileFallbackUrl = signal<string | null>(null);
   readonly activePerformanceTip = signal<string | null>(null);
   readonly currentUrl = signal(this.router.url);
+  readonly showLoginControls = computed(() => shouldShowAdminLayoutLoginControls(this.currentUrl()));
   readonly mobileMenuOpen = signal(false);
   readonly mobileSectionPickerOpen = signal(false);
 

@@ -117,26 +117,6 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("statuses") Collection<CommonInvoiceStatus> statuses
     );
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-        SELECT invoice
-        FROM CommonInvoice invoice
-        JOIN FETCH invoice.account account
-        LEFT JOIN FETCH account.manager manager
-        LEFT JOIN FETCH manager.user
-        LEFT JOIN FETCH account.invoiceCompany invoiceCompany
-        LEFT JOIN FETCH invoiceCompany.manager invoiceManager
-        LEFT JOIN FETCH invoiceManager.user
-        WHERE invoice.account.id = :accountId
-          AND invoice.status IN :statuses
-        ORDER BY invoice.id DESC
-    """)
-    List<CommonInvoice> findCurrentForAccountForUpdate(
-            @Param("accountId") Long accountId,
-            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
-            Pageable pageable
-    );
-
     @Query("""
         SELECT invoice
         FROM CommonInvoice invoice
@@ -354,4 +334,20 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
     Optional<CommonInvoice> findByTbankOrderId(String tbankOrderId);
 
     Optional<CommonInvoice> findByTbankPaymentId(String tbankPaymentId);
+
+    @Query("""
+        SELECT invoice.id
+        FROM CommonInvoice invoice
+        WHERE invoice.tbankOrderId = :tbankOrderId
+        ORDER BY invoice.id ASC
+    """)
+    List<Long> findIdsByTbankOrderId(@Param("tbankOrderId") String tbankOrderId);
+
+    @Query("""
+        SELECT invoice.id
+        FROM CommonInvoice invoice
+        WHERE invoice.tbankPaymentId = :tbankPaymentId
+        ORDER BY invoice.id ASC
+    """)
+    List<Long> findIdsByTbankPaymentId(@Param("tbankPaymentId") String tbankPaymentId);
 }

@@ -2,6 +2,7 @@ package com.hunt.otziv.b_bots.controller;
 
 import com.hunt.otziv.b_bots.dto.BrowserBotMetadataResponse;
 import com.hunt.otziv.b_bots.services.BotBrowserAccessService;
+import com.hunt.otziv.b_bots.services.BotCrudAccessService;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.b_bots.services.StatusBotService;
 import com.hunt.otziv.b_bots.utils.BotValidation;
@@ -44,7 +45,7 @@ class BotsControllerBrowserAccessTest {
                 .extracting(RecordComponent::getName)
                 .doesNotContain("password");
         verify(accessService).requireAccess(42L, authentication);
-        verify(botService, never()).findById(42L);
+        verify(botService, never()).findById(42L, authentication);
     }
 
     @Test
@@ -62,7 +63,7 @@ class BotsControllerBrowserAccessTest {
 
         assertThatThrownBy(() -> controller.botBrowserPage(42L, new ExtendedModelMap(), authentication))
                 .isSameAs(notFound);
-        verify(botService, never()).findById(42L);
+        verify(botService, never()).findById(42L, authentication);
     }
 
     private BotsController controller(BotService botService, BotBrowserAccessService accessService) {
@@ -71,7 +72,8 @@ class BotsControllerBrowserAccessTest {
                 mock(UserService.class),
                 mock(StatusBotService.class),
                 mock(BotValidation.class),
-                accessService
+                accessService,
+                mock(BotCrudAccessService.class)
         );
     }
 }

@@ -16,7 +16,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -98,7 +98,9 @@ public class ApiAdminCityStatsController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Нет данных для экспорта");
         }
 
-        try (Workbook workbook = new XSSFWorkbook()) {
+        SXSSFWorkbook workbook = new SXSSFWorkbook(100);
+        workbook.setCompressTempFiles(true);
+        try (workbook) {
             Sheet sheet = workbook.createSheet("Статистика по городам");
             Map<String, CellStyle> styles = createStyles(workbook);
             String[] headers = {
@@ -191,9 +193,7 @@ public class ApiAdminCityStatsController {
             totalRow.createCell(10).setCellValue(new SimpleDateFormat("dd.MM.yyyy HH:mm:ss").format(new Date()));
             totalRow.getCell(10).setCellStyle(totalStyle);
 
-            for (int i = 0; i < headers.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
+            configureColumnWidths(sheet);
             sheet.createFreezePane(0, 1);
 
             response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -201,6 +201,13 @@ public class ApiAdminCityStatsController {
                     new SimpleDateFormat("yyyy-MM-dd_HH-mm").format(new Date()));
             response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
             workbook.write(response.getOutputStream());
+        }
+    }
+
+    private void configureColumnWidths(Sheet sheet) {
+        int[] widths = {6, 28, 12, 24, 28, 20, 22, 18, 20, 14, 22};
+        for (int i = 0; i < widths.length; i++) {
+            sheet.setColumnWidth(i, widths[i] * 256);
         }
     }
 

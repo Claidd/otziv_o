@@ -9,6 +9,8 @@ import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestricti
 import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.u_users.services.UserServiceImpl;
 import jakarta.servlet.Filter;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -24,17 +26,22 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.web.csrf.DefaultCsrfToken;
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -71,7 +78,7 @@ class LegacyBotSecurityContractTest {
     }
 
     @Test
-    void workerCanReachGuardedBrowserPageButNotLegacyBotAdministration() throws Exception {
+    void workerCanReachOwnedBotCrudRoutesButNotTheGlobalBotDirectory() throws Exception {
         MockHttpSession session = authenticatedSession("worker", "WORKER");
 
         mockMvc.perform(get("/bots/42/browser").session(session))
@@ -80,11 +87,15 @@ class LegacyBotSecurityContractTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/access-denied"));
         mockMvc.perform(get("/bots/edit/42").session(session))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/access-denied"));
+                .andExpect(status().isOk());
         mockMvc.perform(get("/bots/bot_add").session(session))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/access-denied"));
+                .andExpect(status().isOk());
+        mockMvc.perform(csrfPost("/bots/bot_add", session))
+                .andExpect(status().isOk());
+        mockMvc.perform(csrfPost("/bots/edit/42", session))
+                .andExpect(status().isOk());
+        mockMvc.perform(csrfPost("/bots/delete/42", session))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -95,6 +106,10 @@ class LegacyBotSecurityContractTest {
             mockMvc.perform(get("/bots").session(session))
                     .andExpect(status().isOk());
             mockMvc.perform(get("/bots/edit/42").session(session))
+                    .andExpect(status().isOk());
+            mockMvc.perform(csrfPost("/bots/edit/42", session))
+                    .andExpect(status().isOk());
+            mockMvc.perform(csrfPost("/bots/delete/42", session))
                     .andExpect(status().isOk());
             mockMvc.perform(get("/bots/42/browser").session(session))
                     .andExpect(status().isOk());
@@ -111,6 +126,15 @@ class LegacyBotSecurityContractTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/access-denied"));
         mockMvc.perform(get("/bots/edit/42").session(session))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/access-denied"));
+        mockMvc.perform(get("/bots/bot_add").session(session))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/access-denied"));
+        mockMvc.perform(csrfPost("/bots/edit/42", session))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/access-denied"));
+        mockMvc.perform(csrfPost("/bots/delete/42", session))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/access-denied"));
     }
@@ -139,6 +163,28 @@ class LegacyBotSecurityContractTest {
                 new SecurityContextImpl(authentication)
         );
         return session;
+    }
+
+    private MockHttpServletRequestBuilder csrfPost(String path, MockHttpSession session) {
+        DefaultCsrfToken token = new DefaultCsrfToken("X-CSRF-TOKEN", "_csrf", "test-csrf-token");
+        session.setAttribute(
+                HttpSessionCsrfTokenRepository.class.getName() + ".CSRF_TOKEN",
+                token
+        );
+        return post(path)
+                .session(session)
+                .param(token.getParameterName(), xorEncoded(token.getToken()));
+    }
+
+    private String xorEncoded(String token) {
+        byte[] actual = token.getBytes(StandardCharsets.UTF_8);
+        byte[] combined = new byte[actual.length * 2];
+        for (int index = 0; index < actual.length; index++) {
+            byte mask = (byte) (0x5A ^ index);
+            combined[index] = mask;
+            combined[actual.length + index] = (byte) (mask ^ actual[index]);
+        }
+        return Base64.getUrlEncoder().encodeToString(combined);
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -205,8 +251,23 @@ class LegacyBotSecurityContractTest {
             return "ok";
         }
 
+        @PostMapping("/bots/bot_add")
+        String create() {
+            return "ok";
+        }
+
         @GetMapping("/bots/edit/{botId}")
         String edit(@PathVariable long botId) {
+            return "ok:" + botId;
+        }
+
+        @PostMapping("/bots/edit/{botId}")
+        String update(@PathVariable long botId) {
+            return "ok:" + botId;
+        }
+
+        @PostMapping("/bots/delete/{botId}")
+        String delete(@PathVariable long botId) {
             return "ok:" + botId;
         }
 

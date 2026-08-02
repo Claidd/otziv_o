@@ -25,7 +25,8 @@ public final class ReviewTextPolicy {
         }
 
         String normalized = text.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
-        return PLACEHOLDER_PREFIXES.stream().anyMatch(normalized::startsWith);
+        return "нет текста".equals(normalized)
+                || PLACEHOLDER_PREFIXES.stream().anyMatch(normalized::startsWith);
     }
 
     public static boolean isShortCommonReviewText(String text) {

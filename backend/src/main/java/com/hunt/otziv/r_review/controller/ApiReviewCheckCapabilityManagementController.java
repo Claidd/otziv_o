@@ -5,11 +5,10 @@ import com.hunt.otziv.archive.service.ReviewCheckArchiveService.ArchivedReviewCh
 import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityMutationService;
 import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityService;
 import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityService.CapabilityMetadata;
 import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityService.IssuedCapability;
-import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.repository.UserRepository;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -35,14 +34,13 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @RequestMapping("/api/manager/orders/{orderId}/review-check-capabilities")
 @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
-@Transactional
 public class ApiReviewCheckCapabilityManagementController {
 
     private final ReviewCheckCapabilityService capabilityService;
+    private final ReviewCheckCapabilityMutationService mutationService;
     private final OrderDetailsService orderDetailsService;
     private final ReviewCheckArchiveService archiveService;
     private final ManagerAccessService managerAccessService;
-    private final UserRepository userRepository;
 
     @PostMapping
     public ResponseEntity<IssuedCapability> issue(
@@ -51,12 +49,12 @@ public class ApiReviewCheckCapabilityManagementController {
             Authentication authentication
     ) {
         UUID orderDetailId = requiredOrderDetailId(request == null ? null : request.orderDetailId());
-        requireResourceAccess(orderId, orderDetailId, authentication);
-        IssuedCapability issued = capabilityService.issue(
+        IssuedCapability issued = mutationService.issue(
+                orderId,
                 orderDetailId,
                 request.scopes(),
                 request.expiresInDays(),
-                actorId(authentication)
+                authentication
         );
         return oneTimeSecret(issued);
     }
@@ -80,12 +78,12 @@ public class ApiReviewCheckCapabilityManagementController {
             Authentication authentication
     ) {
         UUID orderDetailId = requiredOrderDetailId(request == null ? null : request.orderDetailId());
-        requireResourceAccess(orderId, orderDetailId, authentication);
-        IssuedCapability issued = capabilityService.rotate(
+        IssuedCapability issued = mutationService.rotate(
+                orderId,
                 capabilityId,
                 orderDetailId,
                 request.expiresInDays(),
-                actorId(authentication)
+                authentication
         );
         return oneTimeSecret(issued);
     }
@@ -98,12 +96,12 @@ public class ApiReviewCheckCapabilityManagementController {
             Authentication authentication
     ) {
         UUID orderDetailId = requiredOrderDetailId(request == null ? null : request.orderDetailId());
-        requireResourceAccess(orderId, orderDetailId, authentication);
-        capabilityService.revoke(
+        mutationService.revoke(
+                orderId,
                 capabilityId,
                 orderDetailId,
-                actorId(authentication),
-                request.reason()
+                request.reason(),
+                authentication
         );
         return ResponseEntity.noContent().build();
     }
@@ -128,23 +126,14 @@ public class ApiReviewCheckCapabilityManagementController {
         ArchivedReviewCheck archived = archiveService.findByOrderDetailId(orderDetailId).orElseThrow(
                 ApiReviewCheckCapabilityManagementController::notFound
         );
-        if (!Objects.equals(expectedOrderId, archived.orderId()) || archived.companyId() == null) {
+        if (!Objects.equals(expectedOrderId, archived.orderId())
+                || !managerAccessService.canAccessArchivedOrder(
+                        archived.managerId(),
+                        archived.workerId(),
+                        authentication
+                )) {
             throw notFound();
         }
-        managerAccessService.requireCompanyAccess(archived.companyId(), authentication);
-    }
-
-    private Long actorId(Authentication authentication) {
-        if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
-            throw notFound();
-        }
-        User user = userRepository.findByUsername(authentication.getName()).orElseThrow(
-                ApiReviewCheckCapabilityManagementController::notFound
-        );
-        if (user.getId() == null) {
-            throw notFound();
-        }
-        return user.getId();
     }
 
     private UUID requiredOrderDetailId(UUID orderDetailId) {

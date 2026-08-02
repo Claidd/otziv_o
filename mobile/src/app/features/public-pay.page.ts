@@ -1,8 +1,10 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/standalone';
+import { Subscription } from 'rxjs';
 import { ApiService, PublicPaymentLink, PublicSbpBank, TbankPaymentPageMode } from '../core/api.service';
+import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 import { configuredPaymentTarget, type PaymentNavigationPurpose } from '../shared/payment-navigation';
 
@@ -127,10 +129,14 @@ import { configuredPaymentTarget, type PaymentNavigationPurpose } from '../share
     button{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-height:2.55rem;border:1px solid rgba(108,155,207,.25);border-radius:.82rem;color:var(--otziv-primary);background:var(--otziv-white);font:1000 .82rem/1 var(--otziv-font-family)}button.primary{color:#fff;background:var(--otziv-primary)}button:disabled{opacity:.55}.state-card,.done-card{display:grid;place-items:center;gap:.35rem;min-height:5.5rem;padding:1rem;text-align:center}.state-card.error{color:var(--otziv-danger)}.state-card.ok,.done-card{color:#16735f}.done-card h2,.done-card p{margin:0}.done-card p{color:var(--otziv-info);font-weight:800}.manual-card,.sbp-card{display:grid;gap:.45rem;padding:.75rem}.manual-card h2,.manual-card p{margin:0}.manual-card small{color:var(--otziv-info);font-weight:800}.manual-card .destination-error{margin:0;color:var(--otziv-danger);font-weight:900}
   `]
 })
-export class PublicPayPage {
+export class PublicPayPage implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
+  private readonly routeEpoch = new RouteEpochGuard();
+  private routeSubscription?: Subscription;
+  private paymentLoadSubscription?: Subscription;
+  private sbpBanksLoadSubscription?: Subscription;
 
-  readonly token = signal(this.route.snapshot.paramMap.get('token') ?? '');
+  readonly token = signal('');
   readonly payment = signal<PublicPaymentLink | null>(null);
   readonly loading = signal(true);
   readonly refreshingPayment = signal(false);
@@ -172,7 +178,15 @@ export class PublicPayPage {
     private readonly api: ApiService,
     private readonly externalLink: MobileExternalLinkService
   ) {
-    this.loadPayment();
+    this.routeSubscription = this.route.paramMap.subscribe((params) => {
+      this.activatePaymentRoute(params.get('token'));
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.routeEpoch.destroy();
+    this.cancelRouteReads();
+    this.routeSubscription?.unsubscribe();
   }
 
   @HostListener('window:pageshow') onPageShow(): void { this.refreshPaymentAfterReturn(); }
@@ -196,22 +210,34 @@ export class PublicPayPage {
       this.message.set('Укажите e-mail и подтвердите согласия.');
       return;
     }
+
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    const token = this.token();
     this.sbpSubmitting.set(true);
     this.clearFeedback();
-    this.api.initPublicSbpPayment(this.token(), this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent(), this.selectedSbpBankId() || null).subscribe({
+    this.api.initPublicSbpPayment(token, this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent(), this.selectedSbpBankId() || null).subscribe({
       next: (response) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.sbpSubmitting.set(false);
         if (response.qrPayload) {
-          this.openPaymentTarget(response.qrPayload, 'sbp');
+          this.openPaymentTarget(response.qrPayload, 'sbp', routeTicket);
           return;
         }
         if (response.paymentUrl) {
-          this.openPaymentTarget(response.paymentUrl, 'payment');
+          this.openPaymentTarget(response.paymentUrl, 'payment', routeTicket);
           return;
         }
         this.message.set('Банк не вернул ссылку СБП. Попробуйте форму банка.');
       },
       error: (error) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(error, 'Не удалось перейти к оплате.'));
         this.sbpSubmitting.set(false);
       }
@@ -223,18 +249,30 @@ export class PublicPayPage {
       this.message.set('Укажите e-mail и подтвердите согласия.');
       return;
     }
+
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    const token = this.token();
     this.bankSubmitting.set(true);
     this.clearFeedback();
-    this.api.initPublicPayment(this.token(), this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent()).subscribe({
+    this.api.initPublicPayment(token, this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent()).subscribe({
       next: (response) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.bankSubmitting.set(false);
         if (response.paymentUrl) {
-          this.openPaymentTarget(response.paymentUrl, 'payment');
+          this.openPaymentTarget(response.paymentUrl, 'payment', routeTicket);
           return;
         }
         this.message.set('Банк не вернул ссылку на оплату.');
       },
       error: (error) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(error, 'Не удалось перейти к оплате.'));
         this.bankSubmitting.set(false);
       }
@@ -245,15 +283,27 @@ export class PublicPayPage {
     if (!this.canReportManual()) {
       return;
     }
+
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    const token = this.token();
     this.manualSubmitting.set(true);
     this.clearFeedback();
-    this.api.reportPublicManualPayment(this.token()).subscribe({
+    this.api.reportPublicManualPayment(token).subscribe({
       next: (payment) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.payment.set(payment);
         this.manualSubmitting.set(false);
         this.message.set('Спасибо. Менеджер проверит поступление вручную.');
       },
       error: (error) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(error, 'Не удалось отметить оплату.'));
         this.manualSubmitting.set(false);
       }
@@ -264,7 +314,20 @@ export class PublicPayPage {
     if (!value?.trim()) {
       return;
     }
-    await navigator.clipboard.writeText(value.trim()).then(() => this.message.set('Скопировано.'));
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value.trim());
+      if (this.isActiveRoute(routeTicket)) {
+        this.message.set('Скопировано.');
+      }
+    } catch {
+      if (this.isActiveRoute(routeTicket)) {
+        this.error.set('Не удалось скопировать. Выделите реквизиты вручную.');
+      }
+    }
   }
 
   openManualPaymentUrl(): void {
@@ -273,15 +336,25 @@ export class PublicPayPage {
       this.error.set('Ссылка оплаты не настроена. Обратитесь к менеджеру.');
       return;
     }
-    this.openPaymentTarget(target, 'manual');
+    const routeTicket = this.captureRoute();
+    if (routeTicket) {
+      this.openPaymentTarget(target, 'manual', routeTicket);
+    }
   }
 
-  private openPaymentTarget(value: unknown, purpose: PaymentNavigationPurpose): void {
+  private openPaymentTarget(value: unknown, purpose: PaymentNavigationPurpose, routeTicket: RouteEpochTicket): void {
+    if (!this.isActiveRoute(routeTicket)) {
+      return;
+    }
     void this.externalLink.openPayment(value, purpose).then((opened) => {
-      if (!opened) {
+      if (this.isActiveRoute(routeTicket) && !opened) {
         this.error.set('Ссылка оплаты имеет недопустимый формат. Переход отменен.');
       }
-    }).catch(() => this.error.set('Не удалось открыть ссылку оплаты.'));
+    }).catch(() => {
+      if (this.isActiveRoute(routeTicket)) {
+        this.error.set('Не удалось открыть ссылку оплаты.');
+      }
+    });
   }
 
   setSbpBankId(value: string): void {
@@ -293,32 +366,77 @@ export class PublicPayPage {
   }
 
   loadPayment(): void {
-    if (!this.token()) {
+    const token = this.token();
+    const routeTicket = this.captureRoute();
+    if (!token || !routeTicket) {
       this.loading.set(false);
       this.error.set('Платежная ссылка не найдена.');
       return;
     }
+    this.paymentLoadSubscription?.unsubscribe();
+    this.paymentLoadSubscription = undefined;
     this.loading.set(true);
-    this.api.getPublicPaymentLink(this.token()).subscribe({
+    const subscription = this.api.getPublicPaymentLink(token).subscribe({
       next: (payment) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.applyPayment(payment);
         this.loading.set(false);
       },
       error: (error) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(error, 'Не удалось открыть платежную ссылку.'));
         this.loading.set(false);
       }
     });
+    if (!subscription.closed && this.isActiveRoute(routeTicket)) {
+      this.paymentLoadSubscription = subscription;
+    }
   }
 
-  private applyPayment(payment: PublicPaymentLink): void {
+  private applyPayment(payment: PublicPaymentLink, preserveEmail = false): void {
+    const typedEmail = this.email().trim();
+    this.applyCanonicalToken(payment.token);
     this.payment.set(payment);
-    this.email.set(payment.payerEmail ?? this.email());
+    if (!preserveEmail || !typedEmail) {
+      this.email.set(payment.payerEmail ?? '');
+    }
     if (payment.payable && this.showSbpPayment() && !this.sbpBanks().length) {
-      this.api.getPublicSbpBanks(payment.token).subscribe({
-        next: (banks) => this.sbpBanks.set(banks ?? []),
-        error: () => this.sbpBanks.set([])
-      });
+      this.loadSbpBanks(payment.token);
+    }
+  }
+
+  private applyCanonicalToken(token?: string | null): void {
+    const cleanToken = token?.trim();
+    if (cleanToken && cleanToken !== this.token()) {
+      this.token.set(cleanToken);
+    }
+  }
+
+  private loadSbpBanks(token: string): void {
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    this.sbpBanksLoadSubscription?.unsubscribe();
+    this.sbpBanksLoadSubscription = undefined;
+    const subscription = this.api.getPublicSbpBanks(token).subscribe({
+      next: (banks) => {
+        if (this.isActiveRoute(routeTicket)) {
+          this.sbpBanks.set(banks ?? []);
+        }
+      },
+      error: () => {
+        if (this.isActiveRoute(routeTicket)) {
+          this.sbpBanks.set([]);
+        }
+      }
+    });
+    if (!subscription.closed && this.isActiveRoute(routeTicket)) {
+      this.sbpBanksLoadSubscription = subscription;
     }
   }
 
@@ -329,13 +447,86 @@ export class PublicPayPage {
     }
     this.lastReturnRefreshAt = now;
     this.refreshingPayment.set(true);
-    this.api.getPublicPaymentLink(this.token()).subscribe({
+    const routeTicket = this.captureRoute();
+    const token = this.token();
+    if (!routeTicket || !token) {
+      this.refreshingPayment.set(false);
+      return;
+    }
+    this.paymentLoadSubscription?.unsubscribe();
+    this.paymentLoadSubscription = undefined;
+    const subscription = this.api.getPublicPaymentLink(token).subscribe({
       next: (payment) => {
-        this.applyPayment(payment);
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
+        this.applyPayment(payment, true);
         this.refreshingPayment.set(false);
       },
-      error: () => this.refreshingPayment.set(false)
+      error: () => {
+        if (this.isActiveRoute(routeTicket)) {
+          this.refreshingPayment.set(false);
+        }
+      }
     });
+    if (!subscription.closed && this.isActiveRoute(routeTicket)) {
+      this.paymentLoadSubscription = subscription;
+    }
+  }
+
+  private activatePaymentRoute(rawToken: string | null): void {
+    const token = rawToken?.trim() ?? '';
+    const routeKey = token ? `pay:${token}` : 'pay:invalid';
+    if (!this.routeEpoch.change(routeKey)) {
+      return;
+    }
+
+    this.cancelRouteReads();
+    this.clearRouteState();
+    this.token.set(token);
+    if (!token) {
+      this.error.set('Платежная ссылка не найдена.');
+      return;
+    }
+    this.loadPayment();
+  }
+
+  private clearRouteState(): void {
+    this.payment.set(null);
+    this.loading.set(false);
+    this.refreshingPayment.set(false);
+    this.sbpSubmitting.set(false);
+    this.bankSubmitting.set(false);
+    this.manualSubmitting.set(false);
+    this.error.set('');
+    this.message.set('');
+    this.email.set('');
+    this.offerConsent.set(false);
+    this.privacyConsent.set(false);
+    this.receiptConsent.set(false);
+    this.sbpPaymentPayload.set('');
+    this.sbpBanks.set([]);
+    this.selectedSbpBankId.set('');
+    this.lastReturnRefreshAt = 0;
+  }
+
+  private cancelRouteReads(): void {
+    const paymentSubscription = this.paymentLoadSubscription;
+    const banksSubscription = this.sbpBanksLoadSubscription;
+    this.paymentLoadSubscription = undefined;
+    this.sbpBanksLoadSubscription = undefined;
+    paymentSubscription?.unsubscribe();
+    banksSubscription?.unsubscribe();
+    this.loading.set(false);
+    this.refreshingPayment.set(false);
+  }
+
+  private captureRoute(): RouteEpochTicket | null {
+    return this.routeEpoch.capture();
+  }
+
+  private isActiveRoute(routeTicket: RouteEpochTicket): boolean {
+    return this.routeEpoch.accepts(routeTicket);
   }
 
   private clearFeedback(): void {

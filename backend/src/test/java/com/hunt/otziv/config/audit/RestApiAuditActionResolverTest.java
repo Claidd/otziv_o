@@ -14,6 +14,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 class RestApiAuditActionResolverTest {
@@ -139,6 +141,71 @@ class RestApiAuditActionResolverTest {
         String action = resolver.resolve(request, null);
 
         assertEquals("миграция legacy-пользователя", action);
+    }
+
+    @Test
+    void registrationAuditSanitizesAndBoundsHostileUsernameFromBody() {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST",
+                "/api/auth/register"
+        );
+        request.setAttribute(
+                HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE,
+                "/api/auth/register"
+        );
+        request.setAttribute(
+                RestApiAuditActionResolver.REQUEST_BODY_ATTRIBUTE,
+                Map.of("username", "client\r\nFORGED\u2028LINE\u2029\u0000" + "я".repeat(10_000))
+        );
+
+        String action = resolver.resolve(request, null);
+
+        assertTrue(action.startsWith("регистрация клиента \"client  FORGED LINE  "));
+        assertTrue(action.length() <= RestApiAuditActionResolver.MAX_ACTION_LENGTH);
+        assertTrue(
+                action.length() <= "регистрация клиента \"\"".length()
+                        + RestApiAuditActionResolver.MAX_DYNAMIC_VALUE_LENGTH
+        );
+        assertFalse(action.codePoints().anyMatch(codePoint ->
+                Character.isISOControl(codePoint)
+                        || Character.getType(codePoint) == Character.LINE_SEPARATOR
+                        || Character.getType(codePoint) == Character.PARAGRAPH_SEPARATOR
+        ));
+    }
+
+    @Test
+    void auditPathUsesRouteTemplateAndFailsClosedWithoutOne() {
+        MockHttpServletRequest mapped = new MockHttpServletRequest(
+                "GET",
+                "/api/payments/public/secret-payment-token"
+        );
+        mapped.setAttribute(
+                HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE,
+                "/api/payments/public/{token}"
+        );
+        assertEquals("/api/payments/public/{token}", resolver.bestPattern(mapped));
+
+        MockHttpServletRequest unmatched = new MockHttpServletRequest(
+                "GET",
+                "/api/review-check/11111111-1111-1111-1111-111111111111"
+        );
+        assertEquals("/unmatched-rest-route", resolver.bestPattern(unmatched));
+    }
+
+    @ParameterizedTest
+    @MethodSource("publicReviewRoutes")
+    void publicReviewAuditActionNeverContainsBearerUuid(String method, String pattern) {
+        String bearerUuid = "9f25d728-3d2f-4ba2-9c43-9c74d55e0109";
+        MockHttpServletRequest request = new MockHttpServletRequest(method, pattern.replace("{orderDetailId}", bearerUuid));
+        request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, pattern);
+        request.setAttribute(
+                HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE,
+                Map.of("orderDetailId", bearerUuid, "reviewId", "25")
+        );
+
+        String action = resolver.resolve(request, null);
+
+        assertFalse(action.contains(bearerUuid), () -> "Audit action leaked public bearer UUID: " + action);
     }
 
     @ParameterizedTest
@@ -301,6 +368,22 @@ class RestApiAuditActionResolverTest {
                 arguments("POST", "/logs/clear", "очистка текущего файла лога"),
                 arguments("POST", "/logs/clear/all", "очистка основных файлов логов"),
                 arguments("GET", "/logs/ui", "открытие страницы живых логов")
+        );
+    }
+
+    private static Stream<Arguments> publicReviewRoutes() {
+        return Stream.of(
+                arguments("GET", "/api/review-check/{orderDetailId}"),
+                arguments("PUT", "/api/review-check/{orderDetailId}"),
+                arguments("PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/text"),
+                arguments("PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/answer"),
+                arguments("POST", "/api/review-check/{orderDetailId}/approve"),
+                arguments("POST", "/api/review-check/{orderDetailId}/correction"),
+                arguments("POST", "/api/review-check/{orderDetailId}/send-to-check"),
+                arguments("POST", "/api/review-check/{orderDetailId}/pay-ok"),
+                arguments("PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/note"),
+                arguments("PUT", "/api/review-check/{orderDetailId}/order-note"),
+                arguments("PUT", "/api/review-check/{orderDetailId}/company-note")
         );
     }
 }

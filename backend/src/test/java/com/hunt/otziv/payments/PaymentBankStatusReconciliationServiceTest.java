@@ -46,6 +46,8 @@ class PaymentBankStatusReconciliationServiceTest {
                 any(Pageable.class)
         );
         assertTrue(statuses.getValue().contains(PaymentLinkStatus.NEEDS_RECONCILIATION));
+        assertTrue(statuses.getValue().contains(PaymentLinkStatus.PARTIAL_REVERSED));
+        assertTrue(statuses.getValue().contains(PaymentLinkStatus.PARTIAL_REFUNDED));
         verify(paymentLinkService).reconcileBankLink(eq(1024L), any());
         verify(paymentLinkService).reconcileBankLink(eq(4095L), any());
     }

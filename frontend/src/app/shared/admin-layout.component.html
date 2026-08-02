@@ -48,7 +48,7 @@
           <button type="button" class="mobile-shell-account" aria-label="Выйти из аккаунта" (click)="logout()">
             <span class="material-icons-sharp" aria-hidden="true">logout</span>
           </button>
-        } @else {
+        } @else if (showLoginControls()) {
           <button type="button" class="mobile-shell-login" (click)="login()">Вход</button>
         }
       </div>
@@ -160,7 +160,7 @@
 
     @if (authenticated()) {
       <button type="button" class="login-pill logout" (click)="logout()">Выход</button>
-    } @else {
+    } @else if (showLoginControls()) {
       <button type="button" class="login-pill" (click)="login()">Вход</button>
     }
   </div>
@@ -228,7 +228,7 @@
           }
         </div>
         <button type="button" class="login-pill logout" (click)="logout()">Выход</button>
-      } @else {
+      } @else if (showLoginControls()) {
         <button type="button" class="login-pill" (click)="login()">ЛОГИН</button>
       }
     </div>
@@ -365,7 +365,7 @@
             <span class="material-icons-sharp">logout</span>
             <strong>Выход</strong>
           </a>
-        } @else {
+        } @else if (showLoginControls()) {
           <a class="home-link" href="" (click)="$event.preventDefault(); login()">
             <span class="material-icons-sharp">login</span>
             <strong>Вход</strong>

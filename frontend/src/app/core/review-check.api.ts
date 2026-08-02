@@ -1,7 +1,7 @@
 import { HttpClient, HttpContext, HttpHeaders } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { OPTIONAL_AUTH_TOKEN, SKIP_AUTH_REDIRECT_ON_401 } from './auth-http-context';
+import { OPTIONAL_AUTH_TOKEN, SKIP_AUTH_REDIRECT_ON_401, SKIP_AUTH_TOKEN } from './auth-http-context';
 import { appEnvironment } from './app-environment';
 
 const OPAQUE_REVIEW_CAPABILITY = /^rc1_[A-Za-z0-9_-]{43}$/;
@@ -77,6 +77,9 @@ export class ReviewCheckApi {
   private readonly publicContext = new HttpContext()
     .set(SKIP_AUTH_REDIRECT_ON_401, true)
     .set(OPTIONAL_AUTH_TOKEN, true);
+  private readonly capabilityContext = new HttpContext()
+    .set(SKIP_AUTH_REDIRECT_ON_401, true)
+    .set(SKIP_AUTH_TOKEN, true);
 
   constructor(private readonly http: HttpClient) {}
 
@@ -179,7 +182,7 @@ export class ReviewCheckApi {
       return { context: this.publicContext };
     }
     return {
-      context: this.publicContext,
+      context: this.capabilityContext,
       headers: new HttpHeaders({ 'X-Review-Capability': capabilityToken })
     };
   }

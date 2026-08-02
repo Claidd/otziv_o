@@ -1163,23 +1163,24 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                           Pageable pageable);
 
     @Query("""
-        SELECT DISTINCT o
+        SELECT o.id
         FROM Order o
-        LEFT JOIN FETCH o.status s
-        LEFT JOIN FETCH o.company c
-        LEFT JOIN FETCH c.manager cm
-        LEFT JOIN FETCH cm.user
-        LEFT JOIN FETCH o.manager m
-        LEFT JOIN FETCH m.user
-        LEFT JOIN FETCH o.filial f
-        LEFT JOIN FETCH f.city
-        WHERE c.id = :companyId
+        JOIN o.status status
+        JOIN o.company company
+        WHERE company.id = :companyId
           AND o.complete = false
-          AND s.title IN :statuses
+          AND status.title IN :statuses
+          AND NOT EXISTS (
+              SELECT item.id
+              FROM CommonInvoiceOrder item
+              WHERE item.order = o
+          )
         ORDER BY o.id ASC
     """)
-    List<Order> findCommonBillingBackfillOrders(@Param("companyId") Long companyId,
-                                                @Param("statuses") Collection<String> statuses);
+    List<Long> findCommonBillingBackfillOrderIds(
+            @Param("companyId") Long companyId,
+            @Param("statuses") Collection<String> statuses
+    );
 
     @Query("""
         SELECT o.id

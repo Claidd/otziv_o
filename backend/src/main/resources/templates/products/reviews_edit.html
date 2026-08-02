@@ -112,6 +112,7 @@
                                             <textarea
                                                     class="company__card__text__review expandable-textarea"
                                                     th:field="*{reviews[__${itemStat.index}__].text}"
+                                                    maxlength="5000"
                                                     onclick="expandTextarea(this)"
                                                     data-id="review-text-${itemStat.index}"
                                                     id="review-text-${itemStat.index}"
@@ -130,6 +131,7 @@
                                             <textarea
                                                     class="company__card__content__review__answer"
                                                     th:field="*{reviews[__${itemStat.index}__].answer}"
+                                                    maxlength="5000"
                                                     placeholder="впишите сюда замечания к отзыву, если есть и нажмите кнопку <Сохранить>, затем кнопку <Корректировать>, ниже, под всеми отзывами"
                                                     onfocus="this.placeholder='';"
                                                     onblur="if(this.value===''){this.placeholder='впишите сюда замечания к отзыву, если есть и нажмите кнопку <Сохранить>, затем кнопку <Корректировать>, ниже, под всеми отзывами';}"
@@ -216,14 +218,16 @@
                                         </div>
                                         <div class="company__card__content__review__text">
                                             <textarea class="company__card__text__review" type="text"
-                                                      th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
+                                                      th:field="*{reviews[__${itemStat.index}__].text}"
+                                                      maxlength="5000">  </textarea>
                                         </div>
                                         <div class="company__card__content__subtitle">
                                             <a class="company__card__title__lead2">текст ответа: </a>
                                         </div>
                                         <div>
                                             <input class="company__card__content__review__answer" type="text"
-                                                   th:field="*{reviews[__${itemStat.index}__].answer}"/>
+                                                   th:field="*{reviews[__${itemStat.index}__].answer}"
+                                                   maxlength="5000"/>
                                         </div>
                                         <div style="display: none;">
                                             <textarea class="company__card__content__review__answer" type="text"
@@ -332,14 +336,16 @@
                                         <!--                                        </div>-->
                                         <div class="company__card__content__review__text">
                                             <textarea class="company__card__text__review" type="text"
-                                                      th:field="*{reviews[__${itemStat.index}__].text}">  </textarea>
+                                                      th:field="*{reviews[__${itemStat.index}__].text}"
+                                                      maxlength="5000">  </textarea>
                                         </div>
                                         <div class="company__card__content__subtitle">
                                             <a class="company__card__title__lead2">текст ответа: </a>
                                         </div>
                                         <div>
                                             <input class="company__card__content__review__answer" type="text"
-                                                   th:field="*{reviews[__${itemStat.index}__].answer}"/>
+                                                   th:field="*{reviews[__${itemStat.index}__].answer}"
+                                                   maxlength="5000"/>
                                         </div>
                                         <div style="display: none;">
                                             <textarea class="company__card__content__review__answer" type="text"
@@ -383,7 +389,8 @@
                                     </div>
                                     <div class="reviews__btn__save">
                                         <textarea class="company__card__content__review__comment" type="text"
-                                                  th:field="*{comment}">  </textarea>
+                                                  th:field="*{comment}"
+                                                  maxlength="5000">  </textarea>
                                     </div>
                                     <div style="display: none;">
                                         <textarea class="company__card__content__review__answer" type="text"

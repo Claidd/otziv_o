@@ -45,6 +45,24 @@ public class CommonBillingAccountCompany {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    @Column(name = "reconcile_pending", nullable = false)
+    private boolean reconcilePending;
+
+    @Column(name = "reconcile_attempts", nullable = false)
+    private int reconcileAttempts;
+
+    @Column(name = "reconcile_next_attempt_at")
+    private LocalDateTime reconcileNextAttemptAt;
+
+    @Column(name = "reconcile_lease_token", length = 36)
+    private String reconcileLeaseToken;
+
+    @Column(name = "reconcile_lease_until")
+    private LocalDateTime reconcileLeaseUntil;
+
+    @Column(name = "reconcile_last_error", length = 512)
+    private String reconcileLastError;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

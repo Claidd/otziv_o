@@ -9,8 +9,8 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
@@ -25,7 +25,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,9 +38,6 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class OrderReviewMutationServiceTest {
-
-    @Mock
-    private OrderRepository orderRepository;
 
     @Mock
     private OrderDetailsService orderDetailsService;
@@ -58,6 +54,12 @@ class OrderReviewMutationServiceTest {
     @Mock
     private ReviewAccountWalkScheduleService accountWalkScheduleService;
 
+    @Mock
+    private OrderAggregateMutationLockService orderAggregateMutationLockService;
+
+    @Mock
+    private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+
     @Test
     void addNewReviewCreatesReviewRecalculatesTotalsAndIncrementsCompanyCounter() {
         OrderReviewMutationService service = service();
@@ -71,7 +73,7 @@ class OrderReviewMutationServiceTest {
         order.setDetails(List.of(detail));
         Bot bot = bot(100L);
 
-        when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+        when(orderAggregateMutationLockService.lock(10L)).thenReturn(order);
         when(botAssignmentService.assignBotForReviewChange(any(), any(), any())).thenReturn(bot);
         when(reviewService.save(any(Review.class))).thenAnswer(invocation -> {
             Review review = invocation.getArgument(0);
@@ -112,7 +114,7 @@ class OrderReviewMutationServiceTest {
         OrderReviewMutationService service = service();
         Order order = order(11L, company(0), worker(1L), filial());
 
-        when(orderRepository.findById(11L)).thenReturn(Optional.of(order));
+        when(orderAggregateMutationLockService.lock(11L)).thenReturn(order);
 
         assertFalse(service.addNewReview(11L));
 
@@ -129,8 +131,8 @@ class OrderReviewMutationServiceTest {
         OrderDetails detail = detail(order, product("80.00"), new ArrayList<>(List.of(kept, removed)));
         order.setDetails(List.of(detail));
 
-        when(orderRepository.findById(12L)).thenReturn(Optional.of(order));
-        when(reviewService.getReviewById(2L)).thenReturn(removed);
+        when(orderAggregateMutationLockService.lock(12L)).thenReturn(order);
+        when(reviewService.deleteReviewFromLockedOrder(12L, 2L)).thenReturn(true);
 
         assertTrue(service.deleteNewReview(12L, 2L));
 
@@ -140,7 +142,7 @@ class OrderReviewMutationServiceTest {
         assertEquals(1, order.getAmount());
         assertEquals(new BigDecimal("80.00"), order.getSum());
         assertEquals(0, company.getCounterNoPay());
-        verify(reviewService).deleteReview(2L);
+        verify(reviewService).deleteReviewFromLockedOrder(12L, 2L);
         verify(orderDetailsService).save(detail);
         verify(orderDetailsService).saveOrder(order);
         verify(companyService).save(company);
@@ -154,23 +156,49 @@ class OrderReviewMutationServiceTest {
         OrderDetails detail = detail(order, product("20.00"), new ArrayList<>());
         order.setDetails(List.of(detail));
 
-        when(orderRepository.findById(13L)).thenReturn(Optional.of(order));
-        when(reviewService.getReviewById(99L)).thenReturn(null);
-
+        when(orderAggregateMutationLockService.lock(13L)).thenReturn(order);
         assertFalse(service.deleteNewReview(13L, 99L));
 
-        verify(reviewService, never()).deleteReview(99L);
+        verify(reviewService, never()).deleteReviewFromLockedOrder(13L, 99L);
+        verifyNoInteractions(orderDetailsService, botAssignmentService, companyService);
+    }
+
+    @Test
+    void deleteNewReviewRejectsReviewFromAnotherOrderWithoutMutatingEitherAggregate() {
+        OrderReviewMutationService service = service();
+        Company companyA = company(2);
+        Company companyB = company(4);
+        Order orderA = order(21L, companyA, worker(21L), filial());
+        Order orderB = order(22L, companyB, worker(22L), filial());
+        Review reviewA = review(101L, "50.00");
+        Review reviewB = review(202L, "70.00");
+        OrderDetails detailA = detail(orderA, product("50.00"), new ArrayList<>(List.of(reviewA)));
+        OrderDetails detailB = detail(orderB, product("70.00"), new ArrayList<>(List.of(reviewB)));
+        reviewA.setOrderDetails(detailA);
+        reviewB.setOrderDetails(detailB);
+        orderA.setDetails(List.of(detailA));
+        orderB.setDetails(List.of(detailB));
+        when(orderAggregateMutationLockService.lock(21L)).thenReturn(orderA);
+
+        assertFalse(service.deleteNewReview(21L, 202L));
+
+        assertEquals(List.of(reviewA), detailA.getReviews());
+        assertEquals(List.of(reviewB), detailB.getReviews());
+        assertEquals(2, companyA.getCounterNoPay());
+        assertEquals(4, companyB.getCounterNoPay());
+        verify(reviewService, never()).deleteReviewFromLockedOrder(any(), any());
         verifyNoInteractions(orderDetailsService, botAssignmentService, companyService);
     }
 
     private OrderReviewMutationService service() {
         return new OrderReviewMutationService(
-                orderRepository,
                 orderDetailsService,
                 botAssignmentService,
                 reviewService,
                 companyService,
-                accountWalkScheduleService
+                accountWalkScheduleService,
+                orderAggregateMutationLockService,
+                assignmentMutationGuardService
         );
     }
 

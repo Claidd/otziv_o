@@ -76,6 +76,85 @@ public class PaymentLinkArchiveRepository {
             "receipt_consent_document_url"
     );
 
+    /**
+     * A live payment link must remain authoritative while a provider operation,
+     * delayed cancel observation, or retryable client notification is pending.
+     */
+    private static final String ARCHIVE_STATE_BLOCKER_SQL = """
+            (
+                pl.status = 'NEEDS_RECONCILIATION'
+                OR COALESCE(pl.status, '') NOT IN (
+                    'CREATED',
+                    'TEST_CONFIRMED',
+                    'CONFIRMED',
+                    'REJECTED',
+                    'CANCELED',
+                    'REVERSED',
+                    'REFUNDED',
+                    'EXPIRED',
+                    'FAILED'
+                )
+                OR pl.bank_init_nonce IS NOT NULL
+                OR pl.bank_cancel_nonce IS NOT NULL
+                OR pl.bank_cancel_origin_status IS NOT NULL
+                OR COALESCE(pl.receipt_status, 'DONE') = 'PENDING'
+                OR (
+                    pl.status = 'CONFIRMED'
+                    AND pl.payment_success_notified_at IS NULL
+                    AND COALESCE(pl.payment_success_notification_retry_eligible, 0) = 1
+                )
+            )
+            """;
+
+    /**
+     * Candidate discovery may pass an abandoned claim only after its database
+     * lease has expired and the payment link no longer represents retryable
+     * notification work. A live lease remains an unconditional blocker.
+     */
+    private static final String ARCHIVE_SELECTION_BLOCKER_SQL = """
+            (
+                """ + ARCHIVE_STATE_BLOCKER_SQL + """
+                OR EXISTS (
+                    SELECT 1
+                    FROM payment_success_notification_retry_claims notification_claim
+                    WHERE notification_claim.payment_link_id = pl.id
+                      AND notification_claim.processing_lease_until > CURRENT_TIMESTAMP(6)
+                )
+            )
+            """;
+
+    /**
+     * Copy/delete and hard-delete guards remain strict: cleanup must have
+     * removed every expired, ineligible claim before any live row can move.
+     */
+    private static final String ARCHIVE_FINAL_BLOCKER_SQL = """
+            (
+                """ + ARCHIVE_STATE_BLOCKER_SQL + """
+                OR EXISTS (
+                    SELECT 1
+                    FROM payment_success_notification_retry_claims notification_claim
+                    WHERE notification_claim.payment_link_id = pl.id
+                )
+            )
+            """;
+
+    private static final String ARCHIVE_ELIGIBILITY_SQL = """
+            (
+                (
+                    pl.status IN ('CONFIRMED', 'TEST_CONFIRMED')
+                    AND COALESCE(pl.paid_at, pl.updated_at, pl.created_at) < :paidCutoff
+                    AND COALESCE(pl.receipt_status, 'DONE') <> 'PENDING'
+                )
+                OR (
+                    pl.status IN (
+                        'EXPIRED', 'REJECTED', 'FAILED', 'CANCELED', 'REVERSED',
+                        'PARTIAL_REVERSED', 'REFUNDED', 'PARTIAL_REFUNDED'
+                    )
+                    AND COALESCE(pl.updated_at, pl.created_at) < :finalCutoff
+                )
+            )
+            """;
+
     private final NamedParameterJdbcTemplate jdbc;
 
     public List<AdminPaymentLinkResponse> findArchivedPage(
@@ -152,17 +231,8 @@ public class PaymentLinkArchiveRepository {
                     FROM archive_payment_links apl
                     WHERE apl.id = pl.id
                 )
-                  AND (
-                    (
-                      pl.status IN ('CONFIRMED', 'TEST_CONFIRMED')
-                      AND COALESCE(pl.paid_at, pl.updated_at, pl.created_at) < :paidCutoff
-                      AND COALESCE(pl.receipt_status, 'DONE') <> 'PENDING'
-                    )
-                    OR (
-                      pl.status IN ('EXPIRED', 'REJECTED', 'FAILED', 'CANCELED', 'REVERSED', 'PARTIAL_REVERSED', 'REFUNDED', 'PARTIAL_REFUNDED')
-                      AND COALESCE(pl.updated_at, pl.created_at) < :finalCutoff
-                    )
-                  )
+                  AND """ + ARCHIVE_ELIGIBILITY_SQL + """
+                  AND NOT """ + ARCHIVE_SELECTION_BLOCKER_SQL + """
                 ORDER BY pl.created_at ASC, pl.id ASC
                 LIMIT :limit
                 """, new MapSqlParameterSource()
@@ -171,7 +241,63 @@ public class PaymentLinkArchiveRepository {
                 .addValue("limit", Math.max(1, limit)), Long.class);
     }
 
-    public List<Long> findLiveIdsByOrderId(Long orderId) {
+    public List<Long> findOrderIdsForPaymentLinkIds(Collection<Long> paymentLinkIds) {
+        if (paymentLinkIds == null || paymentLinkIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.queryForList("""
+                SELECT DISTINCT pl.order_id
+                FROM payment_links pl
+                WHERE pl.id IN (:paymentLinkIds)
+                ORDER BY pl.order_id
+                """, Map.of("paymentLinkIds", paymentLinkIds), Long.class);
+    }
+
+    public List<Long> lockOrderIdsForArchive(Collection<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.queryForList("""
+                SELECT o.order_id
+                FROM orders o
+                WHERE o.order_id IN (:orderIds)
+                ORDER BY o.order_id
+                FOR UPDATE
+                """, Map.of("orderIds", orderIds), Long.class);
+    }
+
+    public List<Long> findArchiveCandidateIdsForUpdate(
+            Collection<Long> snapshotIds,
+            Collection<Long> lockedOrderIds,
+            LocalDateTime paidCutoff,
+            LocalDateTime finalCutoff
+    ) {
+        if (snapshotIds == null || snapshotIds.isEmpty()
+                || lockedOrderIds == null || lockedOrderIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.queryForList("""
+                SELECT pl.id
+                FROM payment_links pl
+                WHERE pl.id IN (:snapshotIds)
+                  AND pl.order_id IN (:lockedOrderIds)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM archive_payment_links archived
+                      WHERE archived.id = pl.id
+                  )
+                  AND """ + ARCHIVE_ELIGIBILITY_SQL + """
+                  AND NOT """ + ARCHIVE_SELECTION_BLOCKER_SQL + """
+                ORDER BY pl.order_id, pl.id
+                FOR UPDATE SKIP LOCKED
+                """, new MapSqlParameterSource()
+                .addValue("snapshotIds", snapshotIds)
+                .addValue("lockedOrderIds", lockedOrderIds)
+                .addValue("paidCutoff", Timestamp.valueOf(paidCutoff))
+                .addValue("finalCutoff", Timestamp.valueOf(finalCutoff)), Long.class);
+    }
+
+    public List<Long> findLiveIdsByOrderIdForUpdate(Long orderId) {
         if (orderId == null) {
             return List.of();
         }
@@ -180,10 +306,37 @@ public class PaymentLinkArchiveRepository {
                 FROM payment_links pl
                 WHERE pl.order_id = :orderId
                 ORDER BY pl.created_at ASC, pl.id ASC
+                FOR UPDATE
                 """, Map.of("orderId", orderId), Long.class);
     }
 
-    public boolean hasLiveReconciliationForOrder(Long orderId) {
+    /**
+     * Deletes only abandoned leases for payment rows already locked by the
+     * caller. The canonical order is therefore Order -&gt; PaymentLink -&gt; Claim.
+     * A live lease, or an expired lease whose CONFIRMED link is still retryable,
+     * is deliberately preserved.
+     */
+    public int deleteExpiredIneligibleNotificationClaimsForLockedPaymentLinks(
+            Collection<Long> lockedPaymentLinkIds
+    ) {
+        if (lockedPaymentLinkIds == null || lockedPaymentLinkIds.isEmpty()) {
+            return 0;
+        }
+        return jdbc.update("""
+                DELETE notification_claim
+                FROM payment_success_notification_retry_claims notification_claim
+                JOIN payment_links pl ON pl.id = notification_claim.payment_link_id
+                WHERE pl.id IN (:paymentLinkIds)
+                  AND notification_claim.processing_lease_until <= CURRENT_TIMESTAMP(6)
+                  AND NOT (
+                      pl.status = 'CONFIRMED'
+                      AND pl.payment_success_notified_at IS NULL
+                      AND COALESCE(pl.payment_success_notification_retry_eligible, 0) = 1
+                  )
+                """, Map.of("paymentLinkIds", lockedPaymentLinkIds));
+    }
+
+    public boolean hasLiveArchiveBlockerForOrder(Long orderId) {
         if (orderId == null) {
             return false;
         }
@@ -192,28 +345,29 @@ public class PaymentLinkArchiveRepository {
                     SELECT 1
                     FROM payment_links pl
                     WHERE pl.order_id = :orderId
-                      AND pl.status = 'NEEDS_RECONCILIATION'
+                      AND """ + ARCHIVE_FINAL_BLOCKER_SQL + """
                 )
                 """, Map.of("orderId", orderId), Long.class);
         return present != null && present > 0;
     }
 
-    public List<Long> findLiveIdsForPreparedOrderArchiveCandidates() {
+    public List<Long> findLiveIdsForPreparedOrderArchiveCandidatesForUpdate() {
         return jdbc.queryForList("""
                 SELECT pl.id
                 FROM payment_links pl
                 JOIN archive_candidate_orders co ON co.order_id = pl.order_id
                 ORDER BY pl.created_at ASC, pl.id ASC
+                FOR UPDATE
                 """, Map.of(), Long.class);
     }
 
-    public boolean hasPreparedOrderReconciliationCandidate() {
+    public boolean hasPreparedOrderArchiveBlocker() {
         Long present = jdbc.queryForObject("""
                 SELECT EXISTS(
                     SELECT 1
                     FROM payment_links pl
                     JOIN archive_candidate_orders co ON co.order_id = pl.order_id
-                    WHERE pl.status = 'NEEDS_RECONCILIATION'
+                    WHERE """ + ARCHIVE_FINAL_BLOCKER_SQL + """
                 )
                 """, Map.of(), Long.class);
         return present != null && present > 0;
@@ -240,7 +394,7 @@ public class PaymentLinkArchiveRepository {
                 .map(column -> "pl." + column)
                 .reduce((left, right) -> left + ", " + right)
                 .orElse("");
-        String sql = """
+        String sql = ("""
                 INSERT IGNORE INTO archive_payment_links (
                   %s,
                   archived_at,
@@ -265,7 +419,8 @@ public class PaymentLinkArchiveRepository {
                 LEFT JOIN managers m ON m.manager_id = o.order_manager
                 LEFT JOIN users u ON u.id = m.user_id
                 WHERE pl.id IN (:ids)
-                """.formatted(columns, selectColumns);
+                  AND NOT """ + ARCHIVE_FINAL_BLOCKER_SQL + """
+                """).formatted(columns, selectColumns);
         return jdbc.update(sql, new MapSqlParameterSource()
                 .addValue("ids", ids)
                 .addValue("archivedAt", Timestamp.valueOf(archivedAt))
@@ -277,7 +432,17 @@ public class PaymentLinkArchiveRepository {
         if (ids == null || ids.isEmpty()) {
             return 0;
         }
-        return jdbc.update("DELETE FROM payment_links WHERE id IN (:ids)", Map.of("ids", ids));
+        return jdbc.update("""
+                DELETE pl
+                FROM payment_links pl
+                WHERE pl.id IN (:ids)
+                  AND NOT """ + ARCHIVE_FINAL_BLOCKER_SQL + """
+                  AND EXISTS (
+                      SELECT 1
+                      FROM archive_payment_links archived
+                      WHERE archived.id = pl.id
+                  )
+                """, Map.of("ids", ids));
     }
 
     private MapSqlParameterSource filterParams(

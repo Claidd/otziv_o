@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.capability;
 
+import com.hunt.otziv.p_products.review.OrderAggregateMutationLockService;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class ReviewCheckMutationLockService {
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final OrderAggregateMutationLockService orderAggregateMutationLockService;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void lock(UUID orderDetailId) {
@@ -83,6 +85,12 @@ public class ReviewCheckMutationLockService {
         if (locked.isEmpty()) {
             throw notFound();
         }
+
+        // A live review-check mutation participates in the same parent-row
+        // lock protocol as worker/manager edits and publication approval. An
+        // archived aggregate has no live orders row and remains serialized by
+        // the review-check mutex above.
+        orderAggregateMutationLockService.lockIfLive(locked.getFirst());
     }
 
     private static ResponseStatusException notFound() {

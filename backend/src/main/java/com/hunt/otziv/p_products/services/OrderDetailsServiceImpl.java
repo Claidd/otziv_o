@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -82,6 +83,26 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
         return convertToDetailsDTO(orderDetailsRepository.findByIdForReviewCheck(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Детали заказа '%s' не найдены", orderDetailId))));
     } // Взять детали дто по Id
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderDetailsDTO> getOrderDetailDTOsByOrderIdForReviewCheck(Long orderId) {
+        if (orderId == null) {
+            return List.of();
+        }
+        return orderDetailsRepository.findAllByOrderIdForReviewCheck(orderId).stream()
+                .map(this::convertToDetailsDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderDetails> getOrderDetailsForReviewCheckByOrderId(Long orderId) {
+        if (orderId == null) {
+            return List.of();
+        }
+        return orderDetailsRepository.findAllByOrderIdForReviewCheck(orderId);
+    }
+
     private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){ // перевод деталей в дто
         return OrderDetailsDTO.builder()
                 .id(orderDetails.getId())
@@ -92,7 +113,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .order(convertToOrderDTO(orderDetails.getOrder(), orderDetails.getId()))
                 .reviews(convertToReviewsDTOList(orderDetails.getReviews(), orderDetails.getId()))
                 .comment(orderDetails.getComment())
-                .workerFio(orderDetails.getReviews().getFirst().getWorker().getUser().getFio())
+                .workerFio(resolveWorkerFio(orderDetails.getReviews()))
                 .companyComments(orderDetails.getOrder().getCompany().getCommentsCompany())
                 .titleCompany(orderDetails.getOrder().getCompany().getTitle())
                 .orderComments(orderDetails.getOrder().getZametka())
@@ -131,8 +152,27 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
                 .build();
     } // перевод компании в дто
     private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews, UUID orderDetailsId){ // перевод отзыва в дто
+        if (reviews == null || reviews.isEmpty()) {
+            return List.of();
+        }
         return reviews.stream().map(review -> convertToReviewsDTO(review, orderDetailsId)).collect(Collectors.toList());
     } // перевод отзыва в дто
+
+    private String resolveWorkerFio(List<Review> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return "";
+        }
+        return reviews.stream()
+                .filter(Objects::nonNull)
+                .map(Review::getWorker)
+                .filter(Objects::nonNull)
+                .map(worker -> worker.getUser())
+                .filter(Objects::nonNull)
+                .map(user -> user.getFio())
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse("");
+    }
     private ReviewDTO convertToReviewsDTO(Review review, UUID orderDetailsId) {
         if (review == null) {
             return ReviewDTO.builder()

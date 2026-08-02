@@ -1,4 +1,5 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { apiErrorMessage } from '../../shared/api-error-message';
@@ -10,6 +11,8 @@ import {
   type PaymentNavigationPurpose
 } from '../../shared/payment-navigation';
 import { PaymentsApi, PublicPaymentLink, PublicSbpBank, TbankPaymentPageMode } from '../../core/payments.api';
+import { LatestRouteRequest } from '../../core/latest-route-request';
+import { RouteEpoch, RouteEpochTicket } from '../../core/route-epoch';
 
 @Component({
   selector: 'app-pay-page',
@@ -19,9 +22,13 @@ import { PaymentsApi, PublicPaymentLink, PublicSbpBank, TbankPaymentPageMode } f
 })
 export class PayPageComponent {
   private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly paymentsApi = inject(PaymentsApi);
+  private readonly paymentRouteRequest = new LatestRouteRequest<PublicPaymentLink>();
+  private readonly sbpBanksRouteRequest = new LatestRouteRequest<PublicSbpBank[]>();
+  private readonly routeEpoch = new RouteEpoch();
 
-  readonly token = signal(this.route.snapshot.paramMap.get('token') ?? '');
+  readonly token = signal('');
   readonly payment = signal<PublicPaymentLink | null>(null);
   readonly loading = signal(true);
   readonly sbpSubmitting = signal(false);
@@ -194,7 +201,13 @@ export class PayPageComponent {
   });
 
   constructor() {
-    this.loadPayment();
+    this.destroyRef.onDestroy(() => {
+      this.routeEpoch.destroy();
+      this.cancelRouteReads();
+    });
+    this.route.paramMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => this.activatePaymentRoute(params.get('token')));
   }
 
   @HostListener('window:pageshow')
@@ -228,11 +241,17 @@ export class PayPageComponent {
       return;
     }
 
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    const token = this.token();
+
     this.sbpSubmitting.set(true);
     this.message.set('');
     this.error.set('');
     this.paymentsApi.initPublicSbpPayment(
-      this.token(),
+      token,
       this.email().trim(),
       this.offerConsent(),
       this.privacyConsent(),
@@ -240,6 +259,9 @@ export class PayPageComponent {
       bankId || null
     ).subscribe({
       next: (response) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.sbpPaymentPayload.set(response.qrPayload ?? '');
         this.sbpPaymentUrl.set(response.paymentUrl ?? '');
         if (response.qrPayload) {
@@ -263,6 +285,9 @@ export class PayPageComponent {
         this.sbpSubmitting.set(false);
       },
       error: (err) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.publicPaymentError(err));
         this.sbpSubmitting.set(false);
       }
@@ -275,17 +300,26 @@ export class PayPageComponent {
       return;
     }
 
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    const token = this.token();
+
     this.bankSubmitting.set(true);
     this.message.set('');
     this.error.set('');
     this.paymentsApi.initPublicPayment(
-      this.token(),
+      token,
       this.email().trim(),
       this.offerConsent(),
       this.privacyConsent(),
       this.receiptConsent()
     ).subscribe({
       next: (response) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         if (response.paymentUrl) {
           if (this.navigatePayment(response.paymentUrl, 'payment')) {
             return;
@@ -298,6 +332,9 @@ export class PayPageComponent {
         this.bankSubmitting.set(false);
       },
       error: (err) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.publicPaymentError(err));
         this.bankSubmitting.set(false);
       }
@@ -309,16 +346,28 @@ export class PayPageComponent {
       return;
     }
 
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    const token = this.token();
+
     this.manualSubmitting.set(true);
     this.message.set('');
     this.error.set('');
-    this.paymentsApi.reportPublicManualPayment(this.token()).subscribe({
+    this.paymentsApi.reportPublicManualPayment(token).subscribe({
       next: (payment) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.payment.set(payment);
         this.manualSubmitting.set(false);
         this.message.set('Спасибо. Отметили платеж как отправленный, менеджер проверит поступление вручную.');
       },
       error: (err) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.publicPaymentError(err));
         this.manualSubmitting.set(false);
       }
@@ -330,7 +379,16 @@ export class PayPageComponent {
     if (!text) {
       return;
     }
-    if (await copyTextToClipboard(text)) {
+
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    const copied = await copyTextToClipboard(text);
+    if (!this.isActiveRoute(routeTicket)) {
+      return;
+    }
+    if (copied) {
       this.message.set('Скопировано.');
     } else {
       this.message.set('Не получилось скопировать. Выделите текст вручную.');
@@ -407,18 +465,27 @@ export class PayPageComponent {
   }
 
   private loadPayment(): void {
-    if (!this.token()) {
+    const token = this.token();
+    const routeTicket = this.captureRoute();
+    if (!token || !routeTicket) {
       this.loading.set(false);
       this.error.set('Платежная ссылка не найдена.');
       return;
     }
 
-    this.paymentsApi.getPublicPaymentLink(this.token()).subscribe({
+    this.loading.set(true);
+    this.paymentRouteRequest.start(this.paymentsApi.getPublicPaymentLink(token), {
       next: (payment) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.applyPayment(payment);
         this.loading.set(false);
       },
       error: (err) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.error.set(apiErrorMessage(err, 'Не удалось открыть платежную ссылку.'));
         this.loading.set(false);
       }
@@ -443,12 +510,24 @@ export class PayPageComponent {
 
     this.lastReturnRefreshAt = now;
     this.refreshingPayment.set(true);
-    this.paymentsApi.getPublicPaymentLink(this.token()).subscribe({
+    const routeTicket = this.captureRoute();
+    const token = this.token();
+    if (!routeTicket || !token) {
+      this.refreshingPayment.set(false);
+      return;
+    }
+    this.paymentRouteRequest.start(this.paymentsApi.getPublicPaymentLink(token), {
       next: (payment) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.applyPayment(payment, true);
         this.refreshingPayment.set(false);
       },
       error: () => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.refreshingPayment.set(false);
       }
     });
@@ -493,14 +572,19 @@ export class PayPageComponent {
   }
 
   private loadSbpBanks(): void {
-    if (!this.token()) {
+    const token = this.token();
+    const routeTicket = this.captureRoute();
+    if (!token || !routeTicket) {
       return;
     }
 
     this.sbpBanksLoading.set(true);
     this.sbpBanksError.set('');
-    this.paymentsApi.getPublicSbpBanks(this.token()).subscribe({
+    this.sbpBanksRouteRequest.start(this.paymentsApi.getPublicSbpBanks(token), {
       next: (banks) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.sbpBanks.set(banks ?? []);
         const firstFeatured = this.featuredSbpBanks()[0] ?? this.sbpBanks()[0];
         if (firstFeatured && !this.selectedSbpBankId()) {
@@ -509,12 +593,70 @@ export class PayPageComponent {
         this.sbpBanksLoading.set(false);
       },
       error: (err) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.sbpBanks.set([]);
         this.selectedSbpBankId.set('');
         this.sbpBanksError.set(apiErrorMessage(err, 'Не удалось загрузить банки СБП.'));
         this.sbpBanksLoading.set(false);
       }
     });
+  }
+
+  private activatePaymentRoute(rawToken: string | null): void {
+    const token = rawToken?.trim() ?? '';
+    const routeKey = token ? `pay:${token}` : 'pay:invalid';
+    if (!this.routeEpoch.change(routeKey)) {
+      return;
+    }
+
+    this.cancelRouteReads();
+    this.clearRouteState();
+    this.token.set(token);
+    if (!token) {
+      this.error.set('Платежная ссылка не найдена.');
+      return;
+    }
+    this.loadPayment();
+  }
+
+  private clearRouteState(): void {
+    this.payment.set(null);
+    this.loading.set(false);
+    this.sbpSubmitting.set(false);
+    this.bankSubmitting.set(false);
+    this.manualSubmitting.set(false);
+    this.error.set('');
+    this.message.set('');
+    this.email.set('');
+    this.offerConsent.set(false);
+    this.privacyConsent.set(false);
+    this.receiptConsent.set(false);
+    this.sbpPaymentPayload.set('');
+    this.sbpPaymentUrl.set('');
+    this.sbpBanks.set([]);
+    this.sbpBanksLoading.set(false);
+    this.sbpBanksError.set('');
+    this.selectedSbpBankId.set('');
+    this.refreshingPayment.set(false);
+    this.lastReturnRefreshAt = 0;
+  }
+
+  private cancelRouteReads(): void {
+    this.paymentRouteRequest.cancel();
+    this.sbpBanksRouteRequest.cancel();
+    this.loading.set(false);
+    this.refreshingPayment.set(false);
+    this.sbpBanksLoading.set(false);
+  }
+
+  private captureRoute(): RouteEpochTicket | null {
+    return this.routeEpoch.capture();
+  }
+
+  private isActiveRoute(ticket: RouteEpochTicket): boolean {
+    return this.routeEpoch.accepts(ticket);
   }
 
   private publicPaymentError(err: unknown): string {

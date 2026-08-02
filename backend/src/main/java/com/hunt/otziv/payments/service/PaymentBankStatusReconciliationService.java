@@ -22,7 +22,9 @@ public class PaymentBankStatusReconciliationService {
     private static final Set<PaymentLinkStatus> RECONCILABLE_STATUSES = Set.of(
             PaymentLinkStatus.INITIATED,
             PaymentLinkStatus.AUTHORIZED,
-            PaymentLinkStatus.NEEDS_RECONCILIATION
+            PaymentLinkStatus.NEEDS_RECONCILIATION,
+            PaymentLinkStatus.PARTIAL_REVERSED,
+            PaymentLinkStatus.PARTIAL_REFUNDED
     );
     private static final int BATCH_SIZE = 50;
 
@@ -34,7 +36,20 @@ public class PaymentBankStatusReconciliationService {
             initialDelayString = "${otziv.payments.bank-reconciliation.initial-delay-ms:120000}"
     )
     public void reconcileStaleBankPayments() {
-        LocalDateTime attemptBefore = LocalDateTime.now().minusMinutes(5);
+        LocalDateTime now = LocalDateTime.now();
+        List<Long> expiredInitReservations = paymentLinkRepository.findExpiredBankInitReservationIds(
+                now,
+                PageRequest.of(0, BATCH_SIZE)
+        );
+        for (Long linkId : expiredInitReservations) {
+            try {
+                paymentLinkService.recoverExpiredBankInitReservation(linkId, now);
+            } catch (RuntimeException exception) {
+                log.warn("Expired T-Bank Init reservation recovery failed: linkId={}", linkId, exception);
+            }
+        }
+
+        LocalDateTime attemptBefore = now.minusMinutes(5);
         List<Long> candidates = paymentLinkRepository.findBankReconciliationCandidateIds(
                 RECONCILABLE_STATUSES,
                 attemptBefore,

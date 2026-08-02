@@ -457,8 +457,7 @@ export class PaymentsApi {
 
   getTbankStatus(): Observable<TbankPaymentStatus> {
     return this.http.get<TbankPaymentStatus>(
-      `${appEnvironment.apiBaseUrl}/api/payments/public/tbank-status`,
-      { context: this.publicContext }
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-status`
     );
   }
 

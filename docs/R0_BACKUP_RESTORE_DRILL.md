@@ -8,8 +8,10 @@ MySQL without touching the running Compose/prod-like stack.
 - Use a backup already copied to a local disk. UNC paths are rejected.
 - Use a local Docker Desktop/Engine context. `tcp://` and `ssh://` Docker
   endpoints are rejected so the drill cannot target a production daemon.
-- Have the required MySQL image locally. The script defaults to `mysql:8.4` and
-  deliberately uses `--pull=never`.
+- Have the required MySQL image locally. The script defaults to the pinned
+  production MySQL 9.0.0 digest
+  `mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383`
+  and deliberately uses `--pull=never`.
 - Allow enough Docker disk space for both the uncompressed dump and a temporary
   MySQL data volume.
 

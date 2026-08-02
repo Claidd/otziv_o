@@ -1,6 +1,5 @@
 package com.hunt.otziv.payments.service;
 
-import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
@@ -8,10 +7,10 @@ import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentReceiptStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,7 +18,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class ManualPaymentAutoConfirmationService {
 
     private static final Set<PaymentMethod> MANUAL_PAYMENT_METHODS = Set.of(
@@ -36,20 +34,14 @@ public class ManualPaymentAutoConfirmationService {
             PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
             PaymentLinkStatus.MANUAL_REPORTED
     );
-    private static final Set<PaymentLinkStatus> BLOCKING_BANK_STATUSES = Set.of(
-            PaymentLinkStatus.AUTHORIZED,
-            PaymentLinkStatus.NEEDS_RECONCILIATION
-    );
-    private static final Set<PaymentMethod> BANK_PAYMENT_METHODS = Set.of(
-            PaymentMethod.BANK_FORM,
-            PaymentMethod.SBP_QR
-    );
+    private static final Set<PaymentLinkStatus> BANK_REVIEW_STATUSES =
+            Set.copyOf(EnumSet.allOf(PaymentLinkStatus.class));
     private static final String DEFAULT_CONFIRMED_BY = "order-status:Оплачено";
     private static final String RETIRED_REASON = "Заказ отмечен оплаченным вручную; старая ссылка закрыта";
 
     private final PaymentLinkRepository paymentLinkRepository;
     private final ManualPaymentTaskService manualPaymentTaskService;
-    private final PaymentSuccessClientNotifier paymentSuccessClientNotifier;
+    private final PaymentSuccessNotificationDeliveryService paymentSuccessNotificationDeliveryService;
 
     @Transactional(readOnly = true)
     public void ensureCanCloseOrderManually(Order order) {
@@ -58,7 +50,7 @@ public class ManualPaymentAutoConfirmationService {
         }
 
         boolean hasBankPaymentInProgress = paymentLinkRepository
-                .findByOrder_IdAndStatusIn(order.getId(), BLOCKING_BANK_STATUSES)
+                .findByOrder_IdAndStatusIn(order.getId(), BANK_REVIEW_STATUSES)
                 .stream()
                 .anyMatch(this::hasStartedBankPayment);
 
@@ -94,8 +86,9 @@ public class ManualPaymentAutoConfirmationService {
         List<PaymentLink> links = paymentLinkRepository.findByOrder_IdAndStatusIn(order.getId(), RETIRABLE_STATUSES);
         LocalDateTime now = LocalDateTime.now();
         int retired = 0;
+        List<PaymentLink> retiredLinks = new java.util.ArrayList<>();
         for (PaymentLink link : links) {
-            if (link.getStatus() == PaymentLinkStatus.CONFIRMED) {
+            if (link.getStatus() == PaymentLinkStatus.CONFIRMED || hasStartedBankPayment(link)) {
                 continue;
             }
             link.setStatus(PaymentLinkStatus.CANCELED);
@@ -106,19 +99,37 @@ public class ManualPaymentAutoConfirmationService {
                 link.setManualConfirmedBy(null);
             }
             link.setUpdatedAt(now);
+            retiredLinks.add(link);
             retired++;
         }
-        if (!links.isEmpty()) {
-            paymentLinkRepository.saveAll(links);
+        if (!retiredLinks.isEmpty()) {
+            paymentLinkRepository.saveAll(retiredLinks);
         }
         return retired;
     }
 
     private boolean hasStartedBankPayment(PaymentLink link) {
-        return link != null
-                && BANK_PAYMENT_METHODS.contains(link.getPaymentMethod())
-                && link.getTbankPaymentId() != null
-                && !link.getTbankPaymentId().isBlank();
+        if (link == null) {
+            return false;
+        }
+        if (link.getBankInitNonce() != null && !link.getBankInitNonce().isBlank()) {
+            return true;
+        }
+        if ((link.getBankCancelNonce() != null && !link.getBankCancelNonce().isBlank())
+                || link.getBankCancelOriginStatus() != null) {
+            return true;
+        }
+        if (link.getStatus() == PaymentLinkStatus.NEEDS_RECONCILIATION) {
+            return true;
+        }
+        if (link.getTbankPaymentId() == null || link.getTbankPaymentId().isBlank()) {
+            return false;
+        }
+        return switch (link.getStatus()) {
+            case REJECTED, REVERSED, REFUNDED -> false;
+            case CANCELED, EXPIRED -> link.getLastError() != null && !link.getLastError().isBlank();
+            default -> true;
+        };
     }
 
     private void confirm(PaymentLink link) {
@@ -131,49 +142,8 @@ public class ManualPaymentAutoConfirmationService {
         link.setReceiptStatus(PaymentReceiptStatus.PENDING);
         link.setLastError(null);
         link.setPaymentSuccessNotificationRetryEligible(true);
-        notifyPaymentSuccess(link);
         paymentLinkRepository.save(link);
         manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
-    }
-
-    private void notifyPaymentSuccess(PaymentLink link) {
-        try {
-            ClientMessageSendResult result = paymentSuccessClientNotifier.notifySuccess(link);
-            if (result != null && result.sent()) {
-                link.setPaymentSuccessNotifiedAt(LocalDateTime.now());
-                link.setPaymentSuccessNotificationError(null);
-                link.setPaymentSuccessNotificationRetryEligible(false);
-                return;
-            }
-            link.setPaymentSuccessNotificationError(limit(notificationError(result), 512));
-        } catch (RuntimeException exception) {
-            String message = exception.getMessage();
-            link.setPaymentSuccessNotificationError(limit(
-                    message == null || message.isBlank() ? exception.getClass().getSimpleName() : message,
-                    512
-            ));
-            log.warn("Manual payment success notification failed: linkId={}", link.getId(), exception);
-        }
-    }
-
-    private String notificationError(ClientMessageSendResult result) {
-        if (result == null) {
-            return "notification_result_empty";
-        }
-        String code = normalize(result.errorCode());
-        String message = normalize(result.errorMessage());
-        if (code.isBlank()) {
-            return message.isBlank() ? "notification_not_sent" : message;
-        }
-        return message.isBlank() ? code : code + ": " + message;
-    }
-
-    private String limit(String value, int maxLength) {
-        String clean = normalize(value);
-        return clean.length() <= maxLength ? clean : clean.substring(0, maxLength);
-    }
-
-    private String normalize(String value) {
-        return value == null ? "" : value.trim();
+        paymentSuccessNotificationDeliveryService.deliverAfterCommit(link.getId());
     }
 }

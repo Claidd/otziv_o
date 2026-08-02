@@ -8,7 +8,7 @@ import {
   IonRefresherContent,
   RefresherCustomEvent
 } from '@ionic/angular/standalone';
-import { Subscription, firstValueFrom } from 'rxjs';
+import { Subscription, finalize, firstValueFrom } from 'rxjs';
 import {
   ApiService,
   ReviewCheckNotes,
@@ -17,6 +17,12 @@ import {
   ReviewCheckUpdateRequest
 } from '../core/api.service';
 import { reviewCapabilityToken } from '../core/review-capability-token';
+import {
+  ReviewCheckLoadGuard,
+  ReviewCheckLoadKey,
+  ReviewCheckRouteGuard,
+  ReviewCheckRouteTicket
+} from './review-check-load.guard';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
@@ -1007,6 +1013,11 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
   readonly busy = computed(() => this.mutationKey() !== null);
 
   private routeSubscription?: Subscription;
+  private fragmentSubscription?: Subscription;
+  private reviewCheckLoadSubscription?: Subscription;
+  private readonly reviewCheckLoadGuard = new ReviewCheckLoadGuard();
+  private readonly reviewCheckRouteGuard = new ReviewCheckRouteGuard();
+  private reviewCheckRouteLoadResolved = false;
 
   constructor(
     private readonly api: ApiService,
@@ -1016,32 +1027,36 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
-      const routeSnapshot = this.route.snapshot;
-      const capabilityRoute = routeSnapshot?.routeConfig?.path === 'review/c';
-      const capabilityToken = capabilityRoute
-        ? reviewCapabilityToken()
-        : null;
-      if (capabilityToken) {
-        this.capabilityToken.set(capabilityToken);
-        this.orderDetailId.set('secure-capability');
-        this.loadReviewCheck();
-        return;
-      }
-
-      this.capabilityToken.set(null);
-      const id = params.get('orderDetailId');
-      if (!id) {
-        this.error.set('Ссылка на проверку некорректна.');
-        return;
-      }
-
-      this.orderDetailId.set(id);
-      this.loadReviewCheck();
+      this.syncReviewCheckRoute(params.get('orderDetailId'));
     });
+    this.fragmentSubscription = this.route.fragment.subscribe(() => {
+      if (this.isCapabilityRoute()) {
+        this.syncReviewCheckRoute(null);
+      }
+    });
+  }
+
+  ionViewWillEnter(): void {
+    this.reviewCheckLoadGuard.activate();
+    this.syncReviewCheckRoute(this.route.snapshot.paramMap.get('orderDetailId'));
+    if (!this.reviewCheckRouteLoadResolved
+        && this.orderDetailId()
+        && !this.reviewCheckLoadSubscription) {
+      this.loadReviewCheck();
+    }
+  }
+
+  ionViewWillLeave(): void {
+    this.reviewCheckLoadGuard.leave();
+    this.cancelActiveReviewCheckLoad(false);
   }
 
   ngOnDestroy(): void {
     this.routeSubscription?.unsubscribe();
+    this.fragmentSubscription?.unsubscribe();
+    this.reviewCheckLoadGuard.destroy();
+    this.reviewCheckRouteGuard.destroy();
+    this.cancelActiveReviewCheckLoad(false);
   }
 
   refresh(event: RefresherCustomEvent): void {
@@ -1050,32 +1065,54 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
 
   loadReviewCheck(done?: () => void): void {
     const orderDetailId = this.orderDetailId();
-    if (!orderDetailId) {
+    if (!orderDetailId || !this.reviewCheckLoadGuard.canStart()) {
       done?.();
       return;
     }
 
+    this.cancelActiveReviewCheckLoad();
+    this.reviewCheckRouteLoadResolved = false;
     this.loading.set(true);
     this.error.set(null);
     this.statusMessage.set(null);
 
     const token = this.capabilityToken();
+    const loadKey: ReviewCheckLoadKey = {
+      orderDetailId,
+      capabilityToken: token
+    };
+    const loadTicket = this.reviewCheckLoadGuard.begin(loadKey);
     const request = token
       ? this.api.getReviewCheck(orderDetailId, token)
       : this.api.getReviewCheck(orderDetailId);
-    request.subscribe({
+    const subscription = request.pipe(
+      finalize(() => {
+        if (this.reviewCheckLoadGuard.accepts(loadTicket, this.currentReviewCheckLoadKey())) {
+          this.reviewCheckLoadSubscription = undefined;
+          this.loading.set(false);
+        }
+        done?.();
+      })
+    ).subscribe({
       next: (details) => {
+        if (!this.reviewCheckLoadGuard.accepts(loadTicket, this.currentReviewCheckLoadKey())) {
+          return;
+        }
+        this.reviewCheckRouteLoadResolved = true;
         this.applyDetails(details);
         this.activeReviewIndex.set(0);
-        this.loading.set(false);
-        done?.();
       },
       error: (err) => {
+        if (!this.reviewCheckLoadGuard.accepts(loadTicket, this.currentReviewCheckLoadKey())) {
+          return;
+        }
         this.error.set(this.errorMessage(err, 'Не удалось загрузить проверку отзывов.'));
-        this.loading.set(false);
-        done?.();
       }
     });
+    if (!subscription.closed
+        && this.reviewCheckLoadGuard.accepts(loadTicket, this.currentReviewCheckLoadKey())) {
+      this.reviewCheckLoadSubscription = subscription;
+    }
   }
 
   openCompany(details: ReviewCheckPayload): void {
@@ -1202,6 +1239,10 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     if (!orderDetailId || !this.canSaveReviewField(review, field)) {
       return;
     }
+    const routeTicket = this.captureReviewCheckRoute();
+    if (!routeTicket) {
+      return;
+    }
 
     const value = this.reviewFieldValue(review, field);
     const key = this.fieldMutationKey(review, field);
@@ -1220,12 +1261,18 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
 
     request.subscribe({
       next: (updatedReview) => {
+        if (!this.acceptsReviewCheckRoute(routeTicket)) {
+          return;
+        }
         this.applyUpdatedReview(updatedReview);
         this.editingFieldKey.set(null);
         this.mutationKey.set(null);
         this.statusMessage.set(field === 'text' ? 'Текст отзыва сохранен' : 'Замечание сохранено');
       },
       error: (err) => {
+        if (!this.acceptsReviewCheckRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(err, 'Не удалось сохранить отзыв.'));
         this.mutationKey.set(null);
       }
@@ -1278,6 +1325,10 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     if (!details || !orderDetailId || !this.canEditNotes(details) || !this.hasChangedNotes(details, review)) {
       return;
     }
+    const routeTicket = this.captureReviewCheckRoute();
+    if (!routeTicket) {
+      return;
+    }
 
     const key = this.notesMutationKey(review);
     this.mutationKey.set(key);
@@ -1300,6 +1351,9 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
         updatedNotes = await firstValueFrom(this.api.updateReviewCheckCompanyNote(orderDetailId, this.companyNoteValue(details)));
       }
 
+      if (!this.acceptsReviewCheckRoute(routeTicket)) {
+        return;
+      }
       if (updatedReview) {
         this.applyUpdatedReview(updatedReview);
       }
@@ -1310,9 +1364,13 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
       this.noteOpenId.set(null);
       this.statusMessage.set('Заметки сохранены');
     } catch (err) {
-      this.error.set(this.errorMessage(err, 'Не удалось сохранить заметки.'));
+      if (this.acceptsReviewCheckRoute(routeTicket)) {
+        this.error.set(this.errorMessage(err, 'Не удалось сохранить заметки.'));
+      }
     } finally {
-      this.mutationKey.set(null);
+      if (this.acceptsReviewCheckRoute(routeTicket) && this.mutationKey() === key) {
+        this.mutationKey.set(null);
+      }
     }
   }
 
@@ -1507,6 +1565,10 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     if (this.busy()) {
       return;
     }
+    const routeTicket = this.captureReviewCheckRoute();
+    if (!routeTicket) {
+      return;
+    }
 
     this.mutationKey.set(key);
     this.error.set(null);
@@ -1516,6 +1578,9 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
 
     requestFactory().subscribe({
       next: (details) => {
+        if (!this.acceptsReviewCheckRoute(routeTicket)) {
+          return;
+        }
         this.applyDetails(details);
         if (activeId) {
           this.restoreActiveReview(activeId);
@@ -1527,6 +1592,9 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
         this.mutationKey.set(null);
       },
       error: (err) => {
+        if (!this.acceptsReviewCheckRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(err, 'Действие не выполнено.'));
         this.mutationKey.set(null);
       }
@@ -1576,6 +1644,105 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
 
   private requiredOrderDetailId(): string {
     return this.orderDetailId() ?? '';
+  }
+
+  private syncReviewCheckRoute(legacyOrderDetailId: string | null): void {
+    const capabilityRoute = this.isCapabilityRoute();
+    const capabilityToken = capabilityRoute
+      ? reviewCapabilityToken()
+      : null;
+
+    if (capabilityRoute) {
+      if (capabilityToken) {
+        this.activateReviewCheckRoute('secure-capability', capabilityToken);
+      } else {
+        this.activateReviewCheckRoute(null, null, 'Ссылка на проверку некорректна.');
+      }
+      return;
+    }
+
+    if (!legacyOrderDetailId) {
+      this.activateReviewCheckRoute(null, null, 'Ссылка на проверку некорректна.');
+      return;
+    }
+
+    this.activateReviewCheckRoute(legacyOrderDetailId, null);
+  }
+
+  private activateReviewCheckRoute(
+    orderDetailId: string | null,
+    capabilityToken: string | null,
+    invalidMessage?: string
+  ): void {
+    const routeKey: ReviewCheckLoadKey | null = orderDetailId
+      ? { orderDetailId, capabilityToken }
+      : null;
+    if (!this.reviewCheckRouteGuard.change(routeKey)) {
+      return;
+    }
+
+    this.cancelActiveReviewCheckLoad();
+    this.clearReviewCheckRouteState();
+    this.orderDetailId.set(orderDetailId);
+    this.capabilityToken.set(capabilityToken);
+
+    if (!orderDetailId) {
+      this.error.set(invalidMessage ?? 'Ссылка на проверку некорректна.');
+      return;
+    }
+
+    this.loadReviewCheck();
+  }
+
+  private clearReviewCheckRouteState(): void {
+    this.reviewCheckRouteLoadResolved = false;
+    this.details.set(null);
+    this.loading.set(false);
+    this.error.set(null);
+    this.statusMessage.set(null);
+    this.mutationKey.set(null);
+    this.drafts.set({});
+    this.commentDraft.set('');
+    this.orderNoteDraft.set('');
+    this.companyNoteDraft.set('');
+    this.editingFieldKey.set(null);
+    this.expandedReviewId.set(null);
+    this.noteOpenId.set(null);
+    this.listExpanded.set(false);
+    this.activeReviewIndex.set(0);
+  }
+
+  private isCapabilityRoute(): boolean {
+    return this.route.snapshot?.routeConfig?.path === 'review/c';
+  }
+
+  private captureReviewCheckRoute(): ReviewCheckRouteTicket | null {
+    const orderDetailId = this.orderDetailId();
+    if (!orderDetailId) {
+      return null;
+    }
+    return this.reviewCheckRouteGuard.capture(this.currentReviewCheckLoadKey());
+  }
+
+  private acceptsReviewCheckRoute(ticket: ReviewCheckRouteTicket): boolean {
+    return this.reviewCheckRouteGuard.accepts(ticket, this.currentReviewCheckLoadKey());
+  }
+
+  private currentReviewCheckLoadKey(): ReviewCheckLoadKey {
+    return {
+      orderDetailId: this.orderDetailId() ?? '',
+      capabilityToken: this.capabilityToken()
+    };
+  }
+
+  private cancelActiveReviewCheckLoad(invalidate = true): void {
+    if (invalidate) {
+      this.reviewCheckLoadGuard.invalidate();
+    }
+    const subscription = this.reviewCheckLoadSubscription;
+    this.reviewCheckLoadSubscription = undefined;
+    subscription?.unsubscribe();
+    this.loading.set(false);
   }
 
   private goToReview(index: number): void {

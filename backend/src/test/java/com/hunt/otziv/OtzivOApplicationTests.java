@@ -51,10 +51,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OtzivOApplicationTests {
 
 	@Container
-	static final MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
+	static final MySQLContainer<?> mysql = new MySQLContainer<>("mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383")
 			.withDatabaseName("otziv")
 			.withUsername("root")
-			.withPassword("root");
+			.withPassword("root")
+			.withCommand("--restrict-fk-on-non-standard-key=OFF");
 
 	@DynamicPropertySource
 	static void registerMysqlProperties(DynamicPropertyRegistry registry) {

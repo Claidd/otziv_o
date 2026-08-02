@@ -9,6 +9,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.hunt.otziv.p_products.review.OrderAggregateMutationLockService;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.UUID;
@@ -26,6 +27,7 @@ class ReviewCheckMutationLockServiceTest {
     @Test
     void upsertsThenLocksOneValidatedOrderRow() {
         NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
+        OrderAggregateMutationLockService aggregateLock = mock(OrderAggregateMutationLockService.class);
         UUID orderDetailId = UUID.randomUUID();
         when(jdbc.queryForList(
                 anyString(),
@@ -33,17 +35,18 @@ class ReviewCheckMutationLockServiceTest {
                 eq(Long.class)
         )).thenReturn(List.of(11L));
 
-        new ReviewCheckMutationLockService(jdbc).lock(orderDetailId);
+        new ReviewCheckMutationLockService(jdbc, aggregateLock).lock(orderDetailId);
 
         ArgumentCaptor<String> upsertSql = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> lockSql = ArgumentCaptor.forClass(String.class);
-        var ordered = inOrder(jdbc);
+        var ordered = inOrder(jdbc, aggregateLock);
         ordered.verify(jdbc).update(upsertSql.capture(), any(MapSqlParameterSource.class));
         ordered.verify(jdbc).queryForList(
                 lockSql.capture(),
                 any(MapSqlParameterSource.class),
                 eq(Long.class)
         );
+        ordered.verify(aggregateLock).lockIfLive(11L);
 
         assertThat(upsertSql.getValue()).contains(
                 "INSERT INTO review_check_mutation_locks (order_id, created_at)",
@@ -65,16 +68,18 @@ class ReviewCheckMutationLockServiceTest {
     @Test
     void missingLiveAndArchiveResourceIsUniformNotFound() {
         NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
+        OrderAggregateMutationLockService aggregateLock = mock(OrderAggregateMutationLockService.class);
         when(jdbc.queryForList(
                 anyString(),
                 any(MapSqlParameterSource.class),
                 eq(Long.class)
         )).thenReturn(List.of());
 
-        assertThatThrownBy(() -> new ReviewCheckMutationLockService(jdbc).lock(UUID.randomUUID()))
+        assertThatThrownBy(() -> new ReviewCheckMutationLockService(jdbc, aggregateLock).lock(UUID.randomUUID()))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(exception -> assertThat(((ResponseStatusException) exception).getStatusCode())
                         .isEqualTo(HttpStatus.NOT_FOUND));
+        org.mockito.Mockito.verifyNoInteractions(aggregateLock);
     }
 
     @Test

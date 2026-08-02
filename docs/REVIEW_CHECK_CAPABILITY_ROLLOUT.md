@@ -42,6 +42,23 @@ The public opaque API supports only:
 
 Invalid, malformed, expired, revoked, wrong-scope, and missing-resource requests all return the same 404 contract. The response never exposes the legacy UUID (the compatibility field contains the non-resource zero UUID), order/company identifiers, bot identity, manager links, staff actions, or internal notes. Expiry and last-use decisions use the database clock. Because `order_detail_id` has no live-table foreign key, a capability keeps the same object binding when an order moves live ↔ archive.
 
+Legacy UUID, opaque capability, legacy form, and public payment responses are
+marked `no-store`, `no-referrer`, and `noindex`. Public review traffic, public
+payment traffic, and integration webhooks use separate rate-limit namespaces,
+so a webhook burst cannot consume the review-link quota. The current limiter is
+a bounded per-instance safety net configured by `webhook.rate-limit.*`; it is
+not a cluster-wide quota. A strict cross-replica limit requires an ingress or
+shared store rollout with observed client/NAT traffic first.
+
+Production/prod-like Nginx suppresses access-log entries for bearer paths,
+including Angular matrix-parameter variants. Its remaining access-log format
+omits query strings and `Referer`; capability locations also suppress
+request-bearing Nginx error entries, and capability SPA responses enforce
+`no-referrer`/`no-store`. The application REST audit records the matched route
+template rather than the raw URI and never interpolates the bearer UUID. Keep
+these controls when changing ingress or audit logging: legacy UUID and payment
+tokens are secrets even though they must remain valid public links.
+
 ## Telemetry and staged adoption
 
 Successful legacy UUID requests are registered only after a successful route response. The database stores `SHA-256(lowercase UUID)`, `token_type = LEGACY_UUID`, and `last_used_at`; raw values are not copied. Opaque usage updates `last_used_at`. Both timestamp paths use the database clock and write at most once per token per minute, while the bounded use metric still counts each successful request. Metrics expose only bounded labels:
@@ -71,7 +88,7 @@ ORDER BY use_day DESC, token_type;
 Rollout sequence:
 
 1. Deploy schema and dual-read telemetry while continuing to issue legacy UUID links.
-2. Exercise issue, read, edit, approve, correction, revoke, expiry, rotation, and live↔archive restore in prod-like smoke.
+2. Keep the anonymous route/security probes in `prod-like-smoke.ps1` green. Run the issue/read/edit/approve/correction/revoke/expiry/rotation and live↔archive lifecycle integration suite as a separate mandatory gate before enabling opaque issuance; the current smoke does not create a real capability fixture.
 3. Enable opaque-link issuance for a small internal cohort while every legacy link remains valid.
 4. Expand issuance only after client/support observability is stable; retain instant fallback to the existing UUID link.
 5. Stop generating new legacy links only in a separately approved release after opaque usage is proven healthy.

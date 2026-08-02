@@ -33,7 +33,7 @@ import org.testcontainers.mysql.MySQLContainer;
 class IntegrationOutboxMySqlIntegrationTest {
 
     @Container
-    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.0")
+    static final MySQLContainer MYSQL = new MySQLContainer("mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383")
             .withDatabaseName("outbox_contract")
             .withUsername("root")
             .withPassword("root");

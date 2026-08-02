@@ -10,32 +10,33 @@ import java.security.Principal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.security.core.Authentication;
 
 public interface BotService {
 
     // Создать нового бота
-    boolean createBot(BotDTO botDTO, Principal principal);
+    boolean createBot(BotDTO botDTO, Authentication authentication);
 
     // Обновить бота
-    boolean updateBot(BotDTO botDTO, Long id);
+    boolean updateBot(BotDTO botDTO, Long id, Authentication authentication);
 
     // Удалить бота
-    void deleteBot(Long id);
+    void deleteBot(Long id, Authentication authentication);
 
     // Найти бота по id
-    BotDTO findById(Long id);
+    BotDTO findById(Long id, Authentication authentication);
     BotDTO findByWorker(Principal principal);
 
     // Найти бота по id
     Bot findBotById(Long id);
     // Найти всех ботов
-    List<BotDTO> getAllBots();
+    List<BotDTO> getAllBots(Authentication authentication);
 
     List<Bot> getAllBotsByWorkerId(Long id);
 
     List<Bot> getAllBotsByWorkerIdActiveIsTrue(Long id);
 
-    List<BotDTO> getAllBotsByWorkerActiveIsTrue(Principal principal);
+    List<BotDTO> getAllBotsByWorkerActiveIsTrue(Authentication authentication);
 
     Bot save(Bot bot);
 

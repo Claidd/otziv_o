@@ -5,14 +5,13 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
 import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.services.ReviewService;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,20 +32,21 @@ import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getFirstDetail;
 @RequiredArgsConstructor
 public class OrderReviewMutationService {
 
-    private final OrderRepository orderRepository;
     private final OrderDetailsService orderDetailsService;
     private final BotAssignmentService botAssignmentService;
     private final ReviewService reviewService;
     private final CompanyService companyService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
+    private final OrderAggregateMutationLockService orderAggregateMutationLockService;
+    private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
     @Transactional
     public boolean addNewReview(Long orderId) {
         try {
             log.info("1. Зашли в добавление нового отзыва");
 
-            Order saveOrder = orderRepository.findById(orderId)
-                    .orElseThrow(() -> new EntityNotFoundException(String.format("Заказ '%d' не найден", orderId)));
+            Order saveOrder = orderAggregateMutationLockService.lock(orderId);
+            assignmentMutationGuardService.assertOrder(orderId);
 
             OrderDetails orderDetails = getFirstDetail(saveOrder);
             if (orderDetails == null) {
@@ -95,8 +95,8 @@ public class OrderReviewMutationService {
     @Transactional
     public boolean deleteNewReview(Long orderId, Long reviewId) {
         try {
-            Order saveOrder = orderRepository.findById(orderId)
-                    .orElseThrow(() -> new EntityNotFoundException(String.format("Заказ '%d' не найден", orderId)));
+            Order saveOrder = orderAggregateMutationLockService.lock(orderId);
+            assignmentMutationGuardService.assertOrder(orderId);
 
             OrderDetails orderDetails = getFirstDetail(saveOrder);
             if (orderDetails == null) {
@@ -113,9 +113,17 @@ public class OrderReviewMutationService {
             log.info("1. Найден заказ и его детали");
 
             List<Review> newList = Optional.ofNullable(orderDetails.getReviews()).orElse(new ArrayList<>());
-            Review review = reviewService.getReviewById(reviewId);
+            Review review = newList.stream()
+                    .filter(Objects::nonNull)
+                    .filter(candidate -> Objects.equals(reviewId, candidate.getId()))
+                    .findFirst()
+                    .orElse(null);
             if (review == null) {
-                log.warn("Отзыв с ID '{}' не найден", reviewId);
+                log.warn("Отзыв с ID '{}' не относится к заказу '{}'", reviewId, orderId);
+                return false;
+            }
+            if (!reviewService.deleteReviewFromLockedOrder(orderId, reviewId)) {
+                log.warn("Привязка отзыва '{}' к заказу '{}' изменилась", reviewId, orderId);
                 return false;
             }
 
@@ -125,7 +133,6 @@ public class OrderReviewMutationService {
             recalculateOrderAndDetails(orderDetails);
             log.info("2. Пересчитали детали и заказ");
 
-            reviewService.deleteReview(reviewId);
             log.info("3. Удалили отзыв");
 
             saveCompany.setCounterNoPay(Math.max(0, saveCompany.getCounterNoPay() - 1));

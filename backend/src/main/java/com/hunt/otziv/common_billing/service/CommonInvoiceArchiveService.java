@@ -116,6 +116,13 @@ public class CommonInvoiceArchiveService {
             );
         }
 
+        if (!repository.lockAndCheckPaymentRefsRestorable(invoiceId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Архивный общий счет содержит незавершенную платежную операцию и не может быть восстановлен"
+            );
+        }
+
         List<CommonInvoiceArchiveOrderItem> orders = repository.findOrders(invoiceId, "archive");
         if (orders.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "В архивном общем счете нет заказов");

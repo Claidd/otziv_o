@@ -14,6 +14,7 @@ import com.hunt.otziv.u_users.services.service.WorkerService;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.security.Principal;
@@ -47,6 +48,7 @@ public class BotServiceImpl implements BotService {
     private final BusinessAuditService businessAuditService;
     private final ReviewBotCooldownService botCooldownService;
     private final ReviewAccountPoolAlertScheduler accountPoolAlertScheduler;
+    private final BotCrudAccessService botCrudAccessService;
 
     public BotServiceImpl(
             UserService userService,
@@ -55,7 +57,8 @@ public class BotServiceImpl implements BotService {
             WorkerService workerService,
             BusinessAuditService businessAuditService,
             ReviewBotCooldownService botCooldownService,
-            ReviewAccountPoolAlertScheduler accountPoolAlertScheduler
+            ReviewAccountPoolAlertScheduler accountPoolAlertScheduler,
+            BotCrudAccessService botCrudAccessService
     ) {
         this.userService = userService;
         this.statusBotService = statusBotService;
@@ -64,21 +67,29 @@ public class BotServiceImpl implements BotService {
         this.businessAuditService = businessAuditService;
         this.botCooldownService = botCooldownService;
         this.accountPoolAlertScheduler = accountPoolAlertScheduler;
+        this.botCrudAccessService = botCrudAccessService;
     }
 
     @Override
-    public boolean createBot(BotDTO botDTO, Principal principal) { // Создать нового бота
-        botsRepository.save(toEntity(botDTO, principal));
+    @Transactional
+    public boolean createBot(BotDTO botDTO, Authentication authentication) { // Создать нового бота
+        // Repeat the fresh role check inside the same write transaction and
+        // keep the matching user/role rows locked until the bot is persisted.
+        botCrudAccessService.requireCreateAccess(authentication);
+        botsRepository.save(toEntity(botDTO, authentication));
         return true;
     } // Создать нового бота
 
     // Обновить бота
     @Override
     @Transactional
-    public boolean updateBot(BotDTO botDTO, Long id) { // Обновление бота
+    public boolean updateBot(BotDTO botDTO, Long id, Authentication authentication) { // Обновление бота
         log.info("Вошли в обновление бота и ищем бота по id");
-        /*Ищем пользоваеля, если пользователь не найден, то выбрасываем сообщение с ошибкой*/
-        Bot saveBot = findBotById(botDTO.getId());
+        BotCrudAccessService.LockedCrudBot lockedBot =
+                botCrudAccessService.requireLockedAccess(id, authentication);
+        botCrudAccessService.requireUpdateOwnership(lockedBot, botDTO);
+        /* Path id is canonical; the legacy form does not submit a DTO id. */
+        Bot saveBot = lockedBot.bot();
         log.info("Достали бота по ид из дто");
         boolean isChanged = false;
 
@@ -128,7 +139,7 @@ public class BotServiceImpl implements BotService {
             log.info("Обновили Активность");
         }
         /*Проверяем не равен ли флаг города, если нет, то меняем флаг на тру*/
-        if (!Objects.equals(botDTO.getBotCity(), saveBot.getBotCity())){
+        if (botDTO.getBotCity() != null && !Objects.equals(botDTO.getBotCity(), saveBot.getBotCity())){
             saveBot.setBotCity(botDTO.getBotCity());
             isChanged = true;
             log.info("Обновили Город");
@@ -149,18 +160,20 @@ public class BotServiceImpl implements BotService {
 
     // Удалить бота
     @Override
-    public void deleteBot(Long id) { // Обновление бота
-         botsRepository.deleteById(id);
+    @Transactional
+    public void deleteBot(Long id, Authentication authentication) { // Обновление бота
+        BotCrudAccessService.LockedCrudBot lockedBot =
+                botCrudAccessService.requireLockedAccess(id, authentication);
+        botsRepository.delete(lockedBot.bot());
     } // Обновление бота
 
     // Найти бота по id
     @Override
-    public BotDTO findById(Long id) { // Найти бота по id
-        Bot bot = botsRepository.findByIdWithAdminDetails(id).orElse(null);
-        if(bot == null){
-            throw new UsernameNotFoundException("Bot not found with id: " + id);
-        }
-        return toDto(bot);
+    @Transactional
+    public BotDTO findById(Long id, Authentication authentication) { // Найти бота по id
+        BotCrudAccessService.LockedCrudBot lockedBot =
+                botCrudAccessService.requireLockedAccess(id, authentication);
+        return toDto(lockedBot.bot());
     } // Найти бота по id
 
     @Override
@@ -191,7 +204,9 @@ public class BotServiceImpl implements BotService {
     } // Найти бота по id
 
     @Override
-    public List<BotDTO> getAllBots() { // Найти всех ботов
+    @Transactional
+    public List<BotDTO> getAllBots(Authentication authentication) { // Найти всех ботов
+        botCrudAccessService.requireGlobalAccess(authentication);
         log.info("Берем все юзеров");
         return botsRepository.findAllWithAdminDetails().stream()
                 .map(this::toDto)
@@ -215,8 +230,10 @@ public class BotServiceImpl implements BotService {
         return botsRepository.findAllByWorkerIdAndActiveIsTrue(id);
     } // Взять всех ботов по id работнику и активности
 
-    public List<BotDTO> getAllBotsByWorkerActiveIsTrue(Principal principal){ // Взять всех ботов по работнику и активности
-        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(principal.getName()).orElse(null)).getId());
+    @Transactional
+    public List<BotDTO> getAllBotsByWorkerActiveIsTrue(Authentication authentication){ // Взять всех ботов по работнику и активности
+        botCrudAccessService.requireCreateAccess(authentication);
+        Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(authentication.getName()).orElse(null)).getId());
         return botsRepository.findAllByWorkerAndActiveIsTrue(worker).stream().map(this::toDto).collect(Collectors.toList());
     } // Взять всех ботов по работнику и активности
 

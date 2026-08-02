@@ -7,7 +7,7 @@ param(
     [string]$DrillId = "",
 
     [ValidateNotNullOrEmpty()]
-    [string]$MysqlImage = "mysql:8.4",
+    [string]$MysqlImage = "mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
 
     [ValidateRange(30, 1800)]
     [int]$StartupTimeoutSeconds = 180,

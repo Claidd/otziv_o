@@ -160,6 +160,7 @@ public class SecurityConfig {
 
     private void configureApiAuthorization(AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
         auth.requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll();
+        auth.requestMatchers("/logs", "/logs/**", "/ws/logs").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/auth", "/api/auth/**").permitAll();
         auth.requestMatchers(HttpMethod.GET, "/api/mobile-update", "/api/mobile-update/**").permitAll();
         auth.requestMatchers("/api/me").authenticated();
@@ -262,10 +263,14 @@ public class SecurityConfig {
         auth.requestMatchers("/admin/dispatch/**").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/admin/**").authenticated();
         auth.requestMatchers("/allUsers/**").hasAnyRole("ADMIN", "OWNER");
-        auth.requestMatchers("/logs", "/logs/**").hasAnyRole("ADMIN", "OWNER");
+        auth.requestMatchers("/logs", "/logs/**", "/ws/logs").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/lead/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG");
         auth.requestMatchers(HttpMethod.GET, "/bots/*/browser")
                 .hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers(HttpMethod.GET, "/bots/bot_add", "/bots/edit/*")
+                .hasAnyRole("ADMIN", "OWNER", "WORKER");
+        auth.requestMatchers(HttpMethod.POST, "/bots/bot_add", "/bots/edit/*", "/bots/delete/*")
+                .hasAnyRole("ADMIN", "OWNER", "WORKER");
         auth.requestMatchers("/bots", "/bots/**").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/categories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR");
         auth.requestMatchers("/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR");

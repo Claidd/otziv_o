@@ -43,7 +43,7 @@ public class RestApiAuditInterceptor implements HandlerInterceptor {
         String action = actionResolver.resolve(request, handlerMethod);
         String login = currentLogin(request);
         String method = request.getMethod();
-        String path = request.getRequestURI();
+        String path = actionResolver.bestPattern(request);
         int status = response.getStatus();
 
         if (exception == null) {

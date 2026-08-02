@@ -1,10 +1,10 @@
 package com.hunt.otziv.webhook.security;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -12,55 +12,105 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
-@RequiredArgsConstructor
 @Slf4j
 public class WebhookRateLimitFilter extends OncePerRequestFilter {
 
-    private static final List<String> RATE_LIMITED_PATHS = List.of(
-            "/webhook",
-            "/api/payments/tbank/webhook",
-            "/api/review-check",
-            "/api/leads/import",
-            "/api/leads/modified",
-            "/api/leads/sync",
-            "/api/leads/update",
-            "/api/dispatch-settings/cron"
-    );
+    private static final String REGISTRATION_PUBLIC_GROUP = "registration-public";
+    private static final Map<String, List<String>> RATE_LIMITED_PATHS = rateLimitedPaths();
 
     private final WebhookRateLimiter rateLimiter;
     private final WebhookClientIpResolver clientIpResolver;
+    private final MeterRegistry meterRegistry;
+
+    public WebhookRateLimitFilter(
+            WebhookRateLimiter rateLimiter,
+            WebhookClientIpResolver clientIpResolver,
+            MeterRegistry meterRegistry
+    ) {
+        this.rateLimiter = rateLimiter;
+        this.clientIpResolver = clientIpResolver;
+        this.meterRegistry = meterRegistry;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        if (!isWebhookRequest(request) || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
+        String group = rateLimitGroup(request);
+        if (group == null || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
             filterChain.doFilter(request, response);
             return;
         }
 
         String clientIp = clientIpResolver.resolve(request);
-        if (!rateLimiter.tryAcquire(clientIp)) {
-            log.warn("Webhook rate limit exceeded: ip={}, path={}", clientIp, request.getRequestURI());
+        if (!rateLimiter.tryAcquire(group + "|" + clientIp)) {
+            meterRegistry.counter("otziv.http.rate_limit.rejected", "group", group).increment();
+            log.debug("Request rate limit exceeded: group={}, ip={}", group, clientIp);
             response.setStatus(429);
+            response.setHeader("Retry-After", Long.toString(rateLimiter.retryAfterSeconds()));
+            response.setHeader("Cache-Control", "no-store");
+            response.setHeader("Pragma", "no-cache");
+            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+            response.setContentType("application/json");
+            response.getWriter().write("{\"code\":\"RATE_LIMITED\",\"message\":\"Слишком много запросов. Повторите позже.\"}");
             return;
         }
 
         filterChain.doFilter(request, response);
     }
 
-    private static boolean isWebhookRequest(HttpServletRequest request) {
+    private static String rateLimitGroup(HttpServletRequest request) {
         String path = request.getRequestURI();
         String contextPath = request.getContextPath();
         if (hasText(contextPath) && path.startsWith(contextPath)) {
             path = path.substring(contextPath.length());
         }
         String normalizedPath = path;
-        return RATE_LIMITED_PATHS.stream()
-                .anyMatch(prefix -> normalizedPath.equals(prefix) || normalizedPath.startsWith(prefix + "/"));
+        return RATE_LIMITED_PATHS.entrySet().stream()
+                .filter(entry -> !REGISTRATION_PUBLIC_GROUP.equals(entry.getKey())
+                        || "POST".equalsIgnoreCase(request.getMethod()))
+                .filter(entry -> entry.getValue().stream()
+                        .anyMatch(prefix -> matches(entry.getKey(), normalizedPath, prefix)))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static boolean matches(String group, String path, String prefix) {
+        if (REGISTRATION_PUBLIC_GROUP.equals(group)) {
+            return path.equals(prefix) || path.startsWith(prefix + ";");
+        }
+        return path.equals(prefix)
+                || path.startsWith(prefix + "/")
+                || path.startsWith(prefix + ";");
+    }
+
+    private static Map<String, List<String>> rateLimitedPaths() {
+        Map<String, List<String>> paths = new LinkedHashMap<>();
+        paths.put("webhook", List.of(
+                "/webhook",
+                "/api/payments/tbank/webhook",
+                "/api/leads/import",
+                "/api/leads/modified",
+                "/api/leads/sync",
+                "/api/leads/update",
+                "/api/dispatch-settings/cron"
+        ));
+        paths.put("review-public", List.of(
+                "/api/review-check",
+                "/api/review-capability",
+                "/review/editReviews",
+                "/review/editReviewses"
+        ));
+        paths.put("payment-public", List.of("/api/payments/public"));
+        paths.put(REGISTRATION_PUBLIC_GROUP, List.of("/api/auth/register", "/register"));
+        return Map.copyOf(paths);
     }
 
     private static boolean hasText(String value) {

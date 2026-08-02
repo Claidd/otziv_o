@@ -9,6 +9,7 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -19,10 +20,12 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.capability.ReviewCheckMutationLockService;
+import com.hunt.otziv.r_review.capability.ReviewCheckPublicMutationPolicy;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.webhook.security.WebhookClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -65,6 +68,7 @@ public class ApiReviewCheckController {
     private static final int MAX_PUBLIC_TEXT_LENGTH = 5_000;
     private static final int MAX_PUBLIC_URL_LENGTH = 2_048;
     private static final int MAX_PUBLIC_REVIEW_ITEMS = 1_000;
+    private static final int MAX_AUDIT_DETAIL_VALUE_LENGTH = 256;
 
     private final OrderDetailsService orderDetailsService;
     private final OrderService orderService;
@@ -74,6 +78,9 @@ public class ApiReviewCheckController {
     private final BusinessAuditService businessAuditService;
     private final OrderPublicationApprovalService publicationApprovalService;
     private final ReviewCheckMutationLockService mutationLockService;
+    private final ManagerAccessService managerAccessService;
+    private final WebhookClientIpResolver clientIpResolver;
+    private final ReviewCheckPublicMutationPolicy publicMutationPolicy;
 
     @GetMapping("/{orderDetailId}")
     public ReviewCheckResponse getReviewCheck(
@@ -93,7 +100,11 @@ public class ApiReviewCheckController {
         mutationLockService.lock(orderDetailId);
         OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Коррекция", authentication);
         requireLiveClientMutationAllowed(orderDetails, authentication);
-        updateReviews(orderDetails, request, permissions(authentication).canSeeInternalInfo());
+        updateReviews(
+                orderDetails,
+                request,
+                permissionsForOrder(requireOrder(orderDetails), authentication).canSeeInternalInfo()
+        );
         return buildResponse(orderDetailId, authentication);
     }
 
@@ -106,7 +117,6 @@ public class ApiReviewCheckController {
             Authentication authentication
     ) {
         mutationLockService.lock(orderDetailId);
-        requireCanSave(authentication);
         if (request == null || isBlank(request.text())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст отзыва не указан");
         }
@@ -133,7 +143,6 @@ public class ApiReviewCheckController {
             Authentication authentication
     ) {
         mutationLockService.lock(orderDetailId);
-        requireCanSave(authentication);
         if (request == null || request.answer() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Замечание к отзыву не указано");
         }
@@ -160,15 +169,15 @@ public class ApiReviewCheckController {
             HttpServletRequest servletRequest
     ) throws Exception {
         mutationLockService.lock(orderDetailId);
-        ReviewCheckPermissions permissions = permissions(authentication);
+        OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "На проверке", authentication);
+        requireLiveClientMutationAllowed(orderDetails, authentication);
+        Order order = requireOrder(orderDetails);
+        ReviewCheckPermissions permissions = permissionsForOrder(order, authentication);
         if (!permissions.canApprovePublication()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для разрешения публикации");
         }
-
-        OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Публикация", authentication);
-        requireLiveClientMutationAllowed(orderDetails, authentication);
-        Order order = requireOrder(orderDetails);
         OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request, permissions.canSeeInternalInfo());
+        publicMutationPolicy.requireCompleteReviewSet(orderDetails, updateDto);
         validateReviewTextsReadyForAction(updateDto, "Нельзя разрешить публикацию: заполните текст всех отзывов");
         saveUpdateDto(updateDto);
 
@@ -189,14 +198,13 @@ public class ApiReviewCheckController {
             Authentication authentication
     ) throws Exception {
         mutationLockService.lock(orderDetailId);
-        ReviewCheckPermissions permissions = permissions(authentication);
-        if (!permissions.canSendCorrection()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отправки на коррекцию");
-        }
-
         OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Коррекция", authentication);
         requireLiveClientMutationAllowed(orderDetails, authentication);
         Order order = requireOrder(orderDetails);
+        ReviewCheckPermissions permissions = permissionsForOrder(order, authentication);
+        if (!permissions.canSendCorrection()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отправки на коррекцию");
+        }
 
         updateReviews(orderDetails, request, permissions.canSeeInternalInfo());
 
@@ -215,16 +223,16 @@ public class ApiReviewCheckController {
             Authentication authentication
     ) throws Exception {
         mutationLockService.lock(orderDetailId);
-        ReviewCheckPermissions permissions = permissions(authentication);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        Order order = requireOrder(orderDetails);
+        ReviewCheckPermissions permissions = permissionsForOrder(order, authentication);
         if (!permissions.canSendToCheck()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отправки на проверку");
         }
 
-        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
-        Order order = requireOrder(orderDetails);
-
         if (request != null && request.reviews() != null) {
             OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request);
+            publicMutationPolicy.requireCompleteReviewSet(orderDetails, updateDto);
             validateReviewTextsReadyForAction(updateDto, "Нельзя отправить заказ на проверку: заполните текст всех отзывов");
             saveUpdateDto(updateDto);
         }
@@ -243,13 +251,12 @@ public class ApiReviewCheckController {
             Authentication authentication
     ) throws Exception {
         mutationLockService.lock(orderDetailId);
-        ReviewCheckPermissions permissions = permissions(authentication);
+        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        Order order = requireOrder(orderDetails);
+        ReviewCheckPermissions permissions = permissionsForOrder(order, authentication);
         if (!permissions.canMarkPaid()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отметки оплаты");
         }
-
-        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
-        Order order = requireOrder(orderDetails);
 
         if (order.getAmount() > order.getCounter()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Нельзя отметить оплату: опубликованы не все отзывы");
@@ -271,13 +278,13 @@ public class ApiReviewCheckController {
             Authentication authentication
     ) {
         mutationLockService.lock(orderDetailId);
-        requireCanEditNotes(authentication);
         if (request == null || request.comment() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка отзыва не указана");
         }
 
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
+        requireCanEditNotes(order, authentication);
         requireReviewInDetails(orderDetails, reviewId);
 
         if (!reviewService.updateReviewNote(order.getId(), reviewId, request.comment())) {
@@ -295,13 +302,13 @@ public class ApiReviewCheckController {
             Authentication authentication
     ) {
         mutationLockService.lock(orderDetailId);
-        requireCanEditNotes(authentication);
         if (request == null || request.orderComments() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка заказа не указана");
         }
 
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
+        requireCanEditNotes(order, authentication);
         order.setZametka(request.orderComments());
         orderService.save(order);
 
@@ -319,13 +326,13 @@ public class ApiReviewCheckController {
             Authentication authentication
     ) {
         mutationLockService.lock(orderDetailId);
-        requireCanEditNotes(authentication);
         if (request == null || request.companyComments() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка компании не указана");
         }
 
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
+        requireCanEditNotes(order, authentication);
         Company company = order.getCompany();
         if (company == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Компания заказа не найдена");
@@ -347,7 +354,7 @@ public class ApiReviewCheckController {
     }
 
     private void saveUpdateDto(OrderDetailsDTO updateDto) {
-        updateDto.getReviews().forEach(review -> reviewService.updateOrderDetailAndReview(updateDto, review, review.getId()));
+        reviewService.updateOrderDetailAndReviews(updateDto);
     }
 
     private void validateReviewTextsReadyForAction(OrderDetailsDTO updateDto, String errorMessage) {
@@ -483,6 +490,8 @@ public class ApiReviewCheckController {
         ArchivedReviewCheck archived = reviewCheckArchiveService.findByOrderDetailId(orderDetailId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Проверка отзывов не найдена"));
         ReviewCheckPermissions permissions = archivedPermissions(authentication, archived);
+        boolean canSeeCurrentCompanyComments = permissions.canSeeInternalInfo()
+                && managerAccessService.canAccessCompany(archived.companyId(), authentication);
         boolean approved = isApprovedForPublicationArchived(archived.reviews());
 
         return new ReviewCheckResponse(
@@ -494,14 +503,19 @@ public class ApiReviewCheckController {
                 archived.status(),
                 permissions.canSeeInternalInfo() ? archived.workerFio() : "",
                 permissions.canSeeInternalInfo() ? archived.orderComments() : "",
-                permissions.canSeeInternalInfo() ? archived.companyComments() : "",
+                canSeeCurrentCompanyComments ? archived.companyComments() : "",
                 archived.comment(),
                 archived.amount(),
                 archived.counter(),
                 archived.sum(),
                 approved,
                 archived.reviews().stream()
-                        .map(review -> toArchivedReviewResponse(review, archived, permissions))
+                        .map(review -> toArchivedReviewResponse(
+                                review,
+                                archived,
+                                permissions,
+                                canSeeCurrentCompanyComments
+                        ))
                         .toList(),
                 permissions
         );
@@ -511,7 +525,7 @@ public class ApiReviewCheckController {
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
         Order order = requireOrder(orderDetails);
         Review review = requireReviewInDetails(orderDetails, reviewId);
-        return toReviewResponse(review, orderDetails, order, permissions(authentication));
+        return toReviewResponse(review, orderDetails, order, livePermissions(order, authentication));
     }
 
     private boolean isApprovedForPublication(List<Review> reviews) {
@@ -606,7 +620,8 @@ public class ApiReviewCheckController {
     private ReviewCheckReviewResponse toArchivedReviewResponse(
             ArchivedReviewCheckReview review,
             ArchivedReviewCheck archived,
-            ReviewCheckPermissions permissions
+            ReviewCheckPermissions permissions,
+            boolean canSeeCurrentCompanyComments
     ) {
         return new ReviewCheckReviewResponse(
                 review.id(),
@@ -615,7 +630,7 @@ public class ApiReviewCheckController {
                 permissions.canSeeBot() ? safe(review.botName()) : "",
                 permissions.canSeeInternalInfo() ? safe(archived.comment()) : "",
                 permissions.canSeeInternalInfo() ? safe(archived.orderComments()) : "",
-                permissions.canSeeInternalInfo() ? safe(archived.companyComments()) : "",
+                canSeeCurrentCompanyComments ? safe(archived.companyComments()) : "",
                 safe(review.productTitle()),
                 review.productPhoto(),
                 safe(review.url()),
@@ -624,30 +639,32 @@ public class ApiReviewCheckController {
         );
     }
 
-    private ReviewCheckPermissions permissions(Authentication authentication) {
+    private ReviewCheckPermissions permissionsForOrder(Order order, Authentication authentication) {
         boolean authenticated = isAuthenticated(authentication);
-        boolean canSeeInternal = hasAnyRole(authentication, "WORKER", "MANAGER", "ADMIN", "OWNER");
-        boolean canManage = hasAnyRole(authentication, "MANAGER", "ADMIN", "OWNER");
-        boolean canEditNotes = canManage;
-        boolean workerOnly = hasRole(authentication, "WORKER") && !canManage;
+        boolean objectAccess = authenticated
+                && order != null
+                && order.getId() != null
+                && managerAccessService.canAccessOrder(order.getId(), authentication);
+        boolean canManage = objectAccess && hasAnyRole(authentication, "MANAGER", "ADMIN", "OWNER");
+        boolean workerOnly = objectAccess && hasRole(authentication, "WORKER") && !canManage;
 
         return new ReviewCheckPermissions(
                 authenticated,
-                canSeeInternal,
-                canSeeInternal,
+                objectAccess,
+                objectAccess,
                 !workerOnly,
                 true,
                 !workerOnly,
-                hasAnyRole(authentication, "WORKER", "ADMIN"),
-                hasAnyRole(authentication, "MANAGER", "ADMIN", "OWNER"),
+                objectAccess && hasAnyRole(authentication, "WORKER", "ADMIN"),
+                objectAccess && hasAnyRole(authentication, "MANAGER", "ADMIN", "OWNER"),
                 canManage,
-                canEditNotes
+                canManage
         );
     }
 
     private ReviewCheckPermissions livePermissions(Order order, Authentication authentication) {
-        ReviewCheckPermissions base = permissions(authentication);
-        if (base.canSeeInternalInfo() || clientMutationAllowed(order)) {
+        ReviewCheckPermissions base = permissionsForOrder(order, authentication);
+        if (base.canSeeInternalInfo() || publicMutationPolicy.clientMutationAllowed(order)) {
             return base;
         }
 
@@ -669,7 +686,28 @@ public class ApiReviewCheckController {
             Authentication authentication,
             ArchivedReviewCheck archived
     ) {
-        ReviewCheckPermissions base = permissions(authentication);
+        boolean authenticated = isAuthenticated(authentication);
+        boolean objectAccess = authenticated
+                && archived != null
+                && managerAccessService.canAccessArchivedOrder(
+                        archived.managerId(),
+                        archived.workerId(),
+                        authentication
+                );
+        boolean canManage = objectAccess && hasAnyRole(authentication, "MANAGER", "ADMIN", "OWNER");
+        boolean workerOnly = objectAccess && hasRole(authentication, "WORKER") && !canManage;
+        ReviewCheckPermissions base = new ReviewCheckPermissions(
+                authenticated,
+                objectAccess,
+                objectAccess,
+                !workerOnly,
+                true,
+                !workerOnly,
+                false,
+                false,
+                false,
+                false
+        );
         boolean mutationAllowed = archived != null && !archived.terminalPaidOrder();
         return new ReviewCheckPermissions(
                 base.authenticated(),
@@ -695,31 +733,50 @@ public class ApiReviewCheckController {
         appendDetail(details, "actor", isAuthenticated(authentication) ? authentication.getName() : null);
         appendDetail(details, "ip", clientIp(request));
         appendDetail(details, "userAgent", header(request, "User-Agent"));
-        appendDetail(details, "referer", header(request, "Referer"));
         appendDetail(details, "origin", header(request, "Origin"));
         return details.toString();
     }
 
     private void appendDetail(StringBuilder details, String key, String value) {
-        if (value == null || value.isBlank()) {
+        String sanitized = sanitizeAuditDetailValue(value);
+        if (sanitized.isBlank()) {
             return;
         }
-        details.append(key).append('=').append(value.replace(';', ',')).append(';');
+        details.append(key).append('=').append(sanitized).append(';');
+    }
+
+    private String sanitizeAuditDetailValue(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+
+        StringBuilder sanitized = new StringBuilder(Math.min(value.length(), MAX_AUDIT_DETAIL_VALUE_LENGTH));
+        int codePoints = 0;
+        for (int offset = 0; offset < value.length() && codePoints < MAX_AUDIT_DETAIL_VALUE_LENGTH; ) {
+            int codePoint = value.codePointAt(offset);
+            offset += Character.charCount(codePoint);
+            codePoints++;
+
+            if (codePoint == ';' || codePoint == '=') {
+                sanitized.append(',');
+                continue;
+            }
+
+            int type = Character.getType(codePoint);
+            if (Character.isISOControl(codePoint)
+                    || type == Character.LINE_SEPARATOR
+                    || type == Character.PARAGRAPH_SEPARATOR) {
+                sanitized.append(' ');
+                continue;
+            }
+
+            sanitized.appendCodePoint(codePoint);
+        }
+        return sanitized.toString().strip();
     }
 
     private String clientIp(HttpServletRequest request) {
-        String forwarded = header(request, "X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            int comma = forwarded.indexOf(',');
-            return comma >= 0 ? forwarded.substring(0, comma).trim() : forwarded.trim();
-        }
-
-        String realIp = header(request, "X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
-        }
-
-        return request == null ? null : request.getRemoteAddr();
+        return request == null ? null : clientIpResolver.resolve(request);
     }
 
     private String header(HttpServletRequest request, String name) {
@@ -727,36 +784,16 @@ public class ApiReviewCheckController {
     }
 
     private void requireLiveClientMutationAllowed(OrderDetails orderDetails, Authentication authentication) {
-        if (permissions(authentication).canSeeInternalInfo()) {
-            return;
-        }
-
         Order order = requireOrder(orderDetails);
-        if (clientMutationAllowed(order)) {
+        if (permissionsForOrder(order, authentication).canSeeInternalInfo()) {
             return;
         }
-
-        throw new ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Проверка отзывов уже закрыта для клиентских правок"
-        );
+        publicMutationPolicy.requireClientMutationAllowed(order);
     }
 
-    private boolean clientMutationAllowed(Order order) {
-        String status = order != null && order.getStatus() != null ? safe(order.getStatus().getTitle()) : "";
-        String normalizedStatus = status.trim().toLowerCase().replace('ё', 'е');
-        return Set.of("в проверку", "на проверке", "коррекция", "архив").contains(normalizedStatus);
-    }
-
-    private void requireCanEditNotes(Authentication authentication) {
-        if (!permissions(authentication).canEditNotes()) {
+    private void requireCanEditNotes(Order order, Authentication authentication) {
+        if (!permissionsForOrder(order, authentication).canEditNotes()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для редактирования заметок");
-        }
-    }
-
-    private void requireCanSave(Authentication authentication) {
-        if (!permissions(authentication).canSave()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для сохранения отзывов");
         }
     }
 

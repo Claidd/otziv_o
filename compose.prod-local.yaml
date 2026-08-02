@@ -22,7 +22,8 @@ volumes:
 
 services:
   mysql:
-    image: mysql:8.4
+    # Keep prod-like checks on the exact MySQL 9.0.0 image used in production.
+    image: mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
     restart: unless-stopped
     command:
       - --character-set-server=utf8mb4

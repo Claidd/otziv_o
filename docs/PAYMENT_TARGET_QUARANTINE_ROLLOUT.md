@@ -54,3 +54,32 @@ Regression coverage lives in `PaymentUrlPolicyTest`,
 `PaymentProfileServiceTest`, `ManualPaymentTaskServiceTest`,
 `PaymentLinkServiceTest`, `CommonBillingServiceTest`, and the migration contract
 test.
+
+## CommonBilling current-payment registry rollout
+
+`V1_10_200__common_billing_current_payment_registry.sql` backfills the live
+CommonBilling payment projection into `common_invoice_payment_refs` and adds a
+nullable generated unique key that permits at most one `CURRENT` ref per
+invoice. Ambiguous provider identities are retained as evidence, but the
+affected invoice is moved to `NEEDS_ATTENTION`, its public payment URL and next
+reminder are cleared, and no winner is guessed.
+
+This migration is additive at the schema level, but it is **not safe for an
+ordinary rolling deployment with an old writer still running**. The old backend
+can create an invoice-only T-Bank binding after the backfill snapshot and does
+not maintain the new registry row. Use this sequence:
+
+1. Disable/drain every old backend instance and wait for in-flight payment Init
+   and webhook requests to finish.
+2. Keep the public payment ingress unavailable while no compatible backend is
+   running; do not route it to an old instance.
+3. Start one new backend instance, let Flyway complete V200, and verify there is
+   no startup/migration error.
+4. Confirm that every non-quarantined invoice exposing a payment URL has exactly
+   one `CURRENT` registry row, and that no invoice has more than one `CURRENT`
+   row.
+5. Re-enable ingress and then scale out only the new backend version.
+
+Do not roll the application back to a pre-registry writer while payment ingress
+is enabled. A rollback requires the same drain window and a compatible forward
+fix; deleting the generated column or unique key is not a safe rollback.

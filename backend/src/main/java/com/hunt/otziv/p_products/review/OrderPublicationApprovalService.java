@@ -2,12 +2,13 @@ package com.hunt.otziv.p_products.review;
 
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
-import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.services.ReviewService;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,7 @@ public class OrderPublicationApprovalService {
     private final ReviewService reviewService;
     private final OrderStatusTransitionService orderStatusTransitionService;
     private final BusinessAuditService businessAuditService;
+    private final OrderAggregateMutationLockService orderAggregateMutationLockService;
 
     @Transactional(readOnly = true)
     public void validateExistingOrder(Long orderId) {
@@ -36,13 +38,15 @@ public class OrderPublicationApprovalService {
 
     @Transactional
     public void approveExistingOrder(Long orderId, String auditDetails) {
-        approvePreparedOrder(orderId, existingDetails(orderId), auditDetails);
+        approvePreparedOrder(orderId, List.of(), auditDetails);
     }
 
     @Transactional
     public void approvePreparedOrder(Long orderId, List<OrderDetailsDTO> details, String auditDetails) {
-        validate(orderId, details);
-        assignDates(orderId, details);
+        lockAggregate(orderId);
+        List<OrderDetailsDTO> completeDetails = completeOrderDetails(orderId, details);
+        validate(orderId, completeDetails);
+        assignDates(orderId, completeDetails);
 
         try {
             if (!orderStatusTransitionService.changeStatusForOrder(orderId, STATUS_TO_PUBLISH)) {
@@ -63,11 +67,12 @@ public class OrderPublicationApprovalService {
             );
         }
 
-        recordApproval(orderId, details, auditDetails);
+        recordApproval(orderId, completeDetails, auditDetails);
     }
 
     @Transactional
     public void repairMissingDates(Long orderId, String auditDetails) {
+        lockAggregate(orderId);
         List<OrderDetailsDTO> details = existingDetails(orderId);
         validate(orderId, details);
         boolean hasMissingDates = details.stream()
@@ -90,10 +95,49 @@ public class OrderPublicationApprovalService {
     }
 
     private List<OrderDetailsDTO> existingDetails(Long orderId) {
+        return canonicalDetails(orderId);
+    }
+
+    /**
+     * A publication status belongs to the whole order, while a public review link represents one
+     * order detail. Merge the freshly prepared detail with the canonical remaining details so a
+     * partial request cannot publish an order whose other cards are not ready.
+     */
+    private List<OrderDetailsDTO> completeOrderDetails(Long orderId, List<OrderDetailsDTO> preparedDetails) {
+        List<OrderDetailsDTO> canonicalDetails = canonicalDetails(orderId);
+        Map<java.util.UUID, OrderDetailsDTO> preparedById = new HashMap<>();
+        if (preparedDetails != null) {
+            for (OrderDetailsDTO detail : preparedDetails) {
+                if (detail == null || detail.getId() == null) {
+                    throw failure(orderId, "передана карточка без ID", "обновите страницу и повторите одобрение");
+                }
+                if (preparedById.putIfAbsent(detail.getId(), detail) != null) {
+                    throw failure(orderId, "одна карточка передана повторно", "обновите страницу и повторите одобрение");
+                }
+            }
+        }
+
+        List<OrderDetailsDTO> complete = canonicalDetails.stream()
+                .map(canonical -> {
+                    OrderDetailsDTO prepared = preparedById.remove(canonical.getId());
+                    return prepared != null ? prepared : canonical;
+                })
+                .toList();
+        if (!preparedById.isEmpty()) {
+            throw failure(
+                    orderId,
+                    "передана карточка из другого заказа",
+                    "обновите страницу и повторите одобрение"
+            );
+        }
+        return complete;
+    }
+
+    private List<OrderDetailsDTO> canonicalDetails(Long orderId) {
         if (orderId == null) {
             throw failure(null, "не указан ID заказа", "обновите страницу и повторите действие");
         }
-        List<OrderDetails> details = orderDetailsService.findByOrderId(orderId);
+        List<OrderDetailsDTO> details = orderDetailsService.getOrderDetailDTOsByOrderIdForReviewCheck(orderId);
         if (details == null || details.isEmpty()) {
             throw failure(
                     orderId,
@@ -101,10 +145,7 @@ public class OrderPublicationApprovalService {
                     "добавьте карточку продукта и отзывы либо отправьте заказ в коррекцию"
             );
         }
-        return details.stream()
-                .map(OrderDetails::getId)
-                .map(orderDetailsService::getOrderDetailDTOById)
-                .toList();
+        return details;
     }
 
     private void validate(Long orderId, List<OrderDetailsDTO> details) {
@@ -131,22 +172,27 @@ public class OrderPublicationApprovalService {
     }
 
     private void assignDates(Long orderId, List<OrderDetailsDTO> details) {
-        for (OrderDetailsDTO detail : details) {
-            try {
-                if (!reviewService.updateOrderDetailAndReviewAndPublishDate(detail)) {
-                    throw failure(orderId, "не удалось назначить даты публикации", FIX_PUBLICATION_DATES);
-                }
-            } catch (PublicationApprovalException exception) {
-                throw exception;
-            } catch (Exception exception) {
-                throw new PublicationApprovalException(
-                        orderId,
-                        "не удалось назначить даты публикации: " + concise(exception),
-                        FIX_PUBLICATION_DATES,
-                        exception
-                );
+        try {
+            if (!reviewService.updateOrderDetailsAndReviewsAndPublishDates(orderId, details)) {
+                throw failure(orderId, "не удалось назначить даты публикации", FIX_PUBLICATION_DATES);
             }
+        } catch (PublicationApprovalException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new PublicationApprovalException(
+                    orderId,
+                    "не удалось назначить даты публикации: " + concise(exception),
+                    FIX_PUBLICATION_DATES,
+                    exception
+            );
         }
+    }
+
+    private void lockAggregate(Long orderId) {
+        if (orderId == null) {
+            throw failure(null, "не указан ID заказа", "обновите страницу и повторите действие");
+        }
+        orderAggregateMutationLockService.lock(orderId);
     }
 
     private void recordApproval(Long orderId, List<OrderDetailsDTO> details, String auditDetails) {
