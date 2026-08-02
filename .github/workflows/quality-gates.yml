@@ -27,10 +27,17 @@ jobs:
           BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
         run: ./infrastructure/scripts/security/check-repository-hygiene.ps1 -BaseRevision $env:BASE_REVISION
       - name: Reject oversized Git blobs
+        if: github.event_name != 'push' || github.event.deleted != true
         shell: pwsh
         env:
           BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
-        run: ./infrastructure/scripts/security/check-large-git-files.ps1 -Mode range -BaseRevision $env:BASE_REVISION -TargetRevision HEAD
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+        run: |
+          $baseRevision = $env:BASE_REVISION
+          if ([string]::IsNullOrWhiteSpace($baseRevision) -or $baseRevision -match '^0+$') {
+            $baseRevision = "origin/$env:DEFAULT_BRANCH"
+          }
+          ./infrastructure/scripts/security/check-large-git-files.ps1 -Mode range -BaseRevision $baseRevision -TargetRevision HEAD
       - name: Enforce append-only Flyway migrations
         shell: pwsh
         env:

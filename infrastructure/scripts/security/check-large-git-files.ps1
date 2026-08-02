@@ -7,6 +7,9 @@ param(
 
     [string]$TargetRevision = "HEAD",
 
+    [AllowEmptyString()]
+    [string]$ExcludeRemote = "",
+
     [ValidateRange(1, 10240)]
     [int]$MaxBlobMiB = 95
 )
@@ -33,7 +36,7 @@ function Test-GitCommit {
 
 function Get-OversizedBlobs {
     param(
-        [Parameter(Mandatory = $true)][string[]]$ObjectLines,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$ObjectLines,
         [Parameter(Mandatory = $true)][long]$MaxBytes
     )
 
@@ -105,25 +108,68 @@ function Get-StagedBlobLines {
 function Get-RangeBlobLines {
     param(
         [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Base,
-        [Parameter(Mandatory = $true)][string]$Target
+        [Parameter(Mandatory = $true)][string]$Target,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$ExcludeRemoteName
     )
 
     if (-not (Test-GitCommit -Revision $Target)) {
         throw "Target revision '$Target' is not an available commit."
     }
 
-    $revisionSpec = $Target
+    $revisionArguments = [System.Collections.Generic.List[string]]::new()
     $allZeros = $Base -match '^0+$'
     if (-not [string]::IsNullOrWhiteSpace($Base) -and -not $allZeros) {
         if (Test-GitCommit -Revision $Base) {
-            $revisionSpec = "$Base..$Target"
+            $revisionArguments.Add("$Base..$Target")
         }
         else {
-            Write-Warning "Base revision '$Base' is unavailable; scanning all objects reachable from '$Target'."
+            Write-Warning "Base revision '$Base' is unavailable; excluding commits already reachable from remote '$ExcludeRemoteName'."
         }
     }
 
-    return @(Invoke-GitLines -Arguments @("rev-list", "--objects", $revisionSpec, "--"))
+    if ($revisionArguments.Count -eq 0) {
+        $revisionArguments.Add($Target)
+        if (-not [string]::IsNullOrWhiteSpace($ExcludeRemoteName)) {
+            $revisionArguments.Add("--not")
+            $revisionArguments.Add("--remotes=$ExcludeRemoteName")
+        }
+    }
+
+    $gitArguments = [System.Collections.Generic.List[string]]::new()
+    foreach ($argument in @(
+        "-c",
+        "core.quotepath=false",
+        "log",
+        "--format=",
+        "--raw",
+        "--no-abbrev",
+        "--diff-filter=ACMRT",
+        "--no-renames",
+        "--root",
+        "-m"
+    )) {
+        $gitArguments.Add($argument)
+    }
+    foreach ($argument in $revisionArguments) {
+        $gitArguments.Add($argument)
+    }
+    $gitArguments.Add("--")
+
+    $changes = @(Invoke-GitLines -Arguments @($gitArguments))
+    $objects = [System.Collections.Generic.List[string]]::new()
+    foreach ($change in $changes) {
+        if ($change -notmatch '^:\d+ \d+ [0-9a-f]+ (?<oid>[0-9a-f]+) [ACMRT]\d*\t(?<path>.*)$') {
+            continue
+        }
+
+        if ($Matches.oid -match '^0+$') {
+            continue
+        }
+
+        $objects.Add("$($Matches.oid) $($Matches.path)")
+    }
+
+    return @($objects | Sort-Object -Unique)
 }
 
 $repoRoot = (& git rev-parse --show-toplevel).Trim()
@@ -140,7 +186,7 @@ try {
         $scope = "staged changes"
     }
     else {
-        $objectLines = @(Get-RangeBlobLines -Base $BaseRevision -Target $TargetRevision)
+        $objectLines = @(Get-RangeBlobLines -Base $BaseRevision -Target $TargetRevision -ExcludeRemoteName $ExcludeRemote)
         $scope = "Git range ending at $TargetRevision"
     }
 
