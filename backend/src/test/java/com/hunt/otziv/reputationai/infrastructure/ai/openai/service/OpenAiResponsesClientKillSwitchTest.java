@@ -6,14 +6,14 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
-import com.hunt.otziv.reputationai.application.ReputationAiRuntimeSwitch;
+import com.hunt.otziv.reputationai.application.service.ReputationAiProviderSelectionService;
+import com.hunt.otziv.reputationai.application.service.ReputationAiRuntimeSwitch;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
-import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekAnthropicProvider;
-import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.service.DeepSeekAnthropicProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.service.DeepSeekProvider;
 import com.hunt.otziv.reputationai.infrastructure.ai.dto.AiRequest;
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.dto.OpenAiResponseResult;
-import com.hunt.otziv.reputationai.infrastructure.ai.yandex.YandexGptProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.yandex.service.YandexGptProvider;
 import org.junit.jupiter.api.Test;
 
 class OpenAiResponsesClientKillSwitchTest {

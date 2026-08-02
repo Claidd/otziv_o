@@ -1,7 +1,7 @@
 package com.hunt.otziv.logs.controller;
 
-import com.hunt.otziv.logs.BoundedUtf8LogReader;
-import com.hunt.otziv.logs.conf.LogPathResolver;
+import com.hunt.otziv.logs.util.BoundedUtf8LogReader;
+import com.hunt.otziv.logs.service.LogPathResolver;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;

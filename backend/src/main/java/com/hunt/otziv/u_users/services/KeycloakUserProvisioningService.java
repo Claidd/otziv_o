@@ -12,7 +12,7 @@ import com.hunt.otziv.u_users.dto.RegisterClientRequest;
 import com.hunt.otziv.u_users.dto.UpdateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.UpdateUserAssignmentsRequest;
 import com.hunt.otziv.u_users.dto.UserAssignmentsResponse;
-import com.hunt.otziv.u_users.keycloak.KeycloakAdminClient;
+import com.hunt.otziv.u_users.keycloak.client.KeycloakAdminClient;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;

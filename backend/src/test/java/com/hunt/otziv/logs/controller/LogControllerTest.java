@@ -1,6 +1,6 @@
 package com.hunt.otziv.logs.controller;
 
-import com.hunt.otziv.logs.conf.LogPathResolver;
+import com.hunt.otziv.logs.service.LogPathResolver;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;

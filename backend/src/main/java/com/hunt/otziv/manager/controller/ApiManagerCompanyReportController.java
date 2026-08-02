@@ -7,7 +7,7 @@ import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
-import com.hunt.otziv.reputationai.application.DeepCompanyResearchJobService;
+import com.hunt.otziv.reputationai.application.service.DeepCompanyResearchJobService;
 import com.hunt.otziv.reputationai.config.DeepResearchProfile;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchJobStatus;
 import lombok.RequiredArgsConstructor;

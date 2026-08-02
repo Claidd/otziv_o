@@ -5,7 +5,7 @@ import com.hunt.otziv.u_users.dto.CreateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.LegacyUserMigrationRequest;
 import com.hunt.otziv.u_users.dto.UpdateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.UpdateUserAssignmentsRequest;
-import com.hunt.otziv.u_users.keycloak.KeycloakAdminClient;
+import com.hunt.otziv.u_users.keycloak.client.KeycloakAdminClient;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Manager;

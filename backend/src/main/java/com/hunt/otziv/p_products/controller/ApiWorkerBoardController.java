@@ -17,7 +17,7 @@ import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueStatusResponse;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
-import com.hunt.otziv.p_products.board.OrderBoardQueryService;
+import com.hunt.otziv.p_products.board.service.OrderBoardQueryService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;

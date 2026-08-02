@@ -3,7 +3,7 @@ package com.hunt.otziv.common_billing.service;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
-import com.hunt.otziv.p_products.review.PublicationApprovalException;
+import com.hunt.otziv.p_products.review.exception.PublicationApprovalException;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

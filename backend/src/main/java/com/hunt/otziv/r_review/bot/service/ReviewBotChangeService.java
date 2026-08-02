@@ -7,7 +7,7 @@ import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.FilialService;
-import com.hunt.otziv.config.email.EmailService;
+import com.hunt.otziv.config.email.service.EmailService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;

@@ -34,7 +34,7 @@ import com.hunt.otziv.manager.dto.api.ReviewRecoveryBatchDetailsResponse;
 import com.hunt.otziv.manager.dto.api.ReviewRecoveryTaskDetailsResponse;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderStatusDTO;
-import com.hunt.otziv.p_products.deletion.OrderDeletionPolicy;
+import com.hunt.otziv.p_products.deletion.policy.OrderDeletionPolicy;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;

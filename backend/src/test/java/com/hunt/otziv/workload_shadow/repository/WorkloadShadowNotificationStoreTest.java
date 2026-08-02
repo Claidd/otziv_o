@@ -7,9 +7,9 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hunt.otziv.workload_shadow.notification.WorkloadShadowClaimedNotification;
-import com.hunt.otziv.workload_shadow.notification.WorkloadShadowDeliveryOutcome;
-import com.hunt.otziv.workload_shadow.notification.WorkloadShadowNotificationEvent;
+import com.hunt.otziv.workload_shadow.notification.dto.WorkloadShadowClaimedNotification;
+import com.hunt.otziv.workload_shadow.notification.dto.WorkloadShadowDeliveryOutcome;
+import com.hunt.otziv.workload_shadow.notification.dto.WorkloadShadowNotificationEvent;
 import com.hunt.otziv.workload_shadow.repository.projection.WorkloadShadowClaimedNotificationProjection;
 import java.time.LocalDateTime;
 import java.util.List;

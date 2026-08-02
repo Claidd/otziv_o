@@ -1,6 +1,6 @@
 package com.hunt.otziv.s3.buckupBD.service;
 
-import com.hunt.otziv.config.email.EmailService;
+import com.hunt.otziv.config.email.service.EmailService;
 import com.hunt.otziv.s3.buckupBD.config.BackupProperties;
 import com.hunt.otziv.s3.buckupBD.config.S3Properties;
 import lombok.RequiredArgsConstructor;

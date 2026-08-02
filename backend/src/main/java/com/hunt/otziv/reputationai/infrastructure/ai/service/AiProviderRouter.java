@@ -1,7 +1,7 @@
 package com.hunt.otziv.reputationai.infrastructure.ai.service;
 
-import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
-import com.hunt.otziv.reputationai.application.ReputationAiRuntimeSwitch;
+import com.hunt.otziv.reputationai.application.service.ReputationAiProviderSelectionService;
+import com.hunt.otziv.reputationai.application.service.ReputationAiRuntimeSwitch;
 import com.hunt.otziv.reputationai.infrastructure.ai.dto.AiRequest;
 import com.hunt.otziv.reputationai.infrastructure.ai.dto.AiResponse;
 import lombok.RequiredArgsConstructor;

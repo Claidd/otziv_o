@@ -6,8 +6,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
-import com.hunt.otziv.reputationai.application.ReputationAiRuntimeSwitch;
+import com.hunt.otziv.reputationai.application.service.ReputationAiProviderSelectionService;
+import com.hunt.otziv.reputationai.application.service.ReputationAiRuntimeSwitch;
 import com.hunt.otziv.reputationai.infrastructure.ai.dto.AiRequest;
 import com.hunt.otziv.reputationai.infrastructure.ai.dto.AiResponse;
 import java.util.List;

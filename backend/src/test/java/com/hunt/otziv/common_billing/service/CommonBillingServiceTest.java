@@ -28,7 +28,7 @@ import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
-import com.hunt.otziv.p_products.deletion.OrderDeletionService;
+import com.hunt.otziv.p_products.deletion.service.OrderDeletionService;
 import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
@@ -38,11 +38,11 @@ import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
 import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.review.OrderAggregateMutationLockService;
-import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
+import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
+import com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
-import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
+import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.TbankCancelResponse;
 import com.hunt.otziv.payments.dto.TbankInitCommand;
@@ -682,7 +682,7 @@ class CommonBillingServiceTest {
         doAnswer(invocation -> {
             Long orderId = invocation.getArgument(0);
             if (Long.valueOf(102L).equals(orderId)) {
-                throw new com.hunt.otziv.p_products.review.PublicationApprovalException(
+                throw new com.hunt.otziv.p_products.review.exception.PublicationApprovalException(
                         102L,
                         "есть пустой текст",
                         "заполните текст"
@@ -692,7 +692,7 @@ class CommonBillingServiceTest {
         }).when(publicationApprovalService).validateExistingOrder(any());
 
         assertThrows(
-                com.hunt.otziv.p_products.review.PublicationApprovalException.class,
+                com.hunt.otziv.p_products.review.exception.PublicationApprovalException.class,
                 () -> service.approveReviewOrders(10L)
         );
 

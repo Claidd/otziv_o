@@ -6,7 +6,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
+import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.performers.dto.PerformerAssignmentResponse;
 import com.hunt.otziv.performers.dto.PerformerBoardResponse;
 import com.hunt.otziv.performers.dto.PerformerProblemRequest;

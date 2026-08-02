@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.manager.services.ManagerAccessService;
-import com.hunt.otziv.p_products.review.OrderAggregateMutationLockService;
+import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerAssignmentMutationGuardRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;

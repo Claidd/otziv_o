@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowTransferSimulationService;
-import com.hunt.otziv.workload_shadow.transfer.WorkloadTransferGraphQueryService;
+import com.hunt.otziv.workload_shadow.transfer.service.WorkloadTransferGraphQueryService;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;

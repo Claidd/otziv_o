@@ -9,7 +9,7 @@ import com.hunt.otziv.manager.dto.api.PageResponse;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerAssignmentMutationGuardRepository;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerNetworkViolationRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
-import com.hunt.otziv.workload_shadow.notification.WorkloadShadowDeliveryOutcome;
+import com.hunt.otziv.workload_shadow.notification.dto.WorkloadShadowDeliveryOutcome;
 import com.hunt.otziv.workload_shadow.repository.WorkloadLiveReadinessRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowEventRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowMonitorRepository;
@@ -17,7 +17,7 @@ import com.hunt.otziv.workload_shadow.repository.WorkloadShadowNotificationStore
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowRunRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferOfferRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferPreferenceRepository;
-import com.hunt.otziv.workload_shadow.maintenance.WorkloadShadowMaintenanceService;
+import com.hunt.otziv.workload_shadow.maintenance.service.WorkloadShadowMaintenanceService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProjectionService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowRunService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowTransferSimulationService;

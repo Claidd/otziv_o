@@ -31,7 +31,7 @@ import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.reputationai.api.dto.ReputationBatchReviewDraftRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationBatchReviewDraftTarget;
 import com.hunt.otziv.reputationai.api.dto.ReputationSingleReviewDraftRequest;
-import com.hunt.otziv.reputationai.application.ReputationSingleReviewDraftService;
+import com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftService;
 import com.hunt.otziv.reputationai.domain.ReputationBatchReviewDraftItem;
 import com.hunt.otziv.reputationai.domain.ReputationBatchReviewDraftResult;
 import com.hunt.otziv.reputationai.domain.ReputationSingleReviewDraftResult;

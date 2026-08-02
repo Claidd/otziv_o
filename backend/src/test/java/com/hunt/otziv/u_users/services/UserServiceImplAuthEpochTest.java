@@ -5,7 +5,7 @@ import com.hunt.otziv.u_users.dto.MarketologDTO;
 import com.hunt.otziv.u_users.dto.OperatorDTO;
 import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
-import com.hunt.otziv.u_users.keycloak.KeycloakAdminClient;
+import com.hunt.otziv.u_users.keycloak.client.KeycloakAdminClient;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ImageRepository;

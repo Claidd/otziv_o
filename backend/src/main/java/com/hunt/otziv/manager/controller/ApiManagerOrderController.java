@@ -13,7 +13,7 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.payment.OrderPaymentCancellationService;
+import com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;

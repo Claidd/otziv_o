@@ -8,9 +8,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityScope;
-import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityService;
-import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityService.ResolvedCapability;
+import com.hunt.otziv.r_review.capability.model.ReviewCheckCapabilityScope;
+import com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityService;
+import com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityService.ResolvedCapability;
 import com.hunt.otziv.r_review.controller.ApiReviewCheckController.ReviewCheckPermissions;
 import com.hunt.otziv.r_review.controller.ApiReviewCheckController.ReviewCheckResponse;
 import com.hunt.otziv.r_review.controller.ApiReviewCheckController.ReviewCheckReviewResponse;

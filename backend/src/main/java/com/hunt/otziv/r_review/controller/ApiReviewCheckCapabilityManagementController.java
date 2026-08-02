@@ -5,10 +5,10 @@ import com.hunt.otziv.archive.service.ReviewCheckArchiveService.ArchivedReviewCh
 import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
-import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityMutationService;
-import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityService;
-import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityService.CapabilityMetadata;
-import com.hunt.otziv.r_review.capability.ReviewCheckCapabilityService.IssuedCapability;
+import com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityMutationService;
+import com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityService;
+import com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityService.CapabilityMetadata;
+import com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityService.IssuedCapability;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;

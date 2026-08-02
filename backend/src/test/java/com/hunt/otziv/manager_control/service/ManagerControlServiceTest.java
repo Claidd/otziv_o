@@ -57,7 +57,7 @@ import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
+import com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;

@@ -1,6 +1,6 @@
 package com.hunt.otziv.reputationai.infrastructure.search.service;
 
-import com.hunt.otziv.reputationai.application.ReputationAiRuntimeSwitch;
+import com.hunt.otziv.reputationai.application.service.ReputationAiRuntimeSwitch;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
 import com.hunt.otziv.reputationai.infrastructure.search.dto.SearchQuery;
 import com.hunt.otziv.reputationai.infrastructure.search.dto.SearchResult;

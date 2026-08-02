@@ -2,7 +2,7 @@ package com.hunt.otziv.u_users.services;
 
 
 import com.hunt.otziv.u_users.dto.*;
-import com.hunt.otziv.u_users.keycloak.KeycloakAdminClient;
+import com.hunt.otziv.u_users.keycloak.client.KeycloakAdminClient;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.repository.ImageRepository;
 import com.hunt.otziv.u_users.repository.RoleRepository;
