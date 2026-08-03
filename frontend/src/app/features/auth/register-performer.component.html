@@ -47,8 +47,24 @@
         </select>
       </label>
 
+      <fieldset class="consents">
+        <legend>Обязательные подтверждения · редакция 03.08.2026</legend>
+        <label class="consent">
+          <input type="checkbox" formControlName="personalDataConsentAccepted">
+          <span>Я согласен на обработку персональных данных по <a routerLink="/privacy">политике</a>.</span>
+        </label>
+        <label class="consent">
+          <input type="checkbox" formControlName="rulesConsentAccepted">
+          <span>Я принимаю <a routerLink="/offer">правила работы исполнителя</a>.</span>
+        </label>
+        <label class="consent">
+          <input type="checkbox" formControlName="honestReviewConsentAccepted">
+          <span>Я обязуюсь публиковать только честные отзывы на основании собственного опыта.</span>
+        </label>
+      </fieldset>
+
       @if (form.invalid && form.touched) {
-        <p class="error">Заполните имя, телефон и город.</p>
+        <p class="error">Заполните имя, телефон, город и подтвердите все обязательные условия.</p>
       }
 
       @if (error()) {
@@ -69,27 +85,14 @@
   } @else {
     <section class="panel registration-success">
       <span class="success-icon material-icons-sharp">task_alt</span>
-      <h2>Исполнитель зарегистрирован</h2>
-      <dl>
-        <div>
-          <dt>Логин</dt>
-          <dd>{{ created()!.username }}</dd>
-        </div>
-        <div>
-          <dt>Временный пароль</dt>
-          <dd>{{ created()!.temporaryPassword }}</dd>
-        </div>
-      </dl>
+      <h2>Заявка принята</h2>
+      <p>Учётная запись пока отключена. Привяжите личный Telegram, затем администратор вручную проверит телефон и выдаст новые данные для входа.</p>
       @if (created()!.telegramLinkUrl) {
         <a class="telegram-link" [href]="created()!.telegramLinkUrl" target="_blank" rel="noreferrer">
           <span class="material-icons-sharp">send</span>
           Привязать Telegram
         </a>
       }
-      <button type="button" class="login-button" (click)="login()">
-        <span class="material-icons-sharp">login</span>
-        Войти в кабинет
-      </button>
     </section>
   }
 </app-admin-layout>

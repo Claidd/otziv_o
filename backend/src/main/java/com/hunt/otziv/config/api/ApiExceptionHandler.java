@@ -1,6 +1,7 @@
 package com.hunt.otziv.config.api;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -61,6 +62,13 @@ public class ApiExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex) {
         return ResponseEntity.badRequest().body(new ApiErrorResponse(dataIntegrityMessage(ex)));
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleOptimisticLocking(OptimisticLockingFailureException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(
+                "Данные уже изменились в другой сессии. Обновите страницу и повторите действие."
+        ));
     }
 
     private String dataIntegrityMessage(DataIntegrityViolationException ex) {

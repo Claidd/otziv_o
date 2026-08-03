@@ -263,7 +263,8 @@ public class OrderArchiveRestoreRepository {
         jdbc.update("""
                 UPDATE orders
                 SET order_status = :targetStatusId,
-                    order_changed = CURRENT_DATE()
+                    order_changed = CURRENT_DATE(),
+                    row_version = row_version + 1
                 WHERE order_id = :orderId
                 """, params);
         return restored;

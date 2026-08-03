@@ -1,6 +1,8 @@
 package com.hunt.otziv.b_bots.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.security.credentials.EncryptedCredentialConverter;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
@@ -30,6 +32,9 @@ public class Bot {
     private String login;
 
     //    установленный пароль для бота (должен меняться)
+    @JsonIgnore
+    @ToString.Exclude
+    @Convert(converter = EncryptedCredentialConverter.class)
     @Column(name = "bot_password", nullable = false)
     private String password;
 
@@ -49,7 +54,7 @@ public class Bot {
     private LocalDate cooldownUntil;
 
     //    указатель статуса бота: заблокирован или готов к работе
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bot_status")
     @ToString.Exclude
     @EqualsAndHashCode.Exclude

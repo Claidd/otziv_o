@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -124,6 +126,28 @@ class LogControllerTest {
         assertEquals(List.of("before"), snapshot.lines());
         Map<String, Object> tail = body(controller.tailLog(snapshot.offset(), 10));
         assertEquals(List.of("после snapshot"), tail.get("lines"));
+    }
+
+    @Test
+    void downloadStreamsOnlyAResolvedLogAndDisablesCaching() throws Exception {
+        Path current = tempDirectory.resolve("app.log");
+        Path archive = tempDirectory.resolve("app.2026-07-31.2.log");
+        Files.writeString(current, "CURRENT\n", StandardCharsets.UTF_8);
+        Files.writeString(archive, "ARCHIVE\n", StandardCharsets.UTF_8);
+        LogController controller = controllerFor(current);
+
+        ResponseEntity<Resource> response = controller.downloadLog("2026-07-31.2");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("no-store", response.getHeaders().getFirst(HttpHeaders.CACHE_CONTROL));
+        assertTrue(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION)
+                .contains("app.2026-07-31.2.log"));
+        assertNotNull(response.getBody());
+        try (var input = response.getBody().getInputStream()) {
+            assertEquals("ARCHIVE\n", new String(input.readAllBytes(), StandardCharsets.UTF_8));
+        }
+
+        assertEquals(400, controller.downloadLog("../app").getStatusCode().value());
     }
 
     @Test

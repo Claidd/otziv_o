@@ -374,16 +374,21 @@ export interface RegisterPerformerRequest {
   fio: string;
   telegramUsername?: string;
   registeredSource?: string;
+  personalDataConsentAccepted: boolean;
+  rulesConsentAccepted: boolean;
+  honestReviewConsentAccepted: boolean;
 }
 
 export interface RegisterPerformerResponse {
   userId: number;
   performerId: number;
   username: string;
-  temporaryPassword: string;
-  telegramLinkToken: string;
+  temporaryPassword?: string | null;
+  telegramLinkToken?: string | null;
   telegramLinkUrl: string;
   status: string;
+  registrationExpiresAt: string;
+  requiresAdminApproval: boolean;
 }
 
 export interface LegacyUserMigrationRequest {
@@ -524,7 +529,6 @@ export interface ArchiveReviewItem {
   subCategory: string;
   botId?: number | null;
   botFio: string;
-  botLogin: string;
   productId?: number | null;
   productTitle: string;
   workerFio: string;
@@ -921,8 +925,8 @@ export interface OrderReviewItem {
   subCategory: string;
   botId?: number | null;
   botFio: string;
-  botLogin: string;
-  botPassword: string;
+  botLoginPresent: boolean;
+  botPasswordPresent: boolean;
   botCounter: number;
   botActive?: boolean;
   companyTitle: string;
@@ -969,8 +973,8 @@ export interface BadReviewTaskItem {
   workerFio?: string;
   botId?: number | null;
   botFio?: string;
-  botLogin?: string;
-  botPassword?: string;
+  botLoginPresent: boolean;
+  botPasswordPresent: boolean;
   taskText?: string;
   comment?: string;
 }
@@ -1001,8 +1005,8 @@ export interface ReviewRecoveryTaskItem {
   workerFio?: string;
   botId?: number | null;
   botFio?: string;
-  botLogin?: string;
-  botPassword?: string;
+  botLoginPresent: boolean;
+  botPasswordPresent: boolean;
   batch?: ReviewRecoveryBatchItem | null;
 }
 
@@ -1024,6 +1028,11 @@ export interface WorkerCredentialPreparation {
   ready?: boolean;
   remainingSeconds?: number;
   waitSeconds?: number;
+}
+
+export interface CredentialRevealResponse {
+  value: string;
+  credentialPreparation?: WorkerCredentialPreparation | null;
 }
 
 export interface OrderDetailsPayload {
@@ -1677,8 +1686,8 @@ export interface WorkerReviewItem {
   productTitle: string;
   productPhoto?: boolean;
   botFio: string;
-  botLogin?: string;
-  botPassword?: string;
+  botLoginPresent: boolean;
+  botPasswordPresent: boolean;
   botCounter?: number;
   filialTitle?: string;
   workerFio?: string;
@@ -1710,8 +1719,8 @@ export interface WorkerReviewItem {
 
 export interface WorkerBotItem {
   id: number;
-  login: string;
-  password: string;
+  loginPresent: boolean;
+  passwordPresent: boolean;
   fio: string;
   city: string;
   counter: number;
@@ -2047,11 +2056,13 @@ export interface OperatorPhone {
   amountSent: number;
   blockTime: number;
   timer?: string | null;
-  googleLogin?: string | null;
-  googlePassword?: string | null;
-  avitoPassword?: string | null;
-  mailLogin?: string | null;
-  mailPassword?: string | null;
+  googleLoginMasked?: string | null;
+  googleLoginPresent: boolean;
+  googlePasswordPresent: boolean;
+  avitoPasswordPresent: boolean;
+  mailLoginMasked?: string | null;
+  mailLoginPresent: boolean;
+  mailPasswordPresent: boolean;
   fotoInstagram?: string | null;
   active: boolean;
   createDate?: string | null;
@@ -2118,10 +2129,10 @@ export interface AdminProduct {
 export interface AdminBot {
   id: number;
   login: string;
-  password?: string;
   fio: string;
   active: boolean;
   counter: number;
+  passwordPresent: boolean;
   status?: DictionaryOption | null;
   worker?: DictionaryOption | null;
   city?: DictionaryOption | null;
@@ -3763,6 +3774,42 @@ export class ApiService {
     );
   }
 
+  revealManagerOrderReviewCredential(
+    orderId: number,
+    reviewId: number,
+    field: 'login' | 'password',
+    source?: WorkerActivitySource
+  ): Observable<CredentialRevealResponse> {
+    return this.http.post<CredentialRevealResponse>(
+      this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/credential-reveal`),
+      { ...source, field }
+    );
+  }
+
+  revealManagerBadReviewTaskCredential(
+    orderId: number,
+    taskId: number,
+    field: 'login' | 'password',
+    source?: WorkerActivitySource
+  ): Observable<CredentialRevealResponse> {
+    return this.http.post<CredentialRevealResponse>(
+      this.apiUrl(`/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/credential-reveal`),
+      { ...source, field }
+    );
+  }
+
+  revealManagerRecoveryTaskCredential(
+    orderId: number,
+    taskId: number,
+    field: 'login' | 'password',
+    source?: WorkerActivitySource
+  ): Observable<CredentialRevealResponse> {
+    return this.http.post<CredentialRevealResponse>(
+      this.apiUrl(`/api/manager/orders/${orderId}/recovery-tasks/${taskId}/credential-reveal`),
+      { ...source, field }
+    );
+  }
+
   cancelManagerBadReviewTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
     return this.http.post<OrderDetailsPayload>(
       this.apiUrl(`/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/cancel`),
@@ -4220,41 +4267,41 @@ export class ApiService {
     return this.http.post<void>(this.apiUrl(`/api/worker/recovery-tasks/${taskId}/bots/${botId}/deactivate`), {});
   }
 
-  deleteWorkerBot(botId: number): Observable<void> {
-    return this.http.delete<void>(this.apiUrl(`/api/worker/bots/${botId}`));
-  }
-
-  logWorkerReviewCopyClick(
+  revealWorkerReviewCredential(
     reviewId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<WorkerCredentialPreparation | null> {
-    return this.http.post<WorkerCredentialPreparation | null>(
-      this.apiUrl(`/api/worker/reviews/${reviewId}/copy-click`),
-      { field, ...source }
+  ): Observable<CredentialRevealResponse> {
+    return this.http.post<CredentialRevealResponse>(
+      this.apiUrl(`/api/worker/reviews/${reviewId}/credential-reveal`),
+      { ...source, field }
     );
   }
 
-  logWorkerBadReviewTaskCopyClick(
+  revealWorkerBadReviewTaskCredential(
     taskId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<void> {
-    return this.http.post<void>(
-      this.apiUrl(`/api/worker/bad-review-tasks/${taskId}/copy-click`),
-      { field, ...source }
+  ): Observable<CredentialRevealResponse> {
+    return this.http.post<CredentialRevealResponse>(
+      this.apiUrl(`/api/worker/bad-review-tasks/${taskId}/credential-reveal`),
+      { ...source, field }
     );
   }
 
-  logWorkerRecoveryTaskCopyClick(
+  revealWorkerRecoveryTaskCredential(
     taskId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<void> {
-    return this.http.post<void>(
-      this.apiUrl(`/api/worker/recovery-tasks/${taskId}/copy-click`),
-      { field, ...source }
+  ): Observable<CredentialRevealResponse> {
+    return this.http.post<CredentialRevealResponse>(
+      this.apiUrl(`/api/worker/recovery-tasks/${taskId}/credential-reveal`),
+      { ...source, field }
     );
+  }
+
+  deleteWorkerBot(botId: number): Observable<void> {
+    return this.http.delete<void>(this.apiUrl(`/api/worker/bots/${botId}`));
   }
 
   updateWorkerReviewText(reviewId: number, orderId: number, text: string, source?: WorkerActivitySource): Observable<void> {

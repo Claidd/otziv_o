@@ -111,6 +111,17 @@
   font-weight: 900;
 }
 
+.row > span {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.legacy-warning {
+  color: var(--otziv-danger);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
 .actions,
 .assignment-list article header {
   display: flex;

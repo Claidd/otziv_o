@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
@@ -44,8 +45,10 @@ public class ReviewDTOOne {
 
     private String botFio;
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String botLogin;
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String botPassword;
 
     private int botCounter;

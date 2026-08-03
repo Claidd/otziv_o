@@ -62,7 +62,14 @@ export class AuthService {
 
   login(targetUrl = '/'): Promise<void> {
     return this.keycloak.login({
-      redirectUri: `${window.location.origin}${targetUrl}`
+      redirectUri: `${window.location.origin}${safeAuthTarget(targetUrl)}`
+    });
+  }
+
+  restartLogin(targetUrl = '/'): Promise<void> {
+    return this.keycloak.login({
+      redirectUri: `${window.location.origin}${safeAuthTarget(targetUrl)}`,
+      prompt: 'login'
     });
   }
 
@@ -76,7 +83,7 @@ export class AuthService {
   }
 
   async getToken(): Promise<string | null> {
-    if (!this.keycloak.authenticated) {
+    if (this.redirectingToLogin || !this.keycloak.authenticated) {
       return null;
     }
 
@@ -94,7 +101,7 @@ export class AuthService {
    * features when possible while still remaining usable anonymously.
    */
   getOptionalToken(minValiditySeconds = 5): string | null {
-    if (!this.keycloak.authenticated || !this.keycloak.token) {
+    if (this.redirectingToLogin || !this.keycloak.authenticated || !this.keycloak.token) {
       return null;
     }
 
@@ -108,11 +115,11 @@ export class AuthService {
   }
 
   isAuthenticated(): boolean {
-    return this.keycloak.authenticated === true;
+    return !this.redirectingToLogin && this.keycloak.authenticated === true;
   }
 
   hasRealmRole(role: string): boolean {
-    return this.keycloak.hasRealmRole(role);
+    return !this.redirectingToLogin && this.keycloak.hasRealmRole(role);
   }
 
   hasAnyRealmRole(roles: readonly string[]): boolean {
@@ -120,7 +127,7 @@ export class AuthService {
   }
 
   async refreshToken(minValiditySeconds = 60): Promise<boolean> {
-    if (!this.keycloak.authenticated) {
+    if (this.redirectingToLogin || !this.keycloak.authenticated) {
       return false;
     }
 
@@ -155,10 +162,27 @@ export class AuthService {
 
     this.redirectingToLogin = true;
     this.stopRefreshLoop();
-    this.keycloak.clearToken();
     this.clearSession('expired');
     this.error.set('Сессия закончилась. Войдите снова.');
-    void this.login(targetUrl);
+
+    if (this.isAuthRestartPage()) {
+      // The restart component is about to open a forced credential prompt.
+      // A late API 401 or refresh failure here must not start another
+      // end-session round trip and recreate a logout/restart loop.
+      this.keycloak.clearToken();
+      return;
+    }
+
+    const restartUrl = this.authRestartUrl(targetUrl);
+    void Promise.resolve()
+      .then(() => this.keycloak.logout({ redirectUri: restartUrl }))
+      .catch(() => {
+        // If the end-session endpoint is temporarily unavailable, discard the
+        // unusable local token and move to a same-origin forced-login page.
+        // Its prompt=login prevents a live SSO cookie from recreating the loop.
+        this.keycloak.clearToken();
+        this.replaceBrowserLocation(restartUrl);
+      });
   }
 
   private registerKeycloakCallbacks(): void {
@@ -234,11 +258,8 @@ export class AuthService {
   }
 
   private handleRefreshFailure(error?: unknown): void {
-    this.stopRefreshLoop();
-    this.keycloak.clearToken();
-    this.clearSession('expired');
-    this.error.set(error ? this.getErrorMessage(error) : 'Сессия закончилась. Войдите снова.');
     this.handleUnauthorized();
+    this.error.set(error ? this.getErrorMessage(error) : 'Сессия закончилась. Войдите снова.');
   }
 
   private clearSession(status: AuthStatus): void {
@@ -275,6 +296,102 @@ export class AuthService {
   private currentBrowserPath(): string {
     return `${window.location.pathname}${window.location.search}${window.location.hash}` || '/';
   }
+
+  private authRestartUrl(targetUrl: string): string {
+    const restartUrl = new URL('/auth/restart', window.location.origin);
+    restartUrl.searchParams.set('target', safeAuthTarget(targetUrl));
+    return restartUrl.toString();
+  }
+
+  private isAuthRestartPage(): boolean {
+    const canonicalPath = canonicalAuthPath(window.location.pathname);
+    return canonicalPath !== null && isPathOrDescendant(canonicalPath, '/auth/restart');
+  }
+
+  protected replaceBrowserLocation(url: string): void {
+    window.location.replace(url);
+  }
+}
+
+export function safeAuthTarget(value: string | null | undefined): string {
+  if (!value || !value.startsWith('/')) {
+    return '/';
+  }
+
+  try {
+    const validationOrigin = 'https://auth-target.invalid';
+    const parsed = new URL(value, validationOrigin);
+    const canonicalPath = canonicalAuthPath(parsed.pathname);
+    if (parsed.origin !== validationOrigin
+      || canonicalPath === null
+      || isPathOrDescendant(canonicalPath, '/keycloak')
+      || isPathOrDescendant(canonicalPath, '/auth/restart')) {
+      return '/';
+    }
+    // OAuth redirect_uri values cannot contain fragments. Keycloak also uses
+    // the fragment for responseMode=fragment, so carrying an application or
+    // stale callback hash into redirectUri would corrupt the callback.
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return '/';
+  }
+}
+
+const MAX_AUTH_PATH_LENGTH = 4096;
+const MAX_AUTH_PATH_DECODE_PASSES = 3;
+const ENCODED_PATH_SEPARATOR = /%(?:2f|5c)/i;
+const REMAINING_PERCENT_ESCAPE = /%[0-9a-f]{2}/i;
+const UNSAFE_PATH_CHARACTER = /[\\\u0000-\u001f\u007f]/;
+
+function canonicalAuthPath(pathname: string): string | null {
+  if (!pathname || pathname.length > MAX_AUTH_PATH_LENGTH) {
+    return null;
+  }
+
+  let canonical = pathname;
+  for (let pass = 0; pass < MAX_AUTH_PATH_DECODE_PASSES; pass += 1) {
+    // Encoded separators change Angular's segment boundaries after decoding.
+    // Reject them at every layer rather than guessing which router view wins.
+    if (ENCODED_PATH_SEPARATOR.test(canonical) || UNSAFE_PATH_CHARACTER.test(canonical)) {
+      return null;
+    }
+
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(canonical);
+    } catch {
+      return null;
+    }
+    if (UNSAFE_PATH_CHARACTER.test(decoded)) {
+      return null;
+    }
+    if (decoded === canonical) {
+      return withoutMatrixParameters(decoded);
+    }
+    canonical = decoded;
+  }
+
+  // More deeply nested escapes are not valid auth navigation targets. This
+  // keeps validation bounded and prevents a later decoder from seeing a
+  // different reserved route than this check did.
+  if (ENCODED_PATH_SEPARATOR.test(canonical)
+    || REMAINING_PERCENT_ESCAPE.test(canonical)
+    || UNSAFE_PATH_CHARACTER.test(canonical)) {
+    return null;
+  }
+  return withoutMatrixParameters(canonical);
+}
+
+function withoutMatrixParameters(pathname: string): string {
+  return pathname
+    .split('/')
+    .map((segment) => segment.split(';', 1)[0])
+    .join('/');
+}
+
+function isPathOrDescendant(pathname: string, reservedPath: string): boolean {
+  const normalized = pathname.toLowerCase();
+  return normalized === reservedPath || normalized.startsWith(`${reservedPath}/`);
 }
 
 export function hasKeycloakAuthenticationCallback(url: string): boolean {

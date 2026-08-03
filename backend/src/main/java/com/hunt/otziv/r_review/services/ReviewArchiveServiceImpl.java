@@ -69,11 +69,6 @@ public class ReviewArchiveServiceImpl implements ReviewArchiveService{
         return reviewArchiveRepository.existsByTextExcludingOwnSource(text, reviewId, orderId);
     }
 
-    @Override
-    public Iterable<ReviewArchive> findAllReviews() {
-        return reviewArchiveRepository.findAll();
-    }
-
     private void enrichExistingSource(ReviewArchive archive, Review review, String sourceReason) {
         String normalizedReason = normalizeSourceReason(sourceReason);
         boolean forcePublishedSource = ReviewArchiveSourceReason.PUBLISHED.equals(normalizedReason)

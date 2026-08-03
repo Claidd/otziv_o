@@ -1,15 +1,21 @@
 # syntax=docker/dockerfile:1
 
-FROM maven:3.9.15-eclipse-temurin-26-alpine AS build
+FROM maven:3.9.15-eclipse-temurin-26-alpine@sha256:9b0bc1420b93f3eafb7401dc3030eac01e773d8d709686d3c4ac351fcf6f9f42 AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
 RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp clean package -DskipTests
 
-FROM eclipse-temurin:26-jre-jammy
+FROM eclipse-temurin:26-jre-jammy@sha256:3e83fe06950ab45b8fee3c8fccdbb3dc0cc203c4518babdd9e8957c31284c9d5
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl default-mysql-client openssl \
     && rm -rf /var/lib/apt/lists/*
+
+ARG OTZIV_UID=10001
+ARG OTZIV_GID=10001
+RUN groupadd --system --gid "$OTZIV_GID" otziv \
+    && useradd --system --uid "$OTZIV_UID" --gid "$OTZIV_GID" \
+        --home-dir /app --shell /usr/sbin/nologin otziv
 
 # MAX moved its API to a chain rooted at the official Russian Trusted Root CA.
 # Validate the published certificate fingerprint before adding it to the OS and
@@ -24,12 +30,16 @@ RUN test "$(openssl x509 -in /usr/local/share/ca-certificates/russian_trusted_ro
         -storepass changeit
 
 WORKDIR /app
-COPY --from=build /app/target/otziv-1.jar /app/app.jar
+RUN mkdir -p /app/logs /app/sent-hashes /app/backup /app/mobile-releases \
+    && chown -R otziv:otziv /app
+COPY --from=build --chown=otziv:otziv /app/target/otziv-1.jar /app/app.jar
 
 VOLUME /app/logs
 VOLUME /app/sent-hashes
 
 EXPOSE 8080
+
+USER otziv:otziv
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
     CMD curl -fsS http://localhost:8080/actuator/health || exit 1

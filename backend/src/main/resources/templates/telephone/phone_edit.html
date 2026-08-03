@@ -59,27 +59,32 @@
 
             <div class="mb-3">
                 <label for="googleLogin" class="form-label">Google логин</label>
-                <input type="text" th:field="*{googleLogin}" class="form-control">
+                <input type="text" th:field="*{googleLogin}" class="form-control" autocomplete="off"
+                       th:placeholder="${googleLoginPresent} ? 'Сохранён — пустое поле не изменяет' : ''">
             </div>
 
             <div class="mb-3">
                 <label for="googlePassword" class="form-label">Google пароль</label>
-                <input type="text" th:field="*{googlePassword}" class="form-control">
+                <input type="password" th:field="*{googlePassword}" class="form-control" autocomplete="new-password"
+                       th:placeholder="${googlePasswordPresent} ? 'Сохранён — пустое поле не изменяет' : ''">
             </div>
 
             <div class="mb-3">
                 <label for="avitoPassword" class="form-label">Avito пароль</label>
-                <input type="text" th:field="*{avitoPassword}" class="form-control">
+                <input type="password" th:field="*{avitoPassword}" class="form-control" autocomplete="new-password"
+                       th:placeholder="${avitoPasswordPresent} ? 'Сохранён — пустое поле не изменяет' : ''">
             </div>
 
             <div class="mb-3">
                 <label for="mailLogin" class="form-label">Mail логин</label>
-                <input type="text" th:field="*{mailLogin}" class="form-control">
+                <input type="text" th:field="*{mailLogin}" class="form-control" autocomplete="off"
+                       th:placeholder="${mailLoginPresent} ? 'Сохранён — пустое поле не изменяет' : ''">
             </div>
 
             <div class="mb-3">
                 <label for="mailPassword" class="form-label">Mail пароль</label>
-                <input type="text" th:field="*{mailPassword}" class="form-control">
+                <input type="password" th:field="*{mailPassword}" class="form-control" autocomplete="new-password"
+                       th:placeholder="${mailPasswordPresent} ? 'Сохранён — пустое поле не изменяет' : ''">
             </div>
 
             <div class="mb-3">

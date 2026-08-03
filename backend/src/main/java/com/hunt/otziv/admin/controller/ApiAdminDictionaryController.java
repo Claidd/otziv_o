@@ -469,9 +469,10 @@ public class ApiAdminDictionaryController {
                 .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN")
                         || authority.getAuthority().equals("ROLE_OWNER"));
         if (globalRole) {
-            BotCrudAccessService.LockedCrudBot lockedBot =
-                    botCrudAccessService.requireLockedGlobalAccess(id, authentication);
-            return toBotResponse(lockedBot.bot());
+            botCrudAccessService.requireAccess(id, authentication);
+            return botsRepository.findAdminRowById(id)
+                    .map(this::toBotListResponse)
+                    .orElseThrow(() -> notFound("Аккаунт не найден"));
         }
 
         BotBrowserAccessService.AuthorizedBot authorizedBot =
@@ -479,10 +480,10 @@ public class ApiAdminDictionaryController {
         return new BotResponse(
                 authorizedBot.id(),
                 safe(authorizedBot.login()),
-                "",
                 safe(authorizedBot.fio()),
                 false,
                 0,
+                false,
                 null,
                 null,
                 null
@@ -537,7 +538,9 @@ public class ApiAdminDictionaryController {
         assertLoginAvailable(login, id);
 
         bot.setLogin(login);
-        bot.setPassword(requiredText(request.password(), "Пароль обязателен"));
+        if (request.password() != null && !request.password().isBlank()) {
+            bot.setPassword(request.password().trim());
+        }
         bot.setFio(requiredText(request.fio(), "ФИО обязательно"));
         bot.setWorker(requiredWorker(request.workerId()));
         bot.setBotCity(optionalCity(request.cityId()));
@@ -1125,10 +1128,10 @@ public class ApiAdminDictionaryController {
         return new BotResponse(
                 bot.getId(),
                 safe(bot.getLogin()),
-                safe(bot.getPassword()),
                 safe(bot.getFio()),
                 bot.isActive(),
                 bot.getCounter(),
+                bot.getPassword() != null && !bot.getPassword().isBlank(),
                 toStatusOption(bot.getStatus()),
                 toWorkerOption(bot.getWorker()),
                 toCityOption(bot.getBotCity())
@@ -1139,10 +1142,10 @@ public class ApiAdminDictionaryController {
         return new BotResponse(
                 bot.getId(),
                 safe(bot.getLogin()),
-                "",
                 safe(bot.getFio()),
                 Boolean.TRUE.equals(bot.getActive()),
                 bot.getCounter() == null ? 0 : bot.getCounter(),
+                Boolean.TRUE.equals(bot.getPasswordPresent()),
                 bot.getStatusId() == null ? null : new OptionResponse(bot.getStatusId(), safe(bot.getStatusTitle())),
                 bot.getWorkerId() == null ? null : new OptionResponse(
                         bot.getWorkerId(),
@@ -1959,10 +1962,10 @@ public class ApiAdminDictionaryController {
     public record BotResponse(
             Long id,
             String login,
-            String password,
             String fio,
             boolean active,
             int counter,
+            boolean passwordPresent,
             OptionResponse status,
             OptionResponse worker,
             OptionResponse city

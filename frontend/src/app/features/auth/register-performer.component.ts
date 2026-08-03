@@ -7,7 +7,6 @@ import {
   RegisterPerformerRequest,
   RegisterPerformerResponse
 } from '../../core/auth-lifecycle.api';
-import { AuthService } from '../../core/auth.service';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
@@ -21,7 +20,6 @@ import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 export class RegisterPerformerComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly authApi = inject(AuthLifecycleApi);
-  readonly auth = inject(AuthService);
 
   readonly cities = signal<PerformerCityOption[]>([]);
   readonly loadingCities = signal(false);
@@ -35,7 +33,10 @@ export class RegisterPerformerComponent implements OnInit {
     cityId: [0, [Validators.required, Validators.min(1)]],
     gender: ['NOT_SPECIFIED'],
     telegramUsername: [''],
-    registeredSource: ['SITE']
+    registeredSource: ['SITE'],
+    personalDataConsentAccepted: [false, Validators.requiredTrue],
+    rulesConsentAccepted: [false, Validators.requiredTrue],
+    honestReviewConsentAccepted: [false, Validators.requiredTrue]
   });
 
   ngOnInit(): void {
@@ -68,7 +69,10 @@ export class RegisterPerformerComponent implements OnInit {
       cityId: Number(raw.cityId),
       gender: raw.gender as RegisterPerformerRequest['gender'],
       telegramUsername: raw.telegramUsername.trim() || undefined,
-      registeredSource: raw.registeredSource.trim() || 'SITE'
+      registeredSource: raw.registeredSource.trim() || 'SITE',
+      personalDataConsentAccepted: raw.personalDataConsentAccepted,
+      rulesConsentAccepted: raw.rulesConsentAccepted,
+      honestReviewConsentAccepted: raw.honestReviewConsentAccepted
     };
 
     this.saving.set(true);
@@ -84,7 +88,4 @@ export class RegisterPerformerComponent implements OnInit {
     });
   }
 
-  login(): void {
-    void this.auth.login('/performer');
-  }
 }

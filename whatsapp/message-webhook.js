@@ -1,5 +1,12 @@
 "use strict";
 
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+
+const DELIVERY_STORE_COMPACT_EVERY = 256;
+const DELIVERY_STORE_MAX_ENTRIES = 50_000;
+
 function serializedId(value) {
   if (!value) {
     return "";
@@ -102,11 +109,206 @@ class RecentOutboundRegistry {
   }
 }
 
+class MemoryDeliveryIdempotencyStore {
+  constructor(now = () => Date.now()) {
+    this.now = now;
+    this.entries = new Map();
+  }
+
+  async has(key) {
+    this.cleanup();
+    return this.entries.has(key);
+  }
+
+  async mark(key, expiresAt) {
+    this.cleanup();
+    this.entries.set(key, expiresAt);
+  }
+
+  cleanup() {
+    const cutoff = this.now();
+    for (const [key, expiresAt] of this.entries) {
+      if (!Number.isFinite(expiresAt) || expiresAt <= cutoff) {
+        this.entries.delete(key);
+      }
+    }
+  }
+}
+
+class FileDeliveryIdempotencyStore {
+  constructor(filePath, now = () => Date.now(), maxEntries = DELIVERY_STORE_MAX_ENTRIES) {
+    if (!filePath) {
+      throw new Error("Delivery idempotency path is required");
+    }
+    this.filePath = path.resolve(filePath);
+    this.now = now;
+    this.entries = new Map();
+    this.loaded = false;
+    this.needsCompaction = false;
+    this.operationsSinceCompaction = 0;
+    this.maxEntries = Math.max(1, Math.min(Number(maxEntries) || DELIVERY_STORE_MAX_ENTRIES, DELIVERY_STORE_MAX_ENTRIES));
+    this.operation = Promise.resolve();
+  }
+
+  has(key) {
+    return this.serialize(async () => {
+      await this.load();
+      this.cleanup();
+      return this.entries.has(key);
+    });
+  }
+
+  mark(key, expiresAt) {
+    return this.serialize(async () => {
+      await this.load();
+      this.cleanup();
+      this.entries.delete(key);
+      this.entries.set(key, expiresAt);
+      const evicted = this.enforceEntryLimit();
+      if (this.needsCompaction || evicted || this.operationsSinceCompaction >= DELIVERY_STORE_COMPACT_EVERY - 1) {
+        await this.compact();
+        return;
+      }
+      await this.append({ version: 2, key, expiresAt });
+      this.operationsSinceCompaction += 1;
+    });
+  }
+
+  serialize(operation) {
+    const result = this.operation.then(operation, operation);
+    this.operation = result.catch(() => undefined);
+    return result;
+  }
+
+  async load() {
+    if (this.loaded) {
+      return;
+    }
+    try {
+      const content = await fs.promises.readFile(this.filePath, "utf8");
+      this.loadContent(content);
+      this.cleanup();
+      if (this.enforceEntryLimit()) {
+        this.needsCompaction = true;
+      }
+      this.loaded = true;
+    } catch (error) {
+      if (error && error.code !== "ENOENT" && !(error instanceof SyntaxError)) {
+        throw error;
+      }
+      this.entries.clear();
+      this.loaded = true;
+    }
+  }
+
+  cleanup() {
+    const cutoff = this.now();
+    let dirty = false;
+    for (const [key, expiresAt] of this.entries) {
+      if (!Number.isFinite(expiresAt) || expiresAt <= cutoff) {
+        this.entries.delete(key);
+        dirty = true;
+      }
+    }
+    return dirty;
+  }
+
+  enforceEntryLimit() {
+    let evicted = false;
+    while (this.entries.size > this.maxEntries) {
+      const oldest = this.entries.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.entries.delete(oldest);
+      evicted = true;
+    }
+    return evicted;
+  }
+
+  loadContent(content) {
+    const source = String(content || "").trim();
+    if (!source) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(source);
+      this.applyStoredPayload(parsed);
+      return;
+    } catch {
+      // Version 2 is newline-delimited so each acknowledgement is O(1).
+    }
+
+    for (const line of source.split(/\r?\n/)) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        this.applyStoredPayload(JSON.parse(line));
+      } catch {
+        this.needsCompaction = true;
+      }
+    }
+  }
+
+  applyStoredPayload(payload) {
+    if (payload && payload.version === 1 && payload.entries && typeof payload.entries === "object") {
+      for (const [key, expiresAt] of Object.entries(payload.entries)) {
+        this.setLoadedEntry(key, expiresAt);
+      }
+      this.needsCompaction = true;
+      return;
+    }
+    if (payload && payload.version === 2 && Array.isArray(payload.entries)) {
+      this.entries.clear();
+      for (const entry of payload.entries) {
+        if (Array.isArray(entry) && entry.length === 2) {
+          this.setLoadedEntry(entry[0], entry[1]);
+        }
+      }
+      return;
+    }
+    if (payload && payload.version === 2) {
+      this.setLoadedEntry(payload.key, payload.expiresAt);
+      return;
+    }
+    this.needsCompaction = true;
+  }
+
+  setLoadedEntry(key, expiresAt) {
+    if (typeof key === "string" && key.length <= 128 && Number.isFinite(expiresAt)) {
+      this.entries.delete(key);
+      this.entries.set(key, expiresAt);
+    }
+  }
+
+  async append(record) {
+    const directory = path.dirname(this.filePath);
+    await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 });
+    await fs.promises.appendFile(this.filePath, `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: 0o600 });
+  }
+
+  async compact() {
+    const directory = path.dirname(this.filePath);
+    await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 });
+    const temporaryPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
+    const payload = `${JSON.stringify({ version: 2, entries: Array.from(this.entries) })}\n`;
+    try {
+      await fs.promises.writeFile(temporaryPath, payload, { encoding: "utf8", mode: 0o600 });
+      await fs.promises.rename(temporaryPath, this.filePath);
+      this.operationsSinceCompaction = 0;
+      this.needsCompaction = false;
+    } finally {
+      await fs.promises.rm(temporaryPath, { force: true }).catch(() => undefined);
+    }
+  }
+}
+
 class DeliveredMessageCache {
-  constructor(ttlMs = 24 * 60 * 60 * 1000, now = () => Date.now()) {
+  constructor(ttlMs = 24 * 60 * 60 * 1000, now = () => Date.now(), store = null) {
     this.ttlMs = ttlMs;
     this.now = now;
-    this.delivered = new Map();
+    this.store = store || new MemoryDeliveryIdempotencyStore(now);
     this.inFlight = new Map();
   }
 
@@ -115,25 +317,31 @@ class DeliveredMessageCache {
     if (!id) {
       return "";
     }
-    return `${path}|${String(payload.clientId || "").trim()}|${String(payload.groupId || payload.from || "").trim()}|${id}`;
+    return crypto.createHash("sha256")
+      .update(JSON.stringify([
+        String(path || ""),
+        String(payload.clientId || "").trim(),
+        String(payload.groupId || payload.from || "").trim(),
+        id,
+      ]), "utf8")
+      .digest("hex");
   }
 
   async deliver(path, payload, sender) {
-    this.cleanup();
     const key = this.key(path, payload);
     if (!key) {
       return sender();
-    }
-    if (this.delivered.has(key)) {
-      return { duplicate: true };
     }
     if (this.inFlight.has(key)) {
       return this.inFlight.get(key);
     }
     const delivery = Promise.resolve()
-      .then(sender)
-      .then((result) => {
-        this.delivered.set(key, this.now() + this.ttlMs);
+      .then(async () => {
+        if (await this.store.has(key)) {
+          return { duplicate: true };
+        }
+        const result = await sender();
+        await this.store.mark(key, this.now() + this.ttlMs);
         return result;
       })
       .finally(() => this.inFlight.delete(key));
@@ -141,14 +349,6 @@ class DeliveredMessageCache {
     return delivery;
   }
 
-  cleanup() {
-    const cutoff = this.now();
-    for (const [key, expiresAt] of this.delivered.entries()) {
-      if (expiresAt <= cutoff) {
-        this.delivered.delete(key);
-      }
-    }
-  }
 }
 
 async function groupMetadata(message, groupId, log) {
@@ -232,17 +432,27 @@ function reconciliationPayloads({
   afterTimestamp,
   messages,
 }) {
-  const cutoff = Number(afterTimestamp) || 0;
+  const cutoffValue = Number(afterTimestamp);
+  const cutoff = Number.isFinite(cutoffValue) ? Math.max(0, Math.floor(cutoffValue)) : 0;
+  const seen = new Set();
   return (Array.isArray(messages) ? messages : [])
-    .filter((message) => message && !message.fromMe && Number(message.timestamp) > cutoff)
+    .filter((message) => {
+      const id = messageId(message);
+      const timestamp = Number(message && message.timestamp);
+      if (!message || message.fromMe || !id || seen.has(id) || !Number.isFinite(timestamp) || timestamp <= cutoff) {
+        return false;
+      }
+      seen.add(id);
+      return true;
+    })
     .map((message) => ({
       clientId,
       groupId,
-      groupName: String(groupName || "").trim(),
+      groupName: String(groupName || "").trim().slice(0, 256),
       from: serializedId(message.author) || serializedId(message.from),
       fromName: String(message._data && message._data.notifyName || "").trim(),
       messageId: messageId(message) || null,
-      timestamp: message.timestamp || null,
+      timestamp: Math.floor(Number(message.timestamp)),
       fromMe: false,
       systemGenerated: false,
       message: trackedBody(message),
@@ -252,6 +462,8 @@ function reconciliationPayloads({
 
 module.exports = {
   DeliveredMessageCache,
+  FileDeliveryIdempotencyStore,
+  MemoryDeliveryIdempotencyStore,
   RecentOutboundRegistry,
   createMessageHandler,
   deriveGroupId,

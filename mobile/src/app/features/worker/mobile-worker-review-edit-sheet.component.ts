@@ -52,7 +52,15 @@ import { safeHttpsOrInternalUrl } from '../../shared/external-navigation';
               @if (showBotPassword()) {
                 <label>
                   <span>Пароль бота</span>
-                  <input name="botPassword" type="text" [ngModel]="form.botPassword" (ngModelChange)="setField('botPassword', $event)" [disabled]="busy()">
+                  <input
+                    name="botPassword"
+                    type="password"
+                    autocomplete="new-password"
+                    [ngModel]="form.botPassword"
+                    (ngModelChange)="setField('botPassword', $event)"
+                    [placeholder]="currentReview()?.botPasswordPresent ? 'Пароль сохранен — введите новый для замены' : 'Пароль не задан'"
+                    [disabled]="busy()"
+                  >
                 </label>
               }
 
@@ -394,7 +402,7 @@ export class MobileWorkerReviewEditSheetComponent {
       publish: Boolean(review.publish),
       vigul: Boolean(review.vigul),
       botName: review.botFio ?? '',
-      botPassword: review.botPassword ?? '',
+      botPassword: '',
       productId: review.productId ?? null,
       url: review.url || review.urlPhoto || ''
     });

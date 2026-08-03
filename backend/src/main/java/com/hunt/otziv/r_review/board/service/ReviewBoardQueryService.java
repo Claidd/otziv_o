@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.keywordPredicate;
+import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.hasText;
 import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.parseKeywordLong;
 import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.parseKeywordUuid;
 
@@ -63,7 +64,8 @@ public class ReviewBoardQueryService {
             return new PageImpl<>(Collections.emptyList(), pageable, 0);
         }
 
-        String joins = """
+        boolean hasKeyword = hasText(keyword);
+        String joins = hasKeyword ? """
                 LEFT JOIN r.bot b
                 LEFT JOIN r.filial f
                 LEFT JOIN f.city city
@@ -79,7 +81,7 @@ public class ReviewBoardQueryService {
                 LEFT JOIN o.status os
                 LEFT JOIN o.manager om
                 LEFT JOIN om.user mu
-                """;
+                """ : reviewCountJoins(mode, scope);
 
         List<String> conditions = new ArrayList<>();
         switch (mode) {
@@ -118,7 +120,9 @@ public class ReviewBoardQueryService {
 
         Long keywordLong = parseKeywordLong(keyword);
         UUID keywordUuid = parseKeywordUuid(keyword);
-        conditions.add(keywordPredicate(keywordLong != null, keywordUuid != null));
+        if (hasKeyword) {
+            conditions.add(keywordPredicate(keywordLong != null, keywordUuid != null));
+        }
 
         String where = " WHERE " + String.join(" AND ", conditions);
         String direction = "asc".equalsIgnoreCase(sortDirection) ? "DESC" : "ASC";
@@ -199,11 +203,11 @@ public class ReviewBoardQueryService {
     private String reviewCountJoins(ReviewBoardMode mode, ReviewBoardScope scope) {
         return switch (mode) {
             case PUBLISH -> scope == ReviewBoardScope.MANAGER
-                    ? " LEFT JOIN r.bot b JOIN r.orderDetails d JOIN d.order o "
-                    : " LEFT JOIN r.bot b ";
+                    ? " JOIN r.orderDetails d JOIN d.order o "
+                    : " ";
             case VIGUL -> scope == ReviewBoardScope.MANAGER
-                    ? " LEFT JOIN r.bot b LEFT JOIN r.orderDetails d LEFT JOIN d.order o "
-                    : " LEFT JOIN r.bot b ";
+                    ? " LEFT JOIN r.orderDetails d LEFT JOIN d.order o "
+                    : " ";
             case ORDER_STATUS -> " JOIN r.orderDetails d JOIN d.order o JOIN o.status os ";
         };
     }
@@ -247,16 +251,6 @@ public class ReviewBoardQueryService {
         conditions.add("LOWER(TRIM(r.text)) NOT LIKE 'подсавить текст%'");
     }
 
-    private void addReadyReviewAccountConditions(List<String> conditions) {
-        conditions.add("b IS NOT NULL");
-        conditions.add("b.id IS NOT NULL");
-        conditions.add("b.id <> 1");
-        conditions.add("b.active = true");
-        conditions.add("b.login IS NOT NULL");
-        conditions.add("TRIM(b.login) <> ''");
-        conditions.add("LOWER(TRIM(b.fio)) NOT IN ('впишите имя фамилию', 'впиши имя фамилию', 'впишите фамилию имя', 'нет доступных аккаунтов')");
-    }
-
     private void bindReviewBoardParameters(
             TypedQuery<Long> query,
             ReviewBoardMode mode,
@@ -288,12 +282,14 @@ public class ReviewBoardQueryService {
             query.setParameter("manager", manager);
         }
 
-        query.setParameter("keyword", "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%");
-        if (keywordLong != null) {
-            query.setParameter("keywordLong", keywordLong);
-        }
-        if (keywordUuid != null) {
-            query.setParameter("keywordUuid", keywordUuid);
+        if (hasText(keyword)) {
+            query.setParameter("keyword", "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%");
+            if (keywordLong != null) {
+                query.setParameter("keywordLong", keywordLong);
+            }
+            if (keywordUuid != null) {
+                query.setParameter("keywordUuid", keywordUuid);
+            }
         }
     }
 

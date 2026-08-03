@@ -9,7 +9,7 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const auth = inject(AuthService);
   const router = inject(Router);
   const apiBaseUrl = mobileEnvironment.apiBaseUrl;
-  const requestPath = pathFromRequestUrl(request.url, apiBaseUrl);
+  const requestPath = pathFromRequestUrl(request.url, apiBaseUrl) ?? '';
   const anonymousRequest = request.clone({
     headers: request.headers.delete('Authorization')
   });
@@ -22,8 +22,7 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
     || requestPath === '/api/review-capability'
     || requestPath.startsWith('/api/review-capability/')
     || requestPath.startsWith('/api/mobile-update');
-  const targetsApi = request.url.startsWith('/api')
-    || (apiBaseUrl.length > 0 && request.url.startsWith(apiBaseUrl));
+  const targetsApi = requestPath === '/api' || requestPath?.startsWith('/api/') === true;
 
   if (!targetsApi || isAlwaysAnonymousApi) {
     return next(isAlwaysAnonymousApi ? anonymousRequest : request);
@@ -122,18 +121,34 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   );
 };
 
-function pathFromRequestUrl(url: string, apiBaseUrl: string): string {
+function pathFromRequestUrl(url: string, apiBaseUrl: string): string | null {
   if (url.startsWith('/')) {
-    return url;
+    if (url.startsWith('//')) {
+      return null;
+    }
+    try {
+      return new URL(url, 'https://mobile.invalid').pathname;
+    } catch {
+      return null;
+    }
   }
 
-  if (apiBaseUrl.length > 0 && url.startsWith(apiBaseUrl)) {
-    return url.slice(apiBaseUrl.length) || '/';
+  if (!apiBaseUrl) {
+    return null;
   }
 
   try {
-    return new URL(url, window.location.origin).pathname;
+    const base = new URL(apiBaseUrl);
+    const target = new URL(url);
+    if (target.origin !== base.origin) {
+      return null;
+    }
+    const basePath = base.pathname.replace(/\/+$/u, '');
+    if (basePath && target.pathname !== basePath && !target.pathname.startsWith(`${basePath}/`)) {
+      return null;
+    }
+    return target.pathname.slice(basePath.length) || '/';
   } catch {
-    return url;
+    return null;
   }
 }

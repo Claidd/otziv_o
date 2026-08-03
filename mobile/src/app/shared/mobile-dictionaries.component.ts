@@ -1062,7 +1062,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                 }
                 @case ('accounts') {
                   <label><span>Логин</span><input name="login" [ngModel]="draftValue('login')" (ngModelChange)="patchDraft('login', $event)" required></label>
-                  <label><span>Пароль</span><input name="password" type="password" autocomplete="off" [ngModel]="draftValue('password')" (ngModelChange)="patchDraft('password', $event)" required></label>
+                  <label><span>Пароль</span><input name="password" type="password" autocomplete="new-password" [ngModel]="draftValue('password')" (ngModelChange)="patchDraft('password', $event)" [required]="selectedId() === null" [placeholder]="selectedId() !== null ? 'Сохранен — пустое поле не изменяет' : ''"></label>
                   <label><span>ФИО</span><input name="fio" [ngModel]="draftValue('fio')" (ngModelChange)="patchDraft('fio', $event)" required></label>
                   <label><span>Работник</span><select name="workerId" [ngModel]="draftValue('workerId')" (ngModelChange)="patchDraft('workerId', $event)" required>@for (worker of botWorkers(); track worker.id) { <option [ngValue]="worker.id">{{ worker.title }}</option> }</select></label>
                   <label><span>Статус</span><select name="statusId" [ngModel]="draftValue('statusId')" (ngModelChange)="patchDraft('statusId', $event)" required>@for (status of botStatuses(); track status.id) { <option [ngValue]="status.id">{{ status.title }}</option> }</select></label>
@@ -2639,11 +2639,11 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
           amountSent: phone.amountSent,
           blockTime: phone.blockTime,
           timer: phone.timer ?? '',
-          googleLogin: phone.googleLogin ?? '',
-          googlePassword: phone.googlePassword ?? '',
-          avitoPassword: phone.avitoPassword ?? '',
-          mailLogin: phone.mailLogin ?? '',
-          mailPassword: phone.mailPassword ?? '',
+          googleLogin: '',
+          googlePassword: '',
+          avitoPassword: '',
+          mailLogin: '',
+          mailPassword: '',
           fotoInstagram: phone.fotoInstagram ?? '',
           active: phone.active,
           createDate: phone.createDate ?? '',
@@ -2654,7 +2654,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
         const bot = item as AdminBot;
         return {
           login: bot.login,
-          password: bot.password ?? '',
+          password: '',
           fio: bot.fio,
           workerId: bot.worker?.id ?? null,
           cityId: bot.city?.id ?? null,

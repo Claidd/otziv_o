@@ -82,7 +82,8 @@ public class SpecialistTransferService {
                 UPDATE reviews r
                 JOIN order_details od ON od.order_detail_id = r.review_order_details
                 JOIN orders o ON o.order_id = od.order_detail_order
-                SET r.review_worker = :toWorkerId
+                SET r.review_worker = :toWorkerId,
+                    r.row_version = r.row_version + 1
                 WHERE r.review_publish = 0
                   AND o.order_worker = :fromWorkerId
                   AND o.order_complete = 0
@@ -101,7 +102,8 @@ public class SpecialistTransferService {
 
         int activeOrderCount = jdbc.update("""
                 UPDATE orders o
-                SET o.order_worker = :toWorkerId
+                SET o.order_worker = :toWorkerId,
+                    o.row_version = o.row_version + 1
                 WHERE o.order_worker = :fromWorkerId
                   AND o.order_company IN (:companyIds)
                   AND o.order_complete = 0

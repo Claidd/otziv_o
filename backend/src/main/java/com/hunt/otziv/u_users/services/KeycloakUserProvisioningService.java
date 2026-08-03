@@ -31,6 +31,7 @@ import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.security.core.Authentication;
@@ -105,10 +106,16 @@ public class KeycloakUserProvisioningService {
     private final CacheManager cacheManager;
     private final UserAuthEpochService authEpochService;
 
+    /** ADMIN always remains global; OWNER cannot manage ADMIN/OWNER accounts unless explicitly enabled. */
+    @Value("${otziv.security.owner-manage-privileged-users:false}")
+    private boolean ownerManagePrivilegedUsers;
+
     @Transactional
     public CreatedKeycloakUserResponse createUser(CreateKeycloakUserRequest request) {
         Set<String> keycloakRoles = normalizeKeycloakRoles(request.getRoles());
-        requireAdminForAdminMutation(keycloakRoles.contains(ADMIN_KEYCLOAK_ROLE));
+        requireAdminForPrivilegedMutation(
+                keycloakRoles.contains(ADMIN_KEYCLOAK_ROLE) || keycloakRoles.contains("OWNER")
+        );
         validateLocalUniqueness(request);
         List<Role> localRoles = findLocalRoles(keycloakRoles);
 
@@ -158,6 +165,7 @@ public class KeycloakUserProvisioningService {
                         (first, ignored) -> first
                 ));
         return users.stream()
+                .filter(user -> canCurrentActorViewInUserAdministration(user))
                 .map(user -> toAdminResponse(user, managersByUserId.get(user.getId())))
                 .toList();
     }
@@ -183,6 +191,7 @@ public class KeycloakUserProvisioningService {
     @Transactional(readOnly = true)
     public UserAssignmentsResponse getUserAssignments(Long userId) {
         User user = findUserWithAssignments(userId);
+        requireAdminForPrivilegedMutation(isPrivilegedUser(user));
         return toAssignmentsResponse(user);
     }
 
@@ -191,8 +200,10 @@ public class KeycloakUserProvisioningService {
         User user = findLockedUser(userId);
 
         Set<String> newKeycloakRoles = normalizeKeycloakRoles(request.getRoles());
-        requireAdminForAdminMutation(
-                hasLocalRole(user, ADMIN_ROLE) || newKeycloakRoles.contains(ADMIN_KEYCLOAK_ROLE)
+        requireAdminForPrivilegedMutation(
+                isPrivilegedUser(user)
+                        || newKeycloakRoles.contains(ADMIN_KEYCLOAK_ROLE)
+                        || newKeycloakRoles.contains("OWNER")
         );
         List<Role> newLocalRoles = findLocalRoles(newKeycloakRoles);
         String oldUsername = user.getUsername();
@@ -278,7 +289,7 @@ public class KeycloakUserProvisioningService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
 
-        requireAdminForAdminMutation(hasLocalRole(user, ADMIN_ROLE));
+        requireAdminForPrivilegedMutation(isPrivilegedUser(user));
 
         user.setTelegramChatId(null);
         userRepository.flush();
@@ -289,6 +300,8 @@ public class KeycloakUserProvisioningService {
     @Transactional
     public void deleteUser(Long userId) {
         User user = findLockedUserWithAssignments(userId);
+
+        requireAdminForPrivilegedMutation(isPrivilegedUser(user));
 
         if (hasLocalRole(user, ADMIN_ROLE)) {
             throw new ResponseStatusException(FORBIDDEN, "Admin users cannot be deleted.");
@@ -323,7 +336,7 @@ public class KeycloakUserProvisioningService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
 
-        requireAdminForAdminMutation(hasLocalRole(user, ADMIN_ROLE));
+        requireAdminForPrivilegedMutation(isPrivilegedUser(user));
 
         if (photo == null || photo.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Profile photo is required");
@@ -346,7 +359,7 @@ public class KeycloakUserProvisioningService {
     public void changePassword(Long userId, ChangeKeycloakPasswordRequest request) {
         User user = findLockedUser(userId);
 
-        requireAdminForAdminMutation(hasLocalRole(user, ADMIN_ROLE));
+        requireAdminForPrivilegedMutation(isPrivilegedUser(user));
 
         if (!hasText(user.getKeycloakId())) {
             throw new ResponseStatusException(
@@ -369,7 +382,7 @@ public class KeycloakUserProvisioningService {
     public UserAssignmentsResponse updateUserAssignments(Long userId, UpdateUserAssignmentsRequest request) {
         User user = findLockedUserWithAssignments(userId);
 
-        requireAdminForAdminMutation(hasLocalRole(user, ADMIN_ROLE));
+        requireAdminForPrivilegedMutation(isPrivilegedUser(user));
 
         Set<Manager> managers = findManagers(request.getManagerIds());
         Set<Worker> workers = findWorkers(request.getWorkerIds());
@@ -911,23 +924,42 @@ public class KeycloakUserProvisioningService {
         return request;
     }
 
-    private void requireAdminForAdminMutation(boolean adminMutation) {
-        if (!adminMutation) {
+    private void requireAdminForPrivilegedMutation(boolean privilegedMutation) {
+        if (!privilegedMutation) {
             return;
         }
 
+        if (currentActorHasRole(ADMIN_ROLE, ADMIN_KEYCLOAK_ROLE)) {
+            return;
+        }
+        if (ownerManagePrivilegedUsers && currentActorHasRole(OWNER_ROLE, "OWNER")) {
+            return;
+        }
+        throw new ResponseStatusException(FORBIDDEN, "Only an admin can manage admin or owner users and roles.");
+    }
+
+    private boolean canCurrentActorViewInUserAdministration(User user) {
+        if (!currentActorHasRole(OWNER_ROLE, "OWNER") || currentActorHasRole(ADMIN_ROLE, ADMIN_KEYCLOAK_ROLE)) {
+            return true;
+        }
+        return ownerManagePrivilegedUsers || !isPrivilegedUser(user);
+    }
+
+    private boolean isPrivilegedUser(User user) {
+        return hasLocalRole(user, ADMIN_ROLE) || hasLocalRole(user, OWNER_ROLE);
+    }
+
+    private boolean currentActorHasRole(String... expectedRoles) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        boolean admin = authentication != null
-                && authentication.getAuthorities() != null
-                && authentication.getAuthorities().stream()
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return false;
+        }
+        Set<String> expected = Set.of(expectedRoles);
+        return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .filter(Objects::nonNull)
                 .map(String::trim)
-                .anyMatch(authority -> ADMIN_ROLE.equalsIgnoreCase(authority)
-                        || ADMIN_KEYCLOAK_ROLE.equalsIgnoreCase(authority));
-        if (!admin) {
-            throw new ResponseStatusException(FORBIDDEN, "Only an admin can manage admin users or roles.");
-        }
+                .anyMatch(authority -> expected.stream().anyMatch(role -> role.equalsIgnoreCase(authority)));
     }
 
     private void ensureUsernameAvailable(User user, String username) {

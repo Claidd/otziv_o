@@ -23,6 +23,7 @@ import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @Component
@@ -45,9 +46,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper;
     private final JwtService jwtService;
     private final LeadTokenReplayGuard replayGuard;
+    private final AtomicLong acceptedLegacyBearerCount = new AtomicLong();
 
-    @Value("${lead.integration.legacy-bearer-enabled:true}")
-    private boolean legacyBearerEnabled = true;
+    @Value("${lead.integration.legacy-bearer-enabled:false}")
+    private boolean legacyBearerEnabled;
 
     @Value("${lead.integration.legacy-bearer-accept-until:2026-08-17T00:00:00Z}")
     private String legacyBearerAcceptUntil = "2026-08-17T00:00:00Z";
@@ -61,7 +63,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     /** Compatibility constructor for focused security contract tests. */
     public JwtAuthFilter(ObjectMapper objectMapper, JwtService jwtService) {
-        this(objectMapper, jwtService, new LeadTokenReplayGuard());
+        this(objectMapper, jwtService, LeadTokenReplayGuard.inMemoryForTests());
     }
 
     @Override
@@ -110,7 +112,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             replayId = selectedToken.modern()
                     ? claims.getId()
                     : "legacy:" + jwtService.tokenFingerprint(selectedToken.value());
-            if (!replayGuard.consume(replayId)) {
+            if (!replayGuard.consume(replayId, claims.getExpiration().toInstant())) {
                 throw new AuthException(HttpServletResponse.SC_FORBIDDEN, "Integration token was already used");
             }
         } catch (BodyTooLargeException exception) {
@@ -164,6 +166,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 && authorization != null
                 && authorization.startsWith("Bearer ")
                 && !authorization.substring(7).isBlank()) {
+            long acceptedCount = acceptedLegacyBearerCount.incrementAndGet();
+            log.warn(
+                    "SECURITY_LEGACY_INTEGRATION_BEARER_ACCEPTED path={} acceptedCount={} acceptUntil={}",
+                    applicationPath(request),
+                    acceptedCount,
+                    legacyBearerAcceptUntil
+            );
             return new SelectedToken(authorization.substring(7).trim(), false);
         }
         throw new AuthException(HttpServletResponse.SC_UNAUTHORIZED, "Missing integration token");

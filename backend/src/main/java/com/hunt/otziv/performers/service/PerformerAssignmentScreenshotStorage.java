@@ -1,12 +1,15 @@
 package com.hunt.otziv.performers.service;
 
 import com.hunt.otziv.uploads.service.FileUploadGuard;
+import com.hunt.otziv.s3.cleanup.service.S3ObjectCleanupQueue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.coobird.thumbnailator.Thumbnails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -25,6 +28,7 @@ public class PerformerAssignmentScreenshotStorage {
 
     private final S3Client s3Client;
     private final FileUploadGuard fileUploadGuard;
+    private final S3ObjectCleanupQueue cleanupQueue;
 
     @Value("${s3.bucket}")
     private String bucket;
@@ -36,11 +40,11 @@ public class PerformerAssignmentScreenshotStorage {
     private String publicBaseUrl;
 
     public String store(MultipartFile file, Long assignmentId, ScreenshotKind kind, @Nullable String oldUrl) {
+        if (assignmentId == null || kind == null) {
+            throw new IllegalArgumentException("assignmentId and screenshot kind are required");
+        }
         FileUploadGuard.ImageCheck imageCheck = fileUploadGuard.requireSupportedImage(file);
         String key = folder(kind) + "/" + assignmentId + "-" + UUID.randomUUID() + ".jpg";
-
-        deleteOldFile(oldUrl);
-
         byte[] processedImage = processImage(imageCheck.bytes());
         PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(bucket)
@@ -51,7 +55,8 @@ public class PerformerAssignmentScreenshotStorage {
 
         s3Client.putObject(putRequest, RequestBody.fromBytes(processedImage));
         String url = publicObjectBaseUrl() + "/" + key;
-        log.info("Скриншот задания исполнителя загружен: assignmentId={}, kind={}, url={}", assignmentId, kind, url);
+        registerObjectLifecycle(key, ownedOldKey(oldUrl, assignmentId, kind));
+        log.info("Скриншот задания исполнителя загружен: assignmentId={}, kind={}", assignmentId, kind);
         return url;
     }
 
@@ -71,19 +76,48 @@ public class PerformerAssignmentScreenshotStorage {
         }
     }
 
-    private void deleteOldFile(@Nullable String oldUrl) {
-        if (oldUrl == null || oldUrl.isBlank()) {
+    private void registerObjectLifecycle(String newKey, @Nullable String oldKey) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    deleteBestEffort(oldKey, "old");
+                }
+
+                @Override
+                public void afterCompletion(int status) {
+                    if (status != STATUS_COMMITTED) {
+                        deleteBestEffort(newKey, "rolled-back-new");
+                    }
+                }
+            });
             return;
         }
-        String key = extractObjectKey(oldUrl.trim());
-        if (key == null) {
-            log.warn("Пропущено удаление старого скриншота: URL не из нашего S3: {}", oldUrl);
+
+        // Known callers are transactional. Preserve data if a future caller is
+        // not: the new object is already durable, so only the obsolete object
+        // can be safely removed here.
+        deleteBestEffort(oldKey, "old");
+    }
+
+    private void deleteBestEffort(@Nullable String key, String reason) {
+        if (key == null || key.isBlank()) {
             return;
         }
-        s3Client.deleteObject(DeleteObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .build());
+        try {
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .build());
+        } catch (RuntimeException exception) {
+            cleanupQueue.enqueueBestEffort(bucket, key, "performer-" + reason);
+            log.warn(
+                    "Не удалось удалить скриншот задания; поставлен в очередь: reason={}, failureType={}",
+                    reason,
+                    exception.getClass().getSimpleName()
+            );
+        }
     }
 
     private String extractObjectKey(String url) {
@@ -96,6 +130,19 @@ public class PerformerAssignmentScreenshotStorage {
             return url.substring(legacyPrefix.length());
         }
         return null;
+    }
+
+    private String ownedOldKey(@Nullable String oldUrl, Long assignmentId, ScreenshotKind kind) {
+        if (oldUrl == null || oldUrl.isBlank()) {
+            return null;
+        }
+        String key = extractObjectKey(oldUrl.trim());
+        String expectedPrefix = folder(kind) + "/" + assignmentId + "-";
+        if (key == null || !key.startsWith(expectedPrefix) || key.length() <= expectedPrefix.length()) {
+            log.warn("Пропущено удаление старого скриншота: объект не принадлежит заданию");
+            return null;
+        }
+        return key;
     }
 
     private String folder(ScreenshotKind kind) {

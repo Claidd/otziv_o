@@ -21,6 +21,7 @@ import com.hunt.otziv.common_billing.model.CommonInvoicePaymentRef;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonBillingAccountCompanyRepository;
 import com.hunt.otziv.common_billing.repository.CommonBillingAccountRepository;
+import com.hunt.otziv.common_billing.repository.CommonInvoiceBoardQueryRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
@@ -126,6 +127,8 @@ class CommonBillingServiceTest {
     private CommonBillingAccountRepository accountRepository;
     @Mock
     private CommonBillingAccountCompanyRepository accountCompanyRepository;
+    @Mock
+    private CommonInvoiceBoardQueryRepository invoiceBoardQueryRepository;
     @Mock
     private CommonInvoiceRepository invoiceRepository;
     @Mock
@@ -259,6 +262,24 @@ class CommonBillingServiceTest {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    @Test
+    void activeCommonInvoiceLookupUsesBoundedBulkQueries() {
+        List<Long> orderIds = java.util.stream.LongStream.rangeClosed(1, 501)
+                .boxed()
+                .toList();
+        when(invoiceOrderRepository.findLinkedOrderIds(any(), any())).thenAnswer(invocation -> {
+            Collection<Long> chunk = invocation.getArgument(0);
+            return chunk.stream()
+                    .filter(id -> id == 1L || id == 501L)
+                    .toList();
+        });
+
+        Set<Long> linked = service.findOrderIdsInActiveCommonInvoices(orderIds);
+
+        assertEquals(Set.of(1L, 501L), linked);
+        verify(invoiceOrderRepository, times(2)).findLinkedOrderIds(any(), any());
     }
 
     @Test
@@ -1333,7 +1354,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void managerBoardPageUsesOneBoundedPassForCardsAndLinkedTotal() {
+    void managerBoardPageLoadsOnlyIdsSelectedAndCountedBySql() {
         CommonBillingAccount firstAccount = account();
         CommonBillingAccount secondAccount = account();
         secondAccount.setId(2L);
@@ -1350,10 +1371,18 @@ class CommonBillingServiceTest {
         secondItem.setPaid(true);
 
         when(invoiceRepository.findAccountIdsWithDuplicateCurrentInvoices(any())).thenReturn(List.of());
-        when(invoiceRepository.findBoardInvoices(any(), any(Pageable.class)))
-                .thenReturn(List.of(firstInvoice, secondInvoice));
-        when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(10L, 20L)))
-                .thenReturn(List.of(firstItem, secondItem));
+        when(invoiceBoardQueryRepository.findPage(
+                eq("Все"),
+                eq(""),
+                eq(null),
+                org.mockito.ArgumentMatchers.<Set<Long>>isNull(),
+                eq(false),
+                eq(1),
+                eq(1),
+                any(LocalDateTime.class)
+        )).thenReturn(new CommonInvoiceBoardQueryRepository.PageSelection(List.of(20L), 2L, 2));
+        when(invoiceRepository.findBoardInvoicesByIds(List.of(20L))).thenReturn(List.of(secondInvoice));
+        when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(20L))).thenReturn(List.of(secondItem));
 
         CommonBillingService.ManagerBoardPage page = service.managerBoardPage(
                 "Все",
@@ -1368,17 +1397,30 @@ class CommonBillingServiceTest {
         assertEquals(2L, page.totalCards());
         assertEquals(2, page.linkedOrderCount());
         assertEquals(List.of(20L), page.cards().stream().map(OrderDTOList::getCommonInvoiceId).toList());
-        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(invoiceRepository, times(1)).findBoardInvoices(any(), pageableCaptor.capture());
-        verify(invoiceOrderRepository, times(1)).findByInvoiceIdsWithOrders(List.of(10L, 20L));
+        verify(invoiceRepository).findBoardInvoicesByIds(List.of(20L));
+        verify(invoiceOrderRepository).findByInvoiceIdsWithOrders(List.of(20L));
         verify(invoiceOrderRepository, never()).findByInvoiceIdWithOrders(any());
         verify(invoiceRepository, never()).findBoardInvoices(any());
-        assertEquals(0, pageableCaptor.getValue().getPageNumber());
-        assertEquals(200, pageableCaptor.getValue().getPageSize());
-        assertEquals(
-                org.springframework.data.domain.Sort.Direction.ASC,
-                pageableCaptor.getValue().getSort().getOrderFor("updatedAt").getDirection()
-        );
+        verify(invoiceRepository, never()).findBoardInvoices(any(), any(Pageable.class));
+    }
+
+    @Test
+    void managerBoardMetricsUsesSqlAggregatesWithoutLoadingInvoiceGraphs() {
+        Set<Long> visibleManagers = Set.of(7L);
+        when(invoiceRepository.findAccountIdsWithDuplicateCurrentInvoices(any())).thenReturn(List.of());
+        when(invoiceBoardQueryRepository.metrics(eq(visibleManagers), any(LocalDateTime.class)))
+                .thenReturn(new CommonInvoiceBoardQueryRepository.BoardMetrics(
+                        Map.of("Опубликовано", 3),
+                        Map.of("В проверку", 5)
+                ));
+
+        CommonBillingService.ManagerBoardMetrics metrics = service.managerBoardMetrics(visibleManagers);
+
+        assertEquals(Map.of("Опубликовано", 3), metrics.cardCounts());
+        assertEquals(Map.of("В проверку", 5), metrics.linkedOrderCounts());
+        verify(invoiceRepository, never()).findBoardInvoices(any());
+        verify(invoiceRepository, never()).findBoardInvoices(any(), any(Pageable.class));
+        verify(invoiceOrderRepository, never()).findByInvoiceIdsWithOrders(any());
     }
 
     @Test
@@ -3801,6 +3843,36 @@ class CommonBillingServiceTest {
         assertEquals("ARCHIVED", result.summary().status());
         verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Архив");
         verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(102L, "Архив");
+    }
+
+    @Test
+    void restoreLiveArchiveFallsBackToToCheckForUnknownRememberedStatus() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.ARCHIVED);
+        invoice.setClosedAt(LocalDateTime.now());
+        invoice.setClosedBy("manager");
+        invoice.setCloseReason("MANUAL_ARCHIVE");
+        Order order = order(101L);
+        order.setStatus(status("Архив"));
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setArchiveSourceOrderStatusTitle("устаревший статус");
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        when(orderStatusTransitionService.changeStatusForPrivilegedCommonBillingOrder(101L, "В проверку"))
+                .thenReturn(true);
+
+        CommonInvoiceDetailsResponse result = service.restoreLiveArchivedInvoice(10L, () -> "manager");
+
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertNull(invoice.getClosedAt());
+        assertNull(invoice.getClosedBy());
+        assertNull(invoice.getCloseReason());
+        assertEquals("READY", result.summary().status());
+        verify(orderStatusTransitionService)
+                .changeStatusForPrivilegedCommonBillingOrder(101L, "В проверку");
     }
 
     @Test

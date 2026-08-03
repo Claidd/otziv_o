@@ -9,9 +9,11 @@ param(
     [string]$DumpPath = "",
     [switch]$SkipDownload,
     [switch]$KeepRemoteDump,
+    [switch]$KeepDownloadedDump,
     [switch]$RunSmoke,
-    [ValidateRange(1, 100)][int]$LocalDumpRetentionCount = 5,
+    [ValidateRange(1, 100)][int]$LocalDumpRetentionCount = 1,
     [switch]$PruneExpiredLocalDumps,
+    [switch]$KeepExpiredLocalDumps,
     [switch]$Help
 )
 
@@ -32,6 +34,11 @@ Useful options:
   -DumpPath .\data\mysql_backup\prod.sql.gz   Restore an already downloaded dump.
   -SkipDownload                               Do not connect to VPS; requires -DumpPath.
   -RunSmoke                                   Run prod-like smoke after restore.
+  -KeepDownloadedDump                         Retain the newly downloaded plaintext
+                                               gzip after a verified restore. By
+                                               default it is removed immediately.
+  -KeepExpiredLocalDumps                      Keep older downloaded dumps instead of
+                                               pruning to -LocalDumpRetentionCount.
 '@ | Write-Host
 }
 
@@ -383,6 +390,58 @@ ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALU
     Write-Host "Restored local DB external messaging is disabled."
 }
 
+function Sanitize-RestoredExternalCredentials {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
+        [Parameter(Mandatory = $true)][hashtable]$EnvValues
+    )
+
+    $mysqlUser = $EnvValues['MYSQL_USER']
+    $mysqlPassword = $EnvValues['MYSQL_PASSWORD']
+    $mysqlDatabase = $EnvValues['MYSQL_DATABASE']
+    if ([string]::IsNullOrWhiteSpace($mysqlUser) `
+            -or [string]::IsNullOrWhiteSpace($mysqlPassword) `
+            -or [string]::IsNullOrWhiteSpace($mysqlDatabase)) {
+        throw 'MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE must be set before local credential sanitization.'
+    }
+
+    # Production credential envelopes deliberately use a different key from
+    # prod-local. Never copy recoverable third-party passwords into the local
+    # database and never require the production decryption key on a developer
+    # machine. Bot passwords remain non-empty only to satisfy the legacy schema;
+    # all local external messaging/browser automation is disabled separately.
+    $sql = @"
+UPDATE bots
+SET bot_password = CONCAT('local-disabled-', bot_id);
+
+UPDATE telephones
+SET telephone_google_password = NULL,
+    telephone_avito_password = NULL,
+    telephone_mail_password = NULL;
+
+UPDATE bad_review_tasks
+SET bad_review_task_bot_password_snapshot = NULL;
+
+UPDATE review_recovery_tasks
+SET review_recovery_task_bot_password_snapshot = NULL;
+
+UPDATE archive_bad_review_tasks
+SET bad_review_task_bot_password_snapshot = NULL;
+"@
+
+    Invoke-External -FilePath 'docker' -Arguments ($ComposeArguments + @(
+        'exec', '-T', '-e', "MYSQL_PWD=$mysqlPassword", 'mysql',
+        'mysql',
+        '--default-character-set=utf8mb4',
+        "-u$mysqlUser",
+        $mysqlDatabase,
+        '-e',
+        $sql
+    ))
+
+    Write-Host 'Restored local DB third-party passwords were replaced with non-production values.'
+}
+
 if ($Help) {
     Show-Help
     exit 0
@@ -440,6 +499,14 @@ if ([string]::IsNullOrWhiteSpace($DumpPath)) {
 $dumpFullPath = if ([System.IO.Path]::IsPathRooted($DumpPath)) { $DumpPath } else { Join-Path $repoRoot $DumpPath }
 $dumpFileName = Split-Path -Leaf $dumpFullPath
 $mountedDumpPath = Join-Path $backupDir $dumpFileName
+
+if (-not $SkipDownload -and -not $KeepDownloadedDump) {
+    $plannedBackupDirectory = [System.IO.Path]::GetFullPath($backupDir).TrimEnd('\')
+    $plannedDumpParent = [System.IO.Path]::GetFullPath((Split-Path -Parent $dumpFullPath)).TrimEnd('\')
+    if (-not $plannedDumpParent.Equals($plannedBackupDirectory, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Ephemeral downloads must target data\mysql_backup. Use -KeepDownloadedDump for an explicit external path.'
+    }
+}
 
 if (-not $SkipDownload) {
     $remote = "${VpsUser}@${VpsHost}"
@@ -553,11 +620,6 @@ if ($resolvedDumpPath -ne $resolvedMountedDumpPath) {
     }
 }
 
-Invoke-LocalDumpRetention `
-    -Directory $backupDir `
-    -KeepCount $LocalDumpRetentionCount `
-    -Prune:$PruneExpiredLocalDumps
-
 $envValues = Read-EnvFile -Path $envPath
 $previousVolumeEnv = $env:LOCAL_MYSQL_VOLUME
 $env:LOCAL_MYSQL_VOLUME = $LocalMysqlVolume
@@ -590,7 +652,28 @@ try {
     ))
 
     Disable-RestoredDbExternalMessaging -ComposeArguments $composeArgs -EnvValues $envValues
+    Sanitize-RestoredExternalCredentials -ComposeArguments $composeArgs -EnvValues $envValues
     Test-LocalFlywayChecksums -ComposeArguments $composeArgs -EnvValues $envValues -MigrationDir $migrationDir
+
+    # A successful fresh restore is the point at which an older local dump is no
+    # longer needed for rollback. Keep a bounded number by default so repeated
+    # prod-like smoke runs do not accumulate plaintext production snapshots.
+    $pruneLocalDumps = $PruneExpiredLocalDumps -or (-not $SkipDownload -and -not $KeepExpiredLocalDumps)
+    Invoke-LocalDumpRetention `
+        -Directory $backupDir `
+        -KeepCount $LocalDumpRetentionCount `
+        -Prune:$pruneLocalDumps
+
+    if (-not $SkipDownload -and -not $KeepDownloadedDump) {
+        $resolvedBackupDirectory = (Resolve-Path -LiteralPath $backupDir).Path.TrimEnd('\')
+        $downloadedDump = (Resolve-Path -LiteralPath $dumpFullPath).Path
+        $downloadedParent = (Split-Path -Parent $downloadedDump).TrimEnd('\')
+        if (-not $downloadedParent.Equals($resolvedBackupDirectory, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to auto-remove downloaded dump outside the protected backup directory: $downloadedDump"
+        }
+        Remove-Item -LiteralPath $downloadedDump -Force
+        Write-Host "Removed ephemeral plaintext production dump after verified restore: $dumpFileName"
+    }
 
     if ($RunSmoke) {
         $smokeScript = Join-Path $scriptRoot "prod-like-smoke.ps1"

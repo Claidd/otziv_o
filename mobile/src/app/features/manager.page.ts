@@ -3676,7 +3676,7 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   orderActionsFor(order: OrderItem): readonly OrderStatusAction[] {
-    return managerOrderActionsFor(order, Boolean(this.selectedCompany()));
+    return managerOrderActionsFor(order, false);
   }
 
   orderProgress(order: OrderItem): number {

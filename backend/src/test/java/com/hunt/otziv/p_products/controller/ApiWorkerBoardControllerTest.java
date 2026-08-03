@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.b_bots.services.BotService;
@@ -33,6 +34,9 @@ import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
+import com.hunt.otziv.security.credentials.CredentialRevealService;
+import com.hunt.otziv.security.credentials.CredentialRevealRequest;
+import com.hunt.otziv.security.credentials.CredentialRevealResponse;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -62,6 +66,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
@@ -73,6 +78,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -163,6 +169,9 @@ class ApiWorkerBoardControllerTest {
     @Mock
     private com.hunt.otziv.worker_activity.service.WorkerRiskAccessPolicy workerRiskAccessPolicy;
 
+    @Mock
+    private CredentialRevealService credentialRevealService;
+
     private ApiWorkerBoardController controller;
     private Principal principal;
     private Authentication workerAuth;
@@ -215,7 +224,8 @@ class ApiWorkerBoardControllerTest {
                 workerCellularAccessService,
                 assignmentMutationGuardService,
                 scheduledClientMessageService,
-                workerRiskAccessPolicy
+                workerRiskAccessPolicy,
+                credentialRevealService
         );
 
         lenient().when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
@@ -734,6 +744,118 @@ class ApiWorkerBoardControllerTest {
                 eq("")
         );
         verify(reviewService, never()).hasActiveNagulReviews(principal);
+    }
+
+    @Test
+    void workerBoardNeverSerializesBotPasswordAndOnlyExposesPresence() throws Exception {
+        ReviewDTOOne review = ReviewDTOOne.builder()
+                .id(901L)
+                .botLogin("worker-login")
+                .botPassword("worker-secret")
+                .build();
+        when(reviewService.getAllReviewDTOByWorkerByPublish(
+                any(LocalDate.class),
+                eq(principal),
+                eq(0),
+                eq(10),
+                eq("desc"),
+                eq("")
+        )).thenReturn(new PageImpl<>(List.of(review), PageRequest.of(0, 10), 1));
+
+        ApiWorkerBoardController.WorkerReviewResponse item = getBoard("publish")
+                .reviews()
+                .content()
+                .getFirst();
+        String json = new ObjectMapper().writeValueAsString(item);
+
+        assertTrue(item.botPasswordPresent());
+        assertTrue(item.botLoginPresent());
+        assertTrue(json.contains("\"botPasswordPresent\":true"));
+        assertTrue(json.contains("\"botLoginPresent\":true"));
+        assertFalse(json.contains("worker-login"));
+        assertFalse(json.contains("worker-secret"));
+    }
+
+    @Test
+    void credentialRevealChecksAssignmentAndDisablesCaching() {
+        Review review = new Review();
+        review.setId(906L);
+        review.setBot(Bot.builder().id(907L).login("login").password("secret").build());
+        CredentialRevealRequest request = new CredentialRevealRequest(
+                "password",
+                "worker-board",
+                "menu",
+                "all"
+        );
+        when(reviewService.getReviewById(906L)).thenReturn(review);
+        when(credentialRevealService.revealReview(review, request))
+                .thenReturn(new CredentialRevealResponse("secret"));
+
+        var response = controller.revealReviewCredential(
+                906L,
+                request,
+                principal,
+                workerAuth
+        );
+
+        assertEquals("secret", response.getBody().value());
+        assertTrue(response.getHeaders().getCacheControl().contains("no-store"));
+        assertEquals("no-cache", response.getHeaders().getFirst(HttpHeaders.PRAGMA));
+        verify(assignmentMutationGuardService).assertReview(906L);
+        verify(credentialRevealService).revealReview(review, request);
+    }
+
+    @Test
+    void managerWorkerBoardDoesNotSerializeBotPassword() throws Exception {
+        Principal managerPrincipal = () -> "manager-credentials";
+        Authentication managerAuth = new UsernamePasswordAuthenticationToken(
+                "manager-credentials",
+                "password",
+                List.of(new SimpleGrantedAuthority("ROLE_MANAGER"))
+        );
+        User managerUser = new User();
+        managerUser.setId(902L);
+        Manager manager = new Manager();
+        manager.setId(903L);
+        Worker teamWorker = workerOption(904L, "Исполнитель команды");
+        ReviewDTOOne review = ReviewDTOOne.builder()
+                .id(905L)
+                .botLogin("manager-login-must-not-leak")
+                .botPassword("manager-must-not-see-this")
+                .build();
+
+        when(userService.findByUserName("manager-credentials")).thenReturn(Optional.of(managerUser));
+        when(managerService.getManagerByUserId(902L)).thenReturn(manager);
+        when(workerService.getAllWorkersToManager(manager)).thenReturn(List.of(teamWorker));
+        when(reviewService.getAllReviewDTOByWorkerByPublish(
+                eq(teamWorker),
+                any(LocalDate.class),
+                eq(0),
+                eq(10),
+                eq("desc"),
+                eq("")
+        )).thenReturn(new PageImpl<>(List.of(review), PageRequest.of(0, 10), 1));
+
+        ApiWorkerBoardController.WorkerReviewResponse item = controller.getBoard(
+                        "publish",
+                        "",
+                        0,
+                        10,
+                        "desc",
+                        teamWorker.getId(),
+                        managerPrincipal,
+                        managerAuth
+                )
+                .reviews()
+                .content()
+                .getFirst();
+        String json = new ObjectMapper().writeValueAsString(item);
+
+        assertTrue(item.botPasswordPresent());
+        assertTrue(item.botLoginPresent());
+        assertTrue(json.contains("\"botPasswordPresent\":true"));
+        assertFalse(json.contains("manager-login-must-not-leak"));
+        assertFalse(json.contains("manager-must-not-see-this"));
     }
 
     @Test

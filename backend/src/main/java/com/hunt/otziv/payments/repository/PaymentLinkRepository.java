@@ -249,11 +249,13 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
     );
 
     @Query("""
-        SELECT link.id
+        SELECT link.id AS id,
+               link.bankReconciliationAttemptedAt AS attemptedAt,
+               link.updatedAt AS updatedAt
         FROM PaymentLink link
-        WHERE (link.status IN :statuses OR link.bankCancelOriginStatus IS NOT NULL)
+        WHERE link.status IN :statuses
           AND link.tbankPaymentId IS NOT NULL
-          AND TRIM(link.tbankPaymentId) <> ''
+          AND link.tbankPaymentId <> ''
           AND link.updatedAt <= :updatedBefore
           AND (
               link.bankReconciliationAttemptedAt IS NULL
@@ -261,8 +263,29 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
           )
         ORDER BY link.bankReconciliationAttemptedAt ASC, link.updatedAt ASC, link.id ASC
     """)
-    List<Long> findBankReconciliationCandidateIds(
+    List<PaymentBankReconciliationCandidateView> findStatusBankReconciliationCandidates(
             @Param("statuses") Collection<PaymentLinkStatus> statuses,
+            @Param("updatedBefore") LocalDateTime updatedBefore,
+            @Param("attemptBefore") LocalDateTime attemptBefore,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT link.id AS id,
+               link.bankReconciliationAttemptedAt AS attemptedAt,
+               link.updatedAt AS updatedAt
+        FROM PaymentLink link
+        WHERE link.bankCancelOriginStatus IS NOT NULL
+          AND link.tbankPaymentId IS NOT NULL
+          AND link.tbankPaymentId <> ''
+          AND link.updatedAt <= :updatedBefore
+          AND (
+              link.bankReconciliationAttemptedAt IS NULL
+              OR link.bankReconciliationAttemptedAt <= :attemptBefore
+          )
+        ORDER BY link.bankReconciliationAttemptedAt ASC, link.updatedAt ASC, link.id ASC
+    """)
+    List<PaymentBankReconciliationCandidateView> findCancelBankReconciliationCandidates(
             @Param("updatedBefore") LocalDateTime updatedBefore,
             @Param("attemptBefore") LocalDateTime attemptBefore,
             Pageable pageable

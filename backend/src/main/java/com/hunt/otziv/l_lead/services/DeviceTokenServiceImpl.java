@@ -14,34 +14,67 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.Base64;
+import java.util.HexFormat;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DeviceTokenServiceImpl implements DeviceTokenService {
 
+    private static final int RANDOM_TOKEN_BYTES = 32;
+    private static final int MAX_ACCEPTED_TOKEN_LENGTH = 512;
+    private static final int DEFAULT_TTL_DAYS = 30;
+    private static final int MAX_TTL_DAYS = 365;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final Pattern LEGACY_UUID = Pattern.compile(
+            "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    );
+
     private final DeviceTokenRepository deviceTokenRepository;
     private final TelephoneRepository telephoneRepository;
 
+    @Value("${lead.device-token.cookie-secure:false}")
+    private boolean secureCookie;
 
+    @Value("${lead.device-token.ttl-days:30}")
+    private int tokenTtlDays = DEFAULT_TTL_DAYS;
+
+    @Transactional
     public String createDeviceToken(Long telephoneId, HttpServletResponse response) {
-        Telephone tel = telephoneRepository.findById(telephoneId)
+        Telephone tel = telephoneRepository.findByIdWithOperator(telephoneId)
                 .orElseThrow(() -> new EntityNotFoundException("Телефон не найден"));
 
+        if (tel.getTelephoneOperator() == null) {
+            throw new IllegalStateException("Телефон не назначен оператору");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        deviceTokenRepository.deleteExpiredOrInactiveByTelephoneId(telephoneId, now);
         if (deviceTokenRepository.existsByTelephone_Id(telephoneId)) {
             throw new IllegalStateException("Токен уже есть в системе");
         }
 
-        String token = UUID.randomUUID().toString();
+        String bearerToken = newBearerToken();
+        int ttlDays = effectiveTtlDays();
 
         DeviceToken deviceToken = DeviceToken.builder()
-                .token(token)
+                .token(hashToken(bearerToken))
                 .telephone(tel)
-                .createdAt(LocalDateTime.now())
+                .createdAt(now)
+                .expiresAt(now.plusDays(ttlDays))
                 .active(true)
                 .build();
 
@@ -51,24 +84,28 @@ public class DeviceTokenServiceImpl implements DeviceTokenService {
             throw new IllegalStateException("Токен уже есть в системе", ex);
         }
 
-        Cookie cookie = new Cookie("device_token", token);
-        cookie.setHttpOnly(true); // ← временно, для JS-доступа
+        Cookie cookie = new Cookie("device_token", bearerToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(secureCookie);
+        cookie.setAttribute("SameSite", "Strict");
         cookie.setPath("/");
-        cookie.setMaxAge(365 * 24 * 60 * 60); // 1 год
+        cookie.setMaxAge(Math.toIntExact(Duration.ofDays(ttlDays).toSeconds()));
         response.addCookie(cookie);
 
-        return token;
+        return bearerToken;
     }
 
+    @Transactional
     public TelephoneIDAndTimeDTO getTelephoneIdByToken(String token) {
-        return deviceTokenRepository.findByToken(token)
-                .map(deviceToken -> toDto(deviceToken.getTelephone()))
-                .orElse(null);
+        DeviceToken deviceToken = resolveDeviceToken(token);
+        return deviceToken == null ? null : toDto(deviceToken.getTelephone());
     }
 
     @Override
+    @Transactional
     public TextPhoneDTO getText(String token) {
-        Telephone telephone = deviceTokenRepository.findTelephoneByToken(token).orElse(null);
+        DeviceToken deviceToken = resolveDeviceToken(token);
+        Telephone telephone = deviceToken == null ? null : deviceToken.getTelephone();
         if (telephone != null) {
             return TextPhoneDTO.builder()
                     .beginText(telephone.getBeginText())
@@ -98,12 +135,77 @@ public class DeviceTokenServiceImpl implements DeviceTokenService {
         }
     }
 
+    private DeviceToken resolveDeviceToken(String bearerToken) {
+        if (bearerToken == null || bearerToken.isBlank() || bearerToken.length() > MAX_ACCEPTED_TOKEN_LENGTH) {
+            return null;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        String hashedToken = hashToken(bearerToken);
+        Optional<DeviceToken> current = deviceTokenRepository
+                .findActiveUnexpiredByStoredToken(hashedToken, now);
+        if (current.isPresent()) {
+            return current.get();
+        }
+
+        // Pre-migration tokens were canonical, lower-case UUID values. Restricting the
+        // compatibility path to that exact shape prevents the stored digest itself from
+        // becoming a usable bearer token through the admin API.
+        if (!LEGACY_UUID.matcher(bearerToken).matches()) {
+            return null;
+        }
+
+        Optional<DeviceToken> legacy = deviceTokenRepository.findActiveLegacyByStoredToken(bearerToken);
+        if (legacy.isEmpty()) {
+            return null;
+        }
+
+        LocalDateTime legacyExpiry = legacy.get().getExpiresAt();
+        if (legacyExpiry != null && !legacyExpiry.isAfter(now)) {
+            return null;
+        }
+
+        LocalDateTime effectiveExpiry = legacyExpiry == null
+                ? now.plusDays(effectiveTtlDays())
+                : legacyExpiry;
+        deviceTokenRepository.rotateLegacyToken(
+                bearerToken,
+                hashedToken,
+                effectiveExpiry,
+                now
+        );
+
+        // A concurrent request may have completed the same rotation first; in either
+        // case reload only by the digest and fail closed if no valid row remains.
+        return deviceTokenRepository.findActiveUnexpiredByStoredToken(hashedToken, now)
+                .orElse(null);
+    }
+
+    private int effectiveTtlDays() {
+        return Math.max(1, Math.min(tokenTtlDays, MAX_TTL_DAYS));
+    }
+
+    private static String newBearerToken() {
+        byte[] bytes = new byte[RANDOM_TOKEN_BYTES];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    static String hashToken(String bearerToken) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(bearerToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is not available", ex);
+        }
+    }
 
     private TelephoneIDAndTimeDTO toDto(Telephone telephone) {
         return TelephoneIDAndTimeDTO.builder()
                 .telephoneID(telephone.getId())
                 .time(telephone.getTimer())
-                .operatorID(telephone.getTelephoneOperator().getId())
+                .operatorID(telephone.getTelephoneOperator() == null ? null : telephone.getTelephoneOperator().getId())
                 .build();
     }
 

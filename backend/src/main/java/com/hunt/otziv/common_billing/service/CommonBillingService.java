@@ -27,6 +27,7 @@ import com.hunt.otziv.common_billing.model.CommonInvoicePaymentRef;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonBillingAccountCompanyRepository;
 import com.hunt.otziv.common_billing.repository.CommonBillingAccountRepository;
+import com.hunt.otziv.common_billing.repository.CommonInvoiceBoardQueryRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
@@ -105,7 +106,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -130,7 +130,6 @@ public class CommonBillingService {
 
     public static final String STATUS_WAITING_COMMON_INVOICE = "Ожидает общего счета";
     private static final int BULK_QUERY_CHUNK_SIZE = 500;
-    private static final int BOARD_BATCH_SIZE = 200;
     private static final String STATUS_NEEDS_ATTENTION = "Требует внимания";
     private static final String STATUS_NOT_PAID = "Не оплачено";
     private static final String STATUS_PUBLIC = "Опубликовано";
@@ -354,6 +353,7 @@ public class CommonBillingService {
     private final EntityManager entityManager;
     private final CommonBillingAccountRepository accountRepository;
     private final CommonBillingAccountCompanyRepository accountCompanyRepository;
+    private final CommonInvoiceBoardQueryRepository invoiceBoardQueryRepository;
     private final CommonInvoiceRepository invoiceRepository;
     private final CommonInvoiceOrderRepository invoiceOrderRepository;
     private final CommonInvoicePaymentRefRepository paymentRefRepository;
@@ -560,12 +560,7 @@ public class CommonBillingService {
         return counts;
     }
 
-    /**
-     * Loads the common-invoice portion of a manager board in bounded database
-     * batches. The same pass calculates both the common-card total and the
-     * linked-order deduction, so the board does not read every invoice/item
-     * graph twice before composing one page.
-     */
+    /** Loads only the requested board page after SQL filtering and counting. */
     @Transactional
     public ManagerBoardPage managerBoardPage(
             String boardStatus,
@@ -578,90 +573,59 @@ public class CommonBillingService {
     ) {
         int safePageNumber = Math.max(0, pageNumber);
         int safePageSize = Math.max(1, pageSize);
-        long pageStart = (long) safePageNumber * safePageSize;
-        long pageEnd = pageStart + safePageSize;
         String normalizedStatus = normalize(boardStatus);
         String normalizedKeyword = normalize(keyword).toLowerCase(Locale.ROOT);
 
         normalizeBoardInvoiceDuplicates();
+        CommonInvoiceBoardQueryRepository.PageSelection selection = invoiceBoardQueryRepository.findPage(
+                normalizedStatus,
+                normalizedKeyword,
+                companyId,
+                visibleManagerIds,
+                "asc".equalsIgnoreCase(sortDirection),
+                safePageNumber,
+                safePageSize,
+                LocalDateTime.now().minusHours(CommonInvoicePublicationBlockerService.ATTENTION_AFTER_HOURS)
+        );
+        if (selection.invoiceIds().isEmpty()) {
+            return new ManagerBoardPage(List.of(), selection.totalCards(), selection.linkedOrderCount());
+        }
 
-        long matchedCards = 0L;
-        Set<Long> matchingLinkedOrderIds = new HashSet<>();
-        List<BoardInvoiceView> selectedCards = new ArrayList<>(safePageSize);
-        int batchNumber = 0;
-        boolean exhausted;
-        do {
-            BoardInvoiceBatch batch = boardInvoiceBatch(batchNumber++, sortDirection);
-            exhausted = batch.exhausted();
-            for (BoardInvoiceView view : batch.invoices()) {
-                CommonInvoice invoice = view.invoice();
-                List<CommonInvoiceOrder> items = view.items();
-                if (!visibleToManager(invoice, items, visibleManagerIds)) {
-                    continue;
-                }
-
-                items.stream()
-                        .filter(item -> itemVisibleInOrderMetrics(item, visibleManagerIds))
-                        .filter(item -> matchesLinkedOrderStatus(item, normalizedStatus))
-                        .filter(item -> matchesLinkedOrderCompany(item, companyId))
-                        .filter(item -> matchesLinkedOrderKeyword(item, normalizedKeyword))
-                        .map(CommonInvoiceOrder::getOrder)
-                        .filter(order -> order != null && order.getId() != null)
-                        .map(Order::getId)
-                        .forEach(matchingLinkedOrderIds::add);
-
-                if (!matchesBoardStatus(invoice, items, normalizedStatus)
-                        || !matchesBoardCompany(items, companyId)
-                        || !matchesBoardKeyword(invoice, items, normalizedKeyword)) {
-                    continue;
-                }
-                if (matchedCards >= pageStart && matchedCards < pageEnd) {
-                    selectedCards.add(view);
-                }
-                matchedCards++;
-            }
-        } while (!exhausted);
-
+        Map<Long, CommonInvoice> invoicesById = invoiceRepository.findBoardInvoicesByIds(selection.invoiceIds())
+                .stream()
+                .filter(invoice -> invoice != null && invoice.getId() != null)
+                .collect(Collectors.toMap(CommonInvoice::getId, Function.identity()));
+        Map<Long, List<CommonInvoiceOrder>> itemsByInvoiceId = invoiceOrderRepository
+                .findByInvoiceIdsWithOrders(selection.invoiceIds())
+                .stream()
+                .filter(item -> item != null && item.getInvoice() != null && item.getInvoice().getId() != null)
+                .collect(Collectors.groupingBy(item -> item.getInvoice().getId()));
+        List<BoardInvoiceView> selectedCards = selection.invoiceIds().stream()
+                .map(invoicesById::get)
+                .filter(Objects::nonNull)
+                .map(invoice -> new BoardInvoiceView(
+                        invoice,
+                        itemsByInvoiceId.getOrDefault(invoice.getId(), List.of())
+                ))
+                .toList();
         List<OrderDTOList> cards = selectedCards.stream()
                 .map(view -> {
                     refreshInvoiceAmounts(view.invoice(), view.items());
                     return toManagerBoardCard(view.invoice(), view.items());
                 })
                 .toList();
-        return new ManagerBoardPage(cards, matchedCards, matchingLinkedOrderIds.size());
+        return new ManagerBoardPage(cards, selection.totalCards(), selection.linkedOrderCount());
     }
 
-    /**
-     * Produces both common-card and linked-order metric maps in one bounded
-     * traversal. ManagerBoardService previously invoked two full graph loads.
-     */
+    /** Aggregates both common cards and linked orders in SQL. */
     @Transactional
     public ManagerBoardMetrics managerBoardMetrics(Set<Long> visibleManagerIds) {
         normalizeBoardInvoiceDuplicates();
-
-        Map<String, Integer> cardCounts = new HashMap<>();
-        Map<String, Integer> linkedOrderCounts = new HashMap<>();
-        int batchNumber = 0;
-        boolean exhausted;
-        do {
-            BoardInvoiceBatch batch = boardInvoiceBatch(batchNumber++, "desc");
-            exhausted = batch.exhausted();
-            for (BoardInvoiceView view : batch.invoices()) {
-                CommonInvoice invoice = view.invoice();
-                List<CommonInvoiceOrder> items = view.items();
-                if (!visibleToManager(invoice, items, visibleManagerIds)) {
-                    continue;
-                }
-                cardCounts.merge(boardStatus(invoice, items), 1, Integer::sum);
-                items.stream()
-                        .filter(item -> itemVisibleInOrderMetrics(item, visibleManagerIds))
-                        .map(item -> statusTitle(item.getOrder()))
-                        .filter(status -> !status.isBlank())
-                        .forEach(status -> linkedOrderCounts.merge(status, 1, Integer::sum));
-            }
-        } while (!exhausted);
-
-        return new ManagerBoardMetrics(cardCounts, linkedOrderCounts);
+        CommonInvoiceBoardQueryRepository.BoardMetrics metrics = invoiceBoardQueryRepository.metrics(
+                visibleManagerIds,
+                LocalDateTime.now().minusHours(CommonInvoicePublicationBlockerService.ATTENTION_AFTER_HOURS)
+        );
+        return new ManagerBoardMetrics(metrics.cardCounts(), metrics.linkedOrderCounts());
     }
 
     @Transactional
@@ -791,6 +755,28 @@ public class CommonBillingService {
                         && invoice.getStatus() != CommonInvoiceStatus.ARCHIVED
                         && invoice.getStatus() != CommonInvoiceStatus.DISABLED)
                 .orElse(false);
+    }
+
+    @Transactional(readOnly = true)
+    public Set<Long> findOrderIdsInActiveCommonInvoices(Collection<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return Set.of();
+        }
+        List<Long> normalized = orderIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (normalized.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> linked = new HashSet<>();
+        for (int offset = 0; offset < normalized.size(); offset += BULK_QUERY_CHUNK_SIZE) {
+            linked.addAll(invoiceOrderRepository.findLinkedOrderIds(
+                    normalized.subList(offset, Math.min(normalized.size(), offset + BULK_QUERY_CHUNK_SIZE)),
+                    BOARD_INVOICE_STATUSES
+            ));
+        }
+        return linked;
     }
 
     @Transactional
@@ -4093,45 +4079,6 @@ public class CommonBillingService {
         return true;
     }
 
-    private BoardInvoiceBatch boardInvoiceBatch(int batchNumber, String sortDirection) {
-        Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection)
-                ? Sort.Direction.DESC
-                : Sort.Direction.ASC;
-        List<CommonInvoice> invoices = invoiceRepository.findBoardInvoices(
-                BOARD_INVOICE_STATUSES,
-                PageRequest.of(
-                        Math.max(0, batchNumber),
-                        BOARD_BATCH_SIZE,
-                        Sort.by(direction, "updatedAt", "id")
-                )
-        );
-        boolean exhausted = invoices.size() < BOARD_BATCH_SIZE;
-        if (invoices.isEmpty()) {
-            return new BoardInvoiceBatch(List.of(), true);
-        }
-
-        List<Long> invoiceIds = invoices.stream()
-                .map(CommonInvoice::getId)
-                .filter(Objects::nonNull)
-                .toList();
-        Map<Long, List<CommonInvoiceOrder>> itemsByInvoiceId = invoiceIds.isEmpty()
-                ? Map.of()
-                : invoiceOrderRepository.findByInvoiceIdsWithOrders(invoiceIds)
-                        .stream()
-                        .filter(item -> item != null
-                                && item.getInvoice() != null
-                                && item.getInvoice().getId() != null)
-                        .collect(Collectors.groupingBy(item -> item.getInvoice().getId()));
-        List<BoardInvoiceView> views = invoices.stream()
-                .filter(invoice -> invoice != null && invoice.getId() != null)
-                .map(invoice -> new BoardInvoiceView(
-                        invoice,
-                        itemsByInvoiceId.getOrDefault(invoice.getId(), List.of())
-                ))
-                .toList();
-        return new BoardInvoiceBatch(views, exhausted);
-    }
-
     private boolean hasDuplicateAttachableInvoices(List<CommonInvoice> invoices) {
         Map<Long, Long> countsByAccount = invoices.stream()
                 .filter(invoice -> invoice.getAccount() != null && invoice.getAccount().getId() != null)
@@ -7334,12 +7281,6 @@ public class CommonBillingService {
     private record BoardInvoiceView(
             CommonInvoice invoice,
             List<CommonInvoiceOrder> items
-    ) {
-    }
-
-    private record BoardInvoiceBatch(
-            List<BoardInvoiceView> invoices,
-            boolean exhausted
     ) {
     }
 

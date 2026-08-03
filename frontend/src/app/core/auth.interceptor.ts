@@ -10,6 +10,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router, { optional: true });
   const shouldAttachToken = req.url.startsWith('/api') && !req.context.get(SKIP_AUTH_TOKEN);
   const optionalAuth = req.context.get(OPTIONAL_AUTH_TOKEN);
+  let optionalTokenAttached = false;
 
   if (!shouldAttachToken) {
     return next(req);
@@ -25,6 +26,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         return next(req);
       }
 
+      optionalTokenAttached = optionalAuth;
+
       return next(req.clone({
         setHeaders: {
           Authorization: `Bearer ${token}`
@@ -32,7 +35,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }));
     }),
     catchError((error) => {
-      if (optionalAuth && isUnauthorized(error)) {
+      if (optionalAuth && optionalTokenAttached && isUnauthorized(error)) {
         // The capability carried by the URL remains valid independently of a
         // stale/revoked login. Retry once without Authorization and let the
         // controller expose its anonymous public-link permissions.
@@ -44,7 +47,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         });
         return throwError(() => error);
       }
-      if (isForbidden(error) && auth.isAuthenticated()) {
+      if (isRefreshableForbidden(error) && auth.isAuthenticated()) {
         return from(auth.refreshToken(-1)).pipe(
           switchMap((refreshed) => {
             if (!refreshed) {
@@ -72,14 +75,21 @@ function isUnauthorized(error: unknown): boolean {
   return error instanceof HttpErrorResponse && error.status === 401;
 }
 
-function isForbidden(error: unknown): boolean {
-  return error instanceof HttpErrorResponse && error.status === 403;
-}
-
 function isManagerReportReviewRequired(error: unknown): boolean {
   return error instanceof HttpErrorResponse
     && error.status === 423
     && error.error?.code === 'MANAGER_REPORT_REVIEW_REQUIRED';
+}
+
+function isRefreshableForbidden(error: unknown): boolean {
+  if (!(error instanceof HttpErrorResponse) || error.status !== 403) {
+    return false;
+  }
+  const code = typeof error.error?.code === 'string' ? error.error.code.toUpperCase() : '';
+  if (code === 'AUTH_TOKEN_STALE' || code === 'TOKEN_EXPIRED' || code === 'STALE_TOKEN') {
+    return true;
+  }
+  return /\binvalid_token\b/i.test(error.headers.get('WWW-Authenticate') ?? '');
 }
 
 function isExpiredForbidden(error: unknown, auth: AuthService): boolean {

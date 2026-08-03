@@ -326,16 +326,6 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     roles: ['MANAGER']
   },
   {
-    id: 'migration',
-    label: 'Миграция',
-    description: 'Перенос учетной записи',
-    icon: 'sync',
-    active: 'migration',
-    group: 'home',
-    routerLink: '/legacy-migration',
-    roles: ['ADMIN', 'OWNER']
-  },
-  {
     id: 'mobile-update',
     label: 'Обновление Android',
     description: 'Публикация APK сотрудникам',

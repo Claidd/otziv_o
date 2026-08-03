@@ -145,11 +145,6 @@ export const routes: Routes = [
       .then((m) => m.RegisterPerformerComponent)
   },
   {
-    path: 'legacy-migration',
-    loadComponent: () => import('./features/auth/legacy-migration.component')
-      .then((m) => m.LegacyMigrationComponent)
-  },
-  {
     path: 'auth/restart',
     loadComponent: () => import('./features/auth/auth-restart.component')
       .then((m) => m.AuthRestartComponent)

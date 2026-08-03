@@ -16,7 +16,7 @@ public interface TelephoneService {
 
     void updatePhone(Long phoneId, TelephoneDTO dto);
 
-    void createTelephone(TelephoneDTO dto);
+    TelephoneDTO createTelephone(TelephoneDTO dto);
 
     TelephoneDTO createEmptyDTO();
 

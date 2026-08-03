@@ -72,6 +72,9 @@ public class BotsController {
     public String saveBot(Model model,@ModelAttribute("bot") @Valid BotDTO botsDto, BindingResult bindingResult,
                           Principal principal, RedirectAttributes rm, Authentication authentication){
         botCrudAccessService.requireCreateAccess(authentication);
+        if (botsDto.getPassword() == null || botsDto.getPassword().isBlank()) {
+            bindingResult.rejectValue("password", "NotEmpty.bot.password", "Пароль не может быть пустым");
+        }
         log.info("Валидация на совпадение логина");
         botValidation.validate(botsDto, bindingResult);
         log.info("Вход в общую валидацию");

@@ -1,5 +1,6 @@
 package com.hunt.otziv.l_lead.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.hunt.otziv.u_users.model.Operator;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -43,18 +44,23 @@ public class TelephoneDTO {
 
 
     //    Логин Гугла
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String googleLogin;
 
     //    Пароль Гугл
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String googlePassword;
 
     //    Пароль Авито
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String avitoPassword;
 
     //    Логин Mail
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String mailLogin;
 
     //    Пароль Mail
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String mailPassword;
 
 

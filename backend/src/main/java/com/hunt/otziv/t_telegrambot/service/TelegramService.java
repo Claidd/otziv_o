@@ -235,13 +235,17 @@ public class TelegramService extends TelegramLongPollingBot {
         String messageText = update.getMessage().getText();
         long chatId = update.getMessage().getChatId();
 
-        PerformerTelegramLinkService performerTelegramLinkService =
-                performerTelegramLinkServiceProvider == null ? null : performerTelegramLinkServiceProvider.getIfAvailable();
-        if (performerTelegramLinkService != null) {
-            Optional<String> performerLinkResponse = performerTelegramLinkService.handleStartCommand(chatId, messageText);
-            if (performerLinkResponse.isPresent()) {
-                sendMessage(chatId, performerLinkResponse.get());
-                return;
+        if (isPrivateChat(update)) {
+            PerformerTelegramLinkService performerTelegramLinkService =
+                    performerTelegramLinkServiceProvider == null
+                            ? null
+                            : performerTelegramLinkServiceProvider.getIfAvailable();
+            if (performerTelegramLinkService != null) {
+                Optional<String> performerLinkResponse = performerTelegramLinkService.handleStartCommand(chatId, messageText);
+                if (performerLinkResponse.isPresent()) {
+                    sendMessage(chatId, performerLinkResponse.get());
+                    return;
+                }
             }
         }
 

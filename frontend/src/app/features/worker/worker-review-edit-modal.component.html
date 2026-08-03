@@ -155,7 +155,9 @@
                 <span>Пароль бота</span>
                 <input
                   name="reviewBotPassword"
-                  type="text"
+                  type="password"
+                  autocomplete="new-password"
+                  [placeholder]="review?.botPasswordPresent ? 'Пароль сохранен — введите новый для замены' : 'Пароль не задан'"
                   [ngModel]="draft.botPassword"
                   (ngModelChange)="setField('botPassword', $event)"
                 >

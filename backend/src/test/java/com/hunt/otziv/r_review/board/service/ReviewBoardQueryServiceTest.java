@@ -148,7 +148,8 @@ class ReviewBoardQueryServiceTest {
         );
 
         assertEquals(7L, count);
-        assertTrue(queryCaptor.getValue().contains("LEFT JOIN r.bot b"));
+        assertTrue(!queryCaptor.getValue().contains("JOIN r.bot"));
+        assertTrue(queryCaptor.getValue().contains("LEFT JOIN r.orderDetails d LEFT JOIN d.order o"));
         assertTrue(queryCaptor.getValue().contains("(o IS NULL OR o.manager IS NULL OR o.manager = :manager)"));
         assertTrue(queryCaptor.getValue().contains("TRIM(r.text) <> ''"));
         assertTrue(queryCaptor.getValue().contains("LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'"));
@@ -223,8 +224,13 @@ class ReviewBoardQueryServiceTest {
         assertEquals(List.of(167498L), page.getContent());
         assertTrue(queryCaptor.getAllValues().get(0).contains("r.vigul = true"));
         assertTrue(queryCaptor.getAllValues().get(1).contains("r.vigul = true"));
+        assertTrue(!queryCaptor.getAllValues().get(0).contains("LOWER(COALESCE"));
+        assertTrue(!queryCaptor.getAllValues().get(0).contains("LEFT JOIN r.filial"));
+        assertTrue(!queryCaptor.getAllValues().get(0).contains("JOIN r.bot"));
         verify(idQuery).setParameter(eq("localDate"), eq(localDate));
         verify(countQuery).setParameter(eq("localDate"), eq(localDate));
+        verify(idQuery, never()).setParameter(eq("keyword"), org.mockito.ArgumentMatchers.any());
+        verify(countQuery, never()).setParameter(eq("keyword"), org.mockito.ArgumentMatchers.any());
     }
 
     private void stubQueryParameters(TypedQuery<Long> query) {

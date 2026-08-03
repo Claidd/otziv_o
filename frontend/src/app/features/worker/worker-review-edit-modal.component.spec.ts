@@ -20,8 +20,8 @@ function review(overrides: Partial<WorkerReviewItem> = {}): WorkerReviewItem {
     subCategory: 'Subcategory',
     botId: 11,
     botFio: 'Bot Name',
-    botLogin: 'bot-login',
-    botPassword: 'bot-password',
+    botLoginPresent: true,
+    botPasswordPresent: true,
     botCounter: 2,
     companyTitle: 'Company',
     commentCompany: 'Company note',
@@ -56,7 +56,7 @@ function draft(overrides: Partial<ReviewEditDraft> = {}): ReviewEditDraft {
     publish: false,
     vigul: false,
     botName: 'Bot Name',
-    botPassword: 'bot-password',
+    botPassword: '',
     productId: 9,
     filialId: null,
     url: '',
@@ -87,7 +87,9 @@ describe('WorkerReviewEditModalComponent', () => {
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('#review-edit-title')?.textContent?.trim()).toBe('Редактирование отзыва');
     expect(element.querySelector<HTMLTextAreaElement>('textarea[name="reviewText"]')?.value).toBe('Review text');
-    expect(element.querySelector<HTMLInputElement>('input[name="reviewBotPassword"]')?.value).toBe('bot-password');
+    const passwordInput = element.querySelector<HTMLInputElement>('input[name="reviewBotPassword"]');
+    expect(passwordInput?.value).toBe('');
+    expect(passwordInput?.placeholder).toContain('Пароль сохранен');
     const deleteButton = element.querySelector<HTMLButtonElement>('.lead-edit-delete.review-delete-action');
     expect(deleteButton?.textContent?.trim()).toBe('delete');
     expect(deleteButton?.getAttribute('aria-label')).toBe('Удалить отзыв');

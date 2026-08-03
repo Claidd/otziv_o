@@ -15,6 +15,9 @@ class RegisterPerformerRequestValidationTest {
         valid.setFio("Иван Петров");
         valid.setTelegramUsername("@performer_1");
         valid.setRegisteredSource("landing");
+        valid.setPersonalDataConsentAccepted(true);
+        valid.setRulesConsentAccepted(true);
+        valid.setHonestReviewConsentAccepted(true);
 
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             assertThat(factory.getValidator().validate(valid)).isEmpty();
@@ -31,6 +34,18 @@ class RegisterPerformerRequestValidationTest {
             assertThat(factory.getValidator().validate(valid))
                     .extracting(violation -> violation.getPropertyPath().toString())
                     .contains("phoneNumber");
+
+            valid.setPhoneNumber("+7 (900) 123-45-67");
+            valid.setPersonalDataConsentAccepted(false);
+            valid.setRulesConsentAccepted(null);
+            valid.setHonestReviewConsentAccepted(false);
+            assertThat(factory.getValidator().validate(valid))
+                    .extracting(violation -> violation.getPropertyPath().toString())
+                    .contains(
+                            "personalDataConsentAccepted",
+                            "rulesConsentAccepted",
+                            "honestReviewConsentAccepted"
+                    );
         }
     }
 }

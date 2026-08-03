@@ -886,10 +886,10 @@ export class WorkerBoardComponent implements OnDestroy {
       return;
     }
 
-    const value = {
+    let value = {
       url: review.filialUrl,
-      login: review.botLogin,
-      password: review.botPassword,
+      login: '',
+      password: '',
       text: review.text,
       answer: review.answer,
       vk: 'https://vk.com/'
@@ -899,14 +899,19 @@ export class WorkerBoardComponent implements OnDestroy {
     const copyLabel = workerReviewCopyLabel(kind);
     const isCredential = kind === 'login' || kind === 'password';
 
+    if (isCredential) {
+      const revealed = await this.revealReviewCredential(review, kind);
+      if (revealed === null) {
+        return;
+      }
+      value = revealed;
+    }
+
     if (!(await this.copyText(value, copiedKey, `${copyLabel} скопирован`, !isCredential))) {
       return;
     }
 
     if (isCredential) {
-      if (!(await this.logReviewCredentialCopyClick(review, kind))) {
-        return;
-      }
       this.showCopySuccess(copiedKey, `${copyLabel} скопирован и подтвержден`);
       this.markPublishCredentialCopied(review, kind);
     }
@@ -916,26 +921,26 @@ export class WorkerBoardComponent implements OnDestroy {
     await this.copyText(title, `title-${review.id}`, 'Название скопировано');
   }
 
-  private async logReviewCredentialCopyClick(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<boolean> {
-    if (kind !== 'login' && kind !== 'password') {
-      return true;
-    }
-
+  private async revealReviewCredential(review: WorkerReviewItem, kind: 'login' | 'password'): Promise<string | null> {
     try {
       const target = workerCredentialCopyTarget(review);
       const request = target.resource === 'recovery-task'
-        ? this.workerApi.logRecoveryTaskCopyClick(target.id, kind, this.workerActivitySource())
+        ? this.workerApi.revealRecoveryTaskCredential(target.id, kind, this.workerActivitySource())
         : target.resource === 'bad-review-task'
-          ? this.workerApi.logBadReviewTaskCopyClick(target.id, kind, this.workerActivitySource())
-        : this.workerApi.logReviewCopyClick(target.id, kind, this.workerActivitySource());
-      await firstValueFrom(request);
-      return true;
-    } catch {
+          ? this.workerApi.revealBadReviewTaskCredential(target.id, kind, this.workerActivitySource())
+          : this.workerApi.revealReviewCredential(target.id, kind, this.workerActivitySource());
+      const response = await firstValueFrom(request);
+      const value = response.value?.trim();
+      if (!value) {
+        throw new Error('Credential reveal returned an empty value');
+      }
+      return value;
+    } catch (err) {
       this.toastService.error(
-        'Копирование не записано',
-        'Данные попали в буфер, но сервер не подтвердил действие. Нажмите кнопку еще раз.'
+        'Данные не скопированы',
+        this.errorMessage(err, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.')
       );
-      return false;
+      return null;
     }
   }
 
@@ -1305,10 +1310,6 @@ export class WorkerBoardComponent implements OnDestroy {
     } catch {
       // Игнорируем: это только восстановление UI-состояния.
     }
-  }
-
-  async copyBotValue(bot: WorkerBotItem, kind: 'login' | 'password'): Promise<void> {
-    await this.copyText(kind === 'login' ? bot.login : bot.password, `bot-${kind}-${bot.id}`, kind === 'login' ? 'Логин скопирован' : 'Пароль скопирован');
   }
 
   isMutating(key: string): boolean {

@@ -455,7 +455,7 @@ public class AllOrderListController {
     private void checkTimeMethod(String text, long startTime){
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-        System.out.printf(text + "%.4f сек%n", timeElapsed);
+        log.debug("{}{} сек", text, timeElapsed);
     }
 
 

@@ -67,6 +67,16 @@ export interface AdminPerformer {
   expiredOfferCount: number;
   failedCheckCount: number;
   telegramChatId?: number | null;
+  telegramLinkedAt?: string | null;
+  registrationExpiresAt?: string | null;
+  phoneVerifiedAt?: string | null;
+  phoneVerificationMethod?: string | null;
+  personalDataConsentVersion?: string | null;
+  rulesConsentVersion?: string | null;
+  honestReviewConsentVersion?: string | null;
+  activationReady: boolean;
+  legacyApprovedBeforeSecureLifecycle: boolean;
+  activationWarning: string;
 }
 
 export interface PerformerCityReport {
@@ -148,10 +158,13 @@ export class PerformerApi {
     return this.http.get<AdminPerformerControl>(`${appEnvironment.apiBaseUrl}/api/admin/performers/control`);
   }
 
-  updatePerformerStatus(id: number, status: string, reason = ''): Observable<AdminPerformer> {
+  updatePerformerStatus(id: number, status: string, reason = '', phoneVerified = false): Observable<AdminPerformer> {
     const params = new URLSearchParams({ status });
     if (reason.trim()) {
       params.set('reason', reason.trim());
+    }
+    if (phoneVerified) {
+      params.set('phoneVerified', 'true');
     }
     return this.http.post<AdminPerformer>(`${appEnvironment.apiBaseUrl}/api/admin/performers/${id}/status?${params.toString()}`, {});
   }

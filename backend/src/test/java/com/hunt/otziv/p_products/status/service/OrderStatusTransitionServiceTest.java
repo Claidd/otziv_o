@@ -278,18 +278,82 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
-    void defaultStatusSetsStatusAndSavesOrder() throws Exception {
+    void invalidStatusTransitionIsRejectedWithoutSaving() {
         OrderStatusTransitionService service = service();
         Order order = order(2L, "Новый");
-        OrderStatus reminder = status("Напоминание");
 
         when(orderRepository.findByIdForMutation(2L)).thenReturn(Optional.of(order));
-        when(orderStatusService.getOrderStatusByTitle("Напоминание")).thenReturn(reminder);
 
-        assertTrue(service.changeStatusForOrder(2L, "Напоминание"));
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(2L, "Напоминание")
+        );
 
-        assertSame(reminder, order.getStatus());
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("Недопустимый переход статуса заказа: \"Новый\" → \"Напоминание\"", exception.getReason());
+        verify(orderStatusService, never()).getOrderStatusByTitle("Напоминание");
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void liveArchivedOrderCanReturnToNewAsOfferedByArchiveBoard() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(102L, "Архив");
+        OrderStatus newStatus = status("Новый");
+        when(orderRepository.findByIdForMutation(102L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Новый")).thenReturn(newStatus);
+
+        assertTrue(service.changeStatusForOrder(102L, "Новый"));
+
+        assertSame(newStatus, order.getStatus());
         verify(orderRepository).save(order);
+    }
+
+    @Test
+    void commonBillingRestoreCanReturnArchivedOrderToCheck() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(104L, "Архив");
+        OrderStatus toCheck = status("В проверку");
+        when(orderRepository.findByIdForMutation(104L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("В проверку")).thenReturn(toCheck);
+
+        assertTrue(service.changeStatusForPrivilegedCommonBillingOrder(104L, "В проверку"));
+
+        assertSame(toCheck, order.getStatus());
+        verify(orderBotLifecycleService).assignBotsIfNeeded(order);
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "В проверку");
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void repeatedStatusRequestIsIdempotentAndDoesNotRepeatSideEffects() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(103L, "В проверку");
+        when(orderRepository.findByIdForMutation(103L)).thenReturn(Optional.of(order));
+
+        assertTrue(service.changeStatusForOrder(103L, "В проверку"));
+
+        verifyNoInteractions(orderStatusService, orderStatusNotificationService, orderTransactionService);
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void publishedTransitionUsesPersistedReviewsInsteadOfStoredCounter() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(101L, "Публикация");
+        order.setAmount(2);
+        order.setCounter(2);
+        when(orderRepository.findByIdForMutation(101L)).thenReturn(Optional.of(order));
+        when(reviewRepository.countPublishedByOrderId(101L)).thenReturn(1);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(101L, "Опубликовано")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(1, order.getCounter());
+        verify(orderTransactionService, never()).handlePaymentStatus(order);
     }
 
     @Test

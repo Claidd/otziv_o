@@ -77,7 +77,6 @@
           <#if appBaseUrl?has_content>
             <div class="otziv-login__links">
               <a href="${appBaseUrl}/register-client">${msg("otzivRegisterLink")}</a>
-              <a href="${appBaseUrl}/legacy-migration">${msg("otzivMigrationLink")}</a>
             </div>
           </#if>
         </form>

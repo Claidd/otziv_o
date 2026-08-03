@@ -46,6 +46,19 @@ describe('payment navigation policy', () => {
     expect(navigate).toHaveBeenCalledWith(target);
   });
 
+  it.each([
+    'http://securepay.tinkoff.ru/pay',
+    'https://securepay.tinkoff.ru.evil.test/pay',
+    'https://evil.test/pay'
+  ])('rejects an untrusted generated payment URL %s', (target) => {
+    expect(safePaymentNavigationTarget(target, 'payment')).toBeNull();
+  });
+
+  it('keeps arbitrary HTTPS manual links for configured acquiring banks', () => {
+    expect(safePaymentNavigationTarget('https://pay.alfabank.ru/sc/example', 'manual'))
+      .toBe('https://pay.alfabank.ru/sc/example');
+  });
+
   it('does not substitute another recipient when the backend quarantines a destination', () => {
     expect(configuredPaymentTarget('')).toBe('');
     expect(configuredPaymentTarget(null)).toBe('');

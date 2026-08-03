@@ -21,9 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -31,7 +31,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PerformerRegistrationService {
 
+    public static final String PERSONAL_DATA_CONSENT_VERSION = "privacy-2026-08-03";
+    public static final String RULES_CONSENT_VERSION = "performer-rules-2026-08-03";
+    public static final String HONEST_REVIEW_CONSENT_VERSION = "honest-review-2026-08-03";
+
     private static final String PERFORMER_ROLE = "PERFORMER";
+    private static final Duration MAX_PENDING_REGISTRATION_TTL = Duration.ofDays(7);
     private static final char[] GENERATED_CREDENTIAL_CHARS = buildGeneratedCredentialChars();
 
     private final KeycloakUserProvisioningService userProvisioningService;
@@ -43,11 +48,15 @@ public class PerformerRegistrationService {
     @Value("${telegram.bot.username:}")
     private String telegramBotUsername;
 
+    @Value("${performer.registration.pending-ttl:PT48H}")
+    private Duration pendingRegistrationTtl = Duration.ofHours(48);
+
     @Transactional
     public RegisterPerformerResponse register(RegisterPerformerRequest request) {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные исполнителя не переданы");
         }
+        requireExplicitConsents(request);
 
         City city = cityRepository.findById(request.getCityId());
         if (city == null) {
@@ -59,8 +68,11 @@ public class PerformerRegistrationService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите корректный телефон");
         }
 
-        String username = "perf" + phone;
-        String temporaryPassword = generateTemporaryPassword();
+        // A phone number is not an identity proof. Never reserve a predictable
+        // username derived from an unverified number: every pending application
+        // gets an opaque account id and expires independently.
+        String username = "performer_" + UUID.randomUUID().toString().replace("-", "");
+        String undisclosedBootstrapPassword = generateTemporaryPassword();
         String technicalEmail = username + "@performers.o-ogo.local";
 
         CreateKeycloakUserRequest createRequest = new CreateKeycloakUserRequest();
@@ -68,9 +80,12 @@ public class PerformerRegistrationService {
         createRequest.setEmail(technicalEmail);
         createRequest.setFio(trimToNull(request.getFio()));
         createRequest.setPhoneNumber("+" + phone);
-        createRequest.setPassword(temporaryPassword);
-        createRequest.setTemporaryPassword(false);
-        createRequest.setEnabled(true);
+        createRequest.setPassword(undisclosedBootstrapPassword);
+        // Pending public applications cannot authenticate. A moderator must
+        // verify the phone out of band, activate the account and issue a fresh
+        // credential through the existing privileged user-management flow.
+        createRequest.setTemporaryPassword(true);
+        createRequest.setEnabled(false);
         createRequest.setEmailVerified(false);
         createRequest.setRoles(new LinkedHashSet<>(Set.of(PERFORMER_ROLE)));
 
@@ -78,19 +93,25 @@ public class PerformerRegistrationService {
         User user = userRepository.findById(created.id())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Пользователь создан, но не найден"));
 
+        LocalDateTime acceptedAt = LocalDateTime.now();
+        LocalDateTime registrationExpiresAt = acceptedAt.plus(validatedPendingRegistrationTtl());
         String token = "performer_" + UUID.randomUUID().toString().replace("-", "");
-        LocalDateTime now = LocalDateTime.now();
         PerformerProfile performer = PerformerProfile.builder()
                 .user(user)
                 .city(city)
                 .gender(request.getGender() == null ? PerformerGender.NOT_SPECIFIED : request.getGender())
-                .status(PerformerProfileStatus.ACTIVE)
+                // Telegram linking (or an administrator) performs the real activation step.
+                .status(PerformerProfileStatus.NEW)
                 .telegramLinkToken(token)
                 .registeredSource(trimToNull(request.getRegisteredSource()))
-                .personalDataAcceptedAt(now)
-                .rulesAcceptedAt(now)
-                .honestReviewAcceptedAt(now)
-                .lastActiveAt(now)
+                .personalDataAcceptedAt(acceptedAt)
+                .personalDataConsentVersion(PERSONAL_DATA_CONSENT_VERSION)
+                .rulesAcceptedAt(acceptedAt)
+                .rulesConsentVersion(RULES_CONSENT_VERSION)
+                .honestReviewAcceptedAt(acceptedAt)
+                .honestReviewConsentVersion(HONEST_REVIEW_CONSENT_VERSION)
+                .registrationExpiresAt(registrationExpiresAt)
+                .lastActiveAt(null)
                 .build();
         performerProfileRepository.save(performer);
 
@@ -98,11 +119,33 @@ public class PerformerRegistrationService {
                 .userId(user.getId())
                 .performerId(performer.getId())
                 .username(user.getUsername())
-                .temporaryPassword(temporaryPassword)
-                .telegramLinkToken(token)
+                // Never disclose the bootstrap credential/token separately.
+                // The one-time Telegram token exists only inside the HTTPS URL.
+                .temporaryPassword(null)
+                .telegramLinkToken(null)
                 .telegramLinkUrl(telegramLinkUrl(token))
                 .status(performer.getStatus().name())
+                .registrationExpiresAt(registrationExpiresAt)
+                .requiresAdminApproval(true)
                 .build();
+    }
+
+    private void requireExplicitConsents(RegisterPerformerRequest request) {
+        if (!Boolean.TRUE.equals(request.getPersonalDataConsentAccepted())
+                || !Boolean.TRUE.equals(request.getRulesConsentAccepted())
+                || !Boolean.TRUE.equals(request.getHonestReviewConsentAccepted())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Необходимо явно принять все условия регистрации");
+        }
+    }
+
+    private Duration validatedPendingRegistrationTtl() {
+        if (pendingRegistrationTtl == null
+                || pendingRegistrationTtl.isZero()
+                || pendingRegistrationTtl.isNegative()
+                || pendingRegistrationTtl.compareTo(MAX_PENDING_REGISTRATION_TTL) > 0) {
+            throw new IllegalStateException("performer.registration.pending-ttl must be greater than zero and at most 7 days");
+        }
+        return pendingRegistrationTtl;
     }
 
     private String telegramLinkUrl(String token) {
@@ -113,7 +156,14 @@ public class PerformerRegistrationService {
     }
 
     private String normalizePhone(String value) {
-        return value == null ? "" : value.replaceAll("\\D+", "");
+        String digits = value == null ? "" : value.replaceAll("\\D+", "");
+        if (digits.length() == 10) {
+            return "7" + digits;
+        }
+        if (digits.length() == 11 && digits.startsWith("8")) {
+            return "7" + digits.substring(1);
+        }
+        return digits;
     }
 
     private String generateTemporaryPassword() {

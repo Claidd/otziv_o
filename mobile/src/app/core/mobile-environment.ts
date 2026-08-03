@@ -14,6 +14,10 @@ export const mobileEnvironment = {
   apiBaseUrl: isNative ? nativeBackendBaseUrl : '',
   backendBaseUrl: isNative ? nativeBackendBaseUrl : '',
   pushNotificationsEnabled: mobileBuildTarget.pushNotificationsEnabled,
+  botBrowserVncAllowedOrigins: [
+    nativeBackendBaseUrl,
+    ...mobileBuildTarget.botBrowserVncAllowedOrigins
+  ] as readonly string[],
   keycloak: {
     url: isNative ? `${nativeBackendBaseUrl}/keycloak` : isLocalWebDev ? `${localProdLikeBaseUrl}/keycloak` : '/keycloak',
     realm: 'otziv',

@@ -57,19 +57,17 @@ that exact hardening profile without `--no-sandbox` or setuid-sandbox bypasses.
 WhatsApp has bounded JSON/message/concurrency settings, Node 22 with lockfile
 installation, `init`, `no-new-privileges`, and PID/CPU/memory limits. QR values
 are no longer printed unless `WHATSAPP_QR_LOG_ENABLED=true`; `/qr` is protected.
-Its Chromium process still runs as root with `--no-sandbox` in this transitional
-release; internal authentication, isolated networking, resource limits, and
-`no-new-privileges` reduce exposure but do not replace the Chromium sandbox.
+Its image runs as the unprivileged `node` user, installs the reviewed Chromium
+sandbox helper, and does not pass `--no-sandbox`. The production services also
+use a read-only root filesystem, writable bounded `/tmp`, dropped capabilities
+and only the namespace/chroot capabilities required by Chromium's sandbox.
 
-## Staged WhatsApp non-root migration
+## WhatsApp session ownership rollout
 
-WhatsApp intentionally remains root in this release because existing bind-mounted
-`./data/whatsapp_auth/*:/auth` directories can have installation-specific owners.
-Changing UID blindly can make the sessions unreadable and force a new QR login.
-
-For a later maintenance window, back up both auth directories, stop one gateway,
-record ownership and permissions, create a fixed gateway UID, migrate one copy,
-and verify restart plus message send/receive before doing the second gateway.
-Only then add `USER`/compose `user` and consider `cap_drop: [ALL]` and a read-only
-root filesystem. Do not chown both live session directories as part of an
-ordinary rolling deploy.
+Existing bind-mounted `./data/whatsapp_auth/*:/auth` directories can have
+installation-specific owners. The deployment therefore performs an explicit,
+one-shot ownership migration before the non-root gateways start. Back up both
+auth directories before the first rollout, verify readiness plus message
+send/receive for each gateway, and retain the previous image for rollback. Do
+not apply an ad-hoc recursive `chown` to live session directories outside that
+reviewed deployment step.

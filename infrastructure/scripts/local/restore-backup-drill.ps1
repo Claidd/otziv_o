@@ -1,3 +1,5 @@
+#requires -Version 7.0
+
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -11,6 +13,14 @@ param(
 
     [ValidateRange(30, 1800)]
     [int]$StartupTimeoutSeconds = 180,
+
+    [string]$EncryptionKeyBase64 = $env:BACKUP_ENCRYPTION_KEY_BASE64,
+
+    [ValidateRange(1048576, 1099511627776)]
+    [long]$MaxDecryptedBytes = 536870912000,
+
+    [ValidateRange(1048576, 17592186044416)]
+    [long]$MaxUncompressedBytes = 1099511627776,
 
     [ValidatePattern("^[A-Za-z0-9_]+$")]
     [string]$DatabaseName = "otziv_restore_drill",
@@ -124,9 +134,13 @@ function New-RandomHex {
 }
 
 function Test-GzipArchive {
-    param([Parameter(Mandatory = $true)][string]$Path)
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][long]$MaximumUncompressedBytes
+    )
 
     [long]$uncompressedBytes = 0
+    $buffer = $null
     $input = [System.IO.File]::OpenRead($Path)
     try {
         $gzip = [System.IO.Compression.GZipStream]::new(
@@ -136,9 +150,15 @@ function Test-GzipArchive {
         try {
             $buffer = New-Object byte[] (1024 * 1024)
             while (($read = $gzip.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                if ($uncompressedBytes -gt ($MaximumUncompressedBytes - [long]$read)) {
+                    throw "The gzip archive exceeds MaxUncompressedBytes ($MaximumUncompressedBytes bytes)."
+                }
                 $uncompressedBytes += $read
             }
         } finally {
+            if ($null -ne $buffer) {
+                [Array]::Clear($buffer, 0, $buffer.Length)
+            }
             $gzip.Dispose()
         }
     } finally {
@@ -149,6 +169,246 @@ function Test-GzipArchive {
         throw "The gzip archive expands to an empty SQL stream."
     }
     return $uncompressedBytes
+}
+
+function Read-ExactBytes {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.Stream]$Stream,
+        [Parameter(Mandatory = $true)][ValidateRange(1, 67108880)][int]$Count,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    $buffer = New-Object byte[] $Count
+    $offset = 0
+    while ($offset -lt $Count) {
+        $read = $Stream.Read($buffer, $offset, $Count - $offset)
+        if ($read -le 0) {
+            throw "Encrypted backup ended while reading $Description."
+        }
+        $offset += $read
+    }
+    return ,$buffer
+}
+
+function Get-UInt32BigEndian {
+    param(
+        [Parameter(Mandatory = $true)][byte[]]$Buffer,
+        [Parameter(Mandatory = $true)][int]$Offset
+    )
+
+    [uint64]$value = 0
+    for ($index = 0; $index -lt 4; $index++) {
+        $value = ($value -shl 8) -bor [uint64]$Buffer[$Offset + $index]
+    }
+    return [uint32]$value
+}
+
+function Get-UInt64BigEndian {
+    param(
+        [Parameter(Mandatory = $true)][byte[]]$Buffer,
+        [Parameter(Mandatory = $true)][int]$Offset
+    )
+
+    [uint64]$value = 0
+    for ($index = 0; $index -lt 8; $index++) {
+        $value = ($value -shl 8) -bor [uint64]$Buffer[$Offset + $index]
+    }
+    return $value
+}
+
+function Set-UInt32BigEndian {
+    param(
+        [Parameter(Mandatory = $true)][byte[]]$Buffer,
+        [Parameter(Mandatory = $true)][int]$Offset,
+        [Parameter(Mandatory = $true)][uint32]$Value
+    )
+
+    $Buffer[$Offset] = [byte](($Value -shr 24) -band 0xff)
+    $Buffer[$Offset + 1] = [byte](($Value -shr 16) -band 0xff)
+    $Buffer[$Offset + 2] = [byte](($Value -shr 8) -band 0xff)
+    $Buffer[$Offset + 3] = [byte]($Value -band 0xff)
+}
+
+function Get-OtzivDb2ChunkCount {
+    param(
+        [Parameter(Mandatory = $true)][uint64]$PlaintextLength,
+        [Parameter(Mandatory = $true)][uint32]$ChunkSize
+    )
+
+    if ($PlaintextLength -eq 0 -or $ChunkSize -eq 0) {
+        throw "OTZIVDB2 chunk count requires positive length and chunk size."
+    }
+    [decimal]$quotient = [decimal]$PlaintextLength / [decimal]$ChunkSize
+    return [uint64][decimal]::Ceiling($quotient)
+}
+
+function ConvertFrom-OtzivDb2Envelope {
+    param(
+        [Parameter(Mandatory = $true)][string]$InputPath,
+        [Parameter(Mandatory = $true)][string]$OutputPath,
+        [Parameter(Mandatory = $true)][string]$EncodedKey,
+        [Parameter(Mandatory = $true)][long]$MaximumPlaintextBytes
+    )
+
+    if ([string]::IsNullOrWhiteSpace($EncodedKey)) {
+        throw "Encrypted OTZIVDB2 backup requires EncryptionKeyBase64 or BACKUP_ENCRYPTION_KEY_BASE64."
+    }
+    try {
+        [byte[]]$key = [Convert]::FromBase64String($EncodedKey.Trim())
+    } catch {
+        throw "The backup encryption key is not valid Base64."
+    }
+    if ($key.Length -ne 32) {
+        [Array]::Clear($key, 0, $key.Length)
+        throw "The backup encryption key must decode to exactly 32 bytes."
+    }
+
+    $headerLength = 28
+    $tagLength = 16
+    $minimumChunkBytes = 64 * 1024
+    $maximumChunkBytes = 64 * 1024 * 1024
+    $input = $null
+    $output = $null
+    $aes = $null
+    $outputCreated = $false
+    $completed = $false
+    try {
+        $input = [System.IO.FileStream]::new(
+            $InputPath,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::Read,
+            [System.IO.FileShare]::Read,
+            1024 * 1024,
+            [System.IO.FileOptions]::SequentialScan
+        )
+        if ($input.Length -lt $headerLength) {
+            throw "Encrypted backup is shorter than the OTZIVDB2 header."
+        }
+        [byte[]]$header = Read-ExactBytes -Stream $input -Count $headerLength -Description "OTZIVDB2 header"
+        $magic = [Text.Encoding]::ASCII.GetString($header, 0, 8)
+        if ($magic -eq "OTZIVDB1") {
+            throw "OTZIVDB1 is a legacy single-message envelope and is not stream-restorable. Create an OTZIVDB2 backup."
+        }
+        if ($magic -ne "OTZIVDB2") {
+            throw "Encrypted backup has an unsupported envelope magic."
+        }
+
+        [uint32]$chunkSize = Get-UInt32BigEndian -Buffer $header -Offset 8
+        [uint64]$plaintextLength = Get-UInt64BigEndian -Buffer $header -Offset 12
+        if ($chunkSize -lt $minimumChunkBytes -or $chunkSize -gt $maximumChunkBytes) {
+            throw "OTZIVDB2 chunk size is outside the supported range."
+        }
+        if ($plaintextLength -eq 0 -or $plaintextLength -gt [uint64]$MaximumPlaintextBytes) {
+            throw "OTZIVDB2 plaintext length is empty or exceeds MaxDecryptedBytes."
+        }
+
+        [uint64]$chunkCount = Get-OtzivDb2ChunkCount `
+            -PlaintextLength $plaintextLength `
+            -ChunkSize $chunkSize
+        if ($chunkCount -gt [uint64][uint32]::MaxValue + 1) {
+            throw "OTZIVDB2 contains too many encrypted chunks."
+        }
+        $expectedEnvelopeLength = [System.Numerics.BigInteger]$headerLength `
+            + [System.Numerics.BigInteger]$plaintextLength `
+            + ([System.Numerics.BigInteger]$chunkCount * $tagLength)
+        if ($expectedEnvelopeLength -ne [System.Numerics.BigInteger]$input.Length) {
+            throw "OTZIVDB2 file length does not match its header; the backup is truncated or has trailing data."
+        }
+
+        $output = [System.IO.FileStream]::new(
+            $OutputPath,
+            [System.IO.FileMode]::CreateNew,
+            [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::None,
+            1024 * 1024,
+            [System.IO.FileOptions]::SequentialScan -bor [System.IO.FileOptions]::WriteThrough
+        )
+        $outputCreated = $true
+        if (-not $IsWindows) {
+            [System.IO.File]::SetUnixFileMode(
+                $OutputPath,
+                [System.IO.UnixFileMode]::UserRead -bor [System.IO.UnixFileMode]::UserWrite
+            )
+        }
+
+        # The single-argument constructor is available throughout supported
+        # PowerShell 7.x/.NET runtimes; OTZIVDB2 always uses a 16-byte tag.
+        $aes = [System.Security.Cryptography.AesGcm]::new($key)
+        $noncePrefix = New-Object byte[] 8
+        [Array]::Copy($header, 20, $noncePrefix, 0, 8)
+        [uint64]$remaining = $plaintextLength
+        for ([uint64]$chunkIndex = 0; $chunkIndex -lt $chunkCount; $chunkIndex++) {
+            $plaintextBytes = [int][Math]::Min([uint64]$chunkSize, $remaining)
+            [byte[]]$ciphertext = Read-ExactBytes -Stream $input -Count $plaintextBytes -Description "chunk $chunkIndex ciphertext"
+            [byte[]]$tag = Read-ExactBytes -Stream $input -Count $tagLength -Description "chunk $chunkIndex authentication tag"
+            $nonce = New-Object byte[] 12
+            [Array]::Copy($noncePrefix, 0, $nonce, 0, 8)
+            Set-UInt32BigEndian -Buffer $nonce -Offset 8 -Value ([uint32]$chunkIndex)
+            $aad = New-Object byte[] ($headerLength + 8)
+            [Array]::Copy($header, 0, $aad, 0, $headerLength)
+            Set-UInt32BigEndian -Buffer $aad -Offset $headerLength -Value ([uint32]$chunkIndex)
+            Set-UInt32BigEndian -Buffer $aad -Offset ($headerLength + 4) -Value ([uint32]$plaintextBytes)
+            $plaintext = New-Object byte[] $plaintextBytes
+            try {
+                try {
+                    $aes.Decrypt($nonce, $ciphertext, $tag, $plaintext, $aad)
+                } catch [System.Security.Cryptography.CryptographicException] {
+                    throw "OTZIVDB2 authentication failed for chunk $chunkIndex. The backup or key is invalid."
+                }
+                $output.Write($plaintext, 0, $plaintext.Length)
+            } finally {
+                [Array]::Clear($plaintext, 0, $plaintext.Length)
+            }
+            $remaining -= [uint64]$plaintextBytes
+        }
+        if ($remaining -ne 0 -or $input.Position -ne $input.Length) {
+            throw "OTZIVDB2 did not end at its authenticated boundary."
+        }
+        $output.Flush($true)
+        if ($output.Length -ne [long]$plaintextLength) {
+            throw "Decrypted OTZIVDB2 length does not match its authenticated header."
+        }
+        $completed = $true
+        return [pscustomobject]@{
+            Format = "OTZIVDB2_CHUNKED_AES_256_GCM"
+            PlaintextBytes = [long]$plaintextLength
+            ChunkSizeBytes = [long]$chunkSize
+            ChunkCount = [long]$chunkCount
+        }
+    } finally {
+        if ($null -ne $aes) { $aes.Dispose() }
+        if ($null -ne $output) { $output.Dispose() }
+        if ($null -ne $input) { $input.Dispose() }
+        [Array]::Clear($key, 0, $key.Length)
+        if (-not $completed -and $outputCreated -and [System.IO.File]::Exists($OutputPath)) {
+            [System.IO.File]::Delete($OutputPath)
+        }
+    }
+}
+
+function New-SensitiveTemporaryPath {
+    $temporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    if ($temporaryRoot.StartsWith("\\")) {
+        throw "UNC temporary directories are not allowed for decrypted backups."
+    }
+    return [System.IO.Path]::Combine(
+        $temporaryRoot,
+        "otziv-restore-$([guid]::NewGuid().ToString('N')).sql.gz"
+    )
+}
+
+function Remove-SensitiveTemporaryFile {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $temporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    if (-not $fullPath.StartsWith($temporaryRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        [System.IO.Path]::GetFileName($fullPath) -notmatch '^otziv-restore-[a-f0-9]{32}\.sql\.gz$') {
+        throw "Refusing to remove an unrecognized decrypted-backup path."
+    }
+    if ([System.IO.File]::Exists($fullPath)) {
+        [System.IO.File]::Delete($fullPath)
+    }
 }
 
 function Wait-DrillMysql {
@@ -235,8 +495,8 @@ foreach ($table in $RequiredTables) {
 
 $resolvedDump = (Resolve-Path -LiteralPath $DumpPath -ErrorAction Stop).Path
 $dumpFile = Get-Item -LiteralPath $resolvedDump
-if ($dumpFile -isnot [System.IO.FileInfo] -or $dumpFile.Name -notmatch "(?i)\.sql\.gz$") {
-    throw "DumpPath must point to a local .sql.gz file."
+if ($dumpFile -isnot [System.IO.FileInfo] -or $dumpFile.Name -notmatch "(?i)\.sql\.gz(?:\.enc)?$") {
+    throw "DumpPath must point to a local .sql.gz or OTZIVDB2 .sql.gz.enc file."
 }
 if ($dumpFile.Length -le 0) {
     throw "Backup file is empty: $resolvedDump"
@@ -245,13 +505,13 @@ if ($resolvedDump -match "^\\\\") {
     throw "UNC paths are not allowed. Copy the backup to a local disk before the drill."
 }
 
-Write-Host "Validating local gzip archive..."
-$uncompressedBytes = Test-GzipArchive -Path $resolvedDump
 $backupSha256 = (Get-FileHash -LiteralPath $resolvedDump -Algorithm SHA256).Hash
-
-Assert-LocalDockerEndpoint
-Invoke-Docker -Arguments @("image", "inspect", $MysqlImage) `
-    -Operation "Inspect local MySQL image (the drill never pulls images)" | Out-Null
+$isEncryptedBackup = $dumpFile.Name -match "(?i)\.enc$"
+$restoreInputPath = $resolvedDump
+$decryptedTemporaryPath = $null
+$backupFormat = if ($isEncryptedBackup) { "ENCRYPTED_PENDING_VALIDATION" } else { "LEGACY_PLAIN_GZIP" }
+$restoreCompressedBytes = $null
+$uncompressedBytes = $null
 
 $containerName = "otziv-r0-$DrillId-mysql"
 $volumeName = "otziv-r0-$DrillId-data"
@@ -272,6 +532,28 @@ $flywayLatestVersion = "NOT_CHECKED"
 $totalWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 try {
+    if ($isEncryptedBackup) {
+        Write-Host "Authenticating and decrypting OTZIVDB2 backup to a restricted temporary gzip file..."
+        $decryptedTemporaryPath = New-SensitiveTemporaryPath
+        $envelope = ConvertFrom-OtzivDb2Envelope `
+            -InputPath $resolvedDump `
+            -OutputPath $decryptedTemporaryPath `
+            -EncodedKey $EncryptionKeyBase64 `
+            -MaximumPlaintextBytes $MaxDecryptedBytes
+        $backupFormat = $envelope.Format
+        $restoreInputPath = $decryptedTemporaryPath
+    }
+
+    Write-Host "Validating local gzip archive..."
+    $restoreCompressedBytes = (Get-Item -LiteralPath $restoreInputPath).Length
+    $uncompressedBytes = Test-GzipArchive `
+        -Path $restoreInputPath `
+        -MaximumUncompressedBytes $MaxUncompressedBytes
+
+    Assert-LocalDockerEndpoint
+    Invoke-Docker -Arguments @("image", "inspect", $MysqlImage) `
+        -Operation "Inspect local MySQL image (the drill never pulls images)" | Out-Null
+
     if (Test-ContainerExists -Name $containerName) {
         throw "Container collision: '$containerName' already exists. Nothing was changed."
     }
@@ -316,7 +598,7 @@ try {
     Invoke-Docker -Arguments @("start", $containerName) -Operation "Start drill MySQL" | Out-Null
     $readySeconds = Wait-DrillMysql -ContainerName $containerName -TimeoutSeconds $StartupTimeoutSeconds
 
-    Invoke-Docker -Arguments @("cp", $resolvedDump, "${containerName}:/tmp/restore.sql.gz") `
+    Invoke-Docker -Arguments @("cp", $restoreInputPath, "${containerName}:/tmp/restore.sql.gz") `
         -Operation "Copy local backup into drill container" | Out-Null
 
     Write-Host "Restoring backup into isolated MySQL..."
@@ -425,6 +707,14 @@ try {
         }
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($decryptedTemporaryPath)) {
+        try {
+            Remove-SensitiveTemporaryFile -Path $decryptedTemporaryPath
+        } catch {
+            $cleanupErrors.Add($_.Exception.Message)
+        }
+    }
+
     if ($cleanupErrors.Count -gt 0) {
         $cleanupResult = "FAIL"
         $result = "FAIL"
@@ -441,9 +731,12 @@ try {
     Write-Host "R0_RESTORE_DRILL_RESULT=$result"
     Write-Host "DRILL_ID=$DrillId"
     Write-Host "BACKUP_PATH=$resolvedDump"
+    Write-Host "BACKUP_FORMAT=$backupFormat"
     Write-Host "BACKUP_SHA256=$backupSha256"
-    Write-Host "BACKUP_COMPRESSED_BYTES=$($dumpFile.Length)"
-    Write-Host "BACKUP_UNCOMPRESSED_BYTES=$uncompressedBytes"
+    Write-Host "BACKUP_SOURCE_BYTES=$($dumpFile.Length)"
+    Write-Host "BACKUP_COMPRESSED_BYTES=$(if ($null -eq $restoreCompressedBytes) { 'NOT_CHECKED' } else { $restoreCompressedBytes })"
+    Write-Host "BACKUP_UNCOMPRESSED_BYTES=$(if ($null -eq $uncompressedBytes) { 'NOT_CHECKED' } else { $uncompressedBytes })"
+    Write-Host "MAX_UNCOMPRESSED_BYTES=$MaxUncompressedBytes"
     Write-Host "MYSQL_IMAGE=$MysqlImage"
     Write-Host "MYSQL_READY_SECONDS=$(Format-Seconds -Value $readySeconds)"
     Write-Host "RESTORE_SECONDS=$(Format-Seconds -Value $restoreSeconds)"

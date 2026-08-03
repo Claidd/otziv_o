@@ -153,15 +153,38 @@ public class LeadImportService {
 
     @Transactional
     public LeadImportResult importLeads(MultipartFile file) {
-        return importLeads(file, LeadImportOptions.empty());
+        return importLeads(file, LeadImportOptions.empty(), LeadImportAssignmentGuard.allowAll());
     }
 
     @Transactional
     public LeadImportResult importLeads(MultipartFile file, LeadImportOptions options) {
+        return importLeads(file, options, LeadImportAssignmentGuard.allowAll());
+    }
+
+    @Transactional
+    public LeadImportResult importLeads(
+            MultipartFile file,
+            LeadImportOptions options,
+            LeadImportAssignmentGuard assignmentGuard
+    ) {
         if (file == null || file.isEmpty()) {
             throw badRequest("Файл не выбран");
         }
+        if (assignmentGuard == null) {
+            throw new IllegalArgumentException("Lead import assignment guard is required");
+        }
         LeadImportOptions importOptions = options == null ? LeadImportOptions.empty() : options.normalized();
+
+        // Reject out-of-scope explicit manager selections before resolving
+        // their import telephone pools or exposing whether those objects exist.
+        for (Long managerId : importOptions.managerIds()) {
+            assignmentGuard.requireAllowed(
+                    managerId,
+                    importOptions.operatorId(),
+                    importOptions.marketologId(),
+                    null
+            );
+        }
 
         List<List<String>> rows = readRows(file);
         if (rows.isEmpty()) {
@@ -230,6 +253,28 @@ public class LeadImportService {
 
             try {
                 ImportAssignment assignment = assignmentPlan.next();
+                Long effectiveManagerId = assignment.manager() != null
+                        ? assignment.manager().getId()
+                        : importedRow.managerId();
+                Long effectiveTelephoneId = assignment.telephone() != null
+                        ? assignment.telephone().getId()
+                        : importedRow.telephoneId();
+                Long effectiveOperatorId = importOptions.operatorId() != null
+                        ? importOptions.operatorId()
+                        : importedRow.operatorId();
+                Long effectiveMarketologId = importOptions.marketologId() != null
+                        ? importOptions.marketologId()
+                        : importedRow.marketologId();
+
+                // Validate the effective row assignment before resolving any
+                // client-controlled IDs through repositories. This covers both
+                // request-level selections and IDs embedded in CSV/XLSX rows.
+                assignmentGuard.requireAllowed(
+                        effectiveManagerId,
+                        effectiveOperatorId,
+                        effectiveMarketologId,
+                        effectiveTelephoneId
+                );
                 Manager assignedManager = assignment.manager() != null
                         ? assignment.manager()
                         : optionalManager(managers, importedRow.managerId(), importedRow.rowNumber());
@@ -968,6 +1013,18 @@ public class LeadImportService {
                     operatorId != null && operatorId > 0 ? operatorId : null,
                     marketologId != null && marketologId > 0 ? marketologId : null
             );
+        }
+    }
+
+    @FunctionalInterface
+    public interface LeadImportAssignmentGuard {
+        void requireAllowed(Long managerId, Long operatorId, Long marketologId, Long telephoneId);
+
+        static LeadImportAssignmentGuard allowAll() {
+            return (managerId, operatorId, marketologId, telephoneId) -> {
+                // Trusted non-web callers and focused parser tests have no
+                // authenticated actor; HTTP entry points must pass a real guard.
+            };
         }
     }
 

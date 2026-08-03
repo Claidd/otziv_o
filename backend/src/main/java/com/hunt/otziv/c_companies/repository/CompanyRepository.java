@@ -557,7 +557,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE Company c
-        SET c.telegramGroupChatId = :newChatId
+        SET c.telegramGroupChatId = :newChatId,
+            c.rowVersion = c.rowVersion + 1
         WHERE c.telegramGroupChatId = :oldChatId
     """)
     int updateTelegramGroupChatId(@Param("oldChatId") Long oldChatId, @Param("newChatId") Long newChatId);

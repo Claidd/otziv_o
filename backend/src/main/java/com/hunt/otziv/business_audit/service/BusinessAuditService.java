@@ -61,6 +61,33 @@ public class BusinessAuditService {
         }
     }
 
+    /**
+     * Records an audit event in an independent transaction and propagates any
+     * persistence failure to the caller. Use this for operations that must not
+     * disclose sensitive data unless a durable audit trail was committed first.
+     */
+    public void recordStrict(
+            String action,
+            String entityType,
+            Object entityId,
+            Long orderId,
+            Long reviewId,
+            Object oldValue,
+            Object newValue,
+            String details
+    ) {
+        transactionTemplate.executeWithoutResult(status -> repository.save(event(
+                action,
+                entityType,
+                entityId,
+                orderId,
+                reviewId,
+                oldValue,
+                newValue,
+                details
+        )));
+    }
+
     private BusinessAuditEvent event(
             String action,
             String entityType,

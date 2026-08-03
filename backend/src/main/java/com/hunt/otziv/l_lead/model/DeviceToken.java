@@ -24,7 +24,8 @@ public class DeviceToken {
     @Id
     @EqualsAndHashCode.Include
     @ToString.Include
-    private String token; // UUID
+    @Column(length = 64)
+    private String token; // SHA-256 hex digest; the bearer token is never persisted
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "telephone_id", nullable = false, unique = true)
@@ -33,6 +34,9 @@ public class DeviceToken {
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
 
     @Column(name = "active", nullable = false)
     @Builder.Default

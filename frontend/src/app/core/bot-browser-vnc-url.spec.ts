@@ -10,6 +10,7 @@ describe('prepareBotBrowserVncUrl', () => {
     'https://vnc.example.test/session%0d%0aLocation:https://evil.test',
     'https://vnc.example.test/session%00',
     'https://vnc.example.test/session%7f',
+    'http://vnc.example.test/session',
     '/relative/vnc/session',
     'not a url',
     'https://'
@@ -17,19 +18,29 @@ describe('prepareBotBrowserVncUrl', () => {
     expect(prepareBotBrowserVncUrl(rawUrl)).toBeNull();
   });
 
-  it.each(['http://vnc.example.test/session', 'https://vnc.example.test/session'])(
-    'accepts absolute HTTP(S) URL %s and adds client parameters',
+  it.each(['https://vnc.example.test/session', 'http://localhost:6080/session'])(
+    'accepts an explicitly allowed secure URL %s and adds client parameters',
     (rawUrl) => {
-      const prepared = prepareBotBrowserVncUrl(rawUrl);
+      const prepared = prepareBotBrowserVncUrl(rawUrl, {
+        pageOrigin: 'https://app.example.test',
+        allowedOrigins: [new URL(rawUrl).origin]
+      });
 
       expect(prepared).not.toBeNull();
       const url = new URL(prepared!);
       expect(['http:', 'https:']).toContain(url.protocol);
-      expect(url.host).toBe('vnc.example.test');
+      expect(url.host).toBe(new URL(rawUrl).host);
       expect(url.searchParams.get('autoconnect')).toBe('1');
       expect(url.searchParams.get('reconnect')).toBe('1');
       expect(url.searchParams.get('resize')).toBe('none');
       expect(url.searchParams.get('clip')).toBe('true');
     }
   );
+
+  it('rejects an HTTPS origin that was not configured', () => {
+    expect(prepareBotBrowserVncUrl('https://evil.example.test/session', {
+      pageOrigin: 'https://app.example.test',
+      allowedOrigins: ['https://vnc.example.test']
+    })).toBeNull();
+  });
 });

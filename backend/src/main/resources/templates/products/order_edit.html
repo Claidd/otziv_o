@@ -110,7 +110,7 @@
                                    th:text="${err}">Validation error</small>
                         </div>
 
-                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'WORKER', 'OWNER')" class="form-group">
+                        <div sec:authorize="hasAnyRole('ADMIN', 'MANAGER', 'OWNER')" class="form-group">
                             <label class="form-label" for="commentsCompany" >Укажите комментарий для уровня КОМПАНИИ</label>
                             <input type="text" id="commentsCompany" th:field="*{commentsCompany}" class="form-control"
                                    placeholder="* необязательное поле">

@@ -1,6 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { AuthService } from '../../core/auth.service';
+import { AuthService, safeAuthTarget } from '../../core/auth.service';
 
 @Component({
   selector: 'app-auth-restart',
@@ -55,16 +55,9 @@ export class AuthRestartComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
 
   ngOnInit(): void {
-    const target = this.safeTarget(this.route.snapshot.queryParamMap.get('target'));
+    const target = safeAuthTarget(this.route.snapshot.queryParamMap.get('target'));
     setTimeout(() => {
-      void this.auth.login(target);
+      void this.auth.restartLogin(target);
     }, 150);
-  }
-
-  private safeTarget(value: string | null): string {
-    if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/keycloak')) {
-      return '/';
-    }
-    return value;
   }
 }

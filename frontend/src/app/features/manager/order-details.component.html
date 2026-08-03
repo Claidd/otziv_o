@@ -807,7 +807,7 @@
                     type="button"
                     class="bad-review-task-action bad-review-task-action--copy"
                     (click)="copyBadReviewTaskField(task, 'botLogin')"
-                    [disabled]="!(task.botLogin || '').trim()"
+                    [disabled]="!task.botLoginPresent"
                   >
                     {{ copied() === badReviewTaskCopyKey(task, 'botLogin') ? 'готово' : 'логин' }}
                   </button>
@@ -815,7 +815,7 @@
                     type="button"
                     class="bad-review-task-action bad-review-task-action--copy"
                     (click)="copyBadReviewTaskField(task, 'botPassword')"
-                    [disabled]="!(task.botPassword || '').trim()"
+                    [disabled]="!task.botPasswordPresent"
                   >
                     {{ copied() === badReviewTaskCopyKey(task, 'botPassword') ? 'готово' : 'пароль' }}
                   </button>
@@ -1123,7 +1123,7 @@
                   type="button"
                   class="bad-review-task-action bad-review-task-action--copy"
                   (click)="copyBadReviewTaskField(task, 'botLogin')"
-                  [disabled]="!(task.botLogin || '').trim()"
+                  [disabled]="!task.botLoginPresent"
                 >
                   {{ copied() === badReviewTaskCopyKey(task, 'botLogin') ? 'готово' : 'логин' }}
                 </button>
@@ -1131,7 +1131,7 @@
                   type="button"
                   class="bad-review-task-action bad-review-task-action--copy"
                   (click)="copyBadReviewTaskField(task, 'botPassword')"
-                  [disabled]="!(task.botPassword || '').trim()"
+                  [disabled]="!task.botPasswordPresent"
                 >
                   {{ copied() === badReviewTaskCopyKey(task, 'botPassword') ? 'готово' : 'пароль' }}
                 </button>
@@ -1493,7 +1493,9 @@
                   <span>Пароль бота</span>
                   <input
                     name="reviewBotPassword"
-                    type="text"
+                    type="password"
+                    autocomplete="new-password"
+                    [placeholder]="editReview()?.botPasswordPresent ? 'Пароль сохранен — введите новый для замены' : 'Пароль не задан'"
                     [ngModel]="draft.botPassword"
                     (ngModelChange)="setReviewEditField('botPassword', $event)"
                   >

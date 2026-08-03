@@ -30,6 +30,11 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "order_id")
     private Long id;
+
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
+
     @CreationTimestamp
     @Column(name = "order_created")
     private LocalDate created;
@@ -116,6 +121,24 @@ public class Order {
             return !Objects.equals(current.getId(), next.getId());
         }
         return !Objects.equals(current.getTitle(), next.getTitle());
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof Order order)) {
+            return false;
+        }
+        return id != null && id.equals(order.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        // A stable class hash keeps managed entities safe inside Company's
+        // Set<Order> before and after an ID is assigned or mutable fields change.
+        return Order.class.hashCode();
     }
 
     @Override

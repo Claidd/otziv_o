@@ -286,6 +286,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly selectedPhone = signal<OperatorPhone | null>(null);
   readonly bots = signal<AdminBot[]>([]);
   readonly botDetailLoadingId = signal<number | null>(null);
+  readonly selectedBotPasswordPresent = signal(false);
   readonly promoTexts = signal<AdminPromoText[]>([]);
   readonly managerTexts = signal<AdminManagerText[]>([]);
   readonly promoManagers = signal<DictionaryOption[]>([]);
@@ -411,7 +412,7 @@ export class AdminDictionariesComponent implements OnDestroy {
 
   readonly botForm = this.fb.group({
     login: this.fb.nonNullable.control('', Validators.required),
-    password: this.fb.nonNullable.control('', Validators.required),
+    password: this.fb.nonNullable.control(''),
     fio: this.fb.nonNullable.control('', Validators.required),
     workerId: this.fb.control<number | null>(null, Validators.required),
     cityId: this.fb.control<number | null>(null),
@@ -1034,11 +1035,12 @@ export class AdminDictionariesComponent implements OnDestroy {
       amountSent: phone.amountSent,
       blockTime: phone.blockTime,
       timer: this.toDateTimeInput(phone.timer),
-      googleLogin: phone.googleLogin ?? '',
-      googlePassword: phone.googlePassword ?? '',
-      avitoPassword: phone.avitoPassword ?? '',
-      mailLogin: phone.mailLogin ?? '',
-      mailPassword: phone.mailPassword ?? '',
+      // Provider credentials are write-only. Blank fields preserve the stored values.
+      googleLogin: '',
+      googlePassword: '',
+      avitoPassword: '',
+      mailLogin: '',
+      mailPassword: '',
       fotoInstagram: phone.fotoInstagram ?? '',
       active: phone.active,
       createDate: this.toDateInput(phone.createDate),
@@ -1080,9 +1082,10 @@ export class AdminDictionariesComponent implements OnDestroy {
           return;
         }
         this.selectedId.set(details.id);
+        this.selectedBotPasswordPresent.set(details.passwordPresent);
         this.botForm.setValue({
           login: details.login,
-          password: details.password ?? '',
+          password: '',
           fio: details.fio,
           workerId: details.worker?.id ?? this.defaultBotWorkerId(),
           cityId: details.city?.id ?? this.defaultBotCityId(),
@@ -1125,6 +1128,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   clearSelection(): void {
     this.botDetailLoadEpoch += 1;
     this.botDetailLoadingId.set(null);
+    this.selectedBotPasswordPresent.set(false);
     this.selectedId.set(null);
     this.editingCategoryId.set(null);
     this.editingSubCategoryId.set(null);
@@ -2932,6 +2936,9 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   private saveBot(): void {
+    if (this.selectedId() == null && !this.botForm.controls.password.value.trim()) {
+      this.botForm.controls.password.setErrors({ required: true });
+    }
     if (this.botForm.invalid) {
       this.botForm.markAllAsTouched();
       return;

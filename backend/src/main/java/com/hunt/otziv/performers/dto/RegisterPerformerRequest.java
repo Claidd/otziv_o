@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.AssertTrue;
 import lombok.Data;
 
 @Data
@@ -33,4 +34,17 @@ public class RegisterPerformerRequest {
     @Size(max = 100)
     @Pattern(regexp = "^[^\\p{Cc}\\p{Zl}\\p{Zp}]*$")
     private String registeredSource;
+
+    /** Explicit user actions; policy versions are assigned by the server. */
+    @NotNull
+    @AssertTrue(message = "Необходимо согласие на обработку персональных данных")
+    private Boolean personalDataConsentAccepted;
+
+    @NotNull
+    @AssertTrue(message = "Необходимо принять правила для исполнителей")
+    private Boolean rulesConsentAccepted;
+
+    @NotNull
+    @AssertTrue(message = "Необходимо подтвердить правило честного отзыва")
+    private Boolean honestReviewConsentAccepted;
 }

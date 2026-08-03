@@ -343,10 +343,10 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                   }
 
                   <div class="review-actions task-actions">
-                    <button type="button" (click)="copyBadReviewTaskField(task, 'botLogin')" [disabled]="!task.botLogin">
+                    <button type="button" (click)="copyBadReviewTaskField(task, 'botLogin')" [disabled]="!task.botLoginPresent">
                       {{ copiedKey() === badReviewTaskCopyKey(task, 'botLogin') ? 'готово' : 'логин' }}
                     </button>
-                    <button type="button" (click)="copyBadReviewTaskField(task, 'botPassword')" [disabled]="!task.botPassword">
+                    <button type="button" (click)="copyBadReviewTaskField(task, 'botPassword')" [disabled]="!task.botPasswordPresent">
                       {{ copiedKey() === badReviewTaskCopyKey(task, 'botPassword') ? 'готово' : 'пароль' }}
                     </button>
                     <button type="button" (click)="changeBadReviewTaskBot(task)" [disabled]="!canEditBadReviewTask(task) || isMutating('bad-task-change-bot-' + task.id)">
@@ -452,10 +452,10 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                   ></textarea>
 
                   <div class="review-actions task-actions">
-                    <button type="button" (click)="copyRecoveryTaskField(task, 'botLogin')" [disabled]="!task.botLogin">
+                    <button type="button" (click)="copyRecoveryTaskField(task, 'botLogin')" [disabled]="!task.botLoginPresent">
                       {{ copiedKey() === recoveryTaskCopyKey(task, 'botLogin') ? 'готово' : 'логин' }}
                     </button>
-                    <button type="button" (click)="copyRecoveryTaskField(task, 'botPassword')" [disabled]="!task.botPassword">
+                    <button type="button" (click)="copyRecoveryTaskField(task, 'botPassword')" [disabled]="!task.botPasswordPresent">
                       {{ copiedKey() === recoveryTaskCopyKey(task, 'botPassword') ? 'готово' : 'пароль' }}
                     </button>
                     <a [href]="recoveryTaskBotBrowserUrl(task)" target="_blank" rel="noopener">вк</a>
@@ -758,9 +758,11 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                         <span>Пароль</span>
                         <input
                           name="reviewEditPassword"
-                          type="text"
+                          type="password"
+                          autocomplete="new-password"
                           [ngModel]="draft.botPassword"
                           (ngModelChange)="setReviewEditField('botPassword', $event)"
+                          [placeholder]="review.botPasswordPresent ? 'Пароль сохранен — введите новый для замены' : 'Пароль не задан'"
                           [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading()"
                         >
                       </label>
@@ -3291,8 +3293,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
     const values: Record<ReviewCopyKind, string> = {
       filialUrl: review.filialUrl,
-      botLogin: review.botLogin,
-      botPassword: review.botPassword,
+      botLogin: '',
+      botPassword: '',
       text: this.reviewFieldValue(review, 'text'),
       answer: this.reviewFieldValue(review, 'answer')
     };
@@ -3302,17 +3304,32 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
-    if (!(await this.copyText(values[kind] ?? '', `${review.id}-${kind}`, routeTicket))) {
-      return;
-    }
-
+    let value = values[kind] ?? '';
     if (kind === 'botLogin' || kind === 'botPassword') {
-      if (!(await this.logReviewCredentialCopyClick(review, kind, routeTicket))) {
+      try {
+        const response = await firstValueFrom(this.api.revealManagerOrderReviewCredential(
+          review.orderId,
+          review.id,
+          kind === 'botLogin' ? 'login' : 'password',
+          this.orderDetailsActivitySource()
+        ));
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
+        value = response.value ?? '';
+        if (response.credentialPreparation) {
+          this.applyServerReviewPublishCredentialPreparation(response.credentialPreparation);
+        }
+      } catch (error) {
+        if (this.isActiveOrderRoute(routeTicket)) {
+          this.error.set(this.errorMessage(error, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.'));
+        }
         return;
       }
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.markReviewCredentialCopied(review, kind);
-      }
+    }
+
+    if (!(await this.copyText(value, `${review.id}-${kind}`, routeTicket))) {
+      return;
     }
   }
 
@@ -3507,45 +3524,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
 
     return this.reviewHasTemplateBot(review) ? 'НУЖЕН ВЫГУЛ' : 'СМЕНИТЕ АККАУНТ';
-  }
-
-  private async logReviewCredentialCopyClick(
-    review: OrderReviewItem,
-    kind: ReviewCopyKind,
-    routeTicket: RouteEpochTicket
-  ): Promise<boolean> {
-    if (kind !== 'botLogin' && kind !== 'botPassword') {
-      return true;
-    }
-
-    const field = kind === 'botLogin' ? 'login' : 'password';
-    try {
-      await firstValueFrom(this.api.logWorkerReviewCopyClick(review.id, field, this.orderDetailsActivitySource()));
-      return this.isActiveOrderRoute(routeTicket);
-    } catch {
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.error.set('Данные скопированы, но сервер не подтвердил действие. Нажмите кнопку еще раз.');
-      }
-      return false;
-    }
-  }
-
-  private markReviewCredentialCopied(review: OrderReviewItem, kind: ReviewCopyKind): void {
-    if (kind !== 'botLogin' && kind !== 'botPassword') {
-      return;
-    }
-
-    const existing = this.copiedReviewCredentials()[review.id];
-    const botId = review.botId ?? null;
-    const base = existing?.botId === botId ? existing : { botId };
-    this.copiedReviewCredentials.set({
-      [review.id]: {
-        ...base,
-        [kind === 'botLogin' ? 'botLoginAt' : 'botPasswordAt']: Date.now()
-      }
-    });
-    this.refreshReviewPublishWaitTimer();
-    this.storeReviewPublishCredentialPreparation(review);
   }
 
   private reviewPublishWaitLeftSeconds(review: OrderReviewItem): number {
@@ -3768,11 +3746,28 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   async copyBadReviewTaskField(task: BadReviewTaskItem, kind: BadReviewTaskCopyKind): Promise<void> {
     const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
+    const orderId = this.orderId();
+    if (!routeTicket || !orderId
+      || (kind === 'botLogin' && !task.botLoginPresent)
+      || (kind === 'botPassword' && !task.botPasswordPresent)) {
       return;
     }
-    const value = kind === 'botLogin' ? task.botLogin : task.botPassword;
-    await this.copyText(value ?? '', this.badReviewTaskCopyKey(task, kind), routeTicket);
+    try {
+      const response = await firstValueFrom(this.api.revealManagerBadReviewTaskCredential(
+        orderId,
+        task.id,
+        kind === 'botLogin' ? 'login' : 'password',
+        this.orderDetailsActivitySource()
+      ));
+      if (!this.isActiveOrderRoute(routeTicket)) {
+        return;
+      }
+      await this.copyText(response.value ?? '', this.badReviewTaskCopyKey(task, kind), routeTicket);
+    } catch (error) {
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.'));
+      }
+    }
   }
 
   changeBadReviewTaskBot(task: BadReviewTaskItem): void {
@@ -3794,11 +3789,28 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   async copyRecoveryTaskField(task: ReviewRecoveryTaskItem, kind: RecoveryTaskCopyKind): Promise<void> {
     const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
+    const orderId = this.orderId();
+    if (!routeTicket || !orderId
+      || (kind === 'botLogin' && !task.botLoginPresent)
+      || (kind === 'botPassword' && !task.botPasswordPresent)) {
       return;
     }
-    const value = kind === 'botLogin' ? task.botLogin : task.botPassword;
-    await this.copyText(value ?? '', this.recoveryTaskCopyKey(task, kind), routeTicket);
+    try {
+      const response = await firstValueFrom(this.api.revealManagerRecoveryTaskCredential(
+        orderId,
+        task.id,
+        kind === 'botLogin' ? 'login' : 'password',
+        this.orderDetailsActivitySource()
+      ));
+      if (!this.isActiveOrderRoute(routeTicket)) {
+        return;
+      }
+      await this.copyText(response.value ?? '', this.recoveryTaskCopyKey(task, kind), routeTicket);
+    } catch (error) {
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.'));
+      }
+    }
   }
 
   recoveryTaskBotBrowserUrl(task: ReviewRecoveryTaskItem): string {
@@ -4391,8 +4403,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     const bot = this.normalizedBotFio(review);
     return (
-      !!review.botLogin?.trim() &&
-      !!review.botPassword?.trim() &&
+      review.botLoginPresent &&
+      review.botPasswordPresent &&
       !this.isPlaceholderBotName(bot) &&
       !this.isTemplateBotName(bot)
     );
@@ -4412,7 +4424,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return 'Это новый невыгулянный аккаунт со служебным именем "Впиши Имя Фамилию". Сначала отправьте его в выгул; после нормального имени он станет доступен для публикации.';
     }
 
-    if (!review.botLogin?.trim() || !review.botPassword?.trim()) {
+    if (!review.botLoginPresent || !review.botPasswordPresent) {
       return 'У назначенного аккаунта нет логина или пароля. Проверьте аккаунт или нажмите "смена".';
     }
 
@@ -4504,7 +4516,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       publish: !!review.publish,
       vigul: !!review.vigul,
       botName: review.botFio ?? '',
-      botPassword: review.botPassword ?? '',
+      botPassword: '',
       productId: review.productId ?? null,
       url: review.url || review.urlPhoto || ''
     };

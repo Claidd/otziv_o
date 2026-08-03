@@ -362,7 +362,7 @@ export class WorkerBoardEditFacade {
           publishedDate: updatedReview.publishedDate || null,
           vigul: !!updatedReview.vigul,
           botName: updatedReview.botFio ?? '',
-          botPassword: updatedReview.botPassword ?? ''
+          botPassword: ''
         } : this.toReviewEditDraft(updatedReview));
 
         this.reviewEditNewAccountSaving.set(false);
@@ -406,7 +406,7 @@ export class WorkerBoardEditFacade {
       publish: !!review.publish,
       vigul: !!review.vigul,
       botName: review.botFio ?? '',
-      botPassword: review.botPassword ?? '',
+      botPassword: '',
       productId: review.productId ?? null,
       filialId: review.filialId ?? null,
       url: review.url || review.urlPhoto || ''

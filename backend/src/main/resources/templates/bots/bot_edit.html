@@ -30,7 +30,10 @@
                     </div>
                     <div class="mb-3" >
                         <label for="inputPassword" class="form-label">Пароль</label>
-                        <input type="text" name="password" th:field="*{password}" th:value="${editBotDto.getPassword()}" class="form-control" id="inputPassword" aria-describedby="emailHelp">
+                        <input type="password" name="password" value="" class="form-control" id="inputPassword"
+                               autocomplete="new-password" aria-describedby="passwordHelp"
+                               placeholder="Оставьте пустым, чтобы сохранить текущий пароль">
+                        <small id="passwordHelp" class="form-text text-muted">Сохранённый пароль не показывается.</small>
                         <small class="form-text text-danger" th:each="err : ${#fields.errors('password')}" th:text="${err}">Validation error</small>
                     </div>
                     <div class="mb-3">

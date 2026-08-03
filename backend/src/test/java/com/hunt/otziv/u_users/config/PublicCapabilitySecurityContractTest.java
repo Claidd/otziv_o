@@ -31,6 +31,8 @@ import org.springframework.core.env.MapPropertySource;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,6 +52,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 class PublicCapabilitySecurityContractTest {
 
@@ -106,6 +109,22 @@ class PublicCapabilitySecurityContractTest {
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/review-check/contract-id/approve"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void reviewCheckUsesValidBearerButIgnoresExpiredBearer() throws Exception {
+        stubJwt("owner-review-token", "OWNER");
+        mockMvc.perform(get("/api/review-check/contract-id")
+                        .header("Authorization", "Bearer owner-review-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actor").value("owner"));
+
+        when(context.getBean(JwtDecoder.class).decode("expired-review-token"))
+                .thenThrow(new JwtException("expired"));
+        mockMvc.perform(get("/api/review-check/contract-id")
+                .header("Authorization", "Bearer expired-review-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actor").value("anonymous"));
     }
 
     @Test
@@ -338,8 +357,11 @@ class PublicCapabilitySecurityContractTest {
     static class ReviewCheckPublicProbe {
 
         @GetMapping("/api/review-check/{orderDetailId}")
-        Map<String, String> get(@PathVariable String orderDetailId) {
-            return Map.of("orderDetailId", orderDetailId);
+        Map<String, String> get(@PathVariable String orderDetailId, Authentication authentication) {
+            return Map.of(
+                    "orderDetailId", orderDetailId,
+                    "actor", authentication == null ? "anonymous" : authentication.getName()
+            );
         }
 
         @PutMapping({

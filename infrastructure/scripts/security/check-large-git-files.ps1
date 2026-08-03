@@ -11,7 +11,7 @@ param(
     [string]$ExcludeRemote = "",
 
     [ValidateRange(1, 10240)]
-    [int]$MaxBlobMiB = 95
+    [int]$MaxBlobMiB = 5
 )
 
 $ErrorActionPreference = "Stop"

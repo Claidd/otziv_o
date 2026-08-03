@@ -187,7 +187,7 @@ public class TelephoneServiceImpl implements TelephoneService {
 
 
     @Transactional
-    public void createTelephone(TelephoneDTO dto) {
+    public TelephoneDTO createTelephone(TelephoneDTO dto) {
         Operator operator = null;
         if (dto.getOperator() != null && dto.getOperator().getId() != null) {
             operator = operatorRepository.findById(dto.getOperator().getId())
@@ -215,7 +215,7 @@ public class TelephoneServiceImpl implements TelephoneService {
                 .telephoneOperator(operator)
                 .build();
 
-        telephoneRepository.save(tel);
+        return toDTO(telephoneRepository.save(tel));
     }
 
     public Telephone saveTelephone(Telephone telephone){

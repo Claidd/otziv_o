@@ -60,8 +60,9 @@ public class LeadServiceImpl implements LeadService {
     private final WhatsAppService whatsAppService;
     private final GamificationEventService gamificationEventService;
     private final AppSettingService appSettingService;
+    private final LeadAccessService leadAccessService;
 
-    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService, LeadMapper leadMapper, LeadEventPublisher leadEventPublisher, WhatsAppService whatsAppService, GamificationEventService gamificationEventService, AppSettingService appSettingService) {
+    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService, LeadMapper leadMapper, LeadEventPublisher leadEventPublisher, WhatsAppService whatsAppService, GamificationEventService gamificationEventService, AppSettingService appSettingService, LeadAccessService leadAccessService) {
         this.leadsRepository = leadsRepository;
         this.userRepository = userRepository;
         this.managerService = managerService;
@@ -75,6 +76,7 @@ public class LeadServiceImpl implements LeadService {
         this.whatsAppService = whatsAppService;
         this.gamificationEventService = gamificationEventService;
         this.appSettingService = appSettingService;
+        this.leadAccessService = leadAccessService;
     }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
@@ -379,11 +381,18 @@ public class LeadServiceImpl implements LeadService {
         }
         if ("ROLE_OWNER".equals(userRole)){
             log.debug("Зашли список лидов для владельца");
-            List<Manager> managerList = currentOwnerManagers(principal);
-            if (!keywords.isEmpty()){
-                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(status, keywords, managerList, pageable);
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                leadsPage = leadsRepository.findAllByLidStatus(status, pageable);
+            } else if (ownerScope.managers().isEmpty()) {
+                return Page.empty(pageable);
+            } else {
+                leadsPage = leadsRepository.findAllByLidStatusAndManagerToOwner(
+                        status,
+                        ownerScope.managers(),
+                        pageable
+                );
             }
-            else leadsPage =leadsRepository.findAllByLidStatusAndManagerToOwner(status, managerList, pageable);
             leadDTOs = leadsPage.getContent()
                     .stream()
                     .map(this::toDto)
@@ -418,13 +427,14 @@ public class LeadServiceImpl implements LeadService {
                     : leadsRepository.countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(status, keyword, marketolog);
         }
         if ("ROLE_OWNER".equals(userRole)) {
-            List<Manager> managerList = currentOwnerManagers(principal);
-            if (managerList.isEmpty()) {
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                return leadsRepository.countByLidStatus(status);
+            }
+            if (ownerScope.managers().isEmpty()) {
                 return 0;
             }
-            return keyword.isEmpty()
-                    ? leadsRepository.countByLidStatusAndManagerIn(status, managerList)
-                    : leadsRepository.countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerIn(status, keyword, managerList);
+            return leadsRepository.countByLidStatusAndManagerIn(status, ownerScope.managers());
         }
         return 0;
     }
@@ -488,12 +498,18 @@ public class LeadServiceImpl implements LeadService {
         }
         if ("ROLE_OWNER".equals(userRole)){
             log.debug("Зашли список лидов в работу для владельца");
-            List<Manager> managerList = currentOwnerManagers(principal);
-            if (!keywords.isEmpty()){
-//                leadsPage =leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndManagerToOwner(status, keywords, managerList, pageable);
-                leadsPage = leadsRepository.findByTelephoneLeadContainingIgnoreCaseAndManagerToOwner(keywords, managerList, pageable);
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                leadsPage = leadsRepository.findAllByLidStatus(status, pageable);
+            } else if (ownerScope.managers().isEmpty()) {
+                return Page.empty(pageable);
+            } else {
+                leadsPage = leadsRepository.findAllByLidStatusAndManagerToOwner(
+                        status,
+                        ownerScope.managers(),
+                        pageable
+                );
             }
-            else leadsPage =leadsRepository.findAllByLidStatusAndManagerToOwner(status, managerList, pageable);
             leadDTOs = leadsPage.getContent()
                     .stream()
                     .map(this::toDto)
@@ -528,13 +544,14 @@ public class LeadServiceImpl implements LeadService {
                     : leadsRepository.countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndMarketolog(status, keyword, marketolog);
         }
         if ("ROLE_OWNER".equals(userRole)) {
-            List<Manager> managerList = currentOwnerManagers(principal);
-            if (managerList.isEmpty()) {
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                return leadsRepository.countByLidStatus(status);
+            }
+            if (ownerScope.managers().isEmpty()) {
                 return 0;
             }
-            return keyword.isEmpty()
-                    ? leadsRepository.countByLidStatusAndManagerIn(status, managerList)
-                    : leadsRepository.countByTelephoneLeadContainingIgnoreCaseAndManagerIn(keyword, managerList);
+            return leadsRepository.countByLidStatusAndManagerIn(status, ownerScope.managers());
         }
         return 0;
     }
@@ -631,18 +648,31 @@ public class LeadServiceImpl implements LeadService {
         }
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)){
-            log.debug("Зашли список лидов для напоминания для админа/владельца");
-            if (!keyword.isEmpty()){
-                leadsPage = leadsRepository.findByLidStatusAndTelephoneLeadContainingIgnoreCaseAndDateNewTryLessThanEqual(
-                        status, keyword, today, pageable);
-            }
-            else leadsPage = leadsRepository.findByLidStatusAndDateNewTryLessThanEqual(status, today, pageable);
+        if ("ROLE_ADMIN".equals(userRole)){
+            log.debug("Зашли список лидов для напоминания для админа");
+            leadsPage = leadsRepository.findByLidStatusAndDateNewTryLessThanEqual(status, today, pageable);
             leadDTOs = leadsPage.getContent()
                     .stream()
                     .map(this::toDto)
                     .collect(Collectors.toList());
             return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+        }
+        if ("ROLE_OWNER".equals(userRole)) {
+            log.debug("Зашли список лидов для напоминания для владельца");
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                leadsPage = leadsRepository.findByLidStatusAndDateNewTryLessThanEqual(status, today, pageable);
+            } else if (ownerScope.managers().isEmpty()) {
+                return Page.empty(pageable);
+            } else {
+                leadsPage = leadsRepository.findByStatusAndManagerInAndDateNewTryLessThanEqual(
+                        status,
+                        ownerScope.managers(),
+                        today,
+                        pageable
+                );
+            }
+            return toDtoPage(leadsPage, pageable);
         }
         if ("ROLE_MANAGER".equals(userRole)){
             log.debug("Зашли список лидов для напоминания для менеджера");
@@ -684,11 +714,22 @@ public class LeadServiceImpl implements LeadService {
         if (!keyword.isEmpty()) {
             return countLeadsToDateReSendByKeyword(status, keyword, today, principal);
         }
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
-            return keyword.isEmpty()
-                    ? leadsRepository.countByLidStatusAndDateNewTryLessThanEqual(status, today)
-                    : leadsRepository.countByLidStatusAndTelephoneLeadContainingIgnoreCaseAndDateNewTryLessThanEqual(
-                            status, keyword, today);
+        if ("ROLE_ADMIN".equals(userRole)) {
+            return leadsRepository.countByLidStatusAndDateNewTryLessThanEqual(status, today);
+        }
+        if ("ROLE_OWNER".equals(userRole)) {
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                return leadsRepository.countByLidStatusAndDateNewTryLessThanEqual(status, today);
+            }
+            if (ownerScope.managers().isEmpty()) {
+                return 0;
+            }
+            return leadsRepository.countByStatusAndManagerInAndDateNewTryLessThanEqual(
+                    status,
+                    ownerScope.managers(),
+                    today
+            );
         }
         if ("ROLE_MANAGER".equals(userRole)) {
             Manager manager = currentManager(principal);
@@ -718,12 +759,34 @@ public class LeadServiceImpl implements LeadService {
         Pageable pageable = leadPageable(pageNumber, pageSize, sortDirection);
         Page<Lead> leadsPage;
         List<LeadDTO> leadDTOs = null;
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole) ){
-            log.debug("Зашли список лидов без статуса для админа/владельца");
+        if ("ROLE_ADMIN".equals(userRole)){
+            log.debug("Зашли список лидов без статуса для админа");
             if (!keyword.isEmpty()){
                 leadsPage = leadsRepository.searchByKeyword(keywordPattern(keyword), pageable);
             }
             else leadsPage = leadsRepository.findAll(pageable);
+            leadDTOs = leadsPage.getContent()
+                    .stream()
+                    .map(this::toDto)
+                    .filter(lead -> lead.getCreateDate().isBefore(LocalDate.now().plusDays(1)))
+                    .sorted(leadCreateDateComparator(sortDirection))
+                    .collect(Collectors.toList());
+            return new PageImpl<>(leadDTOs, pageable, leadsPage.getTotalElements());
+        }
+        if ("ROLE_OWNER".equals(userRole)) {
+            log.debug("Зашли список лидов без статуса для владельца");
+            if (!keyword.isEmpty()) {
+                leadsPage = findLeadsByKeyword(keyword, principal, pageable);
+            } else {
+                LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+                if (ownerScope.canReadAllManagers()) {
+                    leadsPage = leadsRepository.findAll(pageable);
+                } else if (ownerScope.managers().isEmpty()) {
+                    return Page.empty(pageable);
+                } else {
+                    leadsPage = leadsRepository.findAllByManagerToOwner(ownerScope.managers(), pageable);
+                }
+            }
             leadDTOs = leadsPage.getContent()
                     .stream()
                     .map(this::toDto)
@@ -769,10 +832,22 @@ public class LeadServiceImpl implements LeadService {
     public long countLeadsNoStatus(String keywords, Principal principal) {
         String userRole = getRole(principal);
         String keyword = normalizeKeyword(keywords);
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+        if ("ROLE_ADMIN".equals(userRole)) {
             return keyword.isEmpty()
                     ? leadsRepository.count()
                     : leadsRepository.countByKeyword(keywordPattern(keyword));
+        }
+        if ("ROLE_OWNER".equals(userRole)) {
+            if (!keyword.isEmpty()) {
+                return countLeadsByKeyword(keyword, principal);
+            }
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                return leadsRepository.count();
+            }
+            return ownerScope.managers().isEmpty()
+                    ? 0
+                    : leadsRepository.countByManagerIn(ownerScope.managers());
         }
         if ("ROLE_MANAGER".equals(userRole)) {
             Manager manager = currentManager(principal);
@@ -790,10 +865,13 @@ public class LeadServiceImpl implements LeadService {
             return leadsRepository.searchByKeyword(pattern, pageable);
         }
         if ("ROLE_OWNER".equals(userRole)) {
-            List<Manager> managerList = currentOwnerManagers(principal);
-            return managerList.isEmpty()
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                return leadsRepository.searchByKeyword(pattern, pageable);
+            }
+            return ownerScope.managers().isEmpty()
                     ? Page.empty(pageable)
-                    : leadsRepository.searchByKeywordAndManagerToOwner(pattern, managerList, pageable);
+                    : leadsRepository.searchByKeywordAndManagerToOwner(pattern, ownerScope.managers(), pageable);
         }
         if ("ROLE_MANAGER".equals(userRole)) {
             return leadsRepository.searchByKeywordAndManager(pattern, currentManager(principal), pageable);
@@ -811,10 +889,13 @@ public class LeadServiceImpl implements LeadService {
             return leadsRepository.countByKeyword(pattern);
         }
         if ("ROLE_OWNER".equals(userRole)) {
-            List<Manager> managerList = currentOwnerManagers(principal);
-            return managerList.isEmpty()
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                return leadsRepository.countByKeyword(pattern);
+            }
+            return ownerScope.managers().isEmpty()
                     ? 0
-                    : leadsRepository.countByKeywordAndManagerIn(pattern, managerList);
+                    : leadsRepository.countByKeywordAndManagerIn(pattern, ownerScope.managers());
         }
         if ("ROLE_MANAGER".equals(userRole)) {
             return leadsRepository.countByKeywordAndManager(pattern, currentManager(principal));
@@ -832,10 +913,18 @@ public class LeadServiceImpl implements LeadService {
             return leadsRepository.searchByStatusAndKeyword(status, pattern, pageable);
         }
         if ("ROLE_OWNER".equals(userRole)) {
-            List<Manager> managerList = currentOwnerManagers(principal);
-            return managerList.isEmpty()
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                return leadsRepository.searchByStatusAndKeyword(status, pattern, pageable);
+            }
+            return ownerScope.managers().isEmpty()
                     ? Page.empty(pageable)
-                    : leadsRepository.searchByStatusAndKeywordAndManagerIn(status, pattern, managerList, pageable);
+                    : leadsRepository.searchByStatusAndKeywordAndManagerIn(
+                            status,
+                            pattern,
+                            ownerScope.managers(),
+                            pageable
+                    );
         }
         if ("ROLE_MANAGER".equals(userRole)) {
             return leadsRepository.searchByStatusAndKeywordAndManager(status, pattern, currentManager(principal), pageable);
@@ -853,10 +942,17 @@ public class LeadServiceImpl implements LeadService {
             return leadsRepository.countByStatusAndKeyword(status, pattern);
         }
         if ("ROLE_OWNER".equals(userRole)) {
-            List<Manager> managerList = currentOwnerManagers(principal);
-            return managerList.isEmpty()
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                return leadsRepository.countByStatusAndKeyword(status, pattern);
+            }
+            return ownerScope.managers().isEmpty()
                     ? 0
-                    : leadsRepository.countByStatusAndKeywordAndManagerIn(status, pattern, managerList);
+                    : leadsRepository.countByStatusAndKeywordAndManagerIn(
+                            status,
+                            pattern,
+                            ownerScope.managers()
+                    );
         }
         if ("ROLE_MANAGER".equals(userRole)) {
             return leadsRepository.countByStatusAndKeywordAndManager(status, pattern, currentManager(principal));
@@ -876,8 +972,28 @@ public class LeadServiceImpl implements LeadService {
     ) {
         String userRole = getRole(principal);
         String pattern = keywordPattern(keyword);
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+        if ("ROLE_ADMIN".equals(userRole)) {
             return leadsRepository.searchByStatusAndDateNewTryLessThanEqualAndKeyword(status, dateNewTry, pattern, pageable);
+        }
+        if ("ROLE_OWNER".equals(userRole)) {
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                return leadsRepository.searchByStatusAndDateNewTryLessThanEqualAndKeyword(
+                        status,
+                        dateNewTry,
+                        pattern,
+                        pageable
+                );
+            }
+            return ownerScope.managers().isEmpty()
+                    ? Page.empty(pageable)
+                    : leadsRepository.searchByStatusAndManagerInAndDateNewTryLessThanEqualAndKeyword(
+                            status,
+                            ownerScope.managers(),
+                            dateNewTry,
+                            pattern,
+                            pageable
+                    );
         }
         if ("ROLE_MANAGER".equals(userRole)) {
             return leadsRepository.searchByStatusAndManagerAndDateNewTryLessThanEqualAndKeyword(
@@ -894,8 +1010,26 @@ public class LeadServiceImpl implements LeadService {
     private long countLeadsToDateReSendByKeyword(String status, String keyword, LocalDate dateNewTry, Principal principal) {
         String userRole = getRole(principal);
         String pattern = keywordPattern(keyword);
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
+        if ("ROLE_ADMIN".equals(userRole)) {
             return leadsRepository.countByStatusAndDateNewTryLessThanEqualAndKeyword(status, dateNewTry, pattern);
+        }
+        if ("ROLE_OWNER".equals(userRole)) {
+            LeadAccessService.OwnerReadScope ownerScope = currentOwnerReadScope();
+            if (ownerScope.canReadAllManagers()) {
+                return leadsRepository.countByStatusAndDateNewTryLessThanEqualAndKeyword(
+                        status,
+                        dateNewTry,
+                        pattern
+                );
+            }
+            return ownerScope.managers().isEmpty()
+                    ? 0
+                    : leadsRepository.countByStatusAndManagerInAndDateNewTryLessThanEqualAndKeyword(
+                            status,
+                            ownerScope.managers(),
+                            dateNewTry,
+                            pattern
+                    );
         }
         if ("ROLE_MANAGER".equals(userRole)) {
             return leadsRepository.countByStatusAndManagerAndDateNewTryLessThanEqualAndKeyword(
@@ -952,8 +1086,8 @@ public class LeadServiceImpl implements LeadService {
         return marketologService.getMarketologByUserId(currentUser(principal).getId());
     }
 
-    private List<Manager> currentOwnerManagers(Principal principal) {
-        return userService.findManagersByUserName(principal.getName()).stream().toList();
+    private LeadAccessService.OwnerReadScope currentOwnerReadScope() {
+        return leadAccessService.ownerReadScope(SecurityContextHolder.getContext().getAuthentication());
     }
 
     private String getRole(Principal principal){ // Берем роль пользователя

@@ -27,6 +27,7 @@ export class AdminPerformersComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly control = signal<AdminPerformerControl | null>(null);
   readonly statusReason = signal('');
+  readonly phoneVerificationConfirmed = signal<Record<number, boolean>>({});
   readonly rolloutEnabled = signal(false);
   readonly rolloutCityIds = signal('');
   readonly rolloutProductIds = signal('');
@@ -83,7 +84,10 @@ export class AdminPerformersComponent implements OnInit {
   updateStatus(performer: AdminPerformer, status: string): void {
     const key = `status-${performer.id}`;
     this.saving.set(key);
-    this.api.updatePerformerStatus(performer.id, status, this.statusReason()).subscribe({
+    const confirmsPhone = performer.status !== 'ACTIVE'
+      && status === 'ACTIVE'
+      && this.phoneVerificationConfirmed()[performer.id] === true;
+    this.api.updatePerformerStatus(performer.id, status, this.statusReason(), confirmsPhone).subscribe({
       next: () => {
         this.toast.success('Статус обновлен', performer.fio || performer.username);
         this.saving.set(null);
@@ -94,6 +98,10 @@ export class AdminPerformersComponent implements OnInit {
         this.saving.set(null);
       }
     });
+  }
+
+  setPhoneVerificationConfirmed(performerId: number, checked: boolean): void {
+    this.phoneVerificationConfirmed.update((current) => ({ ...current, [performerId]: checked }));
   }
 
   verifyAssignment(assignment: PerformerAssignment): void {

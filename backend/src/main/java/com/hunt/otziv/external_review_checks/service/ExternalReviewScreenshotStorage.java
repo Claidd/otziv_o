@@ -2,6 +2,7 @@ package com.hunt.otziv.external_review_checks.service;
 
 import com.hunt.otziv.external_review_checks.config.ExternalReviewCheckProperties;
 import com.hunt.otziv.external_review_checks.config.ExternalReviewTimeoutPolicy;
+import com.hunt.otziv.s3.cleanup.service.S3ObjectCleanupQueue;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -27,6 +28,7 @@ public class ExternalReviewScreenshotStorage {
 
     private final S3Client s3Client;
     private final ExternalReviewCheckProperties properties;
+    private final S3ObjectCleanupQueue cleanupQueue;
 
     @Value("${s3.bucket}")
     private String bucket;
@@ -109,8 +111,9 @@ public class ExternalReviewScreenshotStorage {
             s3Client.deleteObject(request);
             log.info("Удалён устаревший скриншот проверки: keyHash={}", keyFingerprint(key));
         } catch (RuntimeException exception) {
+            cleanupQueue.enqueueBestEffort(bucket, key, "external-review-screenshot");
             log.warn(
-                    "Не удалось удалить устаревший скриншот проверки: keyHash={}, failureType={}",
+                    "Не удалось удалить устаревший скриншот проверки; поставлен в очередь: keyHash={}, failureType={}",
                     keyFingerprint(key),
                     exception.getClass().getSimpleName()
             );

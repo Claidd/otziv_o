@@ -2,6 +2,7 @@ package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
+import com.hunt.otziv.performers.service.PerformerTelegramLinkService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
 import java.util.ArrayList;
@@ -50,6 +51,12 @@ class TelegramServiceUpdateHandlingTest {
 
     @Mock
     private ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider;
+
+    @Mock
+    private ObjectProvider<PerformerTelegramLinkService> performerTelegramLinkServiceProvider;
+
+    @Mock
+    private PerformerTelegramLinkService performerTelegramLinkService;
 
     @Mock
     private WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService;
@@ -150,6 +157,30 @@ class TelegramServiceUpdateHandlingTest {
     }
 
     @Test
+    void performerLinkIsHandledOnlyInPrivateChat() {
+        CapturingTelegramService service = service();
+        when(performerTelegramLinkServiceProvider.getIfAvailable()).thenReturn(performerTelegramLinkService);
+        when(performerTelegramLinkService.handleStartCommand(123L, "/start performer_token"))
+                .thenReturn(Optional.of("Заявка привязана"));
+
+        service.onUpdateReceived(textUpdate(123L, "private", "/start performer_token"));
+
+        verify(performerTelegramLinkService).handleStartCommand(123L, "/start performer_token");
+        assertEquals("Заявка привязана", service.sentMessages.getFirst().getText());
+    }
+
+    @Test
+    void performerLinkTokenCannotBindAGroupChat() {
+        CapturingTelegramService service = service();
+        when(telegramGroupLinkService.handleGroupStartCommand(-100123L, "/start performer_token"))
+                .thenReturn(Optional.empty());
+
+        service.onUpdateReceived(textUpdate(-100123L, "supergroup", "/start performer_token"));
+
+        verify(performerTelegramLinkServiceProvider, never()).getIfAvailable();
+    }
+
+    @Test
     void selectiveForceReplyTargetsOnlyMentionedWorker() {
         CapturingTelegramService service = service();
 
@@ -192,6 +223,7 @@ class TelegramServiceUpdateHandlingTest {
                 userService,
                 telegramGroupLinkService,
                 publicationProgressPreferenceService,
+                performerTelegramLinkServiceProvider,
                 workerRiskTelegramCallbackServiceProvider
         );
     }
@@ -272,6 +304,7 @@ class TelegramServiceUpdateHandlingTest {
                 UserService userService,
                 TelegramGroupLinkService telegramGroupLinkService,
                 PublicationProgressPreferenceService publicationProgressPreferenceService,
+                ObjectProvider<PerformerTelegramLinkService> performerTelegramLinkServiceProvider,
                 ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider
         ) {
             super(new DefaultBotOptions(),
@@ -283,7 +316,12 @@ class TelegramServiceUpdateHandlingTest {
                     userService,
                     telegramGroupLinkService,
                     publicationProgressPreferenceService,
-                    workerRiskTelegramCallbackServiceProvider);
+                    performerTelegramLinkServiceProvider,
+                    null,
+                    workerRiskTelegramCallbackServiceProvider,
+                    null,
+                    null,
+                    null);
         }
 
         @Override

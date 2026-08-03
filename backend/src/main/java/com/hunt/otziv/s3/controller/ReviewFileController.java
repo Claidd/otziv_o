@@ -32,8 +32,13 @@ public class ReviewFileController {
 
         String oldUrl = review.getUrl();
         String newUrl = s3UploadService.uploadFile(file, "reviews", oldUrl, review.getId());
-        review.setUrl(newUrl);
-        reviewRepository.save(review);
+        try {
+            review.setUrl(newUrl);
+            reviewRepository.save(review);
+        } catch (RuntimeException exception) {
+            s3UploadService.deleteFileAfterCommit(newUrl, "reviews", review.getId());
+            throw exception;
+        }
         s3UploadService.deleteFileAfterCommit(oldUrl, "reviews", review.getId());
 
         redirectAttributes.addFlashAttribute("saveSuccess", true);

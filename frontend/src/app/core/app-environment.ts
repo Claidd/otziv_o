@@ -13,6 +13,7 @@ export const appEnvironment = {
   apiBaseUrl: '',
   backendBaseUrl: '',
   metricsBaseUrl: isLocalAngularDevServer ? `http://localhost:3000${metricsDashboardPath}` : `/grafana${metricsDashboardPath}`,
+  botBrowserVncAllowedOrigins: [] as readonly string[],
   keycloak: {
     url: isLocalAngularDevServer ? 'http://localhost:8180' : '/keycloak',
     realm: 'otziv',

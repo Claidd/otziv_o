@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -28,26 +29,39 @@ public class PerformerTelegramLinkService {
             return Optional.empty();
         }
 
-        PerformerProfile performer = performerProfileRepository.findByTelegramLinkToken(token)
+        PerformerProfile performer = performerProfileRepository.findByTelegramLinkTokenForUpdate(token)
                 .orElse(null);
         if (performer == null) {
             return Optional.of("Не удалось привязать Telegram: ссылка устарела или неверная.");
         }
 
+        LocalDateTime now = LocalDateTime.now();
+        if (performer.getStatus() != PerformerProfileStatus.NEW
+                || performer.getRegistrationExpiresAt() == null
+                || !performer.getRegistrationExpiresAt().isAfter(now)) {
+            performer.setTelegramLinkToken(null);
+            if (performer.getStatus() == PerformerProfileStatus.NEW) {
+                performer.setStatus(PerformerProfileStatus.REJECTED);
+                performer.setBlockReason("Срок публичной заявки истёк");
+            }
+            performerProfileRepository.save(performer);
+            return Optional.of("Не удалось привязать Telegram: срок заявки истёк. Отправьте новую заявку.");
+        }
+
         User user = performer.getUser();
+        Optional<User> existingChatOwner = userRepository.findByTelegramChatId(chatId);
+        if (existingChatOwner.isPresent() && !Objects.equals(existingChatOwner.get().getId(), user.getId())) {
+            return Optional.of("Этот Telegram уже привязан к другой учётной записи. Обратитесь к администратору.");
+        }
         user.setTelegramChatId(chatId);
         userRepository.save(user);
 
-        performer.setTelegramLinkedAt(LocalDateTime.now());
+        performer.setTelegramLinkedAt(now);
         performer.setTelegramLinkToken(null);
-        performer.setLastActiveAt(LocalDateTime.now());
-        if (performer.getStatus() == PerformerProfileStatus.NEW) {
-            performer.setStatus(PerformerProfileStatus.ACTIVE);
-        }
         performerProfileRepository.save(performer);
 
         String name = hasText(user.getFio()) ? user.getFio().trim() : user.getUsername();
-        return Optional.of("Telegram привязан. Добро пожаловать, " + name + "! Задания будут приходить сюда и в личный кабинет.");
+        return Optional.of("Telegram привязан, " + name + ". Заявка ожидает ручной проверки телефона и активации администратором.");
     }
 
     private String extractToken(String messageText) {

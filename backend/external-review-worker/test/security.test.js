@@ -16,10 +16,14 @@ import {
   UnsafeTargetError,
 } from "../src/url-security.js";
 import { chromiumLaunchArgs } from "../src/chromium-security.js";
+import { resolvePinnedTarget } from "../src/dns-pinning-proxy.js";
 
 test("Chromium sandbox cannot be disabled by worker configuration", () => {
-  assert.equal(chromiumLaunchArgs().includes("--no-sandbox"), false);
-  assert.equal(chromiumLaunchArgs().includes("--disable-setuid-sandbox"), false);
+  const args = chromiumLaunchArgs();
+  assert.equal(args.includes("--no-sandbox"), false);
+  assert.equal(args.includes("--disable-setuid-sandbox"), false);
+  assert.equal(args.includes("--disable-quic"), true);
+  assert.equal(args.includes("--force-webrtc-ip-handling-policy=disable_non_proxied_udp"), true);
 });
 
 test("request-body configuration cannot exceed the hard worker ceiling", () => {
@@ -171,6 +175,24 @@ test("request guard re-resolves redirects and aborts a rebinding target", async 
   assert.equal(first.continued, true);
   assert.equal(second.aborted, "blockedbyclient");
   assert.deepEqual(blocked, ["blocked_address"]);
+});
+
+test("pinning proxy connects to the validated numeric answer and rejects a rebound answer", async () => {
+  let lookupCount = 0;
+  const lookup = async () => {
+    lookupCount += 1;
+    return [{ address: lookupCount === 1 ? "8.8.8.8" : "127.0.0.1", family: 4 }];
+  };
+
+  const first = await resolvePinnedTarget("https://maps.example.org/reviews", { lookup });
+  assert.equal(first.address, "8.8.8.8");
+  assert.equal(first.authority, "8.8.8.8:443");
+  assert.equal(first.url.hostname, "maps.example.org");
+
+  await assert.rejects(
+    resolvePinnedTarget("https://maps.example.org/reviews", { lookup }),
+    UnsafeTargetError,
+  );
 });
 
 function requestWithHeader(value) {

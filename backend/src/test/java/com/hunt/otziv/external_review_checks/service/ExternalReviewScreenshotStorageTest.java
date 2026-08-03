@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.hunt.otziv.external_review_checks.config.ExternalReviewCheckProperties;
+import com.hunt.otziv.s3.cleanup.service.S3ObjectCleanupQueue;
 import java.time.Duration;
 import java.util.Base64;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,7 +32,11 @@ class ExternalReviewScreenshotStorageTest {
         properties = new ExternalReviewCheckProperties();
         properties.setScreenshotMaxBytes(1024);
         properties.setScreenshotUploadTimeout(Duration.ofSeconds(12));
-        storage = new ExternalReviewScreenshotStorage(s3Client, properties);
+        storage = new ExternalReviewScreenshotStorage(
+                s3Client,
+                properties,
+                mock(S3ObjectCleanupQueue.class)
+        );
         ReflectionTestUtils.setField(storage, "bucket", "screenshots");
         ReflectionTestUtils.setField(storage, "projectId", "project");
         ReflectionTestUtils.setField(storage, "publicBaseUrl", "https://cdn.example/");

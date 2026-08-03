@@ -23,11 +23,13 @@ export interface OperatorPhone {
   amountSent: number;
   blockTime: number;
   timer?: string | null;
-  googleLogin?: string | null;
-  googlePassword?: string | null;
-  avitoPassword?: string | null;
-  mailLogin?: string | null;
-  mailPassword?: string | null;
+  googleLoginMasked?: string | null;
+  googleLoginPresent: boolean;
+  googlePasswordPresent: boolean;
+  avitoPasswordPresent: boolean;
+  mailLoginMasked?: string | null;
+  mailLoginPresent: boolean;
+  mailPasswordPresent: boolean;
   fotoInstagram?: string | null;
   active: boolean;
   createDate?: string | null;

@@ -13,7 +13,6 @@ public record ArchiveReviewItem(
         String subCategory,
         Long botId,
         String botFio,
-        String botLogin,
         Long productId,
         String productTitle,
         String workerFio,

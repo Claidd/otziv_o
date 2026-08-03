@@ -30,6 +30,10 @@ public class OrderDetails {
     @Column(name = "order_detail_id")
     private UUID id;
 
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_detail_order")
     private Order order;

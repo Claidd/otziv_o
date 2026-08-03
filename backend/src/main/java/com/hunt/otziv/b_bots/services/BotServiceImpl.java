@@ -76,6 +76,9 @@ public class BotServiceImpl implements BotService {
         // Repeat the fresh role check inside the same write transaction and
         // keep the matching user/role rows locked until the bot is persisted.
         botCrudAccessService.requireCreateAccess(authentication);
+        if (botDTO == null || botDTO.getPassword() == null || botDTO.getPassword().isBlank()) {
+            throw new IllegalArgumentException("Пароль нового аккаунта не может быть пустым");
+        }
         botsRepository.save(toEntity(botDTO, authentication));
         return true;
     } // Создать нового бота
@@ -100,7 +103,7 @@ public class BotServiceImpl implements BotService {
             log.info("Обновили телефон-логин");
         }
         /*Проверяем, не равен ли пароль предыдущему */
-        if (botDTO.getPassword() != null && !botDTO.getPassword().isEmpty() && !Objects.equals(botDTO.getPassword(), saveBot.getPassword())){
+        if (botDTO.getPassword() != null && !botDTO.getPassword().isBlank() && !Objects.equals(botDTO.getPassword(), saveBot.getPassword())){
             saveBot.setPassword(botDTO.getPassword());
             isChanged = true;
             log.info("Обновили пароль");
@@ -234,7 +237,9 @@ public class BotServiceImpl implements BotService {
     public List<BotDTO> getAllBotsByWorkerActiveIsTrue(Authentication authentication){ // Взять всех ботов по работнику и активности
         botCrudAccessService.requireCreateAccess(authentication);
         Worker worker = workerService.getWorkerByUserId(Objects.requireNonNull(userService.findByUserName(authentication.getName()).orElse(null)).getId());
-        return botsRepository.findAllByWorkerAndActiveIsTrue(worker).stream().map(this::toDto).collect(Collectors.toList());
+        return botsRepository.findAllByWorkerAndActiveIsTrue(worker).stream()
+                .map(this::toWorkerCredentialDto)
+                .collect(Collectors.toList());
     } // Взять всех ботов по работнику и активности
 
     public List<Bot> getFindAllByFilialCityId(Long cityId){ // Взять всех ботов по id работнику и активности
@@ -428,7 +433,6 @@ public class BotServiceImpl implements BotService {
         return BotDTO.builder()
                 .id(bot.getId())
                 .login(bot.getLogin())
-                .password(bot.getPassword())
                 .fio(bot.getFio())
                 .active(bot.isActive())
                 .counter(bot.getCounter())
@@ -437,6 +441,17 @@ public class BotServiceImpl implements BotService {
                 .botCity(bot.getBotCity())
                 .build();
     } // Перевод бота в дто - конец
+
+    /**
+     * Credentials are populated only for the worker-owned account workflow.
+     * Generic admin/list/edit mappings remain write-only and never carry the
+     * decrypted password into a view model.
+     */
+    private BotDTO toWorkerCredentialDto(Bot bot) {
+        BotDTO dto = toDto(bot);
+        dto.setPassword(bot.getPassword());
+        return dto;
+    }
 
     //    =============================== ПЕРЕВОД ДТО В СУЩНОСТЬ - НАЧАЛО =========================================
     public Bot toEntity(BotDTO botDTO, Principal principal){ // Перевод дто в сущность

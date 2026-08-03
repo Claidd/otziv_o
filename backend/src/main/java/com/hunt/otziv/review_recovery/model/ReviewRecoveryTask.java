@@ -3,10 +3,12 @@ package com.hunt.otziv.review_recovery.model;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.security.credentials.EncryptedCredentialConverter;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -156,6 +158,7 @@ public class ReviewRecoveryTask {
     @Column(name = "review_recovery_task_bot_login_snapshot")
     private String botLoginSnapshot;
 
+    @Convert(converter = EncryptedCredentialConverter.class)
     @Column(name = "review_recovery_task_bot_password_snapshot")
     private String botPasswordSnapshot;
 

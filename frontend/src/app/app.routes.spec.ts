@@ -11,7 +11,6 @@ describe('routes', () => {
     [
       '',
       'register-client',
-      'legacy-migration',
       'pay/success',
       'pay/fail',
       'pay/group/:token',
@@ -45,6 +44,10 @@ describe('routes', () => {
       expect(typeof route(path)?.loadComponent).toBe('function');
       expect(route(path)?.component).toBeUndefined();
     });
+  });
+
+  it('does not expose the retired legacy migration route', () => {
+    expect(route('legacy-migration')).toBeUndefined();
   });
 
   it('keeps review edit route public', () => {

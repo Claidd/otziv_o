@@ -1,6 +1,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { EventEmitter } = require("node:events");
 const test = require("node:test");
 const {
@@ -73,6 +75,11 @@ test("gateway concurrency bound releases slots on both close and finish", () => 
   third.emit("finish");
   middleware({}, responseStub(), () => { fifthAccepted = true; });
   assert.equal(fifthAccepted, true);
+});
+
+test("WhatsApp Chromium keeps its Linux sandbox enabled", () => {
+  const source = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
+  assert.doesNotMatch(source, /--no-sandbox|--disable-setuid-sandbox/u);
 });
 
 function requestWithHeader(value) {

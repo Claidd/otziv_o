@@ -111,7 +111,7 @@ export class AdminLayoutComponent {
       'manager-control', 'team', 'score', 'manager-control-self', 'notification-media', 'analytics', 'training',
       'company-archive', 'cities', 'archive-admin', 'workload-monitor', 'performers-admin',
       'tbank', 'common-billing', 'reputation-ai', 'dictionaries', 'users', 'new-user',
-      'migration', 'mobile-update', 'metrics'
+      'mobile-update', 'metrics'
     ]),
     APP_LOGOUT_LINK
   ];

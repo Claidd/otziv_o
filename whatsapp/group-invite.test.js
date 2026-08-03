@@ -19,6 +19,15 @@ test("serializes WhatsApp group wid variants", () => {
   assert.equal(serializedGroupId({ user: "120363502", server: "g.us" }), "120363502@g.us");
   assert.equal(serializedGroupId("120363503"), "120363503@g.us");
   assert.equal(serializedGroupId({ user: "79000000000", server: "c.us" }), "");
+  for (const invalid of [
+    "../../internal@g.us",
+    "1203--63503@g.us",
+    "120363503@evil.example",
+    "1@g.us",
+    `${"1".repeat(81)}@g.us`,
+  ]) {
+    assert.equal(serializedGroupId(invalid), "");
+  }
 });
 
 test("builds a group from direct invite information", () => {

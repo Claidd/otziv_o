@@ -56,8 +56,8 @@ function workerReview(overrides: Partial<WorkerReviewItem> = {}): WorkerReviewIt
     category: '',
     subCategory: '',
     botFio: 'Bot',
-    botLogin: 'login',
-    botPassword: 'pass',
+    botLoginPresent: true,
+    botPasswordPresent: true,
     botCounter: 0,
     companyTitle: 'Company',
     commentCompany: 'company note',
@@ -92,8 +92,8 @@ function orderReview(overrides: Partial<OrderReviewItem> = {}): OrderReviewItem 
     category: '',
     subCategory: '',
     botFio: 'Bot',
-    botLogin: 'login',
-    botPassword: 'pass',
+    botLoginPresent: true,
+    botPasswordPresent: true,
     botCounter: 0,
     companyTitle: 'Company',
     commentCompany: 'company note',
@@ -394,7 +394,7 @@ describe('WorkerBoardEditFacade', () => {
         publishedDate: '2026-06-01',
         vigul: false,
         botFio: 'Впиши Имя Фамилию',
-        botPassword: 'new-password'
+        botPasswordPresent: true
       })
     });
 
@@ -406,5 +406,6 @@ describe('WorkerBoardEditFacade', () => {
     expect(state.lastReviewRequest?.publishedDate).toBe('2026-06-01');
     expect(state.lastReviewRequest?.vigul).toBe(false);
     expect(state.lastReviewRequest?.botName).toBe('Впиши Имя Фамилию');
+    expect(state.lastReviewRequest?.botPassword).toBe('');
   });
 });

@@ -13,8 +13,8 @@ function review(overrides: Partial<WorkerReviewItem> = {}): WorkerReviewItem {
     subCategory: 'Subcategory',
     botId: 11,
     botFio: 'Bot Name',
-    botLogin: 'bot-login',
-    botPassword: 'bot-password',
+    botLoginPresent: true,
+    botPasswordPresent: true,
     botCounter: 2,
     companyTitle: 'Company',
     commentCompany: 'Company note',
@@ -415,7 +415,7 @@ describe('WorkerReviewCardComponent', () => {
 
   it('blocks publication when account credentials are incomplete', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
-    fixture.componentInstance.review = review({ botPassword: '' });
+    fixture.componentInstance.review = review({ botPasswordPresent: false });
     fixture.componentInstance.activeSection = 'publish';
     let repairMessage = '';
     let doneEmitted = false;

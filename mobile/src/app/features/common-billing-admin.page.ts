@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -576,7 +576,7 @@ type CommonBillingDraft = {
     }
   `]
 })
-export class CommonBillingAdminPage implements OnInit {
+export class CommonBillingAdminPage implements OnInit, OnDestroy {
   readonly accounts = signal<CommonBillingAccountResponse[]>([]);
   readonly selectedAccountId = signal<number | null>(null);
   readonly details = signal<CommonInvoiceDetailsResponse | null>(null);
@@ -609,6 +609,11 @@ export class CommonBillingAdminPage implements OnInit {
   );
 
   private companySearchTimer: ReturnType<typeof setTimeout> | null = null;
+  private companySearchGeneration = 0;
+  private accountLoadGeneration = 0;
+  private invoiceLoadGeneration = 0;
+  private mutationGeneration = 0;
+  private destroyed = false;
 
   constructor(
     private readonly api: ApiService,
@@ -618,6 +623,18 @@ export class CommonBillingAdminPage implements OnInit {
 
   ngOnInit(): void {
     void this.load();
+  }
+
+  ngOnDestroy(): void {
+    this.destroyed = true;
+    this.companySearchGeneration += 1;
+    this.accountLoadGeneration += 1;
+    this.invoiceLoadGeneration += 1;
+    this.mutationGeneration += 1;
+    if (this.companySearchTimer) {
+      clearTimeout(this.companySearchTimer);
+      this.companySearchTimer = null;
+    }
   }
 
   async refresh(event: RefresherCustomEvent): Promise<void> {
@@ -630,20 +647,31 @@ export class CommonBillingAdminPage implements OnInit {
   }
 
   async load(): Promise<void> {
+    if (this.mutating()) {
+      return;
+    }
+    const generation = ++this.accountLoadGeneration;
     this.loading.set(true);
     try {
       const accounts = await firstValueFrom(this.api.getCommonBillingAccounts());
+      if (!this.isCurrentAccountLoad(generation)) {
+        return;
+      }
       this.accounts.set(accounts);
       const selectedId = this.selectedAccountId();
       const selected = accounts.find((account) => account.id === selectedId) ?? accounts[0] ?? null;
       this.selectedAccountId.set(selected?.id ?? null);
       this.applyDraftFromAccount(selected);
-      await this.loadSelectedInvoice();
       this.error.set(null);
+      await this.loadSelectedInvoice();
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось загрузить общие счета.'));
+      if (this.isCurrentAccountLoad(generation)) {
+        this.error.set(this.errorMessage(error, 'Не удалось загрузить общие счета.'));
+      }
     } finally {
-      this.loading.set(false);
+      if (this.isCurrentAccountLoad(generation)) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -651,6 +679,12 @@ export class CommonBillingAdminPage implements OnInit {
     if (this.selectedAccountId() === accountId) {
       return;
     }
+    this.accountLoadGeneration += 1;
+    this.loading.set(false);
+    this.invoiceLoadGeneration += 1;
+    this.mutationGeneration += 1;
+    this.mutating.set(null);
+    this.details.set(null);
     this.selectedAccountId.set(accountId);
     this.draftCompanies.set([]);
     this.applyDraftFromAccount(this.selectedAccount());
@@ -658,6 +692,11 @@ export class CommonBillingAdminPage implements OnInit {
   }
 
   startNewAccount(): void {
+    this.accountLoadGeneration += 1;
+    this.loading.set(false);
+    this.invoiceLoadGeneration += 1;
+    this.mutationGeneration += 1;
+    this.mutating.set(null);
     this.selectedAccountId.set(null);
     this.details.set(null);
     this.companyResults.set([]);
@@ -677,7 +716,7 @@ export class CommonBillingAdminPage implements OnInit {
 
   setNumericDraft(field: 'managerId' | 'invoiceCompanyId', value: string | number | null): void {
     const normalized = Number(value);
-    this.setDraft(field, Number.isFinite(normalized) && normalized > 0 ? normalized : null);
+    this.setDraft(field, Number.isSafeInteger(normalized) && normalized > 0 ? normalized : null);
   }
 
   canSaveAccount(): boolean {
@@ -690,37 +729,63 @@ export class CommonBillingAdminPage implements OnInit {
     }
 
     const selected = this.selectedAccount();
+    const selectedAccountId = selected?.id ?? null;
     const request = this.accountRequest();
+    const mutationGeneration = ++this.mutationGeneration;
+    this.invalidateAccountLoad();
     this.mutating.set('account');
     try {
       const account = selected
         ? await firstValueFrom(this.api.updateCommonBillingAccount(selected.id, request))
         : await firstValueFrom(this.api.createCommonBillingAccount(request));
+      if (!this.isCurrentMutation(mutationGeneration, selectedAccountId)) {
+        return;
+      }
       this.upsertAccount(account);
       this.selectedAccountId.set(account.id);
       this.draftCompanies.set([]);
       this.applyDraftFromAccount(account);
-      await this.loadSelectedInvoice();
       this.error.set(null);
+      await this.loadSelectedInvoice();
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось сохранить общий счет.'));
+      if (this.isCurrentMutation(mutationGeneration, selectedAccountId)) {
+        this.error.set(this.errorMessage(error, 'Не удалось сохранить общий счет.'));
+      }
     } finally {
-      this.mutating.set(null);
+      if (this.isCurrentMutationGeneration(mutationGeneration)) {
+        this.mutating.set(null);
+      }
     }
   }
 
   onCompanyKeywordChange(value: string): void {
     this.companyKeyword.set(value);
+    const generation = ++this.companySearchGeneration;
     if (this.companySearchTimer) {
       clearTimeout(this.companySearchTimer);
+      this.companySearchTimer = null;
     }
-    this.companySearchTimer = setTimeout(() => void this.searchCompanies(), 320);
-  }
-
-  async searchCompanies(): Promise<void> {
-    const keyword = this.companyKeyword().trim();
+    const keyword = value.trim();
     if (keyword.length < 2) {
       this.companyResults.set([]);
+      this.companySearchLoading.set(false);
+      return;
+    }
+    this.companySearchTimer = setTimeout(() => {
+      this.companySearchTimer = null;
+      void this.searchCompanies(keyword, generation);
+    }, 320);
+  }
+
+  async searchCompanies(
+    keyword = this.companyKeyword().trim(),
+    generation = ++this.companySearchGeneration
+  ): Promise<void> {
+    if (keyword.length < 2) {
+      if (this.isCurrentCompanySearch(generation, keyword)) {
+        this.companyResults.set([]);
+        this.companySearchLoading.set(false);
+      }
       return;
     }
 
@@ -734,12 +799,18 @@ export class CommonBillingAdminPage implements OnInit {
         pageSize: 8,
         sortDirection: 'desc'
       }));
-      this.companyResults.set(board.companies?.content ?? []);
-      this.error.set(null);
+      if (this.isCurrentCompanySearch(generation, keyword)) {
+        this.companyResults.set(board.companies?.content ?? []);
+        this.error.set(null);
+      }
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось найти компании.'));
+      if (this.isCurrentCompanySearch(generation, keyword)) {
+        this.error.set(this.errorMessage(error, 'Не удалось найти компании.'));
+      }
     } finally {
-      this.companySearchLoading.set(false);
+      if (this.isCurrentCompanySearch(generation, keyword)) {
+        this.companySearchLoading.set(false);
+      }
     }
   }
 
@@ -754,17 +825,27 @@ export class CommonBillingAdminPage implements OnInit {
       return;
     }
 
-    this.mutating.set(`add-company-${company.id}`);
+    const mutationGeneration = ++this.mutationGeneration;
+    const mutationKey = `add-company-${company.id}`;
+    this.invalidateAccountLoad();
+    this.mutating.set(mutationKey);
     try {
       const updated = await firstValueFrom(this.api.addCommonBillingCompany(account.id, company.id));
+      if (!this.isCurrentMutation(mutationGeneration, account.id)) {
+        return;
+      }
       this.upsertAccount(updated);
       this.applyDraftFromAccount(updated);
-      await this.loadSelectedInvoice();
       this.error.set(null);
+      await this.loadSelectedInvoice();
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось добавить компанию в связь.'));
+      if (this.isCurrentMutation(mutationGeneration, account.id)) {
+        this.error.set(this.errorMessage(error, 'Не удалось добавить компанию в связь.'));
+      }
     } finally {
-      this.mutating.set(null);
+      if (this.isCurrentMutationGeneration(mutationGeneration) && this.mutating() === mutationKey) {
+        this.mutating.set(null);
+      }
     }
   }
 
@@ -789,39 +870,93 @@ export class CommonBillingAdminPage implements OnInit {
     if (!confirmed) {
       return;
     }
+    if (this.selectedAccountId() !== account.id || this.mutating()) {
+      return;
+    }
 
-    this.mutating.set(`remove-company-${company.companyId}`);
+    const mutationGeneration = ++this.mutationGeneration;
+    const mutationKey = `remove-company-${company.companyId}`;
+    this.invalidateAccountLoad();
+    this.mutating.set(mutationKey);
     try {
       const updated = await firstValueFrom(this.api.removeCommonBillingCompany(account.id, company.companyId, detachCurrent));
+      if (!this.isCurrentMutation(mutationGeneration, account.id)) {
+        return;
+      }
       this.upsertAccount(updated);
       this.applyDraftFromAccount(updated);
-      await this.loadSelectedInvoice();
       this.error.set(null);
+      await this.loadSelectedInvoice();
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось отключить компанию от связи.'));
+      if (this.isCurrentMutation(mutationGeneration, account.id)) {
+        this.error.set(this.errorMessage(error, 'Не удалось отключить компанию от связи.'));
+      }
     } finally {
-      this.mutating.set(null);
+      if (this.isCurrentMutationGeneration(mutationGeneration) && this.mutating() === mutationKey) {
+        this.mutating.set(null);
+      }
     }
   }
 
   async loadSelectedInvoice(): Promise<void> {
+    const generation = ++this.invoiceLoadGeneration;
+    const accountId = this.selectedAccountId();
     const invoiceId = this.selectedAccount()?.currentInvoice?.id ?? null;
     if (!invoiceId) {
       this.details.set(null);
+      this.invoiceLoading.set(false);
       return;
     }
 
     this.invoiceLoading.set(true);
     try {
       const details = await firstValueFrom(this.api.getCommonInvoice(invoiceId));
+      if (!this.isCurrentInvoiceLoad(generation, accountId, invoiceId)) {
+        return;
+      }
       this.details.set(details);
       this.error.set(null);
     } catch (error) {
-      this.details.set(null);
-      this.error.set(this.errorMessage(error, 'Не удалось загрузить текущий общий счет.'));
+      if (this.isCurrentInvoiceLoad(generation, accountId, invoiceId)) {
+        this.details.set(null);
+        this.error.set(this.errorMessage(error, 'Не удалось загрузить текущий общий счет.'));
+      }
     } finally {
-      this.invoiceLoading.set(false);
+      if (this.isCurrentInvoiceLoad(generation, accountId, invoiceId)) {
+        this.invoiceLoading.set(false);
+      }
     }
+  }
+
+  private isCurrentCompanySearch(generation: number, keyword: string): boolean {
+    return !this.destroyed
+      && generation === this.companySearchGeneration
+      && keyword === this.companyKeyword().trim();
+  }
+
+  private isCurrentAccountLoad(generation: number): boolean {
+    return !this.destroyed && generation === this.accountLoadGeneration;
+  }
+
+  private invalidateAccountLoad(): void {
+    this.accountLoadGeneration += 1;
+    this.loading.set(false);
+  }
+
+  private isCurrentMutation(generation: number, selectedAccountId: number | null): boolean {
+    return this.isCurrentMutationGeneration(generation)
+      && selectedAccountId === this.selectedAccountId();
+  }
+
+  private isCurrentMutationGeneration(generation: number): boolean {
+    return !this.destroyed && generation === this.mutationGeneration;
+  }
+
+  private isCurrentInvoiceLoad(generation: number, accountId: number | null, invoiceId: number): boolean {
+    return !this.destroyed
+      && generation === this.invoiceLoadGeneration
+      && accountId === this.selectedAccountId()
+      && invoiceId === (this.selectedAccount()?.currentInvoice?.id ?? null);
   }
 
   openInvoice(invoiceId: number): void {
@@ -857,7 +992,7 @@ export class CommonBillingAdminPage implements OnInit {
   }
 
   isCompanyLinked(companyId: number): boolean {
-    return this.linkedCompanies().some((company) => company.companyId === companyId)
+    return this.linkedCompanies().some((company) => company.companyId === companyId && company.enabled)
       || this.draftCompanies().some((company) => company.id === companyId);
   }
 
@@ -970,7 +1105,9 @@ export class CommonBillingAdminPage implements OnInit {
     const draft = this.draft();
     const selected = this.selectedAccount();
     const draftCompanyIds = this.draftCompanies().map((company) => company.id);
-    const selectedCompanyIds = selected?.companies?.map((company) => company.companyId) ?? [];
+    const selectedCompanyIds = selected?.companies
+      ?.filter((company) => company.enabled)
+      .map((company) => company.companyId) ?? [];
     return {
       name: draft.name.trim(),
       enabled: draft.enabled,

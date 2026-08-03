@@ -2,14 +2,19 @@ package com.hunt.otziv.performers.repository;
 
 import com.hunt.otziv.performers.model.PerformerProfile;
 import com.hunt.otziv.performers.model.PerformerProfileStatus;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface PerformerProfileRepository extends CrudRepository<PerformerProfile, Long> {
@@ -17,6 +22,27 @@ public interface PerformerProfileRepository extends CrudRepository<PerformerProf
     Optional<PerformerProfile> findByUserId(Long userId);
 
     Optional<PerformerProfile> findByTelegramLinkToken(String token);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT p
+        FROM PerformerProfile p
+        JOIN FETCH p.user
+        WHERE p.telegramLinkToken = :token
+    """)
+    Optional<PerformerProfile> findByTelegramLinkTokenForUpdate(@Param("token") String token);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE PerformerProfile p
+        SET p.status = com.hunt.otziv.performers.model.PerformerProfileStatus.REJECTED,
+            p.telegramLinkToken = null,
+            p.blockReason = 'Срок публичной заявки истёк'
+        WHERE p.status = com.hunt.otziv.performers.model.PerformerProfileStatus.NEW
+          AND p.registrationExpiresAt IS NOT NULL
+          AND p.registrationExpiresAt <= :now
+    """)
+    int expirePendingRegistrations(@Param("now") LocalDateTime now);
 
     @Query("""
         SELECT DISTINCT p

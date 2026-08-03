@@ -36,6 +36,9 @@ import com.hunt.otziv.reputationai.domain.ReputationBatchReviewDraftItem;
 import com.hunt.otziv.reputationai.domain.ReputationBatchReviewDraftResult;
 import com.hunt.otziv.reputationai.domain.ReputationSingleReviewDraftResult;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
+import com.hunt.otziv.security.credentials.CredentialRevealRequest;
+import com.hunt.otziv.security.credentials.CredentialRevealResponse;
+import com.hunt.otziv.security.credentials.CredentialRevealService;
 import com.hunt.otziv.s3.service.S3UploadService;
 import com.hunt.otziv.text_generator.service.AutoTextService;
 import com.hunt.otziv.u_users.model.User;
@@ -47,7 +50,11 @@ import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -93,6 +100,7 @@ public class ApiManagerReviewController {
     private final WorkerActivityService workerActivityService;
     private final WorkerCredentialPreparationService credentialPreparationService;
     private final ExternalReviewCheckService externalReviewCheckService;
+    private final CredentialRevealService credentialRevealService;
     private final Map<Long, Boolean> reviewHelpDraftLocks = new ConcurrentHashMap<>();
 
     @GetMapping("/orders/{orderId}/details")
@@ -103,6 +111,112 @@ public class ApiManagerReviewController {
     ) {
         managerAccessService.requireOrderAccess(orderId, authentication);
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+    }
+
+    @PostMapping("/orders/{orderId}/reviews/{reviewId}/credential-reveal")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @Transactional
+    public ResponseEntity<CredentialRevealResponse> revealOrderReviewCredential(
+            @PathVariable Long orderId,
+            @PathVariable Long reviewId,
+            @RequestBody CredentialRevealRequest request,
+            Authentication authentication
+    ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        requireReviewForOrder(orderId, reviewId);
+        Review review = reviewService.getReviewById(reviewId);
+        CredentialRevealResponse response = credentialRevealService.revealReview(review, request);
+        String field = credentialField(request);
+        ReviewActivitySourceRequest source = activitySource(request);
+        boolean preparationRecorded = credentialPreparationService.recordCopy(
+                authentication,
+                review,
+                field,
+                source.sourcePage(),
+                source.sourceEntry(),
+                source.sourceSection()
+        );
+        if (isWorkerAllSource(source)
+                && workerActivityService.isPlainWorker(authentication)
+                && !preparationRecorded) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Сервер не подтвердил подготовку аккаунта. Обновите приложение и повторите копирование."
+            );
+        }
+        workerActivityService.recordSafely(
+                authentication,
+                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "credential_reveal",
+                withSource(
+                        "field=" + field + ";botId="
+                                + valueOrDash(review == null || review.getBot() == null ? null : review.getBot().getId())
+                                + ";",
+                        source
+                )
+        );
+        var preparation = preparationRecorded
+                ? credentialPreparationService.active(authentication, WorkerCredentialPreparationScope.PUBLISH)
+                : null;
+        return noStore(response.withCredentialPreparation(preparation));
+    }
+
+    @PostMapping("/orders/{orderId}/bad-review-tasks/{taskId}/credential-reveal")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @Transactional
+    public ResponseEntity<CredentialRevealResponse> revealBadReviewTaskCredential(
+            @PathVariable Long orderId,
+            @PathVariable Long taskId,
+            @RequestBody CredentialRevealRequest request,
+            Authentication authentication
+    ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        requireBadReviewTaskForOrder(orderId, taskId);
+        var task = badReviewTaskService.getTask(taskId);
+        CredentialRevealResponse response = credentialRevealService.revealBadReviewTask(task, request);
+        String field = credentialField(request);
+        workerActivityService.recordSafely(
+                authentication,
+                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                "bad_review_task",
+                taskId,
+                orderId,
+                task.getSourceReview() == null ? null : task.getSourceReview().getId(),
+                "credential_reveal",
+                withSource("field=" + field + ";", activitySource(request))
+        );
+        return noStore(response);
+    }
+
+    @PostMapping("/orders/{orderId}/recovery-tasks/{taskId}/credential-reveal")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @Transactional
+    public ResponseEntity<CredentialRevealResponse> revealRecoveryTaskCredential(
+            @PathVariable Long orderId,
+            @PathVariable Long taskId,
+            @RequestBody CredentialRevealRequest request,
+            Authentication authentication
+    ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        requireRecoveryTaskForOrder(orderId, taskId);
+        var task = reviewRecoveryTaskService.getTask(taskId);
+        CredentialRevealResponse response = credentialRevealService.revealRecoveryTask(task, request);
+        String field = credentialField(request);
+        workerActivityService.recordSafely(
+                authentication,
+                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                "recovery_task",
+                taskId,
+                orderId,
+                task.getSourceReview() != null ? task.getSourceReview().getId() : task.getArchiveReviewId(),
+                "credential_reveal",
+                withSource("field=" + field + ";", activitySource(request))
+        );
+        return noStore(response);
     }
 
     @PostMapping("/orders/{orderId}/reviews")
@@ -203,7 +317,12 @@ public class ApiManagerReviewController {
         ReviewDTO current = requireReviewForOrder(orderId, reviewId);
         String oldUrl = current.getUrl();
         String newUrl = s3UploadService.uploadFile(file, "reviews", oldUrl, reviewId);
-        reviewService.updateReviewPhoto(reviewId, newUrl);
+        try {
+            reviewService.updateReviewPhoto(reviewId, newUrl);
+        } catch (RuntimeException exception) {
+            s3UploadService.deleteFileAfterCommit(newUrl, "reviews", reviewId);
+            throw exception;
+        }
         s3UploadService.deleteFileAfterCommit(oldUrl, "reviews", reviewId);
 
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
@@ -1172,6 +1291,31 @@ public class ApiManagerReviewController {
 
     private String sourceDetails(ReviewActivitySourceRequest source) {
         return withSource("", source);
+    }
+
+    private String credentialField(CredentialRevealRequest request) {
+        String field = request == null ? "" : normalize(request.field()).toLowerCase(Locale.ROOT);
+        if (!"login".equals(field) && !"password".equals(field)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Поле аккаунта не поддерживается");
+        }
+        return field;
+    }
+
+    private ReviewActivitySourceRequest activitySource(CredentialRevealRequest request) {
+        return request == null
+                ? new ReviewActivitySourceRequest(null, null, null)
+                : new ReviewActivitySourceRequest(
+                        request.sourcePage(),
+                        request.sourceEntry(),
+                        request.sourceSection()
+                );
+    }
+
+    private ResponseEntity<CredentialRevealResponse> noStore(CredentialRevealResponse response) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(response);
     }
 
     private boolean isWorkerAllSource(ReviewActivitySourceRequest source) {

@@ -105,11 +105,6 @@ export const routes: Routes = [
     data: { mode: 'performer' }
   },
   {
-    path: 'legacy-migration',
-    loadComponent: () => import('./features/public-register.page').then((m) => m.PublicRegisterPage),
-    data: { mode: 'legacy' }
-  },
-  {
     path: 'review/editReviews/:orderDetailId',
     loadComponent: () => import('./features/review-check.page').then((m) => m.ReviewCheckPage)
   },

@@ -60,8 +60,41 @@
 }
 
 .actions,
-.error {
+.error,
+.consents {
   grid-column: 1 / -1;
+}
+
+.consents {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  border: 1px solid rgba(103, 116, 131, 0.18);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.consents legend {
+  padding: 0 0.35rem;
+  color: var(--otziv-info);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.performer-form .consent {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr;
+  align-items: start;
+}
+
+.performer-form .consent input {
+  width: 1.1rem;
+  min-height: 1.1rem;
+  margin-top: 0.1rem;
+}
+
+.performer-form .consent span {
+  font-weight: 600;
 }
 
 .error {

@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.security.Principal;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/admin/performers")
@@ -39,9 +41,17 @@ public class ApiAdminPerformerController {
     public AdminPerformerResponse updateStatus(
             @PathVariable Long performerId,
             @RequestParam PerformerProfileStatus status,
-            @RequestParam(required = false) String reason
+            @RequestParam(required = false) String reason,
+            @RequestParam(defaultValue = "false") boolean phoneVerified,
+            Principal principal
     ) {
-        return adminPerformerService.updateStatus(performerId, status, reason);
+        return adminPerformerService.updateStatus(
+                performerId,
+                status,
+                reason,
+                phoneVerified,
+                principal == null ? null : principal.getName()
+        );
     }
 
     @PostMapping("/assignments/{assignmentId}/verify")

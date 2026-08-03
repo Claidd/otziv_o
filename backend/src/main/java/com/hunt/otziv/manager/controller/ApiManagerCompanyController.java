@@ -2,7 +2,10 @@ package com.hunt.otziv.manager.controller;
 
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
+import com.hunt.otziv.c_categories.services.CategoryService;
+import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.c_cities.services.CityService;
 import com.hunt.otziv.c_companies.dto.CompanyContactDTO;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.CompanyInfoDTO;
@@ -35,6 +38,7 @@ import com.hunt.otziv.p_products.services.service.OrderCreationService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -82,6 +86,10 @@ public class ApiManagerCompanyController {
     private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
     private final SharedChatLinkSyncService sharedChatLinkSyncService;
     private final CompanyPublicationDatePermissionNotificationService publicationDatePermissionNotificationService;
+    private final CategoryService categoryService;
+    private final SubCategoryService subCategoryService;
+    private final CityService cityService;
+    private final WorkerService workerService;
 
     @PostMapping("/companies/{companyId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -176,6 +184,7 @@ public class ApiManagerCompanyController {
         boolean permissionWillBeEnabled = request != null && request.allowWorkerPublicationDateEdit() != null
                 ? request.allowWorkerPublicationDateEdit()
                 : permissionWasEnabled;
+        validateCompanyUpdateRelations(current, request, authentication);
 
         try {
             companyService.updateCompany(toCompanyUpdateDto(current, request, companyId, authentication), toWorkerDTO(request), companyId);
@@ -521,6 +530,48 @@ public class ApiManagerCompanyController {
     private WorkerDTO toWorkerDTO(CompanyUpdateRequest request) {
         Long workerId = request == null || request.newWorkerId() == null ? 0L : request.newWorkerId();
         return WorkerDTO.builder().workerId(workerId).build();
+    }
+
+    private void validateCompanyUpdateRelations(
+            CompanyDTO current,
+            CompanyUpdateRequest request,
+            Authentication authentication
+    ) {
+        if (current == null || request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные компании не переданы");
+        }
+        Long categoryId = firstId(request.categoryId(), idOf(current.getCategoryCompany()));
+        Long subCategoryId = firstId(request.subCategoryId(), idOf(current.getSubCategory()));
+        boolean categoryExists = categoryService.getAllCategories().stream()
+                .anyMatch(category -> Objects.equals(category.getId(), categoryId));
+        if (!categoryExists) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Категория не найдена");
+        }
+        boolean subCategoryMatches = subCategoryService.getSubcategoriesByCategoryId(categoryId).stream()
+                .anyMatch(subCategory -> Objects.equals(subCategory.getId(), subCategoryId));
+        if (!subCategoryMatches) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подкатегория не относится к выбранной категории");
+        }
+
+        Long managerId = managerPermissionService.hasRole(authentication, "ADMIN")
+                ? firstId(request.managerId(), idOf(current.getManager()))
+                : idOf(current.getManager());
+        if (!managerAccessService.canAccessManager(managerId, authentication)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден");
+        }
+        if (request.newWorkerId() != null && request.newWorkerId() > 0) {
+            boolean workerAssigned = workerService.getAllWorkersByManagerId(managerId).stream()
+                    .anyMatch(worker -> Objects.equals(worker.getWorkerId(), request.newWorkerId()));
+            if (!workerAssigned) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист не закреплен за менеджером компании");
+            }
+        }
+        if (request.newFilialCityId() != null
+                && request.newFilialCityId() > 0
+                && cityService.getAllCities().stream()
+                .noneMatch(city -> Objects.equals(city.getId(), request.newFilialCityId()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Город филиала не найден");
+        }
     }
 
     private boolean companyHasFilial(CompanyDTO company, Long filialId) {

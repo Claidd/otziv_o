@@ -224,7 +224,7 @@ export class WorkerBoardActionFacade {
   }
 
   deleteBot(bot: WorkerBotItem): void {
-    const confirmed = window.confirm(`Удалить аккаунт "${bot.fio || bot.login}"?`);
+    const confirmed = window.confirm(`Удалить аккаунт "${bot.fio || `#${bot.id}`}"?`);
     if (!confirmed) {
       return;
     }

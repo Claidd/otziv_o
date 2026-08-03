@@ -25,6 +25,7 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import jakarta.ws.rs.NotFoundException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +48,7 @@ import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isShortCommonReview
 @RequiredArgsConstructor
 public class OrderStatusTransitionService {
 
+    private static final String STATUS_NEW = "Новый";
     private static final String STATUS_TO_CHECK = "В проверку";
     private static final String STATUS_IN_CHECK = "На проверке";
     private static final String STATUS_CORRECTION = "Коррекция";
@@ -58,6 +60,35 @@ public class OrderStatusTransitionService {
     private static final String STATUS_ARCHIVE = "Архив";
     private static final String STATUS_BAN = "Бан";
     private static final String STATUS_REMINDER = "Напоминание";
+    private static final String STATUS_WAITING_COMMON_INVOICE = "Ожидает общего счета";
+    private static final Set<String> SUPPORTED_TARGET_STATUSES = Set.of(
+            STATUS_NEW,
+            STATUS_TO_CHECK,
+            STATUS_IN_CHECK,
+            STATUS_CORRECTION,
+            STATUS_TO_PUBLISH,
+            STATUS_PUBLIC,
+            STATUS_TO_PAY,
+            STATUS_REMINDER,
+            STATUS_NOT_PAID,
+            STATUS_PAYMENT,
+            STATUS_ARCHIVE,
+            STATUS_BAN
+    );
+    private static final Map<String, Set<String>> ALLOWED_SOURCE_STATUSES = Map.ofEntries(
+            Map.entry(STATUS_NEW, Set.of(STATUS_ARCHIVE)),
+            Map.entry(STATUS_TO_CHECK, Set.of(STATUS_NEW, STATUS_CORRECTION, STATUS_IN_CHECK, STATUS_ARCHIVE)),
+            Map.entry(STATUS_IN_CHECK, Set.of(STATUS_TO_CHECK, STATUS_CORRECTION, STATUS_ARCHIVE)),
+            Map.entry(STATUS_CORRECTION, Set.of(STATUS_TO_CHECK, STATUS_IN_CHECK, STATUS_TO_PUBLISH, STATUS_PUBLIC, STATUS_ARCHIVE)),
+            Map.entry(STATUS_TO_PUBLISH, Set.of(STATUS_IN_CHECK, STATUS_CORRECTION, STATUS_ARCHIVE)),
+            Map.entry(STATUS_PUBLIC, Set.of(STATUS_TO_PUBLISH)),
+            Map.entry(STATUS_TO_PAY, Set.of(STATUS_PUBLIC, STATUS_REMINDER, STATUS_NOT_PAID, STATUS_WAITING_COMMON_INVOICE)),
+            Map.entry(STATUS_REMINDER, Set.of(STATUS_TO_PAY)),
+            Map.entry(STATUS_NOT_PAID, Set.of(STATUS_TO_PUBLISH, STATUS_PUBLIC, STATUS_TO_PAY, STATUS_REMINDER, STATUS_WAITING_COMMON_INVOICE)),
+            Map.entry(STATUS_PAYMENT, Set.of(STATUS_PUBLIC, STATUS_TO_PAY, STATUS_REMINDER, STATUS_NOT_PAID, STATUS_BAN, STATUS_WAITING_COMMON_INVOICE)),
+            Map.entry(STATUS_ARCHIVE, Set.of(STATUS_TO_CHECK, STATUS_IN_CHECK, STATUS_CORRECTION)),
+            Map.entry(STATUS_BAN, Set.of(STATUS_NOT_PAID, STATUS_TO_PAY, STATUS_REMINDER))
+    );
     private static final Set<String> COMPLETED_ORDER_REOPEN_STATUSES = Set.of(
             "Новый",
             STATUS_TO_CHECK,
@@ -71,7 +102,8 @@ public class OrderStatusTransitionService {
             STATUS_TO_PAY,
             STATUS_REMINDER,
             STATUS_NOT_PAID,
-            STATUS_BAN
+            STATUS_BAN,
+            STATUS_WAITING_COMMON_INVOICE
     );
 
     private final OrderRepository orderRepository;
@@ -128,15 +160,22 @@ public class OrderStatusTransitionService {
             Order order = orderRepository.findByIdForMutation(orderID)
                     .orElseThrow(() -> new NotFoundException("Order not found for orderID: " + orderID));
 
+            ensureSupportedTargetStatus(title);
+            String oldStatus = safeStatusTitle(order);
+            if (safeString(oldStatus).equals(safeString(title))) {
+                recordStatusAudit(order, oldStatus, oldStatus, title, false);
+                return true;
+            }
             ensureCommonBillingStatusTransitionAllowed(order, title, allowCommonBillingFinancialStatus);
             ensureCompletedOrderNotReopened(order, title);
+            ensureStatusTransitionAllowed(order, title);
             if (STATUS_ARCHIVE.equals(title) && !OrderManualArchivePolicy.isAllowed(order)) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
                         "В архив можно перевести заказ только из статусов \"В проверку\", \"На проверке\" или \"Коррекция\""
                 );
             }
-            String oldStatus = safeStatusTitle(order);
+            synchronizeAndRequireCompleteCounter(order, title);
             boolean changed = switch (title) {
                 case STATUS_PAYMENT -> handlePaymentStatus(order);
                 case STATUS_ARCHIVE -> handleArchiveStatus(order);
@@ -148,11 +187,9 @@ public class OrderStatusTransitionService {
                 case STATUS_TO_PAY -> handleManualToPayStatus(order);
                 case STATUS_NOT_PAID -> handleNotPaidStatus(order);
                 case STATUS_BAN -> handleBanStatus(order, allowBanWithPendingBadTasks);
-                default -> {
-                    order.setStatus(orderStatusService.getOrderStatusByTitle(title));
-                    orderRepository.save(order);
-                    yield true;
-                }
+                case STATUS_NEW -> handleSimpleStatus(order, STATUS_NEW);
+                case STATUS_REMINDER -> handleSimpleStatus(order, STATUS_REMINDER);
+                default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Недопустимый статус заказа");
             };
             recordStatusAudit(order, oldStatus, safeStatusTitle(order), title, changed);
             return changed;
@@ -164,6 +201,47 @@ public class OrderStatusTransitionService {
             log.error("При смене статуса произошли какие-то проблемы", e);
             throw e;
         }
+    }
+
+    private void ensureSupportedTargetStatus(String title) {
+        if (title == null || !SUPPORTED_TARGET_STATUSES.contains(title)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Недопустимый статус заказа");
+        }
+    }
+
+    private void ensureStatusTransitionAllowed(Order order, String targetStatus) {
+        String currentStatus = safeStatusTitle(order);
+        if (safeString(currentStatus).equals(safeString(targetStatus))) {
+            return;
+        }
+        Set<String> allowedSources = ALLOWED_SOURCE_STATUSES.get(targetStatus);
+        if (allowedSources == null || !allowedSources.contains(currentStatus)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Недопустимый переход статуса заказа: \"" + currentStatus + "\" → \"" + targetStatus + "\""
+            );
+        }
+    }
+
+    private void synchronizeAndRequireCompleteCounter(Order order, String targetStatus) {
+        if (!STATUS_PUBLIC.equals(targetStatus) && !STATUS_PAYMENT.equals(targetStatus)) {
+            return;
+        }
+        int actualPublished = reviewRepository.countPublishedByOrderId(order.getId());
+        order.setCounter(actualPublished);
+        if (order.getAmount() > actualPublished) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Нельзя перевести заказ в статус \"" + targetStatus + "\": опубликовано "
+                            + actualPublished + " из " + order.getAmount() + " отзывов"
+            );
+        }
+    }
+
+    private boolean handleSimpleStatus(Order order, String title) {
+        order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+        orderRepository.save(order);
+        return true;
     }
 
     private void ensureCommonBillingStatusTransitionAllowed(

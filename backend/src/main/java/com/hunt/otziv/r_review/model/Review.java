@@ -32,6 +32,11 @@ public class Review {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "review_id")
     private Long id;
+
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
+
     @Column(name = "review_text")
     private String text;
     @Column(name = "review_text_ready_at")
@@ -85,7 +90,7 @@ public class Review {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_order_details", updatable = false)
     private OrderDetails orderDetails;
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_filial")
     private Filial filial;
     //    каждый бот имеет Работника, который его добавлял

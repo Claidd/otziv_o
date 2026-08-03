@@ -78,7 +78,7 @@
                   <td>{{ phone.id }}</td>
                   <td>
                     <strong>{{ phone.number }}</strong>
-                    <span>{{ phone.mailLogin || phone.googleLogin || '-' }}</span>
+                    <span>{{ phone.mailLoginMasked || phone.googleLoginMasked || '-' }}</span>
                   </td>
                   <td>{{ phone.fio || '-' }}</td>
                   <td>{{ phone.amountAllowed }}</td>
@@ -159,27 +159,32 @@
 
             <label>
               <span>Google логин</span>
-              <input type="text" formControlName="googleLogin" autocomplete="off">
+              <input type="text" formControlName="googleLogin" autocomplete="off"
+                     [placeholder]="selectedPhone()?.googleLoginPresent ? 'Сохранен — пустое поле не изменяет' : ''">
             </label>
 
             <label>
               <span>Google пароль</span>
-              <input type="password" formControlName="googlePassword" autocomplete="off">
+              <input type="password" formControlName="googlePassword" autocomplete="new-password"
+                     [placeholder]="selectedPhone()?.googlePasswordPresent ? 'Сохранен — пустое поле не изменяет' : ''">
             </label>
 
             <label>
               <span>Avito пароль</span>
-              <input type="password" formControlName="avitoPassword" autocomplete="off">
+              <input type="password" formControlName="avitoPassword" autocomplete="new-password"
+                     [placeholder]="selectedPhone()?.avitoPasswordPresent ? 'Сохранен — пустое поле не изменяет' : ''">
             </label>
 
             <label>
               <span>Mail логин</span>
-              <input type="text" formControlName="mailLogin" autocomplete="off">
+              <input type="text" formControlName="mailLogin" autocomplete="off"
+                     [placeholder]="selectedPhone()?.mailLoginPresent ? 'Сохранен — пустое поле не изменяет' : ''">
             </label>
 
             <label>
               <span>Mail пароль</span>
-              <input type="password" formControlName="mailPassword" autocomplete="off">
+              <input type="password" formControlName="mailPassword" autocomplete="new-password"
+                     [placeholder]="selectedPhone()?.mailPasswordPresent ? 'Сохранен — пустое поле не изменяет' : ''">
             </label>
 
             <label>

@@ -24,6 +24,7 @@ import org.mockito.InOrder;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.ui.ExtendedModelMap;
+import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
@@ -34,6 +35,7 @@ class BotsControllerCrudAccessTest {
     void createChecksFreshAccessBeforeValidationAndMutation() {
         Fixture fixture = fixture();
         BotDTO dto = new BotDTO();
+        dto.setPassword("secret");
         BindingResult bindingResult = mock(BindingResult.class);
         when(bindingResult.hasErrors()).thenReturn(false);
         when(fixture.botService.createBot(dto, fixture.authentication)).thenReturn(true);
@@ -52,6 +54,27 @@ class BotsControllerCrudAccessTest {
         order.verify(fixture.crudAccess).requireCreateAccess(fixture.authentication);
         order.verify(fixture.botValidation).validate(dto, bindingResult);
         order.verify(fixture.botService).createBot(dto, fixture.authentication);
+    }
+
+    @Test
+    void createRejectsBlankPasswordButEditCanLeaveItBlank() {
+        Fixture fixture = fixture();
+        BotDTO dto = new BotDTO();
+        dto.setPassword("  ");
+        BindingResult bindingResult = new BeanPropertyBindingResult(dto, "bot");
+
+        String result = fixture.controller.saveBot(
+                new ExtendedModelMap(),
+                dto,
+                bindingResult,
+                fixture.principal,
+                new RedirectAttributesModelMap(),
+                fixture.authentication
+        );
+
+        assertThat(result).isEqualTo("bots/bot_add");
+        assertThat(bindingResult.getFieldError("password")).isNotNull();
+        verify(fixture.botService, never()).createBot(dto, fixture.authentication);
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.hunt.otziv.l_lead.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.hunt.otziv.security.credentials.EncryptedCredentialConverter;
 import com.hunt.otziv.u_users.model.Operator;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -93,22 +95,30 @@ public class Telephone {
 
 
     //    Логин Гугла
+    @JsonIgnore
     @Column(name = "telephone_google_login")
     private String googleLogin;
 
     //    Пароль Гугл
+    @JsonIgnore
+    @Convert(converter = EncryptedCredentialConverter.class)
     @Column(name = "telephone_google_password")
     private String googlePassword;
 
     //    Пароль Авито
+    @JsonIgnore
+    @Convert(converter = EncryptedCredentialConverter.class)
     @Column(name = "telephone_avito_password")
     private String avitoPassword;
 
     //    Логин Mail
+    @JsonIgnore
     @Column(name = "telephone_mail_login")
     private String mailLogin;
 
     //    Пароль Mail
+    @JsonIgnore
+    @Convert(converter = EncryptedCredentialConverter.class)
     @Column(name = "telephone_mail_password")
     private String mailPassword;
 

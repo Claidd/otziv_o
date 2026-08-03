@@ -1,8 +1,8 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { IonContent, IonRefresher, IonRefresherContent, RefresherCustomEvent } from '@ionic/angular/standalone';
-import { firstValueFrom } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 import {
   ApiService,
   CommonInvoiceDetailsResponse,
@@ -11,6 +11,7 @@ import {
   OrderItem
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { RouteEpochGuard, type RouteEpochTicket } from '../core/route-epoch.guard';
 import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-format';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
@@ -422,7 +423,10 @@ type InvoiceAction =
     }
   `]
 })
-export class CommonBillingPage implements OnInit {
+export class CommonBillingPage implements OnInit, OnDestroy {
+  private readonly routeGuard = new RouteEpochGuard();
+  private routeSubscription?: Subscription;
+  private readRun = 0;
   readonly invoiceId = signal<number | null>(null);
   readonly details = signal<CommonInvoiceDetailsResponse | null>(null);
   readonly loading = signal(false);
@@ -445,9 +449,26 @@ export class CommonBillingPage implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    const invoiceId = Number(this.route.snapshot.paramMap.get('invoiceId') || 0);
-    this.invoiceId.set(Number.isFinite(invoiceId) && invoiceId > 0 ? invoiceId : null);
-    void this.load();
+    this.routeSubscription = this.route.paramMap.subscribe((params) => {
+      const value = Number(params.get('invoiceId') || 0);
+      const invoiceId = Number.isSafeInteger(value) && value > 0 ? value : null;
+      if (!this.routeGuard.change(invoiceId == null ? null : String(invoiceId))) {
+        return;
+      }
+      this.readRun += 1;
+      this.invoiceId.set(invoiceId);
+      this.details.set(null);
+      this.error.set(null);
+      this.loading.set(false);
+      this.mutating.set(null);
+      void this.load();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.readRun += 1;
+    this.routeGuard.destroy();
+    this.routeSubscription?.unsubscribe();
   }
 
   async refresh(event: RefresherCustomEvent): Promise<void> {
@@ -461,7 +482,8 @@ export class CommonBillingPage implements OnInit {
 
   async runInvoiceAction(action: InvoiceAction): Promise<void> {
     const invoiceId = this.invoiceId();
-    if (!invoiceId || this.mutating()) {
+    const ticket = this.routeGuard.capture();
+    if (!invoiceId || !ticket || this.mutating()) {
       return;
     }
 
@@ -475,39 +497,49 @@ export class CommonBillingPage implements OnInit {
     }
 
     const confirmed = await this.confirm.confirm({ message: this.invoiceActionConfirm(action), danger: action === 'ban' || action === 'unpaid' });
-    if (!confirmed) {
+    if (!confirmed || !this.routeGuard.accepts(ticket)) {
       return;
     }
 
+    this.readRun += 1;
     this.mutating.set(action);
     try {
       const details = await firstValueFrom(this.invoiceActionRequest(invoiceId, action));
+      if (!this.routeGuard.accepts(ticket)) {
+        return;
+      }
       this.details.set(details);
       this.error.set(null);
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось обновить общий счет.'));
+      if (this.routeGuard.accepts(ticket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось обновить общий счет.'));
+      }
     } finally {
-      this.mutating.set(null);
+      if (this.routeGuard.accepts(ticket) && this.mutating() === action) {
+        this.mutating.set(null);
+      }
     }
   }
 
   async markOrderPaid(order: CommonInvoiceOrderResponse): Promise<void> {
     const invoiceId = this.invoiceId();
-    if (!invoiceId || this.mutating()) {
+    const ticket = this.routeGuard.capture();
+    if (!invoiceId || !ticket || this.mutating()) {
       return;
     }
 
     const confirmed = await this.confirm.confirm({ message: `Отметить заказ #${order.orderId} оплаченным внутри общего счета?` });
-    if (!confirmed) {
+    if (!confirmed || !this.routeGuard.accepts(ticket)) {
       return;
     }
 
-    await this.runOrderMutation(`paid-${order.orderId}`, () => this.api.markCommonInvoiceOrderPaid(invoiceId, order.orderId));
+    await this.runOrderMutation(ticket, `paid-${order.orderId}`, () => this.api.markCommonInvoiceOrderPaid(invoiceId, order.orderId));
   }
 
   async detachOrder(order: CommonInvoiceOrderResponse): Promise<void> {
     const invoiceId = this.invoiceId();
-    if (!invoiceId || this.mutating()) {
+    const ticket = this.routeGuard.capture();
+    if (!invoiceId || !ticket || this.mutating()) {
       return;
     }
 
@@ -515,16 +547,17 @@ export class CommonBillingPage implements OnInit {
       message: `Отключить заказ #${order.orderId} от общего счета?`,
       danger: true
     });
-    if (!confirmed) {
+    if (!confirmed || !this.routeGuard.accepts(ticket)) {
       return;
     }
 
-    await this.runOrderMutation(`detach-${order.orderId}`, () => this.api.detachCommonInvoiceOrder(invoiceId, order.orderId));
+    await this.runOrderMutation(ticket, `detach-${order.orderId}`, () => this.api.detachCommonInvoiceOrder(invoiceId, order.orderId));
   }
 
   async deleteInvoiceWithOrders(invoice: CommonInvoiceSummaryResponse): Promise<void> {
     const invoiceId = this.invoiceId();
-    if (!invoiceId || this.mutating() || !this.canDeleteInvoiceWithOrders(invoice)) {
+    const ticket = this.routeGuard.capture();
+    if (!invoiceId || !ticket || this.mutating() || !this.canDeleteInvoiceWithOrders(invoice)) {
       return;
     }
 
@@ -532,20 +565,28 @@ export class CommonBillingPage implements OnInit {
       message: `Удалить общий счет #${invoice.id} и все связанные с ним заказы (${invoice.totalOrders})? Действие нельзя отменить.`,
       danger: true
     });
-    if (!confirmed) {
+    if (!confirmed || !this.routeGuard.accepts(ticket)) {
       return;
     }
 
+    this.readRun += 1;
     this.mutating.set(`delete-invoice-${invoice.id}`);
     try {
       await firstValueFrom(this.api.deleteCommonInvoiceWithOrders(invoice.id));
+      if (!this.routeGuard.accepts(ticket)) {
+        return;
+      }
       this.details.set(null);
       this.error.set(null);
       void this.router.navigate(['/tabs/orders']);
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Общий счет не удален.'));
+      if (this.routeGuard.accepts(ticket)) {
+        this.error.set(this.errorMessage(error, 'Общий счет не удален.'));
+      }
     } finally {
-      this.mutating.set(null);
+      if (this.routeGuard.accepts(ticket)) {
+        this.mutating.set(null);
+      }
     }
   }
 
@@ -793,35 +834,62 @@ export class CommonBillingPage implements OnInit {
 
   private async load(): Promise<void> {
     const invoiceId = this.invoiceId();
-    if (!invoiceId) {
+    const ticket = this.routeGuard.capture();
+    if (!invoiceId || !ticket) {
       this.error.set('Не указан ID общего счета.');
       return;
     }
+    if (this.mutating()) {
+      return;
+    }
 
+    const readRun = ++this.readRun;
     this.loading.set(true);
     try {
-      this.details.set(await firstValueFrom(this.api.getCommonInvoice(invoiceId)));
+      const details = await firstValueFrom(this.api.getCommonInvoice(invoiceId));
+      if (!this.acceptsRead(ticket, readRun)) {
+        return;
+      }
+      this.details.set(details);
       this.error.set(null);
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось загрузить общий счет.'));
+      if (this.acceptsRead(ticket, readRun)) {
+        this.error.set(this.errorMessage(error, 'Не удалось загрузить общий счет.'));
+      }
     } finally {
-      this.loading.set(false);
+      if (this.acceptsRead(ticket, readRun)) {
+        this.loading.set(false);
+      }
     }
   }
 
   private async runOrderMutation(
+    ticket: RouteEpochTicket,
     key: string,
     request: () => ReturnType<ApiService['getCommonInvoice']>
   ): Promise<void> {
+    this.readRun += 1;
     this.mutating.set(key);
     try {
-      this.details.set(await firstValueFrom(request()));
+      const details = await firstValueFrom(request());
+      if (!this.routeGuard.accepts(ticket)) {
+        return;
+      }
+      this.details.set(details);
       this.error.set(null);
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось изменить заказ общего счета.'));
+      if (this.routeGuard.accepts(ticket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось изменить заказ общего счета.'));
+      }
     } finally {
-      this.mutating.set(null);
+      if (this.routeGuard.accepts(ticket) && this.mutating() === key) {
+        this.mutating.set(null);
+      }
     }
+  }
+
+  private acceptsRead(ticket: RouteEpochTicket, readRun: number): boolean {
+    return readRun === this.readRun && this.routeGuard.accepts(ticket);
   }
 
   private async copyText(value: string, key: string, fallback: string): Promise<void> {

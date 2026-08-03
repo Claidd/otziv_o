@@ -20,8 +20,8 @@ export interface WorkerPage<T> {
 
 export interface WorkerBotItem {
   id: number;
-  login: string;
-  password: string;
+  loginPresent: boolean;
+  passwordPresent: boolean;
   fio: string;
   city: string;
   counter: number;
@@ -42,8 +42,8 @@ export interface WorkerReviewItem {
   subCategory: string;
   botId?: number | null;
   botFio: string;
-  botLogin: string;
-  botPassword: string;
+  botLoginPresent: boolean;
+  botPasswordPresent: boolean;
   botCounter: number;
   botActive?: boolean;
   companyTitle: string;
@@ -182,6 +182,10 @@ export interface WorkerActivitySource {
   sourceSection?: string;
 }
 
+export interface WorkerCredentialRevealResponse {
+  value: string;
+}
+
 export interface WorkerBoardQuery {
   section: WorkerBoardSectionQuery;
   keyword?: string;
@@ -304,37 +308,46 @@ export class WorkerApi {
     return this.http.post<WorkerActionResponse>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/nagul`, {});
   }
 
-  logReviewCopyClick(
+  revealReviewCredential(
     reviewId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<void> {
-    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/copy-click`, {
-      field,
-      ...source
-    });
+  ): Observable<WorkerCredentialRevealResponse> {
+    return this.http.post<WorkerCredentialRevealResponse>(
+      `${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/credential-reveal`,
+      {
+        ...source,
+        field
+      }
+    );
   }
 
-  logRecoveryTaskCopyClick(
+  revealRecoveryTaskCredential(
     taskId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<void> {
-    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/recovery-tasks/${taskId}/copy-click`, {
-      field,
-      ...source
-    });
+  ): Observable<WorkerCredentialRevealResponse> {
+    return this.http.post<WorkerCredentialRevealResponse>(
+      `${appEnvironment.apiBaseUrl}/api/worker/recovery-tasks/${taskId}/credential-reveal`,
+      {
+        ...source,
+        field
+      }
+    );
   }
 
-  logBadReviewTaskCopyClick(
+  revealBadReviewTaskCredential(
     taskId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<void> {
-    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/copy-click`, {
-      field,
-      ...source
-    });
+  ): Observable<WorkerCredentialRevealResponse> {
+    return this.http.post<WorkerCredentialRevealResponse>(
+      `${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/credential-reveal`,
+      {
+        ...source,
+        field
+      }
+    );
   }
 
   deleteBot(botId: number): Observable<void> {

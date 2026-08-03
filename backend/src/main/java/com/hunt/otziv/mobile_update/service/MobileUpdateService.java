@@ -14,9 +14,14 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
+import java.util.zip.ZipFile;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -30,6 +35,9 @@ public class MobileUpdateService {
 
     private static final Pattern VERSION_NAME = Pattern.compile("[0-9A-Za-z._-]{1,40}");
     private static final long MAX_APK_SIZE = 100L * 1024L * 1024L;
+    private static final long MAX_APK_UNCOMPRESSED_SIZE = 512L * 1024L * 1024L;
+    private static final long MAX_MANIFEST_SIZE = 16L * 1024L * 1024L;
+    private static final int MAX_ZIP_ENTRIES = 20_000;
     private static final byte[] ZIP_SIGNATURE = {0x50, 0x4b, 0x03, 0x04};
 
     private final ObjectMapper objectMapper;
@@ -156,7 +164,11 @@ public class MobileUpdateService {
     }
 
     private void validateApkFile(Path apkPath) throws IOException {
-        if (Files.size(apkPath) < ZIP_SIGNATURE.length) {
+        long actualSize = Files.size(apkPath);
+        if (actualSize > MAX_APK_SIZE) {
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Размер APK превышает 100 МБ.");
+        }
+        if (actualSize < ZIP_SIGNATURE.length) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "APK пуст или поврежден.");
         }
         try (InputStream input = Files.newInputStream(apkPath)) {
@@ -166,6 +178,88 @@ public class MobileUpdateService {
                 }
             }
         }
+
+        try (ZipFile archive = new ZipFile(apkPath.toFile())) {
+            Set<String> names = new HashSet<>();
+            ZipEntry manifest = null;
+            long declaredUncompressedSize = 0;
+            int entryCount = 0;
+            var entries = archive.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                entryCount++;
+                if (entryCount > MAX_ZIP_ENTRIES) {
+                    throw invalidApk("APK содержит слишком много файлов.");
+                }
+                String name = entry.getName();
+                if (!isSafeArchiveEntryName(name) || !names.add(name)) {
+                    throw invalidApk("APK содержит некорректную структуру файлов.");
+                }
+                long size = entry.getSize();
+                if (size > 0) {
+                    declaredUncompressedSize = Math.addExact(declaredUncompressedSize, size);
+                    if (declaredUncompressedSize > MAX_APK_UNCOMPRESSED_SIZE) {
+                        throw invalidApk("Распакованный размер APK слишком велик.");
+                    }
+                }
+                if ("AndroidManifest.xml".equals(name) && !entry.isDirectory()) {
+                    manifest = entry;
+                }
+            }
+            if (manifest == null) {
+                throw invalidApk("В APK отсутствует AndroidManifest.xml.");
+            }
+            validateManifestEntry(archive, manifest);
+        } catch (ZipException exception) {
+            throw invalidApk("Файл не является корректным ZIP/APK архивом.", exception);
+        } catch (ArithmeticException exception) {
+            throw invalidApk("Распакованный размер APK слишком велик.", exception);
+        }
+    }
+
+    private void validateManifestEntry(ZipFile archive, ZipEntry manifest) throws IOException {
+        long declaredSize = manifest.getSize();
+        if (declaredSize == 0 || declaredSize > MAX_MANIFEST_SIZE) {
+            throw invalidApk("AndroidManifest.xml пуст или имеет недопустимый размер.");
+        }
+        long readBytes = 0;
+        byte[] buffer = new byte[8192];
+        try (InputStream input = archive.getInputStream(manifest)) {
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                readBytes += read;
+                if (readBytes > MAX_MANIFEST_SIZE) {
+                    throw invalidApk("AndroidManifest.xml имеет недопустимый размер.");
+                }
+            }
+        }
+        if (readBytes == 0) {
+            throw invalidApk("AndroidManifest.xml пуст.");
+        }
+    }
+
+    private boolean isSafeArchiveEntryName(String name) {
+        if (name == null || name.isBlank() || name.indexOf('\u0000') >= 0
+                || name.startsWith("/") || name.startsWith("\\") || name.contains("\\")) {
+            return false;
+        }
+        if (name.length() >= 2 && Character.isLetter(name.charAt(0)) && name.charAt(1) == ':') {
+            return false;
+        }
+        for (String segment : name.split("/", -1)) {
+            if ("..".equals(segment)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private ResponseStatusException invalidApk(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+    }
+
+    private ResponseStatusException invalidApk(String message, Exception cause) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message, cause);
     }
 
     private String sha256(Path path) throws IOException {

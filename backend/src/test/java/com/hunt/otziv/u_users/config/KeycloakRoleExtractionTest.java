@@ -66,5 +66,10 @@ class KeycloakRoleExtractionTest {
                 "isBearerOptionalPublicPath",
                 "/api/payments/publicevil"
         )).isFalse();
+        assertThat((Boolean) ReflectionTestUtils.invokeMethod(
+                config,
+                "isBearerOptionalPublicPath",
+                "/api/review-check/00000000-0000-0000-0000-000000000001"
+        )).isTrue();
     }
 }

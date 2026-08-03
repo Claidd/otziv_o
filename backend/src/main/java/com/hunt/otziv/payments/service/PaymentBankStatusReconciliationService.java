@@ -1,10 +1,15 @@
 package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.repository.PaymentBankReconciliationCandidateView;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -50,12 +55,20 @@ public class PaymentBankStatusReconciliationService {
         }
 
         LocalDateTime attemptBefore = now.minusMinutes(5);
-        List<Long> candidates = paymentLinkRepository.findBankReconciliationCandidateIds(
+        List<PaymentBankReconciliationCandidateView> statusCandidates =
+                paymentLinkRepository.findStatusBankReconciliationCandidates(
                 RECONCILABLE_STATUSES,
                 attemptBefore,
                 attemptBefore,
                 PageRequest.of(0, BATCH_SIZE)
         );
+        List<PaymentBankReconciliationCandidateView> cancelCandidates =
+                paymentLinkRepository.findCancelBankReconciliationCandidates(
+                        attemptBefore,
+                        attemptBefore,
+                        PageRequest.of(0, BATCH_SIZE)
+                );
+        List<Long> candidates = mergeCandidates(statusCandidates, cancelCandidates);
         int changed = 0;
         for (Long linkId : candidates) {
             try {
@@ -69,5 +82,31 @@ public class PaymentBankStatusReconciliationService {
         if (!candidates.isEmpty()) {
             log.info("Scheduled T-Bank reconciliation finished: checked={}, changed={}", candidates.size(), changed);
         }
+    }
+
+    private List<Long> mergeCandidates(
+            List<PaymentBankReconciliationCandidateView> statusCandidates,
+            List<PaymentBankReconciliationCandidateView> cancelCandidates
+    ) {
+        Map<Long, PaymentBankReconciliationCandidateView> uniqueById = new LinkedHashMap<>();
+        Stream.concat(statusCandidates.stream(), cancelCandidates.stream())
+                .filter(candidate -> candidate != null && candidate.getId() != null)
+                .forEach(candidate -> uniqueById.putIfAbsent(candidate.getId(), candidate));
+
+        Comparator<PaymentBankReconciliationCandidateView> oldestFirst = Comparator
+                .comparing(
+                        PaymentBankReconciliationCandidateView::getAttemptedAt,
+                        Comparator.nullsFirst(Comparator.naturalOrder())
+                )
+                .thenComparing(
+                        PaymentBankReconciliationCandidateView::getUpdatedAt,
+                        Comparator.nullsFirst(Comparator.naturalOrder())
+                )
+                .thenComparing(PaymentBankReconciliationCandidateView::getId);
+        return uniqueById.values().stream()
+                .sorted(oldestFirst)
+                .limit(BATCH_SIZE)
+                .map(PaymentBankReconciliationCandidateView::getId)
+                .toList();
     }
 }

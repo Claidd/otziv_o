@@ -7,6 +7,7 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -37,13 +38,14 @@ public class OrderEditService {
     private final ReviewRepository reviewRepository;
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
+    private final OrderAggregateMutationLockService orderAggregateMutationLockService;
 
     @Transactional
     public void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId) {
         log.info("2. Вошли в обновление данных Заказа");
 
-        Order saveOrder = orderRepository.findById(orderId)
-                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+        Order saveOrder = orderAggregateMutationLockService.lock(orderId);
+        requireCanonicalCompany(saveOrder, companyId);
 
         log.info("Достали Заказ");
         boolean isChanged = false;
@@ -53,11 +55,13 @@ public class OrderEditService {
         Manager currentManager = saveOrder.getManager();
         Company company = saveOrder.getCompany();
 
-        if (orderDTO.getFilial() != null && currentFilial != null &&
-                !Objects.equals(orderDTO.getFilial().getId(), currentFilial.getId())) {
+        Long dtoFilialId = orderDTO.getFilial() != null ? orderDTO.getFilial().getId() : null;
+        Long currentFilialId = currentFilial != null ? currentFilial.getId() : null;
+        if (dtoFilialId != null && !Objects.equals(dtoFilialId, currentFilialId)) {
             log.info("Обновляем филиал заказа");
 
             Filial newFilial = convertFilialDTOToFilial(orderDTO);
+            requireFilialBelongsToCompany(newFilial, company);
             saveOrder.setFilial(newFilial);
 
             for (Review review : reviewRepository.getAllByOrderId(saveOrder.getId())) {
@@ -81,6 +85,7 @@ public class OrderEditService {
 
             log.info("Обновляем работника заказа");
             Worker newWorker = convertWorkerDTOToWorker(orderDTO);
+            requireWorkerBelongsToCompanyManager(newWorker, company);
             saveOrder.setWorker(newWorker);
 
             reviewRepository.reassignWorkerByOrderId(saveOrder.getId(), newWorker);
@@ -96,10 +101,15 @@ public class OrderEditService {
             isChanged = true;
         }
 
-        if (orderDTO.getManager() != null && currentManager != null &&
-                !Objects.equals(orderDTO.getManager().getManagerId(), currentManager.getId())) {
+        Long dtoManagerId = orderDTO.getManager() != null ? orderDTO.getManager().getManagerId() : null;
+        Long currentManagerId = currentManager != null ? currentManager.getId() : null;
+        if (dtoManagerId != null && !Objects.equals(dtoManagerId, currentManagerId)) {
             log.info("Обновляем менеджера заказа");
-            saveOrder.setManager(convertManagerDTOToManager(orderDTO));
+            Manager newManager = convertManagerDTOToManager(orderDTO);
+            if (newManager == null) {
+                throw new IllegalArgumentException("Менеджер не найден");
+            }
+            saveOrder.setManager(newManager);
             isChanged = true;
         }
 
@@ -121,9 +131,11 @@ public class OrderEditService {
             isChanged = true;
         }
 
-        if (orderDTO.getCounter() != null && !Objects.equals(orderDTO.getCounter(), saveOrder.getCounter())) {
-            log.info("Обновляем счетчик опубликованных текстов в заказе");
-            saveOrder.setCounter(orderDTO.getCounter());
+        int actualPublished = reviewRepository.countPublishedByOrderId(saveOrder.getId());
+        if (actualPublished != saveOrder.getCounter()) {
+            log.warn("Исправляем счетчик заказа {} по фактическим отзывам: {} -> {}",
+                    saveOrder.getId(), saveOrder.getCounter(), actualPublished);
+            saveOrder.setCounter(actualPublished);
             isChanged = true;
         }
 
@@ -134,8 +146,8 @@ public class OrderEditService {
     public void updateOrderToWorker(OrderDTO orderDTO, Long companyId, Long orderId) {
         log.info("2. Вошли в обновление данных Заказа Для работника");
 
-        Order saveOrder = orderRepository.findById(orderId)
-                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", orderId)));
+        Order saveOrder = orderAggregateMutationLockService.lock(orderId);
+        requireCanonicalCompany(saveOrder, companyId);
 
         log.info("Достали Заказ");
         boolean isChanged = false;
@@ -185,5 +197,33 @@ public class OrderEditService {
             return null;
         }
         return filialService.getFilial(orderDTO.getFilial().getId());
+    }
+
+    private void requireCanonicalCompany(Order order, Long companyId) {
+        Long canonicalCompanyId = order.getCompany() == null ? null : order.getCompany().getId();
+        if (canonicalCompanyId == null || !Objects.equals(canonicalCompanyId, companyId)) {
+            throw new IllegalArgumentException("Заказ не принадлежит указанной компании");
+        }
+    }
+
+    private void requireFilialBelongsToCompany(Filial filial, Company company) {
+        if (filial == null || filial.getCompany() == null || company == null
+                || !Objects.equals(filial.getCompany().getId(), company.getId())) {
+            throw new IllegalArgumentException("Филиал не принадлежит компании заказа");
+        }
+        if (filial.isArchived()) {
+            throw new IllegalArgumentException("Архивный филиал нельзя назначить заказу");
+        }
+    }
+
+    private void requireWorkerBelongsToCompanyManager(Worker worker, Company company) {
+        if (worker == null || company == null || company.getManager() == null) {
+            throw new IllegalArgumentException("Специалист или менеджер компании не найден");
+        }
+        boolean assigned = workerService.getAllWorkersByManagerId(company.getManager().getId()).stream()
+                .anyMatch(candidate -> Objects.equals(candidate.getWorkerId(), worker.getId()));
+        if (!assigned) {
+            throw new IllegalArgumentException("Специалист не закреплен за менеджером компании");
+        }
     }
 }

@@ -5,6 +5,7 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.services.serv.DeviceTokenService;
+import com.hunt.otziv.l_lead.services.LeadAccessService;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.l_lead.dto.TelephoneIDAndTimeDTO;
@@ -36,6 +37,7 @@ public class OperatorController {
     private final LeadService leadService;
     private final PromoTextService promoTextService;
     private final DeviceTokenService deviceTokenService;
+    private final LeadAccessService leadAccessService;
 
     @GetMapping
     public ModelAndView leadToOperator(
@@ -49,7 +51,8 @@ public class OperatorController {
         LocalDateTime now = LocalDateTime.now();
         String userRole = getRole(principal);
 
-        TelephoneIDAndTimeDTO telephone = resolveTelephoneId(token);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        TelephoneIDAndTimeDTO telephone = resolveTelephoneId(token, authentication);
         boolean requireDeviceId = (telephone == null || telephone.getTelephoneID() == null);
         boolean hasKeyword = !keyword.isEmpty();
         boolean isTimerExpired = (telephone != null && (now.isAfter(telephone.getTime()) || now.isEqual(telephone.getTime())));
@@ -93,7 +96,7 @@ public class OperatorController {
 
         model.put("requireDeviceId", requireDeviceId);
         model.put("promoTexts", promoTextService.getAllPromoTexts());
-        model.put("text", deviceTokenService.getText(token));
+        model.put("text", deviceTokenService.getText(requireDeviceId ? null : token));
         model.put("leadListNew", leadsNew);
 
         return new ModelAndView("lead/layouts/operators", model);
@@ -105,6 +108,7 @@ public class OperatorController {
     @PostMapping("/status_send/{leadId}")
     public String changeStatusLeadOnSend(Model model, RedirectAttributes rm,  @PathVariable final Long leadId, Principal principal){
         log.info("вход в меняем статус с нового на отправленное");
+        leadAccessService.requireLeadAccess(leadId, SecurityContextHolder.getContext().getAuthentication());
         leadService.changeStatusLeadOnSendAndTelephone(leadId);
         log.info("статус успешно сменен с нового на отправленного" );
         rm.addFlashAttribute("saveSuccess", "true");
@@ -117,6 +121,7 @@ public class OperatorController {
     public String changeStatusLeadToWork(Model model, RedirectAttributes rm, @PathVariable final Long leadId,
                                          @RequestParam(required = false) String commentsLead, Principal principal){
         log.info("вход в меняем статус с нового на В Работу");
+        leadAccessService.requireLeadAccess(leadId, SecurityContextHolder.getContext().getAuthentication());
         leadService.changeStatusLeadToWork(leadId, commentsLead);
         log.info("статус успешно сменен с нового на В Работу" );
         rm.addFlashAttribute("saveSuccess", "true");
@@ -126,12 +131,16 @@ public class OperatorController {
 
 
 
-    private TelephoneIDAndTimeDTO resolveTelephoneId(String token) {
+    private TelephoneIDAndTimeDTO resolveTelephoneId(String token, Authentication authentication) {
         if (token == null || token.isBlank()) {
             log.warn("device_token отсутствует в cookies");
             return null;
         }
         TelephoneIDAndTimeDTO telephone = deviceTokenService.getTelephoneIdByToken(token);
+        if (telephone != null && !leadAccessService.canAccessTelephone(telephone.getTelephoneID(), authentication)) {
+            log.warn("Токен [{}] не принадлежит текущему пользователю", maskToken(token));
+            return null;
+        }
         if (telephone == null) {
             log.warn("Токен [{}] не найден в базе", maskToken(token));
         } else {

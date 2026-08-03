@@ -39,7 +39,7 @@ public class LegacyMigrationRequestGuard {
     @Autowired
     public LegacyMigrationRequestGuard(
             WebhookClientIpResolver clientIpResolver,
-            @Value("${otziv.auth.legacy-migration.enabled:true}") boolean migrationEnabled,
+            @Value("${otziv.auth.legacy-migration.enabled:false}") boolean migrationEnabled,
             @Value("${otziv.auth.legacy-migration.rate-limit.enabled:true}") boolean rateLimitEnabled,
             @Value("${otziv.auth.legacy-migration.rate-limit.max-attempts:5}") int maxAttempts,
             @Value("${otziv.auth.legacy-migration.rate-limit.window:PT15M}") Duration window,
@@ -84,8 +84,8 @@ public class LegacyMigrationRequestGuard {
     void enforce(HttpServletRequest request, String username, Instant now) {
         if (!migrationEnabled) {
             throw new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "Legacy migration is temporarily unavailable."
+                    HttpStatus.GONE,
+                    "Legacy migration is no longer available."
             );
         }
         if (!rateLimitEnabled) {

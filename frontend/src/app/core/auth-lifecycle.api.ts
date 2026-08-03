@@ -24,16 +24,21 @@ export interface RegisterPerformerRequest {
   fio: string;
   telegramUsername?: string;
   registeredSource?: string;
+  personalDataConsentAccepted: boolean;
+  rulesConsentAccepted: boolean;
+  honestReviewConsentAccepted: boolean;
 }
 
 export interface RegisterPerformerResponse {
   userId: number;
   performerId: number;
   username: string;
-  temporaryPassword: string;
-  telegramLinkToken: string;
+  temporaryPassword?: string | null;
+  telegramLinkToken?: string | null;
   telegramLinkUrl: string;
   status: string;
+  registrationExpiresAt: string;
+  requiresAdminApproval: boolean;
 }
 
 export interface LegacyUserMigrationRequest {

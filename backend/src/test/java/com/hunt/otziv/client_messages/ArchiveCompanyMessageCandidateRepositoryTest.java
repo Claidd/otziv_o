@@ -51,7 +51,10 @@ class ArchiveCompanyMessageCandidateRepositoryTest {
         String sql = sqlCaptor.getValue();
         assertTrue(sql.contains("FROM companies c"));
         assertTrue(sql.contains("c.company_status_changed_at <= :cutoff"));
-        assertTrue(sql.contains("LEFT JOIN archive_orders ao"));
+        assertTrue(sql.contains("WITH eligible_companies AS"));
+        assertTrue(sql.contains("FROM archive_orders archived"));
+        assertTrue(sql.contains("ORDER BY archived.archived_at DESC, archived.order_id DESC"));
+        assertFalse(sql.contains("GROUP_CONCAT"));
         assertFalse(sql.contains("FROM archive_orders ao"));
     }
 

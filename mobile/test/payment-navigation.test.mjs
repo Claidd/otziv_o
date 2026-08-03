@@ -53,6 +53,23 @@ test('keeps a valid public payment URL byte-for-byte unchanged', () => {
   assert.deepEqual(navigated, [value]);
 });
 
+for (const value of [
+  'http://securepay.tinkoff.ru/pay',
+  'https://securepay.tinkoff.ru.evil.test/pay',
+  'https://evil.test/pay'
+]) {
+  test(`rejects untrusted generated payment URL: ${value}`, () => {
+    assert.equal(safePaymentNavigationTarget(value, 'payment'), null);
+  });
+}
+
+test('keeps arbitrary HTTPS manual links for configured acquiring banks', () => {
+  assert.equal(
+    safePaymentNavigationTarget('https://pay.alfabank.ru/sc/example', 'manual'),
+    'https://pay.alfabank.ru/sc/example'
+  );
+});
+
 test('does not substitute another recipient for a quarantined backend destination', () => {
   assert.equal(configuredPaymentTarget(''), '');
   assert.equal(configuredPaymentTarget(null), '');

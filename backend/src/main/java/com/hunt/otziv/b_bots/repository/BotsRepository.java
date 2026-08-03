@@ -34,6 +34,7 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
         String getFio();
         Boolean getActive();
         Integer getCounter();
+        Boolean getPasswordPresent();
         Long getStatusId();
         String getStatusTitle();
         Long getWorkerId();
@@ -97,6 +98,7 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
                b.fio AS fio,
                b.active AS active,
                b.counter AS counter,
+               CASE WHEN b.password IS NOT NULL AND b.password <> '' THEN true ELSE false END AS passwordPresent,
                s.id AS statusId,
                s.botStatusTitle AS statusTitle,
                w.id AS workerId,
@@ -112,6 +114,29 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     """)
     List<AdminBotRow> findAllAdminRows();
 
+    @Query("""
+        SELECT b.id AS id,
+               b.login AS login,
+               b.fio AS fio,
+               b.active AS active,
+               b.counter AS counter,
+               CASE WHEN b.password IS NOT NULL AND b.password <> '' THEN true ELSE false END AS passwordPresent,
+               s.id AS statusId,
+               s.botStatusTitle AS statusTitle,
+               w.id AS workerId,
+               u.fio AS workerFio,
+               u.username AS workerUsername,
+               bc.id AS cityId,
+               bc.title AS cityTitle
+        FROM Bot b
+        LEFT JOIN b.status s
+        LEFT JOIN b.worker w
+        LEFT JOIN w.user u
+        LEFT JOIN b.botCity bc
+        WHERE b.id = :id
+    """)
+    Optional<AdminBotRow> findAdminRowById(@Param("id") Long id);
+
     @Query(
             value = """
                 SELECT b.id AS id,
@@ -119,6 +144,7 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
                        b.fio AS fio,
                        b.active AS active,
                        b.counter AS counter,
+                       CASE WHEN b.password IS NOT NULL AND b.password <> '' THEN true ELSE false END AS passwordPresent,
                        s.id AS statusId,
                        s.botStatusTitle AS statusTitle,
                        w.id AS workerId,

@@ -74,7 +74,8 @@ public class ClientMessageMaintenancePreviewService {
                 JOIN company_status target_status ON target_status.status_title = 'В работе'
                 SET c.company_status = target_status.company_status_id,
                     c.company_status_changed_at = NOW(6),
-                    c.update_status = CURDATE()
+                    c.update_status = CURDATE(),
+                    c.row_version = c.row_version + 1
                 WHERE current_status.status_title NOT IN ('В работе', 'Бан')
                   AND EXISTS (
                     SELECT 1
@@ -91,7 +92,8 @@ public class ClientMessageMaintenancePreviewService {
                 JOIN company_status target_status ON target_status.status_title = 'На стопе'
                 SET c.company_status = target_status.company_status_id,
                     c.company_status_changed_at = NOW(6),
-                    c.update_status = CURDATE()
+                    c.update_status = CURDATE(),
+                    c.row_version = c.row_version + 1
                 WHERE current_status.status_title = 'В работе'
                   AND NOT EXISTS (
                     SELECT 1
@@ -325,7 +327,8 @@ public class ClientMessageMaintenancePreviewService {
         for (int i = 0; i < reviewIds.size(); i++) {
             updated += jdbc.update("""
                     UPDATE reviews
-                    SET review_publish_date = :publishDate
+                    SET review_publish_date = :publishDate,
+                        row_version = row_version + 1
                     WHERE review_id = :reviewId
                       AND review_publish = 0
                     """, new MapSqlParameterSource()

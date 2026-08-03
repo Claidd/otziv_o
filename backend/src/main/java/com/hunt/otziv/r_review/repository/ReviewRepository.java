@@ -454,7 +454,8 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Modifying(flushAutomatically = true)
     @Query("""
         UPDATE Review r
-        SET r.worker = :worker
+        SET r.worker = :worker,
+            r.rowVersion = r.rowVersion + 1
         WHERE r.orderDetails.order.id = :orderId
           AND r.publish = false
     """)
@@ -673,7 +674,8 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("""
         UPDATE Review r
         SET r.category = :category,
-            r.subCategory = :subCategory
+            r.subCategory = :subCategory,
+            r.rowVersion = r.rowVersion + 1
         WHERE r.filial IN :filials
     """)
     int updateClassificationByFilials(

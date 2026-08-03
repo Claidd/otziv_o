@@ -13,8 +13,8 @@ public record ReviewRecoveryTaskDetailsResponse(
         String workerFio,
         Long botId,
         String botFio,
-        String botLogin,
-        String botPassword,
+        boolean botLoginPresent,
+        boolean botPasswordPresent,
         ReviewRecoveryBatchDetailsResponse batch
 ) {
 }

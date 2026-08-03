@@ -26,8 +26,10 @@ import java.util.Optional;
 import java.util.stream.StreamSupport;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -237,6 +239,41 @@ class LeadImportServiceTest {
                 .orElseThrow();
 
         assertEquals("79100000000", lead.getTelephoneLead());
+    }
+
+    @Test
+    void importLeadsValidatesIdsEmbeddedInEachRowBeforeResolvingOrSavingThem() {
+        when(leadsRepository.findExistingTelephoneLeads(anyCollection())).thenReturn(List.of());
+
+        String csv = """
+                telephone_lead;manager_id;operator_id;marketolog_id;telephone_id
+                +79182002001;99;88;77;66
+                """;
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "leads.csv",
+                "text/csv",
+                csv.getBytes(StandardCharsets.UTF_8)
+        );
+
+        SecurityException rejection = assertThrows(SecurityException.class, () -> service.importLeads(
+                file,
+                LeadImportService.LeadImportOptions.empty(),
+                (managerId, operatorId, marketologId, telephoneId) -> {
+                    assertEquals(99L, managerId);
+                    assertEquals(88L, operatorId);
+                    assertEquals(77L, marketologId);
+                    assertEquals(66L, telephoneId);
+                    throw new SecurityException("out of scope");
+                }
+        ));
+
+        assertEquals("out of scope", rejection.getMessage());
+        verify(managerRepository, never()).findById(any());
+        verify(operatorRepository, never()).findById(any());
+        verify(marketologRepository, never()).findById(any());
+        verify(telephoneRepository, never()).findById(any());
+        verify(leadsRepository, never()).saveAll(any());
     }
 
     private LeadImportTelephonePool pool(Manager manager, Long telephoneId, int priority) {

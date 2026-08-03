@@ -1,0 +1,344 @@
+networks:
+  internal_net:
+
+volumes:
+  mysql_data:
+  sent_hashes:
+  keycloak_pg_data:
+  loki_data:
+  tempo_data:
+  alloy_data:
+  frontend_node_modules:
+
+services:
+  mysql:
+    # Match production and avoid an implicit upgrade through the latest tag.
+    image: mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
+    container_name: my-mysql
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./data/mysql_backup:/backup
+      - ./data/bots:/var/lib/mysql-files/
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-local-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me-local-mysql}
+    networks:
+      internal_net:
+
+  nginx:
+    image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+    ports:
+      - '127.0.0.1:80:80'
+      - '127.0.0.1:443:443'
+    restart: always
+    volumes:
+      - ./data/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./data/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./data/nginx/www:/var/www
+      - ./data/nginx/logs/nginx:/var/log/nginx
+#      - ./data/nginx/nginx.conf:/etc/nginx/nginx.conf
+#      - ./data/nginx/o-ogo.crt:/etc/ssl/o-ogo.crt
+#      - ./data/nginx/ca.crt:/etc/ssl/ca.crt
+#      - ./data/nginx/o-ogo.key:/etc/ssl/o-ogo.key
+    depends_on:
+      - mysql
+      - app
+    networks:
+      internal_net:
+
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        BUILD_NO_CACHE: 1
+    restart: always
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - mysql
+      - external-review-worker
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-local-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me-local-mysql}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN_LOCAL_DOCKER:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME_LOCAL_DOCKER:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      DATABASE_URL: ${DATABASE_URL}
+      KEYCLOAK_ISSUER_URI: ${LOCAL_KEYCLOAK_ISSUER_URI:-http://localhost:8180/realms/otziv}
+      KEYCLOAK_JWK_SET_URI: ${LOCAL_KEYCLOAK_JWK_SET_URI:-http://keycloak:8080/realms/otziv/protocol/openid-connect/certs}
+      KEYCLOAK_ADMIN_SERVER_URL: ${LOCAL_KEYCLOAK_ADMIN_SERVER_URL:-http://keycloak:8080}
+      KEYCLOAK_ADMIN_REALM: ${KEYCLOAK_ADMIN_REALM:-otziv}
+      KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-otziv-backend}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-local-secret}
+      OTZIV_APP_BASE_URL: ${OTZIV_APP_BASE_URL:-http://localhost:4200}
+      EXTERNAL_REVIEW_CHECK_ENABLED: ${EXTERNAL_REVIEW_CHECK_ENABLED:-false}
+      EXTERNAL_REVIEW_CHECK_WORKER_BASE_URL: ${EXTERNAL_REVIEW_CHECK_WORKER_BASE_URL:-http://external-review-worker:3097}
+      OTZIV_PAYMENTS_TBANK_ENABLED: ${OTZIV_PAYMENTS_TBANK_ENABLED:-false}
+      OTZIV_PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED: ${OTZIV_PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED:-true}
+      OTZIV_PAYMENTS_TBANK_MANAGER_UI_ENABLED: ${OTZIV_PAYMENTS_TBANK_MANAGER_UI_ENABLED:-false}
+      OTZIV_PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS: ${OTZIV_PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS:-false}
+      OTZIV_PAYMENTS_TBANK_BASE_URL: ${OTZIV_PAYMENTS_TBANK_BASE_URL:-https://securepay.tinkoff.ru}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_NAME: ${OTZIV_PAYMENTS_TBANK_PRIMARY_NAME:-Основной магазин}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_TERMINAL_KEY: ${OTZIV_PAYMENTS_TBANK_PRIMARY_TERMINAL_KEY:-}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_PASSWORD: ${OTZIV_PAYMENTS_TBANK_PRIMARY_PASSWORD:-}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_TEST_TERMINAL_KEY: ${OTZIV_PAYMENTS_TBANK_PRIMARY_TEST_TERMINAL_KEY:-}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_TEST_PASSWORD: ${OTZIV_PAYMENTS_TBANK_PRIMARY_TEST_PASSWORD:-}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_LIVE_TERMINAL_KEY: ${OTZIV_PAYMENTS_TBANK_PRIMARY_LIVE_TERMINAL_KEY:-}
+      OTZIV_PAYMENTS_TBANK_PRIMARY_LIVE_PASSWORD: ${OTZIV_PAYMENTS_TBANK_PRIMARY_LIVE_PASSWORD:-}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_TERMINAL_KEY: ${OTZIV_PAYMENTS_TBANK_SECONDARY_TERMINAL_KEY:-}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_PASSWORD: ${OTZIV_PAYMENTS_TBANK_SECONDARY_PASSWORD:-}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_TEST_TERMINAL_KEY: ${OTZIV_PAYMENTS_TBANK_SECONDARY_TEST_TERMINAL_KEY:-}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_TEST_PASSWORD: ${OTZIV_PAYMENTS_TBANK_SECONDARY_TEST_PASSWORD:-}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_LIVE_TERMINAL_KEY: ${OTZIV_PAYMENTS_TBANK_SECONDARY_LIVE_TERMINAL_KEY:-}
+      OTZIV_PAYMENTS_TBANK_SECONDARY_LIVE_PASSWORD: ${OTZIV_PAYMENTS_TBANK_SECONDARY_LIVE_PASSWORD:-}
+      OTZIV_PAYMENTS_TBANK_TERMINAL_KEY: ${OTZIV_PAYMENTS_TBANK_TERMINAL_KEY:-}
+      OTZIV_PAYMENTS_TBANK_PASSWORD: ${OTZIV_PAYMENTS_TBANK_PASSWORD:-}
+      OTZIV_PAYMENTS_TBANK_PUBLIC_BASE_URL: ${OTZIV_PAYMENTS_TBANK_PUBLIC_BASE_URL:-http://localhost:4200}
+      OTZIV_PAYMENTS_TBANK_NOTIFICATION_PATH: ${OTZIV_PAYMENTS_TBANK_NOTIFICATION_PATH:-/api/payments/tbank/webhook}
+      OTZIV_PAYMENTS_TBANK_SUCCESS_PATH: ${OTZIV_PAYMENTS_TBANK_SUCCESS_PATH:-/pay/success}
+      OTZIV_PAYMENTS_TBANK_FAIL_PATH: ${OTZIV_PAYMENTS_TBANK_FAIL_PATH:-/pay/fail}
+      OTZIV_PAYMENTS_TBANK_LINK_TTL: ${OTZIV_PAYMENTS_TBANK_LINK_TTL:-P90D}
+      OTZIV_PAYMENTS_TBANK_REDIRECT_DUE: ${OTZIV_PAYMENTS_TBANK_REDIRECT_DUE:-P7D}
+      OTZIV_PAYMENTS_TBANK_TAXATION: ${OTZIV_PAYMENTS_TBANK_TAXATION:-usn_income}
+      OTZIV_PAYMENTS_TBANK_TAX: ${OTZIV_PAYMENTS_TBANK_TAX:-none}
+      OTZIV_PAYMENTS_TBANK_PAYMENT_METHOD: ${OTZIV_PAYMENTS_TBANK_PAYMENT_METHOD:-full_payment}
+      OTZIV_PAYMENTS_TBANK_PAYMENT_OBJECT: ${OTZIV_PAYMENTS_TBANK_PAYMENT_OBJECT:-service}
+      OTZIV_PAYMENTS_TBANK_RECEIPT_ITEM_NAME: "${OTZIV_PAYMENTS_TBANK_RECEIPT_ITEM_NAME:-Рекламные и информационные услуги}"
+      TZ: Asia/Irkutsk
+      JAVA_OPTS: "-Xmx512m"
+      OTZIV_SERVICE_NAME: ${OTZIV_SERVICE_NAME:-otziv-backend-local}
+      OTZIV_TRACING_ENABLED: ${OTZIV_TRACING_ENABLED:-false}
+      MANAGEMENT_TRACING_ENABLED: ${OTZIV_TRACING_ENABLED:-false}
+      MANAGEMENT_TRACING_EXPORT_ENABLED: ${OTZIV_TRACING_ENABLED:-false}
+      MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED: ${OTZIV_TRACING_ENABLED:-false}
+      OTZIV_TRACING_SAMPLING_PROBABILITY: ${OTZIV_TRACING_SAMPLING_PROBABILITY:-0.1}
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${OTZIV_OTLP_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
+      MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED: "false"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data/app-logs:/app/logs
+      - ./docker/sent-hashes:/app/sent-hashes
+    networks:
+      internal_net:
+
+  external-review-worker:
+    image: ${EXTERNAL_REVIEW_WORKER_IMAGE:-otziv-external-review-worker:local}
+    build:
+      context: ./backend/external-review-worker
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${EXTERNAL_REVIEW_WORKER_PORT:-3097}:3097"
+    environment:
+      PORT: 3097
+      TZ: ${TZ:-Asia/Irkutsk}
+      CHECK_TIMEOUT_MS: ${EXTERNAL_REVIEW_CHECK_TIMEOUT_MS:-60000}
+      MAX_REVIEW_SCROLLS: ${EXTERNAL_REVIEW_MAX_SCROLLS:-6}
+      MATCH_CONFIRMED_THRESHOLD: ${EXTERNAL_REVIEW_MATCH_CONFIRMED_THRESHOLD:-0.92}
+      MATCH_NEEDS_REVIEW_THRESHOLD: ${EXTERNAL_REVIEW_MATCH_NEEDS_REVIEW_THRESHOLD:-0.75}
+      EXTERNAL_REVIEW_PROXY_ENABLED: ${EXTERNAL_REVIEW_PROXY_ENABLED:-false}
+      EXTERNAL_REVIEW_PROXY_HOST: ${EXTERNAL_REVIEW_PROXY_HOST:-}
+      EXTERNAL_REVIEW_PROXY_PORT: ${EXTERNAL_REVIEW_PROXY_PORT:-8888}
+      EXTERNAL_REVIEW_PROXY_USERNAME: ${EXTERNAL_REVIEW_PROXY_USERNAME:-}
+      EXTERNAL_REVIEW_PROXY_PASSWORD: ${EXTERNAL_REVIEW_PROXY_PASSWORD:-}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3097/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      internal_net:
+
+  frontend:
+    image: node:24-alpine@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3
+    working_dir: /app
+    command: sh -c "npm ci && npm run ng -- serve --host 0.0.0.0 --port 4200 --proxy-config proxy.docker.conf.json"
+    ports:
+      - "127.0.0.1:4200:4200"
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - app
+      - keycloak
+    networks:
+      internal_net:
+
+  phpmyadmin:
+    image: phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b
+    profiles: ["db-admin"]
+    ports:
+      - "127.0.0.1:6571:80"
+    volumes:
+      - ./data/phpmyadmin/config.inc.php:/etc/phpmyadmin/config.inc.php
+      - ./data/phpmyadmin/apache2.conf:/etc/apache2/conf-available/servername.conf
+    environment:
+      - UPLOAD_LIMIT=512M
+      - PMA_HOST=mysql
+      - PMA_USER=${MYSQL_USER}
+      - PMA_PASSWORD=${MYSQL_PASSWORD}
+    restart: always
+    depends_on:
+      - mysql
+    command: /bin/sh -c "chmod 644 /etc/phpmyadmin/config.inc.php && apache2-foreground"
+    networks:
+      internal_net:
+
+  log-viewer:
+    image: amir20/dozzle@sha256:1c1060cfb5402093c4e0f03f3534d7deaffeb0a6f6dd034e7c5f244603f35fb3
+    profiles: ["observability"]
+    container_name: log-viewer
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./data/app-logs:/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DOZZLE_LEVEL=info
+    networks:
+      - internal_net
+
+  keycloak-postgres:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    container_name: otziv-keycloak-postgres
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-change-me-local-keycloak}
+      POSTGRES_DB: keycloak
+    volumes:
+      - keycloak_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U keycloak" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - internal_net
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9
+    container_name: otziv-keycloak
+    command: start-dev --import-realm
+    ports:
+      - "127.0.0.1:8180:8080"
+      - "127.0.0.1:9000:9000"
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-change-me-local-keycloak}
+      KC_METRICS_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_RELATIVE_PATH: ${KC_HTTP_RELATIVE_PATH:-/}
+      KC_SPI_THEME_CACHE_THEMES: "false"
+      KC_SPI_THEME_CACHE_TEMPLATES: "false"
+      KC_SPI_THEME_STATIC_MAX_AGE: "-1"
+      OTZIV_APP_BASE_URL: ${OTZIV_APP_BASE_URL:-http://localhost:4200}
+    volumes:
+      - ./infrastructure/keycloak/realm-config.json:/opt/keycloak/data/import/realm-config.json:ro
+      - ./infrastructure/keycloak/themes:/opt/keycloak/themes:ro
+    depends_on:
+      keycloak-postgres:
+        condition: service_healthy
+    networks:
+      - internal_net
+
+  prometheus:
+    image: prom/prometheus@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3
+    profiles: ["observability"]
+    container_name: otziv-prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - internal_net
+
+  loki:
+    image: grafana/loki@sha256:8b5bd7748d0e4da66cd741ac276e485517514af0bea32167e27c0e1a95bcf8aa
+    profiles: ["observability"]
+    container_name: otziv-loki
+    command: -config.file=/etc/loki/loki-config.yaml
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./infrastructure/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+    networks:
+      - internal_net
+
+  tempo:
+    image: grafana/tempo@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50
+    profiles: ["observability"]
+    container_name: otziv-tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "127.0.0.1:3200:3200"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    volumes:
+      - ./infrastructure/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    restart: unless-stopped
+    networks:
+      - internal_net
+
+  alloy:
+    image: grafana/alloy@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8
+    profiles: ["observability"]
+    container_name: otziv-alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "127.0.0.1:12345:12345"
+    volumes:
+      - ./infrastructure/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./data/app-logs:/var/log/otziv-app:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      - loki
+      - tempo
+    restart: unless-stopped
+    networks:
+      - internal_net
+
+  grafana:
+    image: grafana/grafana@sha256:7567a7c70a3c1d75aeeedc968d1304174a16651e55a60d1fb132a05e1e63a054
+    profiles: ["observability"]
+    container_name: otziv-grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-local-grafana}
+      GF_METRICS_ENABLED: "true"
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/grafana/dashboards:/etc/grafana/dashboards
+    networks:
+      - internal_net

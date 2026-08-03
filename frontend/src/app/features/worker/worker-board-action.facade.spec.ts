@@ -26,8 +26,8 @@ function review(overrides: Partial<WorkerReviewItem> = {}): WorkerReviewItem {
     subCategory: '',
     botId: 11,
     botFio: 'Bot',
-    botLogin: 'login',
-    botPassword: 'pass',
+    botLoginPresent: true,
+    botPasswordPresent: true,
     botCounter: 2,
     companyTitle: 'Company',
     commentCompany: 'company note',
@@ -53,8 +53,8 @@ function review(overrides: Partial<WorkerReviewItem> = {}): WorkerReviewItem {
 function bot(overrides: Partial<WorkerBotItem> = {}): WorkerBotItem {
   return {
     id: 5,
-    login: 'bot-login',
-    password: 'bot-pass',
+    loginPresent: true,
+    passwordPresent: true,
     fio: 'Bot Name',
     city: 'City',
     counter: 3,

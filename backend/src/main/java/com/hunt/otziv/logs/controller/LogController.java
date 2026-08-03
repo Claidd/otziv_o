@@ -7,8 +7,11 @@ import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Predicate;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -251,6 +254,36 @@ window.onload = function() {
 
     public ResponseEntity<Map<String, Object>> tailLog(long offset) throws IOException {
         return tailLog(offset, DEFAULT_TAIL_LIMIT, null);
+    }
+
+    @GetMapping("/download")
+    public ResponseEntity<Resource> downloadLog(
+            @RequestParam(required = false) String date
+    ) throws IOException {
+        Optional<LogPathResolver.LogSelection> resolvedSelection = resolver.resolveLogSelection(date);
+        if (resolvedSelection.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        LogPathResolver.LogSelection selection = resolvedSelection.get();
+        Path selectedPath = selection.path();
+        if (!Files.isRegularFile(selectedPath, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String filename = selection.selector().isBlank()
+                ? "app.log"
+                : "app." + selection.selector() + ".log";
+        String disposition = org.springframework.http.ContentDisposition.attachment()
+                .filename(filename, StandardCharsets.UTF_8)
+                .build()
+                .toString();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(new FileSystemResource(selectedPath));
     }
 
     private static Predicate<String> logFilter(String level, String search) {

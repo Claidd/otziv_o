@@ -337,8 +337,8 @@ class ManagerBoardEditAssemblerTest {
         assertEquals(1, response.badReviewSummary().done());
         assertEquals("https://review", response.reviews().getFirst().urlPhoto());
         assertEquals(1, response.badReviewTasks().size());
-        assertEquals("snapshot-login", response.badReviewTasks().getFirst().botLogin());
-        assertEquals("snapshot-password", response.badReviewTasks().getFirst().botPassword());
+        assertTrue(response.badReviewTasks().getFirst().botLoginPresent());
+        assertTrue(response.badReviewTasks().getFirst().botPasswordPresent());
         assertEquals("самостоятельный плохой текст", response.badReviewTasks().getFirst().taskText());
         assertEquals(0, response.recoveryTasks().size());
         assertTrue(response.canEditReviewPublish());

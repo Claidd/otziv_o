@@ -48,8 +48,8 @@
                     <tbody>
                     <tr th:each="bot : ${all_bots}">
                         <th scope="row" th:text="${bot.id}">ID</th>
-                        <th scope="row" th:text="${bot.login}">Логин</th>
-                        <th scope="row" th:text="${bot.password}">Пароль</th>
+                        <th scope="row">Скрыт — используйте новый кабинет</th>
+                        <th scope="row">Скрыт — откройте карточку аккаунта</th>
                         <th scope="row" th:text="${bot.fio}">ФИО</th>
                         <th scope="row" th:text="${bot.counter}">Публикаций</th>
                         <th scope="row" th:text="${bot.worker.user.fio}">Владелец</th>

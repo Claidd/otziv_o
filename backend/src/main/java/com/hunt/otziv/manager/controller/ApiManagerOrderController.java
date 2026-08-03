@@ -13,6 +13,7 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.payment.service.OrderPaymentCancellationService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
@@ -57,10 +58,12 @@ public class ApiManagerOrderController {
     private final CompanyRepository companyRepository;
     private final OrderRepository orderRepository;
     private final WorkerService workerService;
+    private final OrderAggregateMutationLockService orderAggregateMutationLockService;
 
     @PostMapping("/orders/{orderId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @Transactional
     public void updateOrderStatus(
             @PathVariable Long orderId,
             @RequestBody StatusChangeRequest request,
@@ -68,16 +71,12 @@ public class ApiManagerOrderController {
             Authentication authentication
     ) throws Exception {
         managerAccessService.requireOrderAccess(orderId, authentication);
+        orderAggregateMutationLockService.lock(orderId);
+        managerAccessService.requireOrderAccess(orderId, authentication);
         String status = requireStatus(request);
         servletRequest.setAttribute("status", status);
         if (managerPermissionService.hasOnlyWorkerRole(authentication) && !"В проверку".equals(status)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Специалист может отправить заказ только на проверку");
-        }
-
-        Order order = orderService.getOrder(orderId);
-
-        if ("Опубликовано".equals(status) || "Оплачено".equals(status)) {
-            requireCompleteCounter(order, status);
         }
 
         boolean updated = "Бан".equals(status) && managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER")
@@ -114,7 +113,11 @@ public class ApiManagerOrderController {
             Authentication authentication
     ) {
         managerAccessService.requireOrderAccess(orderId, authentication);
+        orderAggregateMutationLockService.lock(orderId);
+        managerAccessService.requireOrderAccess(orderId, authentication);
         OrderDTO current = orderService.getOrderDTO(orderId);
+        validateOrderUpdateRelations(current, request, authentication);
+        requireCompanyAccessForCompanyMutations(current, request, authentication);
         OrderDTO update = toOrderUpdateDto(current, request, orderId, authentication);
 
         try {
@@ -153,11 +156,6 @@ public class ApiManagerOrderController {
         Worker selectedWorker = workerService.getWorkerById(selectedWorkerId);
         if (selectedWorker == null) {
             throw new IllegalArgumentException("Новый специалист не найден");
-        }
-
-        if (managerPermissionService.hasOnlyWorkerRole(authentication)
-                && (company.getWorkers() == null || !company.getWorkers().contains(selectedWorker))) {
-            throw new IllegalArgumentException("Специалист не закреплен за компанией");
         }
 
         if (company.getWorkers() == null) {
@@ -210,10 +208,6 @@ public class ApiManagerOrderController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные заказа не переданы");
         }
 
-        if (request.counter() != null && request.counter() < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Счетчик не может быть меньше нуля");
-        }
-
         boolean canComplete = managerPermissionService.hasRole(authentication, "ADMIN") || managerPermissionService.hasRole(authentication, "OWNER");
 
         return OrderDTO.builder()
@@ -221,7 +215,8 @@ public class ApiManagerOrderController {
                 .filial(FilialDTO.builder().id(firstId(request.filialId(), idOf(current.getFilial()))).build())
                 .worker(WorkerDTO.builder().workerId(firstId(request.workerId(), idOf(current.getWorker()))).build())
                 .manager(ManagerDTO.builder().managerId(firstId(request.managerId(), idOf(current.getManager()))).build())
-                .counter(request.counter() != null ? request.counter() : current.getCounter())
+                // Publication progress is derived from persisted reviews, never from the browser.
+                .counter(current.getCounter())
                 .orderComments(normalize(request.orderComments()))
                 .commentsCompany(normalize(request.commentsCompany()))
                 .complete(canComplete ? Boolean.TRUE.equals(request.complete()) : current.isComplete())
@@ -255,13 +250,79 @@ public class ApiManagerOrderController {
         return request.status().trim();
     }
 
-    private void requireCompleteCounter(Order order, String status) {
-        if (order.getAmount() > order.getCounter()) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Нельзя перевести заказ в статус \"" + status + "\": опубликовано "
-                            + order.getCounter() + " из " + order.getAmount() + " отзывов"
-            );
+    private void validateOrderUpdateRelations(
+            OrderDTO current,
+            OrderUpdateRequest request,
+            Authentication authentication
+    ) {
+        if (current == null || current.getCompany() == null || current.getCompany().getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У заказа не указана компания");
+        }
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные заказа не переданы");
+        }
+
+        Long currentFilialId = idOf(current.getFilial());
+        Long currentWorkerId = idOf(current.getWorker());
+        Long currentManagerId = idOf(current.getManager());
+        if (managerPermissionService.hasOnlyWorkerRole(authentication)) {
+            if ((request.filialId() != null && !Objects.equals(request.filialId(), currentFilialId))
+                    || (request.workerId() != null && !Objects.equals(request.workerId(), currentWorkerId))
+                    || (request.managerId() != null && !Objects.equals(request.managerId(), currentManagerId))
+                    || (request.counter() != null && !Objects.equals(request.counter(), current.getCounter()))
+                    || (request.complete() != null && !Objects.equals(request.complete(), current.isComplete()))
+                    || Boolean.TRUE.equals(request.removePreviousWorkerFromCompany())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Специалист может менять только заметки заказа");
+            }
+            return;
+        }
+
+        Long targetManagerId = firstId(request.managerId(), currentManagerId);
+        if (!managerAccessService.canAccessManager(targetManagerId, authentication)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден");
+        }
+
+        Long targetFilialId = firstId(request.filialId(), currentFilialId);
+        boolean filialBelongsToCompany = current.getCompany().getFilials() != null
+                && current.getCompany().getFilials().stream()
+                .anyMatch(filial -> Objects.equals(filial.getId(), targetFilialId)
+                        && (!filial.isArchived() || Objects.equals(targetFilialId, currentFilialId)));
+        if (!filialBelongsToCompany) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Филиал не найден у компании");
+        }
+
+        Long targetWorkerId = firstId(request.workerId(), currentWorkerId);
+        Long companyManagerId = current.getCompany().getManager() == null
+                ? null
+                : current.getCompany().getManager().getManagerId();
+        boolean workerBelongsToCompanyManager = companyManagerId != null
+                && workerService.getAllWorkersByManagerId(companyManagerId).stream()
+                .anyMatch(worker -> Objects.equals(worker.getWorkerId(), targetWorkerId));
+        if (!workerBelongsToCompanyManager) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист не закреплен за менеджером компании");
+        }
+    }
+
+    private void requireCompanyAccessForCompanyMutations(
+            OrderDTO current,
+            OrderUpdateRequest request,
+            Authentication authentication
+    ) {
+        Long currentWorkerId = idOf(current.getWorker());
+        Long targetWorkerId = firstId(request.workerId(), currentWorkerId);
+        boolean workerTransfer = !Objects.equals(targetWorkerId, currentWorkerId);
+        boolean workerMembershipMissing = targetWorkerId != null
+                && targetWorkerId > 0
+                && (current.getCompany().getWorkers() == null
+                || current.getCompany().getWorkers().stream()
+                .noneMatch(worker -> Objects.equals(worker.getWorkerId(), targetWorkerId)));
+        boolean companyCommentsChanged = !Objects.equals(
+                normalize(request.commentsCompany()),
+                current.getCommentsCompany()
+        );
+
+        if (workerTransfer || workerMembershipMissing || companyCommentsChanged) {
+            managerAccessService.requireCompanyAccess(current.getCompany().getId(), authentication);
         }
     }
 

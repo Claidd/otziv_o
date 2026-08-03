@@ -296,6 +296,20 @@ class KeycloakUserProvisioningServiceTest {
     }
 
     @Test
+    void ownerCannotCreateAnotherOwnerByDefault() {
+        authenticateAs("OWNER");
+        CreateKeycloakUserRequest request = createRequest("new-owner", "OWNER");
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createUser(request)
+        );
+
+        assertEquals(403, error.getStatusCode().value());
+        verify(keycloakAdminClient, never()).createUser(any());
+    }
+
+    @Test
     void adminCanCreateUserWithAdminRole() {
         authenticateAs("ADMIN");
         Role adminRole = role("ROLE_ADMIN");
@@ -339,6 +353,23 @@ class KeycloakUserProvisioningServiceTest {
         ResponseStatusException error = assertThrows(
                 ResponseStatusException.class,
                 () -> service.updateUser(4L, request)
+        );
+
+        assertEquals(403, error.getStatusCode().value());
+        verify(keycloakAdminClient, never()).updateUser(anyString(), anyString(), any());
+        verify(userRepository, never()).flush();
+    }
+
+    @Test
+    void ownerCannotModifyExistingOwnerByDefault() {
+        authenticateAs("OWNER");
+        User user = userWithRole(44L, "other-owner", "ROLE_OWNER", "kc-owner");
+        UpdateKeycloakUserRequest request = updateRequest("other-owner", true, "OWNER");
+        when(userRepository.lockById(44L)).thenReturn(Optional.of(user));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.updateUser(44L, request)
         );
 
         assertEquals(403, error.getStatusCode().value());

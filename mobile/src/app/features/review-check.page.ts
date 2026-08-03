@@ -151,7 +151,7 @@ type ReviewDraft = {
                     [context]="(details.companyTitle || 'Компания') + ' · #' + review.id"
                     [value]="reviewFieldValue(review, 'text')"
                     [editing]="isReviewFieldEditing(review, 'text')"
-                    [disabled]="isMutating(fieldMutationKey(review, 'text'))"
+                    [disabled]="busy()"
                     [showToggle]="shouldShowTextToggle(review)"
                     [expanded]="isReviewTextOpen(review)"
                     [saveDisabled]="!canSaveReviewField(review, 'text')"
@@ -169,7 +169,7 @@ type ReviewDraft = {
                     [context]="(details.companyTitle || 'Компания') + ' · #' + review.id"
                     [value]="reviewFieldValue(review, 'answer')"
                     [editing]="isReviewFieldEditing(review, 'answer')"
-                    [disabled]="isMutating(fieldMutationKey(review, 'answer'))"
+                    [disabled]="busy()"
                     [saveDisabled]="!canSaveReviewField(review, 'answer')"
                     (start)="startReviewFieldEdit(review, 'answer')"
                     (valueChange)="setReviewFieldDraft(review, 'answer', $event)"
@@ -211,8 +211,8 @@ type ReviewDraft = {
                         ></textarea>
                       </label>
                       <div class="field-actions mobile-keyboard-actions">
-                        <button type="button" (click)="toggleReviewNotes(review)" [disabled]="isMutating(notesMutationKey(review))">Закрыть</button>
-                        <button type="button" class="save" (click)="saveReviewNotes(review)" [disabled]="!canEditNotes(details) || !hasChangedNotes(details, review) || isMutating(notesMutationKey(review))">
+                        <button type="button" (click)="toggleReviewNotes(review)" [disabled]="busy()">Закрыть</button>
+                        <button type="button" class="save" (click)="saveReviewNotes(review)" [disabled]="busy() || !canEditNotes(details) || !hasChangedNotes(details, review)">
                           {{ isMutating(notesMutationKey(review)) ? '...' : 'Сохранить' }}
                         </button>
                       </div>
@@ -1211,7 +1211,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
   }
 
   startReviewFieldEdit(review: ReviewCheckReview, field: ReviewEditableField): void {
-    if (!this.details()?.permissions.canSave || this.isMutating(this.fieldMutationKey(review, field))) {
+    if (!this.details()?.permissions.canSave || this.busy()) {
       if (field === 'text') {
         this.toggleReviewText(review);
       }
@@ -1225,7 +1225,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
   }
 
   cancelReviewFieldEdit(review: ReviewCheckReview, field: ReviewEditableField): void {
-    if (this.isMutating(this.fieldMutationKey(review, field))) {
+    if (this.busy()) {
       return;
     }
 
@@ -1262,7 +1262,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
 
     request.subscribe({
       next: (updatedReview) => {
-        if (!this.acceptsReviewCheckRoute(routeTicket)) {
+        if (!this.acceptsReviewCheckRoute(routeTicket) || this.mutationKey() !== key) {
           return;
         }
         this.applyUpdatedReview(updatedReview);
@@ -1271,7 +1271,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
         this.statusMessage.set(field === 'text' ? 'Текст отзыва сохранен' : 'Замечание сохранено');
       },
       error: (err) => {
-        if (!this.acceptsReviewCheckRoute(routeTicket)) {
+        if (!this.acceptsReviewCheckRoute(routeTicket) || this.mutationKey() !== key) {
           return;
         }
         this.error.set(this.errorMessage(err, 'Не удалось сохранить отзыв.'));
@@ -1285,7 +1285,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
   }
 
   canSaveReviewField(review: ReviewCheckReview, field: ReviewEditableField): boolean {
-    if (!this.details()?.permissions.canSave || this.isMutating(this.fieldMutationKey(review, field))) {
+    if (!this.details()?.permissions.canSave || this.busy()) {
       return false;
     }
 
@@ -1323,7 +1323,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
   async saveReviewNotes(review: ReviewCheckReview): Promise<void> {
     const details = this.details();
     const orderDetailId = this.orderDetailId();
-    if (!details || !orderDetailId || !this.canEditNotes(details) || !this.hasChangedNotes(details, review)) {
+    if (!details || !orderDetailId || this.busy() || !this.canEditNotes(details) || !this.hasChangedNotes(details, review)) {
       return;
     }
     const routeTicket = this.captureReviewCheckRoute();
@@ -1336,20 +1336,32 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     this.error.set(null);
     this.statusMessage.set(null);
 
+    const reviewNote = this.reviewNoteValue(review);
+    const orderNote = this.orderNoteValue(details);
+    const companyNote = this.companyNoteValue(details);
+    const reviewChanged = reviewNote !== (review.comment ?? '');
+    const orderChanged = orderNote !== (details.orderComments ?? '');
+    const companyChanged = companyNote !== (details.companyComments ?? '');
+    let updatedReview: ReviewCheckReview | null = null;
+    let updatedNotes: ReviewCheckNotes | null = null;
+    let reviewSaved = !reviewChanged;
+    let orderSaved = !orderChanged;
+    let companySaved = !companyChanged;
+
     try {
-      let updatedReview: ReviewCheckReview | null = null;
-      let updatedNotes: ReviewCheckNotes | null = null;
-
-      if (this.reviewNoteValue(review) !== (review.comment ?? '')) {
-        updatedReview = await firstValueFrom(this.api.updateReviewCheckNote(orderDetailId, review.id, this.reviewNoteValue(review)));
+      if (reviewChanged) {
+        updatedReview = await firstValueFrom(this.api.updateReviewCheckNote(orderDetailId, review.id, reviewNote));
+        reviewSaved = true;
       }
 
-      if (this.orderNoteValue(details) !== (details.orderComments ?? '')) {
-        updatedNotes = await firstValueFrom(this.api.updateReviewCheckOrderNote(orderDetailId, this.orderNoteValue(details)));
+      if (orderChanged) {
+        updatedNotes = await firstValueFrom(this.api.updateReviewCheckOrderNote(orderDetailId, orderNote));
+        orderSaved = true;
       }
 
-      if (this.companyNoteValue(details) !== (details.companyComments ?? '')) {
-        updatedNotes = await firstValueFrom(this.api.updateReviewCheckCompanyNote(orderDetailId, this.companyNoteValue(details)));
+      if (companyChanged) {
+        updatedNotes = await firstValueFrom(this.api.updateReviewCheckCompanyNote(orderDetailId, companyNote));
+        companySaved = true;
       }
 
       if (!this.acceptsReviewCheckRoute(routeTicket)) {
@@ -1366,6 +1378,32 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
       this.statusMessage.set('Заметки сохранены');
     } catch (err) {
       if (this.acceptsReviewCheckRoute(routeTicket)) {
+        if (updatedReview) {
+          this.applyUpdatedReview(updatedReview);
+        }
+        if (updatedNotes) {
+          this.applyUpdatedNotes(updatedNotes);
+        }
+        if (!orderSaved && orderChanged) {
+          this.orderNoteDraft.set(orderNote);
+        }
+        if (!companySaved && companyChanged) {
+          this.companyNoteDraft.set(companyNote);
+        }
+
+        const saved = [
+          reviewChanged && reviewSaved ? 'заметка отзыва' : null,
+          orderChanged && orderSaved ? 'заметка заказа' : null,
+          companyChanged && companySaved ? 'заметка компании' : null
+        ].filter((label): label is string => Boolean(label));
+        const unsaved = [
+          reviewChanged && !reviewSaved ? 'заметка отзыва' : null,
+          orderChanged && !orderSaved ? 'заметка заказа' : null,
+          companyChanged && !companySaved ? 'заметка компании' : null
+        ].filter((label): label is string => Boolean(label));
+        if (saved.length) {
+          this.statusMessage.set(`Сохранено: ${saved.join(', ')}. Не сохранено: ${unsaved.join(', ')}.`);
+        }
         this.error.set(this.errorMessage(err, 'Не удалось сохранить заметки.'));
       }
     } finally {

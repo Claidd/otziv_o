@@ -1,6 +1,7 @@
 package com.hunt.otziv.s3.service;
 
 import com.hunt.otziv.uploads.service.FileUploadGuard;
+import com.hunt.otziv.s3.cleanup.service.S3ObjectCleanupQueue;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
@@ -36,7 +37,11 @@ class S3UploadServiceImplTest {
         S3Client s3Client = mock(S3Client.class);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
-        S3UploadServiceImpl service = new S3UploadServiceImpl(s3Client, guard());
+        S3UploadServiceImpl service = new S3UploadServiceImpl(
+                s3Client,
+                guard(),
+                mock(S3ObjectCleanupQueue.class)
+        );
         ReflectionTestUtils.setField(service, "bucket", "bucket");
         ReflectionTestUtils.setField(service, "region", "ru-1");
         ReflectionTestUtils.setField(service, "projectId", "project");
@@ -126,6 +131,36 @@ class S3UploadServiceImplTest {
     }
 
     @Test
+    void rolledBackTransactionDeletesNewlyUploadedObject() throws Exception {
+        S3Client s3Client = mock(S3Client.class);
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
+        S3UploadServiceImpl service = service(s3Client);
+        TransactionSynchronizationManager.initSynchronization();
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            service.uploadFile(
+                    new MockMultipartFile("file", "new.png", "image/png", pngBytes()),
+                    "reviews",
+                    null,
+                    123L
+            );
+            List<TransactionSynchronization> synchronizations =
+                    TransactionSynchronizationManager.getSynchronizations();
+            synchronizations.forEach(sync -> sync.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+
+            ArgumentCaptor<PutObjectRequest> uploaded = ArgumentCaptor.forClass(PutObjectRequest.class);
+            verify(s3Client).putObject(uploaded.capture(), any(RequestBody.class));
+            ArgumentCaptor<DeleteObjectRequest> deleted = ArgumentCaptor.forClass(DeleteObjectRequest.class);
+            verify(s3Client).deleteObject(deleted.capture());
+            assertTrue(deleted.getValue().key().equals(uploaded.getValue().key()));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+            TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
+    }
+
+    @Test
     void oldObjectCleanupRejectsUrlOwnedByAnotherEntity() {
         S3Client s3Client = mock(S3Client.class);
         S3UploadServiceImpl service = service(s3Client);
@@ -140,7 +175,11 @@ class S3UploadServiceImplTest {
     }
 
     private S3UploadServiceImpl service(S3Client s3Client) {
-        S3UploadServiceImpl service = new S3UploadServiceImpl(s3Client, guard());
+        S3UploadServiceImpl service = new S3UploadServiceImpl(
+                s3Client,
+                guard(),
+                mock(S3ObjectCleanupQueue.class)
+        );
         ReflectionTestUtils.setField(service, "bucket", "bucket");
         ReflectionTestUtils.setField(service, "region", "ru-1");
         ReflectionTestUtils.setField(service, "projectId", "project");

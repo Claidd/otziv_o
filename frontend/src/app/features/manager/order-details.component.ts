@@ -382,8 +382,8 @@ export class OrderDetailsComponent {
   async copyReviewField(review: OrderReviewItem, kind: ReviewCopyKind): Promise<void> {
     const map: Record<ReviewCopyKind, { value: string; label: string }> = {
       filialUrl: { value: review.filialUrl, label: 'Ссылка скопирована' },
-      botLogin: { value: review.botLogin, label: 'Логин скопирован' },
-      botPassword: { value: review.botPassword, label: 'Пароль скопирован' },
+      botLogin: { value: '', label: 'Логин скопирован' },
+      botPassword: { value: '', label: 'Пароль скопирован' },
       text: { value: review.text, label: 'Текст отзыва скопирован' },
       answer: { value: review.answer, label: 'Ответ скопирован' }
     };
@@ -394,14 +394,20 @@ export class OrderDetailsComponent {
       return;
     }
 
-    if (!(await this.copyText(item.value, `${review.id}-${kind}`, item.label))) {
+    let value = item.value;
+    if (kind === 'botLogin' || kind === 'botPassword') {
+      const revealed = await this.revealReviewCredential(review, kind);
+      if (revealed === null) {
+        return;
+      }
+      value = revealed;
+    }
+
+    if (!(await this.copyText(value, `${review.id}-${kind}`, item.label))) {
       return;
     }
 
     if (kind === 'botLogin' || kind === 'botPassword') {
-      if (!(await this.logReviewCredentialCopyClick(review, kind))) {
-        return;
-      }
       this.markReviewCredentialCopied(review, kind);
     }
   }
@@ -1696,7 +1702,7 @@ export class OrderDetailsComponent {
           publishedDate: updatedReview.publishedDate || null,
           vigul: !!updatedReview.vigul,
           botName: updatedReview.botFio ?? '',
-          botPassword: updatedReview.botPassword ?? ''
+          botPassword: ''
         } : this.toReviewEditDraft(updatedReview));
         this.writeOrderDetailsSessionDraft();
 
@@ -2033,9 +2039,32 @@ export class OrderDetailsComponent {
   }
 
   async copyBadReviewTaskField(task: BadReviewTaskItem, kind: BadReviewTaskCopyKind): Promise<void> {
-    const value = kind === 'botLogin' ? task.botLogin : task.botPassword;
+    const orderId = this.orderId();
+    if (!orderId
+      || (kind === 'botLogin' && !task.botLoginPresent)
+      || (kind === 'botPassword' && !task.botPasswordPresent)) {
+      return;
+    }
+
     const label = kind === 'botLogin' ? 'Логин скопирован' : 'Пароль скопирован';
-    await this.copyText(value ?? '', this.badReviewTaskCopyKey(task, kind), label);
+    try {
+      const response = await firstValueFrom(this.managerApi.revealBadReviewTaskCredential(
+        orderId,
+        task.id,
+        kind === 'botLogin' ? 'login' : 'password',
+        this.orderDetailsActivitySource()
+      ));
+      const value = response.value?.trim();
+      if (!value) {
+        throw new Error('Credential reveal returned an empty value');
+      }
+      await this.copyText(value, this.badReviewTaskCopyKey(task, kind), label);
+    } catch (err) {
+      this.toastService.error(
+        'Данные не скопированы',
+        this.errorMessage(err, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.')
+      );
+    }
   }
 
   changeBadReviewTaskBot(task: BadReviewTaskItem): void {
@@ -2365,7 +2394,7 @@ export class OrderDetailsComponent {
     const storedEdit = this.readOrderDetailsSessionDraft()?.reviewEdit;
     this.editReview.set(review);
     this.reviewEditDraft.set(storedEdit?.reviewId === review.id
-      ? storedEdit.draft
+      ? { ...storedEdit.draft, botPassword: '' }
       : this.toReviewEditDraft(review)
     );
     this.reviewEditError.set(null);
@@ -2373,6 +2402,7 @@ export class OrderDetailsComponent {
     this.reviewEditDeleting.set(false);
     this.reviewEditUploading.set(false);
     this.reviewEditNewAccountSaving.set(false);
+    this.writeOrderDetailsSessionDraft();
   }
 
   closeReviewEdit(): void {
@@ -2743,8 +2773,8 @@ export class OrderDetailsComponent {
 
     const botFio = this.normalizedBotFio(review);
     return (
-      !!review.botLogin?.trim() &&
-      !!review.botPassword?.trim() &&
+      review.botLoginPresent &&
+      review.botPasswordPresent &&
       !this.isPlaceholderBotName(botFio) &&
       !this.isTemplateBotName(botFio)
     );
@@ -2764,7 +2794,7 @@ export class OrderDetailsComponent {
       return 'Это новый невыгулянный аккаунт со служебным именем "Впиши Имя Фамилию". Сначала отправьте его в выгул; после нормального имени он станет доступен для публикации.';
     }
 
-    if (!review.botLogin?.trim() || !review.botPassword?.trim()) {
+    if (!review.botLoginPresent || !review.botPasswordPresent) {
       return 'У назначенного аккаунта нет логина или пароля. Проверьте аккаунт или нажмите "смена".';
     }
 
@@ -2908,7 +2938,7 @@ export class OrderDetailsComponent {
       publish: !!review.publish,
       vigul: !!review.vigul,
       botName: review.botFio ?? '',
-      botPassword: review.botPassword ?? '',
+      botPassword: '',
       productId: review.productId ?? null,
       filialId: review.filialId ?? null,
       url: review.url || review.urlPhoto || ''
@@ -3438,21 +3468,29 @@ export class OrderDetailsComponent {
     }
   }
 
-  private async logReviewCredentialCopyClick(review: OrderReviewItem, kind: ReviewCopyKind): Promise<boolean> {
-    if (kind !== 'botLogin' && kind !== 'botPassword') {
-      return true;
-    }
-
+  private async revealReviewCredential(
+    review: OrderReviewItem,
+    kind: 'botLogin' | 'botPassword'
+  ): Promise<string | null> {
     const field = kind === 'botLogin' ? 'login' : 'password';
     try {
-      await firstValueFrom(this.managerApi.logOrderReviewCopyClick(review.id, field, this.orderDetailsActivitySource()));
-      return true;
-    } catch {
+      const response = await firstValueFrom(this.managerApi.revealOrderReviewCredential(
+        review.orderId,
+        review.id,
+        field,
+        this.orderDetailsActivitySource()
+      ));
+      const value = response.value?.trim();
+      if (!value) {
+        throw new Error('Credential reveal returned an empty value');
+      }
+      return value;
+    } catch (err) {
       this.toastService.error(
-        'Копирование не записано',
-        'Данные попали в буфер, но сервер не подтвердил действие. Нажмите кнопку еще раз.'
+        'Данные не скопированы',
+        this.errorMessage(err, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.')
       );
-      return false;
+      return null;
     }
   }
 
@@ -3653,7 +3691,7 @@ export class OrderDetailsComponent {
 
     return {
       reviewId: review.id,
-      draft
+      draft: { ...draft, botPassword: '' }
     };
   }
 

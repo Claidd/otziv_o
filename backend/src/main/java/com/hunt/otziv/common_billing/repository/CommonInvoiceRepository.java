@@ -188,6 +188,19 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
     );
 
     @Query("""
+        SELECT invoice
+        FROM CommonInvoice invoice
+        JOIN FETCH invoice.account account
+        LEFT JOIN FETCH account.manager manager
+        LEFT JOIN FETCH manager.user
+        LEFT JOIN FETCH account.invoiceCompany invoiceCompany
+        LEFT JOIN FETCH invoiceCompany.manager invoiceManager
+        LEFT JOIN FETCH invoiceManager.user
+        WHERE invoice.id IN :invoiceIds
+    """)
+    List<CommonInvoice> findBoardInvoicesByIds(@Param("invoiceIds") Collection<Long> invoiceIds);
+
+    @Query("""
         SELECT invoice.account.id
         FROM CommonInvoice invoice
         WHERE invoice.status IN :statuses

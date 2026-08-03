@@ -32,6 +32,9 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
+import com.hunt.otziv.security.credentials.CredentialRevealRequest;
+import com.hunt.otziv.security.credentials.CredentialRevealResponse;
+import com.hunt.otziv.security.credentials.CredentialRevealService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -54,6 +57,9 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -150,6 +156,7 @@ public class ApiWorkerBoardController {
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final ScheduledClientMessageService scheduledClientMessageService;
     private final WorkerRiskAccessPolicy workerRiskAccessPolicy;
+    private final CredentialRevealService credentialRevealService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -524,6 +531,110 @@ public class ApiWorkerBoardController {
         return preparationRecorded
                 ? activeCredentialPreparation(authentication, request == null ? null : request.sourceSection())
                 : null;
+    }
+
+    @PostMapping("/reviews/{reviewId}/credential-reveal")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @Transactional
+    public ResponseEntity<CredentialRevealResponse> revealReviewCredential(
+            @PathVariable Long reviewId,
+            @RequestBody CredentialRevealRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        ReviewCopyClickRequest source = copyRequest(request);
+        String field = normalizeReviewCopyField(source);
+        Review review = reviewService.getReviewById(reviewId);
+        if (review == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден");
+        }
+        enforceReviewSourceAccess(review, source.sourceSection());
+        enforcePublicationSessionIfNeeded(source, principal, authentication);
+
+        CredentialRevealResponse response = credentialRevealService.revealReview(review, request);
+        boolean preparationRecorded = credentialPreparationService.recordCopy(
+                authentication,
+                review,
+                field,
+                source.sourcePage(),
+                source.sourceEntry(),
+                source.sourceSection()
+        );
+        if (credentialPreparationRequired(source) && !preparationRecorded) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Сервер не подтвердил подготовку аккаунта. Обновите приложение и повторите копирование."
+            );
+        }
+
+        Order order = review.getOrderDetails() == null ? null : review.getOrderDetails().getOrder();
+        workerActivityService.recordSafely(
+                authentication,
+                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                "review",
+                reviewId,
+                order == null ? null : order.getId(),
+                reviewId,
+                "credential_reveal",
+                withSource(credentialCopyDetails(field, review.getBot()), source)
+        );
+        recordPublicationActivityIfNeeded(source, principal, authentication);
+        WorkerCredentialPreparationResponse preparation = preparationRecorded
+                ? activeCredentialPreparation(authentication, source.sourceSection())
+                : null;
+        return noStore(response.withCredentialPreparation(preparation));
+    }
+
+    @PostMapping("/recovery-tasks/{taskId}/credential-reveal")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @Transactional
+    public ResponseEntity<CredentialRevealResponse> revealRecoveryTaskCredential(
+            @PathVariable Long taskId,
+            @RequestBody CredentialRevealRequest request,
+            Authentication authentication
+    ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
+        assignmentMutationGuardService.assertRecoveryTask(taskId);
+        String field = normalizeReviewCopyField(copyRequest(request));
+        ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
+        CredentialRevealResponse response = credentialRevealService.revealRecoveryTask(task, request);
+        workerActivityService.recordSafely(
+                authentication,
+                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                "recovery_task",
+                task.getId(),
+                orderId(task),
+                reviewId(task),
+                SECTION_RECOVERY,
+                withSource(credentialCopyDetails(field, task.getBot()), copyRequest(request))
+        );
+        return noStore(response);
+    }
+
+    @PostMapping("/bad-review-tasks/{taskId}/credential-reveal")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @Transactional
+    public ResponseEntity<CredentialRevealResponse> revealBadReviewTaskCredential(
+            @PathVariable Long taskId,
+            @RequestBody CredentialRevealRequest request,
+            Authentication authentication
+    ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_BAD);
+        assignmentMutationGuardService.assertBadTask(taskId);
+        String field = normalizeReviewCopyField(copyRequest(request));
+        BadReviewTask task = badReviewTaskService.getTask(taskId);
+        CredentialRevealResponse response = credentialRevealService.revealBadReviewTask(task, request);
+        workerActivityService.recordSafely(
+                authentication,
+                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                "bad_review_task",
+                task.getId(),
+                orderId(task),
+                reviewId(task),
+                SECTION_BAD,
+                withSource(credentialCopyDetails(field, task.getBot()), copyRequest(request))
+        );
+        return noStore(response);
     }
 
     @PostMapping("/recovery-tasks/{taskId}/copy-click")
@@ -1164,7 +1275,9 @@ public class ApiWorkerBoardController {
             return toRecoveryTaskPageResponse(tasks);
         }
 
-        return toReviewPageResponse(loadReviewPage(principal, authentication, selectedWorker, section, pageNumber, pageSize, sortDirection, keyword));
+        return toReviewPageResponse(
+                loadReviewPage(principal, authentication, selectedWorker, section, pageNumber, pageSize, sortDirection, keyword)
+        );
     }
 
     private Page<ReviewRecoveryTask> loadRecoveryTasks(
@@ -1762,8 +1875,8 @@ public class ApiWorkerBoardController {
         String city = bot.getBotCity() != null ? safe(bot.getBotCity().getTitle()) : "";
         return new BotResponse(
                 bot.getId(),
-                safe(bot.getLogin()),
-                safe(bot.getPassword()),
+                !safe(bot.getLogin()).isBlank(),
+                !safe(bot.getPassword()).isBlank(),
                 safe(bot.getFio()),
                 city,
                 bot.getCounter(),
@@ -1786,8 +1899,8 @@ public class ApiWorkerBoardController {
                 safe(review.getSubCategory()),
                 review.getBotId(),
                 safe(review.getBotFio()),
-                safe(review.getBotLogin()),
-                safe(review.getBotPassword()),
+                !safe(review.getBotLogin()).isBlank(),
+                !safe(review.getBotPassword()).isBlank(),
                 review.getBotCounter(),
                 safe(review.getCompanyTitle()),
                 safe(review.getCommentCompany()),
@@ -1833,8 +1946,16 @@ public class ApiWorkerBoardController {
         Bot bot = task.getBot();
         Long botId = bot != null ? bot.getId() : review.getBotId();
         String botFio = firstNonBlank(task.getBotFioSnapshot(), bot != null ? bot.getFio() : null, review.getBotFio());
-        String botLogin = firstNonBlank(task.getBotLoginSnapshot(), bot != null ? bot.getLogin() : null, review.getBotLogin());
-        String botPassword = firstNonBlank(task.getBotPasswordSnapshot(), bot != null ? bot.getPassword() : null, review.getBotPassword());
+        boolean botLoginPresent = !firstNonBlank(
+                task.getBotLoginSnapshot(),
+                bot != null ? bot.getLogin() : null,
+                review.getBotLogin()
+        ).isBlank();
+        boolean botPasswordPresent = !firstNonBlank(
+                task.getBotPasswordSnapshot(),
+                bot != null ? bot.getPassword() : null,
+                review.getBotPassword()
+        ).isBlank();
         int botCounter = bot != null ? bot.getCounter() : review.getBotCounter();
         String workerFio = task.getWorker() != null && task.getWorker().getUser() != null
                 ? safe(task.getWorker().getUser().getFio())
@@ -1853,8 +1974,8 @@ public class ApiWorkerBoardController {
                 safe(review.getSubCategory()),
                 botId,
                 botFio,
-                botLogin,
-                botPassword,
+                botLoginPresent,
+                botPasswordPresent,
                 botCounter,
                 safe(review.getCompanyTitle()),
                 safe(review.getCommentCompany()),
@@ -1902,8 +2023,12 @@ public class ApiWorkerBoardController {
         Bot bot = task.getBot();
         Long botId = bot != null ? bot.getId() : review.getBotId();
         String botFio = bot != null ? safe(bot.getFio()) : safe(task.getBotFioSnapshot());
-        String botLogin = bot != null ? safe(bot.getLogin()) : safe(task.getBotLoginSnapshot());
-        String botPassword = bot != null ? safe(bot.getPassword()) : safe(task.getBotPasswordSnapshot());
+        boolean botLoginPresent = !(bot != null
+                ? safe(bot.getLogin())
+                : safe(task.getBotLoginSnapshot())).isBlank();
+        boolean botPasswordPresent = !(bot != null
+                ? safe(bot.getPassword())
+                : safe(task.getBotPasswordSnapshot())).isBlank();
         int botCounter = bot != null ? bot.getCounter() : review.getBotCounter();
         String workerFio = task.getWorker() != null && task.getWorker().getUser() != null
                 ? safe(task.getWorker().getUser().getFio())
@@ -1922,8 +2047,8 @@ public class ApiWorkerBoardController {
                 safe(review.getSubCategory()),
                 botId,
                 botFio,
-                botLogin,
-                botPassword,
+                botLoginPresent,
+                botPasswordPresent,
                 botCounter,
                 recoveryCompanyTitle(task, review),
                 recoveryCompanyNote(task, review),
@@ -2701,6 +2826,24 @@ public class ApiWorkerBoardController {
         return field;
     }
 
+    private ReviewCopyClickRequest copyRequest(CredentialRevealRequest request) {
+        return request == null
+                ? new ReviewCopyClickRequest(null, null, null, null)
+                : new ReviewCopyClickRequest(
+                        request.field(),
+                        request.sourcePage(),
+                        request.sourceEntry(),
+                        request.sourceSection()
+                );
+    }
+
+    private ResponseEntity<CredentialRevealResponse> noStore(CredentialRevealResponse response) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(response);
+    }
+
     private String copyFieldLabel(String field) {
         return "password".equals(field) ? "пароль" : "логин";
     }
@@ -2806,9 +2949,13 @@ public class ApiWorkerBoardController {
         );
     }
 
-    private PageResponse<WorkerReviewResponse> toReviewPageResponse(Page<ReviewDTOOne> page) {
+    private PageResponse<WorkerReviewResponse> toReviewPageResponse(
+            Page<ReviewDTOOne> page
+    ) {
         return new PageResponse<>(
-                page.getContent().stream().map(this::toReviewResponse).toList(),
+                page.getContent().stream()
+                        .map(this::toReviewResponse)
+                        .toList(),
                 page.getNumber(),
                 page.getSize(),
                 page.getTotalElements(),
@@ -2818,9 +2965,13 @@ public class ApiWorkerBoardController {
         );
     }
 
-    private PageResponse<WorkerReviewResponse> toBadTaskPageResponse(Page<BadReviewTask> page) {
+    private PageResponse<WorkerReviewResponse> toBadTaskPageResponse(
+            Page<BadReviewTask> page
+    ) {
         return new PageResponse<>(
-                page.getContent().stream().map(this::toBadTaskReviewResponse).toList(),
+                page.getContent().stream()
+                        .map(this::toBadTaskReviewResponse)
+                        .toList(),
                 page.getNumber(),
                 page.getSize(),
                 page.getTotalElements(),
@@ -2830,9 +2981,13 @@ public class ApiWorkerBoardController {
         );
     }
 
-    private PageResponse<WorkerReviewResponse> toRecoveryTaskPageResponse(Page<ReviewRecoveryTask> page) {
+    private PageResponse<WorkerReviewResponse> toRecoveryTaskPageResponse(
+            Page<ReviewRecoveryTask> page
+    ) {
         return new PageResponse<>(
-                page.getContent().stream().map(this::toRecoveryTaskReviewResponse).toList(),
+                page.getContent().stream()
+                        .map(this::toRecoveryTaskReviewResponse)
+                        .toList(),
                 page.getNumber(),
                 page.getSize(),
                 page.getTotalElements(),
@@ -2981,8 +3136,8 @@ public class ApiWorkerBoardController {
 
     public record BotResponse(
             Long id,
-            String login,
-            String password,
+            boolean loginPresent,
+            boolean passwordPresent,
             String fio,
             String city,
             int counter,
@@ -3004,8 +3159,8 @@ public class ApiWorkerBoardController {
             String subCategory,
             Long botId,
             String botFio,
-            String botLogin,
-            String botPassword,
+            boolean botLoginPresent,
+            boolean botPasswordPresent,
             int botCounter,
             String companyTitle,
             String commentCompany,

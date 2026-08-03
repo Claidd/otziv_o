@@ -18,6 +18,7 @@ import {
   UnsafeTargetError,
 } from "./url-security.js";
 import { chromiumLaunchArgs } from "./chromium-security.js";
+import { startDnsPinningProxy } from "./dns-pinning-proxy.js";
 
 const app = express();
 
@@ -92,6 +93,7 @@ app.post(
   }
 
   let browser;
+  let outboundProxy;
   let ocrWorker;
   let deadlineExceeded = false;
   const deadlineTimer = setTimeout(() => {
@@ -103,12 +105,13 @@ app.post(
   deadlineTimer.unref();
   try {
     const executablePath = process.env.CHROMIUM_EXECUTABLE_PATH || undefined;
+    outboundProxy = await startDnsPinningProxy({ upstreamProxy: configuredUpstreamProxy() });
     browser = await chromium.launch({
       headless: true,
       executablePath,
       timeout: Math.min(checkTimeoutMs, 30_000),
       args: chromiumLaunchArgs(),
-      proxy: proxyConfig()
+      proxy: { server: outboundProxy.server }
     });
 
     const context = await browser.newContext({
@@ -224,6 +227,9 @@ app.post(
     if (ocrWorker) {
       await ocrWorker.terminate().catch(() => {});
     }
+    if (outboundProxy) {
+      await outboundProxy.close().catch(() => {});
+    }
   }
 });
 
@@ -243,7 +249,7 @@ app.listen(port, () => {
   console.log(`external-review-worker listening on ${port}`);
 });
 
-function proxyConfig() {
+function configuredUpstreamProxy() {
   if (String(process.env.EXTERNAL_REVIEW_PROXY_ENABLED || "false").toLowerCase() !== "true") {
     return undefined;
   }
@@ -252,7 +258,11 @@ function proxyConfig() {
   if (!host || !port) {
     return undefined;
   }
-  const proxy = { server: `http://${host}:${port}` };
+  const parsedPort = Number.parseInt(port, 10);
+  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65_535) {
+    return undefined;
+  }
+  const proxy = { host, port: parsedPort };
   if (process.env.EXTERNAL_REVIEW_PROXY_USERNAME) {
     proxy.username = process.env.EXTERNAL_REVIEW_PROXY_USERNAME;
     proxy.password = process.env.EXTERNAL_REVIEW_PROXY_PASSWORD || "";

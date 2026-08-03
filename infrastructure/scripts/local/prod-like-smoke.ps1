@@ -134,6 +134,28 @@ function ConvertTo-SmokeArray {
     return @($Value)
 }
 
+function ConvertFrom-SmokeHexUtf8 {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Hex
+    )
+
+    if (($Hex.Length % 2) -ne 0 -or $Hex -notmatch '^[0-9A-Fa-f]*$') {
+        throw 'Expected an even-length hexadecimal UTF-8 value.'
+    }
+
+    $bytes = [byte[]]::new([int]($Hex.Length / 2))
+    for ($index = 0; $index -lt $bytes.Length; $index++) {
+        $bytes[$index] = [Convert]::ToByte($Hex.Substring($index * 2, 2), 16)
+    }
+
+    # Do not use Convert.FromHexString here: the prod-like smoke remains
+    # runnable from the Windows PowerShell 5.1 host shipped with Windows.
+    $strictUtf8 = [System.Text.UTF8Encoding]::new($false, $true)
+    return $strictUtf8.GetString($bytes)
+}
+
 function Wait-HttpOk {
     param(
         [Parameter(Mandatory = $true)][string]$Url,
@@ -349,6 +371,36 @@ function Invoke-PublicCapabilityAuthorizationSmoke {
     Assert-AnonymousMissingCapability -Url "$root/api/payments/public/$missingPaymentToken" -Name "single payment link"
     Assert-AnonymousMissingCapability -Url "$root/api/payments/public/$missingPaymentToken/init" -Name "payment init" -Method "POST" -Body $paymentInitBody
     Assert-AnonymousMissingCapability -Url "$root/api/payments/public/group/$missingPaymentToken" -Name "group payment link"
+}
+
+function Assert-LegacyUserMigrationDisabled {
+    param([Parameter(Mandatory = $true)][string]$BaseUrl)
+
+    $response = Invoke-SmokeHttpRequest `
+        -Url "$($BaseUrl.TrimEnd('/'))/api/auth/legacy-migration" `
+        -Method "POST" `
+        -Body '{"username":"retired-migration-smoke","password":"not-a-real-password"}'
+    if ($response.StatusCode -ne 410) {
+        throw "Legacy user migration must be retired with HTTP 410, got $($response.StatusCode)."
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$response.WwwAuthenticate)) {
+        throw "Retired legacy migration unexpectedly returned an authentication challenge."
+    }
+    Write-Host "Legacy user migration is retired (410 Gone)."
+}
+
+function Assert-ScheduledMessageReconciliationHealthy {
+    param([Parameter(Mandatory = $true)][string[]]$ComposeArguments)
+
+    $appLogs = & docker @($ComposeArguments + @("logs", "--since=5m", "app")) 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not inspect backend logs for scheduled message reconciliation failures."
+    }
+    if ($appLogs -match "Scheduled client message reconciliation transaction failed" `
+            -or $appLogs -match "Column 'state_status' in field list is ambiguous") {
+        throw "Scheduled client message reconciliation failed in prod-like backend logs."
+    }
+    Write-Host "Scheduled client message reconciliation log check is clean."
 }
 
 function Assert-LegacyReviewCapabilityNotLogged {
@@ -933,76 +985,998 @@ function Update-KeycloakFrontendLoopbackRedirects {
     Invoke-RestMethod -Uri "$apiRoot/clients/$frontendClientUuid" -Method Put -Headers $adminHeaders -Body $body -ContentType "application/json" -TimeoutSec 30 | Out-Null
 }
 
+function Get-LocalKeycloakRealmUsers {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers
+    )
+
+    $pageSize = 100
+    $first = 0
+    $result = [System.Collections.Generic.List[object]]::new()
+    do {
+        $page = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod `
+            -Uri "$ApiRoot/users?first=$first&max=$pageSize" `
+            -Headers $Headers `
+            -TimeoutSec 30))
+        foreach ($user in $page) {
+            [void]$result.Add($user)
+        }
+        $first += $page.Count
+    } while ($page.Count -eq $pageSize)
+
+    return $result.ToArray()
+}
+
+function Get-LocalKeycloakRealmClients {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers
+    )
+
+    $pageSize = 100
+    $first = 0
+    $result = [System.Collections.Generic.List[object]]::new()
+    do {
+        $page = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod `
+            -Uri "$ApiRoot/clients?first=$first&max=$pageSize" `
+            -Headers $Headers `
+            -TimeoutSec 30))
+        foreach ($client in $page) {
+            [void]$result.Add($client)
+        }
+        $first += $page.Count
+    } while ($page.Count -eq $pageSize)
+
+    return $result.ToArray()
+}
+
+function Remove-LocalKeycloakLoginSmokeClients {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers
+    )
+
+    # Both prefixes are reserved by this isolated prod-local script. The first
+    # is the current project-specific prefix; the second removes leftovers from
+    # the earlier implementation without matching normal application clients.
+    $reservedPrefixes = @(
+        'otziv-prod-local-login-smoke-',
+        'otziv-local-login-smoke-'
+    )
+    $staleClients = @(
+        @(Get-LocalKeycloakRealmClients -ApiRoot $ApiRoot -Headers $Headers) |
+            Where-Object {
+                $candidateId = [string]$_.clientId
+                $reservedPrefixes | Where-Object {
+                    $candidateId.StartsWith($_, [System.StringComparison]::Ordinal)
+                } | Select-Object -First 1
+            }
+    )
+    foreach ($client in $staleClients) {
+        $parsedClientUuid = [guid]::Empty
+        if ([string]::IsNullOrWhiteSpace([string]$client.clientId) `
+                -or -not [guid]::TryParse([string]$client.id, [ref]$parsedClientUuid)) {
+            throw 'Local Keycloak returned an invalid reserved login-smoke client.'
+        }
+        Invoke-RestMethod `
+            -Uri "$ApiRoot/clients/$($parsedClientUuid.ToString())" `
+            -Method Delete `
+            -Headers $Headers `
+            -TimeoutSec 30 | Out-Null
+    }
+
+    $remainingReservedClients = @(
+        @(Get-LocalKeycloakRealmClients -ApiRoot $ApiRoot -Headers $Headers) |
+            Where-Object {
+                $candidateId = [string]$_.clientId
+                $reservedPrefixes | Where-Object {
+                    $candidateId.StartsWith($_, [System.StringComparison]::Ordinal)
+                } | Select-Object -First 1
+            }
+    )
+    if ($remainingReservedClients.Count -ne 0) {
+        throw "Local Keycloak still contains $($remainingReservedClients.Count) reserved login-smoke client(s) after cleanup."
+    }
+}
+
+function Assert-LocalKeycloakIdentitySyncIsolation {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments
+    )
+
+    try {
+        $rootUri = [Uri]$RootUrl
+    } catch {
+        throw "Local Keycloak identity synchronization requires a valid loopback BaseUrl, got '$RootUrl'."
+    }
+    if (-not $rootUri.IsLoopback `
+            -or $rootUri.Scheme -ne 'http' `
+            -or $rootUri.AbsolutePath -ne '/' `
+            -or -not [string]::IsNullOrWhiteSpace($rootUri.UserInfo) `
+            -or -not [string]::IsNullOrWhiteSpace($rootUri.Query) `
+            -or -not [string]::IsNullOrWhiteSpace($rootUri.Fragment)) {
+        throw "Refusing to synchronize Keycloak identities through non-loopback BaseUrl '$RootUrl'."
+    }
+
+    $dockerContext = (& docker context show).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($dockerContext)) {
+        throw 'Could not determine the Docker context for local Keycloak identity synchronization.'
+    }
+    $dockerEndpoint = (& docker context inspect $dockerContext --format '{{.Endpoints.docker.Host}}').Trim()
+    if ($LASTEXITCODE -ne 0 -or $dockerEndpoint -notmatch '^(npipe|unix)://') {
+        throw "Refusing local identity synchronization through non-local Docker endpoint '$dockerEndpoint'."
+    }
+
+    foreach ($service in @('mysql', 'keycloak', 'nginx')) {
+        $containerId = (& docker @($ComposeArguments + @('ps', '-q', $service))).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($containerId)) {
+            throw "Local identity synchronization requires a running '$service' Compose service."
+        }
+        $labels = (& docker inspect $containerId --format '{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}').Trim()
+        if ($LASTEXITCODE -ne 0 -or $labels -ne "otziv-prod-local|$service") {
+            throw "Refusing identity synchronization against non-isolated Compose service '$service' ($labels)."
+        }
+    }
+
+    $publishedNginxLines = @(& docker @($ComposeArguments + @('port', 'nginx', '80')))
+    $publishedNginxLines = @($publishedNginxLines | ForEach-Object { $_.ToString().Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($LASTEXITCODE -ne 0 -or $publishedNginxLines.Count -ne 1) {
+        throw "Expected exactly one published loopback endpoint for the isolated local Nginx service."
+    }
+    $publishedNginx = $publishedNginxLines[0]
+    if ($publishedNginx -notmatch '^(?:\[(?<ipv6>[^\]]+)\]|(?<ipv4>[^:]+)):(?<port>[0-9]+)$') {
+        throw "Could not verify the isolated local Nginx endpoint ($publishedNginx)."
+    }
+    $publishedHost = if ([string]::IsNullOrWhiteSpace($Matches['ipv6'])) { $Matches['ipv4'] } else { $Matches['ipv6'] }
+    $publishedAddress = [System.Net.IPAddress]::None
+    if (-not [System.Net.IPAddress]::TryParse($publishedHost, [ref]$publishedAddress) `
+            -or -not [System.Net.IPAddress]::IsLoopback($publishedAddress) `
+            -or [int]$Matches['port'] -ne $rootUri.Port) {
+        throw "BaseUrl '$RootUrl' is not the published loopback endpoint of the isolated local Nginx service ($publishedNginx)."
+    }
+    $rootHostMatchesPublished = $rootUri.Host.Equals('localhost', [System.StringComparison]::OrdinalIgnoreCase) `
+        -or $rootUri.Host.Equals($publishedAddress.ToString(), [System.StringComparison]::OrdinalIgnoreCase)
+    if (-not $rootHostMatchesPublished) {
+        throw "BaseUrl host '$($rootUri.Host)' does not match the isolated local Nginx host '$publishedHost'."
+    }
+}
+
+function Get-LocalKeycloakDatabaseUsers {
+    param(
+        [Parameter(Mandatory = $true)][string]$EnvPath,
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments
+    )
+
+    $mysqlUser = Get-EnvValue -Path $EnvPath -Name 'MYSQL_USER'
+    $mysqlPassword = Get-EnvValue -Path $EnvPath -Name 'MYSQL_PASSWORD'
+    $mysqlDatabase = Get-EnvValue -Path $EnvPath -Name 'MYSQL_DATABASE'
+    if ([string]::IsNullOrWhiteSpace($mysqlUser) `
+            -or [string]::IsNullOrWhiteSpace($mysqlPassword) `
+            -or [string]::IsNullOrWhiteSpace($mysqlDatabase)) {
+        throw 'MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE are required for local identity synchronization.'
+    }
+
+    # The production subject is used only as an eligibility predicate and is
+    # deliberately never selected. Only the minimum local-login data leaves
+    # the isolated MySQL container: username, active status and managed roles;
+    # no password, email, phone or full-name fields are selected.
+    $databaseSql = @"
+SET SESSION group_concat_max_len = 8192;
+SELECT
+    user_row.id,
+    HEX(user_row.username),
+    IF(user_row.active, 1, 0),
+    COALESCE(GROUP_CONCAT(DISTINCT HEX(TRIM(role_row.name)) ORDER BY role_row.name SEPARATOR ','), '')
+FROM users AS user_row
+JOIN users_roles AS user_role ON user_role.user_id = user_row.id
+JOIN roles AS role_row ON role_row.id = user_role.role_id
+WHERE UPPER(TRIM(user_row.auth_provider)) = 'KEYCLOAK'
+  AND user_row.keycloak_id IS NOT NULL
+  AND TRIM(user_row.keycloak_id) <> ''
+  AND EXISTS (
+      SELECT 1
+      FROM users_roles AS eligible_user_role
+      JOIN roles AS eligible_role ON eligible_role.id = eligible_user_role.role_id
+      WHERE eligible_user_role.user_id = user_row.id
+        AND UPPER(TRIM(eligible_role.name)) IN (
+            'ROLE_OWNER', 'ROLE_ADMIN', 'ROLE_MANAGER', 'ROLE_WORKER', 'ROLE_PERFORMER'
+        )
+  )
+GROUP BY user_row.id, user_row.username, user_row.active
+ORDER BY user_row.id;
+"@
+    $databaseOutput = & docker @($ComposeArguments + @(
+        'exec', '-T', '-e', "MYSQL_PWD=$mysqlPassword", 'mysql',
+        'mysql', '--default-character-set=utf8mb4', "-u$mysqlUser",
+        $mysqlDatabase, '-N', '-B', '-e', $databaseSql
+    )) 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not read eligible users from the isolated local database for Keycloak provisioning.'
+    }
+
+    $managedRoleNames = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    foreach ($roleName in @('ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG', 'PERFORMER', 'CLIENT')) {
+        [void]$managedRoleNames.Add($roleName)
+    }
+    $users = [System.Collections.Generic.List[object]]::new()
+    $usersByName = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($line in $databaseOutput) {
+        $text = $line.ToString()
+        if ([string]::IsNullOrWhiteSpace($text)) {
+            continue
+        }
+        if ($text -notmatch '^(?<id>[0-9]+)\t(?<usernameHex>[0-9A-F]*)\t(?<active>[01])\t(?<rolesHex>[0-9A-F,]*)$') {
+            throw 'The isolated local database returned an unexpected row while enumerating eligible Keycloak users.'
+        }
+
+        $databaseId = [long]$Matches['id']
+        $databaseUsernameHex = $Matches['usernameHex']
+        $databaseActive = $Matches['active'] -eq '1'
+        $databaseRolesHex = $Matches['rolesHex']
+        try {
+            $databaseUsername = ConvertFrom-SmokeHexUtf8 -Hex $databaseUsernameHex
+        } catch {
+            throw "The isolated local database returned an invalid encoded username for user id $databaseId."
+        }
+        if ([string]::IsNullOrWhiteSpace($databaseUsername)) {
+            throw "The isolated local database contains a blank eligible username for user id $databaseId."
+        }
+        if (-not $usersByName.Add($databaseUsername)) {
+            throw "The isolated local database contains duplicate case-insensitive eligible username '$databaseUsername'."
+        }
+
+        $userRoles = [System.Collections.Generic.SortedSet[string]]::new(
+            [System.StringComparer]::OrdinalIgnoreCase
+        )
+        foreach ($roleHex in @($databaseRolesHex -split ',' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })) {
+            try {
+                $databaseRole = (ConvertFrom-SmokeHexUtf8 -Hex $roleHex).Trim()
+            } catch {
+                throw "The isolated local database returned an invalid role for user id $databaseId."
+            }
+            if ($databaseRole -notmatch '^ROLE_(?<role>[A-Za-z0-9_]+)$') {
+                throw "Eligible local database user '$databaseUsername' has unsupported role '$databaseRole'."
+            }
+            $realmRole = $Matches['role'].ToUpperInvariant()
+            if (-not $managedRoleNames.Contains($realmRole)) {
+                throw "Eligible local database user '$databaseUsername' has unmanaged application role '$databaseRole'."
+            }
+            [void]$userRoles.Add($realmRole)
+        }
+
+        [void]$users.Add([pscustomobject]@{
+            Id = $databaseId
+            Username = $databaseUsername
+            UsernameHex = $databaseUsernameHex
+            Active = $databaseActive
+            RealmRoles = @($userRoles)
+        })
+    }
+    if ($users.Count -eq 0) {
+        throw 'The isolated local database contains no eligible Keycloak staff or performer users.'
+    }
+
+    return $users.ToArray()
+}
+
+function Get-OrCreate-LocalKeycloakRealmRole {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers,
+        [Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string, object]]$RoleCache,
+        [Parameter(Mandatory = $true)][string]$RoleName
+    )
+
+    if ($RoleCache.ContainsKey($RoleName)) {
+        return $RoleCache[$RoleName]
+    }
+
+    $encodedRole = [Uri]::EscapeDataString($RoleName)
+    try {
+        $realmRole = Invoke-RestMethod -Uri "$ApiRoot/roles/$encodedRole" -Headers $Headers -TimeoutSec 30
+    } catch {
+        $statusCode = if ($null -eq $_.Exception.Response) { 0 } else { [int]$_.Exception.Response.StatusCode }
+        if ($statusCode -ne 404) {
+            throw
+        }
+        $roleBody = @{
+            name = $RoleName
+            description = 'Managed only in the isolated local prod-like realm'
+        } | ConvertTo-Json -Compress
+        Invoke-RestMethod -Uri "$ApiRoot/roles" -Method Post -Headers $Headers -Body $roleBody -ContentType 'application/json' -TimeoutSec 30 | Out-Null
+        $realmRole = Invoke-RestMethod -Uri "$ApiRoot/roles/$encodedRole" -Headers $Headers -TimeoutSec 30
+    }
+    $RoleCache.Add($RoleName, $realmRole)
+    return $realmRole
+}
+
+function Sync-LocalKeycloakManagedRealmRoles {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers,
+        [Parameter(Mandatory = $true)][string]$KeycloakUserId,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$DesiredRoles,
+        [Parameter(Mandatory = $true)][System.Collections.Generic.Dictionary[string, object]]$RoleCache
+    )
+
+    $managedRoleNames = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($roleName in @('ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG', 'PERFORMER', 'CLIENT')) {
+        [void]$managedRoleNames.Add($roleName)
+    }
+    $desired = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    foreach ($roleName in $DesiredRoles) {
+        if (-not $managedRoleNames.Contains($roleName)) {
+            throw "Refusing to assign unmanaged local realm role '$roleName'."
+        }
+        [void]$desired.Add($roleName)
+    }
+
+    $assignedRoles = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod `
+        -Uri "$ApiRoot/users/$KeycloakUserId/role-mappings/realm" `
+        -Headers $Headers `
+        -TimeoutSec 30))
+    $assignedManaged = [System.Collections.Generic.Dictionary[string, object]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    foreach ($assignedRole in $assignedRoles) {
+        $assignedName = [string]$assignedRole.name
+        if ($managedRoleNames.Contains($assignedName) -and -not $assignedManaged.ContainsKey($assignedName)) {
+            $assignedManaged.Add($assignedName, $assignedRole)
+        }
+    }
+
+    $rolesToRemove = [System.Collections.Generic.List[object]]::new()
+    foreach ($entry in $assignedManaged.GetEnumerator()) {
+        if (-not $desired.Contains($entry.Key)) {
+            [void]$rolesToRemove.Add($entry.Value)
+        }
+    }
+    if ($rolesToRemove.Count -gt 0) {
+        $removeBody = ConvertTo-Json -InputObject @($rolesToRemove.ToArray()) -Depth 10 -Compress
+        Invoke-RestMethod `
+            -Uri "$ApiRoot/users/$KeycloakUserId/role-mappings/realm" `
+            -Method Delete `
+            -Headers $Headers `
+            -Body $removeBody `
+            -ContentType 'application/json' `
+            -TimeoutSec 30 | Out-Null
+    }
+
+    $rolesToAdd = [System.Collections.Generic.List[object]]::new()
+    foreach ($desiredRole in $desired) {
+        if (-not $assignedManaged.ContainsKey($desiredRole)) {
+            [void]$rolesToAdd.Add((Get-OrCreate-LocalKeycloakRealmRole `
+                -ApiRoot $ApiRoot `
+                -Headers $Headers `
+                -RoleCache $RoleCache `
+                -RoleName $desiredRole))
+        }
+    }
+    if ($rolesToAdd.Count -gt 0) {
+        $addBody = ConvertTo-Json -InputObject @($rolesToAdd.ToArray()) -Depth 10 -Compress
+        Invoke-RestMethod `
+            -Uri "$ApiRoot/users/$KeycloakUserId/role-mappings/realm" `
+            -Method Post `
+            -Headers $Headers `
+            -Body $addBody `
+            -ContentType 'application/json' `
+            -TimeoutSec 30 | Out-Null
+    }
+
+    $verifiedAssignments = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod `
+        -Uri "$ApiRoot/users/$KeycloakUserId/role-mappings/realm" `
+        -Headers $Headers `
+        -TimeoutSec 30))
+    $verifiedManaged = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    foreach ($verifiedRole in $verifiedAssignments) {
+        $verifiedName = [string]$verifiedRole.name
+        if ($managedRoleNames.Contains($verifiedName)) {
+            [void]$verifiedManaged.Add($verifiedName)
+        }
+    }
+    if (-not $verifiedManaged.SetEquals($desired)) {
+        throw "Local Keycloak managed realm-role verification failed for user id '$KeycloakUserId'."
+    }
+}
+
+function Revoke-LocalKeycloakManagedUserSessions {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers,
+        [Parameter(Mandatory = $true)][string]$KeycloakUserId
+    )
+
+    Invoke-RestMethod `
+        -Uri "$ApiRoot/users/$KeycloakUserId/logout" `
+        -Method Post `
+        -Headers $Headers `
+        -TimeoutSec 30 | Out-Null
+
+    $verifiedUser = Invoke-RestMethod `
+        -Uri "$ApiRoot/users/$KeycloakUserId" `
+        -Headers $Headers `
+        -TimeoutSec 30
+    $enabledProperty = $verifiedUser.PSObject.Properties['enabled']
+    if ($null -eq $enabledProperty -or [bool]$enabledProperty.Value) {
+        throw "Local Keycloak user '$KeycloakUserId' was not disabled during access revocation."
+    }
+
+    $remainingSessions = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod `
+        -Uri "$ApiRoot/users/$KeycloakUserId/sessions" `
+        -Headers $Headers `
+        -TimeoutSec 30))
+    if ($remainingSessions.Count -ne 0) {
+        throw "Local Keycloak user '$KeycloakUserId' still has $($remainingSessions.Count) session(s) after access revocation."
+    }
+}
+
+function Ensure-LocalKeycloakManagedMarkerProfile {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers
+    )
+
+    $profile = Invoke-RestMethod -Uri "$ApiRoot/users/profile" -Headers $Headers -TimeoutSec 30
+    $profileAttributes = [System.Collections.Generic.List[object]]::new()
+    foreach ($profileAttribute in @(ConvertTo-SmokeArray -Value $profile.attributes)) {
+        [void]$profileAttributes.Add($profileAttribute)
+    }
+    $markerAttributes = @($profileAttributes | Where-Object { $_.name -eq 'otziv.local-managed' })
+    if ($markerAttributes.Count -gt 1) {
+        throw 'Local Keycloak user profile contains duplicate local-managed marker definitions.'
+    }
+    $markerDefinition = [ordered]@{
+        name = 'otziv.local-managed'
+        displayName = 'Local managed identity'
+        permissions = [ordered]@{
+            view = @('admin')
+            edit = @('admin')
+        }
+        multivalued = $false
+    }
+    $replaceMarker = $markerAttributes.Count -eq 0
+    if ($markerAttributes.Count -eq 1) {
+        $existingMarker = $markerAttributes[0]
+        $permissionsProperty = $existingMarker.PSObject.Properties['permissions']
+        $multivaluedProperty = $existingMarker.PSObject.Properties['multivalued']
+        $viewProperty = if ($null -eq $permissionsProperty -or $null -eq $permissionsProperty.Value) {
+            $null
+        } else {
+            $permissionsProperty.Value.PSObject.Properties['view']
+        }
+        $editProperty = if ($null -eq $permissionsProperty -or $null -eq $permissionsProperty.Value) {
+            $null
+        } else {
+            $permissionsProperty.Value.PSObject.Properties['edit']
+        }
+        $viewValues = @(if ($null -ne $viewProperty) { $viewProperty.Value })
+        $editValues = @(if ($null -ne $editProperty) { $editProperty.Value })
+        $replaceMarker = $viewValues.Count -ne 1 `
+            -or [string]$viewValues[0] -cne 'admin' `
+            -or $editValues.Count -ne 1 `
+            -or [string]$editValues[0] -cne 'admin' `
+            -or $null -eq $multivaluedProperty `
+            -or [bool]$multivaluedProperty.Value
+    }
+    if ($replaceMarker) {
+        $updatedAttributes = [System.Collections.Generic.List[object]]::new()
+        foreach ($profileAttribute in $profileAttributes) {
+            if ($profileAttribute.name -ne 'otziv.local-managed') {
+                [void]$updatedAttributes.Add($profileAttribute)
+            }
+        }
+        [void]$updatedAttributes.Add($markerDefinition)
+        $profile.attributes = $updatedAttributes.ToArray()
+        $profileBody = $profile | ConvertTo-Json -Depth 30
+        Invoke-RestMethod `
+            -Uri "$ApiRoot/users/profile" `
+            -Method Put `
+            -Headers $Headers `
+            -Body $profileBody `
+            -ContentType 'application/json' `
+            -TimeoutSec 30 | Out-Null
+    }
+
+    $verifiedProfile = Invoke-RestMethod -Uri "$ApiRoot/users/profile" -Headers $Headers -TimeoutSec 30
+    $verifiedMarkers = @(
+        ConvertTo-SmokeArray -Value $verifiedProfile.attributes |
+            Where-Object { $_.name -eq 'otziv.local-managed' }
+    )
+    $verifiedMarker = if ($verifiedMarkers.Count -eq 1) { $verifiedMarkers[0] } else { $null }
+    $verifiedView = @(if ($null -ne $verifiedMarker) { $verifiedMarker.permissions.view })
+    $verifiedEdit = @(if ($null -ne $verifiedMarker) { $verifiedMarker.permissions.edit })
+    $verifiedMultivaluedProperty = if ($null -eq $verifiedMarker) {
+        $null
+    } else {
+        $verifiedMarker.PSObject.Properties['multivalued']
+    }
+    if ($null -eq $verifiedMarker `
+            -or $verifiedView.Count -ne 1 `
+            -or [string]$verifiedView[0] -cne 'admin' `
+            -or $verifiedEdit.Count -ne 1 `
+            -or [string]$verifiedEdit[0] -cne 'admin' `
+            -or $null -eq $verifiedMultivaluedProperty `
+            -or [bool]$verifiedMultivaluedProperty.Value) {
+        throw 'Local Keycloak user profile did not retain the admin-only local-managed marker.'
+    }
+}
+
+function Sync-LocalKeycloakManagedUsers {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers,
+        [Parameter(Mandatory = $true)][object[]]$DatabaseUsers,
+        [Parameter(Mandatory = $true)][object[]]$KeycloakUsers
+    )
+
+    Ensure-LocalKeycloakManagedMarkerProfile -ApiRoot $ApiRoot -Headers $Headers
+
+    $keycloakUsersByName = [System.Collections.Generic.Dictionary[string, object]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($keycloakUser in $KeycloakUsers) {
+        $usernameProperty = $keycloakUser.PSObject.Properties['username']
+        $idProperty = $keycloakUser.PSObject.Properties['id']
+        $serviceAccountProperty = $keycloakUser.PSObject.Properties['serviceAccountClientId']
+        $keycloakUsername = if ($null -eq $usernameProperty) { $null } else { [string]$usernameProperty.Value }
+        $serviceAccountClientId = if ($null -eq $serviceAccountProperty) { $null } else { [string]$serviceAccountProperty.Value }
+        if ([string]::IsNullOrWhiteSpace($keycloakUsername) `
+                -or -not [string]::IsNullOrWhiteSpace($serviceAccountClientId) `
+                -or $keycloakUsername.StartsWith('service-account-', [System.StringComparison]::OrdinalIgnoreCase)) {
+            continue
+        }
+        $parsedId = [guid]::Empty
+        if ($null -eq $idProperty -or -not [guid]::TryParse([string]$idProperty.Value, [ref]$parsedId)) {
+            throw "Local Keycloak returned an invalid user identifier for '$keycloakUsername'."
+        }
+        if ($keycloakUsersByName.ContainsKey($keycloakUsername)) {
+            throw "Local Keycloak contains duplicate case-insensitive username '$keycloakUsername'."
+        }
+        $keycloakUsersByName.Add($keycloakUsername, $keycloakUser)
+    }
+
+    $roleCache = [System.Collections.Generic.Dictionary[string, object]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    $eligibleDatabaseUsernames = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($databaseUser in $DatabaseUsers) {
+        [void]$eligibleDatabaseUsernames.Add([string]$databaseUser.Username)
+    }
+    $managedUsers = [System.Collections.Generic.List[object]]::new()
+    $createdCount = 0
+    foreach ($databaseUser in @($DatabaseUsers | Sort-Object Id)) {
+        $keycloakUser = if ($keycloakUsersByName.ContainsKey($databaseUser.Username)) {
+            $keycloakUsersByName[$databaseUser.Username]
+        } else {
+            $createBody = @{
+                username = $databaseUser.Username
+                enabled = [bool]$databaseUser.Active
+                emailVerified = $false
+                attributes = @{
+                    'otziv.local-managed' = @('true')
+                }
+            } | ConvertTo-Json -Depth 8 -Compress
+            Invoke-RestMethod `
+                -Uri "$ApiRoot/users" `
+                -Method Post `
+                -Headers $Headers `
+                -Body $createBody `
+                -ContentType 'application/json' `
+                -TimeoutSec 30 | Out-Null
+            $encodedUsername = [Uri]::EscapeDataString($databaseUser.Username)
+            $createdMatches = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod `
+                -Uri "$ApiRoot/users?username=$encodedUsername&exact=true&briefRepresentation=false" `
+                -Headers $Headers `
+                -TimeoutSec 30)) | Where-Object {
+                    $_.username -and $_.username.Equals($databaseUser.Username, [System.StringComparison]::OrdinalIgnoreCase)
+                }
+            if ($createdMatches.Count -ne 1) {
+                throw "Local Keycloak did not return exactly one newly managed user '$($databaseUser.Username)'."
+            }
+            $createdCount++
+            $createdMatches[0]
+        }
+
+        $fullUser = Invoke-RestMethod -Uri "$ApiRoot/users/$($keycloakUser.id)" -Headers $Headers -TimeoutSec 30
+        $attributes = [ordered]@{}
+        $attributesProperty = $fullUser.PSObject.Properties['attributes']
+        if ($null -ne $attributesProperty -and $null -ne $attributesProperty.Value) {
+            foreach ($attribute in $attributesProperty.Value.PSObject.Properties) {
+                $attributes[$attribute.Name] = $attribute.Value
+            }
+        }
+        $attributes['otziv.local-managed'] = @('true')
+        # PUT accepts a UserRepresentation rather than a patch. Reuse the full
+        # local representation so fields such as email/name/requiredActions are
+        # not cleared while updating only the managed identity state.
+        $fullUser.username = $databaseUser.Username
+        $fullUser.enabled = [bool]$databaseUser.Active
+        if ($null -eq $attributesProperty) {
+            $fullUser | Add-Member -NotePropertyName attributes -NotePropertyValue $attributes
+        } else {
+            $attributesProperty.Value = $attributes
+        }
+        $fullUser.PSObject.Properties.Remove('access')
+        $updateBody = $fullUser | ConvertTo-Json -Depth 10 -Compress
+        Invoke-RestMethod `
+            -Uri "$ApiRoot/users/$($fullUser.id)" `
+            -Method Put `
+            -Headers $Headers `
+            -Body $updateBody `
+            -ContentType 'application/json' `
+            -TimeoutSec 30 | Out-Null
+
+        [string[]]$desiredRealmRoles = @()
+        if ([bool]$databaseUser.Active) {
+            $desiredRealmRoles = @($databaseUser.RealmRoles)
+        }
+        Sync-LocalKeycloakManagedRealmRoles `
+            -ApiRoot $ApiRoot `
+            -Headers $Headers `
+            -KeycloakUserId ([string]$fullUser.id) `
+            -DesiredRoles $desiredRealmRoles `
+            -RoleCache $roleCache
+
+        $verifiedUser = Invoke-RestMethod -Uri "$ApiRoot/users/$($fullUser.id)" -Headers $Headers -TimeoutSec 30
+        $verifiedAttributesProperty = $verifiedUser.PSObject.Properties['attributes']
+        $markerProperty = if ($null -eq $verifiedAttributesProperty -or $null -eq $verifiedAttributesProperty.Value) {
+            $null
+        } else {
+            $verifiedAttributesProperty.Value.PSObject.Properties['otziv.local-managed']
+        }
+        $markerValues = if ($null -eq $markerProperty) { @() } else { @($markerProperty.Value) }
+        # Keycloak canonicalizes usernames to lowercase in this realm, while
+        # authentication and uniqueness are case-insensitive.
+        if (-not $verifiedUser.username.Equals($databaseUser.Username, [System.StringComparison]::OrdinalIgnoreCase) `
+                -or [bool]$verifiedUser.enabled -ne [bool]$databaseUser.Active `
+                -or -not ($markerValues | Where-Object { [string]$_ -eq 'true' } | Select-Object -First 1)) {
+            throw "Local Keycloak managed-user reconciliation failed for '$($databaseUser.Username)'."
+        }
+        if (-not [bool]$databaseUser.Active) {
+            Revoke-LocalKeycloakManagedUserSessions `
+                -ApiRoot $ApiRoot `
+                -Headers $Headers `
+                -KeycloakUserId ([string]$verifiedUser.id)
+        }
+        [void]$managedUsers.Add([pscustomobject]@{
+            id = [string]$verifiedUser.id
+            username = [string]$verifiedUser.username
+            enabled = [bool]$verifiedUser.enabled
+        })
+    }
+
+    # The local realm survives database refreshes. Retire identities which were
+    # provisioned by this script but no longer have one of the explicitly
+    # allowed production roles, otherwise an old local password could outlive
+    # its authorization scope.
+    $retiredCount = 0
+    foreach ($keycloakUser in $KeycloakUsers) {
+        $username = [string]$keycloakUser.username
+        $keycloakUserId = [string]$keycloakUser.id
+        if ([string]::IsNullOrWhiteSpace($username) `
+                -or [string]::IsNullOrWhiteSpace($keycloakUserId) `
+                -or $eligibleDatabaseUsernames.Contains($username) `
+                -or $username.StartsWith('service-account-', [System.StringComparison]::OrdinalIgnoreCase)) {
+            continue
+        }
+        $fullUser = Invoke-RestMethod -Uri "$ApiRoot/users/$keycloakUserId" -Headers $Headers -TimeoutSec 30
+        $attributesProperty = $fullUser.PSObject.Properties['attributes']
+        $managedMarker = if ($null -eq $attributesProperty -or $null -eq $attributesProperty.Value) {
+            $null
+        } else {
+            $attributesProperty.Value.PSObject.Properties['otziv.local-managed']
+        }
+        $markerValues = if ($null -eq $managedMarker) { @() } else { @($managedMarker.Value) }
+        if (-not ($markerValues | Where-Object { [string]$_ -eq 'true' } | Select-Object -First 1)) {
+            continue
+        }
+
+        $fullUser.enabled = $false
+        $fullUser.PSObject.Properties.Remove('access')
+        $retireBody = $fullUser | ConvertTo-Json -Depth 10 -Compress
+        Invoke-RestMethod `
+            -Uri "$ApiRoot/users/$keycloakUserId" `
+            -Method Put `
+            -Headers $Headers `
+            -Body $retireBody `
+            -ContentType 'application/json' `
+            -TimeoutSec 30 | Out-Null
+        Sync-LocalKeycloakManagedRealmRoles `
+            -ApiRoot $ApiRoot `
+            -Headers $Headers `
+            -KeycloakUserId $keycloakUserId `
+            -DesiredRoles @() `
+            -RoleCache $roleCache
+        Revoke-LocalKeycloakManagedUserSessions `
+            -ApiRoot $ApiRoot `
+            -Headers $Headers `
+            -KeycloakUserId $keycloakUserId
+        $retiredCount++
+    }
+
+    Write-Host "Local Keycloak managed-user provisioning OK: $($managedUsers.Count) eligible user(s), $createdCount created without credentials, $retiredCount stale local identity/identities disabled."
+    return $managedUsers.ToArray()
+}
+
+function Sync-LocalKeycloakSubjectMappings {
+    param(
+        [Parameter(Mandatory = $true)][string]$EnvPath,
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
+        [Parameter(Mandatory = $true)][object[]]$DatabaseUsers,
+        [Parameter(Mandatory = $true)][object[]]$KeycloakUsers
+    )
+
+    $mysqlUser = Get-EnvValue -Path $EnvPath -Name 'MYSQL_USER'
+    $mysqlPassword = Get-EnvValue -Path $EnvPath -Name 'MYSQL_PASSWORD'
+    $mysqlDatabase = Get-EnvValue -Path $EnvPath -Name 'MYSQL_DATABASE'
+    if ([string]::IsNullOrWhiteSpace($mysqlUser) `
+            -or [string]::IsNullOrWhiteSpace($mysqlPassword) `
+            -or [string]::IsNullOrWhiteSpace($mysqlDatabase)) {
+        throw 'MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE are required for local identity synchronization.'
+    }
+
+    $keycloakUsersByName = [System.Collections.Generic.Dictionary[string, object]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($keycloakUser in $KeycloakUsers) {
+        $parsedKeycloakId = [guid]::Empty
+        if ([string]::IsNullOrWhiteSpace([string]$keycloakUser.username) `
+                -or -not [guid]::TryParse([string]$keycloakUser.id, [ref]$parsedKeycloakId)) {
+            throw 'Local Keycloak returned an invalid managed user during subject synchronization.'
+        }
+        if ($keycloakUsersByName.ContainsKey([string]$keycloakUser.username)) {
+            throw "Local Keycloak contains duplicate managed username '$($keycloakUser.username)'."
+        }
+        $keycloakUsersByName.Add([string]$keycloakUser.username, [pscustomobject]@{
+            Username = [string]$keycloakUser.username
+            KeycloakId = $parsedKeycloakId.ToString()
+        })
+    }
+
+    $mappings = [System.Collections.Generic.List[object]]::new()
+    foreach ($databaseUser in $DatabaseUsers) {
+        if (-not $keycloakUsersByName.ContainsKey($databaseUser.Username)) {
+            throw "Eligible local database user '$($databaseUser.Username)' was not provisioned in local Keycloak."
+        }
+        $keycloakUser = $keycloakUsersByName[$databaseUser.Username]
+        [void]$mappings.Add([pscustomobject]@{
+            Id = $databaseUser.Id
+            UsernameHex = $databaseUser.UsernameHex
+            KeycloakId = $keycloakUser.KeycloakId
+        })
+    }
+
+    $mappingValues = @($mappings | ForEach-Object {
+        "($($_.Id), 0x$($_.UsernameHex), '$($_.KeycloakId)')"
+    }) -join ",`n"
+    $identitySql = @"
+CREATE TEMPORARY TABLE local_keycloak_identity_sync (
+    user_id BIGINT NOT NULL PRIMARY KEY,
+    username VARBINARY(1020) NOT NULL,
+    keycloak_id VARBINARY(64) NOT NULL UNIQUE
+);
+INSERT INTO local_keycloak_identity_sync (user_id, username, keycloak_id) VALUES
+$mappingValues;
+UPDATE users AS target
+JOIN local_keycloak_identity_sync AS incoming
+  ON incoming.user_id = target.id
+ AND incoming.username = CONVERT(target.username USING binary)
+SET target.keycloak_id = CONVERT(incoming.keycloak_id USING utf8mb4);
+SELECT CONCAT('OTZIV_LOCAL_IDENTITY_VERIFIED=', COUNT(*))
+FROM users AS target
+JOIN local_keycloak_identity_sync AS incoming
+  ON incoming.user_id = target.id
+ AND incoming.username = CONVERT(target.username USING binary)
+ AND incoming.keycloak_id = CONVERT(target.keycloak_id USING binary);
+"@
+    $identityOutput = & docker @($ComposeArguments + @(
+        'exec', '-T', '-e', "MYSQL_PWD=$mysqlPassword", 'mysql',
+        'mysql', '--default-character-set=utf8mb4', "-u$mysqlUser",
+        $mysqlDatabase, '-N', '-B', '-e', $identitySql
+    )) 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $identityDiagnostic = ($identityOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        throw "Could not synchronize the isolated local database identities with local Keycloak: $identityDiagnostic"
+    }
+    $verifiedLine = @($identityOutput |
+        ForEach-Object { $_.ToString().Trim() } |
+        Where-Object { $_ -match '^OTZIV_LOCAL_IDENTITY_VERIFIED=[0-9]+$' } |
+        Select-Object -Last 1)
+    if ($verifiedLine.Count -ne 1) {
+        throw 'Local Keycloak identity synchronization did not return a verification count.'
+    }
+    $verifiedCount = [int]($verifiedLine[0] -replace '^OTZIV_LOCAL_IDENTITY_VERIFIED=', '')
+    if ($verifiedCount -ne $DatabaseUsers.Count) {
+        throw "Local Keycloak identity synchronization verified $verifiedCount of $($DatabaseUsers.Count) eligible users."
+    }
+
+    Write-Host "Local Keycloak identity synchronization OK: $verifiedCount eligible user(s)."
+}
+
+function Ensure-LocalKeycloakActiveLoginProfile {
+    param(
+        [Parameter(Mandatory = $true)][string]$ApiRoot,
+        [Parameter(Mandatory = $true)][hashtable]$Headers,
+        [Parameter(Mandatory = $true)][string]$KeycloakUserId
+    )
+
+    $user = Invoke-RestMethod -Uri "$ApiRoot/users/$KeycloakUserId" -Headers $Headers -TimeoutSec 30
+    $changed = $false
+    $localProfileValues = [ordered]@{
+        email = "local-$($KeycloakUserId.Replace('-', ''))@account.invalid"
+        firstName = 'Local'
+        lastName = 'Account'
+    }
+    foreach ($entry in $localProfileValues.GetEnumerator()) {
+        $property = $user.PSObject.Properties[$entry.Key]
+        if ($null -eq $property) {
+            $user | Add-Member -NotePropertyName $entry.Key -NotePropertyValue $entry.Value
+            $changed = $true
+        } elseif ([string]::IsNullOrWhiteSpace([string]$property.Value)) {
+            $property.Value = $entry.Value
+            $changed = $true
+        }
+    }
+
+    if ($changed) {
+        $user.PSObject.Properties.Remove('access')
+        $body = $user | ConvertTo-Json -Depth 10 -Compress
+        Invoke-RestMethod `
+            -Uri "$ApiRoot/users/$KeycloakUserId" `
+            -Method Put `
+            -Headers $Headers `
+            -Body $body `
+            -ContentType 'application/json' `
+            -TimeoutSec 30 | Out-Null
+    }
+
+    $verifiedUser = Invoke-RestMethod -Uri "$ApiRoot/users/$KeycloakUserId" -Headers $Headers -TimeoutSec 30
+    foreach ($propertyName in @('email', 'firstName', 'lastName')) {
+        $property = $verifiedUser.PSObject.Properties[$propertyName]
+        if ($null -eq $property -or [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+            throw "Local Keycloak active login user is missing required profile field '$propertyName'."
+        }
+    }
+}
+
 function Sync-LocalKeycloakLoginCredential {
     param(
         [Parameter(Mandatory = $true)][string]$RootUrl,
         [Parameter(Mandatory = $true)][string]$EnvPath,
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
         [Parameter(Mandatory = $true)][string]$Username,
-        [Parameter(Mandatory = $true)][string]$Password
+        [Parameter(Mandatory = $true)][string]$Password,
+        [switch]$SkipCredentialSync
     )
 
-    if ([string]::IsNullOrWhiteSpace($Username) -or [string]::IsNullOrWhiteSpace($Password)) {
+    if (-not $SkipCredentialSync -and
+        ([string]::IsNullOrWhiteSpace($Username) -or [string]::IsNullOrWhiteSpace($Password))) {
         throw "LocalLoginUsername and LocalLoginPassword must not be empty when local credential sync is enabled."
     }
 
     try {
         $rootUri = [Uri]$RootUrl
     } catch {
-        throw "Local Keycloak credential sync requires a valid loopback BaseUrl, got '$RootUrl'."
+        throw "Local Keycloak identity synchronization requires a valid loopback BaseUrl, got '$RootUrl'."
     }
 
     if (-not $rootUri.IsLoopback) {
-        throw "Refusing to reset a Keycloak password through non-loopback BaseUrl '$RootUrl'. Use -SkipLocalLoginCredentialSync when checking a remote environment."
+        throw "Refusing local Keycloak identity synchronization through non-loopback BaseUrl '$RootUrl'."
     }
 
+    Assert-LocalKeycloakIdentitySyncIsolation -RootUrl $RootUrl -ComposeArguments $ComposeArguments
+    $databaseUsers = @(Get-LocalKeycloakDatabaseUsers -EnvPath $EnvPath -ComposeArguments $ComposeArguments)
     $realm = Get-KeycloakRealm -EnvPath $EnvPath
     $adminToken = Get-KeycloakAdminToken -RootUrl $RootUrl -EnvPath $EnvPath
     $headers = @{ Authorization = "Bearer $adminToken" }
     $apiRoot = "$($RootUrl.TrimEnd('/'))/keycloak/admin/realms/$realm"
-    $encodedUsername = [Uri]::EscapeDataString($Username)
-    $response = Invoke-RestMethod -Uri "$apiRoot/users?username=$encodedUsername&exact=true" -Headers $headers -TimeoutSec 30
-    $users = @(ConvertTo-SmokeArray -Value $response) |
-        Where-Object { $_.username -and $_.username.Equals($Username, [System.StringComparison]::OrdinalIgnoreCase) }
-
-    if ($users.Count -eq 0) {
-        throw "Local Keycloak user '$Username' was not found in realm '$realm'. Create the local identity or use -SkipLocalLoginCredentialSync."
-    }
-    if ($users.Count -gt 1) {
-        throw "Local Keycloak contains more than one exact '$Username' identity in realm '$realm'."
-    }
-    if ($users[0].enabled -eq $false) {
-        throw "Local Keycloak user '$Username' is disabled in realm '$realm'."
-    }
-
-    $credential = @{
-        type = "password"
-        value = $Password
-        temporary = $false
-    } | ConvertTo-Json -Compress
-    Invoke-RestMethod `
-        -Uri "$apiRoot/users/$($users[0].id)/reset-password" `
-        -Method Put `
+    Remove-LocalKeycloakLoginSmokeClients -ApiRoot $apiRoot -Headers $headers
+    $realmUsers = @(Get-LocalKeycloakRealmUsers -ApiRoot $apiRoot -Headers $headers)
+    $managedUsers = @(Sync-LocalKeycloakManagedUsers `
+        -ApiRoot $apiRoot `
         -Headers $headers `
-        -Body $credential `
-        -ContentType "application/json" `
-        -TimeoutSec 30 | Out-Null
+        -DatabaseUsers $databaseUsers `
+        -KeycloakUsers $realmUsers)
+    Sync-LocalKeycloakSubjectMappings `
+        -EnvPath $EnvPath `
+        -ComposeArguments $ComposeArguments `
+        -DatabaseUsers $databaseUsers `
+        -KeycloakUsers $managedUsers
 
-    try {
-        Invoke-RestMethod `
-            -Uri "$apiRoot/attack-detection/brute-force/users/$($users[0].id)" `
-            -Method Delete `
+    if ($SkipCredentialSync) {
+        Write-Host "Local Keycloak managed identities and subject mappings synchronized; local password reset and login probes skipped."
+        return
+    }
+
+    $activeDatabaseUsers = @($databaseUsers | Where-Object { [bool]$_.Active })
+    $selectedDatabaseUsers = @($activeDatabaseUsers | Where-Object {
+        $_.Username.Equals($Username, [System.StringComparison]::OrdinalIgnoreCase)
+    })
+    if ($selectedDatabaseUsers.Count -ne 1) {
+        throw "LocalLoginUsername '$Username' is not an active eligible Keycloak staff or performer user in the isolated local database."
+    }
+
+    $managedUsersByName = [System.Collections.Generic.Dictionary[string, object]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($managedUser in $managedUsers) {
+        if ([string]::IsNullOrWhiteSpace([string]$managedUser.username) `
+                -or $managedUsersByName.ContainsKey([string]$managedUser.username)) {
+            throw 'Local Keycloak managed-user list contains a blank or duplicate username.'
+        }
+        $managedUsersByName.Add([string]$managedUser.username, $managedUser)
+    }
+
+    $loginTargets = [System.Collections.Generic.List[object]]::new()
+    foreach ($databaseUser in @($activeDatabaseUsers | Sort-Object Id)) {
+        if (-not $managedUsersByName.ContainsKey($databaseUser.Username)) {
+            throw "Managed local Keycloak user '$($databaseUser.Username)' was not provisioned in realm '$realm'."
+        }
+        $managedUser = $managedUsersByName[$databaseUser.Username]
+        if (-not [bool]$managedUser.enabled) {
+            throw "Local Keycloak user '$($databaseUser.Username)' is disabled in realm '$realm'."
+        }
+        $parsedKeycloakId = [guid]::Empty
+        if (-not [guid]::TryParse([string]$managedUser.id, [ref]$parsedKeycloakId)) {
+            throw "Local Keycloak returned an invalid user identifier for '$($databaseUser.Username)'."
+        }
+
+        Ensure-LocalKeycloakActiveLoginProfile `
+            -ApiRoot $apiRoot `
             -Headers $headers `
+            -KeycloakUserId ([string]$managedUser.id)
+
+        $credential = @{
+            type = 'password'
+            value = $Password
+            temporary = $false
+        } | ConvertTo-Json -Compress
+        Invoke-RestMethod `
+            -Uri "$apiRoot/users/$($managedUser.id)/reset-password" `
+            -Method Put `
+            -Headers $headers `
+            -Body $credential `
+            -ContentType 'application/json' `
             -TimeoutSec 30 | Out-Null
-    } catch {
-        Write-Warning "Password was reset, but the Keycloak brute-force state for '$Username' could not be cleared: $($_.Exception.Message)"
+
+        try {
+            Invoke-RestMethod `
+                -Uri "$apiRoot/attack-detection/brute-force/users/$($managedUser.id)" `
+                -Method Delete `
+                -Headers $headers `
+                -TimeoutSec 30 | Out-Null
+        } catch {
+            Write-Warning "Password was reset, but the local Keycloak brute-force state for '$($databaseUser.Username)' could not be cleared: $($_.Exception.Message)"
+        }
+
+        $credentials = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod `
+            -Uri "$apiRoot/users/$($managedUser.id)/credentials" `
+            -Headers $headers `
+            -TimeoutSec 30))
+        if (-not ($credentials | Where-Object { $_.type -eq 'password' } | Select-Object -First 1)) {
+            throw "Keycloak did not retain a password credential for local user '$($databaseUser.Username)'."
+        }
+        [void]$loginTargets.Add([pscustomobject]@{
+            Username = [string]$databaseUser.Username
+            KeycloakUsername = [string]$managedUser.username
+        })
     }
 
-    $credentials = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod -Uri "$apiRoot/users/$($users[0].id)/credentials" -Headers $headers -TimeoutSec 30))
-    if (-not ($credentials | Where-Object { $_.type -eq "password" } | Select-Object -First 1)) {
-        throw "Keycloak did not retain a password credential for local user '$Username'."
-    }
-
-    $loginClientId = "otziv-local-login-smoke-$([guid]::NewGuid().ToString('N').Substring(0, 12))"
+    $loginClientId = "otziv-prod-local-login-smoke-$([guid]::NewGuid().ToString('N').Substring(0, 12))"
     $loginClientCreated = $false
     try {
         $loginClient = @{
@@ -1015,7 +1989,21 @@ function Sync-LocalKeycloakLoginCredential {
             implicitFlowEnabled = $false
             directAccessGrantsEnabled = $true
             serviceAccountsEnabled = $false
-        } | ConvertTo-Json -Compress
+            protocol = "openid-connect"
+            protocolMappers = @(
+                @{
+                    name = "backend audience"
+                    protocol = "openid-connect"
+                    protocolMapper = "oidc-audience-mapper"
+                    consentRequired = $false
+                    config = @{
+                        "included.client.audience" = "otziv-backend"
+                        "id.token.claim" = "false"
+                        "access.token.claim" = "true"
+                    }
+                }
+            )
+        } | ConvertTo-Json -Depth 10 -Compress
         Invoke-RestMethod `
             -Uri "$apiRoot/clients" `
             -Method Post `
@@ -1025,20 +2013,31 @@ function Sync-LocalKeycloakLoginCredential {
             -TimeoutSec 30 | Out-Null
         $loginClientCreated = $true
 
-        $token = Invoke-RestMethod `
-            -Uri "$($RootUrl.TrimEnd('/'))/keycloak/realms/$realm/protocol/openid-connect/token" `
-            -Method Post `
-            -Body @{
-                grant_type = "password"
-                client_id = $loginClientId
-                username = $Username
-                password = $Password
-                scope = "openid"
-            } `
-            -ContentType "application/x-www-form-urlencoded" `
-            -TimeoutSec 30
-        if ([string]::IsNullOrWhiteSpace($token.access_token)) {
-            throw "Keycloak did not issue an access token for local user '$Username'."
+        foreach ($loginTarget in $loginTargets) {
+            $token = Invoke-RestMethod `
+                -Uri "$($RootUrl.TrimEnd('/'))/keycloak/realms/$realm/protocol/openid-connect/token" `
+                -Method Post `
+                -Body @{
+                    grant_type = 'password'
+                    client_id = $loginClientId
+                    username = $loginTarget.KeycloakUsername
+                    password = $Password
+                    scope = 'openid'
+                } `
+                -ContentType 'application/x-www-form-urlencoded' `
+                -TimeoutSec 30
+            if ([string]::IsNullOrWhiteSpace($token.access_token)) {
+                throw "Keycloak did not issue an access token for local user '$($loginTarget.Username)'."
+            }
+            $me = Invoke-RestMethod `
+                -Uri "$($RootUrl.TrimEnd('/'))/api/me" `
+                -Headers @{ Authorization = "Bearer $($token.access_token)" } `
+                -TimeoutSec 30
+            if (-not [bool]$me.authenticated `
+                    -or -not ([string]$me.name).Equals($loginTarget.Username, [System.StringComparison]::OrdinalIgnoreCase) `
+                    -or $null -eq $me.localUserId) {
+                throw "Local Keycloak login for '$($loginTarget.Username)' succeeded, but backend local-user authorization did not."
+            }
         }
     } finally {
         if ($loginClientCreated) {
@@ -1056,7 +2055,9 @@ function Sync-LocalKeycloakLoginCredential {
         }
     }
 
-    Write-Host "Local Keycloak login credential synchronized and verified for '$Username' in realm '$realm'."
+    Remove-LocalKeycloakLoginSmokeClients -ApiRoot $apiRoot -Headers $headers
+
+    Write-Host "Local Keycloak login credential synchronized and verified for all $($loginTargets.Count) active eligible user(s) in realm '$realm'; selected account: '$Username'."
 }
 
 function Get-KeycloakClientCredentialsToken {
@@ -1091,7 +2092,10 @@ function New-KeycloakSmokeClient {
 
     $apiRoot = "$($RootUrl.TrimEnd('/'))/keycloak/admin/realms/$Realm"
     $roleKey = $Role.ToLowerInvariant()
-    $clientId = "otziv-smoke-ai-$roleKey-$([guid]::NewGuid().ToString("N").Substring(0, 12))"
+    # Fixed IDs are exact-matched by the prod-like-only local security-state
+    # exemption. The process mutex prevents concurrent smoke runs, and every
+    # suite removes stale clients before creating one.
+    $clientId = "otziv-smoke-ai-$roleKey"
     $clientBody = @{
         clientId = $clientId
         name = "Reputation AI smoke $Role"
@@ -1974,6 +2978,10 @@ function Invoke-OfflineAppBuild {
 
 $operationMutex = [System.Threading.Mutex]::new($false, 'OtzivProdLikeDatabaseOperation')
 $operationLockHeld = $false
+$previousLegacyMigrationEnv = [Environment]::GetEnvironmentVariable(
+    'OTZIV_AUTH_LEGACY_MIGRATION_ENABLED',
+    [EnvironmentVariableTarget]::Process
+)
 try {
 try {
     $operationLockHeld = $operationMutex.WaitOne(0)
@@ -1989,6 +2997,10 @@ if ($RestoreProdDb -and $SkipProdDbRestore) {
 if ($RestoreProdDb) {
     Write-Host '-RestoreProdDb explicitly confirms the default fresh production DB restore.'
 }
+
+# The migration window is closed. Override an old local env file for this
+# process without rewriting or exposing the user's external secret file.
+$env:OTZIV_AUTH_LEGACY_MIGRATION_ENABLED = 'false'
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
@@ -2136,26 +3148,36 @@ try {
         Wait-ComposeServiceHealthy -ComposeArguments $composeArgs -Service "mysql"
         Disable-LocalExternalMessaging -ComposeArguments $composeArgs -EnvPath $envPath
 
-        $upArgs = @("up", "-d", "--remove-orphans")
         if (-not $NoBuild -and -not $OfflineAppBuild) {
-            $upArgs += "--build"
+            # Build the application image before mounting legacy volumes. This
+            # lets the ownership repair complete before Compose waits on the
+            # non-root application's health check.
+            $buildResult = Invoke-DockerComposeUp -ComposeArguments $composeArgs -UpArguments @("build")
+            $canFallback = $buildResult.ExitCode -ne 0 -and -not $NoOfflineFallback -and (Test-RegistryBuildFailure -Output $buildResult.Output)
+            if ($buildResult.ExitCode -ne 0 -and -not $canFallback) {
+                throw "Command failed: docker $($composeArgs + @('build') -join ' ')"
+            }
+            if ($canFallback) {
+                Write-Warning "Docker registry is unavailable. Falling back to offline backend image rebuild from local Maven jar."
+                Invoke-OfflineAppBuild -RepoRoot $repoRoot -EnvPath $envPath
+            }
         }
 
+        # Existing prod-like volumes may have been initialized by the former
+        # root runtime. The hardened image runs as 10001 and drops every
+        # capability, so repair ownership before starting the application with
+        # a short-lived container that receives only CAP_CHOWN.
+        Write-Host "Migrating local application volume ownership to UID/GID 10001."
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
+            "run", "--rm", "--no-deps", "--cap-add", "CHOWN", "--user", "0",
+            "--entrypoint", "chown", "app", "-R", "10001:10001",
+            "/app/logs", "/app/backup", "/app/mobile-releases", "/app/sent-hashes"
+        ))
+
+        $upArgs = @("up", "-d", "--remove-orphans")
         $upResult = Invoke-DockerComposeUpWithNetworkRepair -ComposeArguments $composeArgs -UpArguments $upArgs
         if ($upResult.ExitCode -ne 0) {
-            $canFallback = -not $NoOfflineFallback -and -not $OfflineAppBuild -and -not $NoBuild -and (Test-RegistryBuildFailure -Output $upResult.Output)
-            if (-not $canFallback) {
-                throw "Command failed: docker $($composeArgs + $upArgs -join ' ')"
-            }
-
-            Write-Warning "Docker registry is unavailable. Falling back to offline backend image rebuild from local Maven jar."
-            Invoke-OfflineAppBuild -RepoRoot $repoRoot -EnvPath $envPath
-
-            $retryArgs = @("up", "-d", "--remove-orphans")
-            $retryResult = Invoke-DockerComposeUpWithNetworkRepair -ComposeArguments $composeArgs -UpArguments $retryArgs
-            if ($retryResult.ExitCode -ne 0) {
-                throw "Command failed after offline fallback: docker $($composeArgs + $retryArgs -join ' ')"
-            }
+            throw "Command failed after image preparation: docker $($composeArgs + $upArgs -join ' ')"
         }
     }
 
@@ -2184,17 +3206,18 @@ try {
         Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health after local safety reload" -Deadline $deadline
     }
     Wait-HttpOk -Url "$BaseUrl/keycloak/realms/otziv/.well-known/openid-configuration" -Name "Keycloak realm" -Deadline $deadline
-    if (-not $SkipProdDbRestore -and -not $SkipLocalLoginCredentialSync) {
-        Sync-LocalKeycloakLoginCredential `
-            -RootUrl $BaseUrl `
-            -EnvPath $envPath `
-            -Username $LocalLoginUsername `
-            -Password $LocalLoginPassword
-    }
+    Sync-LocalKeycloakLoginCredential `
+        -RootUrl $BaseUrl `
+        -EnvPath $envPath `
+        -ComposeArguments $composeArgs `
+        -Username $LocalLoginUsername `
+        -Password $LocalLoginPassword `
+        -SkipCredentialSync:$SkipLocalLoginCredentialSync
     Update-KeycloakFrontendLoopbackRedirects -ComposeArguments $composeArgs -EnvPath $envPath -BaseUrl $BaseUrl
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline
     Invoke-PublicFrontendSmoke -BaseUrl $BaseUrl
     Invoke-PublicCapabilityAuthorizationSmoke -BaseUrl $BaseUrl
+    Assert-LegacyUserMigrationDisabled -BaseUrl $BaseUrl
     Assert-LegacyReviewCapabilityNotLogged -BaseUrl $BaseUrl -ComposeArguments $composeArgs
     Invoke-TbankPaymentConfigSmoke -BaseUrl $BaseUrl -EnvPath $envPath
     if (-not $SkipWorkloadShadowSmoke) {
@@ -2203,6 +3226,7 @@ try {
             -EnvPath $envPath `
             -ComposeArguments $composeArgs
     }
+    Assert-ScheduledMessageReconciliationHealthy -ComposeArguments $composeArgs
     if ($WithReputationAiSmoke) {
         Invoke-ReputationAiSmoke `
             -RootUrl $BaseUrl `
@@ -2223,6 +3247,11 @@ try {
     throw
 }
 } finally {
+    if ($null -eq $previousLegacyMigrationEnv) {
+        Remove-Item Env:OTZIV_AUTH_LEGACY_MIGRATION_ENABLED -ErrorAction SilentlyContinue
+    } else {
+        $env:OTZIV_AUTH_LEGACY_MIGRATION_ENABLED = $previousLegacyMigrationEnv
+    }
     if ($operationLockHeld) {
         $operationMutex.ReleaseMutex()
     }

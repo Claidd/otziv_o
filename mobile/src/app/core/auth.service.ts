@@ -115,7 +115,9 @@ export class AuthService {
     authUrl.searchParams.set('client_id', mobileEnvironment.keycloak.clientId);
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', 'openid profile email offline_access');
+    authUrl.searchParams.set('scope', this.isNative
+      ? 'openid profile email offline_access'
+      : 'openid profile email');
     authUrl.searchParams.set('state', state);
     authUrl.searchParams.set('code_challenge', codeChallenge);
     authUrl.searchParams.set('code_challenge_method', 'S256');

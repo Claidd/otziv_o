@@ -15,6 +15,7 @@ import com.hunt.otziv.l_lead.model.Telephone;
 import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.l_lead.services.LeadImportService;
+import com.hunt.otziv.l_lead.services.LeadAccessService;
 import com.hunt.otziv.l_lead.services.LeadImportService.LeadImportOptions;
 import com.hunt.otziv.l_lead.services.LeadImportService.LeadImportResult;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
@@ -78,6 +79,7 @@ public class ApiLeadBoardController {
     private final LeadImportService leadImportService;
     private final TelephoneService telephoneService;
     private final PerformanceMetrics performanceMetrics;
+    private final LeadAccessService leadAccessService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG')")
@@ -186,6 +188,9 @@ public class ApiLeadBoardController {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Назначать менеджера может только владелец или администратор");
             }
 
+            if (!leadAccessService.canAccessManager(request.managerId(), authentication)) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден");
+            }
             manager = managerService.getManagerById(request.managerId());
             if (manager == null) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден");
@@ -217,15 +222,16 @@ public class ApiLeadBoardController {
 
     @GetMapping("/edit-options")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG')")
-    public LeadEditOptionsResponse getEditOptions() {
+    public LeadEditOptionsResponse getEditOptions(Authentication authentication) {
+        LeadAccessService.LeadAssignmentOptions options = leadAccessService.assignmentOptions(authentication);
         return new LeadEditOptionsResponse(
-                operatorService.getAllOperators().stream()
+                options.operators().stream()
                         .map(operator -> toPersonOption(operator.getId(), operator.getUser()))
                         .toList(),
-                managerService.getAllManagers().stream()
+                options.managers().stream()
                         .map(manager -> toPersonOption(manager.getId(), manager.getUser()))
                         .toList(),
-                marketologService.getAllMarketologs().stream()
+                options.marketologs().stream()
                         .map(marketolog -> toPersonOption(marketolog.getId(), marketolog.getUser()))
                         .toList(),
                 Arrays.stream(LeadStatus.values()).map(status -> status.title).toList()
@@ -238,9 +244,24 @@ public class ApiLeadBoardController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(name = "managerIds", required = false) List<Long> managerIds,
             @RequestParam(name = "operatorId", required = false) Long operatorId,
-            @RequestParam(name = "marketologId", required = false) Long marketologId
+            @RequestParam(name = "marketologId", required = false) Long marketologId,
+            Authentication authentication
     ) {
-        return leadImportService.importLeads(file, new LeadImportOptions(managerIds, operatorId, marketologId));
+        return leadImportService.importLeads(
+                file,
+                new LeadImportOptions(managerIds, operatorId, marketologId),
+                (assignedManagerId, assignedOperatorId, assignedMarketologId, assignedTelephoneId) -> {
+                    leadAccessService.requireLeadAssignmentsAllowed(
+                            assignedManagerId,
+                            assignedOperatorId,
+                            assignedMarketologId,
+                            authentication
+                    );
+                    if (assignedTelephoneId != null) {
+                        leadAccessService.requireTelephoneAccess(assignedTelephoneId, authentication);
+                    }
+                }
+        );
     }
 
     @PutMapping("/{id}")
@@ -250,6 +271,7 @@ public class ApiLeadBoardController {
             @RequestBody LeadUpdateRequest request,
             Authentication authentication
     ) {
+        leadAccessService.requireLeadAccess(id, authentication);
         String telephoneLead = changeNumberPhone(request.telephoneLead());
         if (telephoneLead.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Номер не может быть пустым");
@@ -260,7 +282,16 @@ public class ApiLeadBoardController {
         }
 
         boolean canUpdateTelephone = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
+        if (canUpdateTelephone && request.telephoneId() != null) {
+            leadAccessService.requireTelephoneAccess(request.telephoneId(), authentication);
+        }
         Telephone telephone = canUpdateTelephone ? resolveTelephone(request.telephoneId()) : null;
+        leadAccessService.requireLeadAssignmentsAllowed(
+                request.managerId(),
+                request.operatorId(),
+                request.marketologId(),
+                authentication
+        );
 
         LeadDTO leadDTO = LeadDTO.builder()
                 .telephoneLead(telephoneLead)
@@ -294,7 +325,8 @@ public class ApiLeadBoardController {
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public void deleteLead(@PathVariable Long id) {
+    public void deleteLead(@PathVariable Long id, Authentication authentication) {
+        leadAccessService.requireLeadAccess(id, authentication);
         try {
             leadService.deleteLead(id);
         } catch (EntityNotFoundException ex) {
@@ -304,19 +336,22 @@ public class ApiLeadBoardController {
 
     @PostMapping("/{id}/status/send")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG')")
-    public void markSend(@PathVariable Long id) {
+    public void markSend(@PathVariable Long id, Authentication authentication) {
+        leadAccessService.requireLeadAccess(id, authentication);
         leadService.changeStatusLeadOnSend(id);
     }
 
     @PostMapping("/{id}/status/resend")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG')")
-    public void markResend(@PathVariable Long id) {
+    public void markResend(@PathVariable Long id, Authentication authentication) {
+        leadAccessService.requireLeadAccess(id, authentication);
         leadService.changeStatusLeadOnReSend(id);
     }
 
     @PostMapping("/{id}/status/archive")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG')")
-    public void markArchive(@PathVariable Long id) {
+    public void markArchive(@PathVariable Long id, Authentication authentication) {
+        leadAccessService.requireLeadAccess(id, authentication);
         leadService.changeStatusLeadOnArchive(id);
     }
 
@@ -324,14 +359,17 @@ public class ApiLeadBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG')")
     public void markToWork(
             @PathVariable Long id,
-            @RequestBody(required = false) LeadStatusChangeRequest request
+            @RequestBody(required = false) LeadStatusChangeRequest request,
+            Authentication authentication
     ) {
+        leadAccessService.requireLeadAccess(id, authentication);
         leadService.changeStatusLeadToWork(id, request != null ? request.commentsLead() : null);
     }
 
     @PostMapping("/{id}/status/new")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG')")
-    public void markNew(@PathVariable Long id) {
+    public void markNew(@PathVariable Long id, Authentication authentication) {
+        leadAccessService.requireLeadAccess(id, authentication);
         leadService.changeStatusLeadOnNew(id);
     }
 

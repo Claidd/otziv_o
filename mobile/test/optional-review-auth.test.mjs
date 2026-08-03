@@ -40,3 +40,10 @@ test('capability-header and public-payment APIs remain always anonymous', () => 
   assert.match(interceptor, /headers: request\.headers\.delete\('Authorization'\)/);
   assert.match(interceptor, /return next\(isAlwaysAnonymousApi \? anonymousRequest : request\)/);
 });
+
+test('native API token attachment requires an exact backend origin and API path', () => {
+  assert.match(interceptor, /target\.origin !== base\.origin/);
+  assert.match(interceptor, /target\.pathname\.startsWith\(`\$\{basePath\}\//);
+  assert.match(interceptor, /requestPath === '\/api' \|\| requestPath\?\.startsWith\('\/api\/'\) === true/);
+  assert.doesNotMatch(interceptor, /request\.url\.startsWith\(apiBaseUrl\)/);
+});

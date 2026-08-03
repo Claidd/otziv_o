@@ -74,7 +74,6 @@ export interface ArchiveReviewItem {
   subCategory: string;
   botId?: number | null;
   botFio: string;
-  botLogin: string;
   productId?: number | null;
   productTitle: string;
   workerFio: string;
@@ -495,8 +494,8 @@ export interface OrderReviewItem {
   subCategory: string;
   botId?: number | null;
   botFio: string;
-  botLogin: string;
-  botPassword: string;
+  botLoginPresent: boolean;
+  botPasswordPresent: boolean;
   botCounter: number;
   botActive?: boolean;
   companyTitle: string;
@@ -547,8 +546,8 @@ export interface BadReviewTaskItem {
   workerFio?: string;
   botId?: number | null;
   botFio?: string;
-  botLogin?: string;
-  botPassword?: string;
+  botLoginPresent: boolean;
+  botPasswordPresent: boolean;
   taskText?: string;
   comment?: string;
 }
@@ -579,8 +578,8 @@ export interface ReviewRecoveryTaskItem {
   workerFio?: string;
   botId?: number | null;
   botFio?: string;
-  botLogin?: string;
-  botPassword?: string;
+  botLoginPresent: boolean;
+  botPasswordPresent: boolean;
   batch?: ReviewRecoveryBatchItem | null;
 }
 
@@ -638,6 +637,10 @@ export interface ReviewActivitySource {
   sourcePage?: string;
   sourceEntry?: string;
   sourceSection?: string;
+}
+
+export interface ManagerCredentialRevealResponse {
+  value: string;
 }
 
 export interface CompanyDeepReportState {
@@ -1068,14 +1071,39 @@ export class ManagerApi {
     );
   }
 
-  logOrderReviewCopyClick(
+  revealOrderReviewCredential(
+    orderId: number,
     reviewId: number,
     field: 'login' | 'password',
     source?: ReviewActivitySource
-  ): Observable<void> {
-    return this.http.post<void>(
-      `${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/copy-click`,
-      { field, ...source }
+  ): Observable<ManagerCredentialRevealResponse> {
+    return this.http.post<ManagerCredentialRevealResponse>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/credential-reveal`,
+      { ...source, field }
+    );
+  }
+
+  revealBadReviewTaskCredential(
+    orderId: number,
+    taskId: number,
+    field: 'login' | 'password',
+    source?: ReviewActivitySource
+  ): Observable<ManagerCredentialRevealResponse> {
+    return this.http.post<ManagerCredentialRevealResponse>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/credential-reveal`,
+      { ...source, field }
+    );
+  }
+
+  revealRecoveryTaskCredential(
+    orderId: number,
+    taskId: number,
+    field: 'login' | 'password',
+    source?: ReviewActivitySource
+  ): Observable<ManagerCredentialRevealResponse> {
+    return this.http.post<ManagerCredentialRevealResponse>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/recovery-tasks/${taskId}/credential-reveal`,
+      { ...source, field }
     );
   }
 

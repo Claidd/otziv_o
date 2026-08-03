@@ -3,9 +3,11 @@ package com.hunt.otziv.u_users.config;
 import com.hunt.otziv.config.jwt.service.JwtAuthFilter;
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestrictionFilter;
 import com.hunt.otziv.u_users.services.UserServiceImpl;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -24,6 +26,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
@@ -51,6 +54,10 @@ public class SecurityConfig {
     private final RequestValidationFilter requestValidationFilter;
     private final JwtAuthFilter jwtAuthFilter;
     private final ManagerReportReviewRestrictionFilter managerReportReviewRestrictionFilter;
+    @Autowired(required = false)
+    private LocalJwtSecurityStateFilter localJwtSecurityStateFilter;
+    @Autowired(required = false)
+    private JwtDecoder jwtDecoder;
 
     @Value("${otziv.legacy.enabled:false}")
     private boolean legacyEnabled;
@@ -73,7 +80,23 @@ public class SecurityConfig {
         }
 
         http.addFilterBefore(requestValidationFilter, UsernamePasswordAuthenticationFilter.class);
-        http.addFilterAfter(managerReportReviewRestrictionFilter, BearerTokenAuthenticationFilter.class);
+        if (jwtDecoder != null) {
+            http.addFilterAfter(
+                    new OptionalPublicBearerAuthenticationFilter(jwtDecoder, keycloakJwtAuthenticationConverter()),
+                    BearerTokenAuthenticationFilter.class
+            );
+        }
+        if (localJwtSecurityStateFilter != null && jwtDecoder != null) {
+            http.addFilterAfter(localJwtSecurityStateFilter, OptionalPublicBearerAuthenticationFilter.class);
+            http.addFilterAfter(managerReportReviewRestrictionFilter, LocalJwtSecurityStateFilter.class);
+        } else if (localJwtSecurityStateFilter != null) {
+            http.addFilterAfter(localJwtSecurityStateFilter, BearerTokenAuthenticationFilter.class);
+            http.addFilterAfter(managerReportReviewRestrictionFilter, LocalJwtSecurityStateFilter.class);
+        } else if (jwtDecoder != null) {
+            http.addFilterAfter(managerReportReviewRestrictionFilter, OptionalPublicBearerAuthenticationFilter.class);
+        } else {
+            http.addFilterAfter(managerReportReviewRestrictionFilter, BearerTokenAuthenticationFilter.class);
+        }
 
         return http.build();
     }
@@ -174,7 +197,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/manager-report-review/access-state", "/api/manager-report-review/check-in").authenticated();
         auth.requestMatchers("/api/manager-activity/**").authenticated();
         auth.requestMatchers("/api/mobile/**").authenticated();
-        auth.requestMatchers("/api/gamification/me").authenticated();
+        auth.requestMatchers("/api/gamification/**").authenticated();
         auth.requestMatchers("/api/workload-shadow/preferences/me").hasRole("WORKER");
         auth.requestMatchers("/api/personal-reminders", "/api/personal-reminders/**").authenticated();
         auth.requestMatchers("/api/metric-snapshots", "/api/metric-snapshots/**").authenticated();
@@ -304,7 +327,15 @@ public class SecurityConfig {
 
     private BearerTokenResolver publicPaymentAwareBearerTokenResolver() {
         DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
-        return request -> isBearerOptionalPublicPath(request.getServletPath()) ? null : delegate.resolve(request);
+        return request -> isBearerOptionalPublicPath(applicationPath(request)) ? null : delegate.resolve(request);
+    }
+
+    private static String applicationPath(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        return contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)
+                ? path.substring(contextPath.length())
+                : path;
     }
 
     private boolean isBearerOptionalPublicPath(String path) {
@@ -314,6 +345,7 @@ public class SecurityConfig {
         int matrixSeparator = path.indexOf(';');
         String normalized = matrixSeparator >= 0 ? path.substring(0, matrixSeparator) : path;
         return matchesPathOrDescendant(normalized, "/api/payments/public")
+                || matchesPathOrDescendant(normalized, "/api/review-check")
                 || matchesPathOrDescendant(normalized, "/api/review-capability")
                 || normalized.equals("/api/leads/import")
                 || normalized.equals("/api/leads/modified")

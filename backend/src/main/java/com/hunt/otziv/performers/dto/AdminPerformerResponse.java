@@ -1,6 +1,7 @@
 package com.hunt.otziv.performers.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 public record AdminPerformerResponse(
         Long id,
@@ -17,6 +18,16 @@ public record AdminPerformerResponse(
         int cancelledCount,
         int expiredOfferCount,
         int failedCheckCount,
-        Long telegramChatId
+        Long telegramChatId,
+        LocalDateTime telegramLinkedAt,
+        LocalDateTime registrationExpiresAt,
+        LocalDateTime phoneVerifiedAt,
+        String phoneVerificationMethod,
+        String personalDataConsentVersion,
+        String rulesConsentVersion,
+        String honestReviewConsentVersion,
+        boolean activationReady,
+        boolean legacyApprovedBeforeSecureLifecycle,
+        String activationWarning
 ) {
 }

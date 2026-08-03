@@ -204,10 +204,15 @@ public class PerformerAssignmentService {
     }
 
     @Transactional
-    public PerformerAssignmentResponse acceptOfferFromTelegram(Long offerId) {
+    public PerformerAssignmentResponse acceptOfferFromTelegram(
+            Long offerId,
+            Long telegramUserId,
+            Long telegramChatId
+    ) {
         ReviewPerformerOffer offer = offerRepository.findByIdForAction(offerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Предложение не найдено"));
-        return acceptOfferInternal(offerId, offer.getPerformer().getId());
+        PerformerProfile performer = requireActiveTelegramPerformer(offer, telegramUserId, telegramChatId);
+        return acceptOfferInternal(offer, performer.getId());
     }
 
     @Transactional
@@ -217,10 +222,11 @@ public class PerformerAssignmentService {
     }
 
     @Transactional
-    public void declineOfferFromTelegram(Long offerId) {
+    public void declineOfferFromTelegram(Long offerId, Long telegramUserId, Long telegramChatId) {
         ReviewPerformerOffer offer = offerRepository.findByIdForAction(offerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Предложение не найдено"));
-        declineOfferInternal(offerId, offer.getPerformer().getId(), "Отказ из Telegram");
+        PerformerProfile performer = requireActiveTelegramPerformer(offer, telegramUserId, telegramChatId);
+        declineOfferInternal(offer, performer.getId(), "Отказ из Telegram");
     }
 
     @Transactional
@@ -477,6 +483,10 @@ public class PerformerAssignmentService {
     private PerformerAssignmentResponse acceptOfferInternal(Long offerId, Long performerId) {
         ReviewPerformerOffer offer = offerRepository.findByIdForAction(offerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Предложение не найдено"));
+        return acceptOfferInternal(offer, performerId);
+    }
+
+    private PerformerAssignmentResponse acceptOfferInternal(ReviewPerformerOffer offer, Long performerId) {
         if (!Objects.equals(offer.getPerformer().getId(), performerId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это предложение назначено другому исполнителю");
         }
@@ -518,6 +528,10 @@ public class PerformerAssignmentService {
     private void declineOfferInternal(Long offerId, Long performerId, String reason) {
         ReviewPerformerOffer offer = offerRepository.findByIdForAction(offerId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Предложение не найдено"));
+        declineOfferInternal(offer, performerId, reason);
+    }
+
+    private void declineOfferInternal(ReviewPerformerOffer offer, Long performerId, String reason) {
         if (!Objects.equals(offer.getPerformer().getId(), performerId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это предложение назначено другому исполнителю");
         }
@@ -534,6 +548,31 @@ public class PerformerAssignmentService {
             assignment.setStatus(PerformerAssignmentStatus.CREATED);
             assignmentRepository.save(assignment);
         }
+    }
+
+    private PerformerProfile requireActiveTelegramPerformer(
+            ReviewPerformerOffer offer,
+            Long telegramUserId,
+            Long telegramChatId
+    ) {
+        PerformerProfile performer = offer == null ? null : offer.getPerformer();
+        User user = performer == null ? null : performer.getUser();
+        Long expectedChatId = user == null ? null : user.getTelegramChatId();
+        Long offeredChatId = offer == null ? null : offer.getTelegramChatId();
+        boolean identityMatches = expectedChatId != null
+                && Objects.equals(expectedChatId, telegramUserId)
+                && Objects.equals(expectedChatId, telegramChatId)
+                && (offeredChatId == null || Objects.equals(expectedChatId, offeredChatId));
+        if (!identityMatches) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Команда принадлежит другому Telegram-аккаунту"
+            );
+        }
+        if (performer.getStatus() != PerformerProfileStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Профиль исполнителя еще не активирован");
+        }
+        return performer;
     }
 
     private boolean createAssignmentIfEligible(Order order, Review review, LocalDate cutoffDate) {
@@ -623,8 +662,12 @@ public class PerformerAssignmentService {
     private PerformerProfile performer(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Пользователь не найден"));
-        return performerProfileRepository.findByUserId(user.getId())
+        PerformerProfile performer = performerProfileRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Профиль исполнителя не найден"));
+        if (performer.getStatus() != PerformerProfileStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Профиль исполнителя еще не активирован");
+        }
+        return performer;
     }
 
     private Product product(Review review) {

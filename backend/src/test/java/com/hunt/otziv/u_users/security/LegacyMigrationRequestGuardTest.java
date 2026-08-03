@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LegacyMigrationRequestGuardTest {
 
     @Test
-    void killSwitchFailsClosedWithServiceUnavailable() {
+    void closedMigrationWindowFailsClosedWithGone() {
         LegacyMigrationRequestGuard guard = guard(false, true, 5, 100);
 
         ResponseStatusException error = assertThrows(
@@ -28,7 +28,8 @@ class LegacyMigrationRequestGuardTest {
                 () -> guard.enforce(requestFrom("198.51.100.25"), "legacy-user")
         );
 
-        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, error.getStatusCode());
+        assertEquals(HttpStatus.GONE, error.getStatusCode());
+        assertEquals("Legacy migration is no longer available.", error.getReason());
         assertEquals(0, guard.bucketCount());
     }
 

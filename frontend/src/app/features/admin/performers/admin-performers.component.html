@@ -73,8 +73,9 @@
     <section class="panel">
       <header class="section-header">
         <h2>Исполнители</h2>
-        <input type="text" [ngModel]="statusReason()" (ngModelChange)="statusReason.set($event)" placeholder="Причина изменения статуса">
+        <input type="text" [ngModel]="statusReason()" (ngModelChange)="statusReason.set($event)" placeholder="Причина / способ ручной проверки телефона">
       </header>
+      <p class="muted">Новая публичная заявка не даёт доступ. Перед первой активацией привяжите личный Telegram, проверьте телефон вне системы, отметьте подтверждение и укажите способ проверки. После активации выдайте новый временный пароль через управление пользователями.</p>
       <div class="table">
         <div class="row header">
           <span>Имя</span>
@@ -88,11 +89,38 @@
           <div class="row">
             <span>{{ performer.fio || performer.username }}</span>
             <span>{{ performer.cityTitle || '-' }}</span>
-            <span>{{ performer.status }}</span>
-            <span>{{ performer.telegramChatId || 'не привязан' }}</span>
+            <span>
+              {{ performer.status }}
+              @if (performer.status !== 'ACTIVE') {
+                <small>{{ performer.activationReady ? 'готов к ручной проверке' : 'ожидает Telegram/согласия' }}</small>
+              }
+              @if (performer.legacyApprovedBeforeSecureLifecycle) {
+                <small class="legacy-warning">Legacy: профиль был активен до защищённой регистрации</small>
+              }
+              @if (performer.activationWarning) {
+                <small class="legacy-warning">{{ performer.activationWarning }}</small>
+              }
+            </span>
+            <span>
+              {{ performer.telegramChatId || 'не привязан' }}
+              @if (performer.status !== 'ACTIVE') {
+                <label>
+                  <input
+                    type="checkbox"
+                    [ngModel]="phoneVerificationConfirmed()[performer.id] === true"
+                    (ngModelChange)="setPhoneVerificationConfirmed(performer.id, $event)"
+                  >
+                  Телефон проверен вне системы
+                </label>
+              }
+            </span>
             <span>{{ performer.completedCount }} / {{ performer.cancelledCount }} / {{ performer.expiredOfferCount }}</span>
             <span class="actions">
-              <button type="button" (click)="updateStatus(performer, 'ACTIVE')" [disabled]="saving() === 'status-' + performer.id">Актив</button>
+              <button
+                type="button"
+                (click)="updateStatus(performer, 'ACTIVE')"
+                [disabled]="saving() === 'status-' + performer.id || (performer.status !== 'ACTIVE' && (!performer.activationReady || phoneVerificationConfirmed()[performer.id] !== true || !statusReason().trim()))"
+              >Актив</button>
               <button type="button" class="secondary" (click)="updateStatus(performer, 'PAUSED')" [disabled]="saving() === 'status-' + performer.id">Пауза</button>
               <button type="button" class="danger" (click)="updateStatus(performer, 'BLOCKED')" [disabled]="saving() === 'status-' + performer.id">Блок</button>
             </span>

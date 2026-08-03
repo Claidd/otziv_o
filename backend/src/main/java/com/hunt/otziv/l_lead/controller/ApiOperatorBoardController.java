@@ -11,6 +11,7 @@ import com.hunt.otziv.l_lead.dto.api.OperatorBoardResponse;
 import com.hunt.otziv.l_lead.dto.api.OperatorDeviceTokenRequest;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.services.serv.DeviceTokenService;
+import com.hunt.otziv.l_lead.services.LeadAccessService;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.u_users.model.Manager;
@@ -55,6 +56,7 @@ public class ApiOperatorBoardController {
     private final PromoTextService promoTextService;
     private final DeviceTokenService deviceTokenService;
     private final PerformanceMetrics performanceMetrics;
+    private final LeadAccessService leadAccessService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'OPERATOR')")
@@ -74,7 +76,7 @@ public class ApiOperatorBoardController {
             String normalizedSection = normalizeSection(section);
             LocalDateTime now = LocalDateTime.now();
 
-            TelephoneIDAndTimeDTO telephone = resolveTelephone(token);
+            TelephoneIDAndTimeDTO telephone = resolveTelephone(token, authentication);
             boolean requireDeviceId = telephone == null || telephone.getTelephoneID() == null;
             boolean timerExpired = isTimerExpired(telephone, now);
             Page<LeadDTO> queueLeads = Page.empty(PageRequest.of(normalizedPage, normalizedSize));
@@ -105,7 +107,7 @@ public class ApiOperatorBoardController {
             return new OperatorBoardResponse(
                     toPageResponse(leads),
                     promoTextService.getAllPromoTexts(),
-                    deviceTokenService.getText(token),
+                    deviceTokenService.getText(requireDeviceId ? null : token),
                     requireDeviceId,
                     telephone != null ? telephone.getTelephoneID() : null,
                     telephone != null ? telephone.getOperatorID() : null,
@@ -123,9 +125,11 @@ public class ApiOperatorBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'OPERATOR')")
     public void createDeviceToken(
             @Valid @RequestBody OperatorDeviceTokenRequest request,
-            HttpServletResponse response
+            HttpServletResponse response,
+            Authentication authentication
     ) {
         try {
+            leadAccessService.requireTelephoneAccess(request.telephoneId(), authentication);
             deviceTokenService.createDeviceToken(request.telephoneId(), response);
         } catch (IllegalStateException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
@@ -137,8 +141,9 @@ public class ApiOperatorBoardController {
     @PostMapping("/leads/{id}/status/send")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'OPERATOR')")
-    public void markSend(@PathVariable Long id) {
+    public void markSend(@PathVariable Long id, Authentication authentication) {
         try {
+            leadAccessService.requireLeadAccess(id, authentication);
             leadService.changeStatusLeadOnSendAndTelephone(id);
         } catch (IllegalStateException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
@@ -150,16 +155,21 @@ public class ApiOperatorBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'OPERATOR')")
     public void markToWork(
             @PathVariable Long id,
-            @RequestBody(required = false) LeadStatusChangeRequest request
+            @RequestBody(required = false) LeadStatusChangeRequest request,
+            Authentication authentication
     ) {
+        leadAccessService.requireLeadAccess(id, authentication);
         leadService.changeStatusLeadToWork(id, request != null ? request.commentsLead() : null);
     }
 
-    private TelephoneIDAndTimeDTO resolveTelephone(String token) {
+    private TelephoneIDAndTimeDTO resolveTelephone(String token, Authentication authentication) {
         if (token == null || token.isBlank()) {
             return null;
         }
-        return deviceTokenService.getTelephoneIdByToken(token);
+        TelephoneIDAndTimeDTO telephone = deviceTokenService.getTelephoneIdByToken(token);
+        return telephone != null && leadAccessService.canAccessTelephone(telephone.getTelephoneID(), authentication)
+                ? telephone
+                : null;
     }
 
     private boolean isTimerExpired(TelephoneIDAndTimeDTO telephone, LocalDateTime now) {

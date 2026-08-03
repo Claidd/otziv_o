@@ -3,24 +3,28 @@
 
 Run this script on the production host. It reads S3 credentials from the
 existing /docker/.env file, never prints them, uploads deterministic object
-keys, and performs the database changes in one transaction.
+keys, and performs all database changes in one transaction with the
+application database account.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import hashlib
 import hmac
 import json
 import mimetypes
-import os
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -32,6 +36,25 @@ REQUIRED_S3_ENV = (
     "S3_REGION",
     "S3_PUBLIC_BASE_URL",
 )
+
+
+@dataclass(frozen=True)
+class S3ObjectInfo:
+    key: str
+    sha256: str | None
+    import_id: str | None
+    etag: str | None
+    size: int | None
+
+
+class S3UploadError(RuntimeError):
+    """An upload failed after an object may have been created by this run."""
+
+    def __init__(
+        self, message: str, newly_uploaded: S3ObjectInfo | None = None
+    ) -> None:
+        super().__init__(message)
+        self.newly_uploaded = newly_uploaded
 
 
 def load_dotenv(path: Path) -> dict[str, str]:
@@ -56,7 +79,7 @@ def mysql(sql: str) -> str:
         "my-mysql",
         "sh",
         "-lc",
-        'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE" -N -B',
+        'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u"$MYSQL_USER" "$MYSQL_DATABASE" -N -B',
     ]
     result = subprocess.run(
         command,
@@ -82,7 +105,9 @@ def signing_key(secret_key: str, date_stamp: str, region: str) -> bytes:
     return sign(service_key, "aws4_request")
 
 
-def upload_s3(data: bytes, key: str, content_type: str, env: dict[str, str]) -> None:
+def s3_location(
+    key: str, env: dict[str, str]
+) -> tuple[urllib.parse.SplitResult, str, str]:
     endpoint = urllib.parse.urlsplit(env["S3_ENDPOINT"].rstrip("/"))
     object_path = "/".join(
         part.strip("/")
@@ -93,25 +118,45 @@ def upload_s3(data: bytes, key: str, content_type: str, env: dict[str, str]) -> 
     url = urllib.parse.urlunsplit(
         (endpoint.scheme, endpoint.netloc, canonical_uri, "", "")
     )
+    return endpoint, canonical_uri, url
+
+
+def signed_s3_request(
+    method: str,
+    key: str,
+    env: dict[str, str],
+    *,
+    data: bytes | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: int = 90,
+) -> tuple[int, dict[str, str]]:
+    endpoint, canonical_uri, url = s3_location(key, env)
+    payload = data if data is not None else b""
 
     now = dt.datetime.now(dt.timezone.utc)
     amz_date = now.strftime("%Y%m%dT%H%M%SZ")
     date_stamp = now.strftime("%Y%m%d")
-    payload_hash = hashlib.sha256(data).hexdigest()
-    canonical_headers = (
-        f"content-type:{content_type}\n"
-        f"host:{endpoint.netloc}\n"
-        "x-amz-acl:public-read\n"
-        f"x-amz-content-sha256:{payload_hash}\n"
-        f"x-amz-date:{amz_date}\n"
+    payload_hash = hashlib.sha256(payload).hexdigest()
+    request_headers = {
+        name.lower(): " ".join(value.strip().split())
+        for name, value in (headers or {}).items()
+    }
+    request_headers.update(
+        {
+            "host": endpoint.netloc,
+            "x-amz-content-sha256": payload_hash,
+            "x-amz-date": amz_date,
+        }
     )
-    signed_headers = "content-type;host;x-amz-acl;x-amz-content-sha256;x-amz-date"
+    signed_header_names = sorted(request_headers)
+    canonical_headers = "".join(
+        f"{name}:{request_headers[name]}\n" for name in signed_header_names
+    )
+    signed_headers = ";".join(signed_header_names)
     canonical_request = "\n".join(
-        ("PUT", canonical_uri, "", canonical_headers, signed_headers, payload_hash)
+        (method, canonical_uri, "", canonical_headers, signed_headers, payload_hash)
     )
-    credential_scope = (
-        f"{date_stamp}/{env['S3_REGION']}/s3/aws4_request"
-    )
+    credential_scope = f"{date_stamp}/{env['S3_REGION']}/s3/aws4_request"
     string_to_sign = "\n".join(
         (
             "AWS4-HMAC-SHA256",
@@ -130,37 +175,246 @@ def upload_s3(data: bytes, key: str, content_type: str, env: dict[str, str]) -> 
         f"Credential={env['S3_ACCESS_KEY']}/{credential_scope}, "
         f"SignedHeaders={signed_headers}, Signature={signature}"
     )
+    request_headers["authorization"] = authorization
     request = urllib.request.Request(
         url,
         data=data,
-        method="PUT",
+        method=method,
+        headers=request_headers,
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.status, {
+            name.lower(): value.strip() for name, value in response.headers.items()
+        }
+
+
+def response_sha256(headers: dict[str, str]) -> str | None:
+    metadata_digest = headers.get("x-amz-meta-sha256", "").lower()
+    if len(metadata_digest) == 64 and all(
+        character in "0123456789abcdef" for character in metadata_digest
+    ):
+        return metadata_digest
+    checksum = headers.get("x-amz-checksum-sha256")
+    if checksum:
+        try:
+            decoded = base64.b64decode(checksum, validate=True)
+        except ValueError:
+            return None
+        if len(decoded) == hashlib.sha256().digest_size:
+            return decoded.hex()
+    return None
+
+
+def head_s3(key: str, env: dict[str, str]) -> S3ObjectInfo | None:
+    try:
+        status, headers = signed_s3_request("HEAD", key, env, timeout=30)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            return None
+        raise
+    if status != 200:
+        raise RuntimeError(f"S3 returned HTTP {status} for HEAD {key}")
+    content_length = headers.get("content-length")
+    try:
+        size = int(content_length) if content_length is not None else None
+    except ValueError:
+        size = None
+    return S3ObjectInfo(
+        key=key,
+        sha256=response_sha256(headers),
+        import_id=headers.get("x-amz-meta-import-id"),
+        etag=headers.get("etag"),
+        size=size,
+    )
+
+
+def object_matches(info: S3ObjectInfo, digest: str, size: int) -> bool:
+    return hmac.compare_digest(info.sha256 or "", digest) and info.size == size
+
+
+def assert_existing_object_matches(
+    info: S3ObjectInfo, digest: str, size: int
+) -> None:
+    if not object_matches(info, digest, size):
+        raise RuntimeError(
+            f"Refusing to overwrite existing S3 object without matching "
+            f"SHA-256 metadata and size: {info.key}"
+        )
+
+
+def upload_s3(
+    data: bytes,
+    key: str,
+    content_type: str,
+    env: dict[str, str],
+    import_id: str,
+) -> dict[str, str]:
+    digest = hashlib.sha256(data).hexdigest()
+    status, headers = signed_s3_request(
+        "PUT",
+        key,
+        env,
+        data=data,
         headers={
-            "Authorization": authorization,
-            "Content-Type": content_type,
-            "Host": endpoint.netloc,
+            "content-type": content_type,
+            "if-none-match": "*",
             "x-amz-acl": "public-read",
-            "x-amz-content-sha256": payload_hash,
-            "x-amz-date": amz_date,
+            "x-amz-meta-import-id": import_id,
+            "x-amz-meta-sha256": digest,
         },
     )
-    with urllib.request.urlopen(request, timeout=90) as response:
-        if response.status not in (200, 201, 204):
-            raise RuntimeError(f"S3 returned HTTP {response.status} for {key}")
+    if status not in (200, 201, 204):
+        raise RuntimeError(f"S3 returned HTTP {status} for PUT {key}")
+    return headers
 
 
 def upload_with_retry(
-    data: bytes, key: str, content_type: str, env: dict[str, str]
-) -> None:
+    data: bytes,
+    key: str,
+    content_type: str,
+    env: dict[str, str],
+    import_id: str,
+    on_created: Callable[[S3ObjectInfo], None] | None = None,
+) -> S3ObjectInfo | None:
+    digest = hashlib.sha256(data).hexdigest()
+    created_reported = False
+
+    def report_created(info: S3ObjectInfo) -> None:
+        nonlocal created_reported
+        if not created_reported and on_created is not None:
+            on_created(info)
+        created_reported = True
+
+    existing = head_s3(key, env)
+    if existing is not None:
+        assert_existing_object_matches(existing, digest, len(data))
+        return None
+
     last_error: Exception | None = None
+    uploaded_hint: S3ObjectInfo | None = None
     for attempt in range(1, 4):
         try:
-            upload_s3(data, key, content_type, env)
-            return
+            response_headers = upload_s3(data, key, content_type, env, import_id)
+            uploaded_hint = S3ObjectInfo(
+                key=key,
+                sha256=digest,
+                import_id=import_id,
+                etag=response_headers.get("etag"),
+                size=len(data),
+            )
+            report_created(uploaded_hint)
+            current = head_s3(key, env)
+            if current is None:
+                raise RuntimeError(f"Uploaded S3 object is not visible: {key}")
+            assert_existing_object_matches(current, digest, len(data))
+            if current.import_id != import_id:
+                raise RuntimeError(
+                    f"Uploaded S3 object has unexpected ownership metadata: {key}"
+                )
+            return current
+        except urllib.error.HTTPError as error:
+            last_error = error
+            try:
+                current = head_s3(key, env)
+            except Exception:  # noqa: BLE001 - retry the original failed request
+                current = None
+            if current is not None:
+                assert_existing_object_matches(current, digest, len(data))
+                if current.import_id == import_id:
+                    report_created(current)
+                    return current
+                return None
+            if error.code == 412:
+                raise RuntimeError(
+                    f"S3 rejected conditional upload but object is absent: {key}"
+                ) from error
+            if error.code == 409 and attempt == 3:
+                # AWS documents 409 as retryable for conditional PutObject.
+                # On the final attempt there is no safe state to accept.
+                raise S3UploadError(
+                    f"S3 conditional upload conflict for {key}: {error}"
+                ) from error
         except Exception as error:  # noqa: BLE001 - retry boundary
             last_error = error
-            if attempt < 3:
-                time.sleep(attempt * 2)
-    raise RuntimeError(f"S3 upload failed for {key}: {last_error}")
+            try:
+                current = head_s3(key, env)
+            except Exception:  # noqa: BLE001 - retain the original upload error
+                current = None
+            if current is not None and object_matches(current, digest, len(data)):
+                if current.import_id == import_id:
+                    report_created(current)
+                    return current
+                return None
+        except BaseException:
+            try:
+                current = head_s3(key, env)
+            except Exception:  # noqa: BLE001 - preserve interruption
+                current = None
+            if (
+                current is not None
+                and current.import_id == import_id
+                and object_matches(current, digest, len(data))
+            ):
+                report_created(current)
+            raise
+        if isinstance(last_error, RuntimeError):
+            # A verified ownership or digest conflict is not transient.
+            if (
+                "unexpected ownership" in str(last_error)
+                or "Refusing to overwrite" in str(last_error)
+            ):
+                break
+        if attempt < 3:
+            time.sleep(attempt * 2)
+    raise S3UploadError(
+        f"S3 upload failed for {key}: {last_error}",
+        newly_uploaded=uploaded_hint,
+    )
+
+
+def delete_s3_if_owned(info: S3ObjectInfo, env: dict[str, str]) -> None:
+    current = head_s3(info.key, env)
+    if current is None:
+        return
+    if (
+        current.import_id != info.import_id
+        or info.sha256 is None
+        or info.size is None
+        or not object_matches(current, info.sha256, info.size)
+    ):
+        raise RuntimeError(
+            f"Refusing to delete S3 object whose ownership or digest changed: {info.key}"
+        )
+    if not current.etag:
+        raise RuntimeError(
+            f"Refusing to delete S3 object without an ETag precondition: {info.key}"
+        )
+    status, _ = signed_s3_request(
+        "DELETE",
+        info.key,
+        env,
+        headers={"if-match": current.etag},
+        timeout=30,
+    )
+    if status not in (200, 204):
+        raise RuntimeError(f"S3 returned HTTP {status} for DELETE {info.key}")
+
+
+def cleanup_uploaded(objects: list[S3ObjectInfo], env: dict[str, str]) -> None:
+    seen: set[str] = set()
+    for info in reversed(objects):
+        if info.key in seen:
+            continue
+        seen.add(info.key)
+        try:
+            delete_s3_if_owned(info, env)
+            print(f"rolled back uploaded object: {info.key}", file=sys.stderr, flush=True)
+        except Exception as error:  # noqa: BLE001 - best-effort rollback with warning
+            print(
+                f"WARNING: could not roll back uploaded object {info.key}: {error}",
+                file=sys.stderr,
+                flush=True,
+            )
 
 
 def sql_quote(value: str) -> str:
@@ -249,7 +503,9 @@ def validate_manifest(root: Path, manifest: dict) -> list[dict[str, str]]:
     return rows
 
 
-def ensure_rules_exist(rows: list[dict[str, str]]) -> None:
+def apply_database_changes(
+    rows: list[dict[str, str]], env: dict[str, str], prefix: str
+) -> None:
     expected = {
         (row["event_code"], row["recipient_type"])
         for row in rows
@@ -264,36 +520,19 @@ def ensure_rules_exist(rows: list[dict[str, str]]) -> None:
             "WHERE NOT EXISTS (SELECT 1 FROM notification_media_rules "
             f"WHERE event_code={sql_quote(event_code)} AND recipient_type={sql_quote(recipient_type)});"
         )
-    statements.append("COMMIT;")
-    mysql("\n".join(statements) + "\n")
-    output = mysql(
-        "SELECT event_code, recipient_type FROM notification_media_rules "
-        "WHERE enabled=b'1';\n"
-    )
-    actual = {
-        tuple(line.split("\t", 1))
-        for line in output.splitlines()
-        if "\t" in line
-    }
-    missing = sorted(expected - actual)
-    if missing:
-        raise RuntimeError(f"Missing enabled notification rules: {missing}")
-
-
-def attach_assets(rows: list[dict[str, str]], env: dict[str, str], prefix: str) -> None:
-    statements = ["START TRANSACTION;"]
     for row in rows:
         key = f"notification-media/{row['event_code'].lower()}/{prefix}/{row['file_name']}"
         url = public_url(env["S3_PUBLIC_BASE_URL"], key)
         sequence_text = Path(row["file_name"]).stem.split("-", 1)[0]
         sequence = int(sequence_text)
-        prefix_like = f"notification-media/{row['event_code'].lower()}/{prefix}/%"
+        key_prefix = f"notification-media/{row['event_code'].lower()}/{prefix}/"
         statements.append(
             "INSERT INTO notification_media_assets "
             "(rule_id,storage_key,image_url,original_filename,content_type,active,sort_order,created_at,updated_at) "
             "SELECT r.rule_id,{key},{url},{name},{content_type},b'1',"
             "COALESCE((SELECT MAX(existing.sort_order) FROM notification_media_assets existing "
-            "WHERE existing.rule_id=r.rule_id AND existing.storage_key NOT LIKE {prefix_like}),-1)+{sequence},"
+            "WHERE existing.rule_id=r.rule_id "
+            "AND LEFT(existing.storage_key,CHAR_LENGTH({key_prefix}))<>{key_prefix}),-1)+{sequence},"
             "CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6) "
             "FROM notification_media_rules r "
             "WHERE r.event_code={event} AND r.recipient_type={recipient} "
@@ -304,14 +543,82 @@ def attach_assets(rows: list[dict[str, str]], env: dict[str, str], prefix: str) 
                 url=sql_quote(url),
                 name=sql_quote(row["original_filename"]),
                 content_type=sql_quote(row["content_type"]),
-                prefix_like=sql_quote(prefix_like),
+                key_prefix=sql_quote(key_prefix),
                 sequence=sequence,
                 event=sql_quote(row["event_code"]),
                 recipient=sql_quote(row["recipient_type"]),
             )
         )
-    statements.append("COMMIT;")
-    mysql("\n".join(statements) + "\n")
+    statements.extend(
+        (
+            "CREATE TEMPORARY TABLE notification_import_assertions ("
+            "assertion_name VARCHAR(255) NOT NULL,"
+            "actual_count BIGINT NOT NULL,"
+            "expected_count BIGINT NOT NULL,"
+            "CONSTRAINT chk_notification_import_assertion "
+            "CHECK (actual_count = expected_count)"
+            ") ENGINE=InnoDB;",
+        )
+    )
+    expected_rows: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for row in rows:
+        pair = (row["event_code"], row["recipient_type"])
+        expected_rows.setdefault(pair, []).append(row)
+    for (event_code, recipient_type), pair_rows in sorted(expected_rows.items()):
+        assertion_name = f"rule:{event_code}:{recipient_type}"
+        statements.append(
+            "INSERT INTO notification_import_assertions "
+            "(assertion_name,actual_count,expected_count) "
+            f"SELECT {sql_quote(assertion_name)},COUNT(*),1 "
+            "FROM notification_media_rules "
+            f"WHERE event_code={sql_quote(event_code)} "
+            f"AND recipient_type={sql_quote(recipient_type)} AND enabled=b'1';"
+        )
+        key_prefix = f"notification-media/{event_code.lower()}/{prefix}/"
+        count_assertion_name = f"asset-count:{event_code}:{recipient_type}"
+        statements.append(
+            "INSERT INTO notification_import_assertions "
+            "(assertion_name,actual_count,expected_count) "
+            f"SELECT {sql_quote(count_assertion_name)},COUNT(*),{len(pair_rows)} "
+            "FROM notification_media_assets a "
+            "JOIN notification_media_rules r ON r.rule_id=a.rule_id "
+            f"WHERE r.event_code={sql_quote(event_code)} "
+            f"AND r.recipient_type={sql_quote(recipient_type)} "
+            "AND a.active=b'1' "
+            f"AND LEFT(a.storage_key,CHAR_LENGTH({sql_quote(key_prefix)}))="
+            f"{sql_quote(key_prefix)};"
+        )
+        for row in pair_rows:
+            key = (
+                f"notification-media/{event_code.lower()}/"
+                f"{prefix}/{row['file_name']}"
+            )
+            url = public_url(env["S3_PUBLIC_BASE_URL"], key)
+            row_assertion_name = f"asset:{event_code}:{recipient_type}:{row['file_name']}"
+            statements.append(
+                "INSERT INTO notification_import_assertions "
+                "(assertion_name,actual_count,expected_count) "
+                f"SELECT {sql_quote(row_assertion_name)},COUNT(*),1 "
+                "FROM notification_media_assets a "
+                "JOIN notification_media_rules r ON r.rule_id=a.rule_id "
+                f"WHERE r.event_code={sql_quote(event_code)} "
+                f"AND r.recipient_type={sql_quote(recipient_type)} "
+                f"AND a.storage_key={sql_quote(key)} "
+                f"AND a.image_url={sql_quote(url)} "
+                f"AND a.original_filename={sql_quote(row['original_filename'])} "
+                f"AND a.content_type={sql_quote(row['content_type'])} "
+                "AND a.active=b'1';"
+            )
+    statements.extend(
+        (
+            "DROP TEMPORARY TABLE notification_import_assertions;",
+            "COMMIT;",
+            "SELECT 'IMPORT_COMMIT_OK';",
+        )
+    )
+    output = mysql("\n".join(statements) + "\n")
+    if "IMPORT_COMMIT_OK" not in output.splitlines():
+        raise RuntimeError("MySQL did not confirm notification import COMMIT")
 
 
 def verify_database(rows: list[dict[str, str]], prefix: str) -> None:
@@ -320,12 +627,13 @@ def verify_database(rows: list[dict[str, str]], prefix: str) -> None:
         event_code = row["event_code"]
         expected_counts[event_code] = expected_counts.get(event_code, 0) + 1
     for event_code, expected_count in sorted(expected_counts.items()):
-        key_prefix = f"notification-media/{event_code.lower()}/{prefix}/%"
+        key_prefix = f"notification-media/{event_code.lower()}/{prefix}/"
         count = mysql(
             "SELECT COUNT(*) FROM notification_media_assets a "
             "JOIN notification_media_rules r ON r.rule_id=a.rule_id "
             f"WHERE r.event_code={sql_quote(event_code)} AND a.active=b'1' "
-            f"AND a.storage_key LIKE {sql_quote(key_prefix)};\n"
+            f"AND LEFT(a.storage_key,CHAR_LENGTH({sql_quote(key_prefix)}))="
+            f"{sql_quote(key_prefix)};\n"
         )
         if count != str(expected_count):
             raise RuntimeError(
@@ -363,6 +671,70 @@ def print_status() -> None:
     print(output, flush=True)
 
 
+def run_import(
+    rows: list[dict[str, str]], env: dict[str, str], prefix: str
+) -> None:
+    total = len(rows)
+    import_id = uuid.uuid4().hex
+    newly_uploaded: list[S3ObjectInfo] = []
+    newly_uploaded_keys: set[str] = set()
+    committed = False
+
+    def track_created(info: S3ObjectInfo) -> None:
+        if info.import_id != import_id or info.key in newly_uploaded_keys:
+            return
+        newly_uploaded.append(info)
+        newly_uploaded_keys.add(info.key)
+
+    try:
+        for index, row in enumerate(rows, start=1):
+            key = (
+                f"notification-media/{row['event_code'].lower()}/"
+                f"{prefix}/{row['file_name']}"
+            )
+            data = Path(row["path"]).read_bytes()
+            content_type = (
+                row.get("content_type")
+                or mimetypes.guess_type(row["file_name"])[0]
+                or "image/png"
+            )
+            try:
+                created = upload_with_retry(
+                    data,
+                    key,
+                    content_type,
+                    env,
+                    import_id,
+                    on_created=track_created,
+                )
+            except S3UploadError as error:
+                if error.newly_uploaded is not None:
+                    track_created(error.newly_uploaded)
+                raise
+            if created is not None:
+                track_created(created)
+                action = "uploaded"
+            else:
+                action = "reused"
+            print(
+                f"{action} {index}/{total}: "
+                f"{row['event_code']}/{row['file_name']}",
+                flush=True,
+            )
+
+        apply_database_changes(rows, env, prefix)
+        committed = True
+
+        # These are post-COMMIT health checks. Their failure must never remove
+        # objects now referenced by committed database rows.
+        verify_database(rows, prefix)
+        verify_public_assets(rows, env, prefix)
+    except BaseException:
+        if not committed:
+            cleanup_uploaded(newly_uploaded, env)
+        raise
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path)
@@ -390,24 +762,11 @@ def main() -> int:
     if missing_env:
         raise RuntimeError(f"Missing S3 environment keys: {missing_env}")
 
-    ensure_rules_exist(rows)
     rule_count = len({(row["event_code"], row["recipient_type"]) for row in rows})
     total = len(rows)
-    print(f"preflight passed: {rule_count} rules, {total} images", flush=True)
+    print(f"manifest validation passed: {rule_count} rules, {total} images", flush=True)
 
-    for index, row in enumerate(rows, start=1):
-        key = (
-            f"notification-media/{row['event_code'].lower()}/"
-            f"{args.prefix}/{row['file_name']}"
-        )
-        data = Path(row["path"]).read_bytes()
-        content_type = row.get("content_type") or mimetypes.guess_type(row["file_name"])[0] or "image/png"
-        upload_with_retry(data, key, content_type, env)
-        print(f"uploaded {index}/{total}: {row['event_code']}/{row['file_name']}", flush=True)
-
-    attach_assets(rows, env, args.prefix)
-    verify_database(rows, args.prefix)
-    verify_public_assets(rows, env, args.prefix)
+    run_import(rows, env, args.prefix)
     print(f"IMPORT_COMPLETE: {total} assets attached", flush=True)
     return 0
 

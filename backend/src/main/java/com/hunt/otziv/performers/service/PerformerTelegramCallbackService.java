@@ -19,13 +19,23 @@ public class PerformerTelegramCallbackService {
             return Optional.empty();
         }
         String data = callbackQuery.getData().trim();
+        Long telegramUserId = callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId();
+        Long telegramChatId = callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId();
         try {
             if (data.startsWith(ACCEPT_PREFIX)) {
-                assignmentService.acceptOfferFromTelegram(parseId(data, ACCEPT_PREFIX));
+                assignmentService.acceptOfferFromTelegram(
+                        parseId(data, ACCEPT_PREFIX),
+                        telegramUserId,
+                        telegramChatId
+                );
                 return Optional.of("Задание принято");
             }
             if (data.startsWith(DECLINE_PREFIX)) {
-                assignmentService.declineOfferFromTelegram(parseId(data, DECLINE_PREFIX));
+                assignmentService.declineOfferFromTelegram(
+                        parseId(data, DECLINE_PREFIX),
+                        telegramUserId,
+                        telegramChatId
+                );
                 return Optional.of("Отказ зафиксирован");
             }
         } catch (RuntimeException e) {

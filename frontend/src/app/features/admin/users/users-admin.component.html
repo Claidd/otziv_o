@@ -17,7 +17,6 @@
 
       <div class="quick-links">
         <a routerLink="/admin/users/new">Новый пользователь</a>
-        <a routerLink="/legacy-migration">Миграция</a>
         <button type="button" (click)="loadUsers()" [disabled]="loading()">
           <span class="material-icons-sharp">refresh</span>
           {{ loading() ? 'Загрузка' : 'Обновить' }}
@@ -96,7 +95,7 @@
                   <td>
                     <span class="status-pill" [class.off]="!user.active">{{ user.active ? 'Включен' : 'Отключен' }}</span>
                     @if (!user.keycloakLinked) {
-                      <span class="status-pill warn">Нужна миграция</span>
+                      <span class="status-pill warn">Нет связи с Keycloak</span>
                     }
                   </td>
                 </tr>
@@ -174,7 +173,7 @@
               <h2>{{ selectedUser()?.username }}</h2>
             </div>
             <span [class.warn]="!selectedUser()?.keycloakLinked">
-              {{ selectedUser()?.keycloakLinked ? 'Keycloak' : 'Миграция' }}
+              {{ selectedUser()?.keycloakLinked ? 'Keycloak' : 'Не связан' }}
             </span>
           </div>
 

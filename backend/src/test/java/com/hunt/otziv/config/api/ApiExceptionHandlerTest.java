@@ -2,6 +2,7 @@ package com.hunt.otziv.config.api;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -41,6 +42,20 @@ class ApiExceptionHandlerTest {
         assertNotNull(response.getBody());
         assertEquals(
                 "Изменение не сохранено: запись связана с рабочими данными. История сохранена, ничего не удалено.",
+                response.getBody().message()
+        );
+    }
+
+    @Test
+    void handleOptimisticLockingReturnsRetryableConflict() {
+        ResponseEntity<ApiExceptionHandler.ApiErrorResponse> response = handler.handleOptimisticLocking(
+                new OptimisticLockingFailureException("stale row")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(
+                "Данные уже изменились в другой сессии. Обновите страницу и повторите действие.",
                 response.getBody().message()
         );
     }

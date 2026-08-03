@@ -32,41 +32,49 @@ public class ArchiveCompanyMessageCandidateRepository {
                 .addValue("openNextOrderStatuses", openNextOrderStatuses);
 
         return jdbc.query("""
+                WITH eligible_companies AS (
+                    SELECT
+                        c.company_id,
+                        c.company_status_changed_at
+                    FROM companies c
+                    JOIN company_status cs ON cs.company_status_id = c.company_status
+                    WHERE c.company_status_changed_at IS NOT NULL
+                      AND c.company_status_changed_at <= :cutoff
+                      AND cs.status_title = :archiveCompanyStatus
+                      AND c.company_active = 1
+                      AND c.company_url_chat IS NOT NULL
+                      AND TRIM(c.company_url_chat) <> ''
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM orders live_order
+                          JOIN order_statuses live_status
+                            ON live_status.order_status_id = live_order.order_status
+                          WHERE live_order.order_company = c.company_id
+                            AND COALESCE(live_status.order_status_title, '') NOT IN (:inactiveStatuses)
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM next_order_requests request
+                          WHERE request.company_id = c.company_id
+                            AND request.request_status IN (:openNextOrderStatuses)
+                      )
+                    ORDER BY c.company_status_changed_at ASC, c.company_id ASC
+                    LIMIT :limit
+                )
                 SELECT
-                    c.company_id AS company_id,
-                    CAST(SUBSTRING_INDEX(
-                        GROUP_CONCAT(ao.order_id ORDER BY ao.archived_at DESC, ao.order_id DESC),
-                        ',',
-                        1
-                    ) AS UNSIGNED) AS archive_order_id,
-                    c.company_status_changed_at AS status_changed_at
-                FROM companies c
-                LEFT JOIN company_status cs ON cs.company_status_id = c.company_status
-                LEFT JOIN archive_orders ao ON ao.order_company = c.company_id
-                  AND ao.archived_at IS NOT NULL
-                  AND ao.restored_at IS NULL
-                WHERE c.company_status_changed_at IS NOT NULL
-                  AND c.company_status_changed_at <= :cutoff
-                  AND COALESCE(cs.status_title, '') = :archiveCompanyStatus
-                  AND c.company_active = 1
-                  AND c.company_url_chat IS NOT NULL
-                  AND TRIM(c.company_url_chat) <> ''
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM orders live_order
-                      JOIN order_statuses live_status ON live_status.order_status_id = live_order.order_status
-                      WHERE live_order.order_company = c.company_id
-                        AND COALESCE(live_status.order_status_title, '') NOT IN (:inactiveStatuses)
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM next_order_requests request
-                      WHERE request.company_id = c.company_id
-                        AND request.request_status IN (:openNextOrderStatuses)
-                  )
-                GROUP BY c.company_id, c.company_status_changed_at
-                ORDER BY c.company_status_changed_at ASC, c.company_id ASC
-                LIMIT :limit
+                    eligible.company_id AS company_id,
+                    (
+                        SELECT archived.order_id
+                        FROM archive_orders archived
+                        WHERE archived.order_company = eligible.company_id
+                          AND archived.restored_at IS NULL
+                          AND archived.archived_at IS NOT NULL
+                        ORDER BY archived.archived_at DESC, archived.order_id DESC
+                        LIMIT 1
+                    ) AS archive_order_id,
+                    eligible.company_status_changed_at AS status_changed_at
+                FROM eligible_companies eligible
+                ORDER BY eligible.company_status_changed_at ASC, eligible.company_id ASC
                 """, params, (rs, rowNum) -> {
             Long archiveOrderId = rs.getLong("archive_order_id");
             if (rs.wasNull()) {

@@ -7,6 +7,7 @@ const qrcodeTerminal = require("qrcode-terminal");
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const {
   DeliveredMessageCache,
+  FileDeliveryIdempotencyStore,
   RecentOutboundRegistry,
   createMessageHandler,
   reconciliationPayloads,
@@ -14,6 +15,7 @@ const {
 const {
   groupFromInviteInfo,
   normalizeInviteCode,
+  serializedGroupId,
 } = require("./group-invite");
 const { selectGroupsCache } = require("./groups-cache");
 const {
@@ -39,7 +41,8 @@ const WHATSAPP_GROUPS_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_GROUPS_
 const WHATSAPP_GROUPS_RESPONSE_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_GROUPS_RESPONSE_TIMEOUT_MS, 25000);
 const WHATSAPP_GROUPS_CACHE_TTL_MS = parsePositiveInt(process.env.WHATSAPP_GROUPS_CACHE_TTL_MS, 600000);
 const WHATSAPP_GROUP_INVITE_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_GROUP_INVITE_TIMEOUT_MS, 2000);
-const WHATSAPP_GROUP_INVITE_CONCURRENCY = parsePositiveInt(process.env.WHATSAPP_GROUP_INVITE_CONCURRENCY, 16);
+const WHATSAPP_GROUP_INVITE_CONCURRENCY = Math.min(parsePositiveInt(process.env.WHATSAPP_GROUP_INVITE_CONCURRENCY, 16), 32);
+const WHATSAPP_RECONCILE_CONCURRENCY = Math.min(parsePositiveInt(process.env.WHATSAPP_RECONCILE_CONCURRENCY, 4), 8);
 const WHATSAPP_PUPPETEER_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_PUPPETEER_TIMEOUT_MS, 300000);
 const WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS, 300000);
 const WHATSAPP_STARTUP_READY_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_STARTUP_READY_TIMEOUT_MS, 600000);
@@ -76,7 +79,14 @@ let lastGroupsSuccessAt = null;
 let lastGroupsError = null;
 let lastGroupsErrorAt = null;
 const outboundRegistry = new RecentOutboundRegistry(WHATSAPP_OUTBOUND_MARK_TTL_MS);
-const deliveredMessageCache = new DeliveredMessageCache(WHATSAPP_MESSAGE_DEDUP_TTL_MS);
+const deliveryIdempotencyStore = new FileDeliveryIdempotencyStore(
+  process.env.WHATSAPP_DELIVERY_IDEMPOTENCY_PATH || path.join(AUTH_PATH, "delivery-idempotency.json")
+);
+const deliveredMessageCache = new DeliveredMessageCache(
+  WHATSAPP_MESSAGE_DEDUP_TTL_MS,
+  () => Date.now(),
+  deliveryIdempotencyStore
+);
 
 const app = express();
 
@@ -241,11 +251,7 @@ function normalizePhone(raw) {
 }
 
 function normalizeGroupId(raw) {
-  const value = String(raw || "").trim();
-  if (!value) {
-    return "";
-  }
-  return value.includes("@g.us") ? value : `${value}@g.us`;
+  return serializedGroupId(raw);
 }
 
 function statusPayload() {
@@ -310,8 +316,6 @@ function createClient() {
   removeStaleChromiumLocks(AUTH_PATH);
 
   const launchArgs = [
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
     "--no-first-run",
@@ -934,21 +938,28 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
     return;
   }
 
-  const cursors = Array.isArray(req.body && req.body.chats)
-    ? req.body.chats.slice(0, 50)
-    : [];
+  const cursorsByGroup = new Map();
+  for (const cursor of Array.isArray(req.body && req.body.chats) ? req.body.chats : []) {
+    const groupId = normalizeGroupId(cursor && (cursor.groupId || cursor.chatId));
+    const timestamp = Number(cursor && cursor.afterTimestamp);
+    if (!groupId || !Number.isFinite(timestamp)) {
+      continue;
+    }
+    const afterTimestamp = Math.max(0, Math.floor(timestamp));
+    const previous = cursorsByGroup.get(groupId);
+    if (previous == null && cursorsByGroup.size >= 50) {
+      continue;
+    }
+    cursorsByGroup.set(groupId, previous == null ? afterTimestamp : Math.min(previous, afterTimestamp));
+  }
+  const cursors = Array.from(cursorsByGroup, ([groupId, afterTimestamp]) => ({ groupId, afterTimestamp }));
   if (cursors.length === 0) {
     res.json({ status: "ok", clientId: CLIENT_ID, messages: [] });
     return;
   }
 
-  const messages = [];
-  for (const cursor of cursors) {
-    const groupId = normalizeGroupId(cursor && (cursor.groupId || cursor.chatId));
-    if (!groupId) {
-      continue;
-    }
-    const afterTimestamp = Math.max(0, Number(cursor.afterTimestamp) || 0);
+  const batches = await mapWithConcurrency(cursors, WHATSAPP_RECONCILE_CONCURRENCY, async (cursor) => {
+    const { groupId, afterTimestamp } = cursor;
     try {
       const chat = await client.getChatById(groupId);
       const recent = await withTimeout(
@@ -956,20 +967,30 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
         WHATSAPP_GROUPS_TIMEOUT_MS,
         `Recent messages for ${groupId}`
       );
-      messages.push(...reconciliationPayloads({
+      return reconciliationPayloads({
         clientId: CLIENT_ID,
         groupId,
         groupName: chat.name || "",
         afterTimestamp,
         messages: recent,
-      }));
+      });
     } catch (error) {
       log("warn", "WhatsApp message reconciliation skipped for group", {
         groupId,
         error: errorMessage(error),
       });
+      return [];
+    }
+  });
+
+  const uniqueMessages = new Map();
+  for (const message of batches.flat()) {
+    const key = `${message.groupId}|${message.messageId}`;
+    if (!uniqueMessages.has(key)) {
+      uniqueMessages.set(key, message);
     }
   }
+  const messages = Array.from(uniqueMessages.values());
 
   messages.sort((left, right) =>
     Number(left.timestamp || 0) - Number(right.timestamp || 0)

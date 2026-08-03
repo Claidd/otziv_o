@@ -1038,7 +1038,7 @@
                       <td>{{ phone.id }}</td>
                       <td>
                         <strong>{{ phone.number }}</strong>
-                        <span>{{ phone.mailLogin || phone.googleLogin || '-' }}</span>
+                        <span>{{ phone.mailLoginMasked || phone.googleLoginMasked || '-' }}</span>
                       </td>
                       <td>{{ phone.fio || '-' }}</td>
                       <td>{{ phone.amountAllowed }}</td>
@@ -1869,27 +1869,32 @@
 
                 <label appTooltip="Логин Google-аккаунта, связанного с рабочим номером.">
                   <span>Google логин</span>
-                  <input type="text" formControlName="googleLogin" autocomplete="off">
+                  <input type="text" formControlName="googleLogin" autocomplete="off"
+                         [placeholder]="selectedPhone()?.googleLoginPresent ? 'Сохранен — пустое поле не изменяет' : ''">
                 </label>
 
                 <label appTooltip="Пароль Google-аккаунта. Заполняйте только если он нужен для рабочего процесса.">
                   <span>Google пароль</span>
-                  <input type="password" formControlName="googlePassword" autocomplete="off">
+                  <input type="password" formControlName="googlePassword" autocomplete="new-password"
+                         [placeholder]="selectedPhone()?.googlePasswordPresent ? 'Сохранен — пустое поле не изменяет' : ''">
                 </label>
 
                 <label appTooltip="Пароль Avito, если номер используется в сценариях с Avito.">
                   <span>Avito пароль</span>
-                  <input type="password" formControlName="avitoPassword" autocomplete="off">
+                  <input type="password" formControlName="avitoPassword" autocomplete="new-password"
+                         [placeholder]="selectedPhone()?.avitoPasswordPresent ? 'Сохранен — пустое поле не изменяет' : ''">
                 </label>
 
                 <label appTooltip="Логин почты, привязанной к этому телефону или аккаунту.">
                   <span>Mail логин</span>
-                  <input type="text" formControlName="mailLogin" autocomplete="off">
+                  <input type="text" formControlName="mailLogin" autocomplete="off"
+                         [placeholder]="selectedPhone()?.mailLoginPresent ? 'Сохранен — пустое поле не изменяет' : ''">
                 </label>
 
                 <label appTooltip="Пароль почты. Заполняйте только для рабочих аккаунтов, где он действительно нужен.">
                   <span>Mail пароль</span>
-                  <input type="password" formControlName="mailPassword" autocomplete="off">
+                  <input type="password" formControlName="mailPassword" autocomplete="new-password"
+                         [placeholder]="selectedPhone()?.mailPasswordPresent ? 'Сохранен — пустое поле не изменяет' : ''">
                 </label>
 
                 <label appTooltip="Дата добавления или создания профиля. Помогает понимать возраст номера.">
@@ -1971,7 +1976,12 @@
 
               <label appTooltip="Пароль аккаунта. Храните актуальное значение, чтобы не терять доступ.">
                 <span>Пароль</span>
-                <input type="password" formControlName="password" autocomplete="off">
+                <input
+                  type="password"
+                  formControlName="password"
+                  autocomplete="new-password"
+                  [placeholder]="selectedBotPasswordPresent() ? 'Сохранен — пустое поле не изменяет' : ''"
+                >
               </label>
 
               <label appTooltip="Имя профиля или ФИО, по которому аккаунт легко отличить от других.">
@@ -2027,7 +2037,7 @@
               </label>
 
               @if (botForm.invalid && botForm.touched) {
-                <p class="error compact">Логин, пароль, ФИО, владелец и статус обязательны.</p>
+                <p class="error compact">Для нового аккаунта обязательны логин, пароль, ФИО, владелец и статус.</p>
               }
               <div class="actions">
                 @if (selectedId() !== null) {

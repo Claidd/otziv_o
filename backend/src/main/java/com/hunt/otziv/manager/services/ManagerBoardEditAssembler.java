@@ -395,16 +395,16 @@ public class ManagerBoardEditAssembler {
                 taskBot != null ? taskBot.getFio() : null,
                 sourceBot != null ? sourceBot.getFio() : null
         );
-        String botLogin = firstNonBlank(
+        boolean botLoginPresent = !firstNonBlank(
                 task.getBotLoginSnapshot(),
                 taskBot != null ? taskBot.getLogin() : null,
                 sourceBot != null ? sourceBot.getLogin() : null
-        );
-        String botPassword = firstNonBlank(
+        ).isBlank();
+        boolean botPasswordPresent = !firstNonBlank(
                 task.getBotPasswordSnapshot(),
                 taskBot != null ? taskBot.getPassword() : null,
                 sourceBot != null ? sourceBot.getPassword() : null
-        );
+        ).isBlank();
         String workerFio = task.getWorker() != null && task.getWorker().getUser() != null
                 ? safe(task.getWorker().getUser().getFio())
                 : "";
@@ -421,8 +421,8 @@ public class ManagerBoardEditAssembler {
                 workerFio,
                 botId,
                 botFio,
-                botLogin,
-                botPassword,
+                botLoginPresent,
+                botPasswordPresent,
                 firstNonBlank(task.getTaskText(), review != null ? review.getText() : null),
                 safe(task.getComment())
         );
@@ -436,12 +436,16 @@ public class ManagerBoardEditAssembler {
         String botFio = task.getBot() != null && !isBlank(task.getBot().getFio())
                 ? safe(task.getBot().getFio())
                 : safe(task.getBotFioSnapshot());
-        String botLogin = task.getBot() != null && !isBlank(task.getBot().getLogin())
-                ? safe(task.getBot().getLogin())
-                : safe(task.getBotLoginSnapshot());
-        String botPassword = task.getBot() != null && !isBlank(task.getBot().getPassword())
-                ? safe(task.getBot().getPassword())
-                : safe(task.getBotPasswordSnapshot());
+        boolean botLoginPresent = !(
+                task.getBot() != null && !isBlank(task.getBot().getLogin())
+                        ? safe(task.getBot().getLogin())
+                        : safe(task.getBotLoginSnapshot())
+        ).isBlank();
+        boolean botPasswordPresent = !(
+                task.getBot() != null && !isBlank(task.getBot().getPassword())
+                        ? safe(task.getBot().getPassword())
+                        : safe(task.getBotPasswordSnapshot())
+        ).isBlank();
         String workerFio = task.getWorker() != null && task.getWorker().getUser() != null
                 ? safe(task.getWorker().getUser().getFio())
                 : "";
@@ -459,8 +463,8 @@ public class ManagerBoardEditAssembler {
                 workerFio,
                 botId,
                 botFio,
-                botLogin,
-                botPassword,
+                botLoginPresent,
+                botPasswordPresent,
                 toReviewRecoveryBatchResponse(batch)
         );
     }
@@ -491,8 +495,8 @@ public class ManagerBoardEditAssembler {
                 safe(review.getSubCategory()),
                 review.getBotId(),
                 safe(review.getBotFio()),
-                safe(review.getBotLogin()),
-                safe(review.getBotPassword()),
+                !safe(review.getBotLogin()).isBlank(),
+                !safe(review.getBotPassword()).isBlank(),
                 review.getBotCounter(),
                 safe(review.getCompanyTitle()),
                 safe(review.getCommentCompany()),

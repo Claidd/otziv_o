@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
@@ -68,9 +69,11 @@ public class ReviewDTO {
 
     private String urlPhoto;
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String botLogin; // ← можно добавить
     private Long botId; // ← и ID бота для идентификации
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String botPassword;
 
     private boolean vigul;

@@ -32,6 +32,10 @@ public class Company {
     @Column(name = "company_id")
     private Long id;
 
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
+
     //    название компании
     @Column(name = "company_title")
     private String title;
@@ -219,15 +223,18 @@ public class Company {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Company company = (Company) o;
-        return Objects.equals(id, company.id); // Сравниваем только идентификатор
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof Company company)) {
+            return false;
+        }
+        return id != null && id.equals(company.getId());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id); // Хэшируем только идентификатор
+        return Company.class.hashCode();
     }
 }

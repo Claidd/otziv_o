@@ -87,11 +87,36 @@ public class PerformerProfile {
     @Column(name = "personal_data_accepted_at")
     private LocalDateTime personalDataAcceptedAt;
 
+    @Column(name = "personal_data_consent_version", length = 64)
+    private String personalDataConsentVersion;
+
     @Column(name = "rules_accepted_at")
     private LocalDateTime rulesAcceptedAt;
 
+    @Column(name = "rules_consent_version", length = 64)
+    private String rulesConsentVersion;
+
     @Column(name = "honest_review_accepted_at")
     private LocalDateTime honestReviewAcceptedAt;
+
+    @Column(name = "honest_review_consent_version", length = 64)
+    private String honestReviewConsentVersion;
+
+    @Column(name = "registration_expires_at")
+    private LocalDateTime registrationExpiresAt;
+
+    @Column(name = "phone_verified_at")
+    private LocalDateTime phoneVerifiedAt;
+
+    @Column(name = "phone_verification_method", length = 32)
+    private String phoneVerificationMethod;
+
+    @Column(name = "phone_verification_note", length = 500)
+    private String phoneVerificationNote;
+
+    @Builder.Default
+    @Column(name = "legacy_approved_before_secure_lifecycle", nullable = false)
+    private boolean legacyApprovedBeforeSecureLifecycle = false;
 
     @Column(name = "moderated_at")
     private LocalDateTime moderatedAt;

@@ -36,6 +36,7 @@ backend/.idea
 !.env.prod-local.example
 !docker-compose.yaml
 !docker-compose.build.yaml
+!compose.yaml
 !compose.prod.yaml
 !compose.prod-local.yaml
 !infrastructure/loki/*.yaml
@@ -74,7 +75,21 @@ tmp-keycloak-login-check/
 /.release-worktree-*/
 /mobile/www/
 /mobile/builds/
-/generated-assets/
+__pycache__/
+*.py[cod]
+/generated-assets/**
+!/generated-assets/notification-media-received-20260801/
+!/generated-assets/notification-media-received-20260801/manifest.json
+!/generated-assets/notification-media-v2/
+!/generated-assets/notification-media-v2/import_to_production.py
+!/generated-assets/notification-media-v2/manifest.json
+
+# Local evidence/debug captures may contain production or personal data.
+/payment-profile-comment-preview.png
+/tmp-external-check-*.png
+/CHAR(50
+/issue_count
+/=
 
 # managed
 **.data.json

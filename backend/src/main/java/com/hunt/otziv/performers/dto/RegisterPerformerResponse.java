@@ -2,6 +2,8 @@ package com.hunt.otziv.performers.dto;
 
 import lombok.Builder;
 
+import java.time.LocalDateTime;
+
 @Builder
 public record RegisterPerformerResponse(
         Long userId,
@@ -10,6 +12,8 @@ public record RegisterPerformerResponse(
         String temporaryPassword,
         String telegramLinkToken,
         String telegramLinkUrl,
-        String status
+        String status,
+        LocalDateTime registrationExpiresAt,
+        boolean requiresAdminApproval
 ) {
 }

@@ -1,6 +1,7 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, OnDestroy, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { CabinetApi, CabinetUserInfo, UserStat } from '../../core/cabinet.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
@@ -43,13 +44,17 @@ const MONTH_NAMES = [
   templateUrl: './user-info.component.html',
   styleUrl: './user-info.component.scss'
 })
-export class UserInfoComponent {
+export class UserInfoComponent implements OnDestroy {
   readonly selectedDate = signal(this.todayIso());
   readonly payload = signal<CabinetUserInfo | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
 
-  readonly userId: number;
+  private userId: number | null = null;
+  private readonly routeSubscription: Subscription;
+  private requestSubscription?: Subscription;
+  private requestRun = 0;
+  private destroyed = false;
 
   readonly metrics = computed(() => {
     const stat = this.payload()?.workerZp;
@@ -71,25 +76,50 @@ export class UserInfoComponent {
     private readonly cabinetApi: CabinetApi,
     private readonly route: ActivatedRoute
   ) {
-    this.userId = Number(this.route.snapshot.paramMap.get('userId'));
-    this.load();
+    this.routeSubscription = this.route.paramMap.subscribe((params) => {
+      const value = Number(params.get('userId'));
+      this.userId = Number.isSafeInteger(value) && value > 0 ? value : null;
+      this.requestRun += 1;
+      this.requestSubscription?.unsubscribe();
+      this.payload.set(null);
+      this.error.set(null);
+      this.loading.set(false);
+      this.load();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroyed = true;
+    this.requestRun += 1;
+    this.routeSubscription.unsubscribe();
+    this.requestSubscription?.unsubscribe();
   }
 
   load(forceRefresh = false): void {
-    if (!Number.isFinite(this.userId)) {
+    const userId = this.userId;
+    if (userId == null) {
       this.error.set('Некорректный пользователь');
       return;
     }
 
+    const selectedDate = this.selectedDate();
+    const requestRun = ++this.requestRun;
+    this.requestSubscription?.unsubscribe();
     this.loading.set(true);
     this.error.set(null);
 
-    this.cabinetApi.getUserInfo(this.userId, this.selectedDate(), { forceRefresh }).subscribe({
+    this.requestSubscription = this.cabinetApi.getUserInfo(userId, selectedDate, { forceRefresh }).subscribe({
       next: (response) => {
+        if (!this.isCurrentRequest(requestRun, userId, selectedDate)) {
+          return;
+        }
         this.payload.set(response);
         this.loading.set(false);
       },
       error: (error) => {
+        if (!this.isCurrentRequest(requestRun, userId, selectedDate)) {
+          return;
+        }
         this.error.set(apiErrorDetail(error, 'Обновите данные через пару минут или обратитесь к администратору.'));
         this.loading.set(false);
       }
@@ -145,5 +175,12 @@ export class UserInfoComponent {
 
   private todayIso(): string {
     return businessDateIso();
+  }
+
+  private isCurrentRequest(requestRun: number, userId: number, selectedDate: string): boolean {
+    return !this.destroyed
+      && requestRun === this.requestRun
+      && userId === this.userId
+      && selectedDate === this.selectedDate();
   }
 }

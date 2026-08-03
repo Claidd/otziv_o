@@ -88,7 +88,7 @@ public class CategoryServiceImpl implements CategoryService{
                 .toList();
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-        System.out.printf("Список категорий: %.4f сек%n", timeElapsed);
+        log.debug("Список категорий: {} сек", timeElapsed);
         return categoriesDto;
     } // Взять все категории
 
@@ -124,7 +124,7 @@ public class CategoryServiceImpl implements CategoryService{
                 .toList();
         long endTime = System.nanoTime();
         double timeElapsed = (endTime - startTime) / 1_000_000_000.0;
-        System.out.printf("Список категорий: %.4f сек%n", timeElapsed);
+        log.debug("Список категорий: {} сек", timeElapsed);
         return categoriesDto;
     }
 

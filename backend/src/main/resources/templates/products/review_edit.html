@@ -105,7 +105,8 @@
 
                         <div class="form-group">
                             <label for="botPassword">Пароль Бота</label>
-                            <input type="text" id="botPassword" th:field="*{botPassword}" class="form-control">
+                            <input type="password" id="botPassword" name="botPassword" value="" autocomplete="new-password"
+                                   placeholder="Оставьте пустым, чтобы сохранить текущий пароль" class="form-control">
                             <small class="form-text text-danger" th:each="err : ${#fields.errors('botPassword')}" th:text="${err}">Validation error</small>
                         </div>
 

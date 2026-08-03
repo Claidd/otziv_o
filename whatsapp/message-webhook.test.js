@@ -2,8 +2,12 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const {
   DeliveredMessageCache,
+  FileDeliveryIdempotencyStore,
   RecentOutboundRegistry,
   createMessageHandler,
   deriveGroupId,
@@ -75,6 +79,56 @@ test("deduplicates concurrent and repeated deliveries by message id", async () =
   assert.equal(third.duplicate, true);
 });
 
+test("persists delivery idempotency across gateway process instances", async (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "whatsapp-delivery-test-"));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const filePath = path.join(directory, "delivered.json");
+  const payload = { clientId: "vika", groupId: "group", messageId: "durable" };
+  let calls = 0;
+
+  const first = new DeliveredMessageCache(
+    60_000,
+    () => 1_000,
+    new FileDeliveryIdempotencyStore(filePath, () => 1_000),
+  );
+  await first.deliver("/group", payload, async () => { calls += 1; return { ok: true }; });
+
+  const afterRestart = new DeliveredMessageCache(
+    60_000,
+    () => 2_000,
+    new FileDeliveryIdempotencyStore(filePath, () => 2_000),
+  );
+  const result = await afterRestart.deliver("/group", payload, async () => { calls += 1; });
+
+  assert.equal(calls, 1);
+  assert.equal(result.duplicate, true);
+  if (process.platform !== "win32") {
+    assert.equal(fs.statSync(filePath).mode & 0o777, 0o600);
+  }
+});
+
+test("migrates the legacy delivery cache and bounds durable entries", async (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "whatsapp-delivery-migration-"));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const filePath = path.join(directory, "delivered.json");
+  fs.writeFileSync(filePath, JSON.stringify({
+    version: 1,
+    entries: { legacy: 60_000 },
+  }));
+
+  const store = new FileDeliveryIdempotencyStore(filePath, () => 1_000, 3);
+  assert.equal(await store.has("legacy"), true);
+  await store.mark("one", 60_000);
+  await store.mark("two", 60_000);
+  await store.mark("three", 60_000);
+
+  const afterRestart = new FileDeliveryIdempotencyStore(filePath, () => 2_000, 3);
+  assert.equal(await afterRestart.has("legacy"), false);
+  assert.equal(await afterRestart.has("one"), true);
+  assert.equal(await afterRestart.has("three"), true);
+  assert.equal(JSON.parse(fs.readFileSync(filePath, "utf8")).version, 2);
+});
+
 test("delivers media-only group messages with a stable placeholder", async () => {
   const calls = [];
   const handler = createMessageHandler({
@@ -129,4 +183,23 @@ test("reconciliation returns only incoming messages newer than the open-card cur
   assert.equal(payloads[0].messageId, "reply");
   assert.equal(payloads[0].message, "Ответ сотрудника");
   assert.equal(payloads[0].fromMe, false);
+});
+
+test("reconciliation normalizes timestamps and removes duplicate message ids", () => {
+  const payloads = reconciliationPayloads({
+    clientId: "whatsapp_vika",
+    groupId: "120363000000000000@g.us",
+    groupName: " Клиент ",
+    afterTimestamp: "100.9",
+    messages: [
+      { id: { _serialized: "same" }, timestamp: "101.8", body: "Первый" },
+      { id: { _serialized: "same" }, timestamp: 102, body: "Дубликат" },
+      { id: { _serialized: "invalid-time" }, timestamp: "not-a-number", body: "Ошибка" },
+    ],
+  });
+
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].messageId, "same");
+  assert.equal(payloads[0].timestamp, 101);
+  assert.equal(payloads[0].groupName, "Клиент");
 });

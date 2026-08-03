@@ -394,6 +394,9 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/change-bot", "смена аккаунта отзыва {reviewId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/new-account", "назначение нового аккаунта отзыву {reviewId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/bots/{botId}/deactivate", "деактивация аккаунта {botId} отзыва {reviewId}");
+        put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/credential-reveal", "защищенное раскрытие данных аккаунта отзыва {reviewId}");
+        put(actions, "POST", "/api/manager/orders/{orderId}/bad-review-tasks/{taskId}/credential-reveal", "защищенное раскрытие данных аккаунта плохого отзыва {taskId}");
+        put(actions, "POST", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}/credential-reveal", "защищенное раскрытие данных аккаунта восстановления {taskId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/{reviewId}/publish", "публикация отзыва {reviewId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/bad-review-tasks/{taskId}/cancel", "отмена плохого отзыва {taskId}");
         put(actions, "PUT", "/api/manager/orders/{orderId}/bad-review-tasks/{taskId}", "редактирование плохого отзыва {taskId}");
@@ -426,6 +429,9 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/worker/reviews/{reviewId}/copy-click", "нажатие кнопки копирования данных аккаунта в отзыве {reviewId}");
         put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/copy-click", "нажатие кнопки копирования данных аккаунта в плохом отзыве {taskId}");
         put(actions, "POST", "/api/worker/recovery-tasks/{taskId}/copy-click", "нажатие кнопки копирования данных аккаунта в восстановлении {taskId}");
+        put(actions, "POST", "/api/worker/reviews/{reviewId}/credential-reveal", "защищенное раскрытие данных аккаунта отзыва {reviewId}");
+        put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/credential-reveal", "защищенное раскрытие данных аккаунта плохого отзыва {taskId}");
+        put(actions, "POST", "/api/worker/recovery-tasks/{taskId}/credential-reveal", "защищенное раскрытие данных аккаунта восстановления {taskId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/publish", "публикация отзыва {reviewId}");
         put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/complete", "выполнение плохого отзыва {taskId}");
         put(actions, "PUT", "/api/worker/bad-review-tasks/{taskId}", "редактирование плохого отзыва {taskId}");

@@ -14,6 +14,7 @@ import com.hunt.otziv.client_messages.model.ScheduledMessageAttemptStatus;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ArchiveCompanyMessageCandidateRepository;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateBatchRepository;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
@@ -31,10 +32,12 @@ import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryHoldService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
+import com.hunt.otziv.scheduler.SchedulerLeaseService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -64,6 +67,8 @@ class ScheduledClientMessageServiceTest {
 
     @Mock
     private ScheduledClientMessageStateRepository stateRepository;
+    @Mock
+    private ScheduledClientMessageStateBatchRepository stateBatchRepository;
     @Mock
     private ScheduledClientMessageAttemptRepository attemptRepository;
     @Mock
@@ -108,6 +113,8 @@ class ScheduledClientMessageServiceTest {
     private OrderPaymentIntegrityService orderPaymentIntegrityService;
     @Mock
     private ClientMessageTransactionRunner transactionRunner;
+    @Mock
+    private SchedulerLeaseService schedulerLeaseService;
 
     @InjectMocks
     private ScheduledClientMessageService service;
@@ -115,6 +122,18 @@ class ScheduledClientMessageServiceTest {
     @BeforeEach
     void setUpProviders() {
         ReflectionTestUtils.setField(service, "commonBillingServiceProvider", commonBillingServiceProvider);
+        ReflectionTestUtils.setField(service, "reconcileLeaseDuration", Duration.ofMinutes(10));
+    }
+
+    @Test
+    void manualReconciliationSkipsWorkWhenAnotherInstanceOwnsLease() {
+        when(schedulerLeaseService.tryAcquire(anyString(), any(Duration.class)))
+                .thenReturn(Optional.empty());
+
+        service.reconcileCandidatesNow();
+
+        verify(transactionRunner, never()).callInNewTransaction(any());
+        verify(schedulerLeaseService, never()).release(any());
     }
 
     @Test

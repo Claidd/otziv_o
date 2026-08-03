@@ -9,11 +9,13 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
@@ -24,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -60,6 +63,9 @@ class OrderEditServiceTest {
     @Mock
     private ReviewRecoveryTaskService reviewRecoveryTaskService;
 
+    @Mock
+    private OrderAggregateMutationLockService orderAggregateMutationLockService;
+
     @Test
     void updateOrderChangesFilialOnOrderAndReviews() {
         OrderEditService service = service();
@@ -71,7 +77,8 @@ class OrderEditServiceTest {
                 .filial(FilialDTO.builder().id(2L).build())
                 .build();
 
-        when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+        newFilial.setCompany(order.getCompany());
+        when(orderAggregateMutationLockService.lock(10L)).thenReturn(order);
         when(filialService.getFilial(2L)).thenReturn(newFilial);
         when(reviewRepository.getAllByOrderId(10L)).thenReturn(List.of(review));
 
@@ -95,8 +102,10 @@ class OrderEditServiceTest {
                 .worker(WorkerDTO.builder().workerId(2L).build())
                 .build();
 
-        when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+        when(orderAggregateMutationLockService.lock(10L)).thenReturn(order);
         when(workerService.getWorkerById(2L)).thenReturn(newWorker);
+        when(workerService.getAllWorkersByManagerId(50L))
+                .thenReturn(Set.of(WorkerDTO.builder().workerId(2L).build()));
 
         service.updateOrder(dto, 100L, 10L);
 
@@ -119,8 +128,10 @@ class OrderEditServiceTest {
                 .worker(WorkerDTO.builder().workerId(2L).build())
                 .build();
 
-        when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+        when(orderAggregateMutationLockService.lock(10L)).thenReturn(order);
         when(workerService.getWorkerById(2L)).thenReturn(newWorker);
+        when(workerService.getAllWorkersByManagerId(50L))
+                .thenReturn(Set.of(WorkerDTO.builder().workerId(2L).build()));
         when(reviewRecoveryTaskService.reassignPendingTasksForOrder(10L, newWorker))
                 .thenThrow(new IllegalStateException("recovery update failed"));
 
@@ -135,6 +146,7 @@ class OrderEditServiceTest {
     void updateOrderToWorkerUpdatesOnlyEditableComments() {
         OrderEditService service = service();
         Company company = new Company();
+        company.setId(100L);
         company.setCommentsCompany("old company comment");
         Order order = new Order();
         order.setId(10L);
@@ -145,7 +157,7 @@ class OrderEditServiceTest {
                 .commentsCompany("new company comment")
                 .build();
 
-        when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+        when(orderAggregateMutationLockService.lock(10L)).thenReturn(order);
 
         service.updateOrderToWorker(dto, 100L, 10L);
 
@@ -158,6 +170,7 @@ class OrderEditServiceTest {
     void updateOrderToWorkerSkipsSaveWhenNothingChanged() {
         OrderEditService service = service();
         Company company = new Company();
+        company.setId(100L);
         company.setCommentsCompany("same company comment");
         Order order = new Order();
         order.setId(10L);
@@ -168,11 +181,27 @@ class OrderEditServiceTest {
                 .commentsCompany("same company comment")
                 .build();
 
-        when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+        when(orderAggregateMutationLockService.lock(10L)).thenReturn(order);
 
         service.updateOrderToWorker(dto, 100L, 10L);
 
         verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void updateOrderIgnoresBrowserCounterAndRepairsItFromPublishedReviews() {
+        OrderEditService service = service();
+        Order order = orderWithDetails(null, null, List.of());
+        order.setCounter(1);
+        OrderDTO dto = OrderDTO.builder().counter(999).build();
+
+        when(orderAggregateMutationLockService.lock(10L)).thenReturn(order);
+        when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(2);
+
+        service.updateOrder(dto, 100L, 10L);
+
+        assertEquals(2, order.getCounter());
+        verify(orderRepository).save(order);
     }
 
     private OrderEditService service() {
@@ -184,7 +213,8 @@ class OrderEditServiceTest {
                 reviewService,
                 reviewRepository,
                 badReviewTaskService,
-                reviewRecoveryTaskService
+                reviewRecoveryTaskService,
+                orderAggregateMutationLockService
         );
     }
 
@@ -195,7 +225,11 @@ class OrderEditServiceTest {
         order.setWorker(worker);
         Company company = new Company();
         company.setId(100L);
+        company.setManager(Manager.builder().id(50L).build());
         order.setCompany(company);
+        if (filial != null) {
+            filial.setCompany(company);
+        }
 
         OrderDetails detail = new OrderDetails();
         detail.setOrder(order);

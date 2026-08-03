@@ -88,7 +88,6 @@ function details(order: ArchiveOrderListItem): ArchiveOrderDetailsPayload {
         subCategory: 'Подкатегория',
         botId: null,
         botFio: '',
-        botLogin: '',
         productId: 10,
         productTitle: 'Отзывы',
         workerFio: 'Специалист',

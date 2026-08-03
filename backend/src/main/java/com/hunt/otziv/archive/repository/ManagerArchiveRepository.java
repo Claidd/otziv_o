@@ -9,6 +9,7 @@ import com.hunt.otziv.archive.dto.ArchiveReviewItem;
 import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.archive.dto.ArchiveZpItem;
 import com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem;
+import com.hunt.otziv.security.credentials.CredentialCipher;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -32,6 +33,7 @@ public class ManagerArchiveRepository {
     private static final int MAX_KEYWORD_TOKENS = 6;
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final CredentialCipher credentialCipher;
 
     public long countOrders(ArchiveAccessScope scope, String mode, String keyword) {
         MapSqlParameterSource params = orderParams(scope, mode, keyword);
@@ -198,7 +200,6 @@ public class ManagerArchiveRepository {
                     COALESCE(sub.subcategory_title, '') AS subcategory_title,
                     ar.review_bot,
                     COALESCE(b.bot_fio, '') AS bot_fio,
-                    COALESCE(b.bot_login, '') AS bot_login,
                     ar.review_product,
                     COALESCE(p.product_title, '') AS product_title,
                     COALESCE(wu.fio, wu.username, '') AS worker_fio,
@@ -230,7 +231,6 @@ public class ManagerArchiveRepository {
                 safeString(rs.getString("subcategory_title")),
                 rowLong(rs, "review_bot"),
                 safeString(rs.getString("bot_fio")),
-                safeString(rs.getString("bot_login")),
                 rowLong(rs, "review_product"),
                 safeString(rs.getString("product_title")),
                 safeString(rs.getString("worker_fio")),
@@ -310,7 +310,7 @@ public class ManagerArchiveRepository {
                 rowLong(rs, "worker_id"),
                 rowLong(rs, "review_bot"),
                 safeString(rs.getString("bot_login")),
-                safeString(rs.getString("bot_password")),
+                credentialCipher.decrypt(safeString(rs.getString("bot_password"))),
                 safeString(rs.getString("bot_fio")),
                 rowLong(rs, "filial_city_id"),
                 safeString(rs.getString("filial_city")),

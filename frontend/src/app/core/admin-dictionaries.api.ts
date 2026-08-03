@@ -48,10 +48,10 @@ export type PerformerTargetPlatform = 'YANDEX' | 'GOOGLE' | 'GIS' | 'OTHER';
 export interface AdminBot {
   id: number;
   login: string;
-  password?: string;
   fio: string;
   active: boolean;
   counter: number;
+  passwordPresent: boolean;
   status?: DictionaryOption | null;
   worker?: DictionaryOption | null;
   city?: DictionaryOption | null;

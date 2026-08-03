@@ -6,9 +6,13 @@ import { fileURLToPath } from "node:url";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(testDirectory, "../../..");
+const node22Base = "node:22-bookworm-slim";
+const node22Digest = "sha256:f32b81066cde10a75dbac96646099533316d94bac4150c55da1636e1f0ffdc46";
 
 test("external worker image is Node 22, lockfile based and non-root with writable-path check", () => {
-  const dockerfile = read("backend/external-review-worker/Dockerfile");
+  const rawDockerfile = read("backend/external-review-worker/Dockerfile");
+  assert.equal(rawDockerfile.split(/\r?\n/u)[0], `FROM ${node22Base}@${node22Digest}`);
+  const dockerfile = rawDockerfile.replace(`@${node22Digest}`, "");
   assert.match(dockerfile, /^FROM node:22-bookworm-slim$/mu);
   assert.match(dockerfile, /npm ci --omit=dev/u);
   assert.match(dockerfile, /TESSERACT_CACHE_PATH=\/tmp\/tesseract-cache/u);
@@ -17,13 +21,28 @@ test("external worker image is Node 22, lockfile based and non-root with writabl
   assert.match(dockerfile, /CHROMIUM_EXECUTABLE_PATH.*fs\.constants\.X_OK/u);
 });
 
-test("WhatsApp image upgrades reproducibly without forcing auth-volume UID migration", () => {
-  const dockerfile = read("Dockerfile.whatsapp");
+test("WhatsApp image upgrades reproducibly and runs as the non-root Node user", () => {
+  const rawDockerfile = read("Dockerfile.whatsapp");
+  assert.equal(rawDockerfile.split(/\r?\n/u)[0], `FROM ${node22Base}@${node22Digest}`);
+  const dockerfile = rawDockerfile.replace(`@${node22Digest}`, "");
+  const deployScript = read("infrastructure/scripts/prod/deploy-prod.ps1");
+  const legacyDeployScript = read("infrastructure/scripts/prod/deploy-prod-ssh-images.ps1");
   assert.match(dockerfile, /^FROM node:22-bookworm-slim$/mu);
+  assert.match(dockerfile, /^\s*chromium-sandbox \\/mu);
   assert.match(dockerfile, /COPY whatsapp\/package\.json whatsapp\/package-lock\.json/u);
   assert.match(dockerfile, /npm ci --omit=dev/u);
-  assert.doesNotMatch(dockerfile, /^USER\s+/mu);
-  assert.match(dockerfile, /existing \/auth/u);
+  assert.match(dockerfile, /^USER node$/mu);
+  assert.match(dockerfile, /chown -R node:node \/app \/auth/u);
+  for (const script of [deployScript, legacyDeployScript]) {
+    assert.match(script, /--entrypoint sh whatsapp_lika -c 'node_uid=.*id -u node.*node_gid=.*id -g node.*chown -R .*\/auth'/u);
+    assert.match(script, /--entrypoint sh whatsapp_vika -c 'node_uid=.*id -u node.*node_gid=.*id -g node.*chown -R .*\/auth'/u);
+  }
+  const stop = deployScript.indexOf("compose stop whatsapp_lika whatsapp_vika");
+  const sandboxPreflight = deployScript.indexOf("WhatsApp Chromium sandbox preflight failed");
+  const ownershipMigration = deployScript.indexOf("--entrypoint sh whatsapp_lika", stop);
+  const restart = deployScript.indexOf("recreate_service_with_retry whatsapp_lika", ownershipMigration);
+  assert.ok(sandboxPreflight >= 0 && sandboxPreflight < stop);
+  assert.ok(stop >= 0 && stop < ownershipMigration && ownershipMigration < restart);
 });
 
 test("production compose isolates integration workers and applies compatible bounds", () => {
@@ -31,6 +50,7 @@ test("production compose isolates integration workers and applies compatible bou
   const app = serviceBlock(compose, "app");
   const worker = serviceBlock(compose, "external-review-worker");
   const whatsAppLika = serviceBlock(compose, "whatsapp_lika");
+  const whatsAppVika = serviceBlock(compose, "whatsapp_vika");
   const mysql = serviceBlock(compose, "mysql");
   const keycloak = serviceBlock(compose, "keycloak");
 
@@ -47,6 +67,11 @@ test("production compose isolates integration workers and applies compatible bou
   assert.match(worker, /EXTERNAL_REVIEW_WORKER_SHARED_SECRET:/u);
   assert.match(worker, /EXTERNAL_REVIEW_WORKER_AUTH_REQUIRED:/u);
   assert.match(whatsAppLika, /no-new-privileges:true/u);
+  assert.match(whatsAppLika, /cap_drop:\s+- ALL/u);
+  assert.match(whatsAppLika, /cap_add:\s+- SYS_ADMIN\s+- SYS_CHROOT/u);
+  assert.match(whatsAppVika, /no-new-privileges:true/u);
+  assert.match(whatsAppVika, /cap_drop:\s+- ALL/u);
+  assert.match(whatsAppVika, /cap_add:\s+- SYS_ADMIN\s+- SYS_CHROOT/u);
   assert.match(whatsAppLika, /networks:\s+- messaging_net/u);
   assert.doesNotMatch(worker, /messaging_net/u);
   assert.doesNotMatch(whatsAppLika, /external_review_net/u);

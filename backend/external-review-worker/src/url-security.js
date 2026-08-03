@@ -96,6 +96,10 @@ export function isPublicAddress(address) {
 }
 
 export async function assertPublicHttpUrl(raw, { lookup = dns.lookup, lookupTimeoutMs = 3_000 } = {}) {
+  return (await resolvePublicHttpUrl(raw, { lookup, lookupTimeoutMs })).url;
+}
+
+export async function resolvePublicHttpUrl(raw, { lookup = dns.lookup, lookupTimeoutMs = 3_000 } = {}) {
   const parsed = parseTopLevelHttpUrl(raw);
   const hostname = stripIpv6Brackets(parsed.hostname).toLowerCase().replace(/\.$/u, "");
   if (isBlockedHostname(hostname)) {
@@ -109,7 +113,13 @@ export async function assertPublicHttpUrl(raw, { lookup = dns.lookup, lookupTime
   if (resolved.length === 0 || resolved.some(({ address }) => !isPublicAddress(address))) {
     throw new UnsafeTargetError("blocked_address");
   }
-  return parsed;
+  return {
+    url: parsed,
+    addresses: resolved.map((entry) => ({
+      address: stripIpv6Brackets(entry.address),
+      family: Number(entry.family) || net.isIP(stripIpv6Brackets(entry.address)),
+    })),
+  };
 }
 
 export function createPublicRequestGuard({

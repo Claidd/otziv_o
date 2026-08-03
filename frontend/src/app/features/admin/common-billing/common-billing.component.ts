@@ -81,8 +81,14 @@ export class CommonBillingComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly routeSubscription: Subscription;
+  private accountsLoadSubscription?: Subscription;
+  private invoiceLoadSubscription?: Subscription;
   private companySearchTimer: number | null = null;
   private companySearchRun = 0;
+  private accountLoadRun = 0;
+  private invoiceViewGeneration = 0;
+  private invoiceReadRun = 0;
+  private destroyed = false;
 
   readonly accounts = signal<CommonBillingAccountResponse[]>([]);
   readonly selectedAccountId = signal<number | null>(null);
@@ -307,17 +313,28 @@ export class CommonBillingComponent implements OnDestroy {
   readonly pageTitle = computed(() => `Заказы - ${this.selectedAccountTitle()}`);
 
   constructor() {
-    this.routeSubscription = this.route.queryParamMap.subscribe(() => this.load());
+    this.routeSubscription = this.route.queryParamMap.subscribe(() => {
+      this.invalidateInvoiceView();
+      this.load();
+    });
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    this.accountLoadRun += 1;
+    this.companySearchRun += 1;
+    this.invalidateInvoiceView();
     this.routeSubscription.unsubscribe();
+    this.accountsLoadSubscription?.unsubscribe();
+    this.invoiceLoadSubscription?.unsubscribe();
     if (this.companySearchTimer != null) {
       window.clearTimeout(this.companySearchTimer);
     }
   }
 
   load(): void {
+    const loadRun = ++this.accountLoadRun;
+    this.accountsLoadSubscription?.unsubscribe();
     this.loading.set(true);
     this.error.set('');
 
@@ -340,8 +357,11 @@ export class CommonBillingComponent implements OnDestroy {
       return;
     }
 
-    this.commonBillingApi.accounts().subscribe({
+    this.accountsLoadSubscription = this.commonBillingApi.accounts().subscribe({
       next: (accounts) => {
+        if (!this.isCurrentAccountLoad(loadRun)) {
+          return;
+        }
         this.accounts.set(accounts ?? []);
         const requestedAccount = requestedInvoiceId
           ? this.accounts().find((account) => account.currentInvoice?.id === requestedInvoiceId)
@@ -361,6 +381,9 @@ export class CommonBillingComponent implements OnDestroy {
         this.loading.set(false);
       },
       error: (err) => {
+        if (!this.isCurrentAccountLoad(loadRun)) {
+          return;
+        }
         const message = apiErrorDetail(err, 'Не удалось загрузить общие счета');
         this.error.set(message);
         this.loading.set(false);
@@ -373,6 +396,7 @@ export class CommonBillingComponent implements OnDestroy {
     if (this.selectedAccountId() === account.id) {
       return;
     }
+    this.invalidateInvoiceView();
     this.selectedAccountId.set(account.id);
     this.invoiceDetails.set(null);
     this.applySelectedDraft();
@@ -389,6 +413,7 @@ export class CommonBillingComponent implements OnDestroy {
       account.enabled && this.normalizedName(account.name) === this.normalizedName(draft.name)
     );
     if (existingAccount) {
+      this.invalidateInvoiceView();
       this.selectedAccountId.set(existingAccount.id);
       this.applySelectedDraft();
       this.loadSelectedInvoice();
@@ -396,7 +421,10 @@ export class CommonBillingComponent implements OnDestroy {
       return;
     }
 
-    this.mutating.set('create');
+    const viewGeneration = this.invoiceViewGeneration;
+    const mutationKey = 'create';
+    this.invalidateAccountLoad();
+    this.mutating.set(mutationKey);
     this.commonBillingApi.createAccount({
       name: draft.name.trim(),
       enabled: draft.enabled,
@@ -406,6 +434,9 @@ export class CommonBillingComponent implements OnDestroy {
       companyIds: this.draftCompanies().map((company) => company.id)
     }).subscribe({
       next: (account) => {
+        if (!this.isCurrentPageView(viewGeneration)) {
+          return;
+        }
         this.accounts.update((accounts) => [account, ...accounts.filter((item) => item.id !== account.id)]);
         this.selectedAccountId.set(account.id);
         this.applySelectedDraft();
@@ -413,7 +444,11 @@ export class CommonBillingComponent implements OnDestroy {
         this.mutating.set('');
         this.toastService.success('Общий плательщик создан');
       },
-      error: (err) => this.failMutation(err, 'Не удалось создать общего плательщика')
+      error: (err) => {
+        if (this.isCurrentPageView(viewGeneration) && this.mutating() === mutationKey) {
+          this.failMutation(err, 'Не удалось создать общего плательщика');
+        }
+      }
     });
   }
 
@@ -424,7 +459,10 @@ export class CommonBillingComponent implements OnDestroy {
       return;
     }
 
-    this.mutating.set(`save-${account.id}`);
+    const viewGeneration = this.invoiceViewGeneration;
+    const mutationKey = `save-${account.id}`;
+    this.invalidateAccountLoad();
+    this.mutating.set(mutationKey);
     this.commonBillingApi.updateAccount(account.id, {
       name: draft.name.trim(),
       enabled: draft.enabled,
@@ -434,18 +472,26 @@ export class CommonBillingComponent implements OnDestroy {
       companyIds: this.enabledCompanyIds(account)
     }).subscribe({
       next: (updated) => {
+        if (!this.isCurrentPageView(viewGeneration)) {
+          return;
+        }
         this.replaceAccount(updated);
         this.applySelectedDraft();
         this.mutating.set('');
         this.toastService.success('Настройки сохранены');
       },
-      error: (err) => this.failMutation(err, 'Не удалось сохранить общего плательщика')
+      error: (err) => {
+        if (this.isCurrentPageView(viewGeneration) && this.mutating() === mutationKey) {
+          this.failMutation(err, 'Не удалось сохранить общего плательщика');
+        }
+      }
     });
   }
 
   onCompanySearchChange(value: string): void {
     this.companySearch.set(value);
     this.companySearchError.set('');
+    const run = ++this.companySearchRun;
     if (this.companySearchTimer != null) {
       window.clearTimeout(this.companySearchTimer);
     }
@@ -458,8 +504,8 @@ export class CommonBillingComponent implements OnDestroy {
     }
 
     this.companySearchLoading.set(true);
-    const run = ++this.companySearchRun;
     this.companySearchTimer = window.setTimeout(() => {
+      this.companySearchTimer = null;
       this.managerApi.getBoard({
         section: 'companies',
         status: 'Все',
@@ -519,16 +565,26 @@ export class CommonBillingComponent implements OnDestroy {
       return;
     }
 
-    this.mutating.set(`add-company-${company.id}`);
+    const viewGeneration = this.invoiceViewGeneration;
+    const mutationKey = `add-company-${company.id}`;
+    this.invalidateAccountLoad();
+    this.mutating.set(mutationKey);
     this.commonBillingApi.addCompany(account.id, company.id).subscribe({
       next: (updated) => {
+        if (!this.isCurrentPageView(viewGeneration)) {
+          return;
+        }
         this.replaceAccount(updated);
         this.clearCompanySearch();
         this.applySelectedDraft();
         this.mutating.set('');
         this.toastService.success('Компания добавлена в общий счет');
       },
-      error: (err) => this.failMutation(err, 'Не удалось добавить компанию')
+      error: (err) => {
+        if (this.isCurrentPageView(viewGeneration) && this.mutating() === mutationKey) {
+          this.failMutation(err, 'Не удалось добавить компанию');
+        }
+      }
     });
   }
 
@@ -546,15 +602,25 @@ export class CommonBillingComponent implements OnDestroy {
       'Отключить также неоплаченные заказы этой компании из текущего общего счета? Отмена оставит текущую пачку как есть.'
     );
 
-    this.mutating.set(`remove-company-${companyId}`);
+    const viewGeneration = this.invoiceViewGeneration;
+    const mutationKey = `remove-company-${companyId}`;
+    this.invalidateAccountLoad();
+    this.mutating.set(mutationKey);
     this.commonBillingApi.removeCompany(account.id, companyId, detachCurrent).subscribe({
       next: (updated) => {
+        if (!this.isCurrentPageView(viewGeneration)) {
+          return;
+        }
         this.replaceAccount(updated);
         this.applySelectedDraft();
         this.mutating.set('');
         this.toastService.success(detachCurrent ? 'Компания исключена, текущие неоплаченные позиции отключены' : 'Компания исключена из будущих счетов');
       },
-      error: (err) => this.failMutation(err, 'Не удалось исключить компанию')
+      error: (err) => {
+        if (this.isCurrentPageView(viewGeneration) && this.mutating() === mutationKey) {
+          this.failMutation(err, 'Не удалось исключить компанию');
+        }
+      }
     });
   }
 
@@ -615,9 +681,14 @@ export class CommonBillingComponent implements OnDestroy {
     if (!invoice || this.mutating() || !this.canArchiveInvoice()) {
       return;
     }
-    this.mutating.set(`archive-preview-${invoice.id}`);
+    const viewGeneration = this.invoiceViewGeneration;
+    const mutationKey = `archive-preview-${invoice.id}`;
+    this.mutating.set(mutationKey);
     this.commonBillingApi.archivePreview(invoice.id).subscribe({
       next: (preview) => {
+        if (!this.isCurrentInvoiceView(viewGeneration, invoice.id)) {
+          return;
+        }
         if (!preview.allowed) {
           this.mutating.set('');
           this.toastService.error(
@@ -637,7 +708,11 @@ export class CommonBillingComponent implements OnDestroy {
           'Общий счет и все заказы архивированы'
         );
       },
-      error: (err) => this.failMutation(err, 'Не удалось проверить возможность архивирования')
+      error: (err) => {
+        if (this.isCurrentInvoiceView(viewGeneration, invoice.id) && this.mutating() === mutationKey) {
+          this.failMutation(err, 'Не удалось проверить возможность архивирования');
+        }
+      }
     });
   }
 
@@ -653,9 +728,15 @@ export class CommonBillingComponent implements OnDestroy {
       return;
     }
 
-    this.mutating.set(`delete-invoice-${invoice.id}`);
+    const viewGeneration = this.invoiceViewGeneration;
+    const mutationKey = `delete-invoice-${invoice.id}`;
+    this.invalidateAccountLoad();
+    this.mutating.set(mutationKey);
     this.commonBillingApi.deleteInvoiceWithOrders(invoice.id).subscribe({
       next: () => {
+        if (!this.isCurrentInvoiceView(viewGeneration, invoice.id)) {
+          return;
+        }
         this.invoiceDetails.set(null);
         this.accounts.update((accounts) => accounts.map((account) =>
           account.currentInvoice?.id === invoice.id ? { ...account, currentInvoice: null } : account
@@ -672,7 +753,11 @@ export class CommonBillingComponent implements OnDestroy {
           queryParamsHandling: 'merge'
         }).then(() => this.load());
       },
-      error: (err) => this.failMutation(err, 'Общий счет не удален')
+      error: (err) => {
+        if (this.isCurrentInvoiceView(viewGeneration, invoice.id) && this.mutating() === mutationKey) {
+          this.failMutation(err, 'Общий счет не удален');
+        }
+      }
     });
   }
 
@@ -1140,35 +1225,72 @@ export class CommonBillingComponent implements OnDestroy {
       this.toastService.error('Одиночное финансовое действие отключено', 'Этот заказ входит в общий счет');
       return;
     }
+    const invoiceId = this.currentInvoice()?.id;
+    if (!invoiceId || this.mutating()) {
+      return;
+    }
+    const viewGeneration = this.invoiceViewGeneration;
     const key = `order-${order.id}-${action.status}`;
+    this.invalidateAccountLoad();
     this.mutating.set(key);
     this.managerApi.updateOrderStatus(order.id, action.status).subscribe({
       next: () => {
+        if (!this.isCurrentInvoiceView(viewGeneration, invoiceId) || this.mutating() !== key) {
+          return;
+        }
         this.mutating.set('');
         this.toastService.success('Статус заказа изменен', `${order.companyTitle}: ${action.status}`);
         this.loadSelectedInvoice();
       },
-      error: (err) => this.failMutation(err, managerErrorMessage(err, 'Не удалось изменить статус заказа'))
+      error: (err) => {
+        if (this.isCurrentInvoiceView(viewGeneration, invoiceId) && this.mutating() === key) {
+          this.failMutation(err, managerErrorMessage(err, 'Не удалось изменить статус заказа'));
+        }
+      }
     });
   }
 
   saveOrderCompanyNote(order: OrderCardItem, value: string): void {
+    const invoiceId = this.currentInvoice()?.id;
+    const viewGeneration = this.invoiceViewGeneration;
+    if (!invoiceId) {
+      return;
+    }
     this.managerApi.updateOrderCompanyNote(order.id, value).subscribe({
       next: () => {
+        if (!this.isCurrentInvoiceView(viewGeneration, invoiceId)) {
+          return;
+        }
         this.toastService.success('Заметка компании сохранена', order.companyTitle || `Заказ #${order.id}`);
         this.loadSelectedInvoice();
       },
-      error: (err) => this.toastService.error('Заметка не сохранена', apiErrorDetail(err, 'Не удалось сохранить заметку компании'))
+      error: (err) => {
+        if (this.isCurrentInvoiceView(viewGeneration, invoiceId)) {
+          this.toastService.error('Заметка не сохранена', apiErrorDetail(err, 'Не удалось сохранить заметку компании'));
+        }
+      }
     });
   }
 
   saveOrderCardNote(order: OrderCardItem, value: string): void {
+    const invoiceId = this.currentInvoice()?.id;
+    const viewGeneration = this.invoiceViewGeneration;
+    if (!invoiceId) {
+      return;
+    }
     this.managerApi.updateOrderNote(order.id, value).subscribe({
       next: () => {
+        if (!this.isCurrentInvoiceView(viewGeneration, invoiceId)) {
+          return;
+        }
         this.toastService.success('Заметка заказа сохранена', order.companyTitle || `Заказ #${order.id}`);
         this.loadSelectedInvoice();
       },
-      error: (err) => this.toastService.error('Заметка не сохранена', apiErrorDetail(err, 'Не удалось сохранить заметку заказа'))
+      error: (err) => {
+        if (this.isCurrentInvoiceView(viewGeneration, invoiceId)) {
+          this.toastService.error('Заметка не сохранена', apiErrorDetail(err, 'Не удалось сохранить заметку заказа'));
+        }
+      }
     });
   }
 
@@ -1197,18 +1319,28 @@ export class CommonBillingComponent implements OnDestroy {
 
   private loadSelectedInvoice(): void {
     const invoiceId = this.selectedAccount()?.currentInvoice?.id;
+    const viewGeneration = this.invoiceViewGeneration;
+    const readRun = ++this.invoiceReadRun;
+    this.invoiceLoadSubscription?.unsubscribe();
     if (!invoiceId) {
       this.invoiceDetails.set(null);
+      this.invoiceLoading.set(false);
       return;
     }
     this.invoiceLoading.set(true);
-    this.commonBillingApi.invoice(invoiceId).subscribe({
+    this.invoiceLoadSubscription = this.commonBillingApi.invoice(invoiceId).subscribe({
       next: (details) => {
+        if (!this.isCurrentInvoiceRead(readRun, viewGeneration, invoiceId)) {
+          return;
+        }
         this.invoiceDetails.set(details);
         this.invoiceCardIndex.set(0);
         this.invoiceLoading.set(false);
       },
       error: (err) => {
+        if (!this.isCurrentInvoiceRead(readRun, viewGeneration, invoiceId)) {
+          return;
+        }
         this.invoiceLoading.set(false);
         const message = apiErrorDetail(err);
         this.error.set(message);
@@ -1218,13 +1350,20 @@ export class CommonBillingComponent implements OnDestroy {
   }
 
   private requestedInvoiceId(): number | null {
-    return Number(this.route.snapshot.queryParamMap.get('invoiceId') ?? 0) || null;
+    const value = Number(this.route.snapshot.queryParamMap.get('invoiceId') ?? 0);
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
   }
 
   private loadInvoiceByRequestedId(invoiceId: number): void {
+    const viewGeneration = this.invoiceViewGeneration;
+    const readRun = ++this.invoiceReadRun;
+    this.invoiceLoadSubscription?.unsubscribe();
     this.invoiceLoading.set(true);
-    this.commonBillingApi.invoice(invoiceId).subscribe({
+    this.invoiceLoadSubscription = this.commonBillingApi.invoice(invoiceId).subscribe({
       next: (details) => {
+        if (!this.isCurrentInvoiceRead(readRun, viewGeneration, invoiceId)) {
+          return;
+        }
         this.invoiceDetails.set(details);
         this.invoiceCardIndex.set(0);
         this.selectedAccountId.set(details.summary.accountId);
@@ -1237,6 +1376,9 @@ export class CommonBillingComponent implements OnDestroy {
         this.invoiceLoading.set(false);
       },
       error: (err) => {
+        if (!this.isCurrentInvoiceRead(readRun, viewGeneration, invoiceId)) {
+          return;
+        }
         this.invoiceLoading.set(false);
         this.toastService.error('Счет не загрузился', apiErrorDetail(err));
       }
@@ -1350,9 +1492,14 @@ export class CommonBillingComponent implements OnDestroy {
     action: () => ReturnType<CommonBillingApi['invoice']>,
     successTitle: string
   ): void {
+    const viewGeneration = this.invoiceViewGeneration;
+    this.invalidateAccountLoad();
     this.mutating.set(key);
     action().subscribe({
       next: (details) => {
+        if (!this.isCurrentInvoiceView(viewGeneration, invoiceId)) {
+          return;
+        }
         this.invoiceDetails.set(details);
         this.accounts.update((accounts) => accounts.map((account) => {
           if (account.currentInvoice?.id !== invoiceId) {
@@ -1363,8 +1510,50 @@ export class CommonBillingComponent implements OnDestroy {
         this.mutating.set('');
         this.toastService.success(successTitle);
       },
-      error: (err) => this.failMutation(err, 'Действие со счетом не выполнено')
+      error: (err) => {
+        if (this.isCurrentInvoiceView(viewGeneration, invoiceId) && this.mutating() === key) {
+          this.failMutation(err, 'Действие со счетом не выполнено');
+        }
+      }
     });
+  }
+
+  private invalidateInvoiceView(): void {
+    this.invoiceViewGeneration += 1;
+    this.invoiceReadRun += 1;
+    this.invoiceLoadSubscription?.unsubscribe();
+    this.invoiceLoadSubscription = undefined;
+    this.invoiceLoading.set(false);
+    this.mutating.set('');
+  }
+
+  private isCurrentAccountLoad(loadRun: number): boolean {
+    return !this.destroyed && loadRun === this.accountLoadRun;
+  }
+
+  private invalidateAccountLoad(): void {
+    this.accountLoadRun += 1;
+    this.accountsLoadSubscription?.unsubscribe();
+    this.accountsLoadSubscription = undefined;
+    this.loading.set(false);
+  }
+
+  private isCurrentPageView(viewGeneration: number): boolean {
+    return !this.destroyed && viewGeneration === this.invoiceViewGeneration;
+  }
+
+  private isCurrentInvoiceRead(readRun: number, viewGeneration: number, invoiceId: number): boolean {
+    return readRun === this.invoiceReadRun && this.isCurrentInvoiceView(viewGeneration, invoiceId);
+  }
+
+  private isCurrentInvoiceView(viewGeneration: number, invoiceId: number): boolean {
+    return !this.destroyed
+      && viewGeneration === this.invoiceViewGeneration
+      && this.desiredInvoiceId() === invoiceId;
+  }
+
+  private desiredInvoiceId(): number | null {
+    return this.requestedInvoiceId() ?? this.selectedAccount()?.currentInvoice?.id ?? null;
   }
 
   private replaceAccount(updated: CommonBillingAccountResponse): void {
@@ -1415,6 +1604,7 @@ export class CommonBillingComponent implements OnDestroy {
   }
 
   private clearCompanySearch(): void {
+    this.companySearchRun += 1;
     this.companySearch.set('');
     this.companySearchResults.set([]);
     this.companySearchError.set('');

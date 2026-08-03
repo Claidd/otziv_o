@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { NEVER, Subject, of } from 'rxjs';
+import { BehaviorSubject, NEVER, Subject, of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { AdminDictionariesApi } from '../../../core/admin-dictionaries.api';
 import { BotBrowserComponent } from './bot-browser.component';
@@ -100,7 +100,7 @@ describe('BotBrowserComponent', () => {
       })),
       openBotBrowser: vi.fn(() => of({
         sessionId: '7c121c71-7bc4-4a25-a33c-78c7fe63e5c9',
-        vncUrl: 'https://vnc.example.test/session'
+        vncUrl: `${window.location.origin}/session`
       })),
       heartbeatBotBrowser: vi.fn(() => of(undefined)),
       closeBotBrowser: vi.fn()
@@ -139,6 +139,49 @@ describe('BotBrowserComponent', () => {
     );
   });
 
+  it('opens the current routed bot after an older session finishes closing', async () => {
+    const routeParams = new BehaviorSubject(convertToParamMap({ botId: '37' }));
+    const firstClose = new Subject<void>();
+    const api = {
+      getBotBrowserMetadata: vi.fn((botId: number) => of({
+        botId,
+        login: `browser-${botId}`,
+        fio: `Аккаунт ${botId}`
+      })),
+      openBotBrowser: vi.fn((botId: number) => of({
+        sessionId: `session-${botId}`,
+        vncUrl: `${window.location.origin}/session/${botId}`
+      })),
+      heartbeatBotBrowser: vi.fn(() => of(undefined)),
+      closeBotBrowser: vi.fn()
+        .mockReturnValueOnce(firstClose)
+        .mockReturnValue(of(undefined))
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [BotBrowserComponent],
+      providers: [
+        { provide: ActivatedRoute, useValue: { paramMap: routeParams } },
+        {
+          provide: DomSanitizer,
+          useValue: { bypassSecurityTrustResourceUrl: vi.fn((url: string) => url) }
+        },
+        { provide: AdminDictionariesApi, useValue: api }
+      ]
+    }).compileComponents();
+
+    const component = TestBed.createComponent(BotBrowserComponent).componentInstance;
+    component.closeSession();
+    routeParams.next(convertToParamMap({ botId: '38' }));
+
+    expect(api.openBotBrowser).toHaveBeenCalledTimes(1);
+    firstClose.next();
+
+    expect(api.openBotBrowser).toHaveBeenCalledTimes(2);
+    expect(api.openBotBrowser).toHaveBeenLastCalledWith(38);
+    expect(component.bot()?.botId).toBe(38);
+  });
+
   it('retries metadata without discarding an already open VNC session', async () => {
     const api = {
       getBotBrowserMetadata: vi.fn(() => of({
@@ -148,7 +191,7 @@ describe('BotBrowserComponent', () => {
       })),
       openBotBrowser: vi.fn(() => of({
         sessionId: '7c121c71-7bc4-4a25-a33c-78c7fe63e5c9',
-        vncUrl: 'https://vnc.example.test/session'
+        vncUrl: `${window.location.origin}/session`
       })),
       heartbeatBotBrowser: vi.fn(() => of(undefined)),
       closeBotBrowser: vi.fn(() => of(undefined))

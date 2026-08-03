@@ -279,7 +279,8 @@ public interface WorkloadEmergencyAssignmentRepository
               ON detail.order_detail_id = review.review_order_details
             JOIN orders orders
               ON orders.order_id = detail.order_detail_order
-            SET review.review_worker = :targetWorkerId
+            SET review.review_worker = :targetWorkerId,
+                review.row_version = review.row_version + 1
             WHERE review.review_id = :reviewId
               AND review.review_worker = :sourceWorkerId
               AND COALESCE(review.review_publish, 0) = 0
@@ -521,7 +522,8 @@ public interface WorkloadEmergencyAssignmentRepository
             UPDATE reviews review
             JOIN workload_transfer_emergency_assignments emergency
               ON emergency.review_id = review.review_id
-            SET review.review_worker = emergency.source_worker_id
+            SET review.review_worker = emergency.source_worker_id,
+                review.row_version = review.row_version + 1
             WHERE emergency.workload_transfer_emergency_assignment_id =
                   :assignmentId
               AND emergency.status = 'ROLLING_BACK'

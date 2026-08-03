@@ -23,6 +23,7 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.l_lead.services.LeadAccessService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
 import com.hunt.otziv.reputationai.application.service.DeepCompanyResearchJobService;
@@ -39,9 +40,11 @@ import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -91,6 +94,8 @@ public class ApiCompanyCreateController {
     private final WorkerService workerService;
     private final PerformanceMetrics performanceMetrics;
     private final DeepCompanyResearchJobService deepCompanyResearchJobService;
+    private final LeadAccessService leadAccessService;
+    private final TransactionTemplate transactionTemplate;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @GetMapping("/create-payload")
@@ -119,7 +124,7 @@ public class ApiCompanyCreateController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'OPERATOR')")
     public CompanyCreateResultResponse createCompany(
-            @RequestBody CompanyCreateRequest request,
+            @Valid @RequestBody CompanyCreateRequest request,
             Principal principal,
             Authentication authentication
     ) {
@@ -148,15 +153,25 @@ public class ApiCompanyCreateController {
         CompanyDTO baseCompany = buildBaseCompany(source, request.leadId(), request.managerId(), principal, authentication);
         CompanyDTO company = toCompanyDto(baseCompany, request);
         validateCreateRequest(company, request);
+        validateScopedRelations(company, request);
 
-        Company savedCompany = companyService.saveAndReturn(company)
-                .orElseThrow(() -> problem(HttpStatus.BAD_REQUEST, "компания не была сохранена", "проверьте поля формы и повторите сохранение"));
+        Company savedCompany = transactionTemplate.execute(status -> {
+            Company saved = companyService.saveAndReturn(company)
+                    .orElseThrow(() -> problem(HttpStatus.BAD_REQUEST, "компания не была сохранена", "проверьте поля формы и повторите сохранение"));
 
-        if (request.leadId() != null) {
-            leadService.changeStatusLeadOnInWork(request.leadId());
-            if (SOURCE_OPERATOR.equals(source)) {
-                leadService.changeCountToOperator(request.leadId());
+            if (!SOURCE_MANUAL.equals(source) && request.leadId() != null) {
+                leadAccessService.requireLeadAccess(request.leadId(), authentication);
+                leadService.changeStatusLeadOnInWork(request.leadId());
+                if (SOURCE_OPERATOR.equals(source)) {
+                    leadService.changeCountToOperator(request.leadId());
+                }
             }
+            return saved;
+        });
+        if (savedCompany == null) {
+            throw problem(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "транзакция создания компании завершилась без результата",
+                    "повторите попытку; если ошибка сохранится, обратитесь к администратору");
         }
 
         Long companyId = savedCompany.getId();
@@ -236,6 +251,7 @@ public class ApiCompanyCreateController {
     ) {
         if (SOURCE_OPERATOR.equals(source)) {
             requireLeadId(leadId);
+            leadAccessService.requireLeadAccess(leadId, authentication);
             return companyService.convertToDtoToOperator(leadId, principal);
         }
 
@@ -244,6 +260,7 @@ public class ApiCompanyCreateController {
         }
 
         requireLeadId(leadId);
+        leadAccessService.requireLeadAccess(leadId, authentication);
         return companyService.convertToDtoToManager(leadId, principal);
     }
 
@@ -273,7 +290,11 @@ public class ApiCompanyCreateController {
     private Manager resolveManualManager(Principal principal, Authentication authentication, Long managerId) {
         if (hasAnyRole(authentication, "ROLE_ADMIN")) {
             if (managerId != null) {
-                return managerService.getManagerById(managerId);
+                Manager manager = managerService.getManagerById(managerId);
+                if (manager == null) {
+                    throw problem(HttpStatus.NOT_FOUND, "менеджер не найден", "обновите список менеджеров и выберите значение заново");
+                }
+                return manager;
             }
             return firstManager(managerService.getAllManagers());
         }
@@ -404,6 +425,42 @@ public class ApiCompanyCreateController {
 
         if (companyService.getCompanyByTelephonAndTitle(storagePhone(company.getTelephone()), company.getTitle()).isPresent()) {
             throw problem(HttpStatus.CONFLICT, "компания с таким названием или телефоном уже существует", "найдите существующую компанию и создайте заказ в ней либо проверьте название и телефон");
+        }
+    }
+
+    private void validateScopedRelations(CompanyDTO company, CompanyCreateRequest request) {
+        Long categoryId = company.getCategoryCompany() == null ? null : company.getCategoryCompany().getId();
+        Long subCategoryId = company.getSubCategory() == null ? null : company.getSubCategory().getId();
+        if (validId(categoryId)) {
+            boolean categoryExists = categoryService.getAllCategories().stream()
+                    .anyMatch(category -> Objects.equals(category.getId(), categoryId));
+            if (!categoryExists) {
+                throw invalid("категория не найдена", "обновите список категорий и выберите значение заново");
+            }
+        }
+        if (validId(subCategoryId)) {
+            boolean belongsToCategory = validId(categoryId)
+                    && subCategoryService.getSubcategoriesByCategoryId(categoryId).stream()
+                    .anyMatch(subCategory -> Objects.equals(subCategory.getId(), subCategoryId));
+            if (!belongsToCategory) {
+                throw invalid("подкатегория не относится к выбранной категории", "выберите подкатегорию из обновленного списка");
+            }
+        }
+
+        Long managerId = company.getManager() == null ? null : company.getManager().getManagerId();
+        Long workerId = company.getWorker() == null ? null : company.getWorker().getWorkerId();
+        if (validId(workerId)) {
+            boolean workerAssigned = validId(managerId)
+                    && workerService.getAllWorkersByManagerId(managerId).stream()
+                    .anyMatch(worker -> Objects.equals(worker.getWorkerId(), workerId));
+            if (!workerAssigned) {
+                throw invalid("специалист не закреплен за менеджером компании", "обновите список специалистов и выберите доступного");
+            }
+        }
+
+        if (validId(request.filialCityId()) && cityService.getAllCities().stream()
+                .noneMatch(city -> Objects.equals(city.getId(), request.filialCityId()))) {
+            throw invalid("город филиала не найден", "обновите список городов и выберите значение заново");
         }
     }
 

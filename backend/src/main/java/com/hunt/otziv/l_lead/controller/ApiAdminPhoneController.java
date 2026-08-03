@@ -1,6 +1,8 @@
 package com.hunt.otziv.l_lead.controller;
 
 import com.hunt.otziv.l_lead.dto.TelephoneDTO;
+import com.hunt.otziv.l_lead.dto.api.AdminDeviceTokenRow;
+import com.hunt.otziv.l_lead.dto.api.AdminPhoneListRow;
 import com.hunt.otziv.l_lead.dto.api.DeviceTokenResponse;
 import com.hunt.otziv.l_lead.dto.api.PhoneListResponse;
 import com.hunt.otziv.l_lead.dto.api.PhoneOperatorOptionResponse;
@@ -8,13 +10,15 @@ import com.hunt.otziv.l_lead.dto.api.PhoneResponse;
 import com.hunt.otziv.l_lead.dto.api.PhoneUpsertRequest;
 import com.hunt.otziv.l_lead.model.DeviceToken;
 import com.hunt.otziv.l_lead.repository.DeviceTokenRepository;
+import com.hunt.otziv.l_lead.repository.TelephoneRepository;
+import com.hunt.otziv.l_lead.services.LeadAccessService;
 import com.hunt.otziv.l_lead.services.serv.TelephoneService;
 import com.hunt.otziv.u_users.model.Operator;
-import com.hunt.otziv.u_users.services.service.OperatorService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,7 +33,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -37,41 +46,68 @@ import java.util.List;
 public class ApiAdminPhoneController {
 
     private final TelephoneService telephoneService;
-    private final OperatorService operatorService;
+    private final TelephoneRepository telephoneRepository;
     private final DeviceTokenRepository deviceTokenRepository;
+    private final LeadAccessService leadAccessService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public PhoneListResponse getPhones(@RequestParam(defaultValue = "") String keyword) {
-        String normalizedKeyword = keyword == null ? "" : keyword.trim().toLowerCase();
-        List<PhoneResponse> phones = telephoneService.getAllTelephones().stream()
-                .filter(phone -> matchesKeyword(phone, normalizedKeyword))
-                .map(this::toResponse)
+    public PhoneListResponse getPhones(
+            @RequestParam(defaultValue = "") String keyword,
+            Authentication authentication
+    ) {
+        String normalizedKeyword = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
+        LeadAccessService.LeadAssignmentOptions options = leadAccessService.assignmentOptions(authentication);
+        Set<Long> allowedOperatorIds = options.operators().stream()
+                .map(Operator::getId)
+                .collect(Collectors.toSet());
+        boolean admin = hasRole(authentication, "ROLE_ADMIN");
+        if (allowedOperatorIds.isEmpty()) {
+            // Keeps the JPQL IN predicate valid without granting access to any real operator.
+            allowedOperatorIds.add(Long.MIN_VALUE);
+        }
+        List<AdminPhoneListRow> rows = telephoneRepository.findAdminPhoneRows(
+                admin,
+                allowedOperatorIds,
+                normalizedKeyword
+        );
+        Map<Long, List<DeviceTokenResponse>> tokensByPhone = deviceTokensByPhone(rows);
+        List<PhoneResponse> phones = rows.stream()
+                .map(phone -> toResponse(phone, tokensByPhone.getOrDefault(phone.id(), List.of())))
                 .toList();
 
-        return new PhoneListResponse(phones, operatorOptions());
+        return new PhoneListResponse(phones, operatorOptions(options.operators()));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public PhoneResponse createPhone(@Valid @RequestBody PhoneUpsertRequest request) {
+    public PhoneResponse createPhone(
+            @Valid @RequestBody PhoneUpsertRequest request,
+            Authentication authentication
+    ) {
+        if ((request.operatorId() == null && !hasRole(authentication, "ROLE_ADMIN"))
+                || (request.operatorId() != null
+                && !leadAccessService.canAccessOperator(request.operatorId(), authentication))) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Оператор не найден");
+        }
         TelephoneDTO dto = toDto(request, telephoneService.createEmptyDTO());
-        telephoneService.createTelephone(dto);
-
-        return telephoneService.getAllTelephones().stream()
-                .filter(phone -> phone.getNumber() != null && phone.getNumber().equals(dto.getNumber()))
-                .max(Comparator.comparing(TelephoneDTO::getId))
-                .map(this::toResponse)
-                .orElseGet(() -> toResponse(dto));
+        return toResponse(telephoneService.createTelephone(dto));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public PhoneResponse updatePhone(
             @PathVariable Long id,
-            @Valid @RequestBody PhoneUpsertRequest request
+            @Valid @RequestBody PhoneUpsertRequest request,
+        Authentication authentication
     ) {
+        leadAccessService.requireTelephoneAccess(id, authentication);
+        if ((request.operatorId() == null && !hasRole(authentication, "ROLE_ADMIN"))
+                || (request.operatorId() != null
+                && !leadAccessService.canAccessOperator(request.operatorId(), authentication))) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Оператор не найден");
+        }
         TelephoneDTO current = telephoneService.getTelephoneDTOById(id);
         TelephoneDTO dto = toDto(request, current);
         telephoneService.updatePhone(id, dto);
@@ -81,7 +117,8 @@ public class ApiAdminPhoneController {
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public void deletePhone(@PathVariable Long id) {
+    public void deletePhone(@PathVariable Long id, Authentication authentication) {
+        leadAccessService.requireTelephoneAccess(id, authentication);
         telephoneService.deletePhone(id);
     }
 
@@ -90,8 +127,10 @@ public class ApiAdminPhoneController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public void deleteDeviceToken(
             @PathVariable Long id,
-            @PathVariable String token
+            @PathVariable String token,
+            Authentication authentication
     ) {
+        leadAccessService.requireTelephoneAccess(id, authentication);
         DeviceToken deviceToken = deviceTokenRepository.findByTokenAndTelephone_Id(token, id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Токен устройства не найден"));
 
@@ -114,11 +153,11 @@ public class ApiAdminPhoneController {
                 .amountSent(request.amountSent() != null ? request.amountSent() : defaults.getAmountSent())
                 .blockTime(request.blockTime() != null ? request.blockTime() : defaults.getBlockTime())
                 .timer(request.timer() != null ? request.timer() : defaults.getTimer())
-                .googleLogin(request.googleLogin())
-                .googlePassword(request.googlePassword())
-                .avitoPassword(request.avitoPassword())
-                .mailLogin(request.mailLogin())
-                .mailPassword(request.mailPassword())
+                .googleLogin(writeOnlyValue(request.googleLogin(), defaults.getGoogleLogin()))
+                .googlePassword(writeOnlyValue(request.googlePassword(), defaults.getGooglePassword()))
+                .avitoPassword(writeOnlyValue(request.avitoPassword(), defaults.getAvitoPassword()))
+                .mailLogin(writeOnlyValue(request.mailLogin(), defaults.getMailLogin()))
+                .mailPassword(writeOnlyValue(request.mailPassword(), defaults.getMailPassword()))
                 .createDate(request.createDate() != null ? request.createDate() : defaultCreateDate(defaults))
                 .updateStatus(defaults.getUpdateStatus())
                 .operator(operator)
@@ -141,11 +180,13 @@ public class ApiAdminPhoneController {
                 phone.getAmountSent(),
                 phone.getBlockTime(),
                 phone.getTimer(),
-                phone.getGoogleLogin(),
-                phone.getGooglePassword(),
-                phone.getAvitoPassword(),
-                phone.getMailLogin(),
-                phone.getMailPassword(),
+                maskedCredential(phone.getGoogleLogin()),
+                hasText(phone.getGoogleLogin()),
+                hasText(phone.getGooglePassword()),
+                hasText(phone.getAvitoPassword()),
+                maskedCredential(phone.getMailLogin()),
+                hasText(phone.getMailLogin()),
+                hasText(phone.getMailPassword()),
                 phone.getFoto_instagram(),
                 phone.isActive(),
                 phone.getCreateDate(),
@@ -153,6 +194,57 @@ public class ApiAdminPhoneController {
                 toOperatorOption(phone.getOperator()),
                 deviceTokens(phone.getId())
         );
+    }
+
+    private PhoneResponse toResponse(AdminPhoneListRow phone, List<DeviceTokenResponse> deviceTokens) {
+        PhoneOperatorOptionResponse operator = phone.operatorId() == null
+                ? new PhoneOperatorOptionResponse(null, "-")
+                : new PhoneOperatorOptionResponse(
+                        phone.operatorId(),
+                        hasText(phone.operatorTitle())
+                                ? phone.operatorTitle()
+                                : "Оператор #" + phone.operatorId()
+                );
+        return new PhoneResponse(
+                phone.id(),
+                phone.number(),
+                phone.fio(),
+                phone.birthday(),
+                phone.amountAllowed(),
+                phone.amountSent(),
+                phone.blockTime(),
+                phone.timer(),
+                phone.googleLoginPresent() ? "••••••" : null,
+                phone.googleLoginPresent(),
+                phone.googlePasswordPresent(),
+                phone.avitoPasswordPresent(),
+                phone.mailLoginPresent() ? "••••••" : null,
+                phone.mailLoginPresent(),
+                phone.mailPasswordPresent(),
+                phone.fotoInstagram(),
+                phone.active(),
+                phone.createDate(),
+                phone.updateStatus(),
+                operator,
+                deviceTokens
+        );
+    }
+
+    private Map<Long, List<DeviceTokenResponse>> deviceTokensByPhone(List<AdminPhoneListRow> phones) {
+        List<Long> telephoneIds = phones.stream()
+                .map(AdminPhoneListRow::id)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (telephoneIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, List<DeviceTokenResponse>> grouped = new HashMap<>();
+        for (AdminDeviceTokenRow token : deviceTokenRepository.findAdminRowsByTelephoneIds(telephoneIds)) {
+            grouped.computeIfAbsent(token.telephoneId(), ignored -> new java.util.ArrayList<>())
+                    .add(new DeviceTokenResponse(token.token(), token.createdAt(), token.active()));
+        }
+        return grouped;
     }
 
     private List<DeviceTokenResponse> deviceTokens(Long telephoneId) {
@@ -169,12 +261,19 @@ public class ApiAdminPhoneController {
                 .toList();
     }
 
-    private List<PhoneOperatorOptionResponse> operatorOptions() {
-        return operatorService.getAllOperators().stream()
+    private List<PhoneOperatorOptionResponse> operatorOptions(List<Operator> operators) {
+        return operators.stream()
                 .map(this::toOperatorOption)
                 .filter(option -> option.id() != null)
                 .sorted(Comparator.comparing(PhoneOperatorOptionResponse::title, String.CASE_INSENSITIVE_ORDER))
                 .toList();
+    }
+
+    private boolean hasRole(Authentication authentication, String role) {
+        return authentication != null
+                && authentication.getAuthorities() != null
+                && authentication.getAuthorities().stream()
+                .anyMatch(authority -> role.equalsIgnoreCase(authority.getAuthority()));
     }
 
     private PhoneOperatorOptionResponse toOperatorOption(Operator operator) {
@@ -189,22 +288,15 @@ public class ApiAdminPhoneController {
         return new PhoneOperatorOptionResponse(operator.getId(), title);
     }
 
-    private boolean matchesKeyword(TelephoneDTO phone, String keyword) {
-        if (keyword.isBlank()) {
-            return true;
-        }
-
-        return contains(phone.getNumber(), keyword)
-                || contains(phone.getFio(), keyword)
-                || contains(phone.getGoogleLogin(), keyword)
-                || contains(phone.getMailLogin(), keyword)
-                || contains(phone.getFoto_instagram(), keyword)
-                || contains(phone.getOperator() != null && phone.getOperator().getUser() != null
-                ? phone.getOperator().getUser().getFio()
-                : null, keyword);
+    private String writeOnlyValue(String requested, String current) {
+        return hasText(requested) ? requested : current;
     }
 
-    private boolean contains(String value, String keyword) {
-        return value != null && value.toLowerCase().contains(keyword);
+    private String maskedCredential(String value) {
+        return hasText(value) ? "••••••" : null;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

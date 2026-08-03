@@ -213,7 +213,9 @@ try {
         Copy-Item -LiteralPath $envFilePath -Destination $stageEnv -Force
         Set-EnvFileValue -Path $stageEnv -Name "APP_IMAGE" -Value $appImage
         Set-EnvFileValue -Path $stageEnv -Name "WEB_IMAGE" -Value $webImage
+        Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_IMAGE" -Value "otziv-whatsapp:$Tag"
         Set-EnvFileValue -Path $stageEnv -Name "OTZIV_APP_BASE_URL" -Value "https://o-ogo.ru"
+        Set-EnvFileValue -Path $stageEnv -Name "OTZIV_AUTH_LEGACY_MIGRATION_ENABLED" -Value "false"
         Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_PUBLIC_URL" -Value "https://o-ogo.ru/keycloak"
         Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_ISSUER_URI" -Value "https://o-ogo.ru/keycloak/realms/otziv"
         Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_JWK_SET_URI" -Value "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
@@ -388,8 +390,10 @@ if [ "`$uploaded_env" != "1" ]; then
   set_env APP_IMAGE "`$app_image"
   set_env WEB_IMAGE "`$web_image"
 fi
+set_env WHATSAPP_IMAGE "otziv-whatsapp:`$deploy_tag"
 
 set_env OTZIV_APP_BASE_URL "https://o-ogo.ru"
+set_env OTZIV_AUTH_LEGACY_MIGRATION_ENABLED "false"
 set_env OTZIV_WORKER_CELLULAR_ACCESS_MODE "ENFORCE"
 set_env OTZIV_WORKER_CELLULAR_ALLOWED_CIDRS "178.177.216.0/22,178.177.220.0/22,91.78.236.0/22,91.78.216.0/21,91.78.224.0/21,91.79.216.0/21,91.79.224.0/21,91.79.232.0/22,89.113.30.0/23"
 set_env MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED "true"
@@ -409,8 +413,15 @@ rm -f "`$images_tar"
 
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
-compose down --remove-orphans || true
 compose build whatsapp_lika whatsapp_vika
+if ! compose run --rm --no-deps --entrypoint /usr/bin/chromium whatsapp_lika --headless --disable-gpu --dump-dom about:blank >/dev/null 2>&1; then
+  echo "WhatsApp Chromium sandbox preflight failed; existing containers were not stopped." >&2
+  exit 1
+fi
+compose down --remove-orphans || true
+compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases /app/sent-hashes
+compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint sh whatsapp_lika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth'
+compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth'
 compose up -d --remove-orphans
 wait_service_healthy keycloak 900
 infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"

@@ -2,8 +2,10 @@ import { Component, HostListener, OnDestroy, OnInit, computed, signal } from '@a
 import { DomSanitizer } from '@angular/platform-browser';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/standalone';
+import { Subscription } from 'rxjs';
 import { ApiService, BotBrowserMetadata } from '../core/api.service';
 import { prepareBotBrowserVncUrl } from '../core/bot-browser-vnc-url';
+import { mobileEnvironment } from '../core/mobile-environment';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 
 @Component({
@@ -47,7 +49,15 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
             }
 
             @if (safeVncUrl(); as url) {
-              <iframe [src]="url" title="Браузер аккаунта" scrolling="yes" (load)="onFrameLoad()"></iframe>
+              <iframe
+                [src]="url"
+                title="Браузер аккаунта"
+                scrolling="yes"
+                sandbox="allow-scripts allow-forms allow-pointer-lock"
+                allow="clipboard-read; clipboard-write"
+                referrerpolicy="no-referrer"
+                (load)="onFrameLoad()"
+              ></iframe>
             }
           </section>
         </main>
@@ -65,9 +75,16 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
 })
 export class BotBrowserPage implements OnInit, OnDestroy {
   private closing = false;
+  private reopenAfterClose = false;
+  private sessionBotId = 0;
   private sessionId: string | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeatInFlight = false;
+  private contextGeneration = 0;
+  private openInFlightGeneration: number | null = null;
+  private routeSubscription?: Subscription;
+  private destroyed = false;
+  private viewActive = true;
 
   readonly botId = signal(0);
   readonly bot = signal<BotBrowserMetadata | null>(null);
@@ -88,28 +105,54 @@ export class BotBrowserPage implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    const id = Number(this.route.snapshot.paramMap.get('botId'));
-    if (!Number.isFinite(id) || id <= 0) {
-      this.status.set('Ошибка');
-      this.error.set('Аккаунт не найден.');
+    if (this.route.paramMap) {
+      this.routeSubscription = this.route.paramMap.subscribe((params) => this.activateBot(params.get('botId')));
+    } else {
+      this.activateBot(this.route.snapshot.paramMap.get('botId'));
+    }
+  }
+
+  ionViewWillEnter(): void {
+    if (this.destroyed || this.viewActive) {
       return;
     }
+    this.viewActive = true;
+    this.contextGeneration += 1;
+    this.frameLoaded.set(false);
+    if (this.botId() > 0) {
+      this.loadMetadata();
+      this.openSession(true);
+    }
+  }
 
-    this.botId.set(id);
-    this.loadMetadata();
-    this.openSession();
+  ionViewWillLeave(): void {
+    if (!this.viewActive) {
+      return;
+    }
+    this.viewActive = false;
+    this.contextGeneration += 1;
+    this.closeSession(true);
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    this.viewActive = false;
+    this.contextGeneration += 1;
+    this.routeSubscription?.unsubscribe();
     this.closeSession(true);
   }
 
   @HostListener('window:pagehide')
   handlePageHide(): void {
+    this.viewActive = false;
+    this.contextGeneration += 1;
     this.closeSession(true);
   }
 
   onFrameLoad(): void {
+    if (!this.vncUrl()) {
+      return;
+    }
     this.frameLoaded.set(true);
     this.status.set('Браузер запущен');
   }
@@ -119,22 +162,33 @@ export class BotBrowserPage implements OnInit, OnDestroy {
       return;
     }
 
+    const botId = this.sessionBotId;
+    const sessionId = this.sessionId;
+    const generation = this.contextGeneration;
     this.closing = true;
+    this.reopenAfterClose = false;
+    this.sessionOpen.set(false);
+    this.sessionBotId = 0;
+    this.sessionId = null;
     this.stopHeartbeat();
+    this.vncUrl.set(null);
+    this.frameLoaded.set(false);
     if (!silent) {
       this.status.set('Отключение...');
     }
 
-    this.api.closeAdminBotBrowser(this.botId(), this.sessionId).subscribe({
+    this.api.closeAdminBotBrowser(botId, sessionId).subscribe({
       next: () => {
-        this.sessionOpen.set(false);
-        this.sessionId = null;
-        this.status.set('Сессия закрыта');
-        this.closing = false;
+        this.finishClose();
+        if (this.isCurrentContext(generation, botId)) {
+          this.status.set('Сессия закрыта');
+        }
       },
       error: () => {
-        this.status.set('Сессия закрывается');
-        this.closing = false;
+        this.finishClose();
+        if (this.isCurrentContext(generation, botId)) {
+          this.status.set('Сессия закрывается');
+        }
       }
     });
   }
@@ -156,26 +210,56 @@ export class BotBrowserPage implements OnInit, OnDestroy {
   }
 
   private loadMetadata(): void {
-    this.api.getBotBrowserMetadata(this.botId()).subscribe({
-      next: (bot) => this.bot.set(bot),
-      error: () => this.error.set('Не удалось загрузить данные аккаунта.')
+    const botId = this.botId();
+    const generation = this.contextGeneration;
+    this.api.getBotBrowserMetadata(botId).subscribe({
+      next: (bot) => {
+        if (this.isCurrentContext(generation, botId)) {
+          this.bot.set(bot);
+        }
+      },
+      error: () => {
+        if (this.isCurrentContext(generation, botId)) {
+          this.error.set('Не удалось загрузить данные аккаунта.');
+        }
+      }
     });
   }
 
-  private openSession(): void {
-    if (this.sessionOpen()) {
+  private openSession(queueAfterClose = false): void {
+    const botId = this.botId();
+    const generation = this.contextGeneration;
+    if (this.closing) {
+      if (queueAfterClose && this.isCurrentContext(generation, botId)) {
+        this.reopenAfterClose = true;
+      }
+      return;
+    }
+    if (this.sessionOpen() || this.openInFlightGeneration === generation || !this.isCurrentContext(generation, botId)) {
       return;
     }
 
+    this.openInFlightGeneration = generation;
     this.status.set('Открываю VNC...');
-    this.api.openAdminBotBrowser(this.botId()).subscribe({
+    this.api.openAdminBotBrowser(botId).subscribe({
       next: (response) => {
+        if (this.openInFlightGeneration === generation) {
+          this.openInFlightGeneration = null;
+        }
+        const sessionId = response.sessionId?.trim() || null;
+        if (!this.isCurrentContext(generation, botId)) {
+          this.closeLateSession(botId, sessionId);
+          return;
+        }
         this.sessionOpen.set(true);
-        this.sessionId = response.sessionId?.trim() || null;
+        this.sessionBotId = botId;
+        this.sessionId = sessionId;
         if (this.sessionId) {
           this.startHeartbeat(response.heartbeatIntervalSeconds);
         }
-        const vncUrl = prepareBotBrowserVncUrl(response.vncUrl);
+        const vncUrl = prepareBotBrowserVncUrl(response.vncUrl, {
+          allowedOrigins: mobileEnvironment.botBrowserVncAllowedOrigins
+        });
         if (!vncUrl) {
           this.status.set('Ошибка запуска');
           this.error.set('Сервис браузера вернул небезопасный адрес подключения.');
@@ -188,8 +272,13 @@ export class BotBrowserPage implements OnInit, OnDestroy {
         this.vncUrl.set(vncUrl);
       },
       error: (error) => {
-        this.status.set('Ошибка запуска');
-        this.error.set(this.errorMessage(error, 'Не удалось открыть браузер аккаунта.'));
+        if (this.openInFlightGeneration === generation) {
+          this.openInFlightGeneration = null;
+        }
+        if (this.isCurrentContext(generation, botId)) {
+          this.status.set('Ошибка запуска');
+          this.error.set(this.errorMessage(error, 'Не удалось открыть браузер аккаунта.'));
+        }
       }
     });
   }
@@ -213,25 +302,32 @@ export class BotBrowserPage implements OnInit, OnDestroy {
 
   private sendHeartbeat(): void {
     const sessionId = this.sessionId;
+    const botId = this.sessionBotId;
     if (!sessionId || !this.sessionOpen() || this.closing || this.heartbeatInFlight) {
       return;
     }
     this.heartbeatInFlight = true;
-    this.api.heartbeatAdminBotBrowser(this.botId(), sessionId).subscribe({
+    this.api.heartbeatAdminBotBrowser(botId, sessionId).subscribe({
       next: () => {
-        this.heartbeatInFlight = false;
+        if (this.isActiveSession(botId, sessionId)) {
+          this.heartbeatInFlight = false;
+        }
       },
       error: (error: unknown) => {
+        if (!this.isActiveSession(botId, sessionId)) {
+          return;
+        }
         this.heartbeatInFlight = false;
         const status = error && typeof error === 'object' && 'status' in error
           ? Number((error as { status?: unknown }).status)
           : 0;
         if (status === 404 || status === 409) {
           this.stopHeartbeat();
-          this.api.closeAdminBotBrowser(this.botId(), sessionId).subscribe({
+          this.api.closeAdminBotBrowser(botId, sessionId).subscribe({
             error: () => undefined
           });
           this.sessionOpen.set(false);
+          this.sessionBotId = 0;
           this.sessionId = null;
           this.vncUrl.set(null);
           this.status.set('Сессия завершена');
@@ -247,5 +343,66 @@ export class BotBrowserPage implements OnInit, OnDestroy {
       this.heartbeatTimer = null;
     }
     this.heartbeatInFlight = false;
+  }
+
+  private activateBot(rawBotId: string | null): void {
+    const value = Number(rawBotId);
+    const botId = Number.isSafeInteger(value) && value > 0 ? value : 0;
+    if (botId === this.botId() && this.contextGeneration > 0) {
+      return;
+    }
+
+    this.contextGeneration += 1;
+    this.closeActiveSessionForRouteChange();
+    this.botId.set(botId);
+    this.bot.set(null);
+    this.vncUrl.set(null);
+    this.frameLoaded.set(false);
+    this.error.set(null);
+    if (!botId) {
+      this.status.set('Ошибка');
+      this.error.set('Аккаунт не найден.');
+      return;
+    }
+    this.loadMetadata();
+    this.openSession(true);
+  }
+
+  private finishClose(): void {
+    this.closing = false;
+    const shouldReopen = this.reopenAfterClose;
+    this.reopenAfterClose = false;
+    if (shouldReopen && !this.destroyed && this.viewActive && this.botId() > 0 && !this.sessionOpen()) {
+      this.openSession();
+    }
+  }
+
+  private closeActiveSessionForRouteChange(): void {
+    if (!this.sessionOpen()) {
+      this.stopHeartbeat();
+      return;
+    }
+    const botId = this.sessionBotId;
+    const sessionId = this.sessionId;
+    this.sessionOpen.set(false);
+    this.sessionBotId = 0;
+    this.sessionId = null;
+    this.stopHeartbeat();
+    this.api.closeAdminBotBrowser(botId, sessionId).subscribe({ error: () => undefined });
+  }
+
+  private closeLateSession(botId: number, sessionId: string | null): void {
+    this.api.closeAdminBotBrowser(botId, sessionId).subscribe({ error: () => undefined });
+  }
+
+  private isCurrentContext(generation: number, botId: number): boolean {
+    return !this.destroyed
+      && this.viewActive
+      && generation === this.contextGeneration
+      && botId === this.botId();
+  }
+
+  private isActiveSession(botId: number, sessionId: string): boolean {
+    return this.sessionOpen() && botId === this.sessionBotId && sessionId === this.sessionId;
   }
 }

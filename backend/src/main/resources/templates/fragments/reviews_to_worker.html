@@ -48,14 +48,10 @@
                                 <button type="submit" class="company__card__text__lead-button" th:attr="data-orderfilial=${review.filialUrl}" th:onclick="myFunction2Gis(this)">ссылка</button>
                             </div>
                             <div class="company__card__text__lead"> <!-- Bot Login -->
-                                <label>
-                                    <textarea  class="company__card__remember-text" th:utext="${review.botLogin}" th:id="'botLogin_' + ${review.id}"></textarea>
-                                </label>
-                                <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionBotLogin(' + ${review.id} + ')'" >логин</button>
+                                <span class="company__card__remember-text">Логин доступен в новом кабинете по защищённому запросу</span>
                             </div>
                             <div class="company__card__text__lead"> <!-- Bot Password -->
-                                <textarea  class="company__card__remember-text" th:utext="${review.botPassword}" th:id="'botPassword_' + ${review.id}"></textarea>
-                                <button type="submit" class="company__card__text__lead-button" th:onclick="'myFunctionBotPassword(' + ${review.id} + ')'" >пароль</button>
+                                <span class="company__card__remember-text">Пароль доступен в новом кабинете по защищённому запросу</span>
                             </div>
 
                             <div class="company__card__text__lead"> <!-- Кнопка аккаунта бота -->

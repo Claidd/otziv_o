@@ -486,7 +486,8 @@ public interface WorkloadTransferExecutionRepository
     @Modifying
     @Query(value = """
             UPDATE reviews
-            SET review_worker = :targetWorkerId
+            SET review_worker = :targetWorkerId,
+                row_version = row_version + 1
             WHERE review_id IN (:entityIds)
               AND review_worker = :sourceWorkerId
               AND COALESCE(review_publish, 0) = 0
@@ -534,7 +535,8 @@ public interface WorkloadTransferExecutionRepository
     @Modifying
     @Query(value = """
             UPDATE orders
-            SET order_worker = :targetWorkerId
+            SET order_worker = :targetWorkerId,
+                row_version = row_version + 1
             WHERE order_id IN (:entityIds)
               AND order_worker = :sourceWorkerId
               AND order_company = :companyId
@@ -1049,7 +1051,8 @@ public interface WorkloadTransferExecutionRepository
               ON audit.execution_id = :executionId
              AND audit.entity_type = 'ORDER'
              AND audit.entity_id = orders.order_id
-            SET orders.order_worker = :sourceWorkerId
+            SET orders.order_worker = :sourceWorkerId,
+                orders.row_version = orders.row_version + 1
             WHERE orders.order_id IN (:entityIds)
               AND orders.order_worker = :targetWorkerId
               AND orders.order_company = :companyId
@@ -1109,7 +1112,8 @@ public interface WorkloadTransferExecutionRepository
               ON audit.execution_id = :executionId
              AND audit.entity_type = 'REVIEW'
              AND audit.entity_id = review.review_id
-            SET review.review_worker = :sourceWorkerId
+            SET review.review_worker = :sourceWorkerId,
+                review.row_version = review.row_version + 1
             WHERE review.review_id IN (:entityIds)
               AND review.review_worker = :targetWorkerId
               AND COALESCE(review.review_publish, 0) =

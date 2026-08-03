@@ -5,7 +5,6 @@ import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.r_review.model.ReviewArchive;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -13,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface ReviewArchiveRepository extends CrudRepository<ReviewArchive, Long> {
+public interface ReviewArchiveRepository extends org.springframework.data.repository.Repository<ReviewArchive, Long> {
     // Проверка наличия записи с таким же текстом
     @Query(value = """
         SELECT COUNT(*)
@@ -85,18 +84,6 @@ public interface ReviewArchiveRepository extends CrudRepository<ReviewArchive, L
             @Param("subCategory") SubCategory subCategory
     );
 
-    @Override
-    @Query("""
-        SELECT r
-        FROM ReviewArchive r
-        LEFT JOIN FETCH r.category
-        LEFT JOIN FETCH r.subCategory
-        LEFT JOIN FETCH r.sourceReview
-        LEFT JOIN FETCH r.sourceOrder
-    """)
-    List<ReviewArchive> findAll();
-
-    @Override
     <S extends ReviewArchive> S save(S entity);
 
 }

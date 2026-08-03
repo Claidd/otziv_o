@@ -13,6 +13,8 @@ import com.hunt.otziv.client_messages.model.ScheduledMessageAttemptStatus;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ArchiveCompanyMessageCandidateRepository;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateBatchRepository;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateBatchRepository.StateSeed;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
@@ -31,6 +33,8 @@ import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryHoldService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
+import com.hunt.otziv.scheduler.SchedulerLeaseService;
+import com.hunt.otziv.scheduler.SchedulerLeaseService.Lease;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
 import java.math.BigDecimal;
@@ -41,6 +45,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -122,6 +127,7 @@ public class ScheduledClientMessageService {
     public static final int DEFAULT_ERROR_PROTECTION_WINDOW_MINUTES = 10;
     public static final int DEFAULT_ERROR_PROTECTION_COOLDOWN_MINUTES = 60;
     private static final Duration SUMMARY_LOG_INTERVAL = Duration.ofMinutes(5);
+    private static final String RECONCILE_LEASE_NAME = "client-messages-reconciliation";
     private static final String STATUS_TO_CHECK = "В проверку";
     private static final String STATUS_IN_CHECK = "На проверке";
     private static final String STATUS_PUBLIC = "Опубликовано";
@@ -141,6 +147,7 @@ public class ScheduledClientMessageService {
     );
 
     private final ScheduledClientMessageStateRepository stateRepository;
+    private final ScheduledClientMessageStateBatchRepository stateBatchRepository;
     private final ScheduledClientMessageAttemptRepository attemptRepository;
     private final ArchiveCompanyMessageCandidateRepository archiveCandidateRepository;
     private final OrderRepository orderRepository;
@@ -162,9 +169,12 @@ public class ScheduledClientMessageService {
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
     private final ClientMessageTransactionRunner transactionRunner;
+    private final SchedulerLeaseService schedulerLeaseService;
     private final Clock clock = Clock.systemDefaultZone();
     @Value("${client.messages.reconcile-interval:PT5M}")
     private Duration reconcileInterval;
+    @Value("${client.messages.reconcile-lease-duration:PT10M}")
+    private Duration reconcileLeaseDuration;
     private LocalDateTime lastReconcileAt;
     private LocalDateTime lastCleanupAt;
     private LocalDateTime lastSummaryLogAt;
@@ -197,8 +207,11 @@ public class ScheduledClientMessageService {
         ClientMessageReconcileSummary reconcileSummary = ClientMessageReconcileSummary.empty();
         if (reconcileDue) {
             try {
-                reconcileSummary = transactionRunner.callInNewTransaction(() -> reconcileCandidates(nowStorage));
-                lastReconcileAt = nowStorage;
+                Optional<ClientMessageReconcileSummary> acquired = reconcileCandidatesWithLease(nowStorage);
+                if (acquired.isPresent()) {
+                    reconcileSummary = acquired.get();
+                    lastReconcileAt = nowStorage;
+                }
             } catch (RuntimeException e) {
                 log.error("Scheduled client message reconciliation transaction failed", e);
             }
@@ -333,11 +346,29 @@ public class ScheduledClientMessageService {
         return manualRetryResult(refreshed, true);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void reconcileCandidatesNow() {
         LocalDateTime nowStorage = LocalDateTime.now(clock);
-        reconcileCandidates(nowStorage);
-        lastReconcileAt = nowStorage;
+        if (reconcileCandidatesWithLease(nowStorage).isPresent()) {
+            lastReconcileAt = nowStorage;
+        }
+    }
+
+    private Optional<ClientMessageReconcileSummary> reconcileCandidatesWithLease(LocalDateTime nowStorage) {
+        Optional<Lease> acquired = schedulerLeaseService.tryAcquire(
+                RECONCILE_LEASE_NAME,
+                reconcileLeaseDuration
+        );
+        if (acquired.isEmpty()) {
+            log.debug("Client message reconciliation skipped because another instance owns the lease");
+            return Optional.empty();
+        }
+        Lease lease = acquired.get();
+        try {
+            return Optional.of(transactionRunner.callInNewTransaction(() -> reconcileCandidates(nowStorage)));
+        } finally {
+            schedulerLeaseService.release(lease);
+        }
     }
 
     @Transactional
@@ -434,6 +465,28 @@ public class ScheduledClientMessageService {
                         currentTargetKey == null
                                 ? "Ожидание текста клиента снято"
                                 : "Заказ перешел в новый цикл ожидания текста клиента"
+                ));
+    }
+
+    private void closeObsoleteClientTextReminderStates(Map<Long, String> currentTargetKeys) {
+        if (currentTargetKeys == null || currentTargetKeys.isEmpty()) {
+            return;
+        }
+        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        stateRepository.findByOrderIdIn(currentTargetKeys.keySet()).stream()
+                .filter(Objects::nonNull)
+                .filter(state -> state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .filter(state -> state.getStatus() == ScheduledMessageStateStatus.ACTIVE)
+                .filter(state -> currentTargetKeys.containsKey(state.getOrderId()))
+                .filter(state -> !Objects.equals(
+                        currentTargetKeys.get(state.getOrderId()),
+                        state.getTargetKey()
+                ))
+                .forEach(state -> markDone(
+                        state,
+                        nowStorage,
+                        "client_text_cycle_changed",
+                        "Заказ перешел в новый цикл ожидания текста клиента"
                 ));
     }
 
@@ -818,14 +871,14 @@ public class ScheduledClientMessageService {
                 PageRequest.of(0, candidateLimit())
         );
 
-        int created = 0;
+        List<StateSeed> seeds = new ArrayList<>(candidates.size());
+        Map<Long, String> currentTargetKeys = new LinkedHashMap<>();
         for (OrderRepository.ClientMessageCandidate order : candidates) {
             LocalDateTime waitingChangedAt = order.getStatusChangedAt();
             LocalDateTime baseDueAt = waitingChangedAt.plusDays(intervalDays);
             String targetKey = clientTextWaitingTargetKey(order.getId(), waitingChangedAt);
-            closeObsoleteClientTextReminderStates(order.getId(), targetKey);
-
-            if (ensureState(
+            currentTargetKeys.put(order.getId(), targetKey);
+            seeds.add(new StateSeed(
                     ClientMessageScenario.CLIENT_TEXT_REMINDER,
                     ClientMessageTargetType.ORDER,
                     targetKey,
@@ -833,12 +886,13 @@ public class ScheduledClientMessageService {
                     order.getId(),
                     null,
                     scheduleAtStorage(baseDueAt)
-            )) {
-                created++;
-            }
+            ));
         }
-        if (created > 0) {
-            log.info("Client messages scheduled client-text states created={} candidates={}", created, candidates.size());
+        closeObsoleteClientTextReminderStates(currentTargetKeys);
+        int affected = stateBatchRepository.upsertAll(seeds);
+        if (affected > 0) {
+            log.info("Client messages reconciled client-text states affectedRows={} candidates={}",
+                    affected, candidates.size());
         }
         return candidates.size();
     }
@@ -855,13 +909,12 @@ public class ScheduledClientMessageService {
                 PageRequest.of(0, candidateLimit())
         );
 
-        int created = 0;
+        List<StateSeed> seeds = new ArrayList<>(candidates.size());
         for (OrderRepository.ClientMessageCandidate order : candidates) {
             LocalDateTime statusChangedAt = order.getStatusChangedAt();
             LocalDateTime baseDueAt = statusChangedAt.plusDays(intervalDays);
             String targetKey = orderTargetKey(order.getId(), statusChangedAt);
-
-            if (ensureState(
+            seeds.add(new StateSeed(
                     scenario,
                     ClientMessageTargetType.ORDER,
                     targetKey,
@@ -869,12 +922,12 @@ public class ScheduledClientMessageService {
                     order.getId(),
                     null,
                     scheduleAtStorage(baseDueAt)
-            )) {
-                created++;
-            }
+            ));
         }
-        if (created > 0) {
-            log.info("Client messages scheduled new order states scenario={} created={} candidates={}", scenario, created, candidates.size());
+        int affected = stateBatchRepository.upsertAll(seeds);
+        if (affected > 0) {
+            log.info("Client messages reconciled order states scenario={} affectedRows={} candidates={}",
+                    scenario, affected, candidates.size());
         }
         return candidates.size();
     }
@@ -889,10 +942,10 @@ public class ScheduledClientMessageService {
                 listSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES, DEFAULT_ARCHIVE_INACTIVE_ORDER_STATUSES),
                 listSetting(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES, DEFAULT_OPEN_NEXT_ORDER_REQUEST_STATUSES)
         );
-        int created = 0;
+        List<StateSeed> seeds = new ArrayList<>(candidates.size());
         for (ArchiveCompanyMessageCandidate candidate : candidates) {
             String targetKey = archiveCompanyTargetKey(candidate.companyId(), candidate.statusChangedAt());
-            if (ensureState(
+            seeds.add(new StateSeed(
                     ClientMessageScenario.ARCHIVE_REORDER_OFFER,
                     ClientMessageTargetType.ARCHIVE_COMPANY,
                     targetKey,
@@ -900,12 +953,12 @@ public class ScheduledClientMessageService {
                     null,
                     candidate.archiveOrderId(),
                     archiveReorderAttemptAt(candidate.statusChangedAt().plusMonths(archiveReorderMonths), targetKey)
-            )) {
-                created++;
-            }
+            ));
         }
-        if (created > 0) {
-            log.info("Client messages scheduled new archive states created={} candidates={}", created, candidates.size());
+        int affected = stateBatchRepository.upsertAll(seeds);
+        if (affected > 0) {
+            log.info("Client messages reconciled archive states affectedRows={} candidates={}",
+                    affected, candidates.size());
         }
         return candidates.size();
     }
@@ -1520,14 +1573,19 @@ public class ScheduledClientMessageService {
                 nowStorage.minusHours(delayHours),
                 PageRequest.of(0, candidateLimit())
         );
-        int created = 0;
         CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        Set<Long> activeCommonInvoiceOrderIds = commonBillingService == null
+                ? Set.of()
+                : commonBillingService.findOrderIdsInActiveCommonInvoices(
+                        candidates.stream().map(OrderRepository.ClientMessageCandidate::getId).toList()
+                );
+        List<StateSeed> seeds = new ArrayList<>(candidates.size());
         for (OrderRepository.ClientMessageCandidate order : candidates) {
-            if (commonBillingService != null && commonBillingService.isOrderInActiveCommonInvoice(order.getId())) {
+            if (activeCommonInvoiceOrderIds.contains(order.getId())) {
                 continue;
             }
             LocalDateTime statusChangedAt = order.getStatusChangedAt();
-            if (ensureState(
+            seeds.add(new StateSeed(
                     ClientMessageScenario.PAYMENT_INVOICE_RETRY,
                     ClientMessageTargetType.ORDER,
                     orderTargetKey(order.getId(), statusChangedAt),
@@ -1535,13 +1593,12 @@ public class ScheduledClientMessageService {
                     order.getId(),
                     null,
                     scheduleAtStorage(statusChangedAt.plusHours(delayHours))
-            )) {
-                created++;
-            }
+            ));
         }
-        if (created > 0) {
-            log.info("Client messages restored missing payment-invoice states created={} candidates={}",
-                    created, candidates.size());
+        int affected = stateBatchRepository.upsertAll(seeds);
+        if (affected > 0) {
+            log.info("Client messages reconciled payment-invoice states affectedRows={} candidates={}",
+                    affected, candidates.size());
         }
         return candidates.size();
     }

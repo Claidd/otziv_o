@@ -1,6 +1,7 @@
 package com.hunt.otziv.s3.service;
 
 import com.hunt.otziv.uploads.service.FileUploadGuard;
+import com.hunt.otziv.s3.cleanup.service.S3ObjectCleanupQueue;
 import lombok.RequiredArgsConstructor;
 
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,7 @@ public class S3UploadServiceImpl implements S3UploadService {
 
     private final S3Client s3Client;
     private final FileUploadGuard fileUploadGuard;
+    private final S3ObjectCleanupQueue cleanupQueue;
 
     @Override
     public String uploadFile(MultipartFile file, String folder, @Nullable String oldUrl, Long reviewId) {
@@ -57,6 +59,7 @@ public class S3UploadServiceImpl implements S3UploadService {
                 .build();
 
         s3Client.putObject(putRequest, RequestBody.fromBytes(processedImage));
+        registerRollbackCleanup(key);
 
         String url = publicObjectBaseUrl() + "/" + key;
         log.info("Новое фото загружено: {}", url);
@@ -84,17 +87,17 @@ public class S3UploadServiceImpl implements S3UploadService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    deleteOldFileBestEffort(ownedKey);
+                    deleteObjectBestEffort(ownedKey, "replaced-upload");
                 }
             });
             return;
         }
 
-        deleteOldFileBestEffort(ownedKey);
+        deleteObjectBestEffort(ownedKey, "replaced-upload");
     }
 
-    private void deleteOldFileBestEffort(String oldKey) {
-        log.info("Удаление старого файла: {}", oldKey);
+    private void deleteObjectBestEffort(String oldKey, String reason) {
+        log.info("Удаление устаревшего файла из хранилища");
 
         DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
                 .bucket(bucket)
@@ -104,11 +107,27 @@ public class S3UploadServiceImpl implements S3UploadService {
         try {
             s3Client.deleteObject(deleteRequest);
         } catch (RuntimeException exception) {
-            // The new object is already durable. Keep the upload successful so
-            // callers can persist its URL; orphan cleanup can safely retry the
-            // old object later without risking loss of the active image.
-            log.warn("Не удалось удалить старый файл из хранилища: {}", oldKey, exception);
+            cleanupQueue.enqueueBestEffort(bucket, oldKey, reason);
+            log.warn(
+                    "Не удалось удалить файл из хранилища; поставлен в очередь: failureType={}",
+                    exception.getClass().getSimpleName()
+            );
         }
+    }
+
+    private void registerRollbackCleanup(String newKey) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()
+                || !TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != STATUS_COMMITTED) {
+                    deleteObjectBestEffort(newKey, "transaction-rollback");
+                }
+            }
+        });
     }
 
     private byte[] processImage(byte[] source) {

@@ -35,7 +35,7 @@ class JwtAuthFilterTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(jwtService, "secret", SECRET);
-        filter = new JwtAuthFilter(objectMapper, jwtService, new LeadTokenReplayGuard());
+        filter = new JwtAuthFilter(objectMapper, jwtService, LeadTokenReplayGuard.inMemoryForTests());
     }
 
     @AfterEach
@@ -65,6 +65,7 @@ class JwtAuthFilterTest {
 
     @Test
     void acceptsLegacyBearerOnlyDuringTheBoundedRolloutWindow() throws Exception {
+        ReflectionTestUtils.setField(filter, "legacyBearerEnabled", true);
         LeadDtoTransfer dto = lead();
         String token = jwtService.generateLegacyTransferToken(dto);
         FilterChain chain = mock(FilterChain.class);

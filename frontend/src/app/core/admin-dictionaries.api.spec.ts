@@ -54,7 +54,7 @@ describe('AdminDictionariesApi bot browser endpoints', () => {
     );
   });
 
-  it('paginates bot lists, loads the global count, and fetches secrets only from detail', () => {
+  it('paginates bot lists, loads the global count, and fetches password-free details', () => {
     api.getBots('irkutsk', 2, 100);
     api.getBotCount();
     api.getBot(37);

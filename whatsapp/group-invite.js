@@ -19,10 +19,10 @@ function serializedGroupId(value) {
   }
   if (typeof value === "string") {
     const candidate = value.trim();
-    if (candidate.endsWith("@g.us")) {
+    if (/^(?=.{8,80}@g\.us$)[0-9]+(?:-[0-9]+)?@g\.us$/u.test(candidate)) {
       return candidate;
     }
-    return /^[0-9-]{8,}$/.test(candidate) ? `${candidate}@g.us` : "";
+    return /^(?=.{8,80}$)[0-9]+(?:-[0-9]+)?$/u.test(candidate) ? `${candidate}@g.us` : "";
   }
   if (typeof value !== "object") {
     return "";
@@ -37,8 +37,8 @@ function serializedGroupId(value) {
 
   const user = String(value.user || "").trim();
   const server = String(value.server || "").trim();
-  if (user && server === "g.us") {
-    return `${user}@g.us`;
+  if (server === "g.us") {
+    return serializedGroupId(user);
   }
 
   return "";

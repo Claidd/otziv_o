@@ -57,7 +57,7 @@ describe('public payment route isolation', () => {
     expect(component.payment()?.token).toBe('C');
     expect(component.bankSubmitting()).toBe(false);
 
-    mutation.next({ paymentUrl: 'https://bank.example/pay', paymentId: 'p1', status: 'NEW' });
+    mutation.next({ paymentUrl: 'https://securepay.tinkoff.ru/pay', paymentId: 'p1', status: 'NEW' });
     expect(navigate).not.toHaveBeenCalled();
     expect(component.payment()?.token).toBe('C');
 
@@ -107,7 +107,7 @@ describe('public payment route isolation', () => {
     expect(component.invoice()?.token).toBe('C');
     expect(component.submitting()).toBe(false);
 
-    mutation.next({ paymentUrl: 'https://bank.example/pay', paymentId: 'p2', status: 'NEW' });
+    mutation.next({ paymentUrl: 'https://securepay.tinkoff.ru/pay', paymentId: 'p2', status: 'NEW' });
     expect(navigate).not.toHaveBeenCalled();
     expect(component.invoice()?.token).toBe('C');
 

@@ -545,12 +545,10 @@ type CredentialWaitSection = 'publish' | 'nagul';
               @for (bot of workerBots(); track bot.id) {
                 <article class="worker-bot-row" [class.inactive]="!bot.active">
                   <header>
-                    <strong>{{ bot.fio || bot.login || ('#' + bot.id) }}</strong>
+                    <strong>{{ bot.fio || ('#' + bot.id) }}</strong>
                     <small>{{ bot.city || 'город не указан' }} · {{ bot.status || 'статус' }}</small>
                   </header>
                   <footer>
-                    <button type="button" (click)="copyBotValue(bot, 'login')">{{ copiedKey() === 'bot-login-' + bot.id ? 'готово' : 'логин' }}</button>
-                    <button type="button" (click)="copyBotValue(bot, 'password')">{{ copiedKey() === 'bot-password-' + bot.id ? 'готово' : 'пароль' }}</button>
                     <a [href]="botBrowserUrlById(bot.id)" target="_blank" rel="noopener">вк</a>
                     <button type="button" class="danger" (click)="deleteBot(bot)" [disabled]="isMutating('bot-' + bot.id + '-delete')">
                       {{ isMutating('bot-' + bot.id + '-delete') ? '...' : 'удалить' }}
@@ -2145,26 +2143,51 @@ export class WorkerPage implements OnInit, OnDestroy {
       return;
     }
 
-    const value = {
+    let value = {
       url: review.filialUrl || review.url || '',
-      login: review.botLogin || '',
-      password: review.botPassword || '',
+      login: '',
+      password: '',
       text: review.text || '',
       answer: review.answer || '',
       vk: 'https://vk.com/'
     }[kind];
-    if (!(await this.copyText(value, `${kind}-${review.id}`))) {
-      return;
-    }
 
     if (kind === 'login' || kind === 'password') {
-      await this.logReviewCredentialCopyClick(review, kind);
+      try {
+        const source = this.workerActivitySource();
+        const response = this.isRecoveryTask(review) && review.recoveryTaskId
+          ? await firstValueFrom(this.api.revealWorkerRecoveryTaskCredential(review.recoveryTaskId, kind, source))
+          : this.isBadTask(review) && review.badTaskId
+            ? await firstValueFrom(this.api.revealWorkerBadReviewTaskCredential(review.badTaskId, kind, source))
+            : await firstValueFrom(this.api.revealWorkerReviewCredential(review.id, kind, source));
+        value = response.value ?? '';
+        if (response.credentialPreparation) {
+          this.applyServerCredentialPreparation(response.credentialPreparation);
+        }
+        if (!value.trim()) {
+          this.error.set('Сервер не вернул данные аккаунта. Буфер обмена не изменен.');
+          return;
+        }
+      } catch (error) {
+        this.error.set(this.apiErrorMessage(error, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.'));
+        return;
+      }
+    }
+
+    if (!(await this.copyText(value, `${kind}-${review.id}`))) {
+      return;
     }
   }
 
   reviewCredentialCopyDisabled(review: WorkerReviewItem, kind: ReviewCopyKind): boolean {
-    return (kind === 'login' || kind === 'password')
-      && (this.activeSection() === 'new' || this.cannotCompleteBecauseBotUnavailable(review));
+    if (kind !== 'login' && kind !== 'password') {
+      return false;
+    }
+
+    const credentialMissing = kind === 'login' ? !review.botLoginPresent : !review.botPasswordPresent;
+    return credentialMissing
+      || this.activeSection() === 'new'
+      || this.cannotCompleteBecauseBotUnavailable(review);
   }
 
   reviewCredentialCopyTitle(review: WorkerReviewItem, kind: ReviewCopyKind): string {
@@ -2175,43 +2198,6 @@ export class WorkerPage implements OnInit, OnDestroy {
     return this.reviewCredentialCopyDisabled(review, kind)
       ? this.accountRepairTitle(review)
       : 'Скопировать';
-  }
-
-  async copyBotValue(bot: WorkerBotItem, kind: 'login' | 'password'): Promise<void> {
-    await this.copyText(kind === 'login' ? bot.login || '' : bot.password || '', `bot-${kind}-${bot.id}`);
-  }
-
-  private async logReviewCredentialCopyClick(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<boolean> {
-    if (kind !== 'login' && kind !== 'password') {
-      return true;
-    }
-
-    try {
-      const source = this.workerActivitySource();
-      if (review.recoveryTask && review.recoveryTaskId) {
-        await firstValueFrom(this.api.logWorkerRecoveryTaskCopyClick(review.recoveryTaskId, kind, source));
-        return true;
-      }
-      if (review.badTask && review.badTaskId) {
-        await firstValueFrom(this.api.logWorkerBadReviewTaskCopyClick(review.badTaskId, kind, source));
-        return true;
-      }
-
-      const preparation = await firstValueFrom(
-        this.api.logWorkerReviewCopyClick(review.id, kind, source)
-      );
-      if (this.shouldUsePublishCredentialWait() && !preparation) {
-        this.error.set('Данные скопированы, но сервер не подтвердил подготовку аккаунта. Повторите копирование.');
-        return false;
-      }
-      if (preparation) {
-        this.applyServerCredentialPreparation(preparation);
-      }
-      return true;
-    } catch {
-      this.error.set('Данные скопированы, но сервер не подтвердил действие. Нажмите кнопку еще раз.');
-      return false;
-    }
   }
 
   publishCredentialWaitLeftSeconds(review: WorkerReviewItem): number {
@@ -2334,7 +2320,7 @@ export class WorkerPage implements OnInit, OnDestroy {
 
     const confirmed = await this.confirm.confirm({
       title: 'Удалить аккаунт',
-      message: `Удалить аккаунт "${bot.fio || bot.login || bot.id}"?`,
+      message: `Удалить аккаунт "${bot.fio || bot.id}"?`,
       confirmText: 'Удалить',
       danger: true
     });
@@ -2477,8 +2463,8 @@ export class WorkerPage implements OnInit, OnDestroy {
     }
 
     const botFio = this.normalizedBotFio(review);
-    return Boolean(review.botLogin?.trim())
-      && Boolean(review.botPassword?.trim())
+    return review.botLoginPresent
+      && review.botPasswordPresent
       && !this.isPlaceholderBotName(botFio)
       && (this.activeSection() !== 'publish' || !this.isTemplateBotName(botFio));
   }
@@ -2497,7 +2483,7 @@ export class WorkerPage implements OnInit, OnDestroy {
       return 'Это новый невыгулянный аккаунт со служебным именем "Впиши Имя Фамилию". Сначала отправьте его в выгул; после нормального имени он станет доступен для публикации.';
     }
 
-    if (!review.botLogin?.trim() || !review.botPassword?.trim()) {
+    if (!review.botLoginPresent || !review.botPasswordPresent) {
       return 'У назначенного аккаунта нет логина или пароля. Проверьте аккаунт или нажмите "смена".';
     }
 

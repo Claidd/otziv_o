@@ -698,6 +698,30 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     @Query("""
         SELECT l FROM Lead l
         WHERE l.lidStatus = :status
+          AND l.manager IN :managers
+          AND l.dateNewTry <= :dateNewTry
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> findByStatusAndManagerInAndDateNewTryLessThanEqual(
+            @Param("status") String status,
+            @Param("managers") Collection<Manager> managers,
+            @Param("dateNewTry") LocalDate dateNewTry,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.manager IN :managers
+          AND l.dateNewTry <= :dateNewTry
+    """)
+    long countByStatusAndManagerInAndDateNewTryLessThanEqual(
+            @Param("status") String status,
+            @Param("managers") Collection<Manager> managers,
+            @Param("dateNewTry") LocalDate dateNewTry);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.lidStatus = :status
           AND l.dateNewTry <= :dateNewTry
           AND (
             LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
@@ -808,6 +832,66 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
     long countByStatusAndManagerAndDateNewTryLessThanEqualAndKeyword(
             @Param("status") String status,
             @Param("manager") Manager manager,
+            @Param("dateNewTry") LocalDate dateNewTry,
+            @Param("keyword") String keyword);
+
+    @Query("""
+        SELECT l FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.manager IN :managers
+          AND l.dateNewTry <= :dateNewTry
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    @EntityGraph(value = "Lead.detail", type = EntityGraph.EntityGraphType.FETCH)
+    Page<Lead> searchByStatusAndManagerInAndDateNewTryLessThanEqualAndKeyword(
+            @Param("status") String status,
+            @Param("managers") Collection<Manager> managers,
+            @Param("dateNewTry") LocalDate dateNewTry,
+            @Param("keyword") String keyword,
+            Pageable pageable);
+
+    @Query("""
+        SELECT COUNT(l) FROM Lead l
+        WHERE l.lidStatus = :status
+          AND l.manager IN :managers
+          AND l.dateNewTry <= :dateNewTry
+          AND (
+            LOWER(COALESCE(l.telephoneLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyName, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.phones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.mobilePhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.whatsappPhones, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.emails, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.websites, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.vkUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.telegramUrl, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.industries, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.companyType, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.region, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.cityLead, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.address, '')) LIKE LOWER(:keyword)
+            OR LOWER(COALESCE(l.commentsLead, '')) LIKE LOWER(:keyword)
+          )
+    """)
+    long countByStatusAndManagerInAndDateNewTryLessThanEqualAndKeyword(
+            @Param("status") String status,
+            @Param("managers") Collection<Manager> managers,
             @Param("dateNewTry") LocalDate dateNewTry,
             @Param("keyword") String keyword);
 

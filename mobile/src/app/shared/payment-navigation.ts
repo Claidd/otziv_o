@@ -1,6 +1,7 @@
 export type PaymentNavigationPurpose = 'manual' | 'payment' | 'sbp';
 
-const WEB_PROTOCOLS = new Set(['http:', 'https:']);
+const PAYMENT_PROVIDER_HOSTS = new Set(['securepay.tinkoff.ru', 'securepay.tbank.ru']);
+const SBP_WEB_HOST = 'qr.nspk.ru';
 const NSPK_BANK_PROTOCOL = /^bank(?:b2b)?[0-9]{12}:$/i;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/;
 const ENCODED_CONTROL = /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i;
@@ -38,8 +39,18 @@ export function safePaymentNavigationTarget(
   try {
     const url = new URL(target);
     const protocol = url.protocol.toLowerCase();
-    if (WEB_PROTOCOLS.has(protocol)) {
-      return url.hostname && !url.username && !url.password ? target : null;
+    if (protocol === 'https:') {
+      if (!url.hostname || url.username || url.password) {
+        return null;
+      }
+      const hostname = url.hostname.toLowerCase();
+      if (purpose === 'manual') {
+        return target;
+      }
+      if (purpose === 'payment') {
+        return PAYMENT_PROVIDER_HOSTS.has(hostname) ? target : null;
+      }
+      return hostname === SBP_WEB_HOST ? target : null;
     }
     if (purpose !== 'sbp' || !url.hostname || url.username || url.password) {
       return null;
@@ -47,7 +58,7 @@ export function safePaymentNavigationTarget(
     if (protocol === 'bankapp:') {
       return url.hostname.toLowerCase() === 'pay' ? target : null;
     }
-    return NSPK_BANK_PROTOCOL.test(protocol) && url.hostname.toLowerCase() === 'qr.nspk.ru'
+    return NSPK_BANK_PROTOCOL.test(protocol) && url.hostname.toLowerCase() === SBP_WEB_HOST
       ? target
       : null;
   } catch {

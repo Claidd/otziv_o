@@ -12,13 +12,16 @@ The `Quality gates` workflow runs on every pull request and push. After one succ
 - `Quality gates / External review worker (syntax and health)`
 - the existing secret-scan and SQL-injection-guard checks
 
-Keep `Dependency audit` required only for changes to dependency manifests and lockfiles. It also runs weekly and manually. Production dependencies at moderate severity or above are blocking. The complete development-dependency audit is visible in logs but is report-only until its existing findings are resolved; do not use `npm audit fix --force`.
+Keep `Dependency audit` required only for changes to dependency manifests and lockfiles. It also runs weekly and manually. The complete npm dependency audit is blocking at low severity or above, and the additional production-only audit remains blocking at moderate severity or above. Keep all four lockfiles at zero known audit findings; do not use `npm audit fix --force`.
 
 The backend job runs the complete Maven `verify` lifecycle on a Docker-capable runner. `OtzivOApplicationTests` starts MySQL with Testcontainers and runs Flyway against a fresh database. The repository-contract job separately rejects changes, deletions and renames of migrations that already exist on the comparison base; new uniquely versioned migrations remain allowed.
 
 ## Safe cleanup sequence
 
 Do not combine the following cleanup with application behavior, dependency upgrades or release work.
+
+The current source/workstation recovery boundary is documented in
+`docs/DISASTER_RECOVERY_SOURCE.md`.
 
 1. Preserve a repository bundle and verify it can be cloned. Record the default-branch commit and active release tags.
 2. Move Android APK/AAB delivery to a signed CI artifact or release asset. Update and verify every `mobile/builds` lookup in the production deployment scripts before untracking any APK.

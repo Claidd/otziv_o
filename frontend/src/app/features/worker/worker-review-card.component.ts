@@ -487,8 +487,8 @@ export class WorkerReviewCardComponent {
 
     const botFio = this.normalizedBotFio();
     return (
-      !!this.review.botLogin?.trim() &&
-      !!this.review.botPassword?.trim() &&
+      this.review.botLoginPresent &&
+      this.review.botPasswordPresent &&
       !this.isPlaceholderBotName(botFio) &&
       !this.isTemplateBotName(botFio)
     );
@@ -610,8 +610,8 @@ export class WorkerReviewCardComponent {
 
     const botFio = this.normalizedBotFio();
     return (
-      !!this.review.botLogin?.trim() &&
-      !!this.review.botPassword?.trim() &&
+      this.review.botLoginPresent &&
+      this.review.botPasswordPresent &&
       !this.isPlaceholderBotName(botFio) &&
       (this.activeSection !== 'publish' || !this.isTemplateBotName(botFio))
     );
@@ -643,7 +643,7 @@ export class WorkerReviewCardComponent {
       return 'Это новый невыгулянный аккаунт со служебным именем "Впиши Имя Фамилию". Сначала отправьте его в выгул; после нормального имени он станет доступен для публикации.';
     }
 
-    if (!this.review.botLogin?.trim() || !this.review.botPassword?.trim()) {
+    if (!this.review.botLoginPresent || !this.review.botPasswordPresent) {
       return 'У назначенного аккаунта нет логина или пароля. Проверьте аккаунт или нажмите "смена".';
     }
 

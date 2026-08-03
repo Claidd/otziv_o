@@ -240,6 +240,45 @@ function Get-EnvFileValue {
     return $DefaultValue
 }
 
+function Assert-ProductionCredentialEncryptionConfig {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $required = Get-EnvFileValue -Path $Path -Name 'OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED'
+    if ($required.ToLowerInvariant() -ne 'true') {
+        throw 'OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED=true is mandatory for production deployment.'
+    }
+
+    $activeKeyId = Get-EnvFileValue -Path $Path -Name 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID'
+    if ($activeKeyId -notmatch '^[A-Za-z0-9._-]{1,64}$') {
+        throw 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID must match [A-Za-z0-9._-]{1,64}.'
+    }
+
+    $encodedKey = Get-EnvFileValue -Path $Path -Name 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64'
+    if ([string]::IsNullOrWhiteSpace($encodedKey)) {
+        throw 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 is required for production deployment.'
+    }
+    if ($encodedKey -notmatch '^[A-Za-z0-9+/]{43}=?$') {
+        throw 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 must be valid Base64.'
+    }
+
+    $decodedKey = $null
+    try {
+        $normalizedKey = if ($encodedKey.Length -eq 43) { $encodedKey + '=' } else { $encodedKey }
+        $decodedKey = [Convert]::FromBase64String($normalizedKey)
+        if ($decodedKey.Length -ne 32) {
+            throw 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 must decode to exactly 32 bytes.'
+        }
+    } catch [System.FormatException] {
+        throw 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 must be valid Base64.'
+    } finally {
+        if ($null -ne $decodedKey) {
+            [Array]::Clear($decodedKey, 0, $decodedKey.Length)
+        }
+        $encodedKey = $null
+        $normalizedKey = $null
+    }
+}
+
 function Get-MobileReleaseArtifact {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,
@@ -432,6 +471,9 @@ if (-not $SkipEnvUpload -and -not (Test-Path -LiteralPath $envFilePath)) {
 }
 
 if (-not $SkipEnvUpload) {
+    # Validate the externally managed production key before building, pushing, uploading,
+    # or changing any remote service. The key value is never written to the console.
+    Assert-ProductionCredentialEncryptionConfig -Path $envFilePath
     Write-Host "Using env file: $envFilePath"
 }
 
@@ -542,7 +584,9 @@ try {
         Copy-Item -LiteralPath $envFilePath -Destination $stageEnv -Force
         Set-EnvFileValue -Path $stageEnv -Name "APP_IMAGE" -Value $appImage
         Set-EnvFileValue -Path $stageEnv -Name "WEB_IMAGE" -Value $webImage
+        Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_IMAGE" -Value "otziv-whatsapp:$Tag"
         Set-EnvFileValue -Path $stageEnv -Name "OTZIV_APP_BASE_URL" -Value "https://o-ogo.ru"
+        Set-EnvFileValue -Path $stageEnv -Name "OTZIV_AUTH_LEGACY_MIGRATION_ENABLED" -Value "false"
         Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_PUBLIC_URL" -Value "https://o-ogo.ru/keycloak"
         Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_ISSUER_URI" -Value "https://o-ogo.ru/keycloak/realms/otziv"
         Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_JWK_SET_URI" -Value "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
@@ -752,6 +796,35 @@ ensure_generated_link_secret() {
 }
 
 validate_security_prerequisites() {
+  if [ "`$(get_env OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED false)" != "true" ]; then
+    echo "OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED=true is mandatory for production deployment." >&2
+    exit 1
+  fi
+  require_env OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID
+  require_env OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64
+  credential_key_id="`$(get_env OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID "")"
+  if ! printf '%s' "`$credential_key_id" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'; then
+    echo "OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID must match [A-Za-z0-9._-]{1,64}." >&2
+    exit 1
+  fi
+  credential_key_value="`$(get_env OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 "")"
+  if ! printf '%s' "`$credential_key_value" | grep -Eq '^[A-Za-z0-9+/]{43}=?$'; then
+    echo "OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 must be valid Base64." >&2
+    exit 1
+  fi
+  if [ "`$(printf '%s' "`$credential_key_value" | wc -c | tr -d ' ')" -eq 43 ]; then
+    credential_key_value="`$credential_key_value="
+  fi
+  if ! credential_key_bytes="`$(printf '%s' "`$credential_key_value" | base64 --decode 2>/dev/null | wc -c | tr -d ' ')"; then
+    echo "OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 must be valid Base64." >&2
+    exit 1
+  fi
+  if [ "`$credential_key_bytes" -ne 32 ]; then
+    echo "OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 must decode to exactly 32 bytes." >&2
+    exit 1
+  fi
+  unset credential_key_id credential_key_value credential_key_bytes
+
   if [ "`$(get_env WHATSAPP_GATEWAY_AUTH_REQUIRED true)" = "true" ]; then
     require_env WHATSAPP_GATEWAY_SHARED_SECRET
   fi
@@ -777,10 +850,43 @@ validate_security_prerequisites() {
   fi
 
   if [ "`$(get_env BACKUP_ENABLED false)" = "true" ]; then
-    require_env S3_ENDPOINT
-    require_env S3_BUCKET
-    require_env S3_ACCESS_KEY
-    require_env S3_SECRET_KEY
+    require_env BACKUP_S3_ENDPOINT
+    require_env BACKUP_S3_REGION
+    require_env BACKUP_S3_BUCKET
+    require_env BACKUP_S3_PROJECT
+    require_env BACKUP_S3_ACCESS_KEY
+    require_env BACKUP_S3_SECRET_KEY
+    require_env BACKUP_ENCRYPTION_KEY_BASE64
+    require_env BACKUP_RESTORE_DRILL_RTO
+    case "`$(get_env BACKUP_S3_ENDPOINT "")" in
+      https://*) ;;
+      *)
+        echo "BACKUP_S3_ENDPOINT must use HTTPS." >&2
+        exit 1
+        ;;
+    esac
+    if [ "`$(get_env BACKUP_S3_INDEPENDENT_CONFIRMED false)" != "true" ]; then
+      echo "BACKUP_ENABLED=true requires BACKUP_S3_INDEPENDENT_CONFIRMED=true." >&2
+      exit 1
+    fi
+    if [ "`$(get_env BACKUP_S3_BUCKET "")" = "`$(get_env S3_BUCKET "")" ]; then
+      echo "Backup storage must not use the primary S3 bucket." >&2
+      exit 1
+    fi
+    if [ "`$(get_env BACKUP_S3_ACCESS_KEY "")" = "`$(get_env S3_ACCESS_KEY "")" ]; then
+      echo "Backup storage must use credentials distinct from primary S3." >&2
+      exit 1
+    fi
+    backup_key_value="`$(get_env BACKUP_ENCRYPTION_KEY_BASE64 "")"
+    if ! backup_key_bytes="`$(printf '%s' "`$backup_key_value" | base64 --decode 2>/dev/null | wc -c | tr -d ' ')"; then
+      echo "BACKUP_ENCRYPTION_KEY_BASE64 must be valid Base64." >&2
+      exit 1
+    fi
+    if [ "`$backup_key_bytes" -ne 32 ]; then
+      echo "BACKUP_ENCRYPTION_KEY_BASE64 must decode to exactly 32 bytes." >&2
+      exit 1
+    fi
+    unset backup_key_value backup_key_bytes
     if [ "`$(get_env BACKUP_DESTINATION_PRIVATE_CONFIRMED false)" != "true" ]; then
       echo "BACKUP_ENABLED=true requires BACKUP_DESTINATION_PRIVATE_CONFIRMED=true." >&2
       exit 1
@@ -789,10 +895,41 @@ validate_security_prerequisites() {
       echo "BACKUP_ENABLED=true requires BACKUP_ENCRYPTION_AT_REST_CONFIRMED=true." >&2
       exit 1
     fi
-    if [ -n "`$(get_env BACKUP_MAIL_TO "")" ] \
-        && [ "`$(get_env BACKUP_EMAIL_DELIVERY_CONFIRMED false)" != "true" ]; then
-      echo "BACKUP_MAIL_TO requires BACKUP_EMAIL_DELIVERY_CONFIRMED=true." >&2
+    backup_retention_days="`$(get_env BACKUP_S3_RETENTION_DAYS 0)"
+    case "`$backup_retention_days" in
+      ''|*[!0-9]*)
+        echo "BACKUP_S3_RETENTION_DAYS must be an integer from 0 to 36500." >&2
+        exit 1
+        ;;
+    esac
+    if [ "`$backup_retention_days" -gt 36500 ]; then
+      echo "BACKUP_S3_RETENTION_DAYS must be an integer from 0 to 36500." >&2
       exit 1
+    fi
+    if [ "`$(get_env BACKUP_S3_OBJECT_LOCK_ENABLED false)" = "true" ]; then
+      if [ "`$backup_retention_days" -lt 1 ]; then
+        echo "Object Lock requires BACKUP_S3_RETENTION_DAYS to be positive." >&2
+        exit 1
+      fi
+      case "`$(get_env BACKUP_S3_OBJECT_LOCK_MODE GOVERNANCE)" in
+        GOVERNANCE|COMPLIANCE) ;;
+        *)
+          echo "BACKUP_S3_OBJECT_LOCK_MODE must be GOVERNANCE or COMPLIANCE." >&2
+          exit 1
+          ;;
+      esac
+    elif [ "`$backup_retention_days" -ne 0 ]; then
+      echo "Non-zero BACKUP_S3_RETENTION_DAYS requires BACKUP_S3_OBJECT_LOCK_ENABLED=true." >&2
+      exit 1
+    fi
+    unset backup_retention_days
+    if [ "`$(get_env BACKUP_MAIL_ENABLED false)" = "true" ]; then
+      require_env BACKUP_MAIL_TO
+      require_env BACKUP_MAIL_FROM
+      if [ "`$(get_env BACKUP_EMAIL_DELIVERY_CONFIRMED false)" != "true" ]; then
+        echo "BACKUP_MAIL_ENABLED=true requires BACKUP_EMAIL_DELIVERY_CONFIRMED=true." >&2
+        exit 1
+      fi
     fi
     require_env BACKUP_RESTORE_DRILL_DATE
     drill_date="`$(get_env BACKUP_RESTORE_DRILL_DATE "")"
@@ -849,7 +986,7 @@ publish_bundled_mobile_release() {
       sudo mkdir -p "`$target_dir"
       sudo chown "`$deploy_uid:`$deploy_gid" "`$target_dir"
     else
-      docker run --rm --user 0 \
+      docker run --rm --user 0 --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --security-opt no-new-privileges \
         -v "`$PWD/data:/host-data" \
         --entrypoint sh "`$app_image" \
         -c "mkdir -p /host-data/mobile-releases && chown `$deploy_uid:`$deploy_gid /host-data/mobile-releases"
@@ -1048,10 +1185,12 @@ if [ "`$uploaded_env" != "1" ]; then
   set_env APP_IMAGE "`$app_image"
   set_env WEB_IMAGE "`$web_image"
 fi
+set_env WHATSAPP_IMAGE "otziv-whatsapp:`$deploy_tag"
 
 chmod 600 "`$env_file" || true
 
 set_env OTZIV_APP_BASE_URL "https://o-ogo.ru"
+set_env OTZIV_AUTH_LEGACY_MIGRATION_ENABLED "false"
 set_env OTZIV_WORKER_CELLULAR_ACCESS_MODE "ENFORCE"
 set_env OTZIV_WORKER_CELLULAR_ALLOWED_CIDRS "178.177.216.0/22,178.177.220.0/22,91.78.236.0/22,91.78.216.0/21,91.78.224.0/21,91.79.216.0/21,91.79.224.0/21,91.79.232.0/22,89.113.30.0/23"
 set_env MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED "true"
@@ -1095,6 +1234,11 @@ else
   echo "MySQL container is not running yet; skipping pre-deploy Flyway validation."
 fi
 compose build whatsapp_lika whatsapp_vika
+if ! compose run --rm --no-deps --entrypoint /usr/bin/chromium whatsapp_lika --headless --disable-gpu --dump-dom about:blank >/dev/null 2>&1; then
+  echo "WhatsApp Chromium sandbox preflight failed; existing gateway containers were not stopped." >&2
+  exit 1
+fi
+compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases /app/sent-hashes
 compose up -d --remove-orphans --no-deps mysql keycloak-postgres loki tempo
 wait_service_healthy mysql 600
 wait_service_healthy keycloak-postgres 600
@@ -1108,6 +1252,9 @@ wait_service_healthy tempo 600
 wait_service_healthy prometheus 600
 compose up -d --no-deps grafana
 wait_service_healthy grafana 600
+compose stop whatsapp_lika whatsapp_vika
+compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint sh whatsapp_lika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth'
+compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth'
 recreate_service_with_retry whatsapp_lika
 recreate_service_with_retry whatsapp_vika
 compose up -d --remove-orphans --no-deps dozzle alloy

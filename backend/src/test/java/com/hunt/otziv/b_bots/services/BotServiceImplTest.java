@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
@@ -90,6 +91,19 @@ class BotServiceImplTest {
     }
 
     @Test
+    void createRejectsBlankPasswordBeforePersisting() {
+        BotServiceImpl service = service();
+        TestingAuthenticationToken authentication = workerAuthentication();
+        BotDTO request = new BotDTO();
+        request.setPassword(" \t ");
+
+        assertThrows(IllegalArgumentException.class, () -> service.createBot(request, authentication));
+
+        verify(botCrudAccessService).requireCreateAccess(authentication);
+        verify(botsRepository, never()).save(any(Bot.class));
+    }
+
+    @Test
     void claimNewAccountFromOwnCityUsesOnlyReadyActiveAccountInTargetCity() {
         BotServiceImpl service = service();
         City city = city(320L, "Город 320");
@@ -131,6 +145,57 @@ class BotServiceImplTest {
         verify(botCrudAccessService).requireLockedAccess(42L, authentication);
         verify(botCrudAccessService).requireUpdateOwnership(lockedBot, request);
         verify(botsRepository).save(existing);
+    }
+
+    @Test
+    void legacyUpdateTreatsBlankPasswordAsKeepExisting() {
+        BotServiceImpl service = service();
+        TestingAuthenticationToken authentication = workerAuthentication();
+        Worker worker = worker(7L);
+        Bot existing = editableBot(42L, worker);
+        BotDTO request = editableDto(null, worker);
+        request.setPassword(" \t ");
+        request.setFio("Новое ФИО");
+        BotCrudAccessService.LockedCrudBot lockedBot =
+                new BotCrudAccessService.LockedCrudBot(existing, 7L, true);
+        when(botCrudAccessService.requireLockedAccess(42L, authentication)).thenReturn(lockedBot);
+
+        assertTrue(service.updateBot(request, 42L, authentication));
+
+        assertEquals("password-42", existing.getPassword());
+        verify(botsRepository).save(existing);
+    }
+
+    @Test
+    void genericEditDtoNeverCarriesStoredPassword() {
+        BotServiceImpl service = service();
+        TestingAuthenticationToken authentication = workerAuthentication();
+        Bot existing = editableBot(42L, worker(7L));
+        when(botCrudAccessService.requireLockedAccess(42L, authentication)).thenReturn(
+                new BotCrudAccessService.LockedCrudBot(existing, 7L, true)
+        );
+
+        BotDTO result = service.findById(42L, authentication);
+
+        assertNull(result.getPassword());
+    }
+
+    @Test
+    void workerOwnedAccountListRetainsCredentialForWorkerWorkflow() {
+        BotServiceImpl service = service();
+        TestingAuthenticationToken authentication = workerAuthentication();
+        User user = new User();
+        user.setId(5L);
+        Worker owner = worker(7L);
+        Bot existing = editableBot(42L, owner);
+        when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
+        when(workerService.getWorkerByUserId(5L)).thenReturn(owner);
+        when(botsRepository.findAllByWorkerAndActiveIsTrue(owner)).thenReturn(List.of(existing));
+
+        List<BotDTO> result = service.getAllBotsByWorkerActiveIsTrue(authentication);
+
+        assertEquals(1, result.size());
+        assertEquals("password-42", result.getFirst().getPassword());
     }
 
     @Test

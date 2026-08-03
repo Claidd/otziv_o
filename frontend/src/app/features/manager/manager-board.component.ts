@@ -1036,7 +1036,7 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   orderActions(order: OrderCardItem): StatusAction[] {
-    return managerOrderActions(order, Boolean(this.selectedCompany()), this.canForceBan());
+    return managerOrderActions(order, false, this.canForceBan());
   }
 
   private canForceBan(): boolean {
