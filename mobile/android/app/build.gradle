@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
-def releaseVersionCodeText = providers.gradleProperty('otzivVersionCode').getOrElse('61').trim()
-def releaseVersionName = providers.gradleProperty('otzivVersionName').getOrElse('1.0.61').trim()
+def releaseVersionCodeText = providers.gradleProperty('otzivVersionCode').getOrElse('62').trim()
+def releaseVersionName = providers.gradleProperty('otzivVersionName').getOrElse('1.0.62').trim()
 if (!(releaseVersionCodeText ==~ /[1-9][0-9]*/)) {
     throw new GradleException('otzivVersionCode must be a positive integer.')
 }

@@ -28,6 +28,29 @@ Local prod-like smoke:
 .\infrastructure\scripts\local\prod-like-smoke.ps1
 ```
 
+The external `prod-local.env` also stores `OTZIV_LOCAL_LOGIN_USERNAME`,
+`OTZIV_LOCAL_LOGIN_PASSWORD`, and the 32-byte Base64
+`OTZIV_LOCAL_LOGIN_ALLOWLIST_HMAC_KEY_BASE64`. The tracked frozen allowlist
+contains only keyed HMAC-SHA256 identities of canonical usernames; it contains
+neither usernames nor production database IDs. Keep a secure backup of the
+external env because the tracked snapshot cannot be matched without its HMAC
+key. On a new computer, restore that env and initialize only the empty local
+Keycloak volume:
+
+```powershell
+.\infrastructure\scripts\local\prod-like-smoke.ps1 `
+  -RotateLocalKeycloakCredentials `
+  -LocalLoginUsername <local-login>
+```
+
+The password is never tracked or printed. Copy it to the clipboard with
+`infrastructure\scripts\local\copy-local-keycloak-login.ps1`.
+`-InitializeLocalKeycloakUserSnapshot` is reserved for the initial creation of
+the tracked snapshot when that file does not exist; it never overwrites it. It
+is also the only operation allowed to create the HMAC key. A missing or invalid
+key for an existing snapshot fails closed instead of silently changing the
+allowlist identity.
+
 Production deploy, preserving the familiar command:
 
 ```powershell

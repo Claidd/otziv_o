@@ -171,7 +171,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=256m,mode=1777
     pids_limit: ${APP_PIDS_LIMIT:-512}
-    mem_limit: ${APP_MEMORY_LIMIT:-1536m}
+    mem_limit: ${APP_MEMORY_LIMIT:-2304m}
     cpus: ${APP_CPU_LIMIT:-2.0}
     environment:
       SPRING_PROFILES_ACTIVE: prod

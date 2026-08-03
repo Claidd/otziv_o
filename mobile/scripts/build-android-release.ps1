@@ -110,8 +110,8 @@ Invoke-CheckedCommand `
         -Arguments @('run', $syncScript) `
         -WorkingDirectory $mobileDirectory
 
-$isWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
-$gradleWrapper = Join-Path $androidDirectory $(if ($isWindows) { "gradlew.bat" } else { "gradlew" })
+$runningOnWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+$gradleWrapper = Join-Path $androidDirectory $(if ($runningOnWindows) { "gradlew.bat" } else { "gradlew" })
 Invoke-CheckedCommand `
         -FilePath $gradleWrapper `
         -Arguments @(

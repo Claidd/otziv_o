@@ -36,7 +36,37 @@ docker compose -f compose.yaml down
 .\infrastructure\scripts\local\prod-like-smoke.ps1
 ```
 
-Скрипт сам создаст `.env.prod-local` из `.env.prod-local.example`, обновит локальную prod-like БД из VPS, применит локальные safety-настройки для мессенджеров, выполнит `docker compose -f compose.prod-local.yaml --env-file .env.prod-local up -d --build`, дождется `/actuator/health`, Keycloak realm и frontend на `http://localhost:8088`. Если Docker Desktop временно не видит Docker Hub, скрипт сам переключится на offline backend rebuild из локально собранного jar.
+Скрипт использует внешний `prod-local.env`, обновит локальную prod-like БД из VPS, применит локальные safety-настройки для мессенджеров, выполнит `docker compose -f compose.prod-local.yaml --env-file .env.prod-local up -d --build`, дождется `/actuator/health`, Keycloak realm и frontend на `http://localhost:8088`. Если Docker Desktop временно не видит Docker Hub, скрипт сам переключится на offline backend rebuild из локально собранного jar.
+
+Состав пользователей локального Keycloak уже зафиксирован в псевдонимизированном allowlist, который хранится в Git: в нём есть только HMAC-SHA-256 канонических имён, но нет открытых логинов, внутренних ID production-БД, ФИО, почты, телефонов или паролей. HMAC вычислен с отдельным 32-байтовым ключом из защищённого внешнего `prod-local.env`, поэтому перебрать короткие логины по файлу из Git нельзя. На этом компьютере постоянный локальный пароль также уже создан. Поэтому обычная рабочая команда остаётся прежней:
+
+```powershell
+.\infrastructure\scripts\local\prod-like-smoke.ps1
+```
+
+В Git сохраняется только allowlist с HMAC-идентификаторами. Общий локальный пароль и `OTZIV_LOCAL_LOGIN_ALLOWLIST_HMAC_KEY_BASE64` находятся только в защищённом `C:\Users\Hunt\.otziv\env\prod-local.env`; этот внешний env необходимо хранить в отдельной защищённой резервной копии. Обычные последующие запуски никогда не добавляют новых пользователей из свежего дампа VPS. Они синхронизируют только ранее зафиксированных пользователей, отключают потерявших доступ и не сбрасывают уже установленный пароль.
+
+На новом компьютере после клонирования Git и настройки внешнего `prod-local.env` один раз создай новый локальный пароль и восстанови пользователей в пустом локальном Keycloak:
+
+```powershell
+.\infrastructure\scripts\local\prod-like-smoke.ps1 `
+  -RotateLocalKeycloakCredentials `
+  -LocalLoginUsername <локальный-логин>
+```
+
+`-InitializeLocalKeycloakUserSnapshot` нужен только сопровождающему проекта для первоначального создания allowlist, когда tracked snapshot действительно отсутствует. Только этот режим может создать HMAC-ключ. Существующий snapshot этот флаг намеренно не перезаписывает, а отсутствие или повреждение его исходного ключа приводит к безопасному отказу — скрипт не подменяет ключ автоматически.
+
+Чтобы скопировать пароль в буфер обмена, не выводя его в консоль:
+
+```powershell
+.\infrastructure\scripts\local\copy-local-keycloak-login.ps1
+```
+
+Осознанная последующая ротация общего локального пароля выполняется отдельно:
+
+```powershell
+.\infrastructure\scripts\local\prod-like-smoke.ps1 -RotateLocalKeycloakCredentials
+```
 
 Если нужно запустить smoke без обновления базы из VPS:
 

@@ -24,13 +24,23 @@
     [ValidateRange(1, 65535)][int]$VpsPort = 22022,
     [string]$SshKey = "C:\Users\Hunt\.ssh\otziv_vps_ed25519",
     [switch]$AllowLocalMessengerSending,
-    [string]$LocalLoginUsername = "hunt",
-    [string]$LocalLoginPassword = "passd",
+    [string]$LocalLoginUsername = "",
+    [string]$LocalKeycloakUserSnapshot = "infrastructure\keycloak\prod-local-user-snapshot.json",
+    [switch]$InitializeLocalKeycloakUserSnapshot,
+    [switch]$RotateLocalKeycloakCredentials,
     [switch]$SkipLocalLoginCredentialSync
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+# Capture an explicitly requested local-only password once, then remove it
+# before any validation or child process can inherit it. The value remains
+# only in this PowerShell process until login configuration is resolved.
+$script:requestedLocalLoginPassword = [Environment]::GetEnvironmentVariable('OTZIV_LOCAL_LOGIN_PASSWORD')
+if (-not [string]::IsNullOrWhiteSpace($script:requestedLocalLoginPassword)) {
+    [Environment]::SetEnvironmentVariable('OTZIV_LOCAL_LOGIN_PASSWORD', $null)
+}
 
 function Format-RedactedCommand {
     param(
@@ -119,6 +129,220 @@ function Get-EnvValue {
     }
 
     return $found
+}
+
+function Protect-SensitiveLocalPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+        $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $grant = if (Test-Path -LiteralPath $Path -PathType Container) { "*${sid}:(OI)(CI)F" } else { "*${sid}:F" }
+        & icacls.exe $Path '/inheritance:r' '/grant:r' $grant '/grant:r' '*S-1-5-18:F' | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to restrict ACL on sensitive path: $Path"
+        }
+        return
+    }
+
+    $mode = if (Test-Path -LiteralPath $Path -PathType Container) { '700' } else { '600' }
+    & chmod $mode -- $Path
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to restrict permissions on sensitive path: $Path"
+    }
+}
+
+function Set-LocalEnvFileValues {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][hashtable]$Values
+    )
+
+    foreach ($entry in $Values.GetEnumerator()) {
+        if ($entry.Key -notmatch '^[A-Z][A-Z0-9_]*$') {
+            throw "Invalid env key '$($entry.Key)'."
+        }
+        $value = [string]$entry.Value
+        if ([string]::IsNullOrWhiteSpace($value) -or $value.Contains("`r") -or $value.Contains("`n") `
+                -or $value -cne $value.Trim()) {
+            throw "Env value '$($entry.Key)' must be a non-empty single-line value without leading or trailing whitespace."
+        }
+    }
+
+    $sourceLines = [System.IO.File]::ReadAllLines($Path)
+    $remaining = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    foreach ($key in $Values.Keys) {
+        [void]$remaining.Add([string]$key)
+    }
+    $written = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    $updatedLines = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in $sourceLines) {
+        if ($line -match '^(?<key>[A-Z][A-Z0-9_]*)=') {
+            $key = $Matches['key']
+            if ($Values.ContainsKey($key)) {
+                if ($written.Add($key)) {
+                    [void]$updatedLines.Add("$key=$($Values[$key])")
+                    [void]$remaining.Remove($key)
+                }
+                continue
+            }
+        }
+        [void]$updatedLines.Add($line)
+    }
+    foreach ($key in @($remaining | Sort-Object)) {
+        [void]$updatedLines.Add("$key=$($Values[$key])")
+    }
+
+    $directory = Split-Path -Parent $Path
+    $temporaryPath = Join-Path $directory (".$([System.IO.Path]::GetFileName($Path)).$([guid]::NewGuid().ToString('N')).tmp")
+    $encoding = [System.Text.UTF8Encoding]::new($false)
+    try {
+        [System.IO.File]::WriteAllLines($temporaryPath, $updatedLines.ToArray(), $encoding)
+        Protect-SensitiveLocalPath -Path $temporaryPath
+        Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
+        Protect-SensitiveLocalPath -Path $Path
+    } finally {
+        if (Test-Path -LiteralPath $temporaryPath) {
+            Remove-Item -LiteralPath $temporaryPath -Force
+        }
+    }
+}
+
+function Remove-LocalEnvFileValues {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string[]]$Names
+    )
+
+    $namesToRemove = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    foreach ($name in $Names) {
+        if ($name -notmatch '^[A-Z][A-Z0-9_]*$') {
+            throw "Invalid env key '$name'."
+        }
+        [void]$namesToRemove.Add($name)
+    }
+
+    $updatedLines = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in [System.IO.File]::ReadAllLines($Path)) {
+        if ($line -match '^(?<key>[A-Z][A-Z0-9_]*)=' -and $namesToRemove.Contains($Matches['key'])) {
+            continue
+        }
+        [void]$updatedLines.Add($line)
+    }
+
+    $directory = Split-Path -Parent $Path
+    $temporaryPath = Join-Path $directory (".$([System.IO.Path]::GetFileName($Path)).$([guid]::NewGuid().ToString('N')).tmp")
+    $encoding = [System.Text.UTF8Encoding]::new($false)
+    try {
+        [System.IO.File]::WriteAllLines($temporaryPath, $updatedLines.ToArray(), $encoding)
+        Protect-SensitiveLocalPath -Path $temporaryPath
+        Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
+        Protect-SensitiveLocalPath -Path $Path
+    } finally {
+        if (Test-Path -LiteralPath $temporaryPath) {
+            Remove-Item -LiteralPath $temporaryPath -Force
+        }
+    }
+}
+
+function Resolve-LocalKeycloakLoginConfiguration {
+    param(
+        [Parameter(Mandatory = $true)][string]$EnvPath,
+        [AllowEmptyString()][string]$UsernameOverride,
+        [switch]$InitializeSnapshot,
+        [switch]$RotateCredentials,
+        [switch]$SkipCredentialSync
+    )
+
+    $storedUsername = Get-EnvValue -Path $EnvPath -Name 'OTZIV_LOCAL_LOGIN_USERNAME'
+    $storedPassword = Get-EnvValue -Path $EnvPath -Name 'OTZIV_LOCAL_LOGIN_PASSWORD'
+    $pendingUsername = Get-EnvValue -Path $EnvPath -Name 'OTZIV_LOCAL_LOGIN_PENDING_USERNAME'
+    $pendingPassword = Get-EnvValue -Path $EnvPath -Name 'OTZIV_LOCAL_LOGIN_PENDING_PASSWORD'
+    $requestedPassword = $script:requestedLocalLoginPassword
+    $script:requestedLocalLoginPassword = $null
+    $hasPendingUsername = -not [string]::IsNullOrWhiteSpace($pendingUsername)
+    $hasPendingPassword = -not [string]::IsNullOrWhiteSpace($pendingPassword)
+    if ($hasPendingUsername -ne $hasPendingPassword) {
+        if (-not ($InitializeSnapshot -or $RotateCredentials)) {
+            throw 'The external prod-local env contains an incomplete pending Keycloak credential rotation. Run an explicit -RotateLocalKeycloakCredentials operation to recover it.'
+        }
+        $pendingUsername = $null
+        $pendingPassword = $null
+        $hasPendingUsername = $false
+        $hasPendingPassword = $false
+    }
+
+    $resumeCredentialRotation = $hasPendingUsername -and $hasPendingPassword
+    try {
+        if ($resumeCredentialRotation) {
+            if ($InitializeSnapshot -or $RotateCredentials) {
+                # An explicit recovery may correct a mistyped or newly
+                # deactivated selected username. Unless a new password is
+                # supplied, preserve the already pending shared password.
+                $username = if (-not [string]::IsNullOrWhiteSpace($UsernameOverride)) {
+                    $UsernameOverride.Trim()
+                } else {
+                    $pendingUsername
+                }
+                $password = if (-not [string]::IsNullOrWhiteSpace($requestedPassword)) {
+                    $requestedPassword
+                } else {
+                    $pendingPassword
+                }
+            } else {
+                if (-not [string]::IsNullOrWhiteSpace($UsernameOverride) -and
+                        -not $pendingUsername.Equals($UsernameOverride.Trim(), [System.StringComparison]::OrdinalIgnoreCase)) {
+                    throw "A pending local Keycloak credential rotation already exists for '$pendingUsername'. Run the normal smoke once without changing LocalLoginUsername to finish it, or use an explicit rotation to replace it."
+                }
+                if (-not [string]::IsNullOrWhiteSpace($requestedPassword) -and $requestedPassword -cne $pendingPassword) {
+                    throw 'A pending local Keycloak credential rotation already exists with a different password. Run the normal smoke once without supplying a new password to finish it, or use an explicit rotation to replace it.'
+                }
+                $username = $pendingUsername
+                $password = $pendingPassword
+            }
+        } else {
+            $username = if (-not [string]::IsNullOrWhiteSpace($UsernameOverride)) {
+                $UsernameOverride.Trim()
+            } else {
+                $storedUsername
+            }
+            $password = if (($InitializeSnapshot -or $RotateCredentials) -and
+                    -not [string]::IsNullOrWhiteSpace($requestedPassword)) {
+                $requestedPassword
+            } else {
+                $storedPassword
+            }
+
+            if ($InitializeSnapshot -or $RotateCredentials) {
+                if ([string]::IsNullOrWhiteSpace($username)) {
+                    throw 'Pass -LocalLoginUsername during one-time local Keycloak initialization, or set OTZIV_LOCAL_LOGIN_USERNAME in the external prod-local env file.'
+                }
+                if (($RotateCredentials -and [string]::IsNullOrWhiteSpace($requestedPassword)) `
+                        -or [string]::IsNullOrWhiteSpace($password)) {
+                    $password = New-LocalRandomSecret
+                }
+
+            }
+        }
+    } finally {
+        $script:requestedLocalLoginPassword = $null
+    }
+
+    if (-not $SkipCredentialSync -and
+            ([string]::IsNullOrWhiteSpace($username) -or [string]::IsNullOrWhiteSpace($password))) {
+        throw 'OTZIV_LOCAL_LOGIN_USERNAME and OTZIV_LOCAL_LOGIN_PASSWORD are required in the external prod-local env file. Create them with -RotateLocalKeycloakCredentials -LocalLoginUsername <name>.'
+    }
+
+    return [pscustomobject]@{
+        Username = $username
+        Password = $password
+        ResumeCredentialRotation = $resumeCredentialRotation
+    }
 }
 
 function ConvertTo-SmokeArray {
@@ -1265,6 +1489,278 @@ ORDER BY user_row.id;
     return $users.ToArray()
 }
 
+function Get-LocalKeycloakSha256Hex {
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $digest = $sha256.ComputeHash($bytes)
+        return [System.BitConverter]::ToString($digest).Replace('-', '').ToLowerInvariant()
+    } finally {
+        [Array]::Clear($bytes, 0, $bytes.Length)
+        $sha256.Dispose()
+    }
+}
+
+function Get-LocalKeycloakAllowlistHmacKey {
+    param(
+        [Parameter(Mandatory = $true)][string]$EnvPath,
+        [switch]$CreateIfMissing
+    )
+
+    $keyName = 'OTZIV_LOCAL_LOGIN_ALLOWLIST_HMAC_KEY_BASE64'
+    $encodedKey = Get-EnvValue -Path $EnvPath -Name $keyName
+    if ([string]::IsNullOrWhiteSpace($encodedKey)) {
+        if (-not $CreateIfMissing) {
+            throw "$keyName is missing from the protected external prod-local env file. Restore that file from its secure backup; a new key may be created only together with -InitializeLocalKeycloakUserSnapshot."
+        }
+
+        $randomBytes = New-Object byte[] 32
+        $randomSource = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        try {
+            $randomSource.GetBytes($randomBytes)
+            $encodedKey = [Convert]::ToBase64String($randomBytes)
+            Set-LocalEnvFileValues -Path $EnvPath -Values @{
+                OTZIV_LOCAL_LOGIN_ALLOWLIST_HMAC_KEY_BASE64 = $encodedKey
+            }
+        } finally {
+            [Array]::Clear($randomBytes, 0, $randomBytes.Length)
+            $randomSource.Dispose()
+        }
+    }
+
+    $decodedKey = $null
+    try {
+        try {
+            $decodedKey = [Convert]::FromBase64String($encodedKey)
+        } catch {
+            throw "$keyName in the protected external prod-local env file is not valid Base64. Restore the original 32-byte key; it must never be regenerated for an existing snapshot."
+        }
+        if ($decodedKey.Length -ne 32) {
+            throw "$keyName in the protected external prod-local env file must decode to exactly 32 bytes. Restore the original key; it must never be regenerated for an existing snapshot."
+        }
+    } finally {
+        if ($null -ne $decodedKey) {
+            [Array]::Clear($decodedKey, 0, $decodedKey.Length)
+        }
+    }
+
+    return $encodedKey
+}
+
+function Get-LocalKeycloakUsernameHmac {
+    param(
+        [Parameter(Mandatory = $true)][string]$Username,
+        [Parameter(Mandatory = $true)][string]$KeyBase64
+    )
+
+    $canonical = $Username.Trim().Normalize([System.Text.NormalizationForm]::FormKC).ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($canonical)) {
+        throw 'Cannot authenticate a blank local Keycloak username for the frozen allowlist.'
+    }
+
+    $keyBytes = [Convert]::FromBase64String($KeyBase64)
+    if ($keyBytes.Length -ne 32) {
+        [Array]::Clear($keyBytes, 0, $keyBytes.Length)
+        throw 'The local Keycloak allowlist HMAC key must contain exactly 32 bytes.'
+    }
+    $canonicalBytes = [System.Text.Encoding]::UTF8.GetBytes($canonical)
+    $hmac = [System.Security.Cryptography.HMACSHA256]::new($keyBytes)
+    $digest = $null
+    try {
+        $digest = $hmac.ComputeHash($canonicalBytes)
+        return [System.BitConverter]::ToString($digest).Replace('-', '').ToLowerInvariant()
+    } finally {
+        if ($null -ne $digest) {
+            [Array]::Clear($digest, 0, $digest.Length)
+        }
+        [Array]::Clear($canonicalBytes, 0, $canonicalBytes.Length)
+        [Array]::Clear($keyBytes, 0, $keyBytes.Length)
+        $hmac.Dispose()
+    }
+}
+
+function Get-LocalKeycloakSnapshotUsersHash {
+    param([Parameter(Mandatory = $true)][object[]]$Users)
+
+    $projection = @($Users | Sort-Object UsernameHmacSha256 | ForEach-Object {
+        [string]$_.UsernameHmacSha256
+    }) -join "`n"
+    return Get-LocalKeycloakSha256Hex -Text $projection
+}
+
+function New-LocalKeycloakUserSnapshot {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][object[]]$DatabaseUsers,
+        [Parameter(Mandatory = $true)][string]$HmacKeyBase64
+    )
+
+    if (Test-Path -LiteralPath $Path) {
+        throw "Local Keycloak user snapshot already exists and will not be overwritten: $Path"
+    }
+    $parent = Split-Path -Parent $Path
+    if ([string]::IsNullOrWhiteSpace($parent) -or -not (Test-Path -LiteralPath $parent -PathType Container)) {
+        throw "Local Keycloak user snapshot directory does not exist: $parent"
+    }
+
+    $usernameHmacs = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    $entries = [System.Collections.Generic.List[object]]::new()
+    foreach ($databaseUser in $DatabaseUsers) {
+        $usernameHmac = Get-LocalKeycloakUsernameHmac `
+            -Username ([string]$databaseUser.Username) `
+            -KeyBase64 $HmacKeyBase64
+        if (-not $usernameHmacs.Add($usernameHmac)) {
+            throw 'Refusing to create a local Keycloak user snapshot with duplicate canonical username identities.'
+        }
+        [void]$entries.Add([pscustomobject][ordered]@{
+            usernameHmacSha256 = $usernameHmac
+        })
+    }
+    if ($entries.Count -eq 0) {
+        throw 'Refusing to create an empty local Keycloak user snapshot.'
+    }
+
+    $snapshotUsers = @($entries.ToArray() | Sort-Object usernameHmacSha256)
+    $snapshot = [ordered]@{
+        schemaVersion = 2
+        capturedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+        selectionRoles = @('OWNER', 'ADMIN', 'MANAGER', 'WORKER', 'PERFORMER')
+        usernameIdentityAlgorithm = 'HMAC-SHA256-NFKC-LOWER'
+        usersSha256 = Get-LocalKeycloakSnapshotUsersHash -Users $snapshotUsers
+        users = $snapshotUsers
+    }
+    $temporaryPath = "$Path.$([guid]::NewGuid().ToString('N')).tmp"
+    $encoding = [System.Text.UTF8Encoding]::new($false)
+    try {
+        [System.IO.File]::WriteAllText(
+            $temporaryPath,
+            (($snapshot | ConvertTo-Json -Depth 8) + [Environment]::NewLine),
+            $encoding
+        )
+        Move-Item -LiteralPath $temporaryPath -Destination $Path
+    } finally {
+        if (Test-Path -LiteralPath $temporaryPath) {
+            Remove-Item -LiteralPath $temporaryPath -Force
+        }
+    }
+
+    Write-Host "Frozen local Keycloak allowlist created with $($entries.Count) eligible user(s): $Path"
+}
+
+function Read-LocalKeycloakUserSnapshot {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Local Keycloak user snapshot is missing: $Path. Create it once with -InitializeLocalKeycloakUserSnapshot -LocalLoginUsername <name>."
+    }
+    try {
+        $snapshot = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    } catch {
+        throw "Local Keycloak user snapshot is not valid JSON: $Path"
+    }
+    if ($null -eq $snapshot -or [int]$snapshot.schemaVersion -ne 2) {
+        throw "Local Keycloak user snapshot has an unsupported schema version: $Path"
+    }
+    $expectedRootProperties = @(
+        'capturedAtUtc',
+        'schemaVersion',
+        'selectionRoles',
+        'usernameIdentityAlgorithm',
+        'users',
+        'usersSha256'
+    )
+    $actualRootProperties = @($snapshot.PSObject.Properties | ForEach-Object { [string]$_.Name } | Sort-Object)
+    if (($actualRootProperties -join ',') -cne (($expectedRootProperties | Sort-Object) -join ',')) {
+        throw "Local Keycloak user snapshot contains unexpected root fields: $Path"
+    }
+
+    $expectedSelectionRoles = @('OWNER', 'ADMIN', 'MANAGER', 'WORKER', 'PERFORMER')
+    $actualSelectionRoles = @(ConvertTo-SmokeArray -Value $snapshot.selectionRoles | ForEach-Object { [string]$_ })
+    if (($actualSelectionRoles -join ',') -cne ($expectedSelectionRoles -join ',')) {
+        throw "Local Keycloak user snapshot has unexpected selection roles: $Path"
+    }
+    if ([string]$snapshot.usernameIdentityAlgorithm -cne 'HMAC-SHA256-NFKC-LOWER') {
+        throw "Local Keycloak user snapshot has an unsupported username identity algorithm: $Path"
+    }
+
+    $usernameHmacs = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    $entries = [System.Collections.Generic.List[object]]::new()
+    foreach ($entry in @(ConvertTo-SmokeArray -Value $snapshot.users)) {
+        if ($null -eq $entry) {
+            throw "Local Keycloak user snapshot contains an invalid username HMAC entry: $Path"
+        }
+        $entryProperties = @($entry.PSObject.Properties | ForEach-Object { [string]$_.Name })
+        if ($entryProperties.Count -ne 1 -or $entryProperties[0] -cne 'usernameHmacSha256') {
+            throw "Local Keycloak user snapshot contains unexpected identity fields: $Path"
+        }
+        $usernameHmac = ([string]$entry.usernameHmacSha256).ToLowerInvariant()
+        if ($usernameHmac -notmatch '^[0-9a-f]{64}$' `
+                -or -not $usernameHmacs.Add($usernameHmac)) {
+            throw "Local Keycloak user snapshot contains an invalid or duplicate username HMAC: $Path"
+        }
+        [void]$entries.Add([pscustomobject]@{
+            UsernameHmacSha256 = $usernameHmac
+        })
+    }
+    if ($entries.Count -eq 0) {
+        throw "Local Keycloak user snapshot is empty: $Path"
+    }
+
+    $expectedUsersHash = Get-LocalKeycloakSnapshotUsersHash -Users @($entries.ToArray())
+    if ([string]::IsNullOrWhiteSpace([string]$snapshot.usersSha256) `
+            -or -not $expectedUsersHash.Equals([string]$snapshot.usersSha256, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Local Keycloak user snapshot checksum does not match its contents: $Path"
+    }
+    return $entries.ToArray()
+}
+
+function Select-FrozenLocalKeycloakDatabaseUsers {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$DatabaseUsers,
+        [Parameter(Mandatory = $true)][object[]]$SnapshotUsers,
+        [Parameter(Mandatory = $true)][string]$HmacKeyBase64
+    )
+
+    $snapshotUsernameHmacs = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    foreach ($snapshotUser in $SnapshotUsers) {
+        [void]$snapshotUsernameHmacs.Add([string]$snapshotUser.UsernameHmacSha256)
+    }
+
+    $currentUsernameHmacs = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::Ordinal
+    )
+    $frozenUsers = [System.Collections.Generic.List[object]]::new()
+    foreach ($databaseUser in @($DatabaseUsers | Sort-Object Id)) {
+        $currentUsernameHmac = Get-LocalKeycloakUsernameHmac `
+            -Username ([string]$databaseUser.Username) `
+            -KeyBase64 $HmacKeyBase64
+        if (-not $currentUsernameHmacs.Add($currentUsernameHmac)) {
+            throw 'The isolated local database returned duplicate canonical eligible usernames.'
+        }
+        if ($snapshotUsernameHmacs.Contains($currentUsernameHmac)) {
+            [void]$frozenUsers.Add($databaseUser)
+        }
+    }
+
+    $ignoredNewCount = $DatabaseUsers.Count - $frozenUsers.Count
+    if ($ignoredNewCount -lt 0) {
+        $ignoredNewCount = 0
+    }
+    if ($frozenUsers.Count -eq 0) {
+        throw 'No current eligible database username matches the frozen local Keycloak allowlist. Restore the original external HMAC key; refusing to replace or empty the frozen identity set.'
+    }
+    Write-Host "Frozen local Keycloak allowlist: $($SnapshotUsers.Count) saved, $($frozenUsers.Count) currently eligible, $ignoredNewCount new VPS-derived user(s) ignored."
+    return $frozenUsers.ToArray()
+}
+
 function Get-OrCreate-LocalKeycloakRealmRole {
     param(
         [Parameter(Mandatory = $true)][string]$ApiRoot,
@@ -1559,6 +2055,7 @@ function Sync-LocalKeycloakManagedUsers {
     $managedUsers = [System.Collections.Generic.List[object]]::new()
     $createdCount = 0
     foreach ($databaseUser in @($DatabaseUsers | Sort-Object Id)) {
+        $createdForDatabaseUser = $false
         $keycloakUser = if ($keycloakUsersByName.ContainsKey($databaseUser.Username)) {
             $keycloakUsersByName[$databaseUser.Username]
         } else {
@@ -1588,12 +2085,24 @@ function Sync-LocalKeycloakManagedUsers {
                 throw "Local Keycloak did not return exactly one newly managed user '$($databaseUser.Username)'."
             }
             $createdCount++
+            $createdForDatabaseUser = $true
             $createdMatches[0]
         }
 
         $fullUser = Invoke-RestMethod -Uri "$ApiRoot/users/$($keycloakUser.id)" -Headers $Headers -TimeoutSec 30
         $attributes = [ordered]@{}
         $attributesProperty = $fullUser.PSObject.Properties['attributes']
+        if (-not $createdForDatabaseUser) {
+            $existingMarker = if ($null -eq $attributesProperty -or $null -eq $attributesProperty.Value) {
+                $null
+            } else {
+                $attributesProperty.Value.PSObject.Properties['otziv.local-managed']
+            }
+            $existingMarkerValues = if ($null -eq $existingMarker) { @() } else { @($existingMarker.Value) }
+            if (-not ($existingMarkerValues | Where-Object { [string]$_ -eq 'true' } | Select-Object -First 1)) {
+                throw "Refusing to adopt existing unmarked local Keycloak user '$($databaseUser.Username)'."
+            }
+        }
         if ($null -ne $attributesProperty -and $null -ne $attributesProperty.Value) {
             foreach ($attribute in $attributesProperty.Value.PSObject.Properties) {
                 $attributes[$attribute.Name] = $attribute.Value
@@ -1656,6 +2165,7 @@ function Sync-LocalKeycloakManagedUsers {
             id = [string]$verifiedUser.id
             username = [string]$verifiedUser.username
             enabled = [bool]$verifiedUser.enabled
+            created = $createdForDatabaseUser
         })
     }
 
@@ -1858,14 +2368,17 @@ function Sync-LocalKeycloakLoginCredential {
         [Parameter(Mandatory = $true)][string]$RootUrl,
         [Parameter(Mandatory = $true)][string]$EnvPath,
         [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
-        [Parameter(Mandatory = $true)][string]$Username,
-        [Parameter(Mandatory = $true)][string]$Password,
+        [Parameter(Mandatory = $true)][string]$SnapshotPath,
+        [AllowEmptyString()][string]$Username,
+        [AllowEmptyString()][string]$Password,
+        [switch]$InitializeSnapshot,
+        [switch]$RotateCredentials,
         [switch]$SkipCredentialSync
     )
 
     if (-not $SkipCredentialSync -and
         ([string]::IsNullOrWhiteSpace($Username) -or [string]::IsNullOrWhiteSpace($Password))) {
-        throw "LocalLoginUsername and LocalLoginPassword must not be empty when local credential sync is enabled."
+        throw 'Persistent local login username and password must not be empty when local credential verification is enabled.'
     }
 
     try {
@@ -1879,7 +2392,25 @@ function Sync-LocalKeycloakLoginCredential {
     }
 
     Assert-LocalKeycloakIdentitySyncIsolation -RootUrl $RootUrl -ComposeArguments $ComposeArguments
-    $databaseUsers = @(Get-LocalKeycloakDatabaseUsers -EnvPath $EnvPath -ComposeArguments $ComposeArguments)
+    $eligibleDatabaseUsers = @(Get-LocalKeycloakDatabaseUsers -EnvPath $EnvPath -ComposeArguments $ComposeArguments)
+    $allowlistHmacKeyBase64 = Get-LocalKeycloakAllowlistHmacKey `
+        -EnvPath $EnvPath `
+        -CreateIfMissing:$InitializeSnapshot
+    try {
+        if ($InitializeSnapshot) {
+            New-LocalKeycloakUserSnapshot `
+                -Path $SnapshotPath `
+                -DatabaseUsers $eligibleDatabaseUsers `
+                -HmacKeyBase64 $allowlistHmacKeyBase64
+        }
+        $snapshotUsers = @(Read-LocalKeycloakUserSnapshot -Path $SnapshotPath)
+        $databaseUsers = @(Select-FrozenLocalKeycloakDatabaseUsers `
+            -DatabaseUsers $eligibleDatabaseUsers `
+            -SnapshotUsers $snapshotUsers `
+            -HmacKeyBase64 $allowlistHmacKeyBase64)
+    } finally {
+        $allowlistHmacKeyBase64 = $null
+    }
     $realm = Get-KeycloakRealm -EnvPath $EnvPath
     $adminToken = Get-KeycloakAdminToken -RootUrl $RootUrl -EnvPath $EnvPath
     $headers = @{ Authorization = "Bearer $adminToken" }
@@ -1898,7 +2429,7 @@ function Sync-LocalKeycloakLoginCredential {
         -KeycloakUsers $managedUsers
 
     if ($SkipCredentialSync) {
-        Write-Host "Local Keycloak managed identities and subject mappings synchronized; local password reset and login probes skipped."
+        Write-Host "Frozen local Keycloak identities and subject mappings synchronized; local password changes and login probes skipped."
         return
     }
 
@@ -1908,6 +2439,16 @@ function Sync-LocalKeycloakLoginCredential {
     })
     if ($selectedDatabaseUsers.Count -ne 1) {
         throw "LocalLoginUsername '$Username' is not an active eligible Keycloak staff or performer user in the isolated local database."
+    }
+
+    if ($InitializeSnapshot -or $RotateCredentials) {
+        # This is the last durable step before password mutation. If the
+        # process is interrupted afterwards, a normal smoke resumes the same
+        # shared credential for every frozen active user.
+        Set-LocalEnvFileValues -Path $EnvPath -Values @{
+            OTZIV_LOCAL_LOGIN_PENDING_USERNAME = $Username
+            OTZIV_LOCAL_LOGIN_PENDING_PASSWORD = $Password
+        }
     }
 
     $managedUsersByName = [System.Collections.Generic.Dictionary[string, object]]::new(
@@ -1922,6 +2463,7 @@ function Sync-LocalKeycloakLoginCredential {
     }
 
     $loginTargets = [System.Collections.Generic.List[object]]::new()
+    $credentialResetCount = 0
     foreach ($databaseUser in @($activeDatabaseUsers | Sort-Object Id)) {
         if (-not $managedUsersByName.ContainsKey($databaseUser.Username)) {
             throw "Managed local Keycloak user '$($databaseUser.Username)' was not provisioned in realm '$realm'."
@@ -1940,19 +2482,6 @@ function Sync-LocalKeycloakLoginCredential {
             -Headers $headers `
             -KeycloakUserId ([string]$managedUser.id)
 
-        $credential = @{
-            type = 'password'
-            value = $Password
-            temporary = $false
-        } | ConvertTo-Json -Compress
-        Invoke-RestMethod `
-            -Uri "$apiRoot/users/$($managedUser.id)/reset-password" `
-            -Method Put `
-            -Headers $headers `
-            -Body $credential `
-            -ContentType 'application/json' `
-            -TimeoutSec 30 | Out-Null
-
         try {
             Invoke-RestMethod `
                 -Uri "$apiRoot/attack-detection/brute-force/users/$($managedUser.id)" `
@@ -1960,15 +2489,41 @@ function Sync-LocalKeycloakLoginCredential {
                 -Headers $headers `
                 -TimeoutSec 30 | Out-Null
         } catch {
-            Write-Warning "Password was reset, but the local Keycloak brute-force state for '$($databaseUser.Username)' could not be cleared: $($_.Exception.Message)"
+            throw "The local Keycloak brute-force state for '$($databaseUser.Username)' could not be cleared before login verification: $($_.Exception.Message)"
         }
 
         $credentials = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod `
             -Uri "$apiRoot/users/$($managedUser.id)/credentials" `
             -Headers $headers `
             -TimeoutSec 30))
-        if (-not ($credentials | Where-Object { $_.type -eq 'password' } | Select-Object -First 1)) {
-            throw "Keycloak did not retain a password credential for local user '$($databaseUser.Username)'."
+        $hasPasswordCredential = $null -ne ($credentials | Where-Object { $_.type -eq 'password' } | Select-Object -First 1)
+        $resetCredential = $InitializeSnapshot `
+            -or $RotateCredentials `
+            -or [bool]$managedUser.created `
+            -or -not $hasPasswordCredential
+        if ($resetCredential) {
+            $credential = @{
+                type = 'password'
+                value = $Password
+                temporary = $false
+            } | ConvertTo-Json -Compress
+            Invoke-RestMethod `
+                -Uri "$apiRoot/users/$($managedUser.id)/reset-password" `
+                -Method Put `
+                -Headers $headers `
+                -Body $credential `
+                -ContentType 'application/json' `
+                -TimeoutSec 30 | Out-Null
+
+            $credentialResetCount++
+
+            $credentials = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod `
+                -Uri "$apiRoot/users/$($managedUser.id)/credentials" `
+                -Headers $headers `
+                -TimeoutSec 30))
+            if (-not ($credentials | Where-Object { $_.type -eq 'password' } | Select-Object -First 1)) {
+                throw "Keycloak did not retain a password credential for local user '$($databaseUser.Username)'."
+            }
         }
         [void]$loginTargets.Add([pscustomobject]@{
             Username = [string]$databaseUser.Username
@@ -2057,7 +2612,18 @@ function Sync-LocalKeycloakLoginCredential {
 
     Remove-LocalKeycloakLoginSmokeClients -ApiRoot $apiRoot -Headers $headers
 
-    Write-Host "Local Keycloak login credential synchronized and verified for all $($loginTargets.Count) active eligible user(s) in realm '$realm'; selected account: '$Username'."
+    if ($InitializeSnapshot -or $RotateCredentials) {
+        Set-LocalEnvFileValues -Path $EnvPath -Values @{
+            OTZIV_LOCAL_LOGIN_USERNAME = $Username
+            OTZIV_LOCAL_LOGIN_PASSWORD = $Password
+        }
+        Remove-LocalEnvFileValues `
+            -Path $EnvPath `
+            -Names @('OTZIV_LOCAL_LOGIN_PENDING_USERNAME', 'OTZIV_LOCAL_LOGIN_PENDING_PASSWORD')
+        Write-Host "Persistent local Keycloak login settings saved in the protected external prod-local env file for '$Username'."
+    }
+
+    Write-Host "Frozen local Keycloak login verified for all $($loginTargets.Count) active user(s) in realm '$realm'; $credentialResetCount credential(s) initialized or explicitly rotated; selected account: '$Username'."
 }
 
 function Get-KeycloakClientCredentialsToken {
@@ -3014,13 +3580,39 @@ if (-not (Test-Path -LiteralPath $envResolverPath)) {
 . $envResolverPath
 $composePath = if ([System.IO.Path]::IsPathRooted($ComposeFile)) { $ComposeFile } else { Join-Path $repoRoot $ComposeFile }
 $envPath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot
+$localKeycloakSnapshotPath = if ([System.IO.Path]::IsPathRooted($LocalKeycloakUserSnapshot)) {
+    $LocalKeycloakUserSnapshot
+} else {
+    Join-Path $repoRoot $LocalKeycloakUserSnapshot
+}
 
 if (-not (Test-Path -LiteralPath $composePath)) {
     throw "Compose file not found: $composePath"
 }
+if ($InitializeLocalKeycloakUserSnapshot -and $RotateLocalKeycloakCredentials) {
+    throw '-InitializeLocalKeycloakUserSnapshot already initializes credentials; do not combine it with -RotateLocalKeycloakCredentials.'
+}
+if ($SkipLocalLoginCredentialSync -and $RotateLocalKeycloakCredentials) {
+    throw '-SkipLocalLoginCredentialSync and -RotateLocalKeycloakCredentials are mutually exclusive.'
+}
+if ($SkipLocalLoginCredentialSync -and $InitializeLocalKeycloakUserSnapshot) {
+    throw '-SkipLocalLoginCredentialSync cannot be used during one-time local Keycloak initialization.'
+}
+if ($InitializeLocalKeycloakUserSnapshot -and (Test-Path -LiteralPath $localKeycloakSnapshotPath)) {
+    throw "Local Keycloak user snapshot already exists and will not be overwritten: $localKeycloakSnapshotPath"
+}
+if (-not $InitializeLocalKeycloakUserSnapshot -and -not (Test-Path -LiteralPath $localKeycloakSnapshotPath -PathType Leaf)) {
+    throw "Local Keycloak user snapshot is missing: $localKeycloakSnapshotPath. Create it once with -InitializeLocalKeycloakUserSnapshot -LocalLoginUsername <name>."
+}
 
 Write-Host "Using env file: $envPath"
 Initialize-LocalBotLinkSecrets -EnvPath $envPath
+$localLoginConfiguration = Resolve-LocalKeycloakLoginConfiguration `
+    -EnvPath $envPath `
+    -UsernameOverride $LocalLoginUsername `
+    -InitializeSnapshot:$InitializeLocalKeycloakUserSnapshot `
+    -RotateCredentials:$RotateLocalKeycloakCredentials `
+    -SkipCredentialSync:$SkipLocalLoginCredentialSync
 
 if (-not $SkipProdDbRestore) {
     $restoreScript = Join-Path $scriptRoot "restore-prod-db-local.ps1"
@@ -3210,8 +3802,11 @@ try {
         -RootUrl $BaseUrl `
         -EnvPath $envPath `
         -ComposeArguments $composeArgs `
-        -Username $LocalLoginUsername `
-        -Password $LocalLoginPassword `
+        -SnapshotPath $localKeycloakSnapshotPath `
+        -Username ([string]$localLoginConfiguration.Username) `
+        -Password ([string]$localLoginConfiguration.Password) `
+        -InitializeSnapshot:$InitializeLocalKeycloakUserSnapshot `
+        -RotateCredentials:($RotateLocalKeycloakCredentials -or [bool]$localLoginConfiguration.ResumeCredentialRotation) `
         -SkipCredentialSync:$SkipLocalLoginCredentialSync
     Update-KeycloakFrontendLoopbackRedirects -ComposeArguments $composeArgs -EnvPath $envPath -BaseUrl $BaseUrl
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline

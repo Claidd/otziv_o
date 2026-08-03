@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 2,
+  "capturedAtUtc": "2026-08-03T15:09:03.2208761+00:00",
+  "selectionRoles": [
+    "OWNER",
+    "ADMIN",
+    "MANAGER",
+    "WORKER",
+    "PERFORMER"
+  ],
+  "usernameIdentityAlgorithm": "HMAC-SHA256-NFKC-LOWER",
+  "usersSha256": "d5649d6ca4423ec4bae1a2fbf29c5b13f60c317e061003ed382123c8be5d6e54",
+  "users": [
+    {
+      "usernameHmacSha256": "04913e7a3f9f73dc3b619f74204f254731f5241db7298bedc9ecdfe0225a511d"
+    },
+    {
+      "usernameHmacSha256": "06a2fac8e0f78c8933892dd62bbab1b3094626215ad1687e51d0af65840346e7"
+    },
+    {
+      "usernameHmacSha256": "214812030b3e151382ccb9427322600a1962df82dff3dc7df867d0f3a84e09e1"
+    },
+    {
+      "usernameHmacSha256": "28d79964bea94b06f1ed9896411b0644925e699a94c0268e5621339ccdd8c131"
+    },
+    {
+      "usernameHmacSha256": "332119079df9185dafa9854539baa1babadf5639b949f697ac827a62c44618dc"
+    },
+    {
+      "usernameHmacSha256": "3cfb369c7ed162d931819daae8b5294c18ad271ccb6b894b0c20b180bd0af1ad"
+    },
+    {
+      "usernameHmacSha256": "3eb6691058b1cc2c1ff0180dc92b1632d9844bc1d76d731ef518a77eacdc21ce"
+    },
+    {
+      "usernameHmacSha256": "4b7582323b79258e4a9f4886e626b4012b4df790284d3a2a469c87eadb551d90"
+    },
+    {
+      "usernameHmacSha256": "60b970aa89729da12e3c29ecc0ec1db9715fd044008f8271103bcf097f7706c1"
+    },
+    {
+      "usernameHmacSha256": "76958bc17a3935fac24d61c6ebf7446a13d36b87d66067f15c813949904b859a"
+    },
+    {
+      "usernameHmacSha256": "7a84d4e443ce8ba268bcf42acb419b03249af8e3ef974293a7eaaaa353cd91f6"
+    },
+    {
+      "usernameHmacSha256": "7bbc90028b330fccfb9cf5d10fbe24bc1274f0a54f9ca2b789a3c35d2d8d3b52"
+    },
+    {
+      "usernameHmacSha256": "8290133d6b56442bce182d16a360944631823d14dfdf0df80bd73e65b193942e"
+    },
+    {
+      "usernameHmacSha256": "892e857e119bfe1ec403f8db1af59768ee12414aaee2efa49d38e0c24956c048"
+    },
+    {
+      "usernameHmacSha256": "b43f4b133a6421de019a1488966c99a26b91c4dceb5ca779898139d5a19165e1"
+    },
+    {
+      "usernameHmacSha256": "b7ec7d59f10e30d03d31f1fb7aa232e5b026135f18a0b4f3c6ace3b395decb6a"
+    },
+    {
+      "usernameHmacSha256": "b822753662bf8a04347eb0378045af76696d2530ab085696971d5e3af271af7e"
+    },
+    {
+      "usernameHmacSha256": "c1a1cca28309f9d541c1efcd717ee06d3e3967208d2f9960511b1289eaa9816b"
+    },
+    {
+      "usernameHmacSha256": "d77ecf3fc26ee720ada94149310f68c8a49e7bc3aa2844ea1ec973e86996404e"
+    },
+    {
+      "usernameHmacSha256": "db5ea877a71d77977c0ed40e03db19e5bd5bc59db58c023780d5a877f30506e8"
+    },
+    {
+      "usernameHmacSha256": "ebebbe1ccfc6147d9f647205903b372bd75c437fcd7f0ebe7e06d27e0ce826ac"
+    },
+    {
+      "usernameHmacSha256": "f3acb503f591a828a16d374a93daa66999571ce684270e672841c5de5e181750"
+    },
+    {
+      "usernameHmacSha256": "f480c051059df7c419ac78c76c944eff39a6ec29fa7b6a99022c3d05b47c2d3c"
+    },
+    {
+      "usernameHmacSha256": "fbc9755bce8a127157af799d2e4fba8a45cafe58f58ac016b2f5dfca68b564bb"
+    }
+  ]
+}

@@ -16,7 +16,12 @@ class OneTimeGroupLinkTokenStoreTest {
         String first = store.issue("telegram-company", 42L, SECRET);
         String second = store.issue("telegram-company", 42L, SECRET);
 
-        assertThat(first).isEqualTo(second).doesNotContain("42");
+        // Opaqueness is a structural property here. A random Base64URL token may
+        // legitimately contain the decimal characters of an id by chance, so
+        // asserting doesNotContain("42") makes this security test probabilistic.
+        assertThat(first)
+                .isEqualTo(second)
+                .matches("^[A-Za-z0-9_-]{24}\\.[A-Za-z0-9_-]{16}$");
         assertThat(store.consume(first, "telegram-company", SECRET)).contains(42L);
         assertThat(store.consume(first, "telegram-company", SECRET)).isEmpty();
         assertThat(store.consume(first + "x", "telegram-company", SECRET)).isEmpty();

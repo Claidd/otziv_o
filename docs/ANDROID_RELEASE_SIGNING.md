@@ -69,7 +69,7 @@ Keyless regression-набор использует уже выпущенный A
 .\scripts\test-android-release-contracts.ps1
 ```
 
-Он проверяет успешный release `1.0.61`, а также обязательный отказ при неверном
+Он проверяет успешный release `1.0.62`, а также обязательный отказ при неверном
 signer, package, `versionCode`, `versionName` и для legacy debuggable APK.
 
 ## Публикация

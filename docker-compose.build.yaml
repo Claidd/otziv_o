@@ -12,3 +12,9 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+
+  external-review-worker:
+    image: ${EXTERNAL_REVIEW_WORKER_IMAGE:-claid38/otziv-external-review-worker:latest}
+    build:
+      context: ./backend/external-review-worker
+      dockerfile: Dockerfile

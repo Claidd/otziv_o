@@ -274,14 +274,19 @@ docker compose -f docker-compose.build.yaml push
 
 Что делает скрипт:
 
-- собирает `APP_IMAGE` и `WEB_IMAGE` через `docker-compose.build.yaml`;
-- пушит оба образа в Docker Hub;
+- собирает `APP_IMAGE`, `WEB_IMAGE` и `EXTERNAL_REVIEW_WORKER_IMAGE` через `docker-compose.build.yaml`;
+- пушит все три образа в Docker Hub;
 - загружает на VPS `docker-compose.yaml`, `.env.prod` и prod-конфиги из `infrastructure`;
-- перед заменой файлов делает backup старых `docker-compose.yaml` и env-файла в `.deploy-backups/<tag>/`;
+- до замены файлов и до запуска Flyway создаёт обязательный зашифрованный DB-backup с отдельным `DEPLOY_DB_BACKUP_ENCRYPTION_KEY_BASE64`, проверяет HMAC/расшифровку/gzip на VPS и скачивает копию в `%USERPROFILE%\.otziv\backups\pre-deploy\<tag>`;
+- до backup отключает и останавливает `otziv-prod-up.timer` и активный oneshot-сервис, сохраняет исходные состояния enable/active в защищённом lock-каталоге, затем удерживает один durable deploy-lock до завершения rollout, поэтому self-heal, перезагрузка VPS и второй deploy не могут вклиниться между снимком БД и миграцией;
+- сохраняет DB-backup в `.deploy-backups/<tag>/`, а старые `docker-compose.yaml` и env-файл — в уникальном `.deploy-backups/<tag>/rollout-<id>/`, поэтому повтор того же тега не затирает исходный rollback;
 - при первом переходе с прежней раскладки сертификатов копирует `data/nginx/o-ogo.crt`/`o-ogo.key` в `data/nginx/certs/fullchain.pem`/`privkey.pem`, если новых файлов еще нет;
-- на VPS выполняет `docker compose down --remove-orphans`;
-- удаляет старые Docker-образы только для backend/frontend репозиториев;
-- тянет новые `app`/`nginx` образы и запускает стек через `docker compose up -d --remove-orphans`.
+- проверяет неизменность Flyway history после DB-backup, затем тянет и последовательно обновляет `external-review-worker`, `app` и остальные сервисы;
+- устанавливает version-controlled `/usr/local/sbin/otziv-prod-up.sh`: он пропускает запуск при deploy-lock и после релиза восстанавливает все обычные сервисы плюс профиль `external-review`;
+- после health-check backend fail-closed обновляет MAX webhook и требует ответ `success=true`; при ошибке self-heal остаётся отключённым и остановленным, а deploy-lock сохраняется для ручной проверки;
+- публикует переданный APK только после финальных health-check нового backend и обязательных сервисов.
+
+Для релиза 5.50 `APP_MEMORY_LIMIT` обязателен и должен быть не ниже `2304m`: фактический пик RSS новой сборки превышает 1.7 GiB, поэтому прежний лимит `1536m` небезопасен. `JAVA_OPTS` при этом менять не требуется.
 
 Перед первым запуском на локальном компьютере нужен `docker login`, а на VPS должны быть Docker Engine и Docker Compose plugin или standalone-команда `docker-compose`. Можно добавить к команде флаг `-DockerLogin`, чтобы скрипт сам запустил локальный `docker login` перед сборкой и push. По умолчанию скрипт берет локальный `.env.prod`, обновляет в его временной копии `APP_IMAGE`/`WEB_IMAGE` на новый тег и загружает копию на VPS. Если на VPS используется файл `.env`, передай `-RemoteEnvFile .env`.
 
@@ -298,7 +303,33 @@ docker compose -f docker-compose.build.yaml push
   -SkipEnvUpload
 ```
 
-В этом режиме скрипт сохранит серверный env-файл и обновит в нем только `APP_IMAGE` и `WEB_IMAGE`.
+В этом режиме скрипт сохранит серверный env-файл и обновит в нем теги `APP_IMAGE`, `WEB_IMAGE` и `EXTERNAL_REVIEW_WORKER_IMAGE`. Серверный env всё равно должен содержать отдельный `DEPLOY_DB_BACKUP_ENCRYPTION_KEY_BASE64`.
+
+### Восстановление pre-deploy DB-backup
+
+Формат `OTZIV-PREDEPLOY-DB-V2` — AES-256-CBC с PBKDF2-SHA256 (200000 итераций), отдельным производным HMAC-SHA256 и аутентифицированными исходными charset/collation schema. Ключ не совпадает с ключами credential-полей или плановых backup. Обычный deploy потоково сжимает и шифрует dump, поэтому незашифрованная копия на диск не записывается. Сначала проверь выбранную пару файлов:
+
+```sh
+artifact=.deploy-backups/5.50/pre-deploy-5.50-<timestamp>-<id>.sql.gz.enc
+bash infrastructure/scripts/prod/create-pre-deploy-db-backup.sh verify "$artifact" "$artifact.manifest" .env
+```
+
+Проверка и расшифровка не меняют БД. Сам restore выполняется только при подтверждённом rollback: сначала отключи автозапуск timer, останови self-heal и все write-path сервисы, затем полностью пересоздай schema. Импорт поверх более новой schema запрещён — иначе таблицы из новых миграций останутся без соответствующей записи Flyway.
+
+```sh
+sudo systemctl disable --now otziv-prod-up.timer
+sudo systemctl stop otziv-prod-up.service
+docker compose -f docker-compose.yaml --env-file .env --profile external-review stop nginx app whatsapp_lika whatsapp_vika external-review-worker
+bash infrastructure/scripts/prod/create-pre-deploy-db-backup.sh restore-clean \
+  "$artifact" "$artifact.manifest" .env my-mysql \
+  I_UNDERSTAND_THIS_REPLACES_PRODUCTION_DATABASE
+```
+
+`restore-clean` дополнительно откажется работать, пока timer разрешён к автозапуску, активен сам timer/oneshot-сервис или работает любой write-path сервис; затем полностью удалит и пересоздаст schema с исходными charset/collation из аутентифицированного зашифрованного backup, импортирует проверенный dump и оставит writers остановленными. После импорта верни сохранённые `docker-compose.yaml` и env нужного релиза, запусти соответствующие образы и проверь backend/БД. `otziv-prod-up.timer` включай только после успешной проверки.
+
+При ошибке до завершения публикации и всех health-check скрипт намеренно оставляет `/docker/.deploy.lock.d`, а timer — disabled и stopped. Сначала убедись, что `deploy-prod.ps1`, SSH backup и миграция уже не выполняются, проверь контейнеры, логи и backup. Только после подтверждённого восстановления удали именно этот lock-каталог и верни timer командой `sudo systemctl enable --now otziv-prod-up.timer`. Если SSH оборвался во время pre-deploy backup, состояние результата неоднозначно: автоматический cleanup намеренно не выполняется, пока оператор не проверит процессы и содержимое lock-каталога.
+
+После успешных health-check и публикации APK начинается только финальная передача управления self-heal. Если SSH оборвётся именно в этом коротком окне, новый релиз уже считается применённым: timer и lock могут быть в любом из двух безопасных конечных состояний. Установленный helper уважает оставшийся lock. Перед повторным deploy проверь оба состояния вручную; не откатывай уже проверенный release автоматически.
 
 ## Локальный Docker запуск
 
