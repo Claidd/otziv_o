@@ -35,6 +35,12 @@ jobs:
       - name: Validate safe backup defaults
         shell: pwsh
         run: ./infrastructure/scripts/security/check-backup-readiness.ps1 -EnvFile .env.prod.example
+      - name: Test production backup readiness guards
+        shell: pwsh
+        run: ./infrastructure/scripts/security/test-backup-readiness.ps1
+      - name: Test protected production backup importer
+        shell: pwsh
+        run: ./infrastructure/scripts/security/test-import-prod-backup-config.ps1
       - name: Reject oversized Git blobs
         if: github.event_name != 'push' || github.event.deleted != true
         shell: pwsh

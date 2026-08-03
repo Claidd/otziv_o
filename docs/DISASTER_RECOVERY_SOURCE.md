@@ -31,7 +31,7 @@ account and bucket rather than the application's primary `S3_*` storage. A
 verified backup run emits `backup-evidence.jsonl`; copy those non-secret records
 to monitoring/audit storage, but do not mistake evidence metadata for the backup
 object itself. See `docs/R0_BACKUP_RESTORE_DRILL.md` for the exact upload,
-HEAD/download/checksum and Object Lock contract.
+version-bound HEAD/download/checksum and Object Lock retention contract.
 
 ## Clean-machine recovery check
 

@@ -37,9 +37,15 @@ spring:
     properties:
       mail:
         smtp:
-          auth: true
+          auth: ${MAIL_SMTP_AUTH:true}
+          connectiontimeout: ${MAIL_SMTP_CONNECTION_TIMEOUT_MS:10000}
+          timeout: ${MAIL_SMTP_READ_TIMEOUT_MS:60000}
+          writetimeout: ${MAIL_SMTP_WRITE_TIMEOUT_MS:60000}
+          ssl:
+            checkserveridentity: ${MAIL_SMTP_SSL_CHECK_SERVER_IDENTITY:true}
           starttls:
-            enable: true
+            enable: ${MAIL_STARTTLS_ENABLE:true}
+            required: ${MAIL_STARTTLS_REQUIRED:false}
 
   jpa:
     hibernate:
@@ -74,7 +80,7 @@ backup:
     user: ${MYSQL_USER}
     password: ${MYSQL_PASSWORD}
   work-dir: /docker/backup
-  part-size-mb: 35
+  part-size-mb: 16
   mail:
     to: 2.12nps@mail.ru
     from: o_company@o-ogo.ru

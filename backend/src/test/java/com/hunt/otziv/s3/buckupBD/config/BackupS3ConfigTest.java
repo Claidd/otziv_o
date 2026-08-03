@@ -8,6 +8,12 @@ import org.junit.jupiter.api.Test;
 class BackupS3ConfigTest {
 
     @Test
+    void requiresServerSideEncryptionByDefault() {
+        org.assertj.core.api.Assertions.assertThat(new BackupS3Properties().isRequireServerSideEncryption())
+                .isTrue();
+    }
+
+    @Test
     void acceptsExplicitlyConfirmedIndependentDestination() {
         assertThatCode(() -> BackupS3Config.validateIndependentDestination(validBackup(), primary()))
                 .doesNotThrowAnyException();

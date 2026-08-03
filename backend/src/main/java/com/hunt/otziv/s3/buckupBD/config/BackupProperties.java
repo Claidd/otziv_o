@@ -12,7 +12,7 @@ public class BackupProperties {
     private boolean enabled = false;
     private Mysql mysql = new Mysql();
     private String workDir = "/docker/backup";
-    private int partSizeMb = 35;
+    private int partSizeMb = 16;
     /**
      * Base64 encoded 256-bit key used for client-side AES-GCM encryption.
      * Backups deliberately fail closed when this is missing or malformed.
@@ -27,7 +27,32 @@ public class BackupProperties {
     private String sourceCommit;
     /** Most recently measured isolated restore time, recorded in evidence when supplied. */
     private Duration restoreDrillRto;
+    /** Daily scheduling is independent from the backup engine so a verified one-shot run can be performed safely. */
+    private Schedule schedule = new Schedule();
+    /** Explicit, idempotent startup request used only for controlled verification runs. */
+    private RunOnce runOnce = new RunOnce();
     private Mail mail = new Mail();
+
+    @Data
+    public static class Schedule {
+        /** Preserves the historical behaviour whenever backup.enabled=true. */
+        private boolean enabled = true;
+        private String cron = "0 0 7 * * *";
+        private String zone = "Asia/Irkutsk";
+        /** Required bounded recovery of the previous daily occurrence after downtime. */
+        private boolean catchUpEnabled = true;
+        /** Covers the previous daily occurrence while remaining below the 36-hour hard limit. */
+        private Duration catchUpWindow = Duration.ofHours(26);
+        private Duration catchUpCheckInterval = Duration.ofMinutes(15);
+        private Duration catchUpInitialDelay = Duration.ofMinutes(1);
+    }
+
+    @Data
+    public static class RunOnce {
+        private boolean enabled = false;
+        /** Stable request id makes a successful startup run idempotent across container restarts. */
+        private String requestId;
+    }
 
     @Data
     public static class Mysql {

@@ -14,6 +14,7 @@ public class BackupS3Properties {
     private String bucket;
     private String projectId;
     private boolean forcePathStyle = true;
+    private boolean requireServerSideEncryption = true;
     private boolean independentDestinationConfirmed = false;
     private boolean privateDestinationConfirmed = false;
     private boolean encryptionAtRestConfirmed = false;

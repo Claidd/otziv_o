@@ -658,6 +658,11 @@ if ($null -ne $localDeployBackupKeyBase64) {
     }
     $localScheduledBackupKeyBase64 = Get-EnvFileValue -Path $envFilePath -Name 'BACKUP_ENCRYPTION_KEY_BASE64'
     if (-not [string]::IsNullOrWhiteSpace($localScheduledBackupKeyBase64) -and
+        -not [string]::IsNullOrWhiteSpace($localCredentialKeyBase64) -and
+        (Test-Base64SecretsEqual -Left $localScheduledBackupKeyBase64 -Right $localCredentialKeyBase64)) {
+        throw 'Scheduled DB-backup encryption and credential-field encryption must use different keys.'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($localScheduledBackupKeyBase64) -and
         (Test-Base64SecretsEqual -Left $localScheduledBackupKeyBase64 -Right $localDeployBackupKeyBase64)) {
         throw 'Pre-deploy and scheduled DB backups must use different encryption keys.'
     }
@@ -1451,6 +1456,7 @@ validate_security_prerequisites() {
     echo "OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 must decode to exactly 32 bytes." >&2
     exit 1
   fi
+  credential_key_sha="`$(printf '%s' "`$credential_key_value" | base64 --decode | sha256sum | awk '{print `$1}')"
   require_env DEPLOY_DB_BACKUP_ENCRYPTION_KEY_BASE64
   deploy_backup_key_value="`$(get_env DEPLOY_DB_BACKUP_ENCRYPTION_KEY_BASE64 "")"
   if ! printf '%s' "`$deploy_backup_key_value" | grep -Eq '^[A-Za-z0-9+/]{43}=?$'; then
@@ -1468,21 +1474,36 @@ validate_security_prerequisites() {
     echo "DEPLOY_DB_BACKUP_ENCRYPTION_KEY_BASE64 must decode to exactly 32 bytes." >&2
     exit 1
   fi
-  if [ "`$deploy_backup_key_value" = "`$credential_key_value" ]; then
+  deploy_backup_key_sha="`$(printf '%s' "`$deploy_backup_key_value" | base64 --decode | sha256sum | awk '{print `$1}')"
+  if [ "`$deploy_backup_key_sha" = "`$credential_key_sha" ]; then
     echo "Deploy DB-backup encryption and credential-field encryption must use different keys." >&2
     exit 1
   fi
   scheduled_backup_key_value="`$(get_env BACKUP_ENCRYPTION_KEY_BASE64 "")"
   if [ -n "`$scheduled_backup_key_value" ]; then
+    if ! printf '%s' "`$scheduled_backup_key_value" | grep -Eq '^[A-Za-z0-9+/]{43}=?`$'; then
+      echo "BACKUP_ENCRYPTION_KEY_BASE64 must be valid Base64." >&2
+      exit 1
+    fi
     if [ "`$(printf '%s' "`$scheduled_backup_key_value" | wc -c | tr -d ' ')" -eq 43 ]; then
       scheduled_backup_key_value="`$scheduled_backup_key_value="
     fi
-    if [ "`$deploy_backup_key_value" = "`$scheduled_backup_key_value" ]; then
+    scheduled_backup_key_bytes="`$(printf '%s' "`$scheduled_backup_key_value" | base64 --decode 2>/dev/null | wc -c | tr -d ' ')"
+    if [ "`$scheduled_backup_key_bytes" -ne 32 ]; then
+      echo "BACKUP_ENCRYPTION_KEY_BASE64 must decode to exactly 32 bytes." >&2
+      exit 1
+    fi
+    scheduled_backup_key_sha="`$(printf '%s' "`$scheduled_backup_key_value" | base64 --decode | sha256sum | awk '{print `$1}')"
+    if [ "`$deploy_backup_key_sha" = "`$scheduled_backup_key_sha" ]; then
       echo "Pre-deploy and scheduled DB backups must use different encryption keys." >&2
       exit 1
     fi
+    if [ "`$credential_key_sha" = "`$scheduled_backup_key_sha" ]; then
+      echo "Scheduled DB-backup encryption and credential-field encryption must use different keys." >&2
+      exit 1
+    fi
   fi
-  unset credential_key_id credential_key_value credential_key_bytes deploy_backup_key_value deploy_backup_key_bytes scheduled_backup_key_value
+  unset credential_key_id credential_key_value credential_key_bytes credential_key_sha deploy_backup_key_value deploy_backup_key_bytes deploy_backup_key_sha scheduled_backup_key_value scheduled_backup_key_bytes scheduled_backup_key_sha
 
   if [ "`$(get_env WHATSAPP_GATEWAY_AUTH_REQUIRED true)" = "true" ]; then
     require_env WHATSAPP_GATEWAY_SHARED_SECRET
@@ -1508,7 +1529,55 @@ validate_security_prerequisites() {
     exit 1
   fi
 
+  for backup_boolean_name in BACKUP_ENABLED BACKUP_SCHEDULE_ENABLED BACKUP_SCHEDULE_CATCH_UP_ENABLED BACKUP_RUN_ONCE_ENABLED BACKUP_S3_FORCE_PATH_STYLE BACKUP_S3_REQUIRE_SERVER_SIDE_ENCRYPTION BACKUP_S3_INDEPENDENT_CONFIRMED BACKUP_DESTINATION_PRIVATE_CONFIRMED BACKUP_ENCRYPTION_AT_REST_CONFIRMED BACKUP_S3_OBJECT_LOCK_ENABLED BACKUP_MAIL_ENABLED BACKUP_EMAIL_DELIVERY_CONFIRMED; do
+    backup_boolean_value="`$(get_env "`$backup_boolean_name" "")"
+    if [ -n "`$backup_boolean_value" ] && [ "`$backup_boolean_value" != "true" ] && [ "`$backup_boolean_value" != "false" ]; then
+      echo "`$backup_boolean_name must be exactly true or false." >&2
+      exit 1
+    fi
+  done
+  unset backup_boolean_name backup_boolean_value
+
+  if [ "`$(get_env BACKUP_RUN_ONCE_ENABLED false)" != "false" ]; then
+    echo "BACKUP_RUN_ONCE_ENABLED must remain false in persistent production env; one-shot mode is not a production procedure." >&2
+    exit 1
+  fi
+
   if [ "`$(get_env BACKUP_ENABLED false)" = "true" ]; then
+    if [ "`$(get_env BACKUP_SCHEDULE_ENABLED true)" != "true" ]; then
+      echo "BACKUP_ENABLED=true requires BACKUP_SCHEDULE_ENABLED=true for recurring production backups." >&2
+      exit 1
+    fi
+    if [ "`$(get_env BACKUP_SCHEDULE_CATCH_UP_ENABLED true)" != "true" ]; then
+      echo "BACKUP_ENABLED=true requires BACKUP_SCHEDULE_CATCH_UP_ENABLED=true." >&2
+      exit 1
+    fi
+    backup_catch_up_window="`$(get_env BACKUP_SCHEDULE_CATCH_UP_WINDOW PT26H)"
+    if ! printf '%s' "`$backup_catch_up_window" | grep -Eq '^PT(2[5-9]|3[0-6])H`$'; then
+      echo "BACKUP_SCHEDULE_CATCH_UP_WINDOW must be a whole-hour duration from PT25H through PT36H." >&2
+      exit 1
+    fi
+    backup_schedule_cron="`$(get_env BACKUP_SCHEDULE_CRON "0 0 7 * * *")"
+    if ! printf '%s\n' "`$backup_schedule_cron" | awk '
+      NF == 6 &&
+      `$1 ~ /^[0-9]+`$/ && `$2 ~ /^[0-9]+`$/ && `$3 ~ /^[0-9]+`$/ &&
+      `$1 >= 0 && `$1 <= 59 && `$2 >= 0 && `$2 <= 59 && `$3 >= 0 && `$3 <= 23 &&
+      `$4 == "*" && `$5 == "*" && `$6 == "*" {
+        valid = 1
+      }
+      END { exit(valid ? 0 : 1) }
+    '; then
+      echo "BACKUP_SCHEDULE_CRON must contain one numeric seconds/minutes/hours value and '*' for day-of-month/month/day-of-week." >&2
+      exit 1
+    fi
+    backup_schedule_zone="`$(get_env BACKUP_SCHEDULE_ZONE "Asia/Irkutsk")"
+    if ! printf '%s' "`$backup_schedule_zone" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._+/-]{0,127}$' ||
+       printf '%s' "`$backup_schedule_zone" | grep -Fq '..' ||
+       [ ! -f "/usr/share/zoneinfo/`$backup_schedule_zone" ]; then
+      echo "BACKUP_SCHEDULE_ZONE must identify an installed IANA time zone." >&2
+      exit 1
+    fi
+    unset backup_catch_up_window backup_schedule_cron backup_schedule_zone
     require_env BACKUP_S3_ENDPOINT
     require_env BACKUP_S3_REGION
     require_env BACKUP_S3_BUCKET
@@ -1517,13 +1586,28 @@ validate_security_prerequisites() {
     require_env BACKUP_S3_SECRET_KEY
     require_env BACKUP_ENCRYPTION_KEY_BASE64
     require_env BACKUP_RESTORE_DRILL_RTO
-    case "`$(get_env BACKUP_S3_ENDPOINT "")" in
+    case "`$(get_env BACKUP_S3_REQUIRE_SERVER_SIDE_ENCRYPTION true)" in
+      true|false) ;;
+      *)
+        echo "BACKUP_S3_REQUIRE_SERVER_SIDE_ENCRYPTION must be true or false." >&2
+        exit 1
+        ;;
+    esac
+    backup_endpoint="`$(get_env BACKUP_S3_ENDPOINT "")"
+    case "`$backup_endpoint" in
       https://*) ;;
       *)
         echo "BACKUP_S3_ENDPOINT must use HTTPS." >&2
         exit 1
         ;;
     esac
+    case "`$backup_endpoint" in
+      *'`$'*|*'#'*|*'"'*|*"'"*)
+        echo "BACKUP_S3_ENDPOINT must be a literal env-safe HTTPS URI." >&2
+        exit 1
+        ;;
+    esac
+    unset backup_endpoint
     if [ "`$(get_env BACKUP_S3_INDEPENDENT_CONFIRMED false)" != "true" ]; then
       echo "BACKUP_ENABLED=true requires BACKUP_S3_INDEPENDENT_CONFIRMED=true." >&2
       exit 1
@@ -1585,10 +1669,68 @@ validate_security_prerequisites() {
     if [ "`$(get_env BACKUP_MAIL_ENABLED false)" = "true" ]; then
       require_env BACKUP_MAIL_TO
       require_env BACKUP_MAIL_FROM
+      require_env MAIL_HOST
+      require_env MAIL_USERNAME
+      require_env MAIL_PASSWORD
       if [ "`$(get_env BACKUP_EMAIL_DELIVERY_CONFIRMED false)" != "true" ]; then
         echo "BACKUP_MAIL_ENABLED=true requires BACKUP_EMAIL_DELIVERY_CONFIRMED=true." >&2
         exit 1
       fi
+      mail_port="`$(get_env MAIL_PORT 587)"
+      case "`$mail_port" in
+        ''|*[!0-9]*) echo "MAIL_PORT must be an integer from 1 to 65535." >&2; exit 1 ;;
+      esac
+      if [ "`$mail_port" -lt 1 ] || [ "`$mail_port" -gt 65535 ]; then
+        echo "MAIL_PORT must be an integer from 1 to 65535." >&2
+        exit 1
+      fi
+      mail_connection_timeout="`$(get_env MAIL_SMTP_CONNECTION_TIMEOUT_MS 10000)"
+      mail_read_timeout="`$(get_env MAIL_SMTP_READ_TIMEOUT_MS 60000)"
+      mail_write_timeout="`$(get_env MAIL_SMTP_WRITE_TIMEOUT_MS 60000)"
+      for mail_timeout in "`$mail_connection_timeout" "`$mail_read_timeout" "`$mail_write_timeout"; do
+        case "`$mail_timeout" in
+          ''|*[!0-9]*) echo "SMTP timeouts must be positive integers no greater than 600000 ms." >&2; exit 1 ;;
+        esac
+        if [ "`$mail_timeout" -lt 1 ] || [ "`$mail_timeout" -gt 600000 ]; then
+          echo "SMTP timeouts must be positive integers no greater than 600000 ms." >&2
+          exit 1
+        fi
+      done
+      for mail_security_name in MAIL_SMTP_AUTH MAIL_STARTTLS_ENABLE MAIL_STARTTLS_REQUIRED MAIL_SMTP_SSL_CHECK_SERVER_IDENTITY; do
+        if [ "`$(get_env "`$mail_security_name" true)" != "true" ]; then
+          echo "`$mail_security_name=true is required for encrypted authenticated backup email." >&2
+          exit 1
+        fi
+      done
+      mail_subject="`$(get_env BACKUP_MAIL_SUBJECT "Otziv database backup")"
+      mail_body="`$(get_env BACKUP_MAIL_BODY "Daily database backup")"
+      mail_to="`$(get_env BACKUP_MAIL_TO "")"
+      mail_from="`$(get_env BACKUP_MAIL_FROM "")"
+      for mail_address in "`$mail_to" "`$mail_from"; do
+        if ! printf '%s' "`$mail_address" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?\.[A-Za-z]{2,63}`$'; then
+          echo "BACKUP_MAIL_TO and BACKUP_MAIL_FROM must each contain one canonical email address." >&2
+          exit 1
+        fi
+        mail_local_part="`$`{mail_address%@*}"
+        mail_domain_part="`$`{mail_address#*@}"
+        case "`$mail_local_part" in .*|*.|*..*)
+          echo "BACKUP_MAIL_TO and BACKUP_MAIL_FROM must each contain one canonical email address." >&2
+          exit 1
+          ;;
+        esac
+        case "`$mail_domain_part" in .*|*.|*..*)
+          echo "BACKUP_MAIL_TO and BACKUP_MAIL_FROM must each contain one canonical email address." >&2
+          exit 1
+          ;;
+        esac
+      done
+      case "`$mail_to`$mail_from`$mail_subject`$mail_body" in
+        *'`$'*|*'#'*|*'"'*|*"'"*)
+          echo "Backup mail addresses, subject and body must be literal single-line env-safe text." >&2
+          exit 1
+          ;;
+      esac
+      unset mail_port mail_connection_timeout mail_read_timeout mail_write_timeout mail_timeout mail_security_name mail_address mail_local_part mail_domain_part mail_to mail_from mail_subject mail_body
     fi
     require_env BACKUP_RESTORE_DRILL_DATE
     drill_date="`$(get_env BACKUP_RESTORE_DRILL_DATE "")"

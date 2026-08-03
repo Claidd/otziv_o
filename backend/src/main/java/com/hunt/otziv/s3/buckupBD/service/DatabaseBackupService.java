@@ -1,17 +1,22 @@
 package com.hunt.otziv.s3.buckupBD.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.config.email.service.EmailService;
 import com.hunt.otziv.s3.buckupBD.config.BackupProperties;
 import com.hunt.otziv.s3.buckupBD.config.BackupS3Properties;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
@@ -26,11 +31,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -48,10 +56,13 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRetentionRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRetentionResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ObjectLockMode;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 
 @Slf4j
@@ -79,7 +90,22 @@ public class DatabaseBackupService {
     private static final Pattern SAFE_PROJECT_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,127}");
     private static final Pattern SAFE_EVIDENCE_FILE = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,127}");
     private static final Pattern SAFE_SOURCE_COMMIT = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}");
+    private static final Pattern SAFE_RUN_REQUEST_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}");
+    private static final String RUN_ID_PATTERN = "\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2}-\\d{3}_[0-9a-f]{32}";
+    private static final Pattern OWNED_PLAINTEXT_TEMP_FILE = Pattern.compile(
+            "^backup_" + RUN_ID_PATTERN + "\\.sql(?:\\.gz)?$"
+    );
+    private static final Pattern OWNED_ENCRYPTED_TEMP_FILE = Pattern.compile(
+            "^(?:backup_" + RUN_ID_PATTERN + "\\.sql\\.gz\\.enc(?:\\.part\\d+)?"
+                    + "|\\.verify_" + RUN_ID_PATTERN + "\\.sql\\.gz\\.enc)$"
+    );
     private static final String BACKUP_FORMAT = "otzivdb2-chunked-aes-256-gcm";
+    private static final String CLIENT_SIDE_ENCRYPTION = "OTZIVDB2_AES_256_GCM";
+    private static final String NO_SERVER_SIDE_ENCRYPTION_REPORTED = "NONE_REPORTED";
+    private static final String BACKUP_EVIDENCE_SCHEMA = "otziv-backup-evidence-v1";
+    private static final String EVIDENCE_PHASE_REMOTE_VERIFIED = "remote-verified";
+    private static final String EVIDENCE_PHASE_COMPLETED = "completed";
+    private static final String LOCAL_RUN_LOCK_FILE = ".database-backup-run.lock";
     private static final Duration MAX_OPERATION_TIMEOUT = Duration.ofHours(24);
     private static final Duration MAX_RESTORE_DRILL_RTO = Duration.ofDays(7);
     private static final int MAX_PART_SIZE_MB = 1024;
@@ -112,7 +138,34 @@ public class DatabaseBackupService {
     }
 
     public void runDailyBackup() throws Exception {
+        runBackup("scheduled", null);
+    }
+
+    public void runCatchUpBackup() throws Exception {
+        runBackup("catch-up", null);
+    }
+
+    public void runManualBackup(String requestId) throws Exception {
+        runBackup("manual", requireRunRequestId(requestId));
+    }
+
+    private void runBackup(String trigger, String requestId) throws Exception {
         BackupRunConfiguration configuration = validateAndPrepareConfiguration();
+        try {
+            try (LocalBackupRunLock ignored = acquireLocalBackupRunLock(configuration.workDir())) {
+                cleanupStaleTemporaryFiles(configuration.workDir(), configuration.evidenceFile());
+                runBackupWithLocalLock(configuration, trigger, requestId);
+            }
+        } finally {
+            Arrays.fill(configuration.encryptionKey(), (byte) 0);
+        }
+    }
+
+    private void runBackupWithLocalLock(
+            BackupRunConfiguration configuration,
+            String trigger,
+            String requestId
+    ) throws Exception {
         Instant startedAt = Instant.now();
         String timestamp = LocalDateTime.now().format(TS);
         String runId = timestamp + "_" + UUID.randomUUID().toString().replace("-", "");
@@ -120,6 +173,8 @@ public class DatabaseBackupService {
         Path gzFile = configuration.workDir().resolve("backup_" + runId + ".sql.gz");
         Path encryptedFile = configuration.workDir().resolve("backup_" + runId + ".sql.gz.enc");
         List<Path> parts = new ArrayList<>();
+        BackupMailDeliveryResult mailDelivery = BackupMailDeliveryResult.disabled();
+        Exception mailFailure = null;
         Exception runFailure = null;
 
         try {
@@ -128,8 +183,8 @@ public class DatabaseBackupService {
             encryptAesGcm(gzFile, encryptedFile, configuration.encryptionKey());
 
             // Never upload or report success while recoverable plaintext remains locally.
-            deleteRequired(sqlFile);
-            deleteRequired(gzFile);
+            overwriteAndDeletePlaintext(sqlFile);
+            overwriteAndDeletePlaintext(gzFile);
 
             VerifiedBackup verifiedBackup = uploadAndVerify(
                     encryptedFile,
@@ -137,17 +192,40 @@ public class DatabaseBackupService {
                     configuration,
                     startedAt
             );
+            writeRemoteVerificationEvidence(
+                    configuration.evidenceFile(),
+                    verifiedBackup,
+                    trigger,
+                    requestId,
+                    backupProps.getMail().isEnabled()
+            );
 
             if (backupProps.getMail().isEnabled()) {
-                parts = splitFile(encryptedFile, configuration.partSizeBytes());
-                sendEncryptedPartsByEmail(parts, timestamp);
+                try {
+                    parts = splitFile(encryptedFile, configuration.partSizeBytes());
+                    mailDelivery = BackupMailDeliveryResult.failed(parts.size());
+                    sendEncryptedPartsByEmail(parts, timestamp);
+                    mailDelivery = BackupMailDeliveryResult.succeeded(parts.size());
+                } catch (Exception exception) {
+                    mailFailure = exception;
+                    mailDelivery = BackupMailDeliveryResult.failed(parts.size());
+                }
             }
 
-            // Successful evidence is written only after every run-owned local artifact is gone.
+            // The remote-verified receipt above already prevents duplicate immutable uploads. This
+            // completed record additionally attests optional email delivery and checked local cleanup.
             deleteAllRequired(parts);
             deleteRequired(encryptedFile);
             BackupCleanupResult cleanup = new BackupCleanupResult(true, true, true, true, true);
-            writeEvidence(configuration.evidenceFile(), verifiedBackup, cleanup);
+            recordVerifiedBackupAndReportMailFailure(
+                    configuration.evidenceFile(),
+                    verifiedBackup,
+                    cleanup,
+                    trigger,
+                    requestId,
+                    mailDelivery,
+                    mailFailure
+            );
             log.info(
                     "Database backup completed, independently verified, and temporary files removed: objectId={}, sha256={}",
                     runId,
@@ -157,9 +235,8 @@ public class DatabaseBackupService {
             runFailure = exception;
             throw exception;
         } finally {
-            Arrays.fill(configuration.encryptionKey(), (byte) 0);
             try {
-                deleteAllRequired(concatPaths(sqlFile, gzFile, encryptedFile, parts));
+                cleanupRunArtifacts(sqlFile, gzFile, encryptedFile, parts);
             } catch (IOException cleanupFailure) {
                 if (runFailure != null) {
                     runFailure.addSuppressed(cleanupFailure);
@@ -476,6 +553,96 @@ public class DatabaseBackupService {
         }
     }
 
+    static void verifyEncryptedEnvelope(Path input, byte[] encryptionKey) throws IOException {
+        if (encryptionKey == null || encryptionKey.length != AES_KEY_BYTES) {
+            throw new IllegalArgumentException("AES-256 envelope verification requires exactly 32 key bytes");
+        }
+        long envelopeLength = Files.size(input);
+        if (envelopeLength < ENCRYPTED_FILE_HEADER_BYTES) {
+            throw new IllegalStateException("Encrypted OTZIVDB2 backup is shorter than its header");
+        }
+
+        byte[] header = new byte[ENCRYPTED_FILE_HEADER_BYTES];
+        try (InputStream source = Files.newInputStream(input)) {
+            readExactly(source, header, header.length);
+            ByteBuffer headerBuffer = ByteBuffer.wrap(header);
+            byte[] magic = new byte[ENCRYPTED_FILE_MAGIC.length];
+            headerBuffer.get(magic);
+            if (!Arrays.equals(magic, ENCRYPTED_FILE_MAGIC)) {
+                throw new IllegalStateException("Encrypted backup is not an OTZIVDB2 envelope");
+            }
+
+            int chunkSizeBytes = headerBuffer.getInt();
+            long plaintextLength = headerBuffer.getLong();
+            byte[] noncePrefix = new byte[NONCE_PREFIX_BYTES];
+            headerBuffer.get(noncePrefix);
+            if (chunkSizeBytes < MIN_ENCRYPTION_CHUNK_BYTES || chunkSizeBytes > MAX_ENCRYPTION_CHUNK_BYTES) {
+                throw new IllegalStateException("OTZIVDB2 envelope has an unsupported chunk size");
+            }
+            if (plaintextLength <= 0) {
+                throw new IllegalStateException("OTZIVDB2 envelope has an invalid plaintext length");
+            }
+
+            long chunkCount = ((plaintextLength - 1) / chunkSizeBytes) + 1;
+            if (chunkCount > MAX_ENCRYPTION_CHUNKS) {
+                throw new IllegalStateException("OTZIVDB2 envelope contains too many chunks");
+            }
+            long expectedEnvelopeLength;
+            try {
+                expectedEnvelopeLength = Math.addExact(
+                        ENCRYPTED_FILE_HEADER_BYTES,
+                        Math.addExact(plaintextLength, Math.multiplyExact(chunkCount, (long) GCM_TAG_BYTES))
+                );
+            } catch (ArithmeticException exception) {
+                throw new IllegalStateException("OTZIVDB2 envelope length is invalid", exception);
+            }
+            if (envelopeLength != expectedEnvelopeLength) {
+                throw new IllegalStateException("OTZIVDB2 envelope length does not match its authenticated header");
+            }
+
+            long remaining = plaintextLength;
+            for (long chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+                int plaintextBytes = (int) Math.min((long) chunkSizeBytes, remaining);
+                byte[] ciphertextAndTag = new byte[plaintextBytes + GCM_TAG_BYTES];
+                byte[] decrypted = null;
+                try {
+                    readExactly(source, ciphertextAndTag, ciphertextAndTag.length);
+                    byte[] nonce = ByteBuffer.allocate(GCM_IV_BYTES)
+                            .put(noncePrefix)
+                            .putInt((int) chunkIndex)
+                            .array();
+                    byte[] aad = ByteBuffer.allocate(header.length + Integer.BYTES + Integer.BYTES)
+                            .put(header)
+                            .putInt((int) chunkIndex)
+                            .putInt(plaintextBytes)
+                            .array();
+                    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+                    cipher.init(
+                            Cipher.DECRYPT_MODE,
+                            new SecretKeySpec(encryptionKey, "AES"),
+                            new GCMParameterSpec(GCM_TAG_BITS, nonce)
+                    );
+                    cipher.updateAAD(aad);
+                    decrypted = cipher.doFinal(ciphertextAndTag);
+                    if (decrypted.length != plaintextBytes) {
+                        throw new IllegalStateException("OTZIVDB2 envelope decrypted to an unexpected chunk size");
+                    }
+                } catch (GeneralSecurityException exception) {
+                    throw new IllegalStateException("OTZIVDB2 client-side envelope authentication failed", exception);
+                } finally {
+                    Arrays.fill(ciphertextAndTag, (byte) 0);
+                    if (decrypted != null) {
+                        Arrays.fill(decrypted, (byte) 0);
+                    }
+                }
+                remaining -= plaintextBytes;
+            }
+            if (remaining != 0 || source.read() != -1) {
+                throw new IllegalStateException("OTZIVDB2 envelope did not end at its authenticated boundary");
+            }
+        }
+    }
+
     private static void readExactly(InputStream source, byte[] destination, int length) throws IOException {
         int offset = 0;
         while (offset < length) {
@@ -518,37 +685,54 @@ public class DatabaseBackupService {
                 .key(key)
                 .contentType("application/octet-stream")
                 .contentLength(expectedBytes)
-                .serverSideEncryption(ServerSideEncryption.AES256)
                 .metadata(metadata)
                 .overrideConfiguration(builder -> builder
                         .apiCallTimeout(configuration.uploadTimeout())
                         .apiCallAttemptTimeout(configuration.uploadTimeout()));
+        if (backupS3Props.isRequireServerSideEncryption()) {
+            putBuilder.serverSideEncryption(ServerSideEncryption.AES256);
+        }
         if (objectLockMode != null) {
             putBuilder.objectLockMode(objectLockMode).objectLockRetainUntilDate(retentionUntil);
         }
 
-        backupS3Client.putObject(putBuilder.build(), RequestBody.fromFile(file));
+        PutObjectResponse putResponse = backupS3Client.putObject(putBuilder.build(), RequestBody.fromFile(file));
+        String uploadedVersionId = trimToNull(putResponse == null ? null : putResponse.versionId());
+        if (objectLockMode != null && uploadedVersionId == null) {
+            throw new IllegalStateException(
+                    "Backup destination did not identify the exact object version protected by Object Lock"
+            );
+        }
 
-        HeadObjectResponse head = backupS3Client.headObject(HeadObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .overrideConfiguration(builder -> builder
-                        .apiCallTimeout(configuration.uploadTimeout())
-                        .apiCallAttemptTimeout(configuration.uploadTimeout()))
-                .build());
-        verifyHeadResponse(head, expectedBytes, expectedSha256, objectLockMode, retentionUntil);
+        HeadObjectResponse head = backupS3Client.headObject(buildHeadObjectRequest(
+                bucket,
+                key,
+                uploadedVersionId,
+                configuration.uploadTimeout()
+        ));
+        String actualServerSideEncryption = verifyHeadResponse(
+                head,
+                expectedBytes,
+                expectedSha256,
+                backupS3Props.isRequireServerSideEncryption()
+        );
+        if (objectLockMode != null) {
+            GetObjectRetentionResponse retention = backupS3Client.getObjectRetention(
+                    buildGetObjectRetentionRequest(
+                            bucket,
+                            key,
+                            uploadedVersionId,
+                            configuration.uploadTimeout()
+                    )
+            );
+            verifyObjectRetention(retention, objectLockMode, retentionUntil);
+        }
 
         Path downloaded = configuration.workDir().resolve(".verify_" + runId + ".sql.gz.enc");
         Exception verificationFailure = null;
         try {
             backupS3Client.getObject(
-                    GetObjectRequest.builder()
-                            .bucket(bucket)
-                            .key(key)
-                            .overrideConfiguration(builder -> builder
-                                    .apiCallTimeout(configuration.uploadTimeout())
-                                    .apiCallAttemptTimeout(configuration.uploadTimeout()))
-                            .build(),
+                    buildGetObjectRequest(bucket, key, uploadedVersionId, configuration.uploadTimeout()),
                     ResponseTransformer.toFile(downloaded)
             );
             long downloadedBytes = Files.size(downloaded);
@@ -559,6 +743,7 @@ public class DatabaseBackupService {
             )) {
                 throw new IllegalStateException("Downloaded backup checksum or size does not match the uploaded object");
             }
+            verifyEncryptedEnvelope(downloaded, configuration.encryptionKey());
         } catch (IOException | RuntimeException exception) {
             verificationFailure = exception;
             throw exception;
@@ -579,20 +764,78 @@ public class DatabaseBackupService {
                 verifiedAt,
                 bucket,
                 key,
+                uploadedVersionId,
                 expectedSha256,
                 expectedBytes,
+                CLIENT_SIDE_ENCRYPTION,
+                true,
+                actualServerSideEncryption,
+                backupS3Props.isRequireServerSideEncryption(),
                 objectLockMode,
                 retentionUntil,
                 Duration.between(startedAt, verifiedAt)
         );
     }
 
-    static void verifyHeadResponse(
+    static HeadObjectRequest buildHeadObjectRequest(
+            String bucket,
+            String key,
+            String versionId,
+            Duration timeout
+    ) {
+        HeadObjectRequest.Builder builder = HeadObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .overrideConfiguration(configuration -> configuration
+                        .apiCallTimeout(timeout)
+                        .apiCallAttemptTimeout(timeout));
+        if (versionId != null) {
+            builder.versionId(versionId);
+        }
+        return builder.build();
+    }
+
+    static GetObjectRetentionRequest buildGetObjectRetentionRequest(
+            String bucket,
+            String key,
+            String versionId,
+            Duration timeout
+    ) {
+        GetObjectRetentionRequest.Builder builder = GetObjectRetentionRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .overrideConfiguration(configuration -> configuration
+                        .apiCallTimeout(timeout)
+                        .apiCallAttemptTimeout(timeout));
+        if (versionId != null) {
+            builder.versionId(versionId);
+        }
+        return builder.build();
+    }
+
+    static GetObjectRequest buildGetObjectRequest(
+            String bucket,
+            String key,
+            String versionId,
+            Duration timeout
+    ) {
+        GetObjectRequest.Builder builder = GetObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .overrideConfiguration(configuration -> configuration
+                        .apiCallTimeout(timeout)
+                        .apiCallAttemptTimeout(timeout));
+        if (versionId != null) {
+            builder.versionId(versionId);
+        }
+        return builder.build();
+    }
+
+    static String verifyHeadResponse(
             HeadObjectResponse head,
             long expectedBytes,
             String expectedSha256,
-            ObjectLockMode expectedObjectLockMode,
-            Instant expectedRetentionUntil
+            boolean requireServerSideEncryption
     ) {
         if (head == null) {
             throw new IllegalStateException("Backup HEAD verification returned no response");
@@ -607,18 +850,149 @@ public class DatabaseBackupService {
         )) {
             throw new IllegalStateException("Backup HEAD verification returned an unexpected SHA-256 metadata value");
         }
-        if (head.serverSideEncryption() != ServerSideEncryption.AES256) {
+        ServerSideEncryption actualEncryption = head.serverSideEncryption();
+        if (requireServerSideEncryption && actualEncryption != ServerSideEncryption.AES256) {
             throw new IllegalStateException("Backup destination did not confirm AES-256 server-side encryption");
         }
-        if (expectedObjectLockMode != null) {
-            if (head.objectLockMode() != expectedObjectLockMode) {
-                throw new IllegalStateException("Backup destination did not confirm the requested Object Lock mode");
-            }
-            Instant actualRetention = head.objectLockRetainUntilDate();
-            if (actualRetention == null || actualRetention.isBefore(expectedRetentionUntil.minusSeconds(1))) {
-                throw new IllegalStateException("Backup destination did not confirm the requested Object Lock retention");
+        if (actualEncryption != null && actualEncryption != ServerSideEncryption.AES256) {
+            throw new IllegalStateException("Backup destination reported an unsupported server-side encryption mode");
+        }
+        return actualEncryption == ServerSideEncryption.AES256
+                ? ServerSideEncryption.AES256.toString()
+                : NO_SERVER_SIDE_ENCRYPTION_REPORTED;
+    }
+
+    static void verifyObjectRetention(
+            GetObjectRetentionResponse response,
+            ObjectLockMode expectedObjectLockMode,
+            Instant expectedRetentionUntil
+    ) {
+        if (response == null || response.retention() == null) {
+            throw new IllegalStateException("Backup destination returned no Object Lock retention settings");
+        }
+        String actualMode = response.retention().modeAsString();
+        if (actualMode == null || !expectedObjectLockMode.toString().equals(actualMode)) {
+            throw new IllegalStateException("Backup destination did not confirm the requested Object Lock mode");
+        }
+        Instant actualRetention = response.retention().retainUntilDate();
+        if (actualRetention == null || actualRetention.isBefore(expectedRetentionUntil.minusSeconds(1))) {
+            throw new IllegalStateException("Backup destination did not confirm the requested Object Lock retention");
+        }
+    }
+
+    public BackupEvidenceSummary readEvidenceSummary() throws IOException {
+        String configuredWorkDir = requireNonBlank(backupProps.getWorkDir(), "backup.work-dir");
+        String evidenceFileName = requireNonBlank(backupProps.getEvidenceFileName(), "backup.evidence-file-name");
+        if (!SAFE_EVIDENCE_FILE.matcher(evidenceFileName).matches()) {
+            throw new IllegalStateException("backup.evidence-file-name must be a simple file name");
+        }
+
+        Path workDir = Paths.get(configuredWorkDir).toAbsolutePath().normalize();
+        if (!Files.exists(workDir)) {
+            return BackupEvidenceSummary.empty();
+        }
+        Path realWorkDir = workDir.toRealPath();
+        if (!Files.isDirectory(realWorkDir)) {
+            throw new IllegalStateException("backup.work-dir must be a directory");
+        }
+        Path evidenceFile = realWorkDir.resolve(evidenceFileName).normalize();
+        if (!evidenceFile.getParent().equals(realWorkDir)) {
+            throw new IllegalStateException("backup.evidence-file-name must remain inside backup.work-dir");
+        }
+        if (!Files.exists(evidenceFile)) {
+            return BackupEvidenceSummary.empty();
+        }
+        if (Files.isSymbolicLink(evidenceFile) || !Files.isRegularFile(evidenceFile)) {
+            throw new IllegalStateException("backup evidence path must be a regular, non-symbolic file");
+        }
+
+        Instant latestVerifiedAt = null;
+        Set<String> completedManualRequests = new HashSet<>();
+        int ignoredRecords = 0;
+        try (BufferedReader reader = Files.newBufferedReader(evidenceFile, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                try {
+                    JsonNode record = objectMapper.readTree(line);
+                    if (!isVerifiedEvidence(record)) {
+                        ignoredRecords++;
+                        continue;
+                    }
+                    Instant verifiedAt = Instant.parse(record.path("timestampUtc").asText());
+                    if (latestVerifiedAt == null || verifiedAt.isAfter(latestVerifiedAt)) {
+                        latestVerifiedAt = verifiedAt;
+                    }
+                    String requestId = record.path("requestId").asText("");
+                    if ("manual".equals(record.path("trigger").asText())
+                            && SAFE_RUN_REQUEST_ID.matcher(requestId).matches()) {
+                        completedManualRequests.add(requestId);
+                    }
+                } catch (RuntimeException | IOException invalidRecord) {
+                    // A truncated final append must cause a backup to run, never suppress one.
+                    ignoredRecords++;
+                }
             }
         }
+        if (ignoredRecords > 0) {
+            log.warn("Ignored {} invalid database backup evidence record(s)", ignoredRecords);
+        }
+        return new BackupEvidenceSummary(
+                Optional.ofNullable(latestVerifiedAt),
+                Set.copyOf(completedManualRequests)
+        );
+    }
+
+    private static boolean isVerifiedEvidence(JsonNode record) {
+        if (record == null
+                || !BACKUP_EVIDENCE_SCHEMA.equals(record.path("schema").asText())
+                || !BACKUP_FORMAT.equals(record.path("format").asText())
+                || record.path("timestampUtc").asText("").isBlank()) {
+            return false;
+        }
+        JsonNode verification = record.path("verification");
+        JsonNode cleanup = record.path("temporaryFileCleanup");
+        boolean serverSideEncryptionRequired = verification.has("serverSideEncryptionRequired")
+                ? verification.path("serverSideEncryptionRequired").asBoolean(false)
+                : true;
+        String actualServerSideEncryption = verification.path("serverSideEncryption").asText();
+        boolean legacyClientSideEvidence = !verification.has("clientSideEncryption")
+                && !verification.has("clientSideEnvelopeVerified")
+                && !verification.has("serverSideEncryptionRequired");
+        boolean validClientSideEncryption = legacyClientSideEvidence
+                || (CLIENT_SIDE_ENCRYPTION.equals(verification.path("clientSideEncryption").asText())
+                && verification.path("clientSideEnvelopeVerified").asBoolean(false));
+        boolean validServerSideEncryption = ServerSideEncryption.AES256.toString()
+                .equals(actualServerSideEncryption)
+                || (!serverSideEncryptionRequired
+                && NO_SERVER_SIDE_ENCRYPTION_REPORTED.equals(actualServerSideEncryption));
+        boolean remoteObjectVerified = verification.path("head").asBoolean(false)
+                && verification.path("download").asBoolean(false)
+                && verification.path("sha256").asBoolean(false)
+                && validClientSideEncryption
+                && validServerSideEncryption;
+        if (!remoteObjectVerified) {
+            return false;
+        }
+
+        String phase = record.path("phase").asText("");
+        if (EVIDENCE_PHASE_REMOTE_VERIFIED.equals(phase)) {
+            return cleanup.path("plaintextSqlDeleted").asBoolean(false)
+                    && cleanup.path("plaintextGzipDeleted").asBoolean(false)
+                    && cleanup.path("verificationDownloadDeleted").asBoolean(false)
+                    && !cleanup.path("encryptedTempDeleted").asBoolean(true)
+                    && cleanup.path("encryptedPartsDeleted").asBoolean(false);
+        }
+        if (!phase.isEmpty() && !EVIDENCE_PHASE_COMPLETED.equals(phase)) {
+            return false;
+        }
+        return cleanup.path("plaintextSqlDeleted").asBoolean(false)
+                && cleanup.path("plaintextGzipDeleted").asBoolean(false)
+                && cleanup.path("verificationDownloadDeleted").asBoolean(false)
+                && cleanup.path("encryptedTempDeleted").asBoolean(false)
+                && cleanup.path("encryptedPartsDeleted").asBoolean(false);
     }
 
     void writeEvidence(
@@ -626,11 +1000,112 @@ public class DatabaseBackupService {
             VerifiedBackup backup,
             BackupCleanupResult cleanup
     ) throws IOException {
+        writeEvidence(evidenceFile, backup, cleanup, null, null, BackupMailDeliveryResult.disabled());
+    }
+
+    void writeEvidence(
+            Path evidenceFile,
+            VerifiedBackup backup,
+            BackupCleanupResult cleanup,
+            String trigger,
+            String requestId
+    ) throws IOException {
+        writeEvidence(evidenceFile, backup, cleanup, trigger, requestId, BackupMailDeliveryResult.disabled());
+    }
+
+    void writeRemoteVerificationEvidence(
+            Path evidenceFile,
+            VerifiedBackup backup,
+            String trigger,
+            String requestId,
+            boolean mailEnabled
+    ) throws IOException {
+        writeEvidenceRecord(
+                evidenceFile,
+                backup,
+                new BackupCleanupResult(true, true, true, false, true),
+                trigger,
+                requestId,
+                BackupMailDeliveryResult.pending(mailEnabled),
+                EVIDENCE_PHASE_REMOTE_VERIFIED
+        );
+    }
+
+    void recordVerifiedBackupAndReportMailFailure(
+            Path evidenceFile,
+            VerifiedBackup backup,
+            BackupCleanupResult cleanup,
+            String trigger,
+            String requestId,
+            BackupMailDeliveryResult mailDelivery,
+            Exception mailFailure
+    ) throws IOException {
+        try {
+            writeEvidence(evidenceFile, backup, cleanup, trigger, requestId, mailDelivery);
+        } catch (IOException | RuntimeException evidenceFailure) {
+            if (mailFailure != null) {
+                evidenceFailure.addSuppressed(mailFailure);
+            }
+            throw evidenceFailure;
+        }
+        if (mailFailure != null) {
+            throw new IllegalStateException(
+                    "Encrypted backup email delivery failed after the exact S3 object was verified; "
+                            + "S3 evidence was recorded and the immutable object will not be uploaded again",
+                    mailFailure
+            );
+        }
+    }
+
+    void writeEvidence(
+            Path evidenceFile,
+            VerifiedBackup backup,
+            BackupCleanupResult cleanup,
+            String trigger,
+            String requestId,
+            BackupMailDeliveryResult mailDelivery
+    ) throws IOException {
+        writeEvidenceRecord(
+                evidenceFile,
+                backup,
+                cleanup,
+                trigger,
+                requestId,
+                mailDelivery,
+                EVIDENCE_PHASE_COMPLETED
+        );
+    }
+
+    private void writeEvidenceRecord(
+            Path evidenceFile,
+            VerifiedBackup backup,
+            BackupCleanupResult cleanup,
+            String trigger,
+            String requestId,
+            BackupMailDeliveryResult mailDelivery,
+            String phase
+    ) throws IOException {
+        if (requestId != null) {
+            requireRunRequestId(requestId);
+        }
+        if (mailDelivery == null) {
+            throw new IllegalArgumentException("mailDelivery is required");
+        }
         Map<String, Object> evidence = new LinkedHashMap<>();
-        evidence.put("schema", "otziv-backup-evidence-v1");
+        evidence.put("schema", BACKUP_EVIDENCE_SCHEMA);
+        evidence.put("phase", phase);
         evidence.put("timestampUtc", backup.verifiedAt().toString());
+        if (trigger != null) {
+            evidence.put("trigger", trigger);
+        }
+        if (requestId != null) {
+            evidence.put("requestId", requestId);
+        }
         evidence.put("bucket", backup.bucket());
         evidence.put("objectKey", backup.key());
+        if (backup.versionId() != null) {
+            evidence.put("objectVersionId", backup.versionId());
+        }
         evidence.put("sha256", backup.sha256());
         evidence.put("bytes", backup.bytes());
         evidence.put("format", BACKUP_FORMAT);
@@ -645,7 +1120,10 @@ public class DatabaseBackupService {
         verification.put("head", true);
         verification.put("download", true);
         verification.put("sha256", true);
-        verification.put("serverSideEncryption", "AES256");
+        verification.put("clientSideEncryption", backup.clientSideEncryption());
+        verification.put("clientSideEnvelopeVerified", backup.clientSideEnvelopeVerified());
+        verification.put("serverSideEncryption", backup.serverSideEncryption());
+        verification.put("serverSideEncryptionRequired", backup.serverSideEncryptionRequired());
         verification.put("objectLock", backup.objectLockMode() != null);
         evidence.put("verification", verification);
 
@@ -656,6 +1134,13 @@ public class DatabaseBackupService {
         cleanupEvidence.put("encryptedTempDeleted", cleanup.encryptedTempDeleted());
         cleanupEvidence.put("encryptedPartsDeleted", cleanup.encryptedPartsDeleted());
         evidence.put("temporaryFileCleanup", cleanupEvidence);
+
+        Map<String, Object> mailEvidence = new LinkedHashMap<>();
+        mailEvidence.put("enabled", mailDelivery.enabled());
+        mailEvidence.put("attempted", mailDelivery.attempted());
+        mailEvidence.put("succeeded", mailDelivery.succeeded());
+        mailEvidence.put("encryptedPartCount", mailDelivery.encryptedPartCount());
+        evidence.put("emailDelivery", mailEvidence);
 
         if (backup.objectLockMode() != null) {
             Map<String, Object> retention = new LinkedHashMap<>();
@@ -813,6 +1298,16 @@ public class DatabaseBackupService {
         return value.trim();
     }
 
+    static String requireRunRequestId(String value) {
+        String requestId = requireNonBlank(value, "backup.run-once.request-id");
+        if (!SAFE_RUN_REQUEST_ID.matcher(requestId).matches()) {
+            throw new IllegalStateException(
+                    "backup.run-once.request-id must contain only letters, digits, dot, underscore, colon or dash"
+            );
+        }
+        return requestId;
+    }
+
     private static String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -855,6 +1350,105 @@ public class DatabaseBackupService {
         }
     }
 
+    static LocalBackupRunLock acquireLocalBackupRunLock(Path realWorkDir) throws IOException {
+        Path lockFile = realWorkDir.resolve(LOCAL_RUN_LOCK_FILE).normalize();
+        if (!lockFile.getParent().equals(realWorkDir)) {
+            throw new IllegalStateException("Backup run lock must remain inside backup.work-dir");
+        }
+        if (!Files.exists(lockFile, LinkOption.NOFOLLOW_LINKS)) {
+            try {
+                createEmptyPrivateFile(lockFile);
+            } catch (java.nio.file.FileAlreadyExistsException ignored) {
+                // Another process created the fixed lock file concurrently.
+            }
+        }
+        if (Files.isSymbolicLink(lockFile) || !Files.isRegularFile(lockFile, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalStateException("Backup run lock path must be a regular, non-symbolic file");
+        }
+
+        FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
+        try {
+            FileLock lock;
+            try {
+                lock = channel.tryLock();
+            } catch (OverlappingFileLockException exception) {
+                lock = null;
+            }
+            if (lock == null) {
+                throw new IllegalStateException("Another database backup is already using this work directory");
+            }
+            return new LocalBackupRunLock(channel, lock);
+        } catch (IOException | RuntimeException exception) {
+            try {
+                channel.close();
+            } catch (IOException closeFailure) {
+                exception.addSuppressed(closeFailure);
+            }
+            throw exception;
+        }
+    }
+
+    static int cleanupStaleTemporaryFiles(Path realWorkDir, Path evidenceFile) throws IOException {
+        int cleaned = 0;
+        try (var candidates = Files.newDirectoryStream(realWorkDir)) {
+            for (Path candidate : candidates) {
+                Path normalized = candidate.toAbsolutePath().normalize();
+                if (!normalized.getParent().equals(realWorkDir) || normalized.equals(evidenceFile)) {
+                    continue;
+                }
+                String fileName = normalized.getFileName().toString();
+                boolean plaintext = OWNED_PLAINTEXT_TEMP_FILE.matcher(fileName).matches();
+                boolean encrypted = OWNED_ENCRYPTED_TEMP_FILE.matcher(fileName).matches();
+                if (!plaintext && !encrypted) {
+                    continue;
+                }
+                if (Files.isSymbolicLink(normalized)) {
+                    deleteRequired(normalized);
+                } else if (!Files.isRegularFile(normalized, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new IOException("Owned backup temporary path is not a regular file: " + fileName);
+                } else if (plaintext) {
+                    overwriteAndDeletePlaintext(normalized);
+                } else {
+                    deleteRequired(normalized);
+                }
+                cleaned++;
+            }
+        }
+        if (cleaned > 0) {
+            log.warn("Removed {} stale database backup temporary file(s) before starting a new run", cleaned);
+        }
+        return cleaned;
+    }
+
+    static void overwriteAndDeletePlaintext(Path path) throws IOException {
+        if (path == null || !Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        if (Files.isSymbolicLink(path)) {
+            deleteRequired(path);
+            return;
+        }
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Plaintext backup temporary path is not a regular file: " + path.getFileName());
+        }
+
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            long remaining = channel.size();
+            ByteBuffer zeros = ByteBuffer.allocate(64 * 1024);
+            channel.position(0);
+            while (remaining > 0) {
+                zeros.clear();
+                zeros.limit((int) Math.min((long) zeros.capacity(), remaining));
+                while (zeros.hasRemaining()) {
+                    channel.write(zeros);
+                }
+                remaining -= zeros.limit();
+            }
+            channel.force(true);
+        }
+        deleteRequired(path);
+    }
+
     private static Path nextPartPath(Path original, int index) {
         return original.resolveSibling(original.getFileName() + ".part" + index);
     }
@@ -887,13 +1481,41 @@ public class DatabaseBackupService {
         }
     }
 
-    private static List<Path> concatPaths(Path sqlFile, Path gzFile, Path encryptedFile, List<Path> parts) {
-        List<Path> paths = new ArrayList<>(parts.size() + 3);
-        paths.add(sqlFile);
-        paths.add(gzFile);
-        paths.add(encryptedFile);
-        paths.addAll(parts);
-        return paths;
+    private static void cleanupRunArtifacts(
+            Path sqlFile,
+            Path gzFile,
+            Path encryptedFile,
+            List<Path> parts
+    ) throws IOException {
+        IOException firstFailure = null;
+        for (Path plaintext : List.of(sqlFile, gzFile)) {
+            try {
+                overwriteAndDeletePlaintext(plaintext);
+            } catch (IOException exception) {
+                firstFailure = appendFailure(firstFailure, exception);
+            }
+        }
+        List<Path> encryptedArtifacts = new ArrayList<>(parts.size() + 1);
+        encryptedArtifacts.add(encryptedFile);
+        encryptedArtifacts.addAll(parts);
+        for (Path encrypted : encryptedArtifacts) {
+            try {
+                deleteRequired(encrypted);
+            } catch (IOException exception) {
+                firstFailure = appendFailure(firstFailure, exception);
+            }
+        }
+        if (firstFailure != null) {
+            throw firstFailure;
+        }
+    }
+
+    private static IOException appendFailure(IOException firstFailure, IOException nextFailure) {
+        if (firstFailure == null) {
+            return nextFailure;
+        }
+        firstFailure.addSuppressed(nextFailure);
+        return firstFailure;
     }
 
     private static void cleanupRequiredOrSuppress(Path path, Throwable failure) {
@@ -919,12 +1541,45 @@ public class DatabaseBackupService {
             Instant verifiedAt,
             String bucket,
             String key,
+            String versionId,
             String sha256,
             long bytes,
+            String clientSideEncryption,
+            boolean clientSideEnvelopeVerified,
+            String serverSideEncryption,
+            boolean serverSideEncryptionRequired,
             ObjectLockMode objectLockMode,
             Instant retentionUntil,
             Duration elapsed
     ) {
+    }
+
+    static final class LocalBackupRunLock implements AutoCloseable {
+        private final FileChannel channel;
+        private final FileLock lock;
+
+        private LocalBackupRunLock(FileChannel channel, FileLock lock) {
+            this.channel = channel;
+            this.lock = lock;
+        }
+
+        @Override
+        public void close() throws IOException {
+            IOException firstFailure = null;
+            try {
+                lock.close();
+            } catch (IOException exception) {
+                firstFailure = exception;
+            }
+            try {
+                channel.close();
+            } catch (IOException exception) {
+                firstFailure = appendFailure(firstFailure, exception);
+            }
+            if (firstFailure != null) {
+                throw firstFailure;
+            }
+        }
     }
 
     record BackupCleanupResult(
@@ -934,6 +1589,56 @@ public class DatabaseBackupService {
             boolean encryptedTempDeleted,
             boolean encryptedPartsDeleted
     ) {
+    }
+
+    record BackupMailDeliveryResult(
+            boolean enabled,
+            boolean attempted,
+            boolean succeeded,
+            int encryptedPartCount
+    ) {
+        BackupMailDeliveryResult {
+            if (encryptedPartCount < 0) {
+                throw new IllegalArgumentException("encryptedPartCount must be non-negative");
+            }
+            if (!enabled && (attempted || succeeded || encryptedPartCount != 0)) {
+                throw new IllegalArgumentException("Disabled backup email cannot contain delivery results");
+            }
+            if (succeeded && !attempted) {
+                throw new IllegalArgumentException("Successful backup email must have been attempted");
+            }
+        }
+
+        static BackupMailDeliveryResult disabled() {
+            return new BackupMailDeliveryResult(false, false, false, 0);
+        }
+
+        static BackupMailDeliveryResult pending(boolean enabled) {
+            return enabled
+                    ? new BackupMailDeliveryResult(true, false, false, 0)
+                    : disabled();
+        }
+
+        static BackupMailDeliveryResult failed(int encryptedPartCount) {
+            return new BackupMailDeliveryResult(true, true, false, encryptedPartCount);
+        }
+
+        static BackupMailDeliveryResult succeeded(int encryptedPartCount) {
+            return new BackupMailDeliveryResult(true, true, true, encryptedPartCount);
+        }
+    }
+
+    public record BackupEvidenceSummary(
+            Optional<Instant> latestVerifiedAt,
+            Set<String> completedManualRequestIds
+    ) {
+        static BackupEvidenceSummary empty() {
+            return new BackupEvidenceSummary(Optional.empty(), Set.of());
+        }
+
+        public boolean containsManualRequest(String requestId) {
+            return completedManualRequestIds.contains(requestId);
+        }
     }
 
     static final class BoundedOutputStream extends OutputStream {

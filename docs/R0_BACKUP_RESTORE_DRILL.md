@@ -17,6 +17,10 @@ Git:
   `BACKUP_DESTINATION_PRIVATE_CONFIRMED=true`, and
   `BACKUP_ENCRYPTION_AT_REST_CONFIRMED=true` after an operator has verified
   those facts;
+- `BACKUP_S3_REQUIRE_SERVER_SIDE_ENCRYPTION=true` (the fail-closed default) for
+  providers that support and report SSE-S3. Set it explicitly to `false` only
+  for a provider such as Selectel that does not support the S3 bucket/SSE-S3
+  encryption contract; this switch never disables client-side encryption;
 - the independent 32-byte `BACKUP_ENCRYPTION_KEY_BASE64` client-side encryption
   key;
 - the most recent measured `BACKUP_RESTORE_DRILL_RTO` in ISO-8601 duration
@@ -25,31 +29,87 @@ Git:
 Each run uploads the encrypted `OTZIVDB2` object with its SHA-256 metadata,
 performs a mandatory `HEAD`, downloads the object through the dedicated backup
 client, and compares its byte length and SHA-256 with the local encrypted file.
-A missing/mismatched HEAD result, server-side AES-256 status, download, or hash
-fails the run; it is never logged or recorded as successful.
+A missing/mismatched HEAD result, download, hash, or authenticated OTZIVDB2
+envelope fails the run; it is never logged or recorded as successful. When
+`BACKUP_S3_REQUIRE_SERVER_SIDE_ENCRYPTION=true`, the upload requests SSE-S3
+AES256 and HEAD must report it. In explicit compatibility mode (`false`) the
+request omits the unsupported SSE header and HEAD may either report AES256 or
+no SSE status. Evidence records `NONE_REPORTED` in the latter case while the
+downloaded client-side AES-256-GCM envelope remains mandatory and is fully
+authenticated with the independent backup key.
 
 Provider-enforced retention is optional. To enable it, first create a bucket
 with S3 Object Lock support, then set `BACKUP_S3_OBJECT_LOCK_ENABLED=true`, a
 positive `BACKUP_S3_RETENTION_DAYS`, and mode `GOVERNANCE` or `COMPLIANCE`.
-Unsupported Object Lock or a HEAD response that does not prove the requested
-mode/retain-until timestamp fails the backup. A non-zero retention value while
-Object Lock is disabled is rejected, so descriptive metadata cannot be mistaken
-for enforced retention.
+The dedicated backup principal must be allowed `PutObject`, `GetObject`,
+`GetObjectVersion`, `PutObjectRetention`, and `GetObjectRetention` for the
+backup prefix. It does not need list, delete, or governance-bypass access. The
+service requires the version ID returned by the upload, uses that exact version
+for HEAD, retention lookup, and the verification download, and confirms the
+requested mode and retain-until timestamp through `GetObjectRetention`.
+Unsupported Object Lock, a missing version ID, or an unconfirmed retention
+response fails the backup. A non-zero retention value while Object Lock is
+disabled is rejected, so descriptive metadata cannot be mistaken for enforced
+retention.
 
 After encryption, deletion of the plaintext `.sql` and `.sql.gz` files is a
 mandatory gate: a deletion error aborts the run before upload. The downloaded
 verification copy, optional encrypted email parts, and the local encrypted
-temporary file are also removed with checked, fail-closed cleanup. Only after
-all remote checks, optional encrypted email delivery, and local cleanup pass
-does the application append one JSON line to
+temporary file are also removed with checked, fail-closed cleanup. Immediately
+after the exact uploaded version passes HEAD, retention, download, SHA-256, and
+authenticated-envelope verification, the application durably appends a
+`phase=remote-verified` JSON line to
 `BACKUP_WORK_DIR/BACKUP_EVIDENCE_FILE_NAME` (default
-`backup-evidence.jsonl`). It contains the UTC timestamp, bucket/object key,
-SHA-256, byte count, format, elapsed time, verification flags, verified
-retention, explicit temporary-file cleanup flags, and optional release
-commit/restore-drill RTO. It contains no access key, secret, encryption key,
-database password, or email credentials. Preserve and monitor this evidence
-file independently; absence of a record means the run must not be treated as
-successful.
+`backup-evidence.jsonl`). This receipt is written before optional email and
+final encrypted-file cleanup, so a later SMTP or cleanup error cannot make the
+bounded catch-up path upload a second immutable copy of an already verified
+backup. After email and checked cleanup, a second `phase=completed` line records
+their outcomes. Each line contains the UTC timestamp, bucket/object key and
+exact object version ID, SHA-256, byte count, format, elapsed time, verification flags (including
+`clientSideEncryption`, `clientSideEnvelopeVerified`, actual
+`serverSideEncryption`, and `serverSideEncryptionRequired`), verified
+retention, explicit temporary-file cleanup flags, `emailDelivery` status, and
+optional release commit/restore-drill RTO. It contains no access key, secret,
+encryption key, database password, or email credentials.
+
+An SMTP failure is appended in the completed record with
+`emailDelivery.succeeded=false` and is then surfaced as a failed run for
+alerting; the already verified immutable object is not uploaded again. The next
+daily run sends a newly created daily backup rather than replaying old email
+parts. A remote-verified line proves the recoverable remote object, but does not
+claim that email or final local cleanup completed. Preserve and monitor both
+phases independently. There is one unavoidable local-journal edge: if the S3
+verification succeeds but the durable remote-verified append itself fails, the
+next catch-up cannot prove the object already exists and may upload another
+copy. Alert on evidence-write failures; eliminating that edge requires a second
+independent idempotency store at the provider.
+
+Before a leased run begins, the service takes an exclusive lock inside the
+real backup work directory and removes only strict application-owned temporary
+names from an interrupted prior run. Plaintext `.sql` and `.sql.gz` files are
+overwritten before checked deletion; encrypted objects, parts, and verification
+downloads are deleted. The evidence file and unrelated files never match the
+cleanup patterns.
+
+The idempotent run-once mode is an internal prod-like test hook, not a
+production procedure. Starting the complete application as a second one-off
+container can also activate unrelated startup and outbound effects, and a
+startup failure under a restart policy can repeat a remote immutable upload.
+Therefore persistent env import, readiness, production deployment, and the
+long-running Compose services all reject or ignore `BACKUP_RUN_ONCE_ENABLED=true`.
+Use this hook only in an isolated test environment where every unrelated
+outbound/startup effect is disabled. The recurring daily schedule and its
+bounded catch-up are the only supported production execution path. Production
+readiness requires catch-up to remain enabled with a window greater than 24
+hours (26 hours by default), so one full daily occurrence remains recoverable
+after ordinary host or deployment downtime without permitting unbounded
+historical runs.
+
+Encrypted email delivery uses 16 MiB raw parts by default so MIME/Base64
+overhead remains below common 25 MiB message limits. Production SMTP uses
+finite connection/read/write timeouts and requires authenticated STARTTLS with
+server-identity verification; readiness and deployment reject a downgrade when
+backup email is enabled.
 
 This drill proves that a local encrypted `*.sql.gz.enc` backup can be
 authenticated, restored, and read by MySQL without touching the running
