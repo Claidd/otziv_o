@@ -15,6 +15,7 @@ param(
     [switch]$DockerLogin,
     [switch]$SkipBuildPush,
     [switch]$SkipEnvUpload,
+    [switch]$EnableExternalReviewWorker,
     [string]$MobileApkPath = "",
     [switch]$SkipMobileApkUpload,
     [string]$PreDeployBackupDirectory = "",
@@ -40,8 +41,9 @@ Useful options:
   -EnvFile .env.prod             Local env file uploaded to VPS as .env.prod.
   -RemoteEnvFile .env            Env file name used on the VPS.
   -DockerLogin                   Run local docker login before build and push.
-  -SkipBuildPush                 Skip build/push and deploy already published app/web/external-worker images.
+  -SkipBuildPush                 Skip build/push and deploy already published images for enabled services.
   -SkipEnvUpload                 Keep VPS env and update app/web/external-worker image tags in it.
+  -EnableExternalReviewWorker    Opt in to building and running the external review checker (disabled by default).
   -MobileApkPath <path>          Publish this signed release APK. By default uses the highest code from mobile/builds.
   -SkipMobileApkUpload           Do not include a mobile APK in this deployment.
   -PreDeployBackupDirectory      Local directory for the mandatory encrypted pre-migration DB backup.
@@ -673,7 +675,11 @@ if ($null -ne $localDeployBackupKeyBase64) {
 Write-Host "Building and pushing:"
 Write-Host "  APP_IMAGE=$appImage"
 Write-Host "  WEB_IMAGE=$webImage"
-Write-Host "  EXTERNAL_REVIEW_WORKER_IMAGE=$externalReviewWorkerImage"
+if ($EnableExternalReviewWorker) {
+    Write-Host "  EXTERNAL_REVIEW_WORKER_IMAGE=$externalReviewWorkerImage (enabled)"
+} else {
+    Write-Host "  EXTERNAL_REVIEW_WORKER=disabled (use -EnableExternalReviewWorker to opt in)"
+}
 if ($null -ne $mobileRelease) {
     Write-Host "  MOBILE_APK=$($mobileRelease.File.FullName) (version $($mobileRelease.VersionName), code $($mobileRelease.VersionCode))"
 } elseif (-not $SkipMobileApkUpload) {
@@ -693,13 +699,19 @@ if (-not $SkipBuildPush) {
     if ($NoBuildCache) {
         $buildArgs += "--no-cache"
     }
+    $buildArgs += @("app", "nginx")
+    if ($EnableExternalReviewWorker) {
+        $buildArgs += "external-review-worker"
+    }
     Invoke-External -FilePath "docker" -Arguments $buildArgs
     Write-Host "Pushing application image..."
     Invoke-External -FilePath "docker" -Arguments @("push", $appImage)
     Write-Host "Pushing web image..."
     Invoke-External -FilePath "docker" -Arguments @("push", $webImage)
-    Write-Host "Pushing external review worker image..."
-    Invoke-External -FilePath "docker" -Arguments @("push", $externalReviewWorkerImage)
+    if ($EnableExternalReviewWorker) {
+        Write-Host "Pushing external review worker image..."
+        Invoke-External -FilePath "docker" -Arguments @("push", $externalReviewWorkerImage)
+    }
     Write-Host "Docker images pushed successfully."
 } else {
     Write-Host "Skipping docker build/push; deploying already published images."
@@ -805,6 +817,7 @@ try {
         Set-EnvFileValue -Path $stageEnv -Name "APP_IMAGE" -Value $appImage
         Set-EnvFileValue -Path $stageEnv -Name "WEB_IMAGE" -Value $webImage
         Set-EnvFileValue -Path $stageEnv -Name "EXTERNAL_REVIEW_WORKER_IMAGE" -Value $externalReviewWorkerImage
+        Set-EnvFileValue -Path $stageEnv -Name "EXTERNAL_REVIEW_CHECK_ENABLED" -Value $(if ($EnableExternalReviewWorker) { "true" } else { "false" })
         Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_IMAGE" -Value "otziv-whatsapp:$Tag"
         Set-EnvFileValue -Path $stageEnv -Name "OTZIV_APP_BASE_URL" -Value "https://o-ogo.ru"
         Set-EnvFileValue -Path $stageEnv -Name "OTZIV_AUTH_LEGACY_MIGRATION_ENABLED" -Value "false"
@@ -862,6 +875,7 @@ chmod 600 $remoteBundleForUploadQuoted
     $vpsHostQuoted = ConvertTo-BashSingleQuoted $VpsHost
     $remoteDeployLockTokenQuoted = ConvertTo-BashSingleQuoted $remoteDeployLockToken
     $uploadedEnv = if ($SkipEnvUpload) { "0" } else { "1" }
+    $deployExternalReviewWorker = if ($EnableExternalReviewWorker) { "1" } else { "0" }
 
     # Create and independently download a verified encrypted DB backup before
     # the remote rollout can start Flyway. The deploy bundle is only read here;
@@ -1156,6 +1170,7 @@ web_repo=$webRepoQuoted
 app_image=$appImageQuoted
 web_image=$webImageQuoted
 external_review_worker_image=$externalReviewWorkerImageQuoted
+deploy_external_review_worker=$deployExternalReviewWorker
 env_file=$remoteEnvFileQuoted
 deploy_tag=$deployTagQuoted
 vps_host=$vpsHostQuoted
@@ -1508,7 +1523,8 @@ validate_security_prerequisites() {
   if [ "`$(get_env WHATSAPP_GATEWAY_AUTH_REQUIRED true)" = "true" ]; then
     require_env WHATSAPP_GATEWAY_SHARED_SECRET
   fi
-  if [ "`$(get_env EXTERNAL_REVIEW_WORKER_AUTH_REQUIRED true)" = "true" ]; then
+  if [ "`$deploy_external_review_worker" = "1" ] \
+      && [ "`$(get_env EXTERNAL_REVIEW_WORKER_AUTH_REQUIRED true)" = "true" ]; then
     require_env EXTERNAL_REVIEW_WORKER_SHARED_SECRET
   fi
 
@@ -2076,6 +2092,11 @@ if [ "`$uploaded_env" != "1" ]; then
   set_env WEB_IMAGE "`$web_image"
 fi
 set_env EXTERNAL_REVIEW_WORKER_IMAGE "`$external_review_worker_image"
+if [ "`$deploy_external_review_worker" = "1" ]; then
+  set_env EXTERNAL_REVIEW_CHECK_ENABLED "true"
+else
+  set_env EXTERNAL_REVIEW_CHECK_ENABLED "false"
+fi
 set_env WHATSAPP_IMAGE "otziv-whatsapp:`$deploy_tag"
 
 chmod 600 "`$env_file" || true
@@ -2127,8 +2148,12 @@ chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true
 chmod +x infrastructure/scripts/prod/register-max-webhook.sh || true
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
-require_compose_service external-review-worker external-review
-compose --profile external-review pull app nginx external-review-worker
+if [ "`$deploy_external_review_worker" = "1" ]; then
+  require_compose_service external-review-worker external-review
+  compose --profile external-review pull app nginx external-review-worker
+else
+  compose pull app nginx
+fi
 if ! docker ps --format '{{.Names}}' | grep -Fxq my-mysql; then
   echo "MySQL stopped after the verified pre-deploy backup; refusing to start Flyway." >&2
   exit 1
@@ -2150,10 +2175,18 @@ wait_service_healthy mysql 600
 wait_service_healthy keycloak-postgres 600
 compose up -d --no-deps keycloak
 wait_service_healthy keycloak 900
-recreate_service_with_retry external-review-worker external-review
-wait_service_healthy external-review-worker 300 external-review
+if [ "`$deploy_external_review_worker" = "1" ]; then
+  recreate_service_with_retry external-review-worker external-review
+  wait_service_healthy external-review-worker 300 external-review
+fi
 recreate_service_with_retry app
 wait_service_healthy app 1200
+if [ "`$deploy_external_review_worker" != "1" ]; then
+  # Keep an old worker available until the replacement backend has started
+  # with the hard switch disabled. A failed app rollout then preserves the
+  # complete previous release instead of removing one of its dependencies.
+  compose --profile external-review stop external-review-worker
+fi
 compose up -d --no-deps prometheus
 wait_service_healthy loki 600
 wait_service_healthy tempo 600
@@ -2208,13 +2241,19 @@ wait_service_healthy keycloak 900
 wait_service_healthy nginx 300
 wait_service_healthy whatsapp_lika 300
 wait_service_healthy whatsapp_vika 300
-wait_service_healthy external-review-worker 300 external-review
+if [ "`$deploy_external_review_worker" = "1" ]; then
+  wait_service_healthy external-review-worker 300 external-review
+fi
 app_container_id="`$(compose ps -q app | head -n 1)"
 bash infrastructure/scripts/prod/register-max-webhook.sh "`$env_file" "`$app_container_id"
 # Publish the APK only after the new backend and every required production
 # dependency have passed their final health checks. A failed rollout therefore
 # cannot advertise a client version that expects an unavailable backend.
-compose --profile external-review ps
+if [ "`$deploy_external_review_worker" = "1" ]; then
+  compose --profile external-review ps
+else
+  compose ps
+fi
 publish_bundled_mobile_release
 release_payload_complete="1"
 resume_self_heal_timer

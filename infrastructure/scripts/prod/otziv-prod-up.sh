@@ -46,11 +46,29 @@ else
   exit 1
 fi
 
-# Release 5.50 always deploys and health-checks this profile. Running without an
-# explicit service list also reconciles default services such as Alloy that the
-# previous VPS helper accidentally omitted.
-"${compose[@]}" \
-  -f "$compose_file" \
-  --env-file "$env_file" \
-  --profile external-review \
-  up -d
+# External review checking is an explicit opt-in. Read the hard deployment
+# switch without sourcing the secret-bearing env file.
+external_review_enabled="$({
+  grep -E '^EXTERNAL_REVIEW_CHECK_ENABLED=' "$env_file" || true
+} | tail -n 1 | cut -d= -f2- | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
+case "$external_review_enabled" in
+  ""|false)
+    external_review_enabled=false
+    ;;
+  true)
+    ;;
+  *)
+    echo "EXTERNAL_REVIEW_CHECK_ENABLED must be exactly true or false." >&2
+    exit 1
+    ;;
+esac
+
+compose_args=(-f "$compose_file" --env-file "$env_file")
+if [[ "$external_review_enabled" == "true" ]]; then
+  "${compose[@]}" "${compose_args[@]}" --profile external-review up -d
+else
+  # Ensure a worker from an earlier opt-in rollout stays stopped, including
+  # after a host reboot, while reconciling every default production service.
+  "${compose[@]}" "${compose_args[@]}" --profile external-review stop external-review-worker
+  "${compose[@]}" "${compose_args[@]}" up -d
+fi

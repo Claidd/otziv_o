@@ -49,9 +49,31 @@ if ($workerBuildBlocks.Count -ne 1) {
 Assert-Match $buildCompose 'EXTERNAL_REVIEW_WORKER_IMAGE[\s\S]{0,250}backend/external-review-worker' 'Build compose must publish the external review worker from its own Dockerfile.'
 Assert-Match $productionCompose 'APP_MEMORY_LIMIT:-2304m' 'Production Compose must default backend memory to the audited 2304 MiB floor.'
 Assert-Match $deploy 'APP_MEMORY_LIMIT[\s\S]{0,500}2304' 'Production deploy must reject an omitted or undersized backend memory limit.'
-Assert-Match $deploy 'docker.+push.+\$externalReviewWorkerImage' 'Production deploy must push the external review worker release image.'
+Assert-Match $deploy '\[switch\]\$EnableExternalReviewWorker' 'External review worker deployment must be an explicit opt-in.'
+Assert-Match $deploy '\$buildArgs \+= @\("app", "nginx"\)[\s\S]{0,200}if \(\$EnableExternalReviewWorker\)[\s\S]{0,100}\$buildArgs \+= "external-review-worker"' 'Default builds must exclude the worker and append it only for an explicit opt-in.'
+Assert-Match $deploy 'if \(\$EnableExternalReviewWorker\)[\s\S]{0,200}docker.+push.+\$externalReviewWorkerImage' 'Production deploy must push the worker image only in the opt-in branch.'
 Assert-Match $deploy 'set_env EXTERNAL_REVIEW_WORKER_IMAGE.+external_review_worker_image' 'Production deploy must persist the worker image tag in the active VPS env.'
-Assert-Match $deploy 'recreate_service_with_retry external-review-worker external-review[\s\S]{0,200}wait_service_healthy external-review-worker' 'Production deploy must recreate and health-check the external review worker.'
+Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,300}recreate_service_with_retry external-review-worker external-review[\s\S]{0,200}wait_service_healthy external-review-worker[\s\S]{0,100}fi' 'Production deploy must start and health-check the worker only when opted in.'
+Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" != "1" \]; then[\s\S]{0,500}stop external-review-worker' 'Production deploy must stop a stale worker when the replacement backend has external checks disabled.'
+Assert-Order $deploy 'wait_service_healthy app 1200' 'compose --profile external-review stop external-review-worker' 'A disabled rollout must keep the previous worker until the replacement backend is healthy.'
+Assert-Match $deploy 'set_env EXTERNAL_REVIEW_CHECK_ENABLED "true"[\s\S]{0,100}set_env EXTERNAL_REVIEW_CHECK_ENABLED "false"' 'Production deploy must persist the backend hard switch consistently with the worker opt-in.'
+
+$workerPushCount = [regex]::Matches($deploy, 'Invoke-External[^\r\n]+@\("push", \$externalReviewWorkerImage\)').Count
+if ($workerPushCount -ne 1) {
+    throw "Production deploy must contain exactly one guarded worker push call; found $workerPushCount."
+}
+$workerPullCount = [regex]::Matches($deploy, '(?m)^\s*compose --profile external-review pull app nginx external-review-worker\s*$').Count
+if ($workerPullCount -ne 1) {
+    throw "Production deploy must contain exactly one guarded worker pull call; found $workerPullCount."
+}
+$workerRecreateCount = [regex]::Matches($deploy, '(?m)^\s*recreate_service_with_retry external-review-worker external-review\s*$').Count
+if ($workerRecreateCount -ne 1) {
+    throw "Production deploy must contain exactly one guarded worker recreate call; found $workerRecreateCount."
+}
+$workerWaitCount = [regex]::Matches($deploy, '(?m)^\s*wait_service_healthy external-review-worker 300 external-review\s*$').Count
+if ($workerWaitCount -ne 2) {
+    throw "Production deploy must contain exactly two guarded worker health checks; found $workerWaitCount."
+}
 
 Assert-Match $deploy 'DEPLOY_DB_BACKUP_ENCRYPTION_KEY_BASE64 must decode to exactly 32 bytes' 'Production deploy must validate a dedicated 32-byte pre-deploy DB backup key.'
 Assert-Match $deploy 'Deploy DB-backup encryption and credential-field encryption must use different keys' 'Production deploy must reject reuse of the credential-field encryption key for DB backups.'
@@ -95,7 +117,7 @@ Assert-Match $deploy 'resume_self_heal_timer\(\)[\s\S]{0,300}systemctl enable "`
 Assert-Match $deploy 'timer_was_active="`\$\(cat[\s\S]{0,100}timer_was_enabled="`\$\(cat[\s\S]{0,500}case "`\$timer_was_enabled"[\s\S]{0,500}systemctl enable otziv-prod-up.timer[\s\S]{0,300}systemctl start otziv-prod-up.timer' 'Pre-rollout cleanup must validate both protected states before enabling and starting the old timer.'
 Assert-Match $deploy 'install -o root -g root -m 0755[\s\S]{0,150}otziv-prod-up\.sh' 'Deploy must install the version-controlled production self-heal helper.'
 Assert-Match $selfHeal '\[\[ -e "\$deploy_lock" \|\| -L "\$deploy_lock" \]\]' 'Production self-heal must respect the durable deploy lock, including symlinks.'
-Assert-Match $selfHeal '--profile external-review[\s\S]{0,100}up -d' 'Production self-heal must reconcile the external review worker and all default services.'
+Assert-Match $selfHeal 'EXTERNAL_REVIEW_CHECK_ENABLED[\s\S]{0,1000}if \[\[ "\$external_review_enabled" == "true" \]\][\s\S]{0,200}--profile external-review up -d[\s\S]{0,300}stop external-review-worker[\s\S]{0,200}up -d' 'Production self-heal must start the worker only when enabled and keep it stopped otherwise.'
 Assert-Match $selfHeal '\.self-heal-env-file[\s\S]{0,500}env_file_name' 'Production self-heal must honor the deploy-selected remote env filename.'
 Assert-Match $deploy 'printf ''%s\\n'' "`\$env_file"[\s\S]{0,250}\.self-heal-env-file' 'Deploy must atomically persist RemoteEnvFile for the installed self-heal helper.'
 Assert-Match $deploy 'Protected self-heal state is missing; leaving deploy lock for manual recovery' 'Local pre-rollout cleanup must fail closed when protected self-heal state is missing.'
@@ -117,7 +139,7 @@ if ($publishCount -ne 1) {
     throw "APK publication must have exactly one call site; found $publishCount."
 }
 Assert-Order $deploy 'wait_service_healthy app 1200' 'publish_bundled_mobile_release' 'APK publication must happen only after the final backend health check.'
-Assert-Order $deploy 'wait_service_healthy external-review-worker 300 external-review' 'publish_bundled_mobile_release' 'APK publication must happen only after the worker health check.'
+Assert-Order $deploy 'wait_service_healthy external-review-worker 300 external-review' 'publish_bundled_mobile_release' 'When enabled, the worker health check must remain before APK publication.'
 Assert-Order $deploy 'publish_bundled_mobile_release' 'resume_self_heal_timer' 'Self-heal must resume only after APK publication succeeds.'
 
 foreach ($parser in @{
@@ -130,4 +152,4 @@ foreach ($parser in @{
     }
 }
 
-Write-Output 'Deploy release contract passed: durable lock, encrypted DB backup, worker/MAX rollout, and post-health APK publication are ordered safely.'
+Write-Output 'Deploy release contract passed: durable lock, encrypted DB backup, optional worker/MAX rollout, and post-health APK publication are ordered safely.'

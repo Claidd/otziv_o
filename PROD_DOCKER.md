@@ -98,7 +98,7 @@ docker compose -f docker-compose.yaml --env-file .env.prod up -d
 docker compose -f docker-compose.yaml --env-file .env.prod --profile external-review up -d external-review-worker
 ```
 
-При `EXTERNAL_REVIEW_CHECK_ENABLED=false` backend не зависит от worker и штатный запуск/self-heal не пытается загружать его образ.
+При `EXTERNAL_REVIEW_CHECK_ENABLED=false` backend не зависит от worker и штатный запуск/self-heal не пытается загружать его образ. Скрипт `deploy-prod.ps1` сохраняет этот безопасный режим по умолчанию; для отдельного будущего rollout worker требуется явный флаг `-EnableExternalReviewWorker`.
 
 ## MAX webhook
 
@@ -274,15 +274,15 @@ docker compose -f docker-compose.build.yaml push
 
 Что делает скрипт:
 
-- собирает `APP_IMAGE`, `WEB_IMAGE` и `EXTERNAL_REVIEW_WORKER_IMAGE` через `docker-compose.build.yaml`;
-- пушит все три образа в Docker Hub;
+- собирает и пушит `APP_IMAGE` и `WEB_IMAGE` через `docker-compose.build.yaml`;
+- только при явном `-EnableExternalReviewWorker` дополнительно собирает, пушит и разворачивает `EXTERNAL_REVIEW_WORKER_IMAGE`, одновременно включая hard-switch `EXTERNAL_REVIEW_CHECK_ENABLED`; без флага worker остаётся остановлен, а hard-switch принудительно сохраняется `false`;
 - загружает на VPS `docker-compose.yaml`, `.env.prod` и prod-конфиги из `infrastructure`;
 - до замены файлов и до запуска Flyway создаёт обязательный зашифрованный DB-backup с отдельным `DEPLOY_DB_BACKUP_ENCRYPTION_KEY_BASE64`, проверяет HMAC/расшифровку/gzip на VPS и скачивает копию в `%USERPROFILE%\.otziv\backups\pre-deploy\<tag>`;
 - до backup отключает и останавливает `otziv-prod-up.timer` и активный oneshot-сервис, сохраняет исходные состояния enable/active в защищённом lock-каталоге, затем удерживает один durable deploy-lock до завершения rollout, поэтому self-heal, перезагрузка VPS и второй deploy не могут вклиниться между снимком БД и миграцией;
 - сохраняет DB-backup в `.deploy-backups/<tag>/`, а старые `docker-compose.yaml` и env-файл — в уникальном `.deploy-backups/<tag>/rollout-<id>/`, поэтому повтор того же тега не затирает исходный rollback;
 - при первом переходе с прежней раскладки сертификатов копирует `data/nginx/o-ogo.crt`/`o-ogo.key` в `data/nginx/certs/fullchain.pem`/`privkey.pem`, если новых файлов еще нет;
-- проверяет неизменность Flyway history после DB-backup, затем тянет и последовательно обновляет `external-review-worker`, `app` и остальные сервисы;
-- устанавливает version-controlled `/usr/local/sbin/otziv-prod-up.sh`: он пропускает запуск при deploy-lock и после релиза восстанавливает все обычные сервисы плюс профиль `external-review`;
+- проверяет неизменность Flyway history после DB-backup, затем последовательно обновляет `app` и остальные обязательные сервисы; optional worker участвует только при явном opt-in;
+- устанавливает version-controlled `/usr/local/sbin/otziv-prod-up.sh`: он пропускает запуск при deploy-lock, восстанавливает обычные сервисы и запускает профиль `external-review` только когда hard-switch равен `true`;
 - после health-check backend fail-closed обновляет MAX webhook и требует ответ `success=true`; при ошибке self-heal остаётся отключённым и остановленным, а deploy-lock сохраняется для ручной проверки;
 - публикует переданный APK только после финальных health-check нового backend и обязательных сервисов.
 
