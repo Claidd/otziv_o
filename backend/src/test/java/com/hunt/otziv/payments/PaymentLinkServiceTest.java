@@ -164,8 +164,10 @@ class PaymentLinkServiceTest {
         assertTrue(List.of(transactional.noRollbackFor()).contains(ResponseStatusException.class));
 
         PaymentLinkService service = service(properties());
-        Order order = order(410L, "ООО Точный порядок", BigDecimal.valueOf(1000));
-        when(orderRepository.findByIdForCounterUpdate(410L)).thenReturn(Optional.of(order));
+        Order orderBeforeBulkClear = order(410L, "ООО Точный порядок", BigDecimal.valueOf(1000));
+        Order reloadedOrder = order(410L, "ООО Точный порядок", BigDecimal.valueOf(1000));
+        when(orderRepository.findByIdForCounterUpdate(410L))
+                .thenReturn(Optional.of(orderBeforeBulkClear), Optional.of(reloadedOrder));
         when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
                 eq(410L),
                 anyCollection(),
@@ -191,7 +193,8 @@ class PaymentLinkServiceTest {
                 anyString(),
                 any(LocalDateTime.class)
         );
-        ordered.verify(orderPaymentIntegrityService).assertPaymentCycleAllowed(order);
+        ordered.verify(orderRepository).findByIdForCounterUpdate(410L);
+        ordered.verify(orderPaymentIntegrityService).assertPaymentCycleAllowed(reloadedOrder);
         ordered.verify(paymentLinkRepository).save(any(PaymentLink.class));
         verify(orderRepository, never()).findByIdForMutation(410L);
     }

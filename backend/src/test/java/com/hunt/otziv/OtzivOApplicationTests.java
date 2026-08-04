@@ -6,6 +6,7 @@ import com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem;
 import com.hunt.otziv.archive.service.ManagerArchiveService;
 import com.hunt.otziv.archive.service.OrderArchiveDryRunService;
 import com.hunt.otziv.manager.dto.api.PageResponse;
+import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerAssignmentMutationGuardRepository;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerNetworkViolationRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -29,6 +30,7 @@ import com.hunt.otziv.workload_shadow.service.WorkloadTransferWorkflowService;
 import java.nio.ByteBuffer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -40,6 +42,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -77,6 +80,9 @@ class OtzivOApplicationTests {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private PaymentLinkService paymentLinkService;
 
 	@Autowired
 	private com.hunt.otziv.r_review.repository.ReviewRepository reviewRepository;
@@ -1680,6 +1686,63 @@ class OtzivOApplicationTests {
 		""", archiveDetailId);
 
 		assertThat(reviewRepository.countUnpublishedNotArchive()).isEqualTo(before + 1);
+	}
+
+	@Test
+	@Transactional
+	void paymentLinkCreationReloadsOrderAfterBulkExpirationClearsPersistenceContext() {
+		List<Long> paidStatusIds = jdbcTemplate.queryForList("""
+			SELECT order_status_id
+			FROM order_statuses
+			WHERE order_status_title = 'Оплачено'
+			ORDER BY order_status_id
+			LIMIT 1
+			""", Long.class);
+		Long paidStatusId;
+		if (paidStatusIds.isEmpty()) {
+			jdbcTemplate.update("INSERT INTO order_statuses (order_status_title) VALUES ('Оплачено')");
+			paidStatusId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+		} else {
+			paidStatusId = paidStatusIds.getFirst();
+		}
+
+		jdbcTemplate.update("""
+			INSERT INTO orders (
+			    order_created,
+			    order_changed,
+			    order_status,
+			    order_amount,
+			    order_counter,
+			    order_sum,
+			    order_complete,
+			    order_waiting_for_client
+			)
+			VALUES (CURRENT_DATE(), CURRENT_DATE(), ?, 1, 1, 100.00, 0, 0)
+			""", paidStatusId);
+		Long orderId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+		jdbcTemplate.update("""
+			INSERT INTO payment_links (
+			    token,
+			    order_id,
+			    amount_kopecks,
+			    description,
+			    status,
+			    payment_method,
+			    expires_at
+			)
+			VALUES (?, ?, 10000, 'Bulk clear regression', 'WAITING_MANUAL_PAYMENT',
+			        'MANUAL_MOBILE_BANK', DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 1 DAY))
+			""", "bulk-clear-" + UUID.randomUUID(), orderId);
+
+		ResponseStatusException exception = org.junit.jupiter.api.Assertions.assertThrows(
+				ResponseStatusException.class,
+				() -> paymentLinkService.createForOrder(orderId)
+		);
+
+		assertThat(exception.getStatusCode().value()).isEqualTo(409);
+		assertThat(exception.getReason()).isEqualTo(
+				"Заказ уже полностью оплачен. Повторный счет заблокирован."
+		);
 	}
 
 	@Test

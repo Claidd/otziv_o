@@ -261,6 +261,12 @@ public class PaymentLinkService {
 
         LocalDateTime now = LocalDateTime.now();
         expireStaleManualLinks(now);
+        // expireManualLinks is a bulk update with clearAutomatically=true. Reload the
+        // order after that clear so its lazy status/manager/company proxies remain
+        // attached for payment-integrity checks and payment-link construction.
+        order = orderRepository.findByIdForCounterUpdate(orderId)
+                .or(() -> orderRepository.findByIdForMutation(orderId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         List<PaymentLink> lockedOrderLinks = paymentLinkRepository.findByOrderIdForUpdate(orderId);
         recoverOrderBankInitReservationsBeforeCreation(lockedOrderLinks, now);
 
