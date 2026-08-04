@@ -50,6 +50,7 @@ class ApiSecureReviewCheckControllerTest {
         assertThat(result.getBody().permissions().canOpenManagerLinks()).isFalse();
         assertThat(result.getBody().reviews()).singleElement().satisfies(review -> {
             assertThat(review.botName()).isEmpty();
+            assertThat(review.filialTitle()).isEqualTo("Филиал отзыва");
             assertThat(review.comment()).isEmpty();
             assertThat(review.orderComments()).isEmpty();
             assertThat(review.commentCompany()).isEmpty();
@@ -179,6 +180,7 @@ class ApiSecureReviewCheckControllerTest {
                         "Текст",
                         "Ответ",
                         "Секретный бот",
+                        "Филиал отзыва",
                         "Внутренний комментарий",
                         "Внутренняя заметка заказа",
                         "Внутренняя заметка компании",

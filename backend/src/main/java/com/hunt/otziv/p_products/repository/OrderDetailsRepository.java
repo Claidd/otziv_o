@@ -34,6 +34,7 @@ public interface OrderDetailsRepository extends CrudRepository<OrderDetails, UUI
             LEFT JOIN FETCH o.manager om
             LEFT JOIN FETCH om.user
             LEFT JOIN FETCH od.reviews r
+            LEFT JOIN FETCH r.filial
             LEFT JOIN FETCH r.product
             LEFT JOIN FETCH r.bot
             LEFT JOIN FETCH r.worker rw
@@ -50,6 +51,7 @@ public interface OrderDetailsRepository extends CrudRepository<OrderDetails, UUI
             LEFT JOIN FETCH o.company
             LEFT JOIN FETCH o.filial
             LEFT JOIN FETCH od.reviews r
+            LEFT JOIN FETCH r.filial
             LEFT JOIN FETCH r.product
             LEFT JOIN FETCH r.bot
             LEFT JOIN FETCH r.worker rw

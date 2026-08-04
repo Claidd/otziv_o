@@ -3,6 +3,7 @@ package com.hunt.otziv.r_review.controller;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -88,8 +89,10 @@ class ApiReviewCheckControllerTest {
     @Test
     void anonymousResponseKeepsClientActionsButHidesInternalFields() {
         UUID orderDetailId = UUID.randomUUID();
-        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
-                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        OrderDetails details = orderDetails(orderDetailId, "На проверке");
+        details.getOrder().setFilial(Filial.builder().title("Филиал заказа").build());
+        details.getReviews().getFirst().setFilial(Filial.builder().title("Филиал отзыва").build());
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId)).thenReturn(details);
 
         ApiReviewCheckController.ReviewCheckResponse response = controller()
                 .getReviewCheck(orderDetailId, null);
@@ -101,6 +104,7 @@ class ApiReviewCheckControllerTest {
         assertThat(response.companyComments()).isEmpty();
         assertThat(response.reviews()).hasSize(1);
         assertThat(response.reviews().getFirst().botName()).isEmpty();
+        assertThat(response.reviews().getFirst().filialTitle()).isEqualTo("Филиал отзыва");
         assertThat(response.permissions().authenticated()).isFalse();
         assertThat(response.permissions().canSeeInternalInfo()).isFalse();
         assertThat(response.permissions().canSave()).isTrue();
@@ -1068,6 +1072,7 @@ class ApiReviewCheckControllerTest {
                         "current text",
                         "current answer",
                         "Bot Fio",
+                        "Филиал архива",
                         "Отзыв 2ГИС",
                         false,
                         "https://real.example/review",

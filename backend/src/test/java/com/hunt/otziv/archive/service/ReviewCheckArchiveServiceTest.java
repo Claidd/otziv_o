@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -50,6 +51,54 @@ class ReviewCheckArchiveServiceTest {
         assertThat(service.findByOrderDetailId(UUID.randomUUID())).isEmpty();
         assertThat(querySql.get())
                 .contains("COALESCE(c.company_comments, '') AS company_comments");
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void archivedReviewsExposeReviewFilialAndQueryFallsBackToArchivedOrderFilial() throws Exception {
+        UUID orderDetailId = UUID.randomUUID();
+        ResultSet baseResultSet = mock(ResultSet.class);
+        ResultSet reviewResultSet = mock(ResultSet.class);
+        AtomicReference<String> reviewQuerySql = new AtomicReference<>();
+
+        when(baseResultSet.getString(anyString())).thenAnswer(invocation ->
+                "order_detail_uuid".equals(invocation.getArgument(0)) ? orderDetailId.toString() : null
+        );
+        when(baseResultSet.wasNull()).thenReturn(false);
+        when(reviewResultSet.getLong("review_id")).thenReturn(501L);
+        when(reviewResultSet.getString(anyString())).thenAnswer(invocation ->
+                "filial_title".equals(invocation.getArgument(0)) ? "Филиал отзыва" : null
+        );
+        when(reviewResultSet.wasNull()).thenReturn(false);
+        when(jdbc.query(
+                anyString(),
+                any(MapSqlParameterSource.class),
+                any(RowMapper.class)
+        )).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0);
+            RowMapper mapper = invocation.getArgument(2);
+            if (sql.contains("FROM archive_reviews ar")) {
+                reviewQuerySql.set(sql);
+                return List.of(mapper.mapRow(reviewResultSet, 0));
+            }
+            return List.of(mapper.mapRow(baseResultSet, 0));
+        });
+
+        ReviewCheckArchiveService service = new ReviewCheckArchiveService(jdbc, restoreService);
+
+        ReviewCheckArchiveService.ArchivedReviewCheck archived = service
+                .findByOrderDetailId(orderDetailId)
+                .orElseThrow();
+
+        assertThat(archived.reviews()).singleElement()
+                .satisfies(review -> assertThat(review.filialTitle()).isEqualTo("Филиал отзыва"));
+        assertThat(reviewQuerySql.get())
+                .contains("LEFT JOIN filial review_filial ON review_filial.filial_id = ar.review_filial")
+                .contains("NULLIF(TRIM(ar.review_filial_title_snapshot), '')")
+                .contains("NULLIF(TRIM(review_filial.filial_title), '')")
+                .contains("NULLIF(TRIM(ao.filial_title_snapshot), '')")
+                .contains("WHEN ar.review_filial IS NULL OR ar.review_filial = ao.order_filial")
+                .contains("ELSE NULL");
     }
 
     @Test

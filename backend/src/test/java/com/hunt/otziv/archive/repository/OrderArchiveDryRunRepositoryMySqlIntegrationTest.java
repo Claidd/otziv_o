@@ -3,12 +3,16 @@ package com.hunt.otziv.archive.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -154,6 +158,51 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
         assertThat(eligibilityDrift).isTrue();
     }
 
+    @Test
+    void reviewArchiveCopyUsesOrderFilialOnlyWhenTheReviewDoesNotPointElsewhere() {
+        jdbc.update("""
+                INSERT INTO filial (filial_id, filial_title)
+                VALUES (1, 'Филиал заказа'), (2, 'Филиал отзыва'), (3, '   ')
+                """);
+        insertPaidOrder(801L);
+        insertPaidOrder(802L);
+        insertPaidOrder(803L);
+        jdbc.update("UPDATE orders SET order_filial = 1 WHERE order_id IN (801, 802, 803)");
+        jdbc.update("INSERT INTO archive_candidate_orders (order_id) VALUES (801), (802), (803)");
+
+        UUID differentBlankDetail = insertOrderDetail(801L);
+        UUID missingReviewFilialDetail = insertOrderDetail(802L);
+        UUID differentNamedDetail = insertOrderDetail(803L);
+        jdbc.update(
+                "INSERT INTO reviews (review_id, review_order_details, review_filial) "
+                        + "VALUES (1, UUID_TO_BIN(?), 3), (2, UUID_TO_BIN(?), NULL), "
+                        + "(3, UUID_TO_BIN(?), 2)",
+                differentBlankDetail.toString(),
+                missingReviewFilialDetail.toString(),
+                differentNamedDetail.toString()
+        );
+
+        repository.copyReviews(new MapSqlParameterSource()
+                .addValue("archivedAt", LocalDateTime.of(2026, 8, 4, 10, 0))
+                .addValue("archiveReason", "test")
+                .addValue("batchId", 17L));
+
+        Map<Long, String> snapshots = jdbc.query(
+                "SELECT review_id, review_filial_title_snapshot FROM archive_reviews ORDER BY review_id",
+                rs -> {
+                    Map<Long, String> values = new java.util.LinkedHashMap<>();
+                    while (rs.next()) {
+                        values.put(rs.getLong("review_id"), rs.getString("review_filial_title_snapshot"));
+                    }
+                    return values;
+                }
+        );
+        assertThat(snapshots)
+                .containsEntry(1L, "")
+                .containsEntry(2L, "Филиал заказа")
+                .containsEntry(3L, "Филиал отзыва");
+    }
+
     private void insertPaidOrder(long orderId) {
         jdbc.update("""
                 INSERT INTO orders (
@@ -165,6 +214,16 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                     order_status_changed_at
                 ) VALUES (?, 1, '2025-01-01', '2025-01-01', '2025-01-01', '2025-01-01 00:00:00')
                 """, orderId);
+    }
+
+    private UUID insertOrderDetail(long orderId) {
+        UUID id = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO order_details (order_detail_id, order_detail_order) VALUES (UUID_TO_BIN(?), ?)",
+                id.toString(),
+                orderId
+        );
+        return id;
     }
 
     private void insertPaidCommonInvoiceWithPaymentRef(String paymentRefStatus) {
@@ -192,8 +251,13 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
         setup.execute("DROP TABLE IF EXISTS payment_links");
         setup.execute("DROP TABLE IF EXISTS next_order_requests");
         setup.execute("DROP TABLE IF EXISTS bad_review_tasks");
+        setup.execute("DROP TABLE IF EXISTS archive_reviews");
+        setup.execute("DROP TABLE IF EXISTS reviews");
+        setup.execute("DROP TABLE IF EXISTS archive_candidate_orders");
+        setup.execute("DROP TABLE IF EXISTS order_details");
         setup.execute("DROP TABLE IF EXISTS orders");
         setup.execute("DROP TABLE IF EXISTS order_statuses");
+        setup.execute("DROP TABLE IF EXISTS filial");
 
         setup.execute("""
                 CREATE TABLE order_statuses (
@@ -203,14 +267,55 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""
+                CREATE TABLE filial (
+                    filial_id BIGINT NOT NULL,
+                    filial_title VARCHAR(255) NULL,
+                    PRIMARY KEY (filial_id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
                 CREATE TABLE orders (
                     order_id BIGINT NOT NULL,
                     order_status BIGINT NOT NULL,
+                    order_filial BIGINT NULL,
                     order_pay_day DATE NULL,
                     order_changed DATE NULL,
                     order_created DATE NULL,
                     order_status_changed_at DATETIME(6) NULL,
                     PRIMARY KEY (order_id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE order_details (
+                    order_detail_id BINARY(16) NOT NULL,
+                    order_detail_order BIGINT NOT NULL,
+                    PRIMARY KEY (order_detail_id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE archive_candidate_orders (
+                    order_id BIGINT NOT NULL,
+                    PRIMARY KEY (order_id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE reviews (
+                    review_id BIGINT NOT NULL,
+                    review_order_details BINARY(16) NOT NULL,
+                    review_filial BIGINT NULL,
+                    PRIMARY KEY (review_id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE archive_reviews (
+                    review_id BIGINT NOT NULL,
+                    review_order_details BINARY(16) NOT NULL,
+                    review_filial BIGINT NULL,
+                    archived_at DATETIME(6) NOT NULL,
+                    archive_reason VARCHAR(255) NOT NULL,
+                    archive_batch_id BIGINT NOT NULL,
+                    review_filial_title_snapshot VARCHAR(255) NULL,
+                    PRIMARY KEY (review_id)
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""

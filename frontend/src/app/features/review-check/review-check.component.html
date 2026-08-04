@@ -42,7 +42,8 @@
                   [class.review-card--fluid]="isReviewTextOpen(review) || isReviewFieldEditing(review, 'answer')"
                 >
                   <header>
-                    <span class="review-card-title">{{ details.companyTitle || 'Компания' }}</span>
+                    @let cardTitle = reviewCardTitle(details, review);
+                    <span class="review-card-title" [title]="cardTitle">{{ cardTitle }}</span>
                     <div class="review-id-line">
                       @if (hasReviewPhoto(review)) {
                         <a

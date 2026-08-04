@@ -172,6 +172,7 @@ public class ApiSecureReviewCheckController {
                 review.text(),
                 review.answer(),
                 "",
+                review.filialTitle(),
                 "",
                 "",
                 "",

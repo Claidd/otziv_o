@@ -27,6 +27,7 @@ export interface ReviewCheckReview {
   comment: string;
   orderComments: string;
   commentCompany: string;
+  filialTitle: string;
   productTitle: string;
   productPhoto: boolean;
   url: string;

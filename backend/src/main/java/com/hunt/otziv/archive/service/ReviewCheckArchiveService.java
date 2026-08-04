@@ -167,6 +167,19 @@ public class ReviewCheckArchiveService {
                     COALESCE(ar.review_text, '') AS review_text,
                     COALESCE(ar.review_answer, '') AS review_answer,
                     COALESCE(b.bot_fio, '') AS bot_fio,
+                    COALESCE(
+                        NULLIF(TRIM(ar.review_filial_title_snapshot), ''),
+                        NULLIF(TRIM(review_filial.filial_title), ''),
+                        CASE
+                            WHEN ar.review_filial IS NULL OR ar.review_filial = ao.order_filial
+                                THEN COALESCE(
+                                    NULLIF(TRIM(ao.filial_title_snapshot), ''),
+                                    NULLIF(TRIM(order_filial.filial_title), '')
+                                )
+                            ELSE NULL
+                        END,
+                        ''
+                    ) AS filial_title,
                     COALESCE(review_product.product_title, detail_product.product_title, '') AS product_title,
                     COALESCE(review_product.product_photo, detail_product.product_photo, 0) AS product_photo,
                     COALESCE(ar.review_url, '') AS review_url,
@@ -174,7 +187,10 @@ public class ReviewCheckArchiveService {
                     COALESCE(ar.review_publish, 0) AS review_publish
                 FROM archive_reviews ar
                 JOIN archive_order_details aod ON aod.order_detail_id = ar.review_order_details
+                JOIN archive_orders ao ON ao.order_id = aod.order_detail_order
                 LEFT JOIN bots b ON b.bot_id = ar.review_bot
+                LEFT JOIN filial review_filial ON review_filial.filial_id = ar.review_filial
+                LEFT JOIN filial order_filial ON order_filial.filial_id = ao.order_filial
                 LEFT JOIN products review_product ON review_product.product_id = ar.review_product
                 LEFT JOIN products detail_product ON detail_product.product_id = aod.order_detail_product
                 WHERE ar.review_order_details = UUID_TO_BIN(:orderDetailId)
@@ -184,6 +200,7 @@ public class ReviewCheckArchiveService {
                 safeString(rs.getString("review_text")),
                 safeString(rs.getString("review_answer")),
                 safeString(rs.getString("bot_fio")),
+                safeString(rs.getString("filial_title")),
                 safeString(rs.getString("product_title")),
                 rs.getBoolean("product_photo"),
                 safeString(rs.getString("review_url")),
@@ -292,6 +309,7 @@ public class ReviewCheckArchiveService {
             String text,
             String answer,
             String botName,
+            String filialTitle,
             String productTitle,
             boolean productPhoto,
             String url,

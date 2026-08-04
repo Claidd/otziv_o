@@ -740,17 +740,7 @@ public class OrderArchiveDryRunRepository {
                 params
         );
         verifyPreparedCommonInvoiceCopy();
-        copyTable(
-                "reviews",
-                "archive_reviews",
-                "r",
-                """
-                        FROM reviews r
-                        JOIN order_details od ON od.order_detail_id = r.review_order_details
-                        JOIN archive_candidate_orders co ON co.order_id = od.order_detail_order
-                        """,
-                params
-        );
+        copyReviews(params);
         copyTable(
                 "bad_review_tasks",
                 "archive_bad_review_tasks",
@@ -1254,6 +1244,40 @@ public class OrderArchiveDryRunRepository {
                 LEFT JOIN users manager_user ON manager_user.id = m.user_id
                 LEFT JOIN workers w ON w.worker_id = o.order_worker
                 LEFT JOIN users worker_user ON worker_user.id = w.user_id
+                """, params);
+    }
+
+    void copyReviews(MapSqlParameterSource params) {
+        List<String> columns = commonColumns("reviews", "archive_reviews");
+        String archiveColumns = quoteList(columns) + """
+                , archived_at, archive_reason, archive_batch_id,
+                  review_filial_title_snapshot
+                """;
+        String selectColumns = selectList("r", columns) + """
+                , :archivedAt, :archiveReason, :batchId,
+                  COALESCE(
+                      NULLIF(TRIM(review_filial.filial_title), ''),
+                      CASE
+                          WHEN r.review_filial IS NULL OR r.review_filial = o.order_filial
+                              THEN NULLIF(TRIM(order_filial.filial_title), '')
+                          ELSE NULL
+                      END,
+                      ''
+                  )
+                """;
+
+        jdbc.update("""
+                INSERT IGNORE INTO archive_reviews (
+                """ + archiveColumns + """
+                )
+                SELECT
+                """ + selectColumns + """
+                FROM reviews r
+                JOIN order_details od ON od.order_detail_id = r.review_order_details
+                JOIN orders o ON o.order_id = od.order_detail_order
+                JOIN archive_candidate_orders co ON co.order_id = o.order_id
+                LEFT JOIN filial review_filial ON review_filial.filial_id = r.review_filial
+                LEFT JOIN filial order_filial ON order_filial.filial_id = o.order_filial
                 """, params);
     }
 

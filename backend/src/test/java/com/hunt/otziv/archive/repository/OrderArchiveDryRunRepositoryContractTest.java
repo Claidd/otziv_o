@@ -1,14 +1,17 @@
 package com.hunt.otziv.archive.repository;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 @ExtendWith(MockitoExtension.class)
@@ -70,5 +74,34 @@ class OrderArchiveDryRunRepositoryContractTest {
         assertTrue(contract.contains("'PARTIAL_REFUNDED'"));
         assertTrue(contract.contains("'PARTIAL_REVERSED'"));
         assertTrue(contract.contains("candidate_order.order_id IS NULL"));
+    }
+
+    @Test
+    void reviewArchiveCopyPersistsTheEffectiveFilialTitleSnapshot() {
+        when(jdbc.queryForList(anyString(), anyMap(), eq(String.class)))
+                .thenReturn(List.of("review_id"));
+
+        repository.copyPreparedCandidatesToArchive(
+                11L,
+                LocalDateTime.of(2026, 8, 4, 1, 0),
+                "retention"
+        );
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbc, atLeastOnce()).update(sql.capture(), any(MapSqlParameterSource.class));
+        String reviewCopy = sql.getAllValues().stream()
+                .filter(value -> value.contains("INSERT IGNORE INTO archive_reviews"))
+                .findFirst()
+                .orElseThrow();
+
+        assertTrue(reviewCopy.contains("review_filial_title_snapshot"));
+        assertTrue(reviewCopy.contains("LEFT JOIN filial review_filial"));
+        assertTrue(reviewCopy.contains("LEFT JOIN filial order_filial"));
+        assertTrue(reviewCopy.contains("NULLIF(TRIM(review_filial.filial_title), '')"));
+        assertTrue(reviewCopy.contains("NULLIF(TRIM(order_filial.filial_title), '')"));
+        assertTrue(reviewCopy.contains(
+                "WHEN r.review_filial IS NULL OR r.review_filial = o.order_filial"
+        ));
+        assertTrue(reviewCopy.contains("ELSE NULL"));
     }
 }

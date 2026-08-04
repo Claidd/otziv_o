@@ -223,6 +223,9 @@
 }
 
 .review-card-title {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   color: var(--otziv-dark);
   font-family: var(--otziv-card-title-font);

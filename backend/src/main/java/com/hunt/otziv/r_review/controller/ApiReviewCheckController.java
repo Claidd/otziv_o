@@ -597,12 +597,14 @@ public class ApiReviewCheckController {
     ) {
         Product product = review.getProduct() != null ? review.getProduct() : orderDetails.getProduct();
         Bot bot = review.getBot();
+        Filial filial = review.getFilial() != null ? review.getFilial() : order.getFilial();
 
         return new ReviewCheckReviewResponse(
                 review.getId(),
                 safe(review.getText()),
                 safe(review.getAnswer()),
                 permissions.canSeeBot() && bot != null ? safe(bot.getFio()) : "",
+                filial != null ? safe(filial.getTitle()) : "",
                 permissions.canSeeInternalInfo() ? safe(orderDetails.getComment()) : "",
                 permissions.canSeeInternalInfo() ? safe(order.getZametka()) : "",
                 permissions.canSeeInternalInfo()
@@ -628,6 +630,7 @@ public class ApiReviewCheckController {
                 safe(review.text()),
                 safe(review.answer()),
                 permissions.canSeeBot() ? safe(review.botName()) : "",
+                safe(review.filialTitle()),
                 permissions.canSeeInternalInfo() ? safe(archived.comment()) : "",
                 permissions.canSeeInternalInfo() ? safe(archived.orderComments()) : "",
                 canSeeCurrentCompanyComments ? safe(archived.companyComments()) : "",
@@ -975,6 +978,7 @@ public class ApiReviewCheckController {
             String text,
             String answer,
             String botName,
+            String filialTitle,
             String comment,
             String orderComments,
             String commentCompany,

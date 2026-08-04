@@ -223,6 +223,18 @@ export class ReviewCheckComponent {
   });
   readonly reviewCheckReviews = computed(() => sortReviewsById(this.details()?.reviews));
   readonly visibleReviews = computed(() => this.reviewCheckReviews());
+  readonly hasMixedReviewFilials = computed(() => {
+    const details = this.details();
+    const reviews = this.reviewCheckReviews();
+    if (!details || reviews.length < 2) {
+      return false;
+    }
+
+    const filialTitles = reviews.map((review) => this.normalizedFilialTitle(
+      this.reviewFilialTitle(details, review)
+    ));
+    return new Set(filialTitles).size > 1;
+  });
   readonly showReviewFastSelect = computed(() => this.reviewCheckReviews().length > 20);
   readonly showReviewNavigation = computed(() => {
     const details = this.details();
@@ -710,6 +722,16 @@ export class ReviewCheckComponent {
 
   reviewText(review: ReviewCheckReview): string {
     return this.findReviewDraft(review)?.text ?? review.text ?? '';
+  }
+
+  reviewCardTitle(details: ReviewCheckPayload, review: ReviewCheckReview): string {
+    const companyTitle = details.companyTitle?.trim() || 'Компания';
+    if (!this.hasMixedReviewFilials()) {
+      return companyTitle;
+    }
+
+    const filialTitle = this.reviewFilialTitle(details, review);
+    return filialTitle ? `${companyTitle} - ${filialTitle}` : companyTitle;
   }
 
   reviewAnswer(review: ReviewCheckReview): string {
@@ -1517,6 +1539,14 @@ export class ReviewCheckComponent {
 
   private findReviewDraft(review: ReviewCheckReview): ReviewCheckDraftReview | undefined {
     return this.draft()?.reviews.find((item) => item.id === review.id);
+  }
+
+  private reviewFilialTitle(details: ReviewCheckPayload, review: ReviewCheckReview): string {
+    return review.filialTitle?.trim() || details.filialTitle?.trim() || '';
+  }
+
+  private normalizedFilialTitle(value: string): string {
+    return value.replace(/\s+/g, ' ').trim().toLocaleLowerCase('ru-RU');
   }
 
   private reviewFieldKey(review: ReviewCheckReview, field: ReviewEditableField): string {

@@ -31,6 +31,7 @@ function review(overrides: Partial<ReviewCheckReview> = {}): ReviewCheckReview {
     comment: '',
     orderComments: '',
     commentCompany: '',
+    filialTitle: 'Филиал',
     productTitle: '',
     productPhoto: false,
     url: '',
@@ -341,6 +342,53 @@ describe('ReviewCheckComponent', () => {
     expect(component.activeReviewSlide()).toBe(2);
     expect(component.reviewJumpValue()).toBe('3');
     expect((fixture.nativeElement as HTMLElement).querySelector('.review-navigation')?.textContent).toContain('3 из 3');
+  });
+
+  it('keeps company-only card titles when every review has the same filial', () => {
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+
+    component.details.set(details({
+      companyTitle: 'СТК',
+      reviews: [
+        review({ id: 1, filialTitle: 'Промышленная 2-я' }),
+        review({ id: 2, filialTitle: '  промышленная   2-Я  ' })
+      ]
+    }));
+    fixture.detectChanges();
+
+    const titles = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.review-card-title')
+    ).map((element) => element.textContent?.trim());
+    expect(titles).toEqual(['СТК', 'СТК']);
+  });
+
+  it('adds each review filial to mixed-filial card titles without losing a long full title', () => {
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+    const longFilialTitle = 'Проспект Маршала Жукова, дом 127, строение 4, помещение 18';
+
+    component.details.set(details({
+      companyTitle: 'СТК',
+      reviews: [
+        review({ id: 1, filialTitle: 'Промышленная 2-я' }),
+        review({ id: 2, filialTitle: longFilialTitle })
+      ]
+    }));
+    fixture.detectChanges();
+
+    const titles = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.review-card-title')
+    );
+    expect(titles.map((element) => element.textContent?.trim())).toEqual([
+      'СТК - Промышленная 2-я',
+      `СТК - ${longFilialTitle}`
+    ]);
+    expect(titles[1]?.getAttribute('title')).toBe(`СТК - ${longFilialTitle}`);
+    const longTitleStyle = window.getComputedStyle(titles[1]!);
+    expect(longTitleStyle.overflow).toBe('hidden');
+    expect(longTitleStyle.textOverflow).toBe('ellipsis');
+    expect(longTitleStyle.whiteSpace).toBe('nowrap');
   });
 
   it('disables expansion when the rendered review text fits its box', () => {
