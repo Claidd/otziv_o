@@ -10,6 +10,8 @@ $legacyDeployPath = Join-Path $repoRoot 'infrastructure\scripts\prod\deploy-prod
 $backupPath = Join-Path $repoRoot 'infrastructure\scripts\prod\create-pre-deploy-db-backup.sh'
 $maxWebhookPath = Join-Path $repoRoot 'infrastructure\scripts\prod\register-max-webhook.sh'
 $selfHealPath = Join-Path $repoRoot 'infrastructure\scripts\prod\otziv-prod-up.sh'
+$selfHealTimerPath = Join-Path $repoRoot 'infrastructure\systemd\otziv-prod-up.timer'
+$selfHealServiceTemplatePath = Join-Path $repoRoot 'infrastructure\systemd\otziv-prod-up.service.in'
 $buildComposePath = Join-Path $repoRoot 'docker-compose.build.yaml'
 $productionComposePath = Join-Path $repoRoot 'docker-compose.yaml'
 
@@ -18,6 +20,8 @@ $legacyDeploy = [IO.File]::ReadAllText($legacyDeployPath)
 $backup = [IO.File]::ReadAllText($backupPath)
 $maxWebhook = [IO.File]::ReadAllText($maxWebhookPath)
 $selfHeal = [IO.File]::ReadAllText($selfHealPath)
+$selfHealTimer = [IO.File]::ReadAllText($selfHealTimerPath)
+$selfHealServiceTemplate = [IO.File]::ReadAllText($selfHealServiceTemplatePath)
 $buildCompose = [IO.File]::ReadAllText($buildComposePath)
 $productionCompose = [IO.File]::ReadAllText($productionComposePath)
 
@@ -135,7 +139,7 @@ Assert-Match $deploy 'release_deploy_lock\(\)[\s\S]{0,500}if ! rm -f[\s\S]{0,250
 Assert-Match $deploy 'pause_self_heal\s+tar --warning=no-timestamp -xzf[\s\S]{0,800}create-pre-deploy-db-backup\.sh" create' 'Production self-heal must be stopped before the mandatory database backup begins.'
 Assert-Match $deploy 'trap cleanup_preflight EXIT[\s\S]{0,100}trap ''exit 130'' INT[\s\S]{0,100}trap ''exit 143'' TERM[\s\S]{0,200}preflight_dir="`\$\(mktemp' 'Pre-backup cleanup must be armed with non-zero signal exits before temporary-directory creation can fail.'
 Assert-Match $deploy 'backup_dir="\.deploy-backups/`\$deploy_tag/rollout-`\$deploy_lock_token"' 'Each repeated deploy tag must preserve compose/env rollback files in a unique attempt directory.'
-Assert-Match $deploy 'deploy_cleanup\(\)[\s\S]{0,1000}systemctl disable "`\$self_heal_timer"' 'Failure cleanup must disable self-heal so a reboot cannot continue a failed rollout.'
+Assert-Match $deploy 'deploy_cleanup\(\)[\s\S]{0,1500}systemctl disable "`\$self_heal_timer"' 'Failure cleanup must disable self-heal so a reboot cannot continue a failed rollout.'
 Assert-Match $deploy 'if \[ "`\$status" -eq 0 \] && \[ "`\$release_payload_complete" != "1" \]; then[\s\S]{0,250}status="1"' 'A clean EOF before the verified release sentinel must be converted into a failed rollout.'
 Assert-Match $deploy 'if \[ "`\$status" -eq 0 \]; then[\s\S]{0,200}resume_self_heal_timer[\s\S]{0,200}release_deploy_lock[\s\S]{0,200}OTZIV_DEPLOY_COMPLETE=%s' 'Only the completed-success cleanup branch may restore self-heal, release the lock, and emit the marker.'
 Assert-Match $deploy 'publish_bundled_mobile_release\s+release_payload_complete="1"\s+"@' 'The release sentinel must be the final command in the rollout main body.'
@@ -151,6 +155,25 @@ Assert-Match $deploy 'resume_self_heal_timer\(\)[\s\S]{0,300}systemctl enable "`
 Assert-Match $deploy 'resume_self_heal_timer\(\)[\s\S]{0,600}if ! sudo -n systemctl enable[\s\S]{0,100}return 1[\s\S]{0,300}if ! sudo -n systemctl start[\s\S]{0,100}return 1[\s\S]{0,150}return 0' 'Self-heal restoration must explicitly propagate enable/start failures from conditional cleanup.'
 Assert-Match $deploy 'timer_was_active="`\$\(cat[\s\S]{0,100}timer_was_enabled="`\$\(cat[\s\S]{0,500}case "`\$timer_was_enabled"[\s\S]{0,500}systemctl enable otziv-prod-up.timer[\s\S]{0,300}systemctl start otziv-prod-up.timer' 'Pre-rollout cleanup must validate both protected states before enabling and starting the old timer.'
 Assert-Match $deploy 'install -o root -g root -m 0755[\s\S]{0,150}otziv-prod-up\.sh' 'Deploy must install the version-controlled production self-heal helper.'
+Assert-Match $selfHealTimer '(?m)^OnActiveSec=90s\s*$' 'Self-heal timer must schedule its first run relative to every timer activation, including post-deploy restart.'
+Assert-Match $selfHealTimer '(?m)^OnUnitInactiveSec=2min\s*$' 'Self-heal timer must reschedule from completion of the Type=oneshot service.'
+Assert-NotMatch $selfHealTimer '(?m)^(?:Requires|After)=docker\.service\s*$' 'The timer itself must survive an independent Docker stop/start; Docker ordering belongs on the invoked service.'
+Assert-NotMatch $selfHealTimer '(?m)^OnBootSec=' 'Self-heal timer must not depend on a boot-relative trigger that becomes elapsed after deploy restart.'
+Assert-NotMatch $selfHealTimer '(?m)^OnUnitActiveSec=' 'Self-heal timer must not use an active-state trigger for a Type=oneshot target.'
+Assert-NotMatch $selfHealTimer '(?m)^Persistent=' 'Persistent has no effect for this monotonic-only timer and must not imply catch-up semantics.'
+Assert-Match $selfHealServiceTemplate '(?m)^Type=oneshot\s*$' 'Version-controlled self-heal service must remain a oneshot unit.'
+Assert-Match $selfHealServiceTemplate '(?m)^WorkingDirectory=@@OTZIV_DEPLOY_PATH@@\s*$' 'Self-heal service must render the validated production deployment path.'
+$serviceTemplatePlaceholderCount = [regex]::Matches($selfHealServiceTemplate, '@@OTZIV_DEPLOY_PATH@@').Count
+if ($serviceTemplatePlaceholderCount -ne 2) {
+    throw "Self-heal service template must contain exactly two deploy-path placeholders; found $serviceTemplatePlaceholderCount."
+}
+Assert-Match $deploy 'infrastructure\\systemd\\otziv-prod-up\.timer[\s\S]{0,150}infrastructure\\systemd\\otziv-prod-up\.service\.in' 'Deploy bundle must include both version-controlled self-heal units.'
+Assert-Match $deploy 'systemd-analyze verify[\s\S]{0,500}install -o root -g root -m 0644[\s\S]{0,300}otziv-prod-up\.timer[\s\S]{0,300}install -o root -g root -m 0644[\s\S]{0,300}otziv-prod-up\.service[\s\S]{0,150}systemctl daemon-reload' 'Deploy must verify, install, and reload both self-heal units while the timer is stopped.'
+Assert-Match $deploy 'Rollback scaffold only[\s\S]{0,1500}otziv-prod-up\.timer /etc/systemd/system/otziv-prod-up\.timer[\s\S]{0,300}otziv-prod-up\.service /etc/systemd/system/otziv-prod-up\.service[\s\S]{0,150}systemctl daemon-reload' 'Rollback scaffold must restore both prior self-heal units before timer recovery.'
+$finiteTimerCheckCount = [regex]::Matches($deploy, 'NextElapseUSecMonotonic').Count
+if ($finiteTimerCheckCount -ne 3) {
+    throw "Pre-backup cleanup, rollout cleanup, and local SSH cleanup must each require a finite next self-heal run; found $finiteTimerCheckCount checks."
+}
 Assert-Match $selfHeal '\[\[ -e "\$deploy_lock" \|\| -L "\$deploy_lock" \]\]' 'Production self-heal must respect the durable deploy lock, including symlinks.'
 Assert-Match $selfHeal 'EXTERNAL_REVIEW_CHECK_ENABLED[\s\S]{0,1000}if \[\[ "\$external_review_enabled" == "true" \]\][\s\S]{0,200}--profile external-review up -d[\s\S]{0,300}stop external-review-worker[\s\S]{0,200}up -d' 'Production self-heal must start the worker only when enabled and keep it stopped otherwise.'
 Assert-Match $selfHeal '\.self-heal-env-file[\s\S]{0,500}env_file_name' 'Production self-heal must honor the deploy-selected remote env filename.'

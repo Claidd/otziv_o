@@ -586,6 +586,8 @@ $deployBundlePaths = @(
     "infrastructure\tempo",
     "infrastructure\alloy",
     "infrastructure\grafana",
+    "infrastructure\systemd\otziv-prod-up.timer",
+    "infrastructure\systemd\otziv-prod-up.service.in",
     "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh",
     "infrastructure\scripts\prod\validate-flyway-migrations.sh",
     "infrastructure\scripts\prod\create-pre-deploy-db-backup.sh",
@@ -920,6 +922,17 @@ assert_self_heal_stopped() {
   done
 }
 
+assert_self_heal_timer_scheduled() {
+  timer_active_state="`$(sudo -n systemctl show "`$self_heal_timer" --property=ActiveState --value 2>/dev/null)" || return 1
+  timer_sub_state="`$(sudo -n systemctl show "`$self_heal_timer" --property=SubState --value 2>/dev/null)" || return 1
+  timer_next_elapse="`$(sudo -n systemctl show "`$self_heal_timer" --property=NextElapseUSecMonotonic --value 2>/dev/null)" || return 1
+  if [ "`$timer_active_state" != "active" ] || [ "`$timer_sub_state" != "waiting" ] \
+      || [ -z "`$timer_next_elapse" ] || [ "`$timer_next_elapse" = "infinity" ] || [ "`$timer_next_elapse" = "0" ]; then
+    echo "Production self-heal timer has no finite next run (`$timer_active_state/`$timer_sub_state, next=`$timer_next_elapse)." >&2
+    return 1
+  fi
+}
+
 pause_self_heal() {
   if ! command -v systemctl >/dev/null 2>&1; then
     echo "systemctl is required to pause production self-heal before backup." >&2
@@ -996,7 +1009,8 @@ cleanup_preflight() {
     fi
     if [ "`$restore_failed" = "0" ] && [ "`$self_heal_was_active" = "1" ]; then
       echo "Pre-deploy backup did not complete; restoring production self-heal timer..." >&2
-      if ! sudo -n systemctl start "`$self_heal_timer"; then
+      if ! sudo -n systemctl start "`$self_heal_timer" \
+          || ! assert_self_heal_timer_scheduled; then
         echo "CRITICAL: failed to restore production self-heal timer after pre-deploy backup failure." >&2
         status="1"
         restore_failed="1"
@@ -1196,6 +1210,7 @@ self_heal_timer_resumed="0"
 release_payload_complete="0"
 mobile_storage_owner_needs_restore="0"
 active_env_temp=""
+active_systemd_unit_stage=""
 
 assert_self_heal_stopped() {
   for unit in "`$self_heal_timer" "`$self_heal_service"; do
@@ -1212,6 +1227,17 @@ assert_self_heal_stopped() {
         ;;
     esac
   done
+}
+
+assert_self_heal_timer_scheduled() {
+  timer_active_state="`$(sudo -n systemctl show "`$self_heal_timer" --property=ActiveState --value 2>/dev/null)" || return 1
+  timer_sub_state="`$(sudo -n systemctl show "`$self_heal_timer" --property=SubState --value 2>/dev/null)" || return 1
+  timer_next_elapse="`$(sudo -n systemctl show "`$self_heal_timer" --property=NextElapseUSecMonotonic --value 2>/dev/null)" || return 1
+  if [ "`$timer_active_state" != "active" ] || [ "`$timer_sub_state" != "waiting" ] \
+      || [ -z "`$timer_next_elapse" ] || [ "`$timer_next_elapse" = "infinity" ] || [ "`$timer_next_elapse" = "0" ]; then
+    echo "Production self-heal timer has no finite next run (`$timer_active_state/`$timer_sub_state, next=`$timer_next_elapse)." >&2
+    return 1
+  fi
 }
 
 release_deploy_lock() {
@@ -1240,7 +1266,8 @@ resume_self_heal_timer() {
   fi
   if [ "`$self_heal_was_active" = "1" ]; then
     echo "Resuming production self-heal timer..."
-    if ! sudo -n systemctl start "`$self_heal_timer"; then
+    if ! sudo -n systemctl start "`$self_heal_timer" \
+        || ! assert_self_heal_timer_scheduled; then
       return 1
     fi
     self_heal_timer_resumed="1"
@@ -1259,6 +1286,9 @@ deploy_cleanup() {
   rmdir -- "`$deploy_bundle_dir" 2>/dev/null || true
   if [ -n "`$active_env_temp" ]; then
     rm -f -- "`$active_env_temp" || true
+  fi
+  if [ -n "`$active_systemd_unit_stage" ]; then
+    rm -rf -- "`$active_systemd_unit_stage" || true
   fi
   if [ "`$mobile_storage_owner_needs_restore" = "1" ]; then
     if ! restore_backend_mobile_storage_owner; then
@@ -2139,6 +2169,16 @@ if [ -f /usr/local/sbin/otziv-prod-up.sh ]; then
   cp /usr/local/sbin/otziv-prod-up.sh "`$backup_dir/otziv-prod-up.sh"
   chmod 700 "`$backup_dir/otziv-prod-up.sh" || true
 fi
+for systemd_unit in otziv-prod-up.timer otziv-prod-up.service; do
+  systemd_unit_source="`$(sudo -n systemctl show "`$systemd_unit" --property=FragmentPath --value)"
+  if [ -z "`$systemd_unit_source" ] || [ ! -f "`$systemd_unit_source" ] || [ -L "`$systemd_unit_source" ]; then
+    echo "Cannot safely preserve existing systemd unit: `$systemd_unit" >&2
+    exit 1
+  fi
+  cp "`$systemd_unit_source" "`$backup_dir/`$systemd_unit"
+  chmod 600 "`$backup_dir/`$systemd_unit" || true
+done
+unset systemd_unit systemd_unit_source
 if [ -L .self-heal-env-file ]; then
   echo "Refusing to replace symlinked production self-heal env selector." >&2
   exit 1
@@ -2157,6 +2197,9 @@ printf '%s\n' \
   "  cp `$backup_dir/docker-compose.yaml docker-compose.yaml" \
   "  cp `$backup_dir/`$env_file `$env_file" \
   "  sudo install -o root -g root -m 0755 `$backup_dir/otziv-prod-up.sh /usr/local/sbin/otziv-prod-up.sh" \
+  "  sudo install -o root -g root -m 0644 `$backup_dir/otziv-prod-up.timer /etc/systemd/system/otziv-prod-up.timer" \
+  "  sudo install -o root -g root -m 0644 `$backup_dir/otziv-prod-up.service /etc/systemd/system/otziv-prod-up.service" \
+  "  sudo systemctl daemon-reload" \
   "  if [ -f `$backup_dir/self-heal-env-file ]; then cp `$backup_dir/self-heal-env-file .self-heal-env-file; else rm -f .self-heal-env-file; fi" \
   "  docker compose -f docker-compose.yaml --env-file `$env_file pull app nginx" \
   "  docker compose -f docker-compose.yaml --env-file `$env_file up -d --no-deps app nginx" \
@@ -2225,6 +2268,7 @@ validate_security_prerequisites
 
 ensure_nginx_certs
 find infrastructure/scripts/prod -type f -name '*.sh' -exec sed -i 's/\r$//' {} +
+find infrastructure/systemd -type f -name 'otziv-prod-up.*' -exec sed -i 's/\r$//' {} +
 self_heal_selector_temp="`$(mktemp "`$remote_path/.self-heal-env-file.XXXXXXXX")"
 active_env_temp="`$self_heal_selector_temp"
 printf '%s\n' "`$env_file" > "`$self_heal_selector_temp"
@@ -2233,6 +2277,37 @@ mv "`$self_heal_selector_temp" "`$remote_path/.self-heal-env-file"
 active_env_temp=""
 sudo -n install -o root -g root -m 0755 \
   infrastructure/scripts/prod/otziv-prod-up.sh /usr/local/sbin/otziv-prod-up.sh
+if [ "`$(grep -o '@@OTZIV_DEPLOY_PATH@@' infrastructure/systemd/otziv-prod-up.service.in | wc -l | tr -d ' ')" -ne 2 ]; then
+  echo "Production self-heal service template has an unexpected deploy-path placeholder count." >&2
+  exit 1
+fi
+active_systemd_unit_stage="`$(mktemp -d "`$remote_path/.systemd-units.XXXXXXXX")"
+chmod 700 "`$active_systemd_unit_stage"
+sed "s|@@OTZIV_DEPLOY_PATH@@|`$remote_path|g" \
+  infrastructure/systemd/otziv-prod-up.service.in > "`$active_systemd_unit_stage/otziv-prod-up.service"
+cp infrastructure/systemd/otziv-prod-up.timer "`$active_systemd_unit_stage/otziv-prod-up.timer"
+chmod 644 "`$active_systemd_unit_stage/otziv-prod-up.service" "`$active_systemd_unit_stage/otziv-prod-up.timer"
+if grep -R -Fq '@@OTZIV_DEPLOY_PATH@@' "`$active_systemd_unit_stage"; then
+  echo "Production self-heal systemd unit rendering left an unresolved placeholder." >&2
+  exit 1
+fi
+systemd-analyze verify \
+  "`$active_systemd_unit_stage/otziv-prod-up.service" \
+  "`$active_systemd_unit_stage/otziv-prod-up.timer"
+for systemd_unit_target in /etc/systemd/system/otziv-prod-up.timer /etc/systemd/system/otziv-prod-up.service; do
+  if [ -L "`$systemd_unit_target" ]; then
+    echo "Refusing to replace symlinked production systemd unit: `$systemd_unit_target" >&2
+    exit 1
+  fi
+done
+sudo -n install -o root -g root -m 0644 \
+  "`$active_systemd_unit_stage/otziv-prod-up.timer" /etc/systemd/system/otziv-prod-up.timer
+sudo -n install -o root -g root -m 0644 \
+  "`$active_systemd_unit_stage/otziv-prod-up.service" /etc/systemd/system/otziv-prod-up.service
+sudo -n systemctl daemon-reload
+rm -rf -- "`$active_systemd_unit_stage"
+active_systemd_unit_stage=""
+unset systemd_unit_target
 chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true
@@ -2432,6 +2507,13 @@ exec bash "`$rollout_script" </dev/null
         $remoteLockCleanupCommand = @"
 lock_dir=$remoteLockDirectoryQuoted
 token=$remoteLockTokenQuoted
+assert_self_heal_timer_scheduled() {
+  timer_active_state="`$(sudo -n systemctl show otziv-prod-up.timer --property=ActiveState --value 2>/dev/null)" || return 1
+  timer_sub_state="`$(sudo -n systemctl show otziv-prod-up.timer --property=SubState --value 2>/dev/null)" || return 1
+  timer_next_elapse="`$(sudo -n systemctl show otziv-prod-up.timer --property=NextElapseUSecMonotonic --value 2>/dev/null)" || return 1
+  [ "`$timer_active_state" = "active" ] && [ "`$timer_sub_state" = "waiting" ] \
+    && [ -n "`$timer_next_elapse" ] && [ "`$timer_next_elapse" != "infinity" ] && [ "`$timer_next_elapse" != "0" ]
+}
 if [ ! -d "`$lock_dir" ]; then
   echo "Protected deploy lock disappeared before local pre-rollout cleanup." >&2
   exit 75
@@ -2470,7 +2552,8 @@ if [ "`$timer_was_enabled" = "1" ]; then
   fi
 fi
 if [ "`$timer_was_active" = "1" ]; then
-  if ! sudo -n systemctl start otziv-prod-up.timer; then
+  if ! sudo -n systemctl start otziv-prod-up.timer \
+      || ! assert_self_heal_timer_scheduled; then
     sudo -n systemctl disable otziv-prod-up.timer || true
     sudo -n systemctl stop otziv-prod-up.timer otziv-prod-up.service || true
     exit 1

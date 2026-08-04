@@ -1,0 +1,15 @@
+[Unit]
+Description=Periodic self-heal for Otziv production services
+
+[Timer]
+# OnActiveSec also works when deploy temporarily disables and restarts the
+# timer long after boot. OnBootSec alone would remain elapsed with no next run.
+OnActiveSec=90s
+# The target is a Type=oneshot service, so schedule the recurring run from
+# the point at which that service returns to inactive.
+OnUnitInactiveSec=2min
+AccuracySec=15s
+Unit=otziv-prod-up.service
+
+[Install]
+WantedBy=timers.target
