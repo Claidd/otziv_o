@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { AuthService, hasKeycloakAuthenticationCallback, safeAuthTarget } from './auth.service';
 
 const keycloak = vi.hoisted(() => ({
   authenticated: true,
@@ -21,6 +20,10 @@ vi.mock('keycloak-js', () => ({
     }
   }
 }));
+
+// Register the Keycloak mock before evaluating AuthService. Static imports can
+// be evaluated first on some CI workers and accidentally construct the real client.
+const { AuthService, hasKeycloakAuthenticationCallback, safeAuthTarget } = await import('./auth.service');
 
 class TestAuthService extends AuthService {
   readonly fallbackUrls: string[] = [];

@@ -21,6 +21,10 @@ param(
     [string]$PreDeployBackupDirectory = "",
     [switch]$NoBuildCache,
     [switch]$AllowDirtyWorktree,
+    [switch]$SkipAutoSnapshotValidation,
+    [switch]$PrepareSnapshotOnly,
+    [switch]$PreparedDeploySnapshot,
+    [string]$DeploySnapshotBaseRevision = "",
     [switch]$Help
 )
 
@@ -37,7 +41,7 @@ Example:
 Useful options:
   -DockerHubNamespace claid38     Docker Hub namespace or username.
   -DockerLoginUsername claid38    Docker Hub login username. Defaults to DockerHubNamespace.
-  -Tag 20260507-1                Image tag. Defaults to current date/time.
+  -Tag 20260507-1                Release name. Exact snapshot SHA is appended automatically.
   -EnvFile .env.prod             Local env file uploaded to VPS as .env.prod.
   -RemoteEnvFile .env            Env file name used on the VPS.
   -DockerLogin                   Run local docker login before build and push.
@@ -48,7 +52,13 @@ Useful options:
   -SkipMobileApkUpload           Do not include a mobile APK in this deployment.
   -PreDeployBackupDirectory      Local directory for the mandatory encrypted pre-migration DB backup.
   -NoBuildCache                  Build images without Docker cache.
-  -AllowDirtyWorktree            Deploy from modified inputs (unsafe emergency override).
+  -AllowDirtyWorktree            Emergency only: bypass the clean automatic snapshot.
+  -SkipAutoSnapshotValidation    Emergency only: skip local gates for an automatic snapshot.
+  -PrepareSnapshotOnly           Build and verify an automatic snapshot without contacting VPS.
+
+When deployment inputs contain local changes, this script automatically creates an
+isolated Git snapshot, validates affected components, and deploys from its clean
+temporary worktree. Your branch, staging area, and working files are not changed.
 '@ | Write-Host
 }
 
@@ -538,32 +548,130 @@ $VpsPath = $VpsPath.TrimEnd('/')
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
 
-if ($Tag -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$') {
-    throw 'Tag must be a valid, bounded Docker tag (letters, digits, dot, underscore and dash only).'
-}
-
-if (-not $AllowDirtyWorktree) {
-    $deployInputPaths = @(
-        'backend', 'frontend', 'whatsapp', 'infrastructure',
-        'docker-compose.yaml', 'docker-compose.build.yaml',
-        'Dockerfile.whatsapp', '.dockerignore'
-    )
-    $dirtyDeployInputs = @(& git -C $repoRoot status --porcelain --untracked-files=all -- @deployInputPaths)
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Unable to verify that deployment inputs are clean. Use -AllowDirtyWorktree only for an audited emergency deployment.'
-    }
-    if ($dirtyDeployInputs.Count -gt 0) {
-        throw "Deployment inputs contain uncommitted changes. Commit/review them first, or use -AllowDirtyWorktree for an audited emergency deployment:`n$($dirtyDeployInputs -join [Environment]::NewLine)"
-    }
-} else {
-    Write-Warning 'Deploying from a dirty worktree by explicit override. The resulting images may not be reproducible from Git.'
-}
-
 $envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
 if (-not (Test-Path -LiteralPath $envResolverPath)) {
     throw "Env resolver script not found: $envResolverPath"
 }
 . $envResolverPath
+
+$snapshotLibraryPath = Join-Path $scriptRoot 'DeploySnapshot.ps1'
+if (-not (Test-Path -LiteralPath $snapshotLibraryPath -PathType Leaf)) {
+    throw "Deploy snapshot library not found: $snapshotLibraryPath"
+}
+. $snapshotLibraryPath
+
+$deployInputPaths = @(Get-OtzivDeployInputPaths)
+$dirtyDeployInputs = @(Get-OtzivDeployChanges -Repository $repoRoot -InputPaths $deployInputPaths)
+
+if ($PreparedDeploySnapshot) {
+    if ([string]::IsNullOrWhiteSpace($DeploySnapshotBaseRevision) -or
+        $DeploySnapshotBaseRevision -notmatch '^[0-9a-f]{40}$') {
+        throw 'Prepared deploy snapshot requires one exact base revision.'
+    }
+    if ($dirtyDeployInputs.Count -gt 0) {
+        throw "Prepared deploy snapshot worktree is not clean:`n$($dirtyDeployInputs -join [Environment]::NewLine)"
+    }
+} elseif (-not $AllowDirtyWorktree -and $dirtyDeployInputs.Count -gt 0) {
+    Write-Host "Local deployment changes detected; creating an isolated automatic snapshot."
+    $snapshot = New-OtzivDeploySnapshot -Repository $repoRoot -InputPaths $deployInputPaths
+    Write-Host "Deploy snapshot: $($snapshot.Commit)"
+    Write-Host "Recovery ref: $($snapshot.Ref)"
+    Write-Host 'Included deployment changes:'
+    $snapshot.ChangedFiles | ForEach-Object { Write-Host "  $_" }
+
+    $snapshotParent = Join-Path ([IO.Path]::GetTempPath()) 'otziv-deploy-worktrees'
+    $snapshotWorktree = Join-Path $snapshotParent ([Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $snapshotParent -Force | Out-Null
+
+    try {
+        & git -C $repoRoot worktree add --detach $snapshotWorktree $snapshot.Commit
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to prepare the clean automatic deploy snapshot worktree.'
+        }
+
+        $preparedRevision = (& git -C $snapshotWorktree rev-parse --verify HEAD).Trim()
+        $preparedChanges = @(& git -C $snapshotWorktree status --porcelain --untracked-files=all)
+        if ($LASTEXITCODE -ne 0 -or $preparedRevision -cne $snapshot.Commit -or $preparedChanges.Count -gt 0) {
+            throw 'Automatic deploy snapshot worktree failed exact revision/cleanliness verification.'
+        }
+
+        if (-not $SkipAutoSnapshotValidation) {
+            $snapshotValidator = Join-Path $snapshotWorktree 'infrastructure\scripts\prod\validate-deploy-snapshot.ps1'
+            if (-not (Test-Path -LiteralPath $snapshotValidator -PathType Leaf)) {
+                throw 'Automatic deploy snapshot does not contain its required validator.'
+            }
+            & $snapshotValidator -RepoRoot $snapshotWorktree -BaseRevision $snapshot.BaseRevision
+            if ($LASTEXITCODE -ne 0) {
+                throw 'Automatic deploy snapshot validation failed.'
+            }
+        } else {
+            Write-Warning 'Automatic deploy snapshot validation was bypassed explicitly.'
+        }
+
+        if ($PrepareSnapshotOnly) {
+            Write-Host 'Automatic snapshot preparation completed; VPS was not contacted.'
+            return
+        }
+
+        $forwardParameters = @{}
+        foreach ($entry in $PSBoundParameters.GetEnumerator()) {
+            $forwardParameters[$entry.Key] = $entry.Value
+        }
+        [void]$forwardParameters.Remove('PrepareSnapshotOnly')
+        [void]$forwardParameters.Remove('AllowDirtyWorktree')
+        $forwardParameters['PreparedDeploySnapshot'] = $true
+        $forwardParameters['DeploySnapshotBaseRevision'] = $snapshot.BaseRevision
+        $forwardParameters['Tag'] = $Tag
+        $forwardParameters['EnvFile'] = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot -AllowMissing:$SkipEnvUpload
+
+        if (-not [string]::IsNullOrWhiteSpace($MobileApkPath) -and
+            -not [IO.Path]::IsPathRooted($MobileApkPath)) {
+            $sourceMobileApk = Join-Path $repoRoot $MobileApkPath
+            if (Test-Path -LiteralPath $sourceMobileApk -PathType Leaf) {
+                $forwardParameters['MobileApkPath'] = (Resolve-Path -LiteralPath $sourceMobileApk).Path
+            }
+        }
+
+        $preparedDeployScript = Join-Path $snapshotWorktree 'infrastructure\scripts\prod\deploy-prod.ps1'
+        & $preparedDeployScript @forwardParameters
+        if ($LASTEXITCODE -ne 0) {
+            throw "Automatic snapshot deployment failed with exit code $LASTEXITCODE."
+        }
+    } finally {
+        if (Test-Path -LiteralPath $snapshotWorktree) {
+            & git -C $repoRoot worktree remove --force $snapshotWorktree 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "Could not remove temporary deploy worktree: $snapshotWorktree"
+            }
+        }
+    }
+    return
+} elseif ($AllowDirtyWorktree -and $dirtyDeployInputs.Count -gt 0) {
+    Write-Warning 'Deploying from a dirty worktree by explicit override. The resulting images may not be reproducible from Git.'
+}
+
+if ($PrepareSnapshotOnly) {
+    Write-Host 'No deployment-input changes were found; automatic snapshot is not required.'
+    return
+}
+
+$gitRevision = (& git -C $repoRoot rev-parse --verify HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $gitRevision -notmatch '^[0-9a-f]{40}$') {
+    throw 'Unable to resolve the exact Git revision for the deployment tag.'
+}
+$revisionTagSuffix = "-$($gitRevision.Substring(0, 12))"
+if ($Tag -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$') {
+    throw 'Tag must be a valid, bounded Docker tag (letters, digits, dot, underscore and dash only).'
+}
+if (-not $Tag.EndsWith($revisionTagSuffix, [StringComparison]::OrdinalIgnoreCase)) {
+    if (($Tag.Length + $revisionTagSuffix.Length) -gt 128) {
+        throw 'Tag is too long after adding the required deploy snapshot revision suffix.'
+    }
+    $Tag += $revisionTagSuffix
+}
+Write-Host "Deployment revision: $gitRevision"
+Write-Host "Traceable image tag: $Tag"
+
 $buildCompose = Join-Path $repoRoot "docker-compose.build.yaml"
 $appImage = "${DockerHubNamespace}/${AppRepository}:${Tag}"
 $webImage = "${DockerHubNamespace}/${WebRepository}:${Tag}"

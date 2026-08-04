@@ -6,6 +6,8 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $deployPath = Join-Path $repoRoot 'infrastructure\scripts\prod\deploy-prod.ps1'
+$snapshotPath = Join-Path $repoRoot 'infrastructure\scripts\prod\DeploySnapshot.ps1'
+$snapshotValidatorPath = Join-Path $repoRoot 'infrastructure\scripts\prod\validate-deploy-snapshot.ps1'
 $legacyDeployPath = Join-Path $repoRoot 'infrastructure\scripts\prod\deploy-prod-ssh-images.ps1'
 $backupPath = Join-Path $repoRoot 'infrastructure\scripts\prod\create-pre-deploy-db-backup.sh'
 $maxWebhookPath = Join-Path $repoRoot 'infrastructure\scripts\prod\register-max-webhook.sh'
@@ -20,6 +22,8 @@ $buildComposePath = Join-Path $repoRoot 'docker-compose.build.yaml'
 $productionComposePath = Join-Path $repoRoot 'docker-compose.yaml'
 
 $deploy = [IO.File]::ReadAllText($deployPath)
+$snapshot = [IO.File]::ReadAllText($snapshotPath)
+$snapshotValidator = [IO.File]::ReadAllText($snapshotValidatorPath)
 $legacyDeploy = [IO.File]::ReadAllText($legacyDeployPath)
 $backup = [IO.File]::ReadAllText($backupPath)
 $maxWebhook = [IO.File]::ReadAllText($maxWebhookPath)
@@ -110,6 +114,25 @@ Assert-Order $deploy 'wait_service_healthy app 1200' 'compose --profile external
 Assert-Order $deploy 'wait_service_healthy app 1200' '--remove-orphans --no-deps dozzle alloy' 'Orphan cleanup must not run until the replacement backend is healthy.'
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,150}compose --profile external-review up -d --remove-orphans --no-deps dozzle alloy[\s\S]{0,100}else[\s\S]{0,100}compose up -d --remove-orphans --no-deps dozzle alloy' 'Orphan cleanup must preserve the opted-in worker profile.'
 Assert-Match $deploy 'set_env EXTERNAL_REVIEW_CHECK_ENABLED "true"[\s\S]{0,100}set_env EXTERNAL_REVIEW_CHECK_ENABLED "false"' 'Production deploy must persist the backend hard switch consistently with the worker opt-in.'
+Assert-Match $deploy 'Join-Path \$scriptRoot ''DeploySnapshot\.ps1''' 'Production deploy must load the isolated automatic snapshot implementation.'
+Assert-Match $deploy 'New-OtzivDeploySnapshot -Repository \$repoRoot -InputPaths \$deployInputPaths' 'Dirty production inputs must be captured through the isolated snapshot index.'
+Assert-Match $deploy 'worktree add --detach \$snapshotWorktree \$snapshot\.Commit' 'Automatic deploy must materialize the exact snapshot in a detached worktree.'
+Assert-Match $deploy '& \$snapshotValidator -RepoRoot \$snapshotWorktree -BaseRevision \$snapshot\.BaseRevision' 'Automatic deploy must validate the clean snapshot before contacting production.'
+Assert-Order $deploy '& $snapshotValidator' '& $preparedDeployScript @forwardParameters' 'Automatic snapshot validation must finish before the production deploy script is invoked.'
+Assert-Match $deploy 'Remove\(''AllowDirtyWorktree''\)' 'Automatic snapshot recursion must not forward the dirty-worktree bypass.'
+Assert-Match $deploy '\$revisionTagSuffix = "-\$\(\$gitRevision\.Substring\(0, 12\)\)"' 'Production image tags must include the exact deploy snapshot revision.'
+Assert-Match $snapshot '''backend''[\s\S]{0,100}''frontend''[\s\S]{0,100}''mobile''[\s\S]{0,100}''whatsapp''[\s\S]{0,100}''infrastructure''' 'Automatic snapshots must include every deploy source tree.'
+Assert-NotMatch $snapshot '(?m)^\s*''\.''\s*,?\s*$' 'Automatic snapshots must never add the unrestricted repository root.'
+Assert-Match $snapshot 'GIT_INDEX_FILE' 'Automatic snapshots must use an isolated Git index.'
+Assert-Match $snapshot '@\(''read-tree'', \$baseRevision\)' 'Automatic snapshots must start from the exact current commit tree.'
+Assert-Match $snapshot 'git -C \$repositoryRoot add -A -- @InputPaths' 'Automatic snapshots must capture tracked, deleted, and untracked allowlisted inputs.'
+Assert-Match $snapshot '@\(''commit-tree'', \$tree, ''-p'', \$baseRevision' 'Automatic snapshots must produce an immutable Git commit without changing the user branch.'
+Assert-Match $snapshot '''update-ref'', \$snapshotRef, \$commit' 'Automatic snapshot commits must retain a local recovery reference.'
+Assert-Match $snapshotValidator 'run-secret-scan\.ps1''[\s\S]{0,100}Mode\s*=\s*''dir''' 'Automatic deploy snapshots must pass a secret scan.'
+Assert-Match $snapshotValidator 'check-flyway-contract\.ps1''[\s\S]{0,100}BaseRevision\s*=\s*\$base' 'Automatic deploy snapshots must enforce append-only Flyway migrations.'
+Assert-Match $snapshotValidator '''backend full test suite''[\s\S]{0,300}''verify''' 'Changed backend snapshots must pass the full Maven suite.'
+Assert-Match $snapshotValidator '''frontend unit tests''[\s\S]{0,200}''--watch=false''' 'Changed frontend snapshots must pass unit tests.'
+Assert-Match $snapshotValidator '''mobile unit tests''[\s\S]{0,200}''test:unit''' 'Changed mobile snapshots must pass unit tests.'
 
 $workerPushCount = [regex]::Matches($deploy, 'Invoke-External[^\r\n]+@\("push", \$externalReviewWorkerImage\)').Count
 if ($workerPushCount -ne 1) {
