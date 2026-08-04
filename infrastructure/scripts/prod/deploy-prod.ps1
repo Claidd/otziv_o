@@ -2425,8 +2425,8 @@ wait_service_healthy prometheus 600
 compose up -d --no-deps grafana
 wait_service_healthy grafana 600
 compose stop whatsapp_lika whatsapp_vika
-compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint sh whatsapp_lika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
-compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
+compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh whatsapp_lika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
+compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
 recreate_service_with_retry whatsapp_lika
 recreate_service_with_retry whatsapp_vika
 if [ "`$deploy_external_review_worker" = "1" ]; then
