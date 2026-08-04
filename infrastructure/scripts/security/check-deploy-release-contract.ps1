@@ -13,6 +13,7 @@ $selfHealPath = Join-Path $repoRoot 'infrastructure\scripts\prod\otziv-prod-up.s
 $selfHealTimerPath = Join-Path $repoRoot 'infrastructure\systemd\otziv-prod-up.timer'
 $selfHealServiceTemplatePath = Join-Path $repoRoot 'infrastructure\systemd\otziv-prod-up.service.in'
 $whatsappIndexPath = Join-Path $repoRoot 'whatsapp\index.js'
+$whatsappPackagePath = Join-Path $repoRoot 'whatsapp\package.json'
 $whatsappChromiumLaunchPath = Join-Path $repoRoot 'whatsapp\chromium-launch.js'
 $whatsappChromiumSmokePath = Join-Path $repoRoot 'whatsapp\chromium-smoke.js'
 $buildComposePath = Join-Path $repoRoot 'docker-compose.build.yaml'
@@ -26,6 +27,7 @@ $selfHeal = [IO.File]::ReadAllText($selfHealPath)
 $selfHealTimer = [IO.File]::ReadAllText($selfHealTimerPath)
 $selfHealServiceTemplate = [IO.File]::ReadAllText($selfHealServiceTemplatePath)
 $whatsappIndex = [IO.File]::ReadAllText($whatsappIndexPath)
+$whatsappPackage = [IO.File]::ReadAllText($whatsappPackagePath)
 $whatsappChromiumLaunch = [IO.File]::ReadAllText($whatsappChromiumLaunchPath)
 $whatsappChromiumSmoke = [IO.File]::ReadAllText($whatsappChromiumSmokePath)
 $buildCompose = [IO.File]::ReadAllText($buildComposePath)
@@ -142,6 +144,8 @@ Assert-Match $deploy 'whatsapp\\chromium-launch\.js' 'Deploy bundle must include
 Assert-Match $deploy 'whatsapp\\chromium-smoke\.js' 'Deploy bundle must include the real Chromium launch smoke test.'
 Assert-Match $whatsappIndex 'chromiumLaunchArgs\(proxyServerArg\(\)\)' 'WhatsApp clients must use the shared audited Chromium launch arguments.'
 Assert-Match $whatsappIndex 'webVersionCache:\s*\{[\s\S]{0,300}type:\s*"none"' 'WhatsApp Web cache must stay disabled because its default local persistence targets the read-only application directory before READY.'
+Assert-Match $whatsappPackage '"brace-expansion"\s*:\s*"2\.1\.4"' 'WhatsApp must retain the patched brace-expansion override.'
+Assert-Match $whatsappPackage '"ip-address"\s*:\s*"10\.4\.0"' 'WhatsApp must retain the patched ip-address override.'
 Assert-NotMatch ($whatsappIndex + "`n" + $whatsappChromiumLaunch) '--no-sandbox|--disable-setuid-sandbox|--no-zygote' 'WhatsApp Chromium must keep its Linux sandbox enabled without the incompatible no-zygote flag.'
 Assert-Match $whatsappChromiumSmoke 'require\("puppeteer"\)[\s\S]{0,300}require\("\./chromium-launch"\)[\s\S]{0,500}puppeteer\.launch[\s\S]{0,500}args: chromiumLaunchArgs\(""\)' 'Chromium smoke test must launch real Puppeteer with the same audited arguments as production.'
 Assert-Match $deploy 'compose run --rm --no-deps --interactive=false -T --entrypoint node whatsapp_lika chromium-smoke\.js </dev/null' 'Deploy must run the real Chromium sandbox smoke test under the production Compose security profile.'
