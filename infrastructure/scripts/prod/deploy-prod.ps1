@@ -150,7 +150,8 @@ function Invoke-ExternalWithRetry {
             if ($attempt -ge $Attempts) {
                 break
             }
-            Write-Warning "Command failed on attempt ${attempt}/${Attempts}: $FilePath $($Arguments -join ' '). Retrying in ${DelaySeconds}s..."
+            $redactedCommand = Format-RedactedCommand -FilePath $FilePath -Arguments $Arguments
+            Write-Warning "Command failed on attempt ${attempt}/${Attempts}: ${redactedCommand}. Retrying in ${DelaySeconds}s..."
             Start-Sleep -Seconds $DelaySeconds
         }
     }
@@ -598,6 +599,7 @@ $remote = "${VpsUser}@${VpsHost}"
 $remoteDeployLockToken = [System.Guid]::NewGuid().ToString('N')
 $remoteUploadDirectory = "$VpsPath/.deploy-upload-$remoteDeployLockToken"
 $remoteBundle = "$remoteUploadDirectory/bundle.tar.gz"
+$remoteRolloutScript = "$remoteUploadDirectory/rollout.sh"
 $stageRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("otziv-deploy-" + [System.Guid]::NewGuid().ToString("N"))
 $bundlePath = Join-Path ([System.IO.Path]::GetTempPath()) ("otziv-deploy-" + [System.Guid]::NewGuid().ToString("N") + ".tar.gz")
 $remoteBundleUploaded = $false
@@ -865,6 +867,7 @@ chmod 600 $remoteBundleForUploadQuoted
 
     $remotePathQuoted = ConvertTo-BashSingleQuoted $VpsPath
     $remoteBundleQuoted = ConvertTo-BashSingleQuoted $remoteBundle
+    $remoteRolloutScriptQuoted = ConvertTo-BashSingleQuoted $remoteRolloutScript
     $appRepoQuoted = ConvertTo-BashSingleQuoted "${DockerHubNamespace}/${AppRepository}"
     $webRepoQuoted = ConvertTo-BashSingleQuoted "${DockerHubNamespace}/${WebRepository}"
     $appImageQuoted = ConvertTo-BashSingleQuoted $appImage
@@ -1016,13 +1019,15 @@ cleanup_preflight() {
   fi
   exit "`$status"
 }
-trap cleanup_preflight EXIT INT TERM
+trap cleanup_preflight EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 preflight_dir="`$(mktemp -d "`$remote_path/.deploy-preflight.XXXXXXXX")"
 pause_self_heal
-tar -xzf "`$bundle_path" -C "`$preflight_dir" ./infrastructure/scripts/prod/create-pre-deploy-db-backup.sh
+tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$preflight_dir" ./infrastructure/scripts/prod/create-pre-deploy-db-backup.sh
 backup_env="`$remote_path/`$env_file"
 if [ "`$uploaded_env" = "1" ]; then
-  tar -xzf "`$bundle_path" -C "`$preflight_dir" "./`$env_file"
+  tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$preflight_dir" "./`$env_file"
   backup_env="`$preflight_dir/`$env_file"
 fi
 chmod 600 "`$backup_env"
@@ -1164,6 +1169,7 @@ umask 077
 
 remote_path=$remotePathQuoted
 bundle_path=$remoteBundleQuoted
+rollout_script_path=$remoteRolloutScriptQuoted
 deploy_bundle_dir="`$(dirname "`$bundle_path")"
 app_repo=$appRepoQuoted
 web_repo=$webRepoQuoted
@@ -1211,8 +1217,14 @@ assert_self_heal_stopped() {
 release_deploy_lock() {
   if [ -f "`$deploy_lock_dir/owner" ] \
       && [ "`$(cat "`$deploy_lock_dir/owner")" = "`$deploy_lock_token" ]; then
-    rm -f -- "`$self_heal_state_file" "`$self_heal_enabled_state_file" "`$deploy_lock_dir/owner"
-    rmdir -- "`$deploy_lock_dir"
+    if ! rm -f -- "`$self_heal_state_file" "`$self_heal_enabled_state_file" "`$deploy_lock_dir/owner"; then
+      echo "Failed to remove protected deployment lock files." >&2
+      return 1
+    fi
+    if ! rmdir -- "`$deploy_lock_dir"; then
+      echo "Failed to remove protected deployment lock directory." >&2
+      return 1
+    fi
     return 0
   fi
   echo "Deployment lock ownership was lost; refusing to remove another deploy's lock." >&2
@@ -1222,19 +1234,28 @@ release_deploy_lock() {
 resume_self_heal_timer() {
   if [ "`$self_heal_was_enabled" = "1" ]; then
     echo "Re-enabling production self-heal timer..."
-    sudo -n systemctl enable "`$self_heal_timer"
+    if ! sudo -n systemctl enable "`$self_heal_timer"; then
+      return 1
+    fi
   fi
   if [ "`$self_heal_was_active" = "1" ]; then
     echo "Resuming production self-heal timer..."
-    sudo -n systemctl start "`$self_heal_timer"
+    if ! sudo -n systemctl start "`$self_heal_timer"; then
+      return 1
+    fi
     self_heal_timer_resumed="1"
   fi
+  return 0
 }
 
 deploy_cleanup() {
   status="`$?"
   trap - EXIT INT TERM
-  rm -f -- "`$bundle_path" || true
+  if [ "`$status" -eq 0 ] && [ "`$release_payload_complete" != "1" ]; then
+    echo "Deployment script ended before the verified release handoff completed; treating the rollout as failed." >&2
+    status="1"
+  fi
+  rm -f -- "`$bundle_path" "`$rollout_script_path" || true
   rmdir -- "`$deploy_bundle_dir" 2>/dev/null || true
   if [ -n "`$active_env_temp" ]; then
     rm -f -- "`$active_env_temp" || true
@@ -1259,22 +1280,39 @@ deploy_cleanup() {
     self_heal_timer_resumed="0"
   fi
   if [ "`$status" -eq 0 ]; then
-    release_deploy_lock || status="1"
-  elif [ "`$release_payload_complete" != "1" ]; then
-    echo "Deployment failed. Previous compose/env files remain under `$remote_path/.deploy-backups/`$deploy_tag." >&2
-    echo "No database rollback was attempted. Review service state and the backup before a manual rollback." >&2
-    if [ "`$self_heal_guard_engaged" = "1" ]; then
-      echo "The production self-heal timer remains disabled and stopped, and the deploy lock remains at `$deploy_lock_dir." >&2
-      echo "After recovery is verified, remove only this deployment's lock and restore the timer state manually." >&2
+    if ! resume_self_heal_timer; then
+      echo "CRITICAL: failed to restore the protected production self-heal state after rollout." >&2
+      status="1"
+    elif ! release_deploy_lock; then
+      status="1"
+    else
+      printf 'OTZIV_DEPLOY_COMPLETE=%s\n' "`$deploy_lock_token"
     fi
-  else
-    echo "Release payload and health checks completed, but the final self-heal/lock handoff was interrupted." >&2
-    echo "Inspect `$deploy_lock_dir and `$self_heal_timer before retrying; the installed self-heal helper respects a retained lock." >&2
+    if [ "`$status" -ne 0 ]; then
+      sudo -n systemctl disable "`$self_heal_timer" || true
+      sudo -n systemctl stop "`$self_heal_timer" "`$self_heal_service" || true
+      self_heal_timer_resumed="0"
+    fi
+  fi
+  if [ "`$status" -ne 0 ]; then
+    if [ "`$release_payload_complete" != "1" ]; then
+      echo "Deployment failed. Previous compose/env files remain under `$remote_path/.deploy-backups/`$deploy_tag." >&2
+      echo "No database rollback was attempted. Review service state and the backup before a manual rollback." >&2
+      if [ "`$self_heal_guard_engaged" = "1" ]; then
+        echo "The production self-heal timer remains disabled and stopped, and the deploy lock remains at `$deploy_lock_dir." >&2
+        echo "After recovery is verified, remove only this deployment's lock and restore the timer state manually." >&2
+      fi
+    else
+      echo "Release payload and health checks completed, but the final self-heal/lock handoff was interrupted." >&2
+      echo "Inspect `$deploy_lock_dir and `$self_heal_timer before retrying; the installed self-heal helper respects a retained lock." >&2
+    fi
   fi
   exit "`$status"
 }
 
-trap deploy_cleanup EXIT INT TERM
+trap deploy_cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 mkdir -p "`$remote_path"
 cd "`$remote_path"
@@ -1314,11 +1352,19 @@ sudo -n systemctl stop "`$self_heal_timer" "`$self_heal_service"
 assert_self_heal_stopped
 self_heal_guard_engaged="1"
 
+# Docker Compose gives exported shell variables precedence over --env-file.
+# Remove release-critical overrides inherited through SSH and pin the project
+# name so every pull/recreate targets the audited production project.
+unset APP_IMAGE WEB_IMAGE EXTERNAL_REVIEW_WORKER_IMAGE WHATSAPP_IMAGE
+unset EXTERNAL_REVIEW_CHECK_ENABLED COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES
+unset COMPOSE_ENV_FILES COMPOSE_DISABLE_ENV_FILE
+compose_project_name="otziv-prod"
+
 compose() {
   if command -v docker-compose >/dev/null 2>&1; then
-    docker-compose -f docker-compose.yaml --env-file "`$env_file" "`$@"
+    docker-compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
   elif docker compose version >/dev/null 2>&1; then
-    docker compose -f docker-compose.yaml --env-file "`$env_file" "`$@"
+    docker compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
   else
     echo "Docker Compose is not installed. Install docker-compose or the Docker Compose plugin." >&2
     exit 1
@@ -1404,6 +1450,51 @@ require_env() {
     echo "Required production setting `$key is empty." >&2
     exit 1
   fi
+}
+
+assert_compose_service_image() {
+  service_name="`$1"
+  expected_image="`$2"
+  profile="`${3:-}"
+  if [ -n "`$profile" ]; then
+    config_json="`$(compose --profile "`$profile" config --format json)"
+  else
+    config_json="`$(compose config --format json)"
+  fi
+  resolved_image="`$(printf '%s' "`$config_json" | python3 -c '
+import json
+import sys
+
+config = json.load(sys.stdin)
+service = config.get("services", {}).get(sys.argv[1], {})
+print(service.get("image", ""))
+' "`$service_name")"
+  if [ "`$resolved_image" != "`$expected_image" ]; then
+    echo "Resolved Compose image for `$service_name is '`$resolved_image'; expected '`$expected_image'." >&2
+    exit 1
+  fi
+}
+
+assert_running_service_image() {
+  service_name="`$1"
+  expected_image="`$2"
+  profile="`${3:-}"
+  if [ -n "`$profile" ]; then
+    container_id="`$(compose --profile "`$profile" ps -q "`$service_name" | head -n 1)"
+  else
+    container_id="`$(compose ps -q "`$service_name" | head -n 1)"
+  fi
+  if [ -z "`$container_id" ]; then
+    echo "Cannot verify image for missing service container: `$service_name" >&2
+    exit 1
+  fi
+  expected_image_id="`$(docker image inspect "`$expected_image" --format '{{.Id}}')"
+  actual_image_id="`$(docker inspect "`$container_id" --format '{{.Image}}')"
+  if [ "`$actual_image_id" != "`$expected_image_id" ]; then
+    echo "Running `$service_name image ID does not match `$expected_image." >&2
+    exit 1
+  fi
+  echo "Verified `$service_name is running the expected image ID."
 }
 
 ensure_generated_link_secret() {
@@ -2148,8 +2239,11 @@ chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true
 chmod +x infrastructure/scripts/prod/register-max-webhook.sh || true
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
+assert_compose_service_image app "`$app_image"
+assert_compose_service_image nginx "`$web_image"
 if [ "`$deploy_external_review_worker" = "1" ]; then
   require_compose_service external-review-worker external-review
+  assert_compose_service_image external-review-worker "`$external_review_worker_image" external-review
   compose --profile external-review pull app nginx external-review-worker
 else
   compose pull app nginx
@@ -2165,12 +2259,12 @@ if [ "`$current_flyway_sha" != "`$expected_flyway_fingerprint" ]; then
 fi
 bash infrastructure/scripts/prod/validate-flyway-migrations.sh "`$app_image" my-mysql
 compose build whatsapp_lika whatsapp_vika
-if ! compose run --rm --no-deps --entrypoint /usr/bin/chromium whatsapp_lika --headless --disable-gpu --dump-dom about:blank >/dev/null 2>&1; then
+if ! compose run --rm --no-deps --interactive=false -T --entrypoint /usr/bin/chromium whatsapp_lika --headless --disable-gpu --dump-dom about:blank </dev/null >/dev/null 2>&1; then
   echo "WhatsApp Chromium sandbox preflight failed; existing gateway containers were not stopped." >&2
   exit 1
 fi
-compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases /app/sent-hashes
-compose up -d --remove-orphans --no-deps mysql keycloak-postgres loki tempo
+compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases /app/sent-hashes </dev/null
+compose up -d --no-deps mysql keycloak-postgres loki tempo
 wait_service_healthy mysql 600
 wait_service_healthy keycloak-postgres 600
 compose up -d --no-deps keycloak
@@ -2178,9 +2272,11 @@ wait_service_healthy keycloak 900
 if [ "`$deploy_external_review_worker" = "1" ]; then
   recreate_service_with_retry external-review-worker external-review
   wait_service_healthy external-review-worker 300 external-review
+  assert_running_service_image external-review-worker "`$external_review_worker_image" external-review
 fi
 recreate_service_with_retry app
 wait_service_healthy app 1200
+assert_running_service_image app "`$app_image"
 if [ "`$deploy_external_review_worker" != "1" ]; then
   # Keep an old worker available until the replacement backend has started
   # with the hard switch disabled. A failed app rollout then preserves the
@@ -2194,11 +2290,15 @@ wait_service_healthy prometheus 600
 compose up -d --no-deps grafana
 wait_service_healthy grafana 600
 compose stop whatsapp_lika whatsapp_vika
-compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint sh whatsapp_lika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth'
-compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth'
+compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint sh whatsapp_lika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
+compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
 recreate_service_with_retry whatsapp_lika
 recreate_service_with_retry whatsapp_vika
-compose up -d --remove-orphans --no-deps dozzle alloy
+if [ "`$deploy_external_review_worker" = "1" ]; then
+  compose --profile external-review up -d --remove-orphans --no-deps dozzle alloy
+else
+  compose up -d --remove-orphans --no-deps dozzle alloy
+fi
 if [ "`$(get_env PHPMYADMIN_ENABLED false)" = "true" ]; then
   echo "Starting loopback-only phpMyAdmin by explicit production opt-in."
   compose --profile db-admin up -d --no-deps phpmyadmin
@@ -2210,6 +2310,7 @@ wait_service_healthy keycloak 300
 wait_service_healthy grafana 300
 recreate_service_with_retry nginx
 wait_service_healthy nginx 300
+assert_running_service_image nginx "`$web_image"
 wait_service_healthy whatsapp_lika 300
 keycloak_settings_applied=0
 for attempt in 1 2 3; do
@@ -2239,10 +2340,13 @@ fi
 wait_service_healthy app 1200
 wait_service_healthy keycloak 900
 wait_service_healthy nginx 300
+assert_running_service_image app "`$app_image"
+assert_running_service_image nginx "`$web_image"
 wait_service_healthy whatsapp_lika 300
 wait_service_healthy whatsapp_vika 300
 if [ "`$deploy_external_review_worker" = "1" ]; then
   wait_service_healthy external-review-worker 300 external-review
+  assert_running_service_image external-review-worker "`$external_review_worker_image" external-review
 fi
 app_container_id="`$(compose ps -q app | head -n 1)"
 bash infrastructure/scripts/prod/register-max-webhook.sh "`$env_file" "`$app_container_id"
@@ -2256,19 +2360,67 @@ else
 fi
 publish_bundled_mobile_release
 release_payload_complete="1"
-resume_self_heal_timer
-release_deploy_lock
-trap - EXIT INT TERM
-rm -f -- "`$bundle_path" || true
-rmdir -- "`$deploy_bundle_dir" 2>/dev/null || true
 "@
     $remoteScript = $remoteScript -replace "`r`n", "`n" -replace "`r", "`n"
 
+    # Never execute the rollout directly from SSH stdin. Commands such as
+    # `docker compose run` attach stdin by default and can otherwise consume
+    # the unread tail of a `bash -s` script while still returning exit code 0.
+    $localRolloutScriptPath = Join-Path $stageRoot '.deploy-rollout.sh'
+    [System.IO.File]::WriteAllText(
+        $localRolloutScriptPath,
+        $remoteScript,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    Protect-SensitiveLocalPath -Path $localRolloutScriptPath
+    $remoteRolloutScriptSha256 = (Get-FileHash -LiteralPath $localRolloutScriptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $remoteRolloutScriptSha256Quoted = ConvertTo-BashSingleQuoted $remoteRolloutScriptSha256
+
+    Write-Host "Uploading verified rollout script to VPS..."
+    Copy-DeployBundle `
+        -ScpArgs $scpArgs `
+        -BundlePath $localRolloutScriptPath `
+        -Remote $remote `
+        -RemoteBundle $remoteRolloutScript
+
+    $remoteRolloutRunner = @"
+set -Eeuo pipefail
+umask 077
+rollout_script=$remoteRolloutScriptQuoted
+rollout_dir=$remoteUploadDirectoryQuoted
+expected_sha256=$remoteRolloutScriptSha256Quoted
+if [ ! -d "`$rollout_dir" ] || [ -L "`$rollout_dir" ]; then
+  echo "Protected rollout directory is missing or unsafe." >&2
+  exit 1
+fi
+if [ ! -f "`$rollout_script" ] || [ -L "`$rollout_script" ]; then
+  echo "Uploaded rollout script is missing or unsafe." >&2
+  exit 1
+fi
+chmod 700 "`$rollout_script"
+actual_sha256="`$(sha256sum -- "`$rollout_script" | awk '{print `$1}')"
+if [ "`$actual_sha256" != "`$expected_sha256" ]; then
+  echo "Uploaded rollout script SHA-256 mismatch." >&2
+  exit 1
+fi
+exec bash "`$rollout_script" </dev/null
+"@
+    $remoteRolloutRunner = $remoteRolloutRunner -replace "`r`n", "`n" -replace "`r", "`n"
+
     Write-Host "Deploying on VPS: ${remote}:$VpsPath"
     $remoteRolloutStarted = $true
-    $remoteScript | & ssh @sshArgs $remote "tr -d '\r' | bash -s"
-    if ($LASTEXITCODE -ne 0) {
+    $remoteDeployOutput = @()
+    & ssh @sshArgs $remote $remoteRolloutRunner | Tee-Object -Variable remoteDeployOutput
+    $remoteDeployExitCode = $LASTEXITCODE
+    if ($remoteDeployExitCode -ne 0) {
         throw "Remote deploy failed."
+    }
+    $expectedRemoteDeployMarker = "OTZIV_DEPLOY_COMPLETE=$remoteDeployLockToken"
+    $matchingRemoteDeployMarkers = @($remoteDeployOutput | Where-Object {
+        ([string]$_) -ceq $expectedRemoteDeployMarker
+    })
+    if ($matchingRemoteDeployMarkers.Count -ne 1) {
+        throw "Remote deploy exited without exactly one authenticated completion marker."
     }
     $remoteDeployLockAcquired = $false
     $remoteBundleUploaded = $false
@@ -2340,8 +2492,9 @@ rmdir -- "`$lock_dir"
     if ($remoteBundleUploaded) {
         $remoteBundleCleanupCommand = @"
 bundle=$(ConvertTo-BashSingleQuoted $remoteBundle)
+rollout_script=$(ConvertTo-BashSingleQuoted $remoteRolloutScript)
 bundle_dir=$(ConvertTo-BashSingleQuoted $remoteUploadDirectory)
-rm -f -- "`$bundle"
+rm -f -- "`$bundle" "`$rollout_script"
 rmdir -- "`$bundle_dir"
 "@
         $remoteBundleCleanupCommand = $remoteBundleCleanupCommand -replace "`r`n", "`n" -replace "`r", "`n"

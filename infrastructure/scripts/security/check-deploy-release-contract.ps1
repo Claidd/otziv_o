@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $deployPath = Join-Path $repoRoot 'infrastructure\scripts\prod\deploy-prod.ps1'
+$legacyDeployPath = Join-Path $repoRoot 'infrastructure\scripts\prod\deploy-prod-ssh-images.ps1'
 $backupPath = Join-Path $repoRoot 'infrastructure\scripts\prod\create-pre-deploy-db-backup.sh'
 $maxWebhookPath = Join-Path $repoRoot 'infrastructure\scripts\prod\register-max-webhook.sh'
 $selfHealPath = Join-Path $repoRoot 'infrastructure\scripts\prod\otziv-prod-up.sh'
@@ -13,6 +14,7 @@ $buildComposePath = Join-Path $repoRoot 'docker-compose.build.yaml'
 $productionComposePath = Join-Path $repoRoot 'docker-compose.yaml'
 
 $deploy = [IO.File]::ReadAllText($deployPath)
+$legacyDeploy = [IO.File]::ReadAllText($legacyDeployPath)
 $backup = [IO.File]::ReadAllText($backupPath)
 $maxWebhook = [IO.File]::ReadAllText($maxWebhookPath)
 $selfHeal = [IO.File]::ReadAllText($selfHealPath)
@@ -51,11 +53,14 @@ Assert-Match $productionCompose 'APP_MEMORY_LIMIT:-2304m' 'Production Compose mu
 Assert-Match $deploy 'APP_MEMORY_LIMIT[\s\S]{0,500}2304' 'Production deploy must reject an omitted or undersized backend memory limit.'
 Assert-Match $deploy '\[switch\]\$EnableExternalReviewWorker' 'External review worker deployment must be an explicit opt-in.'
 Assert-Match $deploy '\$buildArgs \+= @\("app", "nginx"\)[\s\S]{0,200}if \(\$EnableExternalReviewWorker\)[\s\S]{0,100}\$buildArgs \+= "external-review-worker"' 'Default builds must exclude the worker and append it only for an explicit opt-in.'
+Assert-Match $legacyDeploy '\$buildArgs \+= @\("app", "nginx"\)' 'The quarantined legacy deploy must not build the external review worker implicitly.'
 Assert-Match $deploy 'if \(\$EnableExternalReviewWorker\)[\s\S]{0,200}docker.+push.+\$externalReviewWorkerImage' 'Production deploy must push the worker image only in the opt-in branch.'
 Assert-Match $deploy 'set_env EXTERNAL_REVIEW_WORKER_IMAGE.+external_review_worker_image' 'Production deploy must persist the worker image tag in the active VPS env.'
-Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,300}recreate_service_with_retry external-review-worker external-review[\s\S]{0,200}wait_service_healthy external-review-worker[\s\S]{0,100}fi' 'Production deploy must start and health-check the worker only when opted in.'
+Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,300}recreate_service_with_retry external-review-worker external-review[\s\S]{0,200}wait_service_healthy external-review-worker[\s\S]{0,300}assert_running_service_image external-review-worker[\s\S]{0,100}fi' 'Production deploy must start, health-check, and verify the worker image only when opted in.'
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" != "1" \]; then[\s\S]{0,500}stop external-review-worker' 'Production deploy must stop a stale worker when the replacement backend has external checks disabled.'
 Assert-Order $deploy 'wait_service_healthy app 1200' 'compose --profile external-review stop external-review-worker' 'A disabled rollout must keep the previous worker until the replacement backend is healthy.'
+Assert-Order $deploy 'wait_service_healthy app 1200' '--remove-orphans --no-deps dozzle alloy' 'Orphan cleanup must not run until the replacement backend is healthy.'
+Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,150}compose --profile external-review up -d --remove-orphans --no-deps dozzle alloy[\s\S]{0,100}else[\s\S]{0,100}compose up -d --remove-orphans --no-deps dozzle alloy' 'Orphan cleanup must preserve the opted-in worker profile.'
 Assert-Match $deploy 'set_env EXTERNAL_REVIEW_CHECK_ENABLED "true"[\s\S]{0,100}set_env EXTERNAL_REVIEW_CHECK_ENABLED "false"' 'Production deploy must persist the backend hard switch consistently with the worker opt-in.'
 
 $workerPushCount = [regex]::Matches($deploy, 'Invoke-External[^\r\n]+@\("push", \$externalReviewWorkerImage\)').Count
@@ -81,6 +86,8 @@ Assert-Match $deploy 'Pre-deploy and scheduled DB backups must use different enc
 Assert-Match $backup 'create_backup\(\)[\s\S]{0,1000}assert_distinct_backup_keys "\$env_file" "\$key_base64"[\s\S]{0,300}docker inspect' 'Decoded backup-key separation must be enforced remotely before any pre-deploy backup state is created.'
 Assert-NotMatch $backup '(?m)^\s*key_base64="\$\(get_env "\$env_file" OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64' 'Pre-deploy DB backup must never select the credential-field encryption key as its encryption key.'
 Assert-Match $backup 'mysqldump[\s\S]{0,500}\| gzip -9 \| openssl enc' 'mysqldump must stream directly through gzip into encryption without a plaintext database artifact.'
+Assert-Match $backup 'MYSQL_PWD="\$MYSQL_PASSWORD" exec mysqldump[\s\S]{0,100}-u"\$MYSQL_USER"' 'Pre-deploy mysqldump must avoid exposing the database password as a command-line argument.'
+Assert-NotMatch $backup 'mysqldump[\s\\\r\n]+-u"\$MYSQL_USER" -p"\$MYSQL_PASSWORD"' 'Pre-deploy mysqldump must not pass the database password through argv.'
 Assert-NotMatch $backup 'gzip_file="\$work_dir/database\.sql\.gz"' 'Normal backup creation must not write a plaintext compressed database artifact to disk.'
 Assert-Match $backup 'HMAC_DERIVATION_LABEL|otziv-predeploy-backup-authentication-v1' 'Encrypted pre-deploy backups must have a separately derived HMAC key.'
 Assert-Match $backup 'decrypt_artifact_to_stdout[\s\S]{0,1000}gzip -t' 'The encrypted backup must be stream-decrypted and gzip-verified before deployment continues.'
@@ -102,18 +109,46 @@ Assert-Match $deploy 'PreDeployBackupDirectory must stay outside the Git worktre
 Assert-Match $deploy 'must be a dedicated release subdirectory, not a filesystem root, user profile, or shared backup parent' 'Backup ACL hardening must reject dangerously broad local target directories.'
 Assert-Match $deploy 'existing custom PreDeployBackupDirectory is not accepted[\s\S]{0,500}Assert-NoReparsePointInExistingPath' 'Backup ACL hardening must require a dedicated custom leaf and reject reparse-point ancestors.'
 Assert-Match $deploy 'mkdir \$remoteUploadDirectoryQuoted[\s\S]{0,150}chmod 700 \$remoteUploadDirectoryQuoted[\s\S]{0,500}Copy-DeployBundle' 'The secret-bearing deploy bundle must be uploaded only inside a pre-created 0700 directory.'
+Assert-Match $deploy 'WriteAllText\([\s\S]{0,250}\$remoteScript[\s\S]{0,500}Get-FileHash[\s\S]{0,500}Copy-DeployBundle[\s\S]{0,1000}expected_sha256[\s\S]{0,500}sha256sum' 'The complete remote rollout must be uploaded as a hash-verified file before execution.'
+Assert-Match $deploy 'sha256sum -- "`\$rollout_script"[\s\S]{0,500}exec bash "`\$rollout_script" </dev/null' 'The remote rollout must execute the hash-verified file with detached stdin.'
+Assert-NotMatch $deploy '\$remoteScript\s*\|\s*&\s*ssh' 'The production rollout must never stream executable Bash through stdin.'
+$rolloutPathInitializationCount = [regex]::Matches($deploy, '(?m)^rollout_script_path=\$remoteRolloutScriptQuoted\s*$').Count
+if ($rolloutPathInitializationCount -ne 1) {
+    throw "The main rollout must initialize rollout_script_path exactly once before EXIT cleanup can reference it under set -u; found $rolloutPathInitializationCount initializations."
+}
+Assert-Match $deploy 'redactedCommand = Format-RedactedCommand[\s\S]{0,150}Write-Warning "Command failed on attempt' 'Retry warnings must use the central command redactor.'
+Assert-NotMatch $deploy 'Write-Warning "Command failed on attempt[^\r\n]+\$Arguments -join' 'Retry warnings must never log raw command arguments.'
+Assert-Match $deploy 'expectedRemoteDeployMarker[\s\S]{0,100}OTZIV_DEPLOY_COMPLETE=[\s\S]{0,300}-ceq \$expectedRemoteDeployMarker[\s\S]{0,200}Count -ne 1' 'The local deploy must require exactly one case-sensitive token-bound completion marker.'
+$completionMarkerEmitterCount = [regex]::Matches($deploy, 'OTZIV_DEPLOY_COMPLETE=%s\\n').Count
+if ($completionMarkerEmitterCount -ne 1) {
+    throw "Production deploy must contain exactly one remote completion marker emitter; found $completionMarkerEmitterCount."
+}
+Assert-Match $deploy 'unset APP_IMAGE WEB_IMAGE EXTERNAL_REVIEW_WORKER_IMAGE WHATSAPP_IMAGE[\s\S]{0,150}EXTERNAL_REVIEW_CHECK_ENABLED[\s\S]{0,150}COMPOSE_PROJECT_NAME COMPOSE_PROFILES' 'Ambient SSH variables must not override release-critical Compose values.'
+Assert-Match $deploy 'compose_project_name="otziv-prod"[\s\S]{0,300}docker-compose --project-name "`\$compose_project_name" --project-directory "`\$remote_path"[\s\S]{0,300}docker compose --project-name "`\$compose_project_name" --project-directory "`\$remote_path"' 'Every production Compose invocation must pin the audited project name and directory.'
+Assert-Match $deploy 'assert_compose_service_image\(\)[\s\S]{0,1000}compose config --format json[\s\S]{0,2000}assert_running_service_image\(\)[\s\S]{0,1000}docker image inspect[\s\S]{0,500}docker inspect' 'Deploy must verify both resolved Compose image references and running container image IDs.'
+Assert-Match $deploy 'assert_compose_service_image external-review-worker "`\$external_review_worker_image" external-review' 'The opt-in worker image must be resolved with its Compose profile enabled.'
+Assert-Match $deploy 'assert_running_service_image app "`\$app_image"[\s\S]{0,1500}assert_running_service_image nginx "`\$web_image"' 'Backend and frontend image IDs must be verified during the rollout.'
 Assert-Order $deploy 'Creating and verifying mandatory pre-deploy database backup on VPS' 'bash infrastructure/scripts/prod/validate-flyway-migrations.sh' 'The mandatory DB backup must finish before Flyway validation and app startup.'
 Assert-Match $deploy 'deploy_lock_token[\s\S]{0,5000}mkdir "`\$deploy_lock_dir"' 'The rollout must acquire a durable cross-session lock before creating the backup.'
 Assert-Match $deploy 'release_deploy_lock' 'The rollout must explicitly release its durable deployment lock.'
-Assert-Match $deploy 'pause_self_heal\s+tar -xzf[\s\S]{0,700}create-pre-deploy-db-backup\.sh" create' 'Production self-heal must be stopped before the mandatory database backup begins.'
-Assert-Match $deploy 'trap cleanup_preflight EXIT INT TERM[\s\S]{0,200}preflight_dir="`\$\(mktemp' 'Pre-backup lock cleanup must be armed before temporary-directory creation can fail.'
+Assert-Match $deploy 'release_deploy_lock\(\)[\s\S]{0,500}if ! rm -f[\s\S]{0,250}return 1[\s\S]{0,150}if ! rmdir[\s\S]{0,250}return 1' 'Lock release must propagate failures even when called from a conditional cleanup branch.'
+Assert-Match $deploy 'pause_self_heal\s+tar --warning=no-timestamp -xzf[\s\S]{0,800}create-pre-deploy-db-backup\.sh" create' 'Production self-heal must be stopped before the mandatory database backup begins.'
+Assert-Match $deploy 'trap cleanup_preflight EXIT[\s\S]{0,100}trap ''exit 130'' INT[\s\S]{0,100}trap ''exit 143'' TERM[\s\S]{0,200}preflight_dir="`\$\(mktemp' 'Pre-backup cleanup must be armed with non-zero signal exits before temporary-directory creation can fail.'
 Assert-Match $deploy 'backup_dir="\.deploy-backups/`\$deploy_tag/rollout-`\$deploy_lock_token"' 'Each repeated deploy tag must preserve compose/env rollback files in a unique attempt directory.'
-Assert-NotMatch $deploy 'deploy_cleanup\(\)[\s\S]{0,700}(?:resume_self_heal|systemctl start "`\$self_heal)' 'Failure cleanup must not restart self-heal against a partially deployed compose/env.'
 Assert-Match $deploy 'deploy_cleanup\(\)[\s\S]{0,1000}systemctl disable "`\$self_heal_timer"' 'Failure cleanup must disable self-heal so a reboot cannot continue a failed rollout.'
-Assert-Match $deploy 'if \[ "`\$status" -eq 0 \]; then[\s\S]{0,100}release_deploy_lock[\s\S]{0,500}deploy lock remains at' 'A failed rollout must retain its durable lock and release it only on success.'
-Assert-Match $deploy 'release_payload_complete="1"[\s\S]{0,100}resume_self_heal_timer[\s\S]{0,100}release_deploy_lock' 'Final handoff interruptions must be distinguished from failures before the release payload and health checks complete.'
+Assert-Match $deploy 'if \[ "`\$status" -eq 0 \] && \[ "`\$release_payload_complete" != "1" \]; then[\s\S]{0,250}status="1"' 'A clean EOF before the verified release sentinel must be converted into a failed rollout.'
+Assert-Match $deploy 'if \[ "`\$status" -eq 0 \]; then[\s\S]{0,200}resume_self_heal_timer[\s\S]{0,200}release_deploy_lock[\s\S]{0,200}OTZIV_DEPLOY_COMPLETE=%s' 'Only the completed-success cleanup branch may restore self-heal, release the lock, and emit the marker.'
+Assert-Match $deploy 'publish_bundled_mobile_release\s+release_payload_complete="1"\s+"@' 'The release sentinel must be the final command in the rollout main body.'
+Assert-Match $deploy 'trap deploy_cleanup EXIT[\s\S]{0,100}trap ''exit 130'' INT[\s\S]{0,100}trap ''exit 143'' TERM' 'INT and TERM must become non-zero exits before EXIT cleanup evaluates rollout status.'
+$interruptTrapCount = [regex]::Matches($deploy, '(?m)^trap ''exit 130'' INT\s*$').Count
+$terminateTrapCount = [regex]::Matches($deploy, '(?m)^trap ''exit 143'' TERM\s*$').Count
+if ($interruptTrapCount -ne 2 -or $terminateTrapCount -ne 2) {
+    throw "Preflight and rollout must each map INT/TERM to non-zero exits; found INT=$interruptTrapCount TERM=$terminateTrapCount."
+}
+Assert-NotMatch $deploy 'trap (?:cleanup_preflight|deploy_cleanup) EXIT INT TERM' 'EXIT, INT, and TERM must not share a cleanup trap that can preserve a stale zero status.'
 Assert-Match $deploy 'self-heal-timer-was-enabled' 'Deploy must persist the timer enablement state as well as its active state.'
 Assert-Match $deploy 'resume_self_heal_timer\(\)[\s\S]{0,300}systemctl enable "`\$self_heal_timer"' 'A successful deploy must restore the original self-heal enablement state.'
+Assert-Match $deploy 'resume_self_heal_timer\(\)[\s\S]{0,600}if ! sudo -n systemctl enable[\s\S]{0,100}return 1[\s\S]{0,300}if ! sudo -n systemctl start[\s\S]{0,100}return 1[\s\S]{0,150}return 0' 'Self-heal restoration must explicitly propagate enable/start failures from conditional cleanup.'
 Assert-Match $deploy 'timer_was_active="`\$\(cat[\s\S]{0,100}timer_was_enabled="`\$\(cat[\s\S]{0,500}case "`\$timer_was_enabled"[\s\S]{0,500}systemctl enable otziv-prod-up.timer[\s\S]{0,300}systemctl start otziv-prod-up.timer' 'Pre-rollout cleanup must validate both protected states before enabling and starting the old timer.'
 Assert-Match $deploy 'install -o root -g root -m 0755[\s\S]{0,150}otziv-prod-up\.sh' 'Deploy must install the version-controlled production self-heal helper.'
 Assert-Match $selfHeal '\[\[ -e "\$deploy_lock" \|\| -L "\$deploy_lock" \]\]' 'Production self-heal must respect the durable deploy lock, including symlinks.'
@@ -122,6 +157,25 @@ Assert-Match $selfHeal '\.self-heal-env-file[\s\S]{0,500}env_file_name' 'Product
 Assert-Match $deploy 'printf ''%s\\n'' "`\$env_file"[\s\S]{0,250}\.self-heal-env-file' 'Deploy must atomically persist RemoteEnvFile for the installed self-heal helper.'
 Assert-Match $deploy 'Protected self-heal state is missing; leaving deploy lock for manual recovery' 'Local pre-rollout cleanup must fail closed when protected self-heal state is missing.'
 Assert-Match $deploy 'Protected deploy lock ownership changed; refusing to remove it' 'Local pre-rollout cleanup must never remove an unowned lock.'
+
+foreach ($composeRunContract in @(
+    @{ Name = 'production deploy'; Text = $deploy; Expected = 4 },
+    @{ Name = 'quarantined legacy deploy'; Text = $legacyDeploy; Expected = 4 }
+)) {
+    $composeRunLines = @($composeRunContract.Text -split "`r?`n" | Where-Object {
+        $_.Trim() -match '^(?:if ! )?compose run\b'
+    })
+    if ($composeRunLines.Count -ne $composeRunContract.Expected) {
+        throw "$($composeRunContract.Name) must contain exactly $($composeRunContract.Expected) audited compose run calls; found $($composeRunLines.Count)."
+    }
+    foreach ($composeRunLine in $composeRunLines) {
+        if (-not $composeRunLine.Contains('--interactive=false') -or
+            -not $composeRunLine.Contains(' -T ') -or
+            -not $composeRunLine.Contains('</dev/null')) {
+            throw "$($composeRunContract.Name) compose run must disable interactive stdin and TTY and redirect stdin from /dev/null: $($composeRunLine.Trim())"
+        }
+    }
+}
 
 Assert-Match $maxWebhook 'POST|request = \\"POST\\"' 'MAX webhook release verification must perform POST /subscriptions.'
 Assert-Match $maxWebhook 'success[\s\S]{0,100}true' 'MAX webhook release verification must require an explicit success=true response.'
@@ -140,7 +194,6 @@ if ($publishCount -ne 1) {
 }
 Assert-Order $deploy 'wait_service_healthy app 1200' 'publish_bundled_mobile_release' 'APK publication must happen only after the final backend health check.'
 Assert-Order $deploy 'wait_service_healthy external-review-worker 300 external-review' 'publish_bundled_mobile_release' 'When enabled, the worker health check must remain before APK publication.'
-Assert-Order $deploy 'publish_bundled_mobile_release' 'resume_self_heal_timer' 'Self-heal must resume only after APK publication succeeds.'
 
 foreach ($parser in @{
     'deploy embedded env parser' = $deploy

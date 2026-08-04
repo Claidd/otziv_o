@@ -225,9 +225,13 @@ docker compose -f docker-compose.yaml --env-file .env --profile db-admin stop ph
 ```powershell
 $env:APP_IMAGE="claid38/otziv-app:2026-05-04-1"
 $env:WEB_IMAGE="claid38/otziv-web:2026-05-04-1"
-docker compose -f docker-compose.build.yaml build
-docker compose -f docker-compose.build.yaml push
+docker compose -f docker-compose.build.yaml build app nginx
+docker compose -f docker-compose.build.yaml push app nginx
 ```
+
+`external-review-worker` в обычную ручную сборку не входит. Для его осознанного
+включения используй штатный `deploy-prod.ps1 -EnableExternalReviewWorker`, который
+одновременно включает backend-переключатель, проверяет образ и запускает worker.
 
 На VPS поставь такие же значения `APP_IMAGE` и `WEB_IMAGE` в `.env.prod`, затем сделай `pull` и `up -d`.
 

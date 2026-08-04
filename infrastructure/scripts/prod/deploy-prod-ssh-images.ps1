@@ -184,6 +184,7 @@ $buildArgs = @("compose", "-f", $buildCompose, "build")
 if ($NoBuildCache) {
     $buildArgs += "--no-cache"
 }
+$buildArgs += @("app", "nginx")
 Invoke-External -FilePath "docker" -Arguments $buildArgs
 
 if (Test-Path -LiteralPath $imagesTarPath) {
@@ -414,17 +415,17 @@ rm -f "`$images_tar"
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
 compose build whatsapp_lika whatsapp_vika
-if ! compose run --rm --no-deps --entrypoint /usr/bin/chromium whatsapp_lika --headless --disable-gpu --dump-dom about:blank >/dev/null 2>&1; then
+if ! compose run --rm --no-deps --interactive=false -T --entrypoint /usr/bin/chromium whatsapp_lika --headless --disable-gpu --dump-dom about:blank </dev/null >/dev/null 2>&1; then
   echo "WhatsApp Chromium sandbox preflight failed; existing containers were not stopped." >&2
   exit 1
 fi
 compose down --remove-orphans || true
-compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases /app/sent-hashes
-compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint sh whatsapp_lika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth'
-compose run --rm --no-deps --cap-add CHOWN --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth'
+compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases /app/sent-hashes </dev/null
+compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint sh whatsapp_lika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
+compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
 compose up -d --remove-orphans
 wait_service_healthy keycloak 900
-infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"
+infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file" </dev/null
 compose ps
 "@
     $remoteScript = $remoteScript -replace "`r`n", "`n" -replace "`r", "`n"

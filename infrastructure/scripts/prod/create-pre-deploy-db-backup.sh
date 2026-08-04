@@ -327,8 +327,8 @@ create_backup() {
     # SQL stream, so restore-clean never has to trust editable manifest fields.
     printf -- '-- OTZIV_SCHEMA_DEFAULTS:%s:%s\n' "$schema_charset" "$schema_collation"
     docker exec "$mysql_container" sh -lc '
-      exec mysqldump \
-        -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+      MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump \
+        -u"$MYSQL_USER" \
         --single-transaction --quick --routines --events --triggers \
         --hex-blob --no-tablespaces --set-gtid-purged=OFF \
         "$MYSQL_DATABASE"
