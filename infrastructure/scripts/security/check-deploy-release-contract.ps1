@@ -12,6 +12,9 @@ $maxWebhookPath = Join-Path $repoRoot 'infrastructure\scripts\prod\register-max-
 $selfHealPath = Join-Path $repoRoot 'infrastructure\scripts\prod\otziv-prod-up.sh'
 $selfHealTimerPath = Join-Path $repoRoot 'infrastructure\systemd\otziv-prod-up.timer'
 $selfHealServiceTemplatePath = Join-Path $repoRoot 'infrastructure\systemd\otziv-prod-up.service.in'
+$whatsappIndexPath = Join-Path $repoRoot 'whatsapp\index.js'
+$whatsappChromiumLaunchPath = Join-Path $repoRoot 'whatsapp\chromium-launch.js'
+$whatsappChromiumSmokePath = Join-Path $repoRoot 'whatsapp\chromium-smoke.js'
 $buildComposePath = Join-Path $repoRoot 'docker-compose.build.yaml'
 $productionComposePath = Join-Path $repoRoot 'docker-compose.yaml'
 
@@ -22,6 +25,9 @@ $maxWebhook = [IO.File]::ReadAllText($maxWebhookPath)
 $selfHeal = [IO.File]::ReadAllText($selfHealPath)
 $selfHealTimer = [IO.File]::ReadAllText($selfHealTimerPath)
 $selfHealServiceTemplate = [IO.File]::ReadAllText($selfHealServiceTemplatePath)
+$whatsappIndex = [IO.File]::ReadAllText($whatsappIndexPath)
+$whatsappChromiumLaunch = [IO.File]::ReadAllText($whatsappChromiumLaunchPath)
+$whatsappChromiumSmoke = [IO.File]::ReadAllText($whatsappChromiumSmokePath)
 $buildCompose = [IO.File]::ReadAllText($buildComposePath)
 $productionCompose = [IO.File]::ReadAllText($productionComposePath)
 
@@ -132,6 +138,51 @@ Assert-Match $deploy 'compose_project_name="otziv-prod"[\s\S]{0,300}docker-compo
 Assert-Match $deploy 'assert_compose_service_image\(\)[\s\S]{0,1000}compose config --format json[\s\S]{0,2000}assert_running_service_image\(\)[\s\S]{0,1000}docker image inspect[\s\S]{0,500}docker inspect' 'Deploy must verify both resolved Compose image references and running container image IDs.'
 Assert-Match $deploy 'assert_compose_service_image external-review-worker "`\$external_review_worker_image" external-review' 'The opt-in worker image must be resolved with its Compose profile enabled.'
 Assert-Match $deploy 'assert_running_service_image app "`\$app_image"[\s\S]{0,1500}assert_running_service_image nginx "`\$web_image"' 'Backend and frontend image IDs must be verified during the rollout.'
+Assert-Match $deploy 'whatsapp\\chromium-launch\.js' 'Deploy bundle must include the shared audited Chromium launch arguments.'
+Assert-Match $deploy 'whatsapp\\chromium-smoke\.js' 'Deploy bundle must include the real Chromium launch smoke test.'
+Assert-Match $whatsappIndex 'chromiumLaunchArgs\(proxyServerArg\(\)\)' 'WhatsApp clients must use the shared audited Chromium launch arguments.'
+Assert-NotMatch ($whatsappIndex + "`n" + $whatsappChromiumLaunch) '--no-sandbox|--disable-setuid-sandbox|--no-zygote' 'WhatsApp Chromium must keep its Linux sandbox enabled without the incompatible no-zygote flag.'
+Assert-Match $whatsappChromiumSmoke 'require\("puppeteer"\)[\s\S]{0,300}require\("\./chromium-launch"\)[\s\S]{0,500}puppeteer\.launch[\s\S]{0,500}args: chromiumLaunchArgs\(""\)' 'Chromium smoke test must launch real Puppeteer with the same audited arguments as production.'
+Assert-Match $deploy 'compose run --rm --no-deps --interactive=false -T --entrypoint node whatsapp_lika chromium-smoke\.js </dev/null' 'Deploy must run the real Chromium sandbox smoke test under the production Compose security profile.'
+Assert-Order $deploy 'whatsapp_lika chromium-smoke.js </dev/null' 'compose stop whatsapp_lika whatsapp_vika' 'The real Chromium sandbox preflight must pass before existing WhatsApp gateways are stopped.'
+
+$publicBindPermissionFunction = [regex]::Match(
+    $deploy,
+    '(?ms)^normalize_public_bind_mount_permissions\(\) \{\s*(?<body>.*?)^\}'
+)
+if (-not $publicBindPermissionFunction.Success) {
+    throw 'Production deploy must define a dedicated public bind-mount permission normalizer.'
+}
+$publicBindPermissionBody = $publicBindPermissionFunction.Groups['body'].Value
+Assert-Match $publicBindPermissionBody 'for relative_path in infrastructure infrastructure/keycloak; do' 'Only the audited public parent directories may be made traversable.'
+Assert-Match $publicBindPermissionBody 'infrastructure/keycloak/themes[\s\\]+infrastructure/prometheus[\s\\]+infrastructure/loki[\s\\]+infrastructure/tempo[\s\\]+infrastructure/alloy[\s\\]+infrastructure/grafana; do' 'Every public directory bind source must be covered by targeted normalization.'
+Assert-Match $publicBindPermissionBody 'for relative_path in infrastructure/keycloak/realm-config\.prod\.json; do' 'The standalone Keycloak realm bind source must be covered explicitly.'
+Assert-Match $publicBindPermissionBody 'find -P "`\$target" ! -type d ! -type f -print -quit' 'Public bind trees must reject symlinks and other non-regular filesystem nodes before chmod.'
+Assert-Match $publicBindPermissionBody 'find -P "`\$target" -type d -exec chmod 0755 -- \{\} \+' 'Public bind directories must receive traversal-only public permissions.'
+Assert-Match $publicBindPermissionBody 'find -P "`\$target" -type f -exec chmod 0644 -- \{\} \+' 'Public bind files must receive read-only public permissions.'
+Assert-NotMatch $publicBindPermissionBody 'chmod\s+-R|find -P "`\$remote_path/infrastructure"|`\$env_file|\.env|\.deploy-backups|\.deploy-mobile-update' 'Permission normalization must not recursively expose infrastructure or touch secret/runtime artifacts.'
+
+$publicBindSources = @(
+    @{ Compose = './infrastructure/keycloak/realm-config.prod.json'; CoveredBy = 'infrastructure/keycloak/realm-config.prod.json' },
+    @{ Compose = './infrastructure/keycloak/themes'; CoveredBy = 'infrastructure/keycloak/themes' },
+    @{ Compose = './infrastructure/prometheus/prometheus.yml'; CoveredBy = 'infrastructure/prometheus' },
+    @{ Compose = './infrastructure/loki/loki-config.yaml'; CoveredBy = 'infrastructure/loki' },
+    @{ Compose = './infrastructure/tempo/tempo.yaml'; CoveredBy = 'infrastructure/tempo' },
+    @{ Compose = './infrastructure/alloy/config.alloy'; CoveredBy = 'infrastructure/alloy' },
+    @{ Compose = './infrastructure/grafana/provisioning'; CoveredBy = 'infrastructure/grafana' },
+    @{ Compose = './infrastructure/grafana/dashboards'; CoveredBy = 'infrastructure/grafana' }
+)
+foreach ($publicBindSource in $publicBindSources) {
+    Assert-Match $productionCompose ([regex]::Escape($publicBindSource.Compose)) "Production Compose bind source is missing: $($publicBindSource.Compose)"
+    Assert-Match $publicBindPermissionBody ([regex]::Escape($publicBindSource.CoveredBy)) "Deploy permission normalization does not cover: $($publicBindSource.Compose)"
+}
+$publicBindNormalizerCallCount = [regex]::Matches($deploy, '(?m)^normalize_public_bind_mount_permissions\s*$').Count
+if ($publicBindNormalizerCallCount -ne 1) {
+    throw "Production rollout must invoke public bind-mount normalization exactly once; found $publicBindNormalizerCallCount calls."
+}
+Assert-Order $deploy 'tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$remote_path"' 'normalize_public_bind_mount_permissions' 'Public bind permissions must be normalized only after protected bundle extraction.'
+Assert-Order $deploy 'normalize_public_bind_mount_permissions' 'compose up -d --no-deps mysql keycloak-postgres loki tempo' 'Public bind permissions must be normalized before any affected production container starts.'
+
 Assert-Order $deploy 'Creating and verifying mandatory pre-deploy database backup on VPS' 'bash infrastructure/scripts/prod/validate-flyway-migrations.sh' 'The mandatory DB backup must finish before Flyway validation and app startup.'
 Assert-Match $deploy 'deploy_lock_token[\s\S]{0,5000}mkdir "`\$deploy_lock_dir"' 'The rollout must acquire a durable cross-session lock before creating the backup.'
 Assert-Match $deploy 'release_deploy_lock' 'The rollout must explicitly release its durable deployment lock.'

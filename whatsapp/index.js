@@ -23,6 +23,7 @@ const {
   createConcurrencyMiddleware,
   createInternalAuthMiddleware,
 } = require("./internal-auth");
+const { chromiumLaunchArgs } = require("./chromium-launch");
 
 const CLIENT_ID = process.env.CLIENT_ID || "whatsapp_default";
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
@@ -315,17 +316,7 @@ function asyncRoute(handler) {
 function createClient() {
   removeStaleChromiumLocks(AUTH_PATH);
 
-  const launchArgs = [
-    "--disable-dev-shm-usage",
-    "--disable-gpu",
-    "--no-first-run",
-    "--no-zygote",
-    "--disable-extensions",
-  ];
-  const proxy = proxyServerArg();
-  if (proxy) {
-    launchArgs.push(`--proxy-server=${proxy}`);
-  }
+  const launchArgs = chromiumLaunchArgs(proxyServerArg());
 
   return new Client({
     authStrategy: new LocalAuth({

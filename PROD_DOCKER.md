@@ -287,6 +287,7 @@ docker compose -f docker-compose.build.yaml push app nginx
 - при первом переходе с прежней раскладки сертификатов копирует `data/nginx/o-ogo.crt`/`o-ogo.key` в `data/nginx/certs/fullchain.pem`/`privkey.pem`, если новых файлов еще нет;
 - проверяет неизменность Flyway history после DB-backup, затем последовательно обновляет `app` и остальные обязательные сервисы; optional worker участвует только при явном opt-in;
 - устанавливает version-controlled `/usr/local/sbin/otziv-prod-up.sh` и оба systemd unit-файла: helper пропускает запуск при deploy-lock, восстанавливает обычные сервисы и запускает профиль `external-review` только когда hard-switch равен `true`; timer планирует первый запуск относительно каждого своего старта, поэтому после deploy `stop/start` не остаётся в состоянии `active (elapsed)` без следующего запуска;
+- после защищённой распаковки адресно возвращает публичным bind-mounted конфигам Keycloak/Prometheus/Loki/Tempo/Alloy/Grafana права чтения для непривилегированных контейнеров, не ослабляя права production env, backup, скриптов и мобильных артефактов;
 - после health-check backend fail-closed обновляет MAX webhook и требует ответ `success=true`; при ошибке self-heal остаётся отключённым и остановленным, а deploy-lock сохраняется для ручной проверки;
 - публикует переданный APK только после финальных health-check нового backend и обязательных сервисов.
 

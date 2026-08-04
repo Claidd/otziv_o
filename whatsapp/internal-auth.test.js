@@ -12,6 +12,10 @@ const {
   createConcurrencyMiddleware,
   createInternalAuthMiddleware,
 } = require("./internal-auth");
+const {
+  BASE_CHROMIUM_LAUNCH_ARGS,
+  chromiumLaunchArgs,
+} = require("./chromium-launch");
 
 test("gateway request-body configuration has a hard one-megabyte ceiling", () => {
   assert.equal(boundedBodyBytes("128kb"), 128 * 1024);
@@ -79,7 +83,13 @@ test("gateway concurrency bound releases slots on both close and finish", () => 
 
 test("WhatsApp Chromium keeps its Linux sandbox enabled", () => {
   const source = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
-  assert.doesNotMatch(source, /--no-sandbox|--disable-setuid-sandbox/u);
+  const args = chromiumLaunchArgs("http://127.0.0.1:3128");
+
+  assert.match(source, /chromiumLaunchArgs\(proxyServerArg\(\)\)/u);
+  assert.doesNotMatch(source, /--no-sandbox|--disable-setuid-sandbox|--no-zygote/u);
+  assert.doesNotMatch(args.join(" "), /--no-sandbox|--disable-setuid-sandbox|--no-zygote/u);
+  assert.deepEqual(args.slice(0, BASE_CHROMIUM_LAUNCH_ARGS.length), BASE_CHROMIUM_LAUNCH_ARGS);
+  assert.equal(args.at(-1), "--proxy-server=http://127.0.0.1:3128");
 });
 
 function requestWithHeader(value) {

@@ -575,6 +575,8 @@ $deployBundlePaths = @(
     "whatsapp\package.json",
     "whatsapp\package-lock.json",
     "whatsapp\index.js",
+    "whatsapp\chromium-launch.js",
+    "whatsapp\chromium-smoke.js",
     "whatsapp\internal-auth.js",
     "whatsapp\message-webhook.js",
     "whatsapp\group-invite.js",
@@ -2138,6 +2140,63 @@ recreate_service_with_retry() {
   return 1
 }
 
+normalize_public_bind_mount_permissions() {
+  local relative_path target unsafe_entry
+
+  # The deploy archive also contains the production env, so extraction keeps
+  # the restrictive global umask. Windows tar metadata plus umask 077 can make
+  # public bind-mounted configs 0600/0700; normalize only the audited public
+  # paths required by non-root containers, never the env, backups, or scripts.
+  for relative_path in infrastructure infrastructure/keycloak; do
+    target="`$remote_path/`$relative_path"
+    if [ ! -d "`$target" ] || [ -L "`$target" ]; then
+      echo "Public bind-mount parent is missing or unsafe: `$target" >&2
+      return 1
+    fi
+  done
+
+  for relative_path in \
+      infrastructure/keycloak/themes \
+      infrastructure/prometheus \
+      infrastructure/loki \
+      infrastructure/tempo \
+      infrastructure/alloy \
+      infrastructure/grafana; do
+    target="`$remote_path/`$relative_path"
+    if [ ! -d "`$target" ] || [ -L "`$target" ]; then
+      echo "Public bind-mount tree is missing or unsafe: `$target" >&2
+      return 1
+    fi
+    unsafe_entry="`$(find -P "`$target" ! -type d ! -type f -print -quit)"
+    if [ -n "`$unsafe_entry" ]; then
+      echo "Public bind-mount tree contains an unsafe entry: `$unsafe_entry" >&2
+      return 1
+    fi
+  done
+
+  for relative_path in infrastructure/keycloak/realm-config.prod.json; do
+    target="`$remote_path/`$relative_path"
+    if [ ! -f "`$target" ] || [ -L "`$target" ]; then
+      echo "Public bind-mount file is missing or unsafe: `$target" >&2
+      return 1
+    fi
+  done
+
+  chmod 0755 -- "`$remote_path/infrastructure" "`$remote_path/infrastructure/keycloak"
+  for relative_path in \
+      infrastructure/keycloak/themes \
+      infrastructure/prometheus \
+      infrastructure/loki \
+      infrastructure/tempo \
+      infrastructure/alloy \
+      infrastructure/grafana; do
+    target="`$remote_path/`$relative_path"
+    find -P "`$target" -type d -exec chmod 0755 -- {} +
+    find -P "`$target" -type f -exec chmod 0644 -- {} +
+  done
+  chmod 0644 -- "`$remote_path/infrastructure/keycloak/realm-config.prod.json"
+}
+
 ensure_nginx_certs() {
   mkdir -p data/nginx/certs data/nginx/www data/nginx/logs
 
@@ -2216,6 +2275,7 @@ if [ ! -f docker-compose.yaml ]; then
   echo "docker-compose.yaml was not uploaded to `$remote_path" >&2
   exit 1
 fi
+normalize_public_bind_mount_permissions
 
 if [ "`$uploaded_env" != "1" ]; then
   if [ ! -f "`$env_file" ]; then
@@ -2334,7 +2394,7 @@ if [ "`$current_flyway_sha" != "`$expected_flyway_fingerprint" ]; then
 fi
 bash infrastructure/scripts/prod/validate-flyway-migrations.sh "`$app_image" my-mysql
 compose build whatsapp_lika whatsapp_vika
-if ! compose run --rm --no-deps --interactive=false -T --entrypoint /usr/bin/chromium whatsapp_lika --headless --disable-gpu --dump-dom about:blank </dev/null >/dev/null 2>&1; then
+if ! compose run --rm --no-deps --interactive=false -T --entrypoint node whatsapp_lika chromium-smoke.js </dev/null >/dev/null 2>&1; then
   echo "WhatsApp Chromium sandbox preflight failed; existing gateway containers were not stopped." >&2
   exit 1
 fi
