@@ -16,6 +16,12 @@ import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-f
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileOrderCardComponent } from '../shared/mobile-order-card.component';
+import {
+  commonInvoiceAttentionPolicy,
+  commonInvoicePaymentEvidence,
+  commonInvoicePaymentEvidenceConfirmationLines,
+  commonInvoicePaymentEvidenceSnapshot
+} from '../shared/common-invoice-attention-policy';
 
 type InvoiceAction =
   | 'send'
@@ -86,11 +92,19 @@ type InvoiceAction =
 
             <section class="invoice-actions" aria-label="Действия общего счета">
               @if (invoice.status === 'NEEDS_ATTENTION') {
-                <button type="button" (click)="runInvoiceAction('retry')" [disabled]="!!mutating()">Повторить</button>
-                <button type="button" (click)="runInvoiceAction('resolve')" [disabled]="!!mutating()">Закрыть проверку</button>
-                <button type="button" (click)="runInvoiceAction('late-payment')" [disabled]="!!mutating()">Поздняя оплата</button>
-                <button type="button" (click)="runInvoiceAction('final-cancel-check')" [disabled]="!!mutating()">Сверка отмены</button>
-                <button type="button" (click)="runInvoiceAction('payment-init-check')" [disabled]="!!mutating()">Сверка платежа</button>
+                @if (attentionPolicy(invoice).latePayment) {
+                  <button type="button" (click)="runInvoiceAction('late-payment')" [disabled]="!!mutating()">Поздняя оплата</button>
+                }
+                @if (attentionPolicy(invoice).finalCancelCheck) {
+                  <button type="button" (click)="runInvoiceAction('final-cancel-check')" [disabled]="!!mutating()">Сверка отмены</button>
+                }
+                @if (attentionPolicy(invoice).paymentInitCheck) {
+                  <button type="button" (click)="runInvoiceAction('payment-init-check')" [disabled]="!!mutating() || !paymentInitCheckReady()">Сверка платежа</button>
+                }
+                @if (!attentionPolicy(invoice).requiresManualCheck) {
+                  <button type="button" (click)="runInvoiceAction('retry')" [disabled]="!!mutating()">Повторить</button>
+                  <button type="button" (click)="runInvoiceAction('resolve')" [disabled]="!!mutating()">Закрыть проверку</button>
+                }
               } @else {
                 <button type="button" (click)="runInvoiceAction('send')" [disabled]="!!mutating() || !canSendInvoice(invoice)">Отправить</button>
                 <button type="button" (click)="copyPublicUrl(invoice)" [disabled]="!invoice.publicUrl">Ссылка</button>
@@ -121,6 +135,27 @@ type InvoiceAction =
                 }
                 @if (invoice.lastError) {
                   <span class="error-line">{{ invoice.lastError }}</span>
+                }
+              </section>
+            }
+
+            @if (paymentEvidence().length) {
+              <section class="payment-evidence" aria-label="Реквизиты T-Bank для ручной сверки">
+                <header>
+                  <span>Ручная сверка T-Bank</span>
+                  <strong>{{ paymentEvidence().length }}</strong>
+                </header>
+                @for (evidence of paymentEvidence(); track evidence.key) {
+                  <article>
+                    <strong>{{ evidence.label }}</strong>
+                    <span>OrderId: <samp>{{ evidence.orderId }}</samp></span>
+                    <span>PaymentId: <samp>{{ evidence.paymentId }}</samp></span>
+                    <span>Сумма: <samp>{{ evidence.amountKopecks === null ? 'не сохранена' : kopecks(evidence.amountKopecks) }}</samp></span>
+                    <span>Статус: <samp>{{ evidence.status || 'не сохранён' }}</samp></span>
+                    <span>Причина: <samp>{{ evidence.reason || 'не сохранена' }}</samp></span>
+                    <span>Терминал: <samp>{{ evidence.terminalLabel }}</samp></span>
+                    <span>TerminalKey: <samp>{{ evidence.terminalKey }}</samp></span>
+                  </article>
                 }
               </section>
             }
@@ -199,6 +234,7 @@ type InvoiceAction =
     .invoice-stats,
     .invoice-actions,
     .invoice-timeline,
+    .payment-evidence,
     .invoice-orders {
       border: 1px solid rgba(103, 116, 131, 0.14);
       border-radius: 0.9rem;
@@ -330,6 +366,38 @@ type InvoiceAction =
       color: var(--otziv-danger);
     }
 
+    .payment-evidence {
+      display: grid;
+      gap: 0.48rem;
+      padding: 0.72rem;
+    }
+
+    .payment-evidence header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      color: var(--otziv-dark);
+      font: 1000 0.78rem/1.2 var(--otziv-card-title-font);
+    }
+
+    .payment-evidence article {
+      display: grid;
+      gap: 0.22rem;
+      border: 1px solid rgba(103, 116, 131, 0.14);
+      border-radius: 0.72rem;
+      padding: 0.58rem;
+      color: var(--otziv-info);
+      background: var(--otziv-field-background);
+      font: 800 0.65rem/1.3 var(--otziv-card-title-font);
+      overflow-wrap: anywhere;
+    }
+
+    .payment-evidence article > strong {
+      color: var(--otziv-dark);
+      font-size: 0.72rem;
+    }
+
     .invoice-orders {
       display: grid;
       gap: 0.55rem;
@@ -439,6 +507,25 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   readonly reviewApprovalCount = computed(() => this.orders()
     .filter(order => order.orderStatus === 'В проверку' || order.orderStatus === 'На проверке')
     .length);
+  readonly paymentEvidence = computed(() => {
+    const invoice = this.summary();
+    if (!invoice) {
+      return [];
+    }
+    const policy = this.attentionPolicy(invoice);
+    if (!policy.paymentInitCheck && !policy.migrationQuarantine) {
+      return [];
+    }
+    return commonInvoicePaymentEvidence(
+      invoice,
+      this.details()?.paymentRefs,
+      policy.migrationQuarantine
+    );
+  });
+  readonly paymentInitCheckReady = computed(() => !this.loading() && commonInvoicePaymentEvidenceSnapshot(
+    this.details(),
+    this.invoiceId()
+  ) !== null);
 
   constructor(
     private readonly api: ApiService,
@@ -496,7 +583,20 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       }
     }
 
-    const confirmed = await this.confirm.confirm({ message: this.invoiceActionConfirm(action), danger: action === 'ban' || action === 'unpaid' });
+    const paymentSnapshot = action === 'payment-init-check'
+      ? commonInvoicePaymentEvidenceSnapshot(this.details(), invoiceId)
+      : null;
+    if (action === 'payment-init-check' && (this.loading() || !paymentSnapshot)) {
+      this.error.set('Полные платежные реквизиты не загружены. Обновите карточку счета и повторите проверку.');
+      return;
+    }
+    const confirmationMessage = paymentSnapshot
+      ? this.paymentInitCheckConfirmation(paymentSnapshot.evidence)
+      : this.invoiceActionConfirm(action);
+    const confirmed = await this.confirm.confirm({
+      message: confirmationMessage,
+      danger: action === 'ban' || action === 'unpaid'
+    });
     if (!confirmed || !this.routeGuard.accepts(ticket)) {
       return;
     }
@@ -504,7 +604,11 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     this.readRun += 1;
     this.mutating.set(action);
     try {
-      const details = await firstValueFrom(this.invoiceActionRequest(invoiceId, action));
+      const details = await firstValueFrom(this.invoiceActionRequest(
+        invoiceId,
+        action,
+        paymentSnapshot?.evidenceToken ?? null
+      ));
       if (!this.routeGuard.accepts(ticket)) {
         return;
       }
@@ -794,6 +898,13 @@ export class CommonBillingPage implements OnInit, OnDestroy {
 
   invoiceActionHint(invoice: CommonInvoiceSummaryResponse, action?: InvoiceAction): string | null {
     if (invoice.status === 'NEEDS_ATTENTION') {
+      const policy = this.attentionPolicy(invoice);
+      if ((action === 'retry' || action === 'resolve') && policy.requiresManualCheck) {
+        return 'Эта ошибка требует ручной сверки; повтор или обычное закрытие проверки недоступны.';
+      }
+      if (action === 'payment-init-check' && !policy.paymentInitCheck) {
+        return 'Этот платежный конфликт нельзя закрыть из карточки.';
+      }
       return null;
     }
     if ((action === 'send' || action === 'remind') && !this.allOrdersReady(invoice)) {
@@ -912,7 +1023,11 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     }
   }
 
-  private invoiceActionRequest(invoiceId: number, action: InvoiceAction): ReturnType<ApiService['getCommonInvoice']> {
+  private invoiceActionRequest(
+    invoiceId: number,
+    action: InvoiceAction,
+    paymentEvidenceToken: string | null = null
+  ): ReturnType<ApiService['getCommonInvoice']> {
     switch (action) {
       case 'send':
         return this.api.sendCommonInvoice(invoiceId);
@@ -933,7 +1048,10 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       case 'final-cancel-check':
         return this.api.confirmCommonInvoiceFinalPaymentCancelCheck(invoiceId);
       case 'payment-init-check':
-        return this.api.confirmCommonInvoicePaymentInitCheck(invoiceId);
+        return this.api.confirmCommonInvoicePaymentInitCheck(
+          invoiceId,
+          paymentEvidenceToken
+        );
       case 'approve-review-orders':
         return this.api.approveCommonInvoiceReviewOrders(invoiceId);
     }
@@ -964,6 +1082,24 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       case 'approve-review-orders':
         return `Одобрить ${this.reviewApprovalCount()} заказ(ов) и перевести их в публикацию?`;
     }
+  }
+
+  attentionPolicy(invoice: CommonInvoiceSummaryResponse) {
+    return commonInvoiceAttentionPolicy(invoice.lastError);
+  }
+
+  private paymentInitCheckConfirmation(
+    evidenceItems: ReturnType<typeof commonInvoicePaymentEvidence>
+  ): string {
+    const evidence = commonInvoicePaymentEvidenceConfirmationLines(
+      evidenceItems,
+      amountKopecks => this.kopecks(amountKopecks)
+    );
+    return 'Подтвердите, что вы проверили в T-Bank ВСЕ связанные платежи и ни один не требует '
+      + 'применения оплаты, отмены или возврата.'
+      + (evidence
+        ? `\n\n${evidence}`
+        : '\n\nПлатежные реквизиты не сохранены; проверьте операцию по счету вручную.');
   }
 
   private errorMessage(error: unknown, fallback: string): string {

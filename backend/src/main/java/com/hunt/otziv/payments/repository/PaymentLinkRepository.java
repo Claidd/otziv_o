@@ -41,6 +41,9 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
 
     boolean existsByOrder_IdAndStatusIn(Long orderId, Collection<PaymentLinkStatus> statuses);
 
+    @Query("SELECT link FROM PaymentLink link WHERE link.order.id IN :orderIds ORDER BY link.order.id, link.id")
+    List<PaymentLink> findByOrderIdInForRead(@Param("orderIds") Collection<Long> orderIds);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT link FROM PaymentLink link WHERE link.order.id = :orderId ORDER BY link.id")
     List<PaymentLink> findByOrderIdForUpdate(@Param("orderId") Long orderId);

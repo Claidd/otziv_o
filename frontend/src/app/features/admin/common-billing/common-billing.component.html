@@ -234,6 +234,28 @@
               @if (invoiceProblemActionLabel()) {
                 <p class="invoice-problem-next">{{ invoiceProblemActionLabel() }}</p>
               }
+              @if (attentionPaymentEvidence().length) {
+                <ol class="invoice-problem-steps" aria-label="Реквизиты T-Bank для ручной сверки">
+                  @for (evidence of attentionPaymentEvidence(); track evidence.key) {
+                    <li>
+                      <strong>{{ evidence.label }}</strong>:
+                      OrderId <samp>{{ evidence.orderId }}</samp>,
+                      PaymentId <samp>{{ evidence.paymentId }}</samp>
+                      @if (evidence.amountKopecks !== null) {
+                        · сумма <samp>{{ formatKopecks(evidence.amountKopecks) }}</samp>
+                      }
+                      @if (evidence.status) {
+                        · статус <samp>{{ evidence.status }}</samp>
+                      }
+                      @if (evidence.reason) {
+                        · причина <samp>{{ evidence.reason }}</samp>
+                      }
+                      · терминал <samp>{{ evidence.terminalLabel }}</samp>
+                      · TerminalKey <samp>{{ evidence.terminalKey }}</samp>
+                    </li>
+                  }
+                </ol>
+              }
               @if (invoicePaymentNotificationError()) {
                 <div class="invoice-problem-tools" aria-label="Быстрые действия по уведомлению">
                   <button type="button" (click)="copyPaymentNotificationText()" [disabled]="!paymentNotificationCopyText()">
@@ -273,19 +295,23 @@
               </button>
             }
             @if (attentionHasPaymentInitCheck()) {
-              <button type="button" class="success" (click)="confirmPaymentInitCheck()" [disabled]="!!mutating()">
+              <button type="button" class="success" (click)="confirmPaymentInitCheck()" [disabled]="!!mutating() || !paymentInitCheckReady()">
                 <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
                 Сверено
               </button>
             }
-            <button type="button" (click)="retryAttention()" [disabled]="!!mutating() || !attentionRetryEnabled()">
-              <span class="material-icons-sharp" aria-hidden="true">restart_alt</span>
-              Повторить
-            </button>
-            <button type="button" class="success" (click)="resolveAttention()" [disabled]="!!mutating() || !attentionResolveEnabled()">
-              <span class="material-icons-sharp" aria-hidden="true">rule</span>
-              Закрыть проверку
-            </button>
+            @if (attentionRetryEnabled()) {
+              <button type="button" (click)="retryAttention()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">restart_alt</span>
+                Повторить
+              </button>
+            }
+            @if (attentionResolveEnabled()) {
+              <button type="button" class="success" (click)="resolveAttention()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">rule</span>
+                Закрыть проверку
+              </button>
+            }
           } @else if (canResolveTechnicalTail()) {
             <button type="button" class="success" (click)="resolveTechnicalTail()" [disabled]="!!mutating()">
               <span class="material-icons-sharp" aria-hidden="true">task_alt</span>

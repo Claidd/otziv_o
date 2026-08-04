@@ -8,6 +8,7 @@ import {
   CommonBillingApi,
   CommonInvoiceDetailsResponse,
   CommonInvoiceOrderResponse,
+  CommonInvoicePaymentRefResponse,
   CommonInvoiceSummaryResponse,
   ManualPaymentConfirmationRequest
 } from '../../../core/common-billing.api';
@@ -44,6 +45,117 @@ type DraftCompany = {
   city?: string;
   status?: string;
 };
+
+const PAYMENT_INIT_MANUAL_CHECK_PREFIXES = [
+  'payment_init_stale',
+  'payment_init_conflict',
+  'payment_init_exception',
+  'payment_init_response_mismatch',
+  'payment_init_response_collision',
+  'payment_init_invalid_url',
+  'payment_cached_invalid_url',
+  'tbank_init_failed'
+] as const;
+
+const MANUALLY_CONFIRMABLE_MIGRATION_PAYMENT_ERROR =
+  'migration_common_payment_registry:nonterminal_or_unknown_payment_ref_on_invoice';
+
+export function isPaymentInitManualCheckError(error: string | null | undefined): boolean {
+  const normalized = (error ?? '').trim().toLowerCase();
+  return PAYMENT_INIT_MANUAL_CHECK_PREFIXES.some(prefix => normalized.startsWith(prefix))
+    || normalized.startsWith(MANUALLY_CONFIRMABLE_MIGRATION_PAYMENT_ERROR);
+}
+
+export function isMigrationPaymentRegistryError(error: string | null | undefined): boolean {
+  return (error ?? '').trim().toLowerCase().startsWith('migration_common_payment_registry:');
+}
+
+export interface CommonInvoicePaymentEvidenceItem {
+  key: string;
+  label: string;
+  orderId: string;
+  paymentId: string;
+  amountKopecks: number | null;
+  status: string;
+  reason: string;
+  terminalLabel: string;
+  terminalKey: string;
+}
+
+export interface CommonInvoicePaymentEvidenceSnapshot {
+  invoiceId: number;
+  evidenceToken: string;
+  evidence: CommonInvoicePaymentEvidenceItem[];
+}
+
+export function commonInvoicePaymentEvidence(
+  invoice: Pick<
+    CommonInvoiceSummaryResponse,
+    | 'tbankOrderId'
+    | 'tbankPaymentId'
+    | 'tbankPaymentAmountKopecks'
+    | 'tbankTerminalLabel'
+    | 'tbankTerminalKey'
+  > | null,
+  refs: readonly CommonInvoicePaymentRefResponse[] | null | undefined,
+  includeEmptyInvoiceBinding = false
+): CommonInvoicePaymentEvidenceItem[] {
+  const invoiceHasEvidence = Boolean(
+    invoice?.tbankOrderId?.trim()
+      || invoice?.tbankPaymentId?.trim()
+      || invoice?.tbankPaymentAmountKopecks != null
+      || invoice?.tbankTerminalLabel?.trim()
+      || invoice?.tbankTerminalKey?.trim()
+  );
+  return [
+    ...(includeEmptyInvoiceBinding || invoiceHasEvidence ? [{
+      key: 'invoice',
+      label: 'Счёт',
+      orderId: invoice?.tbankOrderId?.trim() || 'не сохранён',
+      paymentId: invoice?.tbankPaymentId?.trim() || 'не сохранён',
+      amountKopecks: invoice?.tbankPaymentAmountKopecks ?? null,
+      status: '',
+      reason: '',
+      terminalLabel: invoice?.tbankTerminalLabel?.trim() || 'не сохранён',
+      terminalKey: invoice?.tbankTerminalKey?.trim() || 'не сохранён'
+    }] : []),
+    ...(refs ?? []).map(ref => ({
+      key: `ref-${ref.id}`,
+      label: `Реестр #${ref.id}`,
+      orderId: ref.orderId?.trim() || 'не сохранён',
+      paymentId: ref.paymentId?.trim() || 'не сохранён',
+      amountKopecks: ref.amountKopecks ?? null,
+      status: ref.status?.trim() || '',
+      reason: ref.reason?.trim() || '',
+      terminalLabel: ref.terminalLabel?.trim() || 'не сохранён',
+      terminalKey: ref.terminalKey?.trim() || 'не сохранён'
+    }))
+  ];
+}
+
+export function commonInvoicePaymentEvidenceSnapshot(
+  details: CommonInvoiceDetailsResponse | null | undefined,
+  expectedInvoiceId: number | null | undefined
+): CommonInvoicePaymentEvidenceSnapshot | null {
+  const invoice = details?.summary;
+  const evidenceToken = details?.paymentEvidenceToken?.trim() || '';
+  if (!invoice
+    || !expectedInvoiceId
+    || invoice.id !== expectedInvoiceId
+    || !isPaymentInitManualCheckError(invoice.lastError)
+    || !evidenceToken) {
+    return null;
+  }
+  return {
+    invoiceId: invoice.id,
+    evidenceToken,
+    evidence: commonInvoicePaymentEvidence(
+      invoice,
+      details.paymentRefs,
+      isMigrationPaymentRegistryError(invoice.lastError)
+    )
+  };
+}
 
 export function isIncompletePartiallyPaidInvoice(
   invoice: Pick<CommonInvoiceSummaryResponse, 'status' | 'readyOrders' | 'totalOrders'> | null
@@ -157,15 +269,27 @@ export class CommonBillingComponent implements OnDestroy {
     return error.startsWith('late_tbank_payment') || error.startsWith('late_payment_');
   });
   readonly attentionHasFinalCancelFailure = computed(() => this.attentionError().startsWith('payment_cancel_failed_final'));
-  readonly attentionHasPaymentInitCheck = computed(() => {
-    const error = this.attentionError();
-    return error.startsWith('payment_init_stale')
-      || error.startsWith('payment_init_conflict')
-      || error.startsWith('payment_init_exception');
+  readonly attentionHasPaymentInitCheck = computed(() => isPaymentInitManualCheckError(this.attentionError()));
+  readonly attentionIsMigrationPaymentRegistry = computed(() => isMigrationPaymentRegistryError(this.attentionError()));
+  readonly attentionPaymentEvidence = computed(() => {
+    if (!this.attentionHasPaymentInitCheck() && !this.attentionIsMigrationPaymentRegistry()) {
+      return [];
+    }
+    return commonInvoicePaymentEvidence(
+      this.currentInvoice(),
+      this.invoiceDetails()?.paymentRefs,
+      this.attentionIsMigrationPaymentRegistry()
+    );
   });
+  readonly paymentInitCheckSnapshot = computed(() => commonInvoicePaymentEvidenceSnapshot(
+    this.invoiceDetails(),
+    this.expectedCurrentInvoiceId()
+  ));
+  readonly paymentInitCheckReady = computed(() => !this.invoiceLoading() && this.paymentInitCheckSnapshot() !== null);
   readonly attentionRequiresManualCheck = computed(() => {
     return this.attentionHasLatePayment()
       || this.attentionHasPaymentInitCheck()
+      || this.attentionIsMigrationPaymentRegistry()
       || this.attentionHasFinalCancelFailure();
   });
   readonly invoiceProblemRaw = computed(() => (this.currentInvoice()?.lastError ?? '').trim());
@@ -230,6 +354,15 @@ export class CommonBillingComponent implements OnDestroy {
     const notificationError = this.invoicePaymentNotificationError().toLowerCase();
     if (notificationError) {
       return 'После ручной отправки или исправления нажмите "Уведомление обработано".';
+    }
+    if (this.attentionIsMigrationPaymentRegistry() && this.attentionHasPaymentInitCheck()) {
+      return 'Сверьте каждый OrderId и PaymentId в T-Bank. Только после ручной проверки нажмите «Сверено».';
+    }
+    if (this.attentionIsMigrationPaymentRegistry()) {
+      return 'Этот тип миграционного конфликта нельзя закрыть из карточки. Передайте реквизиты администратору для отдельного разбора.';
+    }
+    if (this.attentionHasPaymentInitCheck()) {
+      return 'Проверьте состояние создания платежа в T-Bank и только затем нажмите «Сверено».';
     }
     if (this.invoiceNeedsAttention()) {
       return 'После проверки используйте зеленое действие ниже или повторите обработку.';
@@ -864,14 +997,41 @@ export class CommonBillingComponent implements OnDestroy {
     if (!invoice || invoice.status !== 'NEEDS_ATTENTION' || !this.attentionHasPaymentInitCheck() || this.mutating()) {
       return;
     }
-    const confirmed = window.confirm('Подтвердить, что создание T-Bank ссылки проверено вручную и больше не требует действий?');
+    const snapshot = this.paymentInitCheckSnapshot();
+    if (this.invoiceLoading() || !snapshot || snapshot.invoiceId !== invoice.id) {
+      this.toastService.error(
+        'Сверка не начата',
+        'Полные платежные реквизиты не загружены. Обновите карточку счета и повторите проверку.'
+      );
+      return;
+    }
+    const identifiers = snapshot.evidence
+      .map(evidence => {
+        const amount = evidence.amountKopecks == null
+          ? 'не сохранена'
+          : this.formatKopecks(evidence.amountKopecks);
+        const status = evidence.status || 'не сохранён';
+        const reason = evidence.reason || 'не сохранена';
+        return `${evidence.label}: OrderId ${evidence.orderId}, PaymentId ${evidence.paymentId}, `
+          + `сумма ${amount}, статус ${status}, причина ${reason}, `
+          + `терминал ${evidence.terminalLabel} (${evidence.terminalKey})`;
+      })
+      .join('\n');
+    const evidenceText = identifiers
+      ? `\n\nПроверьте все записи:\n${identifiers}`
+      : '\n\nИдентификаторы платежа не сохранены: проверьте операцию по счету вручную в T-Bank.';
+    const confirmed = window.confirm(
+      'Подтвердите, что вы вручную проверили в T-Bank ВСЕ связанные платежи и ни один из них '
+      + 'не требует применения оплаты, отмены или возврата.'
+      + evidenceText
+    );
     if (!confirmed) {
       return;
     }
     this.invoiceAction(
       invoice.id,
       'confirm-payment-init-check',
-      () => this.commonBillingApi.confirmPaymentInitCheck(invoice.id),
+      () => this.commonBillingApi.confirmPaymentInitCheck(invoice.id, snapshot.evidenceToken),
       'Проверка платежной ссылки закрыта'
     );
   }
@@ -1349,6 +1509,13 @@ export class CommonBillingComponent implements OnDestroy {
     });
   }
 
+  private expectedCurrentInvoiceId(): number | null {
+    if (this.managerInvoiceDetailMode) {
+      return this.requestedInvoiceId();
+    }
+    return this.selectedAccount()?.currentInvoice?.id ?? this.requestedInvoiceId();
+  }
+
   private requestedInvoiceId(): number | null {
     const value = Number(this.route.snapshot.queryParamMap.get('invoiceId') ?? 0);
     return Number.isSafeInteger(value) && value > 0 ? value : null;
@@ -1449,6 +1616,26 @@ export class CommonBillingComponent implements OnDestroy {
         'Проверьте чат или настройки отправки уведомлений.',
         'Отправьте клиенту сообщение вручную, если автоматическая отправка не сработала.',
         'После исправления нажмите "Уведомление обработано".'
+      ];
+    }
+    if (this.attentionIsMigrationPaymentRegistry() && this.attentionHasPaymentInitCheck()) {
+      return [
+        'Найдите в T-Bank все перечисленные ниже OrderId и PaymentId.',
+        'Убедитесь, что ни один платеж не требует применения, отмены или возврата.',
+        'Нажимайте «Сверено» только после проверки каждого идентификатора.'
+      ];
+    }
+    if (this.attentionIsMigrationPaymentRegistry()) {
+      return [
+        'Не используйте повторную отправку или закрытие проверки: миграционный конфликт остается в карантине.',
+        'Сохраните перечисленные идентификаторы и передайте их администратору для отдельной сверки T-Bank.'
+      ];
+    }
+    if (this.attentionHasPaymentInitCheck()) {
+      return [
+        'Откройте T-Bank и проверьте, был ли создан или оплачен платеж.',
+        'Не повторяйте создание ссылки до завершения ручной сверки.',
+        'После проверки нажмите «Сверено».'
       ];
     }
     if (commonError.startsWith('whatsapp_group_missing')) {

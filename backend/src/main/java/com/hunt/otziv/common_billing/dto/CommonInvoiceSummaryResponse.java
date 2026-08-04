@@ -27,6 +27,11 @@ public record CommonInvoiceSummaryResponse(
         String closedBy,
         String closeReason,
         String lastError,
-        String paymentSuccessNotificationError
+        String paymentSuccessNotificationError,
+        String tbankOrderId,
+        String tbankPaymentId,
+        Long tbankPaymentAmountKopecks,
+        String tbankTerminalLabel,
+        String tbankTerminalKey
 ) {
 }

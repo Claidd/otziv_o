@@ -25,9 +25,12 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+import com.hunt.otziv.common_billing.model.CommonBillingAccount;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
+import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.common_billing.service.CommonPaymentInitFailureClassifier;
 import com.hunt.otziv.common_billing.service.CommonInvoicePublicationBlockerService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
@@ -59,8 +62,11 @@ import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
+import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -96,6 +102,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -175,6 +183,9 @@ class ManagerControlServiceTest {
     private CommonInvoicePublicationBlockerService commonInvoicePublicationBlockerService;
     @Mock
     private CommonBillingService commonBillingService;
+    @Spy
+    private ManagerControlInvoiceOperationExecutor invoiceOperationExecutor =
+            new ManagerControlInvoiceOperationExecutor();
     @Mock
     private OrderPublicationApprovalService publicationApprovalService;
     @Mock
@@ -747,7 +758,7 @@ class ManagerControlServiceTest {
         );
 
         stubSuccessfulConcreteAction(concrete, parent);
-        when(commonInvoiceRepository.findById(88L)).thenReturn(Optional.of(invoice));
+        when(commonInvoiceRepository.findByIdWithAccount(88L)).thenReturn(Optional.of(invoice));
         when(commonBillingService.invoice(88L)).thenReturn(details);
         when(details.summary()).thenReturn(summary);
         when(details.orders()).thenReturn(List.of());
@@ -765,6 +776,235 @@ class ManagerControlServiceTest {
         assertTrue(concrete.getComment().contains("3 из 5 заказов еще в работе"));
         assertTrue(concrete.getComment().contains("убрана из замечаний"));
         verify(commonBillingService, never()).sendInvoice(anyLong(), eq(true));
+    }
+
+    @Test
+    void repairWhatsappInvoiceTailDelegatesToLockedBillingOperationWithoutSavingDetachedInvoice() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMMON_INVOICE");
+        concrete.setEntityId(88L);
+
+        Company primaryCompany = new Company();
+        primaryCompany.setId(501L);
+        primaryCompany.setTitle("Компания");
+        primaryCompany.setGroupId("120363501@g.us");
+        CommonBillingAccount account = new CommonBillingAccount();
+        account.setId(7L);
+        account.setInvoiceCompany(primaryCompany);
+        CommonInvoice detachedSnapshot = new CommonInvoice();
+        detachedSnapshot.setId(88L);
+        detachedSnapshot.setAccount(account);
+        detachedSnapshot.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        detachedSnapshot.setLastError("whatsapp_group_missing: groupId отсутствовал при отправке");
+
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(commonInvoiceRepository.findByIdWithAccount(88L)).thenReturn(Optional.of(detachedSnapshot));
+        when(commonInvoiceOrderRepository.findByInvoiceIdWithOrders(88L)).thenReturn(List.of());
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals("RESOLVED", response.itemStatus());
+        verify(commonBillingService).resolveWhatsappGroupTail(88L);
+        verify(commonInvoiceRepository, never()).save(any(CommonInvoice.class));
+        assertEquals("whatsapp_group_missing: groupId отсутствовал при отправке", detachedSnapshot.getLastError());
+    }
+
+    @Test
+    void commonInvoiceRepairSuspendsControlTransactionAndResolvesOnlyAfterSend() throws Exception {
+        Transactional controlTransaction = ManagerControlService.class
+                .getMethod("repairConcreteItem", Long.class, Principal.class, Authentication.class)
+                .getAnnotation(Transactional.class);
+        Transactional invoiceBoundary = ManagerControlInvoiceOperationExecutor.class
+                .getMethod("execute", java.util.function.Supplier.class)
+                .getAnnotation(Transactional.class);
+        assertNotNull(controlTransaction);
+        assertNotNull(invoiceBoundary);
+        assertEquals(Propagation.REQUIRED, controlTransaction.propagation());
+        assertEquals(Propagation.NOT_SUPPORTED, invoiceBoundary.propagation());
+
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMMON_INVOICE");
+        concrete.setEntityId(88L);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(88L);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        var readyDetails = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse.class
+        );
+        var readySummary = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse.class
+        );
+        var sentDetails = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse.class
+        );
+        var sentSummary = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse.class
+        );
+
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(commonInvoiceRepository.findByIdWithAccount(88L)).thenReturn(Optional.of(invoice));
+        when(commonBillingService.invoice(88L)).thenReturn(readyDetails);
+        when(readyDetails.summary()).thenReturn(readySummary);
+        when(readySummary.status()).thenReturn(CommonInvoiceStatus.READY.name());
+        when(commonBillingService.sendInvoice(88L, true)).thenReturn(sentDetails);
+        when(sentDetails.summary()).thenReturn(sentSummary);
+        when(sentSummary.status()).thenReturn(CommonInvoiceStatus.INVOICED.name());
+        when(sentSummary.lastError()).thenReturn(null);
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals("RESOLVED", response.itemStatus());
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(
+                commonBillingService,
+                dailyControlConcreteItemRepository
+        );
+        order.verify(commonBillingService).invoice(88L);
+        order.verify(commonBillingService).sendInvoice(88L, true);
+        order.verify(dailyControlConcreteItemRepository).save(concrete);
+    }
+
+    @Test
+    void repairUnsentTlsPaymentInitArchivesAttemptAndSendsFreshInvoice() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMMON_INVOICE");
+        concrete.setEntityId(51L);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(51L);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError(CommonPaymentInitFailureClassifier.TLS_BEFORE_HTTP_ERROR_CODE
+                + ": certificate_unknown; PKIX path building failed");
+        var recovered = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse.class
+        );
+        var recoveredSummary = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse.class
+        );
+        var sent = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse.class
+        );
+        var sentSummary = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse.class
+        );
+
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(commonInvoiceRepository.findByIdWithAccount(51L)).thenReturn(Optional.of(invoice));
+        when(commonBillingService.recoverUnsentPaymentInitTlsFailure(51L)).thenReturn(recovered);
+        when(recovered.summary()).thenReturn(recoveredSummary);
+        when(recoveredSummary.status()).thenReturn(CommonInvoiceStatus.READY.name());
+        when(commonBillingService.sendInvoice(51L, true)).thenReturn(sent);
+        when(sent.summary()).thenReturn(sentSummary);
+        when(sentSummary.status()).thenReturn(CommonInvoiceStatus.INVOICED.name());
+        when(sentSummary.lastError()).thenReturn(null);
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals("RESOLVED", response.itemStatus());
+        assertTrue(concrete.getComment().contains("новая платежная ссылка создана"));
+        verify(commonBillingService).recoverUnsentPaymentInitTlsFailure(51L);
+        verify(commonBillingService).sendInvoice(51L, true);
+    }
+
+    @Test
+    void repairUnsentTlsPaymentInitResendsRemainingBalanceWhenRecoveryIsPartiallyPaid() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMMON_INVOICE");
+        concrete.setEntityId(51L);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(51L);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError(CommonPaymentInitFailureClassifier.TLS_BEFORE_HTTP_ERROR_CODE
+                + ": certificate_unknown; PKIX path building failed");
+        var recovered = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse.class
+        );
+        var recoveredSummary = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse.class
+        );
+        var sent = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse.class
+        );
+        var sentSummary = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse.class
+        );
+
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(commonInvoiceRepository.findByIdWithAccount(51L)).thenReturn(Optional.of(invoice));
+        when(commonBillingService.recoverUnsentPaymentInitTlsFailure(51L)).thenReturn(recovered);
+        when(recovered.summary()).thenReturn(recoveredSummary);
+        when(recoveredSummary.status()).thenReturn(CommonInvoiceStatus.PARTIALLY_PAID.name());
+        when(commonBillingService.sendInvoice(51L, true)).thenReturn(sent);
+        when(sent.summary()).thenReturn(sentSummary);
+        when(sentSummary.status()).thenReturn(CommonInvoiceStatus.PARTIALLY_PAID.name());
+        when(sentSummary.lastError()).thenReturn(null);
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals("RESOLVED", response.itemStatus());
+        assertTrue(concrete.getComment().contains("повторно отправлен"));
+        verify(commonBillingService).sendInvoice(51L, true);
+    }
+
+    @Test
+    void tlsRepairAvailabilityUsesSameStandaloneProviderEvidenceAsExecutionGuard() throws Exception {
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(51L);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError(CommonPaymentInitFailureClassifier.TLS_BEFORE_HTTP_ERROR_CODE
+                + ": certificate_unknown; PKIX path building failed");
+        Order order = new Order();
+        order.setId(101L);
+        CommonInvoiceOrder item = new CommonInvoiceOrder();
+        item.setOrder(order);
+
+        PaymentLink initReserved = new PaymentLink();
+        initReserved.setStatus(PaymentLinkStatus.REFUNDED);
+        initReserved.setBankInitNonce("init-reservation");
+        PaymentLink cancelReserved = new PaymentLink();
+        cancelReserved.setStatus(PaymentLinkStatus.EXPIRED);
+        cancelReserved.setBankCancelOriginStatus(PaymentLinkStatus.INITIATED);
+        PaymentLink ambiguousCanceled = new PaymentLink();
+        ambiguousCanceled.setStatus(PaymentLinkStatus.CANCELED);
+        ambiguousCanceled.setTbankPaymentId("provider-payment-id");
+        ambiguousCanceled.setLastError("cancel_result_unknown");
+
+        assertTrue(StandaloneBankPaymentPolicy.blocksCommonInvoiceTlsRecovery(initReserved));
+        assertTrue(StandaloneBankPaymentPolicy.blocksCommonInvoiceTlsRecovery(cancelReserved));
+        assertTrue(StandaloneBankPaymentPolicy.blocksCommonInvoiceTlsRecovery(ambiguousCanceled));
+        when(paymentLinkRepository.findByOrderIdInForRead(List.of(101L)))
+                .thenReturn(List.of(cancelReserved));
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "commonInvoiceLastErrorReason",
+                CommonInvoice.class,
+                String.class,
+                List.class
+        );
+        method.setAccessible(true);
+        String reason = (String) method.invoke(service, invoice, invoice.getLastError(), List.of(item));
+
+        assertTrue(reason.contains("отдельный незавершенный платеж"));
+        assertFalse(reason.contains("нажмите «Починить»"));
+        verify(paymentLinkRepository).findByOrderIdInForRead(List.of(101L));
     }
 
     @Test

@@ -12,6 +12,7 @@ import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentInitCheckRequest;
 import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.model.CommonBillingAccount;
 import com.hunt.otziv.common_billing.model.CommonBillingAccountCompany;
@@ -65,6 +66,7 @@ import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.services.service.UserService;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
+import java.security.cert.CertPathBuilderException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -74,6 +76,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import javax.net.ssl.SSLHandshakeException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -85,6 +88,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -93,6 +97,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.client.ResourceAccessException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1653,6 +1658,114 @@ class CommonBillingServiceTest {
         assertEquals("terminal", invoice.getTbankTerminalKey());
         assertEquals(100_000L, invoice.getTbankPaymentAmountKopecks());
         assertEquals(null, invoice.getLastError());
+    }
+
+    @Test
+    void initPublicPaymentPersistsTypedMarkerOnlyForCertificateHandshakeCauseChain() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+
+        CertPathBuilderException certPathFailure =
+                new CertPathBuilderException("unable to find valid certification path");
+        SSLHandshakeException handshakeFailure = new SSLHandshakeException("certificate_unknown");
+        handshakeFailure.initCause(certPathFailure);
+        ResourceAccessException transportFailure =
+                new ResourceAccessException("I/O error during TLS handshake", handshakeFailure);
+        doThrow(transportFailure).when(tbankClient).init(any(), any());
+
+        assertThrows(
+                ResourceAccessException.class,
+                () -> service.initPublicPayment("token", "client@example.com", true, true, true)
+        );
+
+        assertTrue(invoice.getLastError().startsWith(
+                CommonPaymentInitFailureClassifier.TLS_BEFORE_HTTP_ERROR_CODE + ":"
+        ));
+        CommonInvoicePaymentRef preparedRef = paymentRefStore.values().stream().findFirst().orElseThrow();
+        assertEquals("INIT_CONFLICT", preparedRef.getStatus());
+        assertEquals(
+                CommonPaymentInitFailureClassifier.TLS_BEFORE_HTTP_REF_REASON,
+                preparedRef.getReason()
+        );
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L)).thenReturn(List.of(preparedRef));
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of());
+        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+
+        service.recoverUnsentPaymentInitTlsFailure(10L);
+
+        assertEquals("ARCHIVED", preparedRef.getStatus());
+        assertNull(invoice.getLastError());
+    }
+
+    @Test
+    void initPublicPaymentDoesNotMarkHttpErrorBodyWithPkixWordsAsSafeToRetry() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+        ResponseStatusException httpResponseFailure = new ResponseStatusException(
+                HttpStatus.BAD_GATEWAY,
+                "proxy response body: certificate_unknown; PKIX path building failed: "
+                        + "unable to find valid certification path"
+        );
+        doThrow(httpResponseFailure).when(tbankClient).init(any(), any());
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.initPublicPayment("token", "client@example.com", true, true, true)
+        );
+
+        assertTrue(invoice.getLastError().startsWith("payment_init_exception:"));
+        assertFalse(invoice.getLastError().startsWith(
+                CommonPaymentInitFailureClassifier.TLS_BEFORE_HTTP_ERROR_CODE
+        ));
+        CommonInvoicePaymentRef preparedRef = paymentRefStore.values().stream().findFirst().orElseThrow();
+        assertEquals(
+                CommonPaymentInitFailureClassifier.LEGACY_TLS_BEFORE_HTTP_REF_REASON,
+                preparedRef.getReason()
+        );
+
+        ResponseStatusException recoveryError = assertThrows(
+                ResponseStatusException.class,
+                () -> service.recoverUnsentPaymentInitTlsFailure(10L)
+        );
+        assertEquals(409, recoveryError.getStatusCode().value());
+        verify(paymentRefRepository, never()).findByInvoiceIdForUpdate(anyLong());
     }
 
     @Test
@@ -4386,6 +4499,399 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void retryAndResolveAttentionRejectMigrationPaymentRegistryQuarantine() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("migration_common_payment_registry: provider evidence preserved; manual reconciliation required");
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
+
+        ResponseStatusException retryError = assertThrows(
+                ResponseStatusException.class,
+                () -> service.retryAttention(10L)
+        );
+        ResponseStatusException resolveError = assertThrows(
+                ResponseStatusException.class,
+                () -> service.resolveAttention(10L)
+        );
+
+        assertEquals(409, retryError.getStatusCode().value());
+        assertEquals(409, resolveError.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith("migration_common_payment_registry:"));
+        verify(paymentRefRepository, never()).findByInvoiceIdForUpdate(anyLong());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void readingMigrationPaymentRegistryQuarantinePreservesProviderBindingAndRefsWhenAmountChanged() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("migration_common_payment_registry:nonterminal_or_unknown_payment_ref_on_invoice; "
+                + "provider evidence preserved; manual reconciliation required");
+        invoice.setAmountKopecks(475_000L);
+        invoice.setTbankOrderId("g97-78a1733109c8");
+        invoice.setTbankPaymentId("8927282485");
+        invoice.setTbankTerminalKey("provider-terminal");
+        invoice.setTbankPaymentAmountKopecks(475_000L);
+        invoice.setPaymentUrl("https://securepay.tinkoff.ru/8927282485");
+        invoice.setTbankPaymentCreatedAt(LocalDateTime.now().minusDays(1));
+        Order order = order(101L);
+        order.setSum(BigDecimal.valueOf(4000));
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setAmountKopecks(475_000L);
+        CommonInvoicePaymentRef preparedRef = paymentRef(
+                97L,
+                invoice,
+                "INIT_CONFLICT",
+                "g97-7bf9c45ca7bc",
+                null,
+                "provider-terminal",
+                475_000L
+        );
+        preparedRef.setReason("migration_invoice_provider_evidence_preserved");
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(10L)).thenReturn(List.of(preparedRef));
+        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+
+        CommonInvoiceDetailsResponse details = service.invoice(10L);
+
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals("g97-78a1733109c8", invoice.getTbankOrderId());
+        assertEquals("8927282485", invoice.getTbankPaymentId());
+        assertEquals("provider-terminal", invoice.getTbankTerminalKey());
+        assertEquals(475_000L, invoice.getTbankPaymentAmountKopecks());
+        assertEquals("https://securepay.tinkoff.ru/8927282485", invoice.getPaymentUrl());
+        assertNotNull(invoice.getTbankPaymentCreatedAt());
+        assertEquals("INIT_CONFLICT", preparedRef.getStatus());
+        assertEquals("migration_invoice_provider_evidence_preserved", preparedRef.getReason());
+        assertEquals(475_000L, invoice.getAmountKopecks());
+        assertEquals(475_000L, item.getAmountKopecks());
+        assertEquals(475_000L, details.summary().remainingKopecks());
+        assertEquals(475_000L, details.summary().tbankPaymentAmountKopecks());
+        assertTrue(paymentRefStore.values().stream().noneMatch(ref -> "CANCEL_PENDING".equals(ref.getStatus())));
+        verify(invoiceRepository, never()).save(any(CommonInvoice.class));
+        verify(invoiceOrderRepository, never()).saveAll(any());
+        verify(paymentRefRepository, never()).save(any(CommonInvoicePaymentRef.class));
+        verify(paymentRefRepository, never()).findByTbankOrderId(anyString());
+        verify(paymentRefRepository, never()).findByTbankPaymentId(anyString());
+        verify(badReviewTaskService, never()).getPayableSum(order);
+        verify(paymentLinkRepository, never())
+                .findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(anyLong(), any());
+    }
+
+    @Test
+    void confirmMigrationPaymentRegistryCheckPreservesDistinctProviderAttempts() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("migration_common_payment_registry: nonterminal_or_unknown_payment_ref_on_invoice");
+        invoice.setTbankOrderId("g97-78a1733109c8");
+        invoice.setTbankPaymentId("8927282485");
+        invoice.setTbankTerminalKey("provider-terminal");
+        invoice.setAmountKopecks(475_000L);
+        invoice.setTbankPaymentAmountKopecks(475_000L);
+        invoice.setPaymentUrl("https://securepay.tinkoff.ru/8927282485");
+        invoice.setTbankPaymentCreatedAt(LocalDateTime.now().minusDays(1));
+        Order order = order(101L);
+        order.setSum(BigDecimal.valueOf(4750));
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setAmountKopecks(475_000L);
+        CommonInvoicePaymentRef preparedRef = paymentRef(
+                97L,
+                invoice,
+                "INIT_CONFLICT",
+                "g97-7bf9c45ca7bc",
+                null,
+                "provider-terminal",
+                475_000L
+        );
+        preparedRef.setReason("migration_invoice_provider_evidence_preserved");
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L)).thenReturn(List.of(preparedRef));
+        when(paymentRefRepository.findByInvoiceIdAndStatusForUpdate(10L, "INIT_PREPARED"))
+                .thenReturn(List.of());
+        when(paymentRefRepository.findByInvoiceIdAndStatusForUpdate(10L, "INIT_CONFLICT"))
+                .thenReturn(List.of(preparedRef));
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of());
+        when(paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(10L)).thenReturn(List.of(preparedRef));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(4750));
+        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+
+        CommonInvoiceDetailsResponse freshDetails = service.invoice(10L);
+        assertNotNull(freshDetails.paymentEvidenceToken());
+        assertEquals(475_000L, freshDetails.summary().tbankPaymentAmountKopecks());
+        assertEquals("provider-terminal", freshDetails.summary().tbankTerminalKey());
+        assertEquals("provider-terminal", freshDetails.summary().tbankTerminalLabel());
+        assertEquals("provider-terminal", freshDetails.paymentRefs().getFirst().terminalKey());
+        assertEquals("provider-terminal", freshDetails.paymentRefs().getFirst().terminalLabel());
+
+        service.confirmPaymentInitCheck(
+                10L,
+                new CommonInvoicePaymentInitCheckRequest(freshDetails.paymentEvidenceToken())
+        );
+
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertNull(invoice.getLastError());
+        assertNull(invoice.getTbankOrderId());
+        assertNull(invoice.getTbankPaymentId());
+        assertNull(invoice.getTbankTerminalKey());
+        assertNull(invoice.getTbankPaymentAmountKopecks());
+        assertNull(invoice.getPaymentUrl());
+        assertNull(invoice.getTbankPaymentCreatedAt());
+        assertEquals("g97-7bf9c45ca7bc", preparedRef.getTbankOrderId());
+        assertNull(preparedRef.getTbankPaymentId());
+        assertEquals("provider-terminal", preparedRef.getTbankTerminalKey());
+        assertEquals(475_000L, preparedRef.getAmountKopecks());
+        assertEquals("ARCHIVED", preparedRef.getStatus());
+        assertTrue(preparedRef.getReason().startsWith("payment_init_manually_checked_by=unknown"));
+        assertTrue(preparedRef.getReason().contains("previous=migration_invoice_provider_evidence_preserved"));
+
+        ArgumentCaptor<CommonInvoicePaymentRef> archivedInvoiceBinding =
+                ArgumentCaptor.forClass(CommonInvoicePaymentRef.class);
+        verify(paymentRefRepository).saveAll(List.of(preparedRef));
+        verify(paymentRefRepository).save(archivedInvoiceBinding.capture());
+        CommonInvoicePaymentRef invoiceBindingRef = archivedInvoiceBinding.getValue();
+        assertFalse(invoiceBindingRef == preparedRef);
+        assertEquals(invoice, invoiceBindingRef.getInvoice());
+        assertEquals("g97-78a1733109c8", invoiceBindingRef.getTbankOrderId());
+        assertEquals("8927282485", invoiceBindingRef.getTbankPaymentId());
+        assertEquals("provider-terminal", invoiceBindingRef.getTbankTerminalKey());
+        assertEquals(475_000L, invoiceBindingRef.getAmountKopecks());
+        assertEquals("ARCHIVED", invoiceBindingRef.getStatus());
+        assertTrue(invoiceBindingRef.getReason().startsWith("payment_init_manually_checked_by=unknown"));
+        assertTrue(invoiceBindingRef.getReason().contains("previous=migration_common_payment_registry:"));
+        verify(entityManager).flush();
+    }
+
+    @Test
+    void recoverUnsentPaymentInitTlsFailureArchivesRefWithoutProviderEvidenceOrActiveLinks() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError(unsentPaymentInitTlsError());
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        CommonInvoicePaymentRef preparedRef = paymentRef(
+                51L,
+                invoice,
+                "INIT_CONFLICT",
+                "g51-unsent-request",
+                null,
+                "provider-terminal",
+                200_000L
+        );
+        preparedRef.setReason("init_exception_before_response");
+        CommonInvoicePaymentRef previouslyVerifiedTlsRef = paymentRef(
+                50L,
+                invoice,
+                "ARCHIVED",
+                "g50-verified-unsent-request",
+                null,
+                "provider-terminal",
+                200_000L
+        );
+        previouslyVerifiedTlsRef.setReason(
+                "payment_init_tls_failed_before_http_request; previous=init_exception_before_response"
+        );
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L))
+                .thenReturn(List.of(previouslyVerifiedTlsRef, preparedRef));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of());
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+
+        service.recoverUnsentPaymentInitTlsFailure(10L);
+
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertNull(invoice.getLastError());
+        assertEquals("ARCHIVED", preparedRef.getStatus());
+        assertTrue(preparedRef.getReason().startsWith("payment_init_tls_failed_before_http_request"));
+        assertTrue(preparedRef.getReason().contains("previous=init_exception_before_response"));
+        assertEquals("ARCHIVED", previouslyVerifiedTlsRef.getStatus());
+        assertTrue(previouslyVerifiedTlsRef.getReason().startsWith("payment_init_tls_failed_before_http_request"));
+        verify(paymentRefRepository).saveAll(List.of(preparedRef));
+        verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+        org.mockito.InOrder locks = inOrder(
+                orderAggregateMutationLockService,
+                paymentLinkRepository,
+                invoiceRepository,
+                paymentRefRepository
+        );
+        locks.verify(orderAggregateMutationLockService).lock(101L);
+        locks.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
+        locks.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
+        locks.verify(paymentRefRepository).findByInvoiceIdForUpdate(10L);
+    }
+
+    @Test
+    void recoverUnsentPaymentInitTlsFailureRejectsWaitingManualPaymentLink() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError(unsentPaymentInitTlsError());
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        CommonInvoicePaymentRef preparedRef = paymentRef(
+                131L,
+                invoice,
+                "INIT_CONFLICT",
+                "g131-unsent-request",
+                null,
+                "provider-terminal",
+                300_000L
+        );
+        preparedRef.setReason("init_exception_before_response");
+        PaymentLink manualLink = new PaymentLink();
+        manualLink.setOrder(order);
+        manualLink.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L)).thenReturn(List.of(preparedRef));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of(manualLink));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.recoverUnsentPaymentInitTlsFailure(10L)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals(unsentPaymentInitTlsError(), invoice.getLastError());
+        assertEquals("INIT_CONFLICT", preparedRef.getStatus());
+        assertEquals("init_exception_before_response", preparedRef.getReason());
+        verify(paymentRefRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void recoverUnsentPaymentInitTlsFailureRejectsCurrentInvoiceProviderEvidence() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError(unsentPaymentInitTlsError());
+        invoice.setTbankOrderId("provider-order-already-recorded");
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.recoverUnsentPaymentInitTlsFailure(10L)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals("provider-order-already-recorded", invoice.getTbankOrderId());
+        verify(paymentRefRepository, never()).findByInvoiceIdForUpdate(anyLong());
+        verify(paymentRefRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void recoverUnsentPaymentInitTlsFailureRejectsAmbiguousArchivedProviderRef() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError(unsentPaymentInitTlsError());
+        CommonInvoicePaymentRef preparedRef = paymentRef(
+                151L,
+                invoice,
+                "INIT_CONFLICT",
+                "g151-unsent-request",
+                null,
+                "provider-terminal",
+                300_000L
+        );
+        preparedRef.setReason("init_exception_before_response");
+        CommonInvoicePaymentRef ambiguousArchivedRef = paymentRef(
+                150L,
+                invoice,
+                "ARCHIVED",
+                "g150-previous-request",
+                "unreconciled-payment-id",
+                "provider-terminal",
+                300_000L
+        );
+        ambiguousArchivedRef.setReason("remaining_changed");
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L))
+                .thenReturn(List.of(ambiguousArchivedRef, preparedRef));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.recoverUnsentPaymentInitTlsFailure(10L)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals(unsentPaymentInitTlsError(), invoice.getLastError());
+        assertEquals("INIT_CONFLICT", preparedRef.getStatus());
+        assertEquals("init_exception_before_response", preparedRef.getReason());
+        assertEquals("ARCHIVED", ambiguousArchivedRef.getStatus());
+        assertEquals("remaining_changed", ambiguousArchivedRef.getReason());
+        verify(paymentRefRepository, never()).saveAll(any());
+        verify(paymentLinkRepository, never()).findByOrderIdForUpdate(anyLong());
+    }
+
+    @Test
+    void resolveWhatsappGroupTailRereadsLockedInvoiceAndPreservesConcurrentPaymentState() {
+        CommonBillingAccount account = account();
+        CommonInvoice staleSnapshot = invoice(account);
+        staleSnapshot.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        staleSnapshot.setLastError("whatsapp_group_missing: старая ошибка");
+
+        CommonInvoice lockedCurrent = invoice(account);
+        lockedCurrent.setStatus(CommonInvoiceStatus.PAID);
+        lockedCurrent.setPaidKopecks(100_000L);
+        lockedCurrent.setTbankOrderId("provider-order");
+        lockedCurrent.setTbankPaymentId("provider-payment");
+        lockedCurrent.setTbankTerminalKey("provider-terminal");
+        lockedCurrent.setTbankPaymentAmountKopecks(100_000L);
+        lockedCurrent.setLastError("whatsapp_group_missing: старая ошибка");
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(staleSnapshot));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(lockedCurrent));
+
+        service.resolveWhatsappGroupTail(10L);
+
+        assertNull(lockedCurrent.getLastError());
+        assertEquals(CommonInvoiceStatus.PAID, lockedCurrent.getStatus());
+        assertEquals(100_000L, lockedCurrent.getPaidKopecks());
+        assertEquals("provider-order", lockedCurrent.getTbankOrderId());
+        assertEquals("provider-payment", lockedCurrent.getTbankPaymentId());
+        assertEquals("provider-terminal", lockedCurrent.getTbankTerminalKey());
+        assertEquals(100_000L, lockedCurrent.getTbankPaymentAmountKopecks());
+        verify(invoiceRepository).save(lockedCurrent);
+        verify(invoiceRepository, never()).save(staleSnapshot);
+    }
+
+    @Test
     void confirmPaymentInitCheckReturnsInvoiceToCurrentStateAfterManualBankCheck() throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
@@ -4394,17 +4900,98 @@ class CommonBillingServiceTest {
         Order order = order(101L);
         CommonInvoiceOrder item = item(invoice, order);
 
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of());
         when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L)).thenReturn(List.of());
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
         when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
 
-        service.confirmPaymentInitCheck(10L);
+        String evidenceToken = paymentEvidenceToken(invoice, List.of());
+        service.confirmPaymentInitCheck(10L, new CommonInvoicePaymentInitCheckRequest(evidenceToken));
 
         assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
         assertEquals(null, invoice.getLastError());
         verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+        org.mockito.InOrder locks = inOrder(
+                orderAggregateMutationLockService,
+                paymentLinkRepository,
+                invoiceRepository,
+                paymentRefRepository
+        );
+        locks.verify(orderAggregateMutationLockService).lock(101L);
+        locks.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
+        locks.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
+        locks.verify(paymentRefRepository).findByInvoiceIdForUpdate(10L);
+    }
+
+    @Test
+    void confirmPaymentInitCheckRejectsMissingEvidenceTokenForOrdinaryConflict() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("payment_init_conflict: нужна ручная сверка");
+        CommonInvoicePaymentRef preparedRef = paymentRef(
+                151L,
+                invoice,
+                "INIT_CONFLICT",
+                "provider-order",
+                null,
+                "provider-terminal",
+                100_000L
+        );
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L)).thenReturn(List.of(preparedRef));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.confirmPaymentInitCheck(10L, null)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals("INIT_CONFLICT", preparedRef.getStatus());
+        verify(paymentRefRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void confirmPaymentInitCheckRejectsStaleEvidenceTokenForOrdinaryConflict() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("payment_init_exception: нужна ручная сверка");
+        CommonInvoicePaymentRef preparedRef = paymentRef(
+                151L,
+                invoice,
+                "INIT_CONFLICT",
+                "provider-order-new",
+                null,
+                "provider-terminal",
+                100_000L
+        );
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L)).thenReturn(List.of(preparedRef));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.confirmPaymentInitCheck(
+                        10L,
+                        new CommonInvoicePaymentInitCheckRequest("stale-evidence-token")
+                )
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals("INIT_CONFLICT", preparedRef.getStatus());
+        verify(paymentRefRepository, never()).saveAll(any());
     }
 
     @Test
@@ -4434,7 +5021,10 @@ class CommonBillingServiceTest {
 
         ResponseStatusException error = assertThrows(
                 ResponseStatusException.class,
-                () -> service.confirmPaymentInitCheck(10L)
+                () -> service.confirmPaymentInitCheck(
+                        10L,
+                        new CommonInvoicePaymentInitCheckRequest(paymentEvidenceToken(invoice, List.of()))
+                )
         );
 
         assertEquals(409, error.getStatusCode().value());
@@ -5003,6 +5593,24 @@ class CommonBillingServiceTest {
         ref.setTbankTerminalKey(terminalKey);
         ref.setAmountKopecks(amountKopecks);
         return ref;
+    }
+
+    private String paymentEvidenceToken(
+            CommonInvoice invoice,
+            List<CommonInvoicePaymentRef> refs
+    ) {
+        String token = ReflectionTestUtils.invokeMethod(service, "paymentEvidenceToken", invoice, refs);
+        assertNotNull(token);
+        return token;
+    }
+
+    private String unsentPaymentInitTlsError() {
+        return "payment_init_exception: I/O error on POST request for "
+                + "\"https://securepay.tinkoff.ru/v2/Init\": (certificate_unknown) "
+                + "PKIX path building failed: "
+                + "sun.security.provider.certpath.SunCertPathBuilderException: "
+                + "unable to find valid certification path to requested target; "
+                + "проверьте банк вручную перед повторной оплатой";
     }
 
     private CommonInvoiceOrderRepository.OrderInvoiceBindingView binding(

@@ -5,6 +5,7 @@ import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceArchivePreviewResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentInitCheckRequest;
 import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
@@ -149,8 +150,11 @@ public class CommonBillingAdminController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/attention/confirm-payment-init-check")
-    public CommonInvoiceDetailsResponse confirmPaymentInitCheck(@PathVariable Long invoiceId) {
-        return commonBillingService.confirmPaymentInitCheck(invoiceId);
+    public CommonInvoiceDetailsResponse confirmPaymentInitCheck(
+            @PathVariable Long invoiceId,
+            @RequestBody(required = false) CommonInvoicePaymentInitCheckRequest request
+    ) {
+        return commonBillingService.confirmPaymentInitCheck(invoiceId, request);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

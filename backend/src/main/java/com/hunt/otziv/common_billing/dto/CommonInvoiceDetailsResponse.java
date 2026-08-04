@@ -7,6 +7,8 @@ public record CommonInvoiceDetailsResponse(
         CommonInvoiceSummaryResponse summary,
         List<CommonInvoiceOrderResponse> orders,
         List<OrderDTOList> orderCards,
-        List<CommonInvoiceNextCycleResponse> nextCycleOrders
+        List<CommonInvoiceNextCycleResponse> nextCycleOrders,
+        List<CommonInvoicePaymentRefResponse> paymentRefs,
+        String paymentEvidenceToken
 ) {
 }

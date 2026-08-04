@@ -30,6 +30,7 @@ import { AuthService } from '../core/auth.service';
 import { businessDateIso } from '../shared/business-date';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
+import { isExplicitlyRepairableCommonInvoiceReason } from '../shared/manager-control-repair-policy';
 import {
   MANAGER_TEAM_PROGRESS_RULE,
   managerPerformanceCompact,
@@ -1457,6 +1458,9 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   }
 
   showRepair(card: ManagerControlConcreteItem): boolean {
+    if (card.type === 'COMMON_INVOICE') {
+      return isExplicitlyRepairableCommonInvoiceReason(card.reason);
+    }
     const text = `${card.type} ${card.reason || ''}`.toLowerCase();
     return card.type === 'ORDER_PAYMENT_INTEGRITY'
       || text.includes('invoice')

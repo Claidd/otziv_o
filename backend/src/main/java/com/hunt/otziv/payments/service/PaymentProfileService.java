@@ -25,6 +25,7 @@ import com.hunt.otziv.u_users.repository.ManagerRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -191,6 +192,39 @@ public class PaymentProfileService {
         return paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc().stream()
                 .filter(profile -> properties.matchesAnyTerminal(profile, clean))
                 .findFirst();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, PaymentProfile> findByTerminalKeys(Collection<String> terminalKeys) {
+        Set<String> cleanKeys = new java.util.LinkedHashSet<>();
+        for (String terminalKey : terminalKeys == null ? List.<String>of() : terminalKeys) {
+            String clean = normalize(terminalKey);
+            if (!clean.isBlank()) {
+                cleanKeys.add(clean);
+            }
+        }
+        if (cleanKeys.isEmpty()) {
+            return Map.of();
+        }
+
+        List<PaymentProfile> profiles = paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc();
+        Map<String, PaymentProfile> resolved = new HashMap<>();
+        for (PaymentProfile profile : profiles) {
+            String storedTerminal = normalize(profile == null ? null : profile.getTerminalKey());
+            if (cleanKeys.contains(storedTerminal)) {
+                resolved.putIfAbsent(storedTerminal, profile);
+            }
+        }
+        for (String terminalKey : cleanKeys) {
+            if (resolved.containsKey(terminalKey)) {
+                continue;
+            }
+            profiles.stream()
+                    .filter(profile -> properties.matchesAnyTerminal(profile, terminalKey))
+                    .findFirst()
+                    .ifPresent(profile -> resolved.put(terminalKey, profile));
+        }
+        return Map.copyOf(resolved);
     }
 
     public TbankPaymentProfile toRuntime(PaymentProfile profile) {

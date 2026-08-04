@@ -35,6 +35,11 @@ export interface CommonInvoiceSummaryResponse {
   closeReason?: string | null;
   lastError?: string | null;
   paymentSuccessNotificationError?: string | null;
+  tbankOrderId?: string | null;
+  tbankPaymentId?: string | null;
+  tbankPaymentAmountKopecks?: number | null;
+  tbankTerminalLabel?: string | null;
+  tbankTerminalKey?: string | null;
 }
 
 export interface CommonBillingAccountResponse {
@@ -94,11 +99,24 @@ export interface ManualPaymentConfirmationRequest {
   receiptUrl: string;
 }
 
+export interface CommonInvoicePaymentRefResponse {
+  id: number;
+  status: string;
+  orderId?: string | null;
+  paymentId?: string | null;
+  amountKopecks?: number | null;
+  reason?: string | null;
+  terminalLabel?: string | null;
+  terminalKey?: string | null;
+}
+
 export interface CommonInvoiceDetailsResponse {
   summary: CommonInvoiceSummaryResponse;
   orders: CommonInvoiceOrderResponse[];
   orderCards: OrderCardItem[];
   nextCycleOrders: CommonInvoiceNextCycleResponse[];
+  paymentRefs?: CommonInvoicePaymentRefResponse[];
+  paymentEvidenceToken?: string | null;
 }
 
 export interface CommonInvoiceArchiveOrderPreview {
@@ -281,10 +299,13 @@ export class CommonBillingApi {
     );
   }
 
-  confirmPaymentInitCheck(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+  confirmPaymentInitCheck(
+    invoiceId: number,
+    evidenceToken?: string | null
+  ): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/attention/confirm-payment-init-check`,
-      {}
+      { evidenceToken: evidenceToken ?? null }
     );
   }
 

@@ -105,10 +105,14 @@ import { MobileConfirmService } from './mobile-confirm.service';
     }
 
     .confirm-message {
+      max-height: min(52vh, 28rem);
+      overflow: auto;
       color: var(--otziv-dark);
       font-size: 0.86rem;
       font-weight: 800;
       line-height: 1.35;
+      overflow-wrap: anywhere;
+      white-space: pre-line;
     }
 
     footer {

@@ -202,6 +202,40 @@ class PaymentProfileServiceTest {
         assertEquals("https://pay.example/replacement", response.profiles().get(0).manualPaymentUrl());
     }
 
+    @Test
+    void terminalProfilesAreResolvedInOneBatchRead() {
+        PaymentProfile first = profile();
+        first.setId(21L);
+        first.setTerminalKey("terminal-one");
+        first.setName("Первый магазин");
+        PaymentProfile second = profile();
+        second.setId(22L);
+        second.setTerminalKey("terminal-two");
+        second.setName("Второй магазин");
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(first, second));
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService
+        );
+
+        var profiles = service.findByTerminalKeys(List.of(
+                " terminal-two ",
+                "terminal-one",
+                "unknown-terminal"
+        ));
+
+        assertEquals(first, profiles.get("terminal-one"));
+        assertEquals(second, profiles.get("terminal-two"));
+        assertFalse(profiles.containsKey("unknown-terminal"));
+        verify(paymentProfileRepository).findAllByOrderByDefaultProfileDescNameAsc();
+        verify(paymentProfileRepository, never()).findByTerminalKey("terminal-one");
+        verify(paymentProfileRepository, never()).findByTerminalKey("terminal-two");
+    }
+
     private Manager manager(PaymentProfile profile) {
         User user = new User();
         user.setId(10L);

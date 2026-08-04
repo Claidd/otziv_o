@@ -29,6 +29,7 @@ import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.common_billing.service.CommonPaymentInitFailureClassifier;
 import com.hunt.otziv.common_billing.service.CommonInvoicePublicationBlockerService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
@@ -75,6 +76,7 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
+import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
 import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
@@ -281,6 +283,7 @@ public class ManagerControlService {
     private final CommonInvoicePublicationBlockerService commonInvoicePublicationBlockerService;
     private final ManagerAutomationFailureService managerAutomationFailureService;
     private final CommonBillingService commonBillingService;
+    private final ManagerControlInvoiceOperationExecutor invoiceOperationExecutor;
     private final OrderPublicationApprovalService publicationApprovalService;
     private final WorkerRiskIncidentRepository riskIncidentRepository;
     private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
@@ -1298,7 +1301,20 @@ public class ManagerControlService {
         if (invoiceId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У карточки общего счета нет ID счета");
         }
-        CommonInvoice invoice = commonInvoiceRepository.findById(invoiceId)
+        CommonInvoiceRepairOutcome outcome = invoiceOperationExecutor.execute(
+                () -> repairCommonInvoiceOutsideControlTransaction(invoiceId)
+        );
+        return resolveRepairedConcreteItem(
+                concreteItem,
+                control,
+                outcome.comment(),
+                principal,
+                outcome.eventDescription()
+        );
+    }
+
+    private CommonInvoiceRepairOutcome repairCommonInvoiceOutsideControlTransaction(Long invoiceId) {
+        CommonInvoice invoice = commonInvoiceRepository.findByIdWithAccount(invoiceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING
                 && commonInvoicePublicationBlockerService.hasOverdueBlockers(
@@ -1314,6 +1330,7 @@ public class ManagerControlService {
         if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING
                 || invoice.getStatus() == CommonInvoiceStatus.READY) {
             CommonInvoiceDetailsResponse details = commonBillingService.invoice(invoiceId);
+            boolean sent = false;
             if (details != null
                     && details.summary() != null
                     && CommonInvoiceStatus.COLLECTING.name().equals(details.summary().status())
@@ -1327,6 +1344,7 @@ public class ManagerControlService {
                     && details.summary() != null
                     && CommonInvoiceStatus.READY.name().equals(details.summary().status())) {
                 details = commonBillingService.sendInvoice(invoiceId, true);
+                sent = true;
             }
             String status = details == null || details.summary() == null
                     ? ""
@@ -1337,12 +1355,9 @@ public class ManagerControlService {
             if (CommonInvoiceStatus.COLLECTING.name().equals(status)) {
                 int ready = details.summary().readyOrders();
                 int total = details.summary().totalOrders();
-                return resolveRepairedConcreteItem(
-                        concreteItem,
-                        control,
+                return new CommonInvoiceRepairOutcome(
                         "Счет исправен и остается в сборе: " + Math.max(0, total - ready)
                                 + " из " + total + " заказов еще в работе. Карточка убрана из замечаний.",
-                        principal,
                         "Исключен исправный общий счет с незавершенными заказами"
                 );
             }
@@ -1352,11 +1367,24 @@ public class ManagerControlService {
                         "Счет обработан, но автоматическая отправка не прошла: " + limit(lastError, 220)
                 );
             }
-            return resolveRepairedConcreteItem(
-                    concreteItem,
-                    control,
+            if (!sent) {
+                if (Set.of(
+                        CommonInvoiceStatus.INVOICED.name(),
+                        CommonInvoiceStatus.REMINDER.name(),
+                        CommonInvoiceStatus.PARTIALLY_PAID.name()
+                ).contains(status)) {
+                    return new CommonInvoiceRepairOutcome(
+                            "Общий счет уже был отправлен клиенту; карточка контроля перепроверена",
+                            "Перепроверен уже отправленный общий счет"
+                    );
+                }
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Счет пересчитан, но не перешел в состояние, из которого его можно отправить"
+                );
+            }
+            return new CommonInvoiceRepairOutcome(
                     "Позиции общего счета пересчитаны, готовые заказы одобрены, счет отправлен клиенту",
-                    principal,
                     "Пересчитан и отправлен зависший общий счет"
             );
         }
@@ -1371,12 +1399,70 @@ public class ManagerControlService {
                         "Напоминание по общему счету не отправлено: " + limit(lastError, 220)
                 );
             }
-            return resolveRepairedConcreteItem(
-                    concreteItem,
-                    control,
+            return new CommonInvoiceRepairOutcome(
                     "Клиенту отправлено напоминание по зависшему общему счету",
-                    principal,
                     "Повторно отправлено напоминание по общему счету"
+            );
+        }
+        if (commonInvoiceUnsentTlsInitRepairable(invoice)) {
+            CommonInvoiceDetailsResponse details = commonBillingService.recoverUnsentPaymentInitTlsFailure(invoiceId);
+            String recoveredStatus = details == null || details.summary() == null
+                    ? ""
+                    : safe(details.summary().status());
+            String recoveredError = details == null || details.summary() == null
+                    ? ""
+                    : safe(details.summary().lastError());
+            if (!recoveredError.isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "TLS-сбой снят, но счет остался с ошибкой: " + limit(recoveredError, 180)
+                );
+            }
+            if (CommonInvoiceStatus.COLLECTING.name().equals(recoveredStatus)) {
+                return new CommonInvoiceRepairOutcome(
+                        "TLS-сбой T-Bank снят; общий счет безопасно возвращен в сбор",
+                        "Безопасно снят TLS-сбой создания платежной ссылки"
+                );
+            }
+            boolean shouldSend = CommonInvoiceStatus.READY.name().equals(recoveredStatus)
+                    || CommonInvoiceStatus.PARTIALLY_PAID.name().equals(recoveredStatus);
+            if (shouldSend) {
+                details = commonBillingService.sendInvoice(invoiceId, true);
+            }
+            String status = details == null || details.summary() == null ? "" : safe(details.summary().status());
+            String lastError = details == null || details.summary() == null ? "" : safe(details.summary().lastError());
+            if (!lastError.isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "TLS-сбой снят, но повторная отправка счета не прошла: " + limit(lastError, 180)
+                );
+            }
+            if (!shouldSend) {
+                if (Set.of(
+                        CommonInvoiceStatus.PAID.name(),
+                        CommonInvoiceStatus.ARCHIVED.name(),
+                        CommonInvoiceStatus.DISABLED.name()
+                ).contains(recoveredStatus)) {
+                    return new CommonInvoiceRepairOutcome(
+                            "TLS-сбой T-Bank снят; повторная отправка не требуется, счет перешел в статус «"
+                                    + commonInvoiceStatusLabel(CommonInvoiceStatus.valueOf(recoveredStatus)) + "»",
+                            "Безопасно снят TLS-сбой без повторной отправки закрытого счета"
+                    );
+                }
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "TLS-сбой снят, но счет не перешел в состояние для безопасной повторной отправки"
+                );
+            }
+            if (details == null || details.summary() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "TLS-сбой снят, но результат повторной отправки счета не подтвержден"
+                );
+            }
+            return new CommonInvoiceRepairOutcome(
+                    "TLS-сбой T-Bank снят; новая платежная ссылка создана и счет повторно отправлен клиенту",
+                    "Безопасно повторено создание платежной ссылки после сбоя TLS до отправки запроса"
             );
         }
         if (commonInvoiceMessageSendRepairable(invoice)) {
@@ -1388,21 +1474,15 @@ public class ManagerControlService {
                         "Повторная отправка общего счета не прошла: " + limit(lastError, 180)
                 );
             }
-            return resolveRepairedConcreteItem(
-                    concreteItem,
-                    control,
+            return new CommonInvoiceRepairOutcome(
                     "Общий счет повторно отправлен клиенту",
-                    principal,
                     "Повторно отправлен общий счет после ошибки клиентского чата"
             );
         }
         if (commonInvoicePaymentNotificationRepairable(invoice)) {
             commonBillingService.resolvePaymentSuccessNotification(invoiceId);
-            return resolveRepairedConcreteItem(
-                    concreteItem,
-                    control,
+            return new CommonInvoiceRepairOutcome(
                     "Ошибка уведомления об оплате закрыта",
-                    principal,
                     "Закрыта ошибка уведомления об оплате общего счета"
             );
         }
@@ -1415,11 +1495,8 @@ public class ManagerControlService {
                         "Повторное одобрение не прошло: " + limit(lastError, 180)
                 );
             }
-            return resolveRepairedConcreteItem(
-                    concreteItem,
-                    control,
+            return new CommonInvoiceRepairOutcome(
                     "Даты назначены, заказы общего счета переведены в публикацию",
-                    principal,
                     "Повторно выполнено массовое одобрение с назначением дат"
             );
         }
@@ -1432,32 +1509,22 @@ public class ManagerControlService {
                         "Повторное создание следующих заказов не прошло: " + limit(lastError, 180)
                 );
             }
-            return resolveRepairedConcreteItem(
-                    concreteItem,
-                    control,
+            return new CommonInvoiceRepairOutcome(
                     "Повторное создание следующих заказов запущено",
-                    principal,
                     "Повторно обработан общий счет после ошибки создания следующих заказов"
             );
         }
         if (commonInvoiceWhatsappGroupTailRepairable(invoice)) {
-            invoice.setLastError(null);
-            commonInvoiceRepository.save(invoice);
-            return resolveRepairedConcreteItem(
-                    concreteItem,
-                    control,
+            commonBillingService.resolveWhatsappGroupTail(invoiceId);
+            return new CommonInvoiceRepairOutcome(
                     "Старый хвост WhatsApp groupId скрыт из контроля",
-                    principal,
                     "Закрыта устаревшая ошибка WhatsApp groupId общего счета"
             );
         }
         if (commonInvoiceTechnicalTailRepairable(invoice)) {
             commonBillingService.resolveTechnicalTail(invoiceId);
-            return resolveRepairedConcreteItem(
-                    concreteItem,
-                    control,
+            return new CommonInvoiceRepairOutcome(
                     "Технический хвост общего счета скрыт из контроля",
-                    principal,
                     "Закрыт технический хвост общего счета"
             );
         }
@@ -5862,7 +5929,7 @@ public class ManagerControlService {
     ) {
         String lastError = safe(invoice.getLastError());
         if (!lastError.isBlank()) {
-            return commonInvoiceLastErrorReason(invoice, lastError);
+            return commonInvoiceLastErrorReason(invoice, lastError, items);
         }
         String notificationError = safe(invoice.getPaymentSuccessNotificationError());
         if (!notificationError.isBlank()) {
@@ -5921,7 +5988,11 @@ public class ManagerControlService {
                 + " дн. Нажмите «Починить»: система проверит текущий шаг и выполнит безопасное продолжение.";
     }
 
-    private String commonInvoiceLastErrorReason(CommonInvoice invoice, String rawError) {
+    private String commonInvoiceLastErrorReason(
+            CommonInvoice invoice,
+            String rawError,
+            List<CommonInvoiceOrder> items
+    ) {
         String error = safe(rawError).toLowerCase(Locale.ROOT);
         if (error.startsWith("manual_fix:") && error.contains("moved_to_invoice_")) {
             String targetInvoice = valueAfter(error, "moved_to_invoice_");
@@ -5955,6 +6026,15 @@ public class ManagerControlService {
             return "Отправка сообщения по счету зависла. Рекомендация: откройте «Счет» и повторите отправку вручную.";
         }
         if (error.startsWith("payment_init")) {
+            if (commonInvoiceUnsentTlsInitRepairable(invoice)) {
+                if (commonInvoiceHasCompetingStandalonePayment(items)) {
+                    return "Создание платежной ссылки остановилось на проверке сертификата, но у одного из заказов "
+                            + "есть отдельный незавершенный платеж. Откройте «Счет» и сначала сверьте этот платеж вручную.";
+                }
+                return "Создание платежной ссылки остановилось на проверке сертификата до отправки запроса в T-Bank. "
+                        + "Сертификат уже доступен текущему backend. Рекомендация: нажмите «Починить», "
+                        + "чтобы безопасно удалить незавершенную попытку и повторно отправить счет.";
+            }
             return "Проблема при создании платежной ссылки T-Bank. Рекомендация: откройте «Счет» и сверьте состояние платежа в банке.";
         }
         if (error.startsWith("close_failed")) {
@@ -6091,6 +6171,31 @@ public class ManagerControlService {
                 || error.startsWith("max_group_missing");
     }
 
+    private boolean commonInvoiceUnsentTlsInitRepairable(CommonInvoice invoice) {
+        return invoice != null
+                && invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
+                && safe(invoice.getTbankOrderId()).isBlank()
+                && safe(invoice.getTbankPaymentId()).isBlank()
+                && safe(invoice.getTbankTerminalKey()).isBlank()
+                && invoice.getTbankPaymentAmountKopecks() == null
+                && invoice.getTbankPaymentCreatedAt() == null
+                && safe(invoice.getPaymentUrl()).isBlank()
+                && CommonPaymentInitFailureClassifier.isPersistedTlsBeforeHttpFailure(invoice.getLastError());
+    }
+
+    private boolean commonInvoiceHasCompetingStandalonePayment(List<CommonInvoiceOrder> items) {
+        List<Long> orderIds = (items == null ? List.<CommonInvoiceOrder>of() : items).stream()
+                .map(CommonInvoiceOrder::getOrder)
+                .filter(Objects::nonNull)
+                .map(Order::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        return !orderIds.isEmpty()
+                && paymentLinkRepository.findByOrderIdInForRead(orderIds).stream()
+                .anyMatch(StandaloneBankPaymentPolicy::blocksCommonInvoiceTlsRecovery);
+    }
+
     private boolean commonInvoicePaymentNotificationRepairable(CommonInvoice invoice) {
         return !safe(invoice == null ? null : invoice.getPaymentSuccessNotificationError()).isBlank();
     }
@@ -6166,6 +6271,9 @@ public class ManagerControlService {
     }
 
     private record CommonInvoiceChatBinding(Company primaryCompany, Company linkedCompanyWithGroup) {
+    }
+
+    private record CommonInvoiceRepairOutcome(String comment, String eventDescription) {
     }
 
     private String valueAfter(String value, String marker) {

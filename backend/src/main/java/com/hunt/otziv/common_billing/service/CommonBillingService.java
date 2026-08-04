@@ -16,6 +16,8 @@ import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceNextCycleResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceOrderResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRefResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentInitCheckRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse;
 import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.dto.PublicCommonInvoiceResponse;
@@ -64,6 +66,7 @@ import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.service.PaymentProfileService;
+import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
 import com.hunt.otziv.payments.service.PaymentUrlPolicy;
 import com.hunt.otziv.payments.service.TbankClient;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
@@ -76,6 +79,9 @@ import com.hunt.otziv.u_users.services.service.UserService;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -113,6 +119,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -269,6 +276,14 @@ public class CommonBillingService {
             "REVERSED",
             "PARTIAL_REVERSED"
     );
+    private static final Set<String> PAYMENT_INIT_TLS_RECOVERY_ALLOWED_REF_STATUSES = Set.of(
+            PAYMENT_REF_INIT_PREPARED,
+            PAYMENT_REF_INIT_CONFLICT,
+            PAYMENT_REF_CANCELED,
+            "REJECTED",
+            "REFUNDED",
+            "REVERSED"
+    );
     private static final Set<String> DELETION_DETACH_BLOCKING_PAYMENT_REF_STATUSES = Set.of(
             PAYMENT_REF_CONFIRMED,
             PAYMENT_REF_PREPAID,
@@ -339,6 +354,14 @@ public class CommonBillingService {
     private static final String PAYMENT_INIT_STALE = "payment_init_stale";
     private static final String PAYMENT_CANCEL_FAILED_FINAL = "payment_cancel_failed_final";
     private static final String MESSAGE_SEND_STALE = "message_send_stale";
+    private static final String MIGRATION_PAYMENT_REGISTRY_ATTENTION = "migration_common_payment_registry:";
+    private static final String MIGRATION_PAYMENT_REGISTRY_MANUAL_CONFIRM_REASON =
+            "nonterminal_or_unknown_payment_ref_on_invoice";
+    private static final String PAYMENT_INIT_TLS_SAFE_ARCHIVED_REASON_PREFIX =
+            "payment_init_tls_failed_before_http_request";
+    private static final String PAYMENT_INIT_MANUALLY_CHECKED_REASON = "payment_init_manually_checked";
+    private static final String PAYMENT_INIT_MANUALLY_CHECKED_BY_PREFIX =
+            PAYMENT_INIT_MANUALLY_CHECKED_REASON + "_by=";
     private static final String INVOICE_MEMBERSHIP_CHANGED = "common_invoice_membership_changed";
     private static final Set<String> RESOLVABLE_TECHNICAL_TAIL_ERROR_PREFIXES = Set.of(
             "disabled:",
@@ -1274,7 +1297,15 @@ public class CommonBillingService {
             invoice.setNextReminderAt(null);
             invoice.setLastError("empty: в общем счете нет заказов");
             invoiceRepository.save(invoice);
-            return new CommonInvoiceDetailsResponse(toInvoiceSummary(invoice, List.of()), List.of(), List.of(), List.of());
+            List<CommonInvoicePaymentRef> paymentRefs = paymentRefEvidenceRows(invoice);
+            return new CommonInvoiceDetailsResponse(
+                    toInvoiceSummary(invoice, List.of()),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    toPaymentRefEvidence(paymentRefs, Map.of()),
+                    paymentEvidenceToken(invoice, paymentRefs)
+            );
         }
         if (isInvoiceReady(invoiceId) && invoice.getStatus() == CommonInvoiceStatus.COLLECTING) {
             invoice.setStatus(CommonInvoiceStatus.READY);
@@ -1454,8 +1485,16 @@ public class CommonBillingService {
 
     @Transactional
     public CommonInvoiceDetailsResponse confirmPaymentInitCheck(Long invoiceId) {
-        CommonInvoice invoice = lockedInvoice(invoiceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        return confirmPaymentInitCheck(invoiceId, null);
+    }
+
+    @Transactional
+    public CommonInvoiceDetailsResponse confirmPaymentInitCheck(
+            Long invoiceId,
+            CommonInvoicePaymentInitCheckRequest request
+    ) {
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureCommonInvoiceNeedsAttention(invoice);
         if (!isPaymentInitManualCheckAttention(invoice)) {
@@ -1463,7 +1502,52 @@ public class CommonBillingService {
         }
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         ensureNoRecordedFullPaymentWithOpenItems(invoice, items);
+        List<CommonInvoicePaymentRef> refs = paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId());
+        ensurePaymentEvidenceSnapshotMatches(invoice, refs, request);
+        if (isMigrationPaymentRegistryAttention(invoice)) {
+            ensureMigrationPaymentRegistryCanBeManuallyResolved(
+                    invoice,
+                    refs,
+                    paymentPrelude.paymentLinksByOrder()
+            );
+        }
         resolvePreparedPaymentInitAfterManualCheck(invoice);
+        resolveAttentionByCurrentItems(invoice, items);
+        return invoiceAfterOrderPrelude(invoiceId);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public CommonInvoiceDetailsResponse recoverUnsentPaymentInitTlsFailure(Long invoiceId) {
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        ensureCommonInvoiceNeedsAttention(invoice);
+        if (!isDefinitelyUnsentPaymentInitTlsFailure(invoice)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автопочинка доступна только для TLS-сбоя, который произошел до отправки запроса в T-Bank"
+            );
+        }
+        ensureInvoiceHasNoCurrentProviderEvidence(invoice);
+
+        List<CommonInvoicePaymentRef> refs = paymentRefRepository.findByInvoiceIdForUpdate(invoiceId);
+        ensureUnsentTlsPaymentRefsCanBeRecovered(invoice, refs);
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        ensureNoCompetingStandalonePaymentLinks(paymentPrelude.paymentLinksByOrder());
+        List<CommonInvoicePaymentRef> recoverableRefs = refs.stream()
+                .filter(this::isPreparedPaymentRef)
+                .toList();
+        recoverableRefs.forEach(ref -> {
+                    String previousReason = normalize(ref.getReason());
+                    ref.setStatus(PAYMENT_REF_ARCHIVED);
+                    ref.setReason(limit(
+                            PAYMENT_INIT_TLS_SAFE_ARCHIVED_REASON_PREFIX
+                                    + (previousReason.isBlank() ? "" : "; previous=" + previousReason),
+                            160
+                    ));
+                });
+        paymentRefRepository.saveAll(recoverableRefs);
+
         resolveAttentionByCurrentItems(invoice, items);
         return invoiceAfterOrderPrelude(invoiceId);
     }
@@ -1479,6 +1563,22 @@ public class CommonBillingService {
         invoice.setNextReminderAt(null);
         invoiceRepository.save(invoice);
         return invoiceAfterOrderPrelude(invoiceId);
+    }
+
+    @Transactional
+    public void resolveWhatsappGroupTail(Long invoiceId) {
+        CommonInvoice invoice = lockedInvoice(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        String error = attentionError(invoice);
+        if (!(error.startsWith("whatsapp_group_missing") || error.contains("whatsapp-групп"))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ошибка WhatsApp общего счета уже изменилась; обновите карточку контроля"
+            );
+        }
+        invoice.setLastError(null);
+        invoiceRepository.save(invoice);
     }
 
     @Transactional
@@ -1956,8 +2056,17 @@ public class CommonBillingService {
                     OffsetDateTime.now(MOSCOW_ZONE).plus(properties.getRedirectDue())
             ));
         } catch (RuntimeException e) {
+            boolean tlsCertificateFailureBeforeHttp =
+                    CommonPaymentInitFailureClassifier.isCertificateTlsFailureBeforeHttpResponse(e);
+            String persistedError = (tlsCertificateFailureBeforeHttp
+                    ? CommonPaymentInitFailureClassifier.TLS_BEFORE_HTTP_ERROR_CODE
+                    : "payment_init_exception")
+                    + ": " + readableException(e);
+            String paymentRefReason = tlsCertificateFailureBeforeHttp
+                    ? CommonPaymentInitFailureClassifier.TLS_BEFORE_HTTP_REF_REASON
+                    : CommonPaymentInitFailureClassifier.LEGACY_TLS_BEFORE_HTTP_REF_REASON;
             writeTransaction(() -> {
-                failPaymentInit(prepared, "payment_init_exception: " + readableException(e));
+                failPaymentInit(prepared, persistedError, paymentRefReason);
                 return null;
             });
             throw e;
@@ -2504,12 +2613,16 @@ public class CommonBillingService {
         }
     }
 
-    private void failPaymentInit(PreparedCommonPaymentInit prepared, String error) {
+    private void failPaymentInit(
+            PreparedCommonPaymentInit prepared,
+            String error,
+            String paymentRefReason
+    ) {
         CommonInvoice invoice = lockedInvoice(prepared.invoiceId()).orElse(null);
         if (invoice == null || !PAYMENT_INIT_IN_PROGRESS.equals(normalize(invoice.getLastError()))) {
             return;
         }
-        markPreparedPaymentInitConflict(invoice, prepared, "init_exception_before_response");
+        markPreparedPaymentInitConflict(invoice, prepared, paymentRefReason);
         if (matchesPreparedCurrentIntent(invoice, prepared)) {
             clearCurrentPaymentRef(invoice);
         } else {
@@ -3160,6 +3273,25 @@ public class CommonBillingService {
         Optional<CommonInvoice> invoice = lockedInvoiceAfterOrderPrelude(invoiceId);
         invoice.ifPresent(ignored -> ensureInvoiceMembershipUnchanged(invoiceId, lockedOrderIds));
         return invoice;
+    }
+
+    /**
+     * Establishes the same lock order used by standalone payment mutations:
+     * Order aggregates, their PaymentLink rows, and only then the common invoice.
+     * Membership is checked again while all locks are held so a pre-lock snapshot
+     * can never authorize or reconcile a different invoice composition.
+     */
+    private LockedInvoicePaymentPrelude lockedInvoiceAfterStandalonePaymentPrelude(Long invoiceId) {
+        Set<Long> lockedOrderIds = lockInvoiceOrderAggregates(invoiceId);
+        Map<Long, List<PaymentLink>> paymentLinksByOrder = new HashMap<>();
+        for (Long orderId : new TreeSet<>(lockedOrderIds)) {
+            List<PaymentLink> lockedLinks = paymentLinkRepository.findByOrderIdForUpdate(orderId);
+            paymentLinksByOrder.put(orderId, lockedLinks == null ? List.of() : List.copyOf(lockedLinks));
+        }
+        CommonInvoice invoice = lockedInvoiceAfterOrderPrelude(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        ensureInvoiceMembershipUnchanged(invoiceId, lockedOrderIds);
+        return new LockedInvoicePaymentPrelude(invoice, Map.copyOf(paymentLinksByOrder));
     }
 
     private Optional<CommonInvoice> lockedInvoiceAfterOrderPrelude(Long invoiceId) {
@@ -4522,6 +4654,12 @@ public class CommonBillingService {
 
     private void ensureAttentionCanBeRetried(CommonInvoice invoice) {
         String error = attentionError(invoice);
+        if (isMigrationPaymentRegistryAttention(invoice)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Платеж из миграционного реестра нельзя повторять до ручной сверки T-Bank"
+            );
+        }
         if (isLatePaymentAttention(invoice)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -4544,6 +4682,12 @@ public class CommonBillingService {
 
     private void ensureAttentionCanBeResolved(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         String error = attentionError(invoice);
+        if (isMigrationPaymentRegistryAttention(invoice)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Миграционный платежный карантин нельзя закрыть без ручной сверки T-Bank"
+            );
+        }
         if (isLatePaymentAttention(invoice)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -4631,7 +4775,211 @@ public class CommonBillingService {
                 || error.startsWith("payment_init_response_collision")
                 || error.startsWith("payment_init_invalid_url")
                 || error.startsWith("payment_cached_invalid_url")
-                || error.startsWith("tbank_init_failed");
+                || error.startsWith("tbank_init_failed")
+                || isManuallyConfirmableMigrationPaymentRegistryAttention(invoice);
+    }
+
+    private boolean isMigrationPaymentRegistryAttention(CommonInvoice invoice) {
+        return attentionError(invoice).startsWith(MIGRATION_PAYMENT_REGISTRY_ATTENTION);
+    }
+
+    private boolean isManuallyConfirmableMigrationPaymentRegistryAttention(CommonInvoice invoice) {
+        String error = attentionError(invoice);
+        if (!error.startsWith(MIGRATION_PAYMENT_REGISTRY_ATTENTION)) {
+            return false;
+        }
+        String reason = error.substring(MIGRATION_PAYMENT_REGISTRY_ATTENTION.length());
+        int separator = reason.indexOf(';');
+        if (separator >= 0) {
+            reason = reason.substring(0, separator);
+        }
+        return MIGRATION_PAYMENT_REGISTRY_MANUAL_CONFIRM_REASON.equals(reason.trim());
+    }
+
+    private boolean isDefinitelyUnsentPaymentInitTlsFailure(CommonInvoice invoice) {
+        return CommonPaymentInitFailureClassifier.isPersistedTlsBeforeHttpFailure(
+                invoice == null ? null : invoice.getLastError()
+        );
+    }
+
+    private void ensureInvoiceHasNoCurrentProviderEvidence(CommonInvoice invoice) {
+        boolean hasProviderEvidence = !normalize(invoice.getTbankOrderId()).isBlank()
+                || !normalize(invoice.getTbankPaymentId()).isBlank()
+                || !normalize(invoice.getTbankTerminalKey()).isBlank()
+                || invoice.getTbankPaymentAmountKopecks() != null
+                || invoice.getTbankPaymentCreatedAt() != null
+                || !normalize(invoice.getPaymentUrl()).isBlank();
+        if (hasProviderEvidence) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автопочинка остановлена: в общем счете уже есть реквизиты платежа T-Bank"
+            );
+        }
+    }
+
+    private void ensureUnsentTlsPaymentRefsCanBeRecovered(
+            CommonInvoice invoice,
+            List<CommonInvoicePaymentRef> refs
+    ) {
+        List<CommonInvoicePaymentRef> safeRefs = refs == null ? List.of() : refs;
+        if (safeRefs.stream().anyMatch(ref -> !isTlsRecoveryAllowedPaymentRef(ref))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автопочинка остановлена: платежный реестр содержит активное или неизвестное состояние"
+            );
+        }
+        List<CommonInvoicePaymentRef> unresolved = safeRefs.stream()
+                .filter(this::isPreparedPaymentRef)
+                .toList();
+        if (unresolved.size() != 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автопочинка остановлена: не найден единственный незавершенный TLS-запрос"
+            );
+        }
+        CommonInvoicePaymentRef ref = unresolved.getFirst();
+        String expectedReason = CommonPaymentInitFailureClassifier.isExactKnownLegacyTlsFailure(
+                invoice == null ? null : invoice.getLastError()
+        )
+                ? CommonPaymentInitFailureClassifier.LEGACY_TLS_BEFORE_HTTP_REF_REASON
+                : CommonPaymentInitFailureClassifier.TLS_BEFORE_HTTP_REF_REASON;
+        boolean exactPreRequestFailure = expectedReason.equals(normalize(ref.getReason()))
+                && !normalize(ref.getTbankOrderId()).isBlank()
+                && normalize(ref.getTbankPaymentId()).isBlank()
+                && !normalize(ref.getTbankTerminalKey()).isBlank()
+                && ref.getAmountKopecks() != null
+                && ref.getAmountKopecks() > 0;
+        if (!exactPreRequestFailure) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автопочинка остановлена: в платежном реестре есть неполные или неоднозначные данные"
+            );
+        }
+    }
+
+    private boolean isTlsRecoveryAllowedPaymentRef(CommonInvoicePaymentRef ref) {
+        String status = paymentRefStatus(ref);
+        if (PAYMENT_REF_ARCHIVED.equals(status)) {
+            return isStrictlySafeArchivedPaymentRef(ref);
+        }
+        return PAYMENT_INIT_TLS_RECOVERY_ALLOWED_REF_STATUSES.contains(status);
+    }
+
+    private boolean isStrictlySafeArchivedPaymentRef(CommonInvoicePaymentRef ref) {
+        String reason = normalize(ref == null ? null : ref.getReason()).toLowerCase(Locale.ROOT);
+        if (reason.startsWith(PAYMENT_INIT_MANUALLY_CHECKED_BY_PREFIX)
+                || PAYMENT_INIT_MANUALLY_CHECKED_REASON.equals(reason)) {
+            return true;
+        }
+        return reason.startsWith(PAYMENT_INIT_TLS_SAFE_ARCHIVED_REASON_PREFIX)
+                && normalize(ref == null ? null : ref.getTbankPaymentId()).isBlank();
+    }
+
+    private void ensureNoCompetingStandalonePaymentLinks(
+            Map<Long, List<PaymentLink>> paymentLinksByOrder
+    ) {
+        for (Map.Entry<Long, List<PaymentLink>> entry : (paymentLinksByOrder == null
+                ? Map.<Long, List<PaymentLink>>of()
+                : paymentLinksByOrder).entrySet()) {
+            boolean competing = entry.getValue().stream()
+                    .anyMatch(StandaloneBankPaymentPolicy::blocksCommonInvoiceTlsRecovery);
+            if (competing) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Автопочинка остановлена: у заказа #" + entry.getKey()
+                                + " есть отдельный незавершенный платеж. Сначала сверьте и закройте его вручную."
+                );
+            }
+        }
+    }
+
+    private void ensureMigrationPaymentRegistryCanBeManuallyResolved(
+            CommonInvoice invoice,
+            List<CommonInvoicePaymentRef> refs,
+            Map<Long, List<PaymentLink>> paymentLinksByOrder
+    ) {
+        if (!isManuallyConfirmableMigrationPaymentRegistryAttention(invoice)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Этот тип миграционного платежного конфликта нельзя закрыть из карточки счета"
+            );
+        }
+        if (refs.stream().anyMatch(ref ->
+                !PREPARED_PAYMENT_REF_LIFECYCLE_STATUSES.contains(paymentRefStatus(ref)))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ручная сверка остановлена: платежный реестр содержит неизвестное состояние"
+            );
+        }
+        if (refs.stream().anyMatch(ref ->
+                PAYMENT_INIT_MANUAL_BLOCKING_REF_STATUSES.contains(paymentRefStatus(ref)))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ручная сверка остановлена: платеж активен, отменяется или уже применен"
+            );
+        }
+
+        String invoiceOrderId = normalize(invoice.getTbankOrderId());
+        String invoicePaymentId = normalize(invoice.getTbankPaymentId());
+        String invoiceTerminalKey = normalize(invoice.getTbankTerminalKey());
+        Long invoiceAmount = invoice.getTbankPaymentAmountKopecks();
+        if (invoiceOrderId.isBlank() || invoicePaymentId.isBlank()
+                || invoiceTerminalKey.isBlank() || invoiceAmount == null || invoiceAmount <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ручная сверка остановлена: сохраненные реквизиты T-Bank неполны"
+            );
+        }
+
+        List<CommonInvoicePaymentRef> unresolved = refs.stream()
+                .filter(this::isPreparedPaymentRef)
+                .toList();
+        if (unresolved.size() != 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ручная сверка остановлена: найдено неоднозначное число незавершенных платежей"
+            );
+        }
+        CommonInvoicePaymentRef ref = unresolved.getFirst();
+        boolean completeReconciliationEvidence = !normalize(ref.getTbankOrderId()).isBlank()
+                && !normalize(ref.getTbankTerminalKey()).isBlank()
+                && invoiceTerminalKey.equals(normalize(ref.getTbankTerminalKey()))
+                && ref.getAmountKopecks() != null
+                && invoiceAmount.equals(ref.getAmountKopecks());
+        if (!completeReconciliationEvidence) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ручная сверка остановлена: в платежном реестре недостаточно данных для проверки T-Bank"
+            );
+        }
+        ensureNoCompetingStandalonePaymentLinks(paymentLinksByOrder);
+    }
+
+    private void ensurePaymentEvidenceSnapshotMatches(
+            CommonInvoice invoice,
+            List<CommonInvoicePaymentRef> refs,
+            CommonInvoicePaymentInitCheckRequest request
+    ) {
+        String supplied = normalize(request == null ? null : request.evidenceToken());
+        String current = normalize(paymentEvidenceToken(invoice, filterPaymentRefEvidenceRows(refs)));
+        if (supplied.isBlank() || current.isBlank() || !MessageDigest.isEqual(
+                supplied.getBytes(StandardCharsets.UTF_8),
+                current.getBytes(StandardCharsets.UTF_8)
+        )) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Платежные данные изменились или открыты в устаревшей карточке. Обновите счет и повторите сверку."
+            );
+        }
+    }
+
+    private boolean isPreparedPaymentRef(CommonInvoicePaymentRef ref) {
+        String status = paymentRefStatus(ref);
+        return PAYMENT_REF_INIT_PREPARED.equals(status) || PAYMENT_REF_INIT_CONFLICT.equals(status);
+    }
+
+    private String paymentRefStatus(CommonInvoicePaymentRef ref) {
+        return normalize(ref == null ? null : ref.getStatus()).toUpperCase(Locale.ROOT);
     }
 
     private String attentionError(CommonInvoice invoice) {
@@ -4902,36 +5250,13 @@ public class CommonBillingService {
         // committed while CommonBilling was waiting for the Order lock.
         boolean competingPayment = paymentLinkRepository.findByOrderIdForUpdate(order.getId())
                 .stream()
-                .anyMatch(this::hasStartedStandaloneBankPayment);
+                .anyMatch(StandaloneBankPaymentPolicy::hasStartedProviderPayment);
         if (competingPayment) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед закрытием общего счета."
             );
         }
-    }
-
-    private boolean hasStartedStandaloneBankPayment(PaymentLink link) {
-        if (link == null) {
-            return false;
-        }
-        if (!normalize(link.getBankInitNonce()).isBlank()) {
-            return true;
-        }
-        if (!normalize(link.getBankCancelNonce()).isBlank() || link.getBankCancelOriginStatus() != null) {
-            return true;
-        }
-        if (link.getStatus() == PaymentLinkStatus.NEEDS_RECONCILIATION) {
-            return true;
-        }
-        if (normalize(link.getTbankPaymentId()).isBlank()) {
-            return false;
-        }
-        return switch (link.getStatus()) {
-            case REJECTED, REVERSED, REFUNDED -> false;
-            case CANCELED, EXPIRED -> !normalize(link.getLastError()).isBlank();
-            default -> true;
-        };
     }
 
     private void cleanupPaidOrderAfterCommonBilling(Order order) {
@@ -5069,7 +5394,9 @@ public class CommonBillingService {
                 + confirmedCommonInvoicePrepaymentKopecks(invoice);
         invoice.setAmountKopecks(amount);
         invoice.setPaidKopecks(Math.min(amount, preserveRecordedAttentionPayment ? Math.max(recordedPaid, paid) : paid));
-        if (invoice.getStatus() != CommonInvoiceStatus.PAID
+        boolean preserveMigrationPaymentEvidence = isMigrationPaymentRegistryAttention(invoice);
+        if (!preserveMigrationPaymentEvidence
+                && invoice.getStatus() != CommonInvoiceStatus.PAID
                 && invoice.getTbankPaymentAmountKopecks() != null
                 && invoice.getTbankPaymentAmountKopecks() != remainingKopecks(invoice)) {
             archiveCurrentPaymentRef(invoice, "remaining_changed");
@@ -5105,6 +5432,9 @@ public class CommonBillingService {
             List<CommonInvoiceOrder> items,
             boolean synchronizeStandalonePayments
     ) {
+        if (isMigrationPaymentRegistryAttention(invoice)) {
+            return;
+        }
         boolean changed = false;
         List<String> amountFailures = new ArrayList<>();
         for (CommonInvoiceOrder item : items) {
@@ -5269,12 +5599,145 @@ public class CommonBillingService {
     }
 
     private CommonInvoiceDetailsResponse invoiceDetails(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        List<CommonInvoicePaymentRef> paymentRefs = paymentRefEvidenceRows(invoice);
+        Map<String, String> terminalLabels = paymentTerminalLabels(invoice, paymentRefs);
         return new CommonInvoiceDetailsResponse(
-                toInvoiceSummary(invoice, items),
+                toInvoiceSummary(
+                        invoice,
+                        items,
+                        terminalLabels.get(normalize(invoice == null ? null : invoice.getTbankTerminalKey()))
+                ),
                 items.stream().map(this::toOrderResponse).toList(),
                 toOrderCards(items),
-                toNextCycleOrders(items)
+                toNextCycleOrders(items),
+                toPaymentRefEvidence(paymentRefs, terminalLabels),
+                paymentEvidenceToken(invoice, paymentRefs)
         );
+    }
+
+    private List<CommonInvoicePaymentRef> paymentRefEvidenceRows(CommonInvoice invoice) {
+        if (invoice == null || invoice.getId() == null
+                || (!isPaymentInitManualCheckAttention(invoice)
+                && !isMigrationPaymentRegistryAttention(invoice))) {
+            return List.of();
+        }
+        return filterPaymentRefEvidenceRows(
+                paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(invoice.getId())
+        );
+    }
+
+    private List<CommonInvoicePaymentRef> filterPaymentRefEvidenceRows(
+            List<CommonInvoicePaymentRef> paymentRefs
+    ) {
+        return (paymentRefs == null ? List.<CommonInvoicePaymentRef>of() : paymentRefs).stream()
+                .filter(ref -> ref != null && (
+                        isPreparedPaymentRef(ref)
+                                || !normalize(ref.getTbankOrderId()).isBlank()
+                                || !normalize(ref.getTbankPaymentId()).isBlank()
+                ))
+                .toList();
+    }
+
+    private List<CommonInvoicePaymentRefResponse> toPaymentRefEvidence(
+            List<CommonInvoicePaymentRef> paymentRefs,
+            Map<String, String> terminalLabels
+    ) {
+        return (paymentRefs == null ? List.<CommonInvoicePaymentRef>of() : paymentRefs).stream()
+                .map(ref -> new CommonInvoicePaymentRefResponse(
+                        ref.getId(),
+                        paymentRefStatus(ref),
+                        normalize(ref.getTbankOrderId()).isBlank() ? null : ref.getTbankOrderId(),
+                        normalize(ref.getTbankPaymentId()).isBlank() ? null : ref.getTbankPaymentId(),
+                        ref.getAmountKopecks(),
+                        terminalLabels == null
+                                ? null
+                                : terminalLabels.get(normalize(ref.getTbankTerminalKey())),
+                        normalize(ref.getTbankTerminalKey()).isBlank() ? null : ref.getTbankTerminalKey(),
+                        normalize(ref.getReason()).isBlank() ? null : ref.getReason()
+                ))
+                .toList();
+    }
+
+    private Map<String, String> paymentTerminalLabels(
+            CommonInvoice invoice,
+            List<CommonInvoicePaymentRef> paymentRefs
+    ) {
+        Set<String> terminalKeys = new HashSet<>();
+        String invoiceTerminalKey = normalize(invoice == null ? null : invoice.getTbankTerminalKey());
+        if (!invoiceTerminalKey.isBlank()) {
+            terminalKeys.add(invoiceTerminalKey);
+        }
+        for (CommonInvoicePaymentRef ref : paymentRefs == null
+                ? List.<CommonInvoicePaymentRef>of()
+                : paymentRefs) {
+            String terminalKey = normalize(ref == null ? null : ref.getTbankTerminalKey());
+            if (!terminalKey.isBlank()) {
+                terminalKeys.add(terminalKey);
+            }
+        }
+        if (terminalKeys.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, PaymentProfile> profilesByTerminal = paymentProfileService.findByTerminalKeys(terminalKeys);
+        if (profilesByTerminal == null) {
+            profilesByTerminal = Map.of();
+        }
+        Map<String, String> labels = new HashMap<>();
+        for (String terminalKey : terminalKeys) {
+            PaymentProfile profile = profilesByTerminal.get(terminalKey);
+            String label = normalize(profile == null ? null : profile.getName());
+            if (label.isBlank()) {
+                label = terminalKey;
+            }
+            labels.put(terminalKey, label);
+        }
+        return labels;
+    }
+
+    private String paymentEvidenceToken(
+            CommonInvoice invoice,
+            List<CommonInvoicePaymentRef> paymentRefs
+    ) {
+        if (invoice == null || invoice.getId() == null
+                || (!isPaymentInitManualCheckAttention(invoice)
+                && !isMigrationPaymentRegistryAttention(invoice))) {
+            return null;
+        }
+        StringBuilder evidence = new StringBuilder(512);
+        appendEvidenceField(evidence, invoice.getId());
+        appendEvidenceField(evidence, invoice.getStatus());
+        appendEvidenceField(evidence, invoice.getLastError());
+        appendEvidenceField(evidence, invoice.getTbankOrderId());
+        appendEvidenceField(evidence, invoice.getTbankPaymentId());
+        appendEvidenceField(evidence, invoice.getTbankTerminalKey());
+        appendEvidenceField(evidence, invoice.getTbankPaymentAmountKopecks());
+        appendEvidenceField(evidence, invoice.getTbankPaymentCreatedAt());
+        appendEvidenceField(evidence, invoice.getPaymentUrl());
+        for (CommonInvoicePaymentRef ref : paymentRefs == null
+                ? List.<CommonInvoicePaymentRef>of()
+                : paymentRefs) {
+            appendEvidenceField(evidence, ref.getId());
+            appendEvidenceField(evidence, ref.getStatus());
+            appendEvidenceField(evidence, ref.getTbankOrderId());
+            appendEvidenceField(evidence, ref.getTbankPaymentId());
+            appendEvidenceField(evidence, ref.getTbankTerminalKey());
+            appendEvidenceField(evidence, ref.getAmountKopecks());
+            appendEvidenceField(evidence, ref.getReason());
+        }
+        try {
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(
+                            evidence.toString().getBytes(StandardCharsets.UTF_8)
+                    )
+            );
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private void appendEvidenceField(StringBuilder target, Object value) {
+        String text = value == null ? "" : String.valueOf(value);
+        target.append(text.length()).append(':').append(text).append('|');
     }
 
     private List<CommonInvoiceNextCycleResponse> toNextCycleOrders(List<CommonInvoiceOrder> items) {
@@ -5447,6 +5910,14 @@ public class CommonBillingService {
     }
 
     private CommonInvoiceSummaryResponse toInvoiceSummary(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        return toInvoiceSummary(invoice, items, null);
+    }
+
+    private CommonInvoiceSummaryResponse toInvoiceSummary(
+            CommonInvoice invoice,
+            List<CommonInvoiceOrder> items,
+            String tbankTerminalLabel
+    ) {
         long remaining = remainingKopecks(invoice);
         return new CommonInvoiceSummaryResponse(
                 invoice.getId(),
@@ -5472,7 +5943,12 @@ public class CommonBillingService {
                 invoice.getClosedBy(),
                 invoice.getCloseReason(),
                 invoice.getLastError(),
-                invoice.getPaymentSuccessNotificationError()
+                invoice.getPaymentSuccessNotificationError(),
+                invoice.getTbankOrderId(),
+                invoice.getTbankPaymentId(),
+                invoice.getTbankPaymentAmountKopecks(),
+                normalize(tbankTerminalLabel).isBlank() ? null : tbankTerminalLabel,
+                normalize(invoice.getTbankTerminalKey()).isBlank() ? null : invoice.getTbankTerminalKey()
         );
     }
 
@@ -6658,6 +7134,7 @@ public class CommonBillingService {
         if (invoice == null || invoice.getId() == null) {
             return;
         }
+        String previousAttention = normalize(invoice.getLastError());
         if (paymentRefRepository.existsByInvoice_IdAndStatusIn(
                 invoice.getId(),
                 PAYMENT_INIT_MANUAL_BLOCKING_REF_STATUSES
@@ -6684,7 +7161,7 @@ public class CommonBillingService {
         }
         for (CommonInvoicePaymentRef ref : unresolved) {
             ref.setStatus(PAYMENT_REF_ARCHIVED);
-            ref.setReason(limit("payment_init_manually_checked", 160));
+            ref.setReason(manualPaymentInitCheckAuditReason(ref.getReason()));
         }
         if (!unresolved.isEmpty()) {
             paymentRefRepository.saveAll(unresolved);
@@ -6708,10 +7185,32 @@ public class CommonBillingService {
         });
         copyCurrentPaymentBindingToRef(invoice, ref);
         ref.setStatus(PAYMENT_REF_ARCHIVED);
-        ref.setReason(limit("payment_init_manually_checked", 160));
+        boolean alreadyAudited = unresolved.stream().anyMatch(unresolvedRef ->
+                Objects.equals(unresolvedRef.getId(), ref.getId())
+        );
+        if (!alreadyAudited) {
+            ref.setReason(manualPaymentInitCheckAuditReason(previousAttention));
+        }
         paymentRefRepository.save(ref);
         flushPaymentRefProviderEvidence(ref);
         clearCurrentPaymentRef(invoice);
+        Authentication authentication = currentAuthentication();
+        log.warn(
+                "Common invoice {} payment-init evidence manually reconciled by {}",
+                invoice.getId(),
+                authentication == null ? "unknown" : normalize(authentication.getName())
+        );
+    }
+
+    private String manualPaymentInitCheckAuditReason(String previousReason) {
+        Authentication authentication = currentAuthentication();
+        String actor = authentication == null ? "unknown" : normalize(authentication.getName());
+        String previous = normalize(previousReason);
+        return limit(
+                PAYMENT_INIT_MANUALLY_CHECKED_BY_PREFIX + limit(actor.isBlank() ? "unknown" : actor, 40)
+                        + (previous.isBlank() ? "" : "; previous=" + previous),
+                160
+        );
     }
 
     private void archiveCurrentPaymentRef(CommonInvoice invoice, String reason) {
@@ -7296,6 +7795,12 @@ public class CommonBillingService {
             Long companyId,
             String leaseToken,
             int attempt
+    ) {
+    }
+
+    private record LockedInvoicePaymentPrelude(
+            CommonInvoice invoice,
+            Map<Long, List<PaymentLink>> paymentLinksByOrder
     ) {
     }
 

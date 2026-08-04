@@ -794,6 +794,11 @@ export interface CommonInvoiceSummaryResponse {
   lastReminderAt?: string | null;
   nextReminderAt?: string | null;
   lastError?: string | null;
+  tbankOrderId?: string | null;
+  tbankPaymentId?: string | null;
+  tbankPaymentAmountKopecks?: number | null;
+  tbankTerminalLabel?: string | null;
+  tbankTerminalKey?: string | null;
 }
 
 export interface CommonBillingAccountResponse {
@@ -838,6 +843,17 @@ export interface CommonInvoiceDetailsResponse {
   summary: CommonInvoiceSummaryResponse;
   orders: CommonInvoiceOrderResponse[];
   orderCards: OrderItem[];
+  paymentRefs?: Array<{
+    id: number;
+    status: string;
+    orderId?: string | null;
+    paymentId?: string | null;
+    amountKopecks?: number | null;
+    reason?: string | null;
+    terminalLabel?: string | null;
+    terminalKey?: string | null;
+  }>;
+  paymentEvidenceToken?: string | null;
 }
 
 export interface OrderNotesResponse {
@@ -4013,10 +4029,13 @@ export class ApiService {
     );
   }
 
-  confirmCommonInvoicePaymentInitCheck(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+  confirmCommonInvoicePaymentInitCheck(
+    invoiceId: number,
+    evidenceToken?: string | null
+  ): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/confirm-payment-init-check`),
-      {}
+      { evidenceToken: evidenceToken ?? null }
     );
   }
 

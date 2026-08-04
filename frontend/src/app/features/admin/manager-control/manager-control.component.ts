@@ -74,6 +74,11 @@ type ManagerPerformanceRow = {
   hint: string;
 };
 
+export function isExplicitlyRepairableCommonInvoiceReason(reason: string | null | undefined): boolean {
+  const normalized = (reason ?? '').trim().toLowerCase();
+  return normalized.includes('нажмите «починить»') || normalized.includes('нажмите "починить"');
+}
+
 @Component({
   selector: 'app-manager-control',
   imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, NgTemplateOutlet],
@@ -1757,7 +1762,7 @@ export class ManagerControlComponent implements OnInit {
       return true;
     }
     if (example.type === 'COMMON_INVOICE') {
-      return !reason.includes('допубликационные позиции блокируют сбор');
+      return isExplicitlyRepairableCommonInvoiceReason(example.reason);
     }
     if (example.type === 'TELEGRAM_CHAT') {
       return true;

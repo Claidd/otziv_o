@@ -82,6 +82,25 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
             @Param("status") String status
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select ref
+            from CommonInvoicePaymentRef ref
+            where ref.invoice.id = :invoiceId
+            order by ref.createdAt asc, ref.id asc
+            """)
+    List<CommonInvoicePaymentRef> findByInvoiceIdForUpdate(@Param("invoiceId") Long invoiceId);
+
+    @Query("""
+            select ref
+            from CommonInvoicePaymentRef ref
+            where ref.invoice.id = :invoiceId
+            order by ref.createdAt asc, ref.id asc
+            """)
+    List<CommonInvoicePaymentRef> findByInvoiceIdOrderByCreatedAtAsc(
+            @Param("invoiceId") Long invoiceId
+    );
+
     @Query("""
             select coalesce(sum(ref.amountKopecks), 0)
             from CommonInvoicePaymentRef ref
