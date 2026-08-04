@@ -119,6 +119,7 @@ $legacyDeploy = Get-RepositoryText 'infrastructure/scripts/prod/deploy-prod-ssh-
 $backendDockerfile = Get-RepositoryText 'backend/Dockerfile'
 $frontendDockerfile = Get-RepositoryText 'frontend/Dockerfile'
 $frontendAngularConfig = Get-RepositoryText 'frontend/angular.json'
+$frontendPackageConfig = Get-RepositoryText 'frontend/package.json'
 $frontendSilentCheckSsoHtml = Get-RepositoryText 'frontend/public/silent-check-sso.html'
 $frontendSilentCheckSsoScript = Get-RepositoryText 'frontend/public/silent-check-sso.js'
 $whatsAppDockerfile = Get-RepositoryText 'Dockerfile.whatsapp'
@@ -542,6 +543,31 @@ try {
 }
 catch {
     $violations.Add("Could not validate frontend/angular.json production CSS optimization: $($_.Exception.Message)")
+}
+
+try {
+    $frontendPackageJson = $frontendPackageConfig | ConvertFrom-Json -AsHashtable
+    $frontendOverrides = $frontendPackageJson['overrides']
+    $requiredFrontendOverrides = [ordered]@{
+        'hono' = '4.12.34'
+        'ip-address' = '10.4.0'
+    }
+    foreach ($dependency in $requiredFrontendOverrides.Keys) {
+        if ($frontendOverrides[$dependency] -ne $requiredFrontendOverrides[$dependency]) {
+            $violations.Add("Frontend dependency override $dependency must remain pinned to $($requiredFrontendOverrides[$dependency]).")
+        }
+    }
+    foreach ($parent in @('@angular/build', 'jsdom')) {
+        if ($frontendOverrides[$parent]['undici'] -ne '7.29.0') {
+            $violations.Add("Frontend dependency override $parent -> undici must remain pinned to 7.29.0.")
+        }
+    }
+    if ($frontendOverrides['node-gyp']['undici'] -ne '6.28.0') {
+        $violations.Add('Frontend dependency override node-gyp -> undici must remain pinned to 6.28.0.')
+    }
+}
+catch {
+    $violations.Add("Could not validate frontend/package.json security overrides: $($_.Exception.Message)")
 }
 
 Assert-TextMatch $frontendSilentCheckSsoHtml '<script\s+src="/silent-check-sso\.js"></script>' 'Keycloak silent SSO callback must use a same-origin external script allowed by the enforced CSP.'

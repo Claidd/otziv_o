@@ -32,6 +32,17 @@
   },
   "overrides": {
     "@modelcontextprotocol/sdk": "1.30.0",
-    "@hono/node-server": "2.0.12"
+    "@hono/node-server": "2.0.12",
+    "@angular/build": {
+      "undici": "7.29.0"
+    },
+    "jsdom": {
+      "undici": "7.29.0"
+    },
+    "node-gyp": {
+      "undici": "6.28.0"
+    },
+    "hono": "4.12.34",
+    "ip-address": "10.4.0"
   }
 }
