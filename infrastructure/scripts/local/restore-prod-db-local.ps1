@@ -539,6 +539,9 @@ printf 'OTZIV_REMOTE_SHA256=%s\n' "$remote_sha"
 printf 'OTZIV_REMOTE_SIZE=%s\n' "$remote_size"
 trap - EXIT INT TERM
 '@
+    # Git may check PowerShell files out with CRLF on Windows. Passing that
+    # here-string directly as an SSH argument makes Bash read `pipefail\r`.
+    $remoteCommand = $remoteCommand.Replace("`r`n", "`n").Replace("`r", "`n")
 
     Write-Host "Creating and validating production dump on VPS..."
     $remoteOutput = @(Invoke-ExternalCapture -FilePath "ssh" -Arguments ($sshArgs + @($remote, $remoteCommand)))

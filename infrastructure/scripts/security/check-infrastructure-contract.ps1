@@ -153,6 +153,7 @@ Assert-TextMatch $restore 'umask 077' 'Remote DB dump creation must set umask 07
 Assert-TextMatch $restore 'OTZIV_REMOTE_SHA256' 'Remote DB dump SHA-256 metadata must be verified locally.'
 Assert-TextMatch $restore 'Test-GzipArchive -Path \$dumpFullPath' 'A gzip integrity check must run before the local MySQL volume is replaced.'
 Assert-TextMatch $restore '"bash",\s*"-o",\s*"pipefail"' 'MySQL import must fail when gzip decompression fails.'
+Assert-TextMatch $restore '\$remoteCommand\s*=\s*\$remoteCommand\.Replace\("`r`n",\s*"`n"\)\.Replace\("`r",\s*"`n"\)' 'Remote production dump commands must normalize Windows CRLF before crossing the SSH boundary.'
 Assert-TextMatch $restore 'prod-like-smoke\.ps1[\s\S]{0,300}-SkipProdDbRestore' '-RunSmoke must not perform a second production DB restore.'
 Assert-TextMatch $restore '\$pruneLocalDumps\s*=\s*\$PruneExpiredLocalDumps\s+-or\s+\(-not \$SkipDownload\s+-and\s+-not \$KeepExpiredLocalDumps\)' 'Fresh production dump downloads must enforce bounded local retention by default.'
 Assert-TextMatch $restore 'Format-RedactedCommand' 'Restore command errors must redact credentials.'
