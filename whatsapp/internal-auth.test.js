@@ -92,6 +92,13 @@ test("WhatsApp Chromium keeps its Linux sandbox enabled", () => {
   assert.equal(args.at(-1), "--proxy-server=http://127.0.0.1:3128");
 });
 
+test("WhatsApp Web cache never writes into the read-only application filesystem", () => {
+  const source = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
+
+  assert.match(source, /webVersionCache:\s*\{[\s\S]{0,300}type:\s*"none"/u);
+  assert.doesNotMatch(source, /webVersionCache:\s*\{[\s\S]{0,300}type:\s*"local"/u);
+});
+
 function requestWithHeader(value) {
   return {
     get(name) {

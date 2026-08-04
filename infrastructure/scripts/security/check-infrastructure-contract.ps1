@@ -118,6 +118,7 @@ $legacyNginxDockerfile = Get-RepositoryText 'Dockerfile.nginx'
 $legacyDeploy = Get-RepositoryText 'infrastructure/scripts/prod/deploy-prod-ssh-images.ps1'
 $backendDockerfile = Get-RepositoryText 'backend/Dockerfile'
 $frontendDockerfile = Get-RepositoryText 'frontend/Dockerfile'
+$frontendAngularConfig = Get-RepositoryText 'frontend/angular.json'
 $frontendSilentCheckSsoHtml = Get-RepositoryText 'frontend/public/silent-check-sso.html'
 $frontendSilentCheckSsoScript = Get-RepositoryText 'frontend/public/silent-check-sso.js'
 $whatsAppDockerfile = Get-RepositoryText 'Dockerfile.whatsapp'
@@ -530,6 +531,17 @@ Assert-TextNotMatch $localCompose 'Dockerfile2\.whatsapp|Dockerfile\.nginx' 'Pro
 Assert-TextNotMatch $developmentCompose 'Dockerfile2\.whatsapp|Dockerfile\.nginx' 'Development Compose must not reference quarantined legacy Dockerfiles.'
 Assert-DigestPinnedDockerfileBases $backendDockerfile 'backend/Dockerfile'
 Assert-DigestPinnedDockerfileBases $frontendDockerfile 'frontend/Dockerfile'
+
+try {
+    $frontendAngularJson = $frontendAngularConfig | ConvertFrom-Json -AsHashtable
+    $inlineCritical = $frontendAngularJson['projects']['frontend']['architect']['build']['configurations']['production']['optimization']['styles']['inlineCritical']
+    if ($inlineCritical -ne $false) {
+        $violations.Add('Production frontend must disable critical CSS inlining so its stylesheet does not depend on a CSP-blocked inline onload handler.')
+    }
+}
+catch {
+    $violations.Add("Could not validate frontend/angular.json production CSS optimization: $($_.Exception.Message)")
+}
 
 Assert-TextMatch $frontendSilentCheckSsoHtml '<script\s+src="/silent-check-sso\.js"></script>' 'Keycloak silent SSO callback must use a same-origin external script allowed by the enforced CSP.'
 Assert-TextNotMatch $frontendSilentCheckSsoHtml '<script(?:\s[^>]*)?>\s*[^<\s]' 'Keycloak silent SSO callback must not contain inline JavaScript blocked by production CSP.'

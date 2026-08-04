@@ -323,6 +323,12 @@ function createClient() {
       clientId: CLIENT_ID,
       dataPath: AUTH_PATH,
     }),
+    webVersionCache: {
+      // The production container is intentionally read-only. The library's
+      // default local cache writes to /app before it injects WWebJS, which
+      // leaves an authenticated session permanently stuck before READY.
+      type: "none",
+    },
     puppeteer: {
       executablePath: CHROMIUM_PATH,
       headless: true,
