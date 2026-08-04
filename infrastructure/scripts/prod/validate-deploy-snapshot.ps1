@@ -18,7 +18,14 @@ function Invoke-SnapshotCheck {
     Write-Host "Snapshot check: $Name"
     Push-Location $WorkingDirectory
     try {
-        & $FilePath @Parameters @Arguments
+        if ($Parameters.Count -gt 0 -and $Arguments.Count -gt 0) {
+            throw "$Name mixes named and positional command parameters; validation is ambiguous."
+        }
+        if ($Parameters.Count -gt 0) {
+            & $FilePath @Parameters
+        } else {
+            & $FilePath @Arguments
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "$Name failed with exit code $LASTEXITCODE. Production deployment remains blocked."
         }
@@ -70,16 +77,6 @@ $hasMobileChanges = @($changedFiles | Where-Object { $_ -like 'mobile/*' }).Coun
 $hasWhatsAppChanges = @($changedFiles | Where-Object { $_ -like 'whatsapp/*' }).Count -gt 0
 $hasExternalWorkerChanges = @($changedFiles | Where-Object { $_ -like 'backend/external-review-worker/*' }).Count -gt 0
 
-if ($hasBackendChanges) {
-    if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
-        Invoke-SnapshotCheck -Name 'backend full test suite' -WorkingDirectory (Join-Path $root 'backend') `
-            -FilePath '.\mvnw.cmd' -Arguments @('-B', '-ntp', 'verify')
-    } else {
-        Invoke-SnapshotCheck -Name 'backend full test suite' -WorkingDirectory (Join-Path $root 'backend') `
-            -FilePath 'bash' -Arguments @('./mvnw', '-B', '-ntp', 'verify')
-    }
-}
-
 if ($hasFrontendChanges) {
     $frontend = Join-Path $root 'frontend'
     Invoke-SnapshotCheck -Name 'frontend dependency install' -WorkingDirectory $frontend `
@@ -118,6 +115,16 @@ if ($hasExternalWorkerChanges) {
     }
     Invoke-SnapshotCheck -Name 'external worker tests' -WorkingDirectory $externalWorker `
         -FilePath 'npm' -Arguments @('test')
+}
+
+if ($hasBackendChanges) {
+    if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+        Invoke-SnapshotCheck -Name 'backend full test suite' -WorkingDirectory (Join-Path $root 'backend') `
+            -FilePath '.\mvnw.cmd' -Arguments @('-B', '-ntp', 'verify')
+    } else {
+        Invoke-SnapshotCheck -Name 'backend full test suite' -WorkingDirectory (Join-Path $root 'backend') `
+            -FilePath 'bash' -Arguments @('./mvnw', '-B', '-ntp', 'verify')
+    }
 }
 
 Write-Host 'Automatic deploy snapshot validation passed.'

@@ -608,16 +608,10 @@ if ($PreparedDeploySnapshot) {
             Write-Warning 'Automatic deploy snapshot validation was bypassed explicitly.'
         }
 
-        if ($PrepareSnapshotOnly) {
-            Write-Host 'Automatic snapshot preparation completed; VPS was not contacted.'
-            return
-        }
-
         $forwardParameters = @{}
         foreach ($entry in $PSBoundParameters.GetEnumerator()) {
             $forwardParameters[$entry.Key] = $entry.Value
         }
-        [void]$forwardParameters.Remove('PrepareSnapshotOnly')
         [void]$forwardParameters.Remove('AllowDirtyWorktree')
         $forwardParameters['PreparedDeploySnapshot'] = $true
         $forwardParameters['DeploySnapshotBaseRevision'] = $snapshot.BaseRevision
@@ -650,11 +644,6 @@ if ($PreparedDeploySnapshot) {
     Write-Warning 'Deploying from a dirty worktree by explicit override. The resulting images may not be reproducible from Git.'
 }
 
-if ($PrepareSnapshotOnly) {
-    Write-Host 'No deployment-input changes were found; automatic snapshot is not required.'
-    return
-}
-
 $gitRevision = (& git -C $repoRoot rev-parse --verify HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $gitRevision -notmatch '^[0-9a-f]{40}$') {
     throw 'Unable to resolve the exact Git revision for the deployment tag.'
@@ -671,6 +660,15 @@ if (-not $Tag.EndsWith($revisionTagSuffix, [StringComparison]::OrdinalIgnoreCase
 }
 Write-Host "Deployment revision: $gitRevision"
 Write-Host "Traceable image tag: $Tag"
+
+if ($PrepareSnapshotOnly) {
+    if ($PreparedDeploySnapshot) {
+        Write-Host 'Automatic snapshot preparation completed; Docker build and VPS access were not started.'
+    } else {
+        Write-Host 'Clean deployment revision verified; Docker build and VPS access were not started.'
+    }
+    return
+}
 
 $buildCompose = Join-Path $repoRoot "docker-compose.build.yaml"
 $appImage = "${DockerHubNamespace}/${AppRepository}:${Tag}"
