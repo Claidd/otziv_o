@@ -2335,19 +2335,22 @@ public class ApiWorkerBoardController {
 
         LocalDate today = LocalDate.now();
         if (selectedWorker != null) {
-            return staffDailyProgressService.workerProgressByWorkers(List.of(selectedWorker), today)
+            return staffDailyProgressService.workerProgressSnapshotByWorkers(List.of(selectedWorker), today)
                     .get(selectedWorker.getId());
         }
 
         if (hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER") || hasRole(authentication, "MANAGER")) {
-            return staffDailyProgressService.aggregateWorkerProgress(workerFilterWorkers(principal, authentication), today);
+            return staffDailyProgressService.aggregateWorkerProgressSnapshot(
+                    workerFilterWorkers(principal, authentication),
+                    today
+            );
         }
 
         if (hasRole(authentication, "WORKER")) {
             Worker worker = resolveWorker(principal);
             return worker == null
                     ? null
-                    : staffDailyProgressService.workerProgressByWorkers(List.of(worker), today).get(worker.getId());
+                    : staffDailyProgressService.workerProgressSnapshotByWorkers(List.of(worker), today).get(worker.getId());
         }
 
         return null;

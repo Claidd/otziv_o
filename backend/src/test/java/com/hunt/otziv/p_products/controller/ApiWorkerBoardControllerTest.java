@@ -1454,6 +1454,26 @@ class ApiWorkerBoardControllerTest {
     }
 
     @Test
+    void workerBoardReadsPreparedProgressSnapshotWithoutRebuildingLifecycle() {
+        when(staffDailyProgressService.progressEnabled()).thenReturn(true);
+        when(staffDailyProgressService.workerProgressSnapshotByWorkers(
+                eq(List.of(worker)),
+                any(LocalDate.class)
+        )).thenReturn(Map.of());
+
+        getBoard("publish");
+
+        verify(staffDailyProgressService).workerProgressSnapshotByWorkers(
+                eq(List.of(worker)),
+                any(LocalDate.class)
+        );
+        verify(staffDailyProgressService, never()).workerProgressByWorkers(
+                anyList(),
+                any(LocalDate.class)
+        );
+    }
+
+    @Test
     void workerNagulUsesConfiguredLookaheadDays() {
         LocalDate expectedDate = LocalDate.now().plusDays(14);
         when(appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, 60)).thenReturn(14);
