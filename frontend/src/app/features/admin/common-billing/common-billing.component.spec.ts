@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL,
   commonInvoicePaymentEvidence,
   commonInvoicePaymentEvidenceSnapshot,
   isIncompletePartiallyPaidInvoice,
   isMigrationPaymentRegistryError,
-  isPaymentInitManualCheckError
+  isPaymentInitManualCheckError,
+  paymentInitNoPaymentActionLabel,
+  paymentInitNoPaymentConfirmation,
+  paymentInitNoPaymentInstructions
 } from './common-billing.component';
 import type { CommonInvoiceDetailsResponse } from '../../../core/common-billing.api';
 
@@ -176,5 +180,45 @@ describe('payment-init attention policy', () => {
     const error = 'migration_common_payment_registry:provider_identity_cross_invoice_collision';
     expect(isMigrationPaymentRegistryError(error)).toBe(true);
     expect(isPaymentInitManualCheckError(error)).toBe(false);
+  });
+});
+
+describe('payment-init manual-check copy', () => {
+  it('names the action as a no-payment outcome without implying paid or unpaid status', () => {
+    expect(PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL).toBe('В T‑Bank оплаты нет — продолжить');
+
+    const helper = paymentInitNoPaymentActionLabel();
+    expect(helper).toContain('по перечисленным OrderId и PaymentId в T‑Bank');
+    expect(helper).toContain('не будет отмечен оплаченным');
+    expect(helper).toContain('не перейдёт в статус «Не оплачено»');
+    expect(helper).toContain('отдельным действием «Оплачено»');
+    expect(helper).toContain('комментарий или чек');
+  });
+
+  it('branches explicitly for active, successful and cancel/refund payments', () => {
+    const instructions = paymentInitNoPaymentInstructions().join(' ');
+
+    expect(instructions).toContain('поле «Номер заказа» вводите только OrderId');
+    expect(instructions).toContain('PaymentId — это отдельный идентификатор платежа');
+    expect(instructions).toContain('Не вводите его в поле «Номер заказа»');
+    expect(instructions).toContain('переключите тип поиска на идентификатор платежа');
+    expect(instructions).toContain('найден активный платёж');
+    expect(instructions).toContain('найден успешный платёж');
+    expect(instructions).toContain('отмена/возврат');
+    expect(instructions).toContain('не нажимайте кнопку');
+  });
+
+  it('makes the confirmation acknowledge only that no actionable payment exists', () => {
+    const confirmation = paymentInitNoPaymentConfirmation('\n\nПроверьте: OrderId test');
+
+    expect(confirmation).toContain('РЕЗУЛЬТАТ ПРОВЕРКИ T‑BANK: ПО УКАЗАННЫМ ID ОПЛАТЫ НЕТ');
+    expect(confirmation).toContain('ВСЕ перечисленные OrderId и PaymentId');
+    expect(confirmation).toContain('не активен, не успешен');
+    expect(confirmation).toContain('ТОЛЬКО отсутствие оплаты по перечисленным T‑Bank ID');
+    expect(confirmation).toContain('НЕ отмечает счёт оплаченным');
+    expect(confirmation).toContain('НЕ переводит его в «Не оплачено»');
+    expect(confirmation).toContain('отдельным действием «Оплачено»');
+    expect(confirmation).toContain('комментарий или чек');
+    expect(confirmation).toContain('OrderId test');
   });
 });

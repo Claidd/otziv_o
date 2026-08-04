@@ -1046,6 +1046,19 @@ export interface WorkerCredentialPreparation {
   waitSeconds?: number;
 }
 
+export interface ManualPaymentConfirmationRequest {
+  comment: string;
+  receiptUrl: string;
+}
+
+export interface ManualCardPaymentConfirmationRequest {
+  recipientStatementChecked: true;
+  paymentReceived: true;
+  receivedAmountKopecks: number;
+  note: string;
+  receiptUrl?: string;
+}
+
 export interface CredentialRevealResponse {
   value: string;
   credentialPreparation?: WorkerCredentialPreparation | null;
@@ -3690,6 +3703,16 @@ export class ApiService {
     return this.http.post<void>(this.apiUrl(`/api/manager/orders/${orderId}/status`), { status });
   }
 
+  confirmManagerManualCardPayment(
+    orderId: number,
+    request: ManualCardPaymentConfirmationRequest
+  ): Observable<void> {
+    return this.http.post<void>(
+      this.apiUrl(`/api/manager/orders/${orderId}/confirm-manual-card-payment`),
+      request
+    );
+  }
+
   updateManagerOrderClientWaiting(orderId: number, waitingForClient: boolean): Observable<void> {
     return this.http.post<void>(this.apiUrl(`/api/worker/orders/${orderId}/client-waiting`), { waitingForClient });
   }
@@ -3980,10 +4003,13 @@ export class ApiService {
     );
   }
 
-  markCommonInvoicePaid(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+  markCommonInvoicePaid(
+    invoiceId: number,
+    request: ManualPaymentConfirmationRequest
+  ): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/paid`),
-      {}
+      request
     );
   }
 
@@ -4039,10 +4065,14 @@ export class ApiService {
     );
   }
 
-  markCommonInvoiceOrderPaid(invoiceId: number, orderId: number): Observable<CommonInvoiceDetailsResponse> {
+  markCommonInvoiceOrderPaid(
+    invoiceId: number,
+    orderId: number,
+    request: ManualPaymentConfirmationRequest
+  ): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/orders/${orderId}/paid`),
-      {}
+      request
     );
   }
 

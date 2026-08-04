@@ -109,6 +109,7 @@ describe('ManagerOrderCardComponent', () => {
 
     expect(copiedPhone).toBe('79086431055');
     expect(copyKind).toBe('review');
+    expect(element.querySelector<HTMLAnchorElement>('.order-links a')?.textContent?.trim()).toBe('перейти');
     expect(status).toBe('На проверке');
     expect(editOpened).toBe(true);
   });

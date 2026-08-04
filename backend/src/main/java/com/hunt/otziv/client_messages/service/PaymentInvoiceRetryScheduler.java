@@ -10,16 +10,28 @@ import com.hunt.otziv.p_products.model.Order;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class PaymentInvoiceRetryScheduler {
+
+    private static final Set<ClientMessageScenario> PAYMENT_AUTOMATION_SCENARIOS = Set.of(
+            ClientMessageScenario.PAYMENT_INVOICE_RETRY,
+            ClientMessageScenario.PAYMENT_REMINDER,
+            ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION,
+            ClientMessageScenario.BAD_REVIEW_INVOICE,
+            ClientMessageScenario.BAD_REVIEW_AUTO_BAN
+    );
 
     private final ScheduledClientMessageStateRepository stateRepository;
     private final AppSettingService appSettingService;
@@ -128,6 +140,44 @@ public class PaymentInvoiceRetryScheduler {
                 "bad_review_auto_ban_canceled",
                 reason == null || reason.isBlank() ? "Автобан после плохих отменен" : reason
         );
+    }
+
+    /**
+     * Closes every still-running payment-message task for an order that has
+     * just been settled outside the automatic payment route. This removes an
+     * already displayed {@code payment_instruction_failed} issue immediately
+     * and, more importantly, prevents a late retry from sending another
+     * payment instruction after the order is paid.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int cancelPaymentAutomation(Long orderId, String reason) {
+        if (orderId == null || orderId <= 0) {
+            return 0;
+        }
+        List<ScheduledClientMessageState> states = stateRepository.findByOrderIdIn(List.of(orderId));
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<ScheduledClientMessageState> changed = new ArrayList<>();
+        for (ScheduledClientMessageState state : states) {
+            if (!PAYMENT_AUTOMATION_SCENARIOS.contains(state.getScenario())
+                    || (state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                    && state.getStatus() != ScheduledMessageStateStatus.PAUSED)) {
+                continue;
+            }
+            state.setStatus(ScheduledMessageStateStatus.DONE);
+            state.setNextAttemptAt(null);
+            state.setLockedUntil(null);
+            state.setLastAttemptAt(now);
+            state.setLastErrorCode("manual_card_payment_confirmed");
+            state.setLastErrorMessage(reason == null || reason.isBlank()
+                    ? "Заказ оплачен переводом на карту; платежные сообщения закрыты"
+                    : reason);
+            state.setConsecutiveFailures(0);
+            changed.add(state);
+        }
+        if (!changed.isEmpty()) {
+            stateRepository.saveAll(changed);
+        }
+        return changed.size();
     }
 
     private void cancelActiveState(

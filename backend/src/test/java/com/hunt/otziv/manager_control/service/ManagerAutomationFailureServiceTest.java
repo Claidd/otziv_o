@@ -87,6 +87,29 @@ class ManagerAutomationFailureServiceTest {
     }
 
     @Test
+    void explainsThatRepairReusesExistingPaymentInsteadOfCreatingAnotherOne() {
+        Manager manager = Manager.builder().id(7L).build();
+        Company company = Company.builder().id(20L).title("Мастер на дом").manager(manager).build();
+        Order order = Order.builder().id(25047L).manager(manager).company(company).build();
+        ScheduledClientMessageState state = state(23L, 25047L, ClientMessageScenario.PAYMENT_REMINDER, 23);
+        state.setLastErrorMessage("Не удалось подготовить ссылку T-Bank для заказа #25047: "
+                + "У заказа уже есть платеж в процессе по старым реквизитам или сумме. "
+                + "Проверьте платеж в журнале перед созданием нового счета.");
+        when(stateRepository.findManagerControlCandidateIds(eq(7L), any(Pageable.class))).thenReturn(List.of(23L));
+        when(stateRepository.findAllById(List.of(23L))).thenReturn(List.of(state));
+        when(orderRepository.findByIdForOrderDto(25047L)).thenReturn(Optional.of(order));
+        when(commonInvoiceOrderRepository.findByOrderIdWithInvoice(25047L)).thenReturn(Optional.empty());
+
+        List<ManagerAutomationFailureService.AutomationFailureIssue> issues = service.issues(manager, 10);
+
+        assertEquals(1, issues.size());
+        String reason = issues.getFirst().reason();
+        assertTrue(reason.contains("действующая платежная ссылка уже существует"));
+        assertTrue(reason.contains("повторно отправит клиенту эту же ссылку"));
+        assertTrue(reason.contains("второй платеж не создается"));
+    }
+
+    @Test
     void collapsesSeveralFailuresOfOneCommonInvoice() {
         Manager manager = Manager.builder().id(7L).build();
         Company company = Company.builder().id(20L).title("Компания").manager(manager).build();

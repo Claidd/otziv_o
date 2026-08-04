@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
+import { afterEach, vi } from 'vitest';
 import type { CompanyCardItem, OrderCardItem, OrderDetailsPayload } from '../../core/manager.api';
 import type { StatusAction } from './manager-board.config';
 import { ManagerBoardActionFacade, type ManagerBoardActionFacadeDeps } from './manager-board-action.facade';
@@ -24,7 +25,11 @@ function order(overrides: Partial<OrderCardItem> = {}): OrderCardItem {
   };
 }
 
-function createFacade(config: { failCompanyStatus?: boolean } = {}) {
+function createFacade(config: {
+  failCompanyStatus?: boolean;
+  orderStatusError?: unknown;
+  canOverrideActiveBankPayment?: boolean;
+} = {}) {
   const mutationKey = signal<string | null>(null);
   const calls: string[] = [];
   const toastMessages: string[] = [];
@@ -39,6 +44,12 @@ function createFacade(config: { failCompanyStatus?: boolean } = {}) {
       },
       updateOrderStatus: (orderId: number, status: string) => {
         calls.push(`order-status:${orderId}:${status}`);
+        return config.orderStatusError === undefined
+          ? of(void 0)
+          : throwError(() => config.orderStatusError);
+      },
+      confirmManualCardPayment: (orderId: number, request) => {
+        calls.push(`manual-card:${orderId}:${request.receivedAmountKopecks}:${request.note}`);
         return of(void 0);
       },
       updateOrderClientWaiting: (orderId: number, waitingForClient: boolean) => {
@@ -72,7 +83,8 @@ function createFacade(config: { failCompanyStatus?: boolean } = {}) {
     loadBoard: () => {
       calls.push('load-board');
     },
-    errorMessage: (_err, fallback) => fallback
+    errorMessage: (_err, fallback) => fallback,
+    canOverrideActiveBankPayment: () => config.canOverrideActiveBankPayment ?? true
   };
 
   return {
@@ -84,6 +96,8 @@ function createFacade(config: { failCompanyStatus?: boolean } = {}) {
 }
 
 describe('ManagerBoardActionFacade', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it('updates company and order statuses', () => {
     const { facade, calls, mutationKey, toastMessages } = createFacade();
     const companyAction: StatusAction = { label: 'archive', status: 'Архив', icon: 'archive' };
@@ -111,6 +125,107 @@ describe('ManagerBoardActionFacade', () => {
     expect(calls).toEqual(['company-status:10:Архив']);
     expect(mutationKey()).toBeNull();
     expect(toastMessages).toContain('error:Статус не изменен:Не удалось изменить статус компании');
+  });
+
+  it('uses the safe manual-card fallback only after the exact active-bank conflict and explicit confirmation', () => {
+    const conflict = {
+      status: 409,
+      error: {
+        message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+      }
+    };
+    const { facade, calls, mutationKey, toastMessages } = createFacade({ orderStatusError: conflict });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    facade.updateOrderStatus(order({
+      id: 25047,
+      companyTitle: 'Мастер на дом',
+      status: 'Напоминание',
+      sum: 1000
+    }), {
+      label: 'оплатили',
+      status: 'Оплачено',
+      icon: 'payments'
+    });
+
+    expect(calls[0]).toBe('order-status:25047:Оплачено');
+    expect(calls[1]).toContain('manual-card:25047:100000:Явно подтверждено кнопкой «Оплатили»');
+    expect(calls[2]).toBe('load-board');
+    expect(mutationKey()).toBeNull();
+    expect(toastMessages).toContain(
+      'success:Оплата переводом подтверждена:Мастер на дом: T-Bank ссылка закрыта, напоминания остановлены'
+    );
+  });
+
+  it('does not send the fallback when the financial confirmation is declined', () => {
+    const conflict = {
+      status: 409,
+      error: {
+        message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+      }
+    };
+    const { facade, calls, mutationKey } = createFacade({ orderStatusError: conflict });
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
+      label: 'оплатили',
+      status: 'Оплачено',
+      icon: 'payments'
+    });
+
+    expect(calls).toEqual(['order-status:25047:Оплачено']);
+    expect(mutationKey()).toBeNull();
+  });
+
+  it('does not bypass an active bank payment for a manager', () => {
+    const conflict = {
+      status: 409,
+      error: {
+        message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+      }
+    };
+    const { facade, calls, toastMessages } = createFacade({
+      orderStatusError: conflict,
+      canOverrideActiveBankPayment: false
+    });
+
+    facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
+      label: 'оплатили', status: 'Оплачено', icon: 'payments'
+    });
+
+    expect(calls).toEqual(['order-status:25047:Оплачено']);
+    expect(toastMessages).toContain('error:Статус не изменен:Не удалось изменить статус заказа');
+  });
+
+  it('does not use the privileged fallback for a different 409 response', () => {
+    const { facade, calls } = createFacade({
+      orderStatusError: { status: 409, error: { message: 'Другой конфликт' } }
+    });
+
+    facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
+      label: 'оплатили', status: 'Оплачено', icon: 'payments'
+    });
+
+    expect(calls).toEqual(['order-status:25047:Оплачено']);
+  });
+
+  it('recognizes the exact Spring ProblemDetail conflict without accepting other errors', () => {
+    const { facade, calls } = createFacade({
+      orderStatusError: {
+        status: 409,
+        error: {
+          detail: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+        }
+      }
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
+      label: 'оплатили', status: 'Оплачено', icon: 'payments'
+    });
+
+    expect(calls[0]).toBe('order-status:25047:Оплачено');
+    expect(calls[1]).toContain('manual-card:25047:100000:');
   });
 
   it('toggles client waiting for an order', () => {

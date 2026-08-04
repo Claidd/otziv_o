@@ -394,6 +394,18 @@
                         {{ isMutating(link) ? 'Проверяю' : 'Подтвердить' }}
                       </button>
                     }
+                    @if (canCloseManualAsUnpaid(link)) {
+                      <button
+                        type="button"
+                        class="unpaid-action"
+                        (click)="closeManualAsUnpaid(link)"
+                        [disabled]="isMutating(link)"
+                        title="После проверки выписки закрыть только эту ручную инструкцию без изменения статуса заказа"
+                      >
+                        <span class="material-icons-sharp" aria-hidden="true">money_off</span>
+                        {{ isMutating(link) ? 'Закрываю' : 'Платежа нет' }}
+                      </button>
+                    }
                     @if (canMarkManualReceipt(link)) {
                       <button
                         type="button"

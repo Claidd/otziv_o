@@ -770,7 +770,7 @@ public class ManagerBoardService {
         return manager == null ? List.of() : workerService.getAllWorkersToManager(manager);
     }
 
-    private Manager resolveManagerFilter(Long managerId, Principal principal, Authentication authentication) {
+    Manager resolveManagerFilter(Long managerId, Principal principal, Authentication authentication) {
         if (managerId == null) {
             return null;
         }
@@ -787,10 +787,18 @@ public class ManagerBoardService {
         }
 
         if (managerPermissionService.hasRole(authentication, "OWNER")) {
-            return resolveOwnerManagers(principal).stream()
-                    .filter(manager -> managerId.equals(manager.getId()))
-                    .findFirst()
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Менеджер недоступен"));
+            // Keep the board scope aligned with Manager Control and the rest of
+            // the manager APIs. An owner in ALL_MANAGERS mode can select any
+            // existing manager there, while a scoped owner remains limited to
+            // managers assigned to that owner.
+            if (!managerAccessService.canAccessManager(managerId, authentication)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Менеджер недоступен");
+            }
+            Manager manager = managerService.getManagerById(managerId);
+            if (manager == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден");
+            }
+            return manager;
         }
 
         Manager ownManager = resolveManager(principal);

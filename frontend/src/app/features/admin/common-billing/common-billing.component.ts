@@ -60,6 +60,38 @@ const PAYMENT_INIT_MANUAL_CHECK_PREFIXES = [
 const MANUALLY_CONFIRMABLE_MIGRATION_PAYMENT_ERROR =
   'migration_common_payment_registry:nonterminal_or_unknown_payment_ref_on_invoice';
 
+export const PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL = 'В T‑Bank оплаты нет — продолжить';
+
+export function paymentInitNoPaymentInstructions(): string[] {
+  return [
+    'В T-Бизнесе откройте «Интернет-эквайринг → Операции». В поле «Номер заказа» вводите только OrderId.',
+    'PaymentId — это отдельный идентификатор платежа. Не вводите его в поле «Номер заказа»: переключите тип поиска на идентификатор платежа, если такой фильтр доступен, либо сверьте PaymentId в карточке найденной операции.',
+    'Если найден активный платёж — не создавайте новую ссылку и дождитесь его итога.',
+    'Если найден успешный платёж или операция, которой нужна отмена/возврат, — не нажимайте кнопку ниже. Обработайте операцию по её фактическому статусу в разделе платежей.',
+    `Только если ни один платёж не активен, не успешен и не требует отмены/возврата, нажмите «${PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL}».`
+  ];
+}
+
+export function paymentInitNoPaymentActionLabel(): string {
+  return `«${PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL}» подтверждает только отсутствие оплаты `
+    + 'по перечисленным OrderId и PaymentId в T‑Bank и закрывает техническую ошибку. '
+    + 'Счёт не будет отмечен оплаченным и не перейдёт в статус «Не оплачено». '
+    + 'Если клиент оплатил переводом на обычную карту, после этого отдельным действием «Оплачено» '
+    + 'зафиксируйте перевод и добавьте комментарий или чек.';
+}
+
+export function paymentInitNoPaymentConfirmation(evidenceText: string): string {
+  return 'РЕЗУЛЬТАТ ПРОВЕРКИ T‑BANK: ПО УКАЗАННЫМ ID ОПЛАТЫ НЕТ.\n\n'
+    + 'Подтвердите, что вы проверили в T‑Bank ВСЕ перечисленные OrderId и PaymentId и ни один платёж по ним '
+    + 'не активен, не успешен и не требует отмены или возврата.\n\n'
+    + 'Если такой платёж найден, нажмите «Отмена» и не продолжайте.\n\n'
+    + 'Это действие означает ТОЛЬКО отсутствие оплаты по перечисленным T‑Bank ID. '
+    + 'Оно НЕ отмечает счёт оплаченным и НЕ переводит его в «Не оплачено», а только закрывает техническую ошибку.\n\n'
+    + 'Если клиент оплатил переводом на обычную карту, после этого отдельным действием «Оплачено» '
+    + 'зафиксируйте перевод и добавьте комментарий или чек.'
+    + evidenceText;
+}
+
 export function isPaymentInitManualCheckError(error: string | null | undefined): boolean {
   const normalized = (error ?? '').trim().toLowerCase();
   return PAYMENT_INIT_MANUAL_CHECK_PREFIXES.some(prefix => normalized.startsWith(prefix))
@@ -184,6 +216,7 @@ export function isIncompletePartiallyPaidInvoice(
   styleUrl: './common-billing.component.scss'
 })
 export class CommonBillingComponent implements OnDestroy {
+  readonly paymentInitNoPaymentButtonLabel = PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL;
   @ViewChild('invoiceOrderCardsViewport') private invoiceOrderCardsElement?: ElementRef<HTMLElement>;
 
   private readonly commonBillingApi = inject(CommonBillingApi);
@@ -356,13 +389,13 @@ export class CommonBillingComponent implements OnDestroy {
       return 'После ручной отправки или исправления нажмите "Уведомление обработано".';
     }
     if (this.attentionIsMigrationPaymentRegistry() && this.attentionHasPaymentInitCheck()) {
-      return 'Сверьте каждый OrderId и PaymentId в T-Bank. Только после ручной проверки нажмите «Сверено».';
+      return paymentInitNoPaymentActionLabel();
     }
     if (this.attentionIsMigrationPaymentRegistry()) {
       return 'Этот тип миграционного конфликта нельзя закрыть из карточки. Передайте реквизиты администратору для отдельного разбора.';
     }
     if (this.attentionHasPaymentInitCheck()) {
-      return 'Проверьте состояние создания платежа в T-Bank и только затем нажмите «Сверено».';
+      return paymentInitNoPaymentActionLabel();
     }
     if (this.invoiceNeedsAttention()) {
       return 'После проверки используйте зеленое действие ниже или повторите обработку.';
@@ -1020,11 +1053,7 @@ export class CommonBillingComponent implements OnDestroy {
     const evidenceText = identifiers
       ? `\n\nПроверьте все записи:\n${identifiers}`
       : '\n\nИдентификаторы платежа не сохранены: проверьте операцию по счету вручную в T-Bank.';
-    const confirmed = window.confirm(
-      'Подтвердите, что вы вручную проверили в T-Bank ВСЕ связанные платежи и ни один из них '
-      + 'не требует применения оплаты, отмены или возврата.'
-      + evidenceText
-    );
+    const confirmed = window.confirm(paymentInitNoPaymentConfirmation(evidenceText));
     if (!confirmed) {
       return;
     }
@@ -1032,7 +1061,7 @@ export class CommonBillingComponent implements OnDestroy {
       invoice.id,
       'confirm-payment-init-check',
       () => this.commonBillingApi.confirmPaymentInitCheck(invoice.id, snapshot.evidenceToken),
-      'Проверка платежной ссылки закрыта'
+      'В T‑Bank оплаты нет: техническая проверка закрыта'
     );
   }
 
@@ -1619,11 +1648,7 @@ export class CommonBillingComponent implements OnDestroy {
       ];
     }
     if (this.attentionIsMigrationPaymentRegistry() && this.attentionHasPaymentInitCheck()) {
-      return [
-        'Найдите в T-Bank все перечисленные ниже OrderId и PaymentId.',
-        'Убедитесь, что ни один платеж не требует применения, отмены или возврата.',
-        'Нажимайте «Сверено» только после проверки каждого идентификатора.'
-      ];
+      return paymentInitNoPaymentInstructions();
     }
     if (this.attentionIsMigrationPaymentRegistry()) {
       return [
@@ -1632,11 +1657,7 @@ export class CommonBillingComponent implements OnDestroy {
       ];
     }
     if (this.attentionHasPaymentInitCheck()) {
-      return [
-        'Откройте T-Bank и проверьте, был ли создан или оплачен платеж.',
-        'Не повторяйте создание ссылки до завершения ручной сверки.',
-        'После проверки нажмите «Сверено».'
-      ];
+      return paymentInitNoPaymentInstructions();
     }
     if (commonError.startsWith('whatsapp_group_missing')) {
       return [

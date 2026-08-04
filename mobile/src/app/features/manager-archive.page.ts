@@ -168,7 +168,7 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
                     rel="noopener"
                     [class.disabled]="!archiveReviewUrl(order)"
                     (click)="guardLink($event, archiveReviewUrl(order))"
-                  >url</a>
+                  >перейти</a>
                   <button type="button" (click)="copyArchivePaymentText(order)">
                     {{ copiedKey() === 'archive-payment-' + order.id ? '✓' : 'счет' }}
                   </button>
@@ -1266,7 +1266,7 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
     const text = [
       this.archiveOrderTitle(order),
       'Здравствуйте, тексты отзывов доступны для проверки.',
-      reviewUrl ? `Ссылка на проверку отзывов: ${reviewUrl}` : ''
+      reviewUrl ? `Перейти к проверке отзывов:\n${reviewUrl}` : ''
     ].filter(Boolean).join('\n\n');
 
     await this.copyText(text, `archive-review-${order.id}`, 'Не удалось скопировать текст.');

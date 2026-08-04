@@ -330,6 +330,14 @@ export interface CompanyFilialEditItem {
   archivedAt?: string | null;
 }
 
+export interface ManualCardPaymentConfirmationRequest {
+  recipientStatementChecked: true;
+  paymentReceived: true;
+  receivedAmountKopecks: number;
+  note: string;
+  receiptUrl?: string;
+}
+
 export interface FilialDeletionPreview {
   filialId: number;
   orderCount: number;
@@ -1080,6 +1088,16 @@ export class ManagerApi {
     return this.http.post<ManagerCredentialRevealResponse>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/credential-reveal`,
       { ...source, field }
+    );
+  }
+
+  confirmManualCardPayment(
+    orderId: number,
+    request: ManualCardPaymentConfirmationRequest
+  ): Observable<void> {
+    return this.http.post<void>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/confirm-manual-card-payment`,
+      request
     );
   }
 

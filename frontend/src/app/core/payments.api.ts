@@ -145,6 +145,12 @@ export interface AdminPaymentLinkResponse {
   refundable: boolean;
 }
 
+export interface CloseManualPaymentUnpaidRequest {
+  recipientStatementChecked: true;
+  paymentAbsent: true;
+  note: string;
+}
+
 export type PaymentLinkListSource = 'LIVE' | 'ARCHIVE';
 
 export interface AdminPaymentLinkSummaryResponse {
@@ -514,6 +520,16 @@ export class PaymentsApi {
     return this.http.post<AdminPaymentLinkResponse>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-links/${linkId}/confirm`,
       {}
+    );
+  }
+
+  closeAdminManualPaymentLinkAsUnpaid(
+    linkId: number,
+    request: CloseManualPaymentUnpaidRequest
+  ): Observable<AdminPaymentLinkResponse> {
+    return this.http.post<AdminPaymentLinkResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-links/${linkId}/close-unpaid`,
+      request
     );
   }
 

@@ -38,6 +38,14 @@ import { MobileReviewCardShellComponent } from '../shared/mobile-review-card-she
 import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
 import {
+  buildManualCardPaymentConfirmationRequest,
+  exactPaymentAmountKopecks,
+  manualCardPaymentConfirmationPrompt,
+  manualCardPaymentFallbackAccessDecision,
+  manualCardPaymentFallbackDecision,
+  shouldSubmitManualCardPaymentFallback
+} from '../shared/manual-payment-confirmation';
+import {
   mobilePageIndex,
   mobilePageIsFirst,
   mobilePageIsLast,
@@ -1859,7 +1867,80 @@ export class WorkerPage implements OnInit, OnDestroy {
   async updateOrderStatus(order: OrderItem, action: WorkerStatusAction): Promise<void> {
     const key = this.orderMutationKey(order, action.status);
     const targetStatus = workerOrderTargetStatus(order, action);
+    if (targetStatus === 'Оплачено') {
+      await this.updatePaidOrderStatus(order, key);
+      return;
+    }
     await this.runMutation(key, () => this.api.updateWorkerOrderStatus(order.id, targetStatus), 'Не удалось изменить статус заказа.');
+  }
+
+  private async updatePaidOrderStatus(order: OrderItem, key: string): Promise<void> {
+    this.mutationKey.set(key);
+    this.error.set(null);
+    try {
+      try {
+        await firstValueFrom(this.api.updateWorkerOrderStatus(order.id, 'Оплачено'));
+      } catch (genericError) {
+        const fallbackAccess = manualCardPaymentFallbackAccessDecision(
+          genericError,
+          this.auth.user()?.roles,
+          order.id
+        );
+        if (!fallbackAccess.allowed) {
+          if (fallbackAccess.userMessage) {
+            this.error.set(fallbackAccess.userMessage);
+            return;
+          }
+          throw genericError;
+        }
+
+        let authoritativeOrder;
+        try {
+          authoritativeOrder = await firstValueFrom(this.api.getManagerOrderDetails(order.id));
+        } catch {
+          this.error.set('Не удалось загрузить точную сумму заказа. Оплата не отмечена, ссылка T-Bank/СБП не закрыта.');
+          return;
+        }
+        const amountKopecks = exactPaymentAmountKopecks(
+          authoritativeOrder.totalSumWithBadReviews ?? authoritativeOrder.sum
+        );
+        const fallback = manualCardPaymentFallbackDecision(
+          genericError,
+          this.auth.user()?.roles,
+          order.id,
+          amountKopecks
+        );
+        if (!fallback.allowed) {
+          this.error.set(fallback.userMessage ?? 'Безопасное ручное подтверждение оплаты недоступно.');
+          return;
+        }
+
+        const prompt = manualCardPaymentConfirmationPrompt(order.id, amountKopecks!);
+        if (!prompt) {
+          this.error.set('Не удалось подготовить безопасное подтверждение. Оплата не изменена.');
+          return;
+        }
+        const explicitlyConfirmed = await this.confirm.confirm(prompt);
+        if (!shouldSubmitManualCardPaymentFallback(fallback, explicitlyConfirmed)) {
+          return;
+        }
+
+        const request = buildManualCardPaymentConfirmationRequest(
+          amountKopecks!,
+          `Владелец/администратор проверил выписку и полное поступление по кнопке «Оплатили» на странице работника; заказ #${order.id}`
+        );
+        if (!request) {
+          this.error.set('Не удалось сформировать запрос с точной суммой. Оплата не изменена.');
+          return;
+        }
+        await firstValueFrom(this.api.confirmManagerManualCardPayment(order.id, request));
+      }
+      await this.load();
+    } catch (error) {
+      this.error.set(this.apiErrorMessage(error, 'Не удалось изменить статус заказа.'));
+    } finally {
+      this.mutationKey.set(null);
+    }
   }
 
   async toggleOrderClientWaiting(order: OrderItem): Promise<void> {

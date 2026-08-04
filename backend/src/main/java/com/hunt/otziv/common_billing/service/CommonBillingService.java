@@ -62,6 +62,7 @@ import com.hunt.otziv.payments.dto.TbankInitResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
@@ -363,6 +364,21 @@ public class CommonBillingService {
     private static final String PAYMENT_INIT_MANUALLY_CHECKED_BY_PREFIX =
             PAYMENT_INIT_MANUALLY_CHECKED_REASON + "_by=";
     private static final String INVOICE_MEMBERSHIP_CHANGED = "common_invoice_membership_changed";
+    private static final String STANDALONE_PAYMENT_ROUTE_CONFLICT = "standalone_payment_route_conflict";
+    private static final String COMMON_INVOICE_ROUTE_ATTACHED_PREFIX = "common_invoice_route_attached; ";
+    private static final String MANUAL_PAYMENT_ABSENT_VERIFIED_PREFIX = "manual_payment_absent_verified";
+    private static final Set<PaymentLinkStatus> SAFELY_CLOSED_STANDALONE_PAYMENT_STATUSES = Set.of(
+            PaymentLinkStatus.REJECTED,
+            PaymentLinkStatus.CANCELED,
+            PaymentLinkStatus.REVERSED,
+            PaymentLinkStatus.REFUNDED
+    );
+    private static final Set<PaymentLinkStatus> STANDALONE_PAYMENT_REVERSAL_STATUSES = Set.of(
+            PaymentLinkStatus.REVERSED,
+            PaymentLinkStatus.PARTIAL_REVERSED,
+            PaymentLinkStatus.REFUNDED,
+            PaymentLinkStatus.PARTIAL_REFUNDED
+    );
     private static final Set<String> RESOLVABLE_TECHNICAL_TAIL_ERROR_PREFIXES = Set.of(
             "disabled:",
             "empty:",
@@ -1106,8 +1122,8 @@ public class CommonBillingService {
             ManualPaymentConfirmationRequest request,
             Principal principal
     ) {
-        CommonInvoice invoice = lockedInvoice(invoiceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureCommonInvoiceNotNeedsAttention(invoice);
         ensureCommonInvoiceCanChangePositions(invoice);
@@ -1152,6 +1168,10 @@ public class CommonBillingService {
         // two concurrent standalone confirmations may already own different
         // order rows from the same invoice.
         orderAggregateMutationLockService.lock(orderId);
+        List<PaymentLink> lockedPaymentLinks = paymentLinkRepository.findByOrderIdForUpdate(orderId);
+        if (lockedPaymentLinks == null) {
+            lockedPaymentLinks = List.of();
+        }
         Optional<CommonInvoiceOrder> optionalItem = invoiceOrderRepository.findByOrderIdWithInvoice(orderId);
         if (optionalItem.isEmpty()) {
             return false;
@@ -1178,24 +1198,35 @@ public class CommonBillingService {
                 .filter(candidate -> candidate.getOrder() != null && orderId.equals(candidate.getOrder().getId()))
                 .findFirst()
                 .orElse(item);
-        if (target.isPaid()) {
-            closeOrderAsPaidForConfirmedItem(invoice, target);
-            refreshInvoiceAmounts(invoice, items);
+        boolean alreadyApplied = target.isPaid();
+        try {
+            Set<PaymentLink> appliedStandalonePayments = synchronizeConfirmedStandalonePaymentsOrThrow(
+                    invoice,
+                    items,
+                    Map.of(orderId, List.copyOf(lockedPaymentLinks))
+            );
+            if (appliedStandalonePayments.isEmpty()) {
+                throw standalonePaymentConflict(
+                        orderId,
+                        "обратный вызов оплаты не нашел единственный подтвержденный отдельный платеж"
+                );
+            }
+            ensureNoCompetingStandaloneRoutesOrThrow(
+                    paymentLinksRequiringCommonInvoiceRouteCheck(
+                            Map.of(orderId, List.copyOf(lockedPaymentLinks)),
+                            List.of(target),
+                            appliedStandalonePayments
+                    )
+            );
+        } catch (ResponseStatusException conflict) {
+            markStandalonePaymentRouteConflict(invoice, conflict);
             return false;
         }
-
-        LocalDateTime confirmedAt = paidAt == null ? LocalDateTime.now() : paidAt;
-        target.setPaid(true);
-        target.setUnpaid(false);
-        target.setPaidAt(confirmedAt);
-        target.setPaymentMethod(PAYMENT_METHOD_TBANK);
-        invoiceOrderRepository.save(target);
-        mergeInvoicePaymentMethod(invoice, PAYMENT_METHOD_TBANK);
 
         // The caller already supplied the confirmed standalone payment. Avoid
         // discovering and closing sibling standalone links while only the
         // target order is locked.
-        refreshInvoiceAmounts(invoice, items, false);
+        refreshInvoiceAmounts(invoice, items);
         if (!items.isEmpty() && items.stream().allMatch(CommonInvoiceOrder::isPaid)) {
             if (!closeOrderAsPaidForConfirmedItem(invoice, target)) {
                 return true;
@@ -1217,6 +1248,56 @@ public class CommonBillingService {
                 invoiceId,
                 normalize(reason)
         );
+        return !alreadyApplied;
+    }
+
+    /**
+     * Quarantines an invoice when the provider later reverses/refunds the exact
+     * standalone payment that funded one of its positions. Paid flags are kept
+     * intact until a human reconciles the returned money.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean applyStandalonePaymentReversal(
+            Long orderId,
+            Long paymentLinkId,
+            PaymentLinkStatus terminalStatus
+    ) {
+        if (orderId == null || paymentLinkId == null
+                || !STANDALONE_PAYMENT_REVERSAL_STATUSES.contains(terminalStatus)) {
+            return false;
+        }
+        orderAggregateMutationLockService.lock(orderId);
+        PaymentLink sourceLink = paymentLinkRepository.findByOrderIdForUpdate(orderId).stream()
+                .filter(link -> paymentLinkId.equals(link.getId()))
+                .findFirst()
+                .orElse(null);
+        String durableProviderStatus = sourceLink == null
+                ? ""
+                : normalize(sourceLink.getProviderTerminalStatus()).toUpperCase(Locale.ROOT);
+        if (sourceLink == null
+                || sourceLink.getStatus() != terminalStatus
+                || !terminalStatus.name().equals(durableProviderStatus)) {
+            return false;
+        }
+        CommonInvoiceOrder item = invoiceOrderRepository.findByOrderIdWithInvoice(orderId).orElse(null);
+        if (item == null || item.getInvoice() == null || item.getInvoice().getId() == null) {
+            return false;
+        }
+        CommonInvoice snapshot = item.getInvoice();
+        if (!paymentLinkId.equals(item.getSourcePaymentLinkId())) {
+            return false;
+        }
+        CommonInvoice invoice = lockedInvoiceAfterOrderPrelude(snapshot.getId()).orElse(snapshot);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setNextReminderAt(null);
+        invoice.setLastError(limit(
+                "standalone_payment_reversed: order=" + orderId
+                        + ";link=" + paymentLinkId
+                        + ";status=" + terminalStatus.name()
+                        + ";provider=" + durableProviderStatus,
+                512
+        ));
+        invoiceRepository.save(invoice);
         return true;
     }
 
@@ -1411,8 +1492,8 @@ public class CommonBillingService {
             ManualPaymentConfirmationRequest request,
             Principal principal
     ) {
-        CommonInvoice invoice = lockedInvoice(invoiceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureCommonInvoiceNotNeedsAttention(invoice);
         if (invoice.getStatus() == CommonInvoiceStatus.PAID
@@ -1627,8 +1708,8 @@ public class CommonBillingService {
 
     @Transactional
     public CommonInvoiceDetailsResponse applyLatePayment(Long invoiceId) {
-        CommonInvoice invoice = lockedInvoice(invoiceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureCommonInvoiceNeedsAttention(invoice);
         if (!isLatePaymentAttention(invoice)) {
@@ -1708,8 +1789,8 @@ public class CommonBillingService {
 
     @Transactional
     public CommonInvoiceDetailsResponse markUnpaid(Long invoiceId) {
-        CommonInvoice invoice = lockedInvoice(invoiceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureCommonInvoiceNotNeedsAttention(invoice);
         ensureCommonInvoiceCanBeMarkedUnpaid(invoice);
@@ -2175,10 +2256,36 @@ public class CommonBillingService {
     }
 
     private PreparedCommonPaymentInit preparePaymentInit(String token, String cleanEmail) {
-        CommonInvoice invoice = lockedInvoiceByToken(token)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceByTokenAfterStandalonePaymentPrelude(token);
+        CommonInvoice invoice = paymentPrelude.invoice();
         ensureNoOperationInProgress(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        try {
+            Set<PaymentLink> appliedStandalonePayments = synchronizeConfirmedStandalonePaymentsOrThrow(
+                    invoice,
+                    items,
+                    paymentPrelude.paymentLinksByOrder()
+            );
+            ensureNoCompetingStandaloneRoutesOrThrow(
+                    paymentLinksRequiringCommonInvoiceRouteCheck(
+                            paymentPrelude.paymentLinksByOrder(),
+                            items,
+                            appliedStandalonePayments
+                    )
+            );
+        } catch (ResponseStatusException conflict) {
+            markStandalonePaymentRouteConflict(invoice, conflict);
+            return new PreparedCommonPaymentInit(
+                    invoice.getId(),
+                    null,
+                    cleanEmail,
+                    0,
+                    null,
+                    null,
+                    null,
+                    "У общего счета обнаружен другой незакрытый способ оплаты; нужна ручная сверка"
+            );
+        }
         refreshInvoiceAmounts(invoice, items);
         long remaining = remainingKopecks(invoice);
         if (!canAcceptPublicPayment(invoice)) {
@@ -3283,15 +3390,11 @@ public class CommonBillingService {
      */
     private LockedInvoicePaymentPrelude lockedInvoiceAfterStandalonePaymentPrelude(Long invoiceId) {
         Set<Long> lockedOrderIds = lockInvoiceOrderAggregates(invoiceId);
-        Map<Long, List<PaymentLink>> paymentLinksByOrder = new HashMap<>();
-        for (Long orderId : new TreeSet<>(lockedOrderIds)) {
-            List<PaymentLink> lockedLinks = paymentLinkRepository.findByOrderIdForUpdate(orderId);
-            paymentLinksByOrder.put(orderId, lockedLinks == null ? List.of() : List.copyOf(lockedLinks));
-        }
+        Map<Long, List<PaymentLink>> paymentLinksByOrder = lockPaymentLinksForOrders(lockedOrderIds);
         CommonInvoice invoice = lockedInvoiceAfterOrderPrelude(invoiceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         ensureInvoiceMembershipUnchanged(invoiceId, lockedOrderIds);
-        return new LockedInvoicePaymentPrelude(invoice, Map.copyOf(paymentLinksByOrder));
+        return new LockedInvoicePaymentPrelude(invoice, paymentLinksByOrder);
     }
 
     private Optional<CommonInvoice> lockedInvoiceAfterOrderPrelude(Long invoiceId) {
@@ -3324,6 +3427,23 @@ public class CommonBillingService {
         });
         invoice.ifPresent(locked -> ensureInvoiceMembershipUnchanged(locked.getId(), lockedOrderIds));
         return invoice;
+    }
+
+    private LockedInvoicePaymentPrelude lockedInvoiceByTokenAfterStandalonePaymentPrelude(String token) {
+        Set<Long> lockedOrderIds = lockInvoiceOrderAggregatesByToken(token);
+        Map<Long, List<PaymentLink>> paymentLinksByOrder = lockPaymentLinksForOrders(lockedOrderIds);
+        Optional<CommonInvoice> snapshot = invoiceRepository.findByTokenWithAccount(token);
+        Long expectedAccountId = snapshot.map(CommonInvoice::getAccount)
+                .map(CommonBillingAccount::getId)
+                .orElse(null);
+        lockFreshAccountAfterOrderPrelude(expectedAccountId);
+        CommonInvoice invoice = invoiceRepository.findByTokenWithAccountForUpdate(token)
+                .or(() -> snapshot)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        entityManager.refresh(invoice);
+        ensureInvoiceAccountUnchanged(invoice, expectedAccountId);
+        ensureInvoiceMembershipUnchanged(invoice.getId(), lockedOrderIds);
+        return new LockedInvoicePaymentPrelude(invoice, paymentLinksByOrder);
     }
 
     private CommonBillingAccount lockFreshAccountAfterOrderPrelude(Long accountId) {
@@ -3382,6 +3502,340 @@ public class CommonBillingService {
             locked.put(orderId, orderAggregateMutationLockService.lock(orderId));
         }
         return locked;
+    }
+
+    private Map<Long, List<PaymentLink>> lockPaymentLinksForOrders(Collection<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<PaymentLink>> locked = new HashMap<>();
+        for (Long orderId : new TreeSet<>(orderIds.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()))) {
+            List<PaymentLink> links = paymentLinkRepository.findByOrderIdForUpdate(orderId);
+            locked.put(orderId, links == null ? List.of() : List.copyOf(links));
+        }
+        return Map.copyOf(locked);
+    }
+
+    private Map<Long, List<PaymentLink>> paymentLinksRequiringCommonInvoiceRouteCheck(
+            Map<Long, List<PaymentLink>> paymentLinksByOrder,
+            Collection<CommonInvoiceOrder> items,
+            Set<PaymentLink> appliedStandalonePayments
+    ) {
+        if (paymentLinksByOrder == null || paymentLinksByOrder.isEmpty()
+                || items == null || items.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> invoiceOrderIds = items.stream()
+                .filter(Objects::nonNull)
+                .filter(item -> item.getOrder() != null && item.getOrder().getId() != null)
+                .map(item -> item.getOrder().getId())
+                .collect(Collectors.toSet());
+        Set<PaymentLink> applied = appliedStandalonePayments == null
+                ? Set.of()
+                : appliedStandalonePayments;
+        Map<Long, List<PaymentLink>> selected = new HashMap<>();
+        for (Map.Entry<Long, List<PaymentLink>> entry : paymentLinksByOrder.entrySet()) {
+            if (!invoiceOrderIds.contains(entry.getKey())) {
+                continue;
+            }
+            List<PaymentLink> relevant = entry.getValue().stream()
+                    .filter(link -> !applied.contains(link))
+                    .toList();
+            if (!relevant.isEmpty()) {
+                selected.put(entry.getKey(), relevant);
+            }
+        }
+        return Map.copyOf(selected);
+    }
+
+    /**
+     * Validation is deliberately non-mutating. A CREATED local token does not
+     * prove that its public URL was never disclosed, so even that state must be
+     * reconciled explicitly before switching the order to a common invoice.
+     */
+    private void ensureNoCompetingStandaloneRoutesOrThrow(
+            Map<Long, List<PaymentLink>> paymentLinksByOrder
+    ) {
+        for (Map.Entry<Long, List<PaymentLink>> entry : (paymentLinksByOrder == null
+                ? Map.<Long, List<PaymentLink>>of()
+                : paymentLinksByOrder).entrySet()) {
+            for (PaymentLink link : entry.getValue()) {
+                if (isSafelyClosedStandaloneRoute(link)) {
+                    continue;
+                }
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Заказ #" + entry.getKey()
+                                + " нельзя включить в общий счет: отдельный способ оплаты"
+                                + " (ссылка #" + (link.getId() == null ? "?" : link.getId())
+                                + ", статус " + (link.getStatus() == null ? "UNKNOWN" : link.getStatus().name())
+                                + ") не закрыт безопасно. Проверьте T-Bank либо поступление по ручным реквизитам,"
+                                + " затем явно отмените/закройте отдельный платеж."
+                );
+            }
+        }
+    }
+
+    private Set<PaymentLink> synchronizeConfirmedStandalonePaymentsOrThrow(
+            CommonInvoice invoice,
+            List<CommonInvoiceOrder> items,
+            Map<Long, List<PaymentLink>> paymentLinksByOrder
+    ) {
+        if (invoice == null || items == null || items.isEmpty()
+                || paymentLinksByOrder == null || paymentLinksByOrder.isEmpty()) {
+            return Set.of();
+        }
+        ensureAppliedStandalonePaymentSourcesHealthyOrThrow(items, paymentLinksByOrder);
+        long allocatedPaidKopecks = items.stream()
+                .filter(CommonInvoiceOrder::isPaid)
+                .mapToLong(CommonInvoiceOrder::getAmountKopecks)
+                .sum();
+        boolean hasUnallocatedCommonPayment = invoice.getPaidKopecks() > allocatedPaidKopecks;
+        Set<PaymentLink> applied = new HashSet<>();
+        List<ConfirmedStandaloneApplication> applications = new ArrayList<>();
+
+        for (CommonInvoiceOrder item : items) {
+            Order order = item == null ? null : item.getOrder();
+            Long orderId = order == null ? null : order.getId();
+            if (orderId == null) {
+                continue;
+            }
+            List<PaymentLink> confirmed = paymentLinksByOrder.getOrDefault(orderId, List.of()).stream()
+                    .filter(Objects::nonNull)
+                    .filter(link -> link.getStatus() == PaymentLinkStatus.CONFIRMED)
+                    .toList();
+            if (confirmed.isEmpty()) {
+                continue;
+            }
+            if (confirmed.size() != 1) {
+                throw standalonePaymentConflict(
+                        orderId,
+                        "найдено несколько подтвержденных отдельных платежей (" + confirmed.size() + ")"
+                );
+            }
+
+            PaymentLink link = confirmed.getFirst();
+            long currentAmount = item.getAmountKopecks();
+            if (!item.isPaid()) {
+                try {
+                    currentAmount = amountKopecks(payableSum(order));
+                } catch (AmountCalculationException exception) {
+                    throw standalonePaymentConflict(
+                            orderId,
+                            "не удалось безопасно определить актуальную сумму позиции"
+                    );
+                }
+            }
+            ensureConfirmedStandaloneEvidence(item, link, currentAmount);
+            if (item.getSourcePaymentLinkId() != null) {
+                if (!Objects.equals(item.getSourcePaymentLinkId(), link.getId())) {
+                    throw standalonePaymentConflict(orderId, "позиция уже связана с другим отдельным платежом");
+                }
+                ensureItemMatchesConfirmedStandalonePayment(item, link);
+                applied.add(link);
+                continue;
+            }
+            if (hasItemPaymentEvidence(item)) {
+                throw standalonePaymentConflict(
+                        orderId,
+                        "позиция уже содержит другой либо недоказанный источник оплаты"
+                );
+            }
+            if (hasUnallocatedCommonPayment || hasCurrentCommonPaymentRoute(invoice)) {
+                throw standalonePaymentConflict(
+                        orderId,
+                        "в общем счете уже есть платежный источник; автоматическое распределение небезопасно"
+                );
+            }
+            if (!isOrderPaid(order)) {
+                throw standalonePaymentConflict(
+                        orderId,
+                        "платеж подтвержден, но перевод заказа в статус оплаты не завершен"
+                );
+            }
+            applications.add(new ConfirmedStandaloneApplication(item, link, currentAmount));
+        }
+
+        for (ConfirmedStandaloneApplication application : applications) {
+            CommonInvoiceOrder item = application.item();
+            PaymentLink link = application.link();
+            item.setAmountKopecks(application.amountKopecks());
+            item.setPaid(true);
+            item.setUnpaid(false);
+            item.setPaidAt(link.getPaidAt());
+            item.setPaymentMethod(standalonePaymentMethod(link));
+            item.setSourcePaymentLinkId(link.getId());
+            if (isManualPayment(link)) {
+                item.setManualPaidBy(normalize(link.getManualConfirmedBy()));
+                item.setManualPaymentComment(normalize(link.getManualComment()));
+            }
+            mergeInvoicePaymentMethod(invoice, standalonePaymentMethod(link));
+            applied.add(link);
+        }
+        if (!applications.isEmpty()) {
+            invoiceOrderRepository.saveAll(applications.stream()
+                    .map(ConfirmedStandaloneApplication::item)
+                    .toList());
+        }
+        return Set.copyOf(applied);
+    }
+
+    private void ensureConfirmedStandaloneEvidence(
+            CommonInvoiceOrder item,
+            PaymentLink link,
+            long currentItemAmount
+    ) {
+        Long orderId = item == null || item.getOrder() == null ? null : item.getOrder().getId();
+        Long linkOrderId = link == null || link.getOrder() == null ? null : link.getOrder().getId();
+        Long confirmedAmount = link == null ? null : link.getConfirmedAmountKopecks();
+        boolean exactAmount = confirmedAmount != null
+                && confirmedAmount > 0
+                && confirmedAmount == currentItemAmount
+                && link.getAmountKopecks() == currentItemAmount;
+        boolean commonEvidence = link != null
+                && link.getId() != null
+                && Objects.equals(orderId, linkOrderId)
+                && link.getPaidAt() != null
+                && exactAmount;
+        boolean bankEvidence = commonEvidence
+                && (link.getPaymentMethod() == PaymentMethod.BANK_FORM
+                || link.getPaymentMethod() == PaymentMethod.SBP_QR)
+                && !normalize(link.getTbankPaymentId()).isBlank()
+                && !normalize(link.getTbankOrderId()).isBlank()
+                && !normalize(link.getTbankTerminalKey()).isBlank();
+        boolean manualEvidence = commonEvidence
+                && isManualPayment(link)
+                && link.getManualConfirmedAt() != null
+                && !normalize(link.getManualConfirmedBy()).isBlank();
+        if (!bankEvidence && !manualEvidence) {
+            throw standalonePaymentConflict(
+                    orderId,
+                    "подтвержденный платеж не имеет однозначного происхождения или его сумма не совпадает"
+            );
+        }
+    }
+
+    private void ensureAppliedStandalonePaymentSourcesHealthyOrThrow(
+            List<CommonInvoiceOrder> items,
+            Map<Long, List<PaymentLink>> paymentLinksByOrder
+    ) {
+        for (CommonInvoiceOrder item : items) {
+            Long sourcePaymentLinkId = item == null ? null : item.getSourcePaymentLinkId();
+            Order order = item == null ? null : item.getOrder();
+            Long orderId = order == null ? null : order.getId();
+            if (sourcePaymentLinkId == null || orderId == null) {
+                continue;
+            }
+            PaymentLink source = paymentLinksByOrder.getOrDefault(orderId, List.of()).stream()
+                    .filter(link -> sourcePaymentLinkId.equals(link.getId()))
+                    .findFirst()
+                    .orElse(null);
+            if (source != null && source.getStatus() != PaymentLinkStatus.CONFIRMED) {
+                throw standalonePaymentConflict(
+                        orderId,
+                        "ранее зачтенный отдельный платеж #" + sourcePaymentLinkId
+                                + " теперь имеет статус " + source.getStatus().name()
+                );
+            }
+        }
+    }
+
+    private void ensureItemMatchesConfirmedStandalonePayment(CommonInvoiceOrder item, PaymentLink link) {
+        boolean matches = item != null
+                && item.isPaid()
+                && !item.isUnpaid()
+                && Objects.equals(item.getPaidAt(), link.getPaidAt())
+                && standalonePaymentMethod(link).equals(normalize(item.getPaymentMethod()))
+                && Objects.equals(item.getSourcePaymentLinkId(), link.getId());
+        if (!matches) {
+            Long orderId = item == null || item.getOrder() == null ? null : item.getOrder().getId();
+            throw standalonePaymentConflict(orderId, "источник отдельной оплаты не совпадает с позицией счета");
+        }
+    }
+
+    private boolean hasItemPaymentEvidence(CommonInvoiceOrder item) {
+        return item != null
+                && (item.isPaid()
+                || item.isUnpaid()
+                || item.getPaidAt() != null
+                || !normalize(item.getPaymentMethod()).isBlank()
+                || !normalize(item.getManualPaidBy()).isBlank()
+                || !normalize(item.getManualPaymentComment()).isBlank()
+                || !normalize(item.getManualPaymentReceiptUrl()).isBlank());
+    }
+
+    private boolean hasCurrentCommonPaymentRoute(CommonInvoice invoice) {
+        return invoice != null
+                && (!normalize(invoice.getPaymentUrl()).isBlank()
+                || !normalize(invoice.getTbankPaymentId()).isBlank()
+                || !normalize(invoice.getTbankOrderId()).isBlank()
+                || !normalize(invoice.getTbankTerminalKey()).isBlank()
+                || invoice.getTbankPaymentAmountKopecks() != null
+                || invoice.getTbankPaymentCreatedAt() != null);
+    }
+
+    private String standalonePaymentMethod(PaymentLink link) {
+        return isManualPayment(link) ? PAYMENT_METHOD_MANUAL : PAYMENT_METHOD_TBANK;
+    }
+
+    private boolean isManualPayment(PaymentLink link) {
+        return link != null
+                && (link.getPaymentMethod() == PaymentMethod.MANUAL_MOBILE_BANK
+                || link.getPaymentMethod() == PaymentMethod.MANUAL_EXTERNAL_LINK);
+    }
+
+    private ResponseStatusException standalonePaymentConflict(Long orderId, String reason) {
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Заказ #" + (orderId == null ? "?" : orderId) + ": " + reason
+                        + ". Нужна ручная сверка платежных источников."
+        );
+    }
+
+    private boolean isSafelyClosedStandaloneRoute(PaymentLink link) {
+        if (link == null || link.getStatus() == null) {
+            return false;
+        }
+        boolean operationStillReserved = !normalize(link.getBankInitNonce()).isBlank()
+                || !normalize(link.getBankCancelNonce()).isBlank()
+                || link.getBankCancelOriginStatus() != null;
+        if (operationStillReserved) {
+            return false;
+        }
+        if (SAFELY_CLOSED_STANDALONE_PAYMENT_STATUSES.contains(link.getStatus())) {
+            return true;
+        }
+        if (link.getStatus() != PaymentLinkStatus.EXPIRED) {
+            return false;
+        }
+        boolean providerConfirmedExpiry = "DEADLINE_EXPIRED".equals(
+                normalize(link.getProviderTerminalStatus()).toUpperCase(Locale.ROOT)
+        ) && (link.getPaymentMethod() == PaymentMethod.BANK_FORM
+                || link.getPaymentMethod() == PaymentMethod.SBP_QR);
+        return providerConfirmedExpiry
+                || (link.getPaymentMethod() == PaymentMethod.BANK_FORM
+                && normalize(link.getTbankPaymentId()).isBlank()
+                && normalize(link.getTbankOrderId()).isBlank()
+                && link.getInitiatedAt() == null);
+    }
+
+    private void markStandalonePaymentRouteConflict(
+            CommonInvoice invoice,
+            ResponseStatusException conflict
+    ) {
+        if (invoice == null) {
+            throw conflict;
+        }
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setNextReminderAt(null);
+        invoice.setLastError(limit(
+                STANDALONE_PAYMENT_ROUTE_CONFLICT + ": "
+                        + normalize(conflict == null ? null : conflict.getReason()),
+                512
+        ));
+        invoiceRepository.save(invoice);
     }
 
     private void ensureInvoiceMembershipUnchanged(Long invoiceId, Set<Long> lockedOrderIds) {
@@ -3706,6 +4160,9 @@ public class CommonBillingService {
         orderIdsToLock.addAll(expectedMovableBindings.keySet());
         orderIdsToLock.addAll(expectedBackfillOrderIds);
         Map<Long, Order> lockedOrders = lockOrderAggregatesWithEntities(orderIdsToLock);
+        Map<Long, List<PaymentLink>> lockedBackfillPaymentLinks =
+                lockPaymentLinksForOrders(expectedBackfillOrderIds);
+        ensureNoCompetingStandaloneRoutesOrThrow(lockedBackfillPaymentLinks);
         Map<Long, CommonBillingAccount> lockedAccounts = lockAccountsInCanonicalOrder(accountSnapshots);
         Map<Long, CommonInvoice> lockedInvoices = lockInvoicesInCanonicalOrder(invoiceSnapshots);
 
@@ -3788,6 +4245,7 @@ public class CommonBillingService {
                 ready++;
             }
         }
+        consumeVerifiedManualRouteAfterAttach(targetInvoice, lockedBackfillPaymentLinks);
 
         List<CommonInvoiceOrder> targetItems = invoiceOrderRepository.findByInvoiceIdWithOrders(targetInvoice.getId());
         recalculateInvoice(targetInvoice, targetItems);
@@ -4060,6 +4518,8 @@ public class CommonBillingService {
         Set<Long> orderIdsToLock = new TreeSet<>(expectedBindings.keySet());
         orderIdsToLock.add(orderId);
         Map<Long, Order> lockedOrders = lockOrderAggregatesWithEntities(orderIdsToLock);
+        Map<Long, List<PaymentLink>> lockedPaymentLinks = lockPaymentLinksForOrders(Set.of(orderId));
+        ensureNoCompetingStandaloneRoutesOrThrow(lockedPaymentLinks);
         Map<Long, CommonBillingAccount> lockedAccounts = lockAccountsInCanonicalOrder(
                 Map.of(accountId, accountSnapshot)
         );
@@ -4096,6 +4556,7 @@ public class CommonBillingService {
                 ? createInvoice(lockedAccount)
                 : normalizeAttachableInvoices(lockedAccount, currentInvoices);
         CommonInvoiceOrder item = attachOrderWithoutInvoiceRefresh(invoice, lockedOrder);
+        consumeVerifiedManualRouteAfterAttach(invoice, lockedPaymentLinks);
         recalculateInvoice(invoice);
         publicationBlockerService.reconcileInvoice(invoice.getId());
         return item;
@@ -4109,6 +4570,31 @@ public class CommonBillingService {
         item.setAmountKopecks(payable == null ? 0 : payable);
         item.setOriginalOrderStatusTitle(limit(statusTitle(order), 64));
         return invoiceOrderRepository.save(item);
+    }
+
+    private void consumeVerifiedManualRouteAfterAttach(
+            CommonInvoice invoice,
+            Map<Long, List<PaymentLink>> paymentLinksByOrder
+    ) {
+        if (invoice == null || invoice.getId() == null
+                || paymentLinksByOrder == null || paymentLinksByOrder.isEmpty()) {
+            return;
+        }
+        paymentLinksByOrder.values().stream()
+                .flatMap(Collection::stream)
+                .filter(Objects::nonNull)
+                .filter(link -> link.getStatus() == PaymentLinkStatus.CANCELED)
+                .filter(this::isManualPayment)
+                .filter(link -> normalize(link.getLastError()).startsWith(MANUAL_PAYMENT_ABSENT_VERIFIED_PREFIX))
+                .forEach(link -> {
+                    link.setLastError(limit(
+                            COMMON_INVOICE_ROUTE_ATTACHED_PREFIX
+                                    + "invoice=" + invoice.getId() + "; "
+                                    + normalize(link.getLastError()),
+                            512
+                    ));
+                    paymentLinkRepository.save(link);
+                });
     }
 
     private boolean markBackfilledOrderReadyIfPublished(CommonInvoiceOrder item) {
@@ -4310,8 +4796,8 @@ public class CommonBillingService {
             LocalDateTime dueNow,
             boolean checkVisibility
     ) {
-        CommonInvoice invoice = lockedInvoice(invoiceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
         if (dueOnly && !isStillDueReminderCandidate(invoice, dueNow)) {
             return null;
         }
@@ -4322,6 +4808,23 @@ public class CommonBillingService {
         ensureCommonInvoiceCanSendPaymentMessages(invoice);
         ensureNoOperationInProgress(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        try {
+            Set<PaymentLink> appliedStandalonePayments = synchronizeConfirmedStandalonePaymentsOrThrow(
+                    invoice,
+                    items,
+                    paymentPrelude.paymentLinksByOrder()
+            );
+            ensureNoCompetingStandaloneRoutesOrThrow(
+                    paymentLinksRequiringCommonInvoiceRouteCheck(
+                            paymentPrelude.paymentLinksByOrder(),
+                            items,
+                            appliedStandalonePayments
+                    )
+            );
+        } catch (ResponseStatusException conflict) {
+            markStandalonePaymentRouteConflict(invoice, conflict);
+            return null;
+        }
         refreshInvoiceAmounts(invoice, items);
         ensureCommonInvoiceNotNeedsAttention(invoice);
         if (hasActiveRecovery(items)) {
@@ -5260,6 +5763,37 @@ public class CommonBillingService {
     }
 
     private void cleanupPaidOrderAfterCommonBilling(Order order) {
+        Long orderId = order == null ? null : order.getId();
+        if (orderId == null) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    cleanupPaidOrderAfterCommit(orderId);
+                }
+            });
+            return;
+        }
+        performPaidOrderCleanup(order);
+    }
+
+    private void cleanupPaidOrderAfterCommit(Long orderId) {
+        try {
+            writeTransaction(() -> {
+                Order lockedOrder = orderAggregateMutationLockService.lock(orderId);
+                performPaidOrderCleanup(lockedOrder);
+                return null;
+            });
+        } catch (RuntimeException e) {
+            log.warn("Не удалось выполнить отложенную очистку оплаченного заказа {}", orderId, e);
+        }
+    }
+
+    /** Both downstream operations are idempotent and safe to retry after commit. */
+    private void performPaidOrderCleanup(Order order) {
         try {
             manualPaymentAutoConfirmationService.retireOpenLinksForPaidOrder(order);
         } catch (RuntimeException e) {
@@ -5424,14 +5958,8 @@ public class CommonBillingService {
     }
 
     private void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
-        refreshInvoiceAmounts(invoice, items, true);
-    }
-
-    private void refreshInvoiceAmounts(
-            CommonInvoice invoice,
-            List<CommonInvoiceOrder> items,
-            boolean synchronizeStandalonePayments
-    ) {
+        // Standalone confirmations are synchronized separately and only while
+        // a LockedInvoicePaymentPrelude owns Order and PaymentLink locks.
         if (isMigrationPaymentRegistryAttention(invoice)) {
             return;
         }
@@ -5455,10 +5983,6 @@ public class CommonBillingService {
             if (item.getAmountKopecks() != payable) {
                 item.setAmountKopecks(payable);
                 changed = true;
-            }
-            if (synchronizeStandalonePayments && markItemPaidFromConfirmedOrderLink(item)) {
-                changed = true;
-                continue;
             }
             if (!item.isReady() && canMarkCommonInvoiceItemReady(item.getOrder())) {
                 item.setReady(true);
@@ -5486,39 +6010,6 @@ public class CommonBillingService {
                 invoiceRepository.save(invoice);
             }
         }
-    }
-
-    private boolean markItemPaidFromConfirmedOrderLink(CommonInvoiceOrder item) {
-        Order order = item == null ? null : item.getOrder();
-        Long orderId = order == null ? null : order.getId();
-        if (orderId == null) {
-            return false;
-        }
-        Optional<PaymentLink> optionalLink = paymentLinkRepository
-                .findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(orderId, PaymentLinkStatus.CONFIRMED);
-        if (optionalLink.isEmpty()) {
-            return false;
-        }
-        PaymentLink link = optionalLink.get();
-        long paidAmount = link.getConfirmedAmountKopecks() != null && link.getConfirmedAmountKopecks() > 0
-                ? link.getConfirmedAmountKopecks()
-                : link.getAmountKopecks();
-        long itemAmount = Math.max(0, item.getAmountKopecks());
-        if (itemAmount > 0 && paidAmount < itemAmount) {
-            return false;
-        }
-        item.setPaid(true);
-        item.setUnpaid(false);
-        item.setPaidAt(link.getPaidAt() == null ? LocalDateTime.now() : link.getPaidAt());
-        item.setPaymentMethod(PAYMENT_METHOD_TBANK);
-        mergeInvoicePaymentMethod(item.getInvoice(), PAYMENT_METHOD_TBANK);
-        closeOrderAsPaidForConfirmedItem(item.getInvoice(), item);
-        log.info(
-                "Позиция общего счета по заказу {} автоматически зачтена по подтвержденной отдельной ссылке {}",
-                orderId,
-                link.getId()
-        );
-        return true;
     }
 
     private boolean canMarkCommonInvoiceItemReady(Order order) {
@@ -7824,6 +8315,13 @@ public class CommonBillingService {
             String tbankOrderId,
             PublicPaymentInitResponse cachedResponse,
             String deferredFailure
+    ) {
+    }
+
+    private record ConfirmedStandaloneApplication(
+            CommonInvoiceOrder item,
+            PaymentLink link,
+            long amountKopecks
     ) {
     }
 

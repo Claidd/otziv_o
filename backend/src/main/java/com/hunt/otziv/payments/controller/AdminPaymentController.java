@@ -2,6 +2,8 @@ package com.hunt.otziv.payments.controller;
 
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
+import com.hunt.otziv.payments.dto.CloseManualPaymentUnpaidRequest;
+import com.hunt.otziv.payments.dto.ConfirmManualCardPaymentRequest;
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
@@ -73,6 +75,44 @@ public class AdminPaymentController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/admin/payments/tbank-links/{linkId}/confirm-manual-card-payment")
+    public AdminPaymentLinkResponse confirmManualCardPayment(
+            @PathVariable Long linkId,
+            @RequestBody ConfirmManualCardPaymentRequest request,
+            Authentication authentication
+    ) {
+        return paymentLinkService.confirmPaidByManualCardTransfer(
+                linkId,
+                request != null && Boolean.TRUE.equals(request.recipientStatementChecked()),
+                request != null && Boolean.TRUE.equals(request.paymentReceived()),
+                request == null ? null : request.receivedAmountKopecks(),
+                request == null ? null : request.note(),
+                request == null ? null : request.receiptUrl(),
+                actor(authentication),
+                authentication
+        );
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/manager/orders/{orderId}/confirm-manual-card-payment")
+    public void confirmOrderManualCardPayment(
+            @PathVariable Long orderId,
+            @RequestBody ConfirmManualCardPaymentRequest request,
+            Authentication authentication
+    ) {
+        paymentLinkService.confirmPaidByManualCardTransferForOrder(
+                orderId,
+                request != null && Boolean.TRUE.equals(request.recipientStatementChecked()),
+                request != null && Boolean.TRUE.equals(request.paymentReceived()),
+                request == null ? null : request.receivedAmountKopecks(),
+                request == null ? null : request.note(),
+                request == null ? null : request.receiptUrl(),
+                actor(authentication),
+                authentication
+        );
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @PostMapping("/api/admin/payments/tbank-links/{linkId}/resolve-ambiguous-init")
     public AdminPaymentLinkResponse resolveAmbiguousTbankInit(
             @PathVariable Long linkId,
@@ -94,6 +134,23 @@ public class AdminPaymentController {
             Authentication authentication
     ) {
         return paymentLinkService.confirmManual(linkId, actor(authentication));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/admin/payments/manual-links/{linkId}/close-unpaid")
+    public AdminPaymentLinkResponse closeManualPaymentAsUnpaid(
+            @PathVariable Long linkId,
+            @RequestBody CloseManualPaymentUnpaidRequest request,
+            Authentication authentication
+    ) {
+        return paymentLinkService.closeManualAsUnpaid(
+                linkId,
+                request != null && Boolean.TRUE.equals(request.recipientStatementChecked()),
+                request != null && Boolean.TRUE.equals(request.paymentAbsent()),
+                request == null ? null : request.note(),
+                actor(authentication),
+                authentication
+        );
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")

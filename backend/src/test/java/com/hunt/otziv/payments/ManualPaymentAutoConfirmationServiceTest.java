@@ -214,6 +214,204 @@ class ManualPaymentAutoConfirmationServiceTest {
     }
 
     @Test
+    void blocksGenericPaidStatusWhenCreatedBankRouteHasNoProviderPaymentIdYet() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(471L);
+        PaymentLink link = new PaymentLink();
+        link.setStatus(PaymentLinkStatus.CREATED);
+        link.setPaymentMethod(PaymentMethod.BANK_FORM);
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(471L), any(Collection.class)))
+                .thenReturn(List.of(link));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.ensureCanCloseOrderManually(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.",
+                exception.getReason()
+        );
+    }
+
+    @Test
+    void blocksGenericPaidStatusForProviderVerifiedTerminalBankRoute() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(472L);
+        PaymentLink link = new PaymentLink();
+        link.setStatus(PaymentLinkStatus.CANCELED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankPaymentId("8634010799");
+        link.setProviderTerminalStatus("CANCELED");
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(472L), any(Collection.class)))
+                .thenReturn(List.of(link));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.ensureCanCloseOrderManually(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
+    void blocksGenericPaidStatusForLocallyExpiredBankRouteEvenWithManualInstruction() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(473L);
+        PaymentLink oldBankLink = new PaymentLink();
+        oldBankLink.setStatus(PaymentLinkStatus.EXPIRED);
+        oldBankLink.setPaymentMethod(PaymentMethod.BANK_FORM);
+        oldBankLink.setTbankPaymentId("8634010800");
+        PaymentLink manualLink = new PaymentLink();
+        manualLink.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        manualLink.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(473L), any(Collection.class)))
+                .thenReturn(List.of(oldBankLink, manualLink));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.ensureCanCloseOrderManually(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
+    void keepsGenericPaidStatusForProviderExpiredBankRouteWithManualInstruction() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(477L);
+        PaymentLink oldBankLink = new PaymentLink();
+        oldBankLink.setStatus(PaymentLinkStatus.EXPIRED);
+        oldBankLink.setPaymentMethod(PaymentMethod.BANK_FORM);
+        oldBankLink.setTbankPaymentId("8634010803");
+        oldBankLink.setProviderTerminalStatus("DEADLINE_EXPIRED");
+        PaymentLink manualLink = new PaymentLink();
+        manualLink.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        manualLink.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(477L), any(Collection.class)))
+                .thenReturn(List.of(oldBankLink, manualLink));
+
+        service.ensureCanCloseOrderManually(order);
+    }
+
+    @Test
+    void blocksGenericPaidStatusForUnstartedTerminalBankRouteWithoutManualInstruction() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(478L);
+
+        for (PaymentLinkStatus status : List.of(
+                PaymentLinkStatus.CANCELED,
+                PaymentLinkStatus.REJECTED,
+                PaymentLinkStatus.EXPIRED,
+                PaymentLinkStatus.FAILED
+        )) {
+            PaymentLink bankLink = new PaymentLink();
+            bankLink.setStatus(status);
+            bankLink.setPaymentMethod(PaymentMethod.BANK_FORM);
+            when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(478L), any(Collection.class)))
+                    .thenReturn(List.of(bankLink));
+
+            ResponseStatusException exception = assertThrows(
+                    ResponseStatusException.class,
+                    () -> service.ensureCanCloseOrderManually(order)
+            );
+
+            assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+            assertEquals(
+                    "У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.",
+                    exception.getReason()
+            );
+        }
+    }
+
+    @Test
+    void keepsGenericPaidStatusForUnstartedTerminalBankRouteWithManualInstruction() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(479L);
+        PaymentLink oldBankLink = new PaymentLink();
+        oldBankLink.setStatus(PaymentLinkStatus.EXPIRED);
+        oldBankLink.setPaymentMethod(PaymentMethod.BANK_FORM);
+        PaymentLink manualLink = new PaymentLink();
+        manualLink.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        manualLink.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(479L), any(Collection.class)))
+                .thenReturn(List.of(oldBankLink, manualLink));
+
+        service.ensureCanCloseOrderManually(order);
+    }
+
+    @Test
+    void blocksGenericManualConfirmationWhenBankRouteIsStillActive() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(475L);
+        PaymentLink activeBankLink = new PaymentLink();
+        activeBankLink.setStatus(PaymentLinkStatus.INITIATED);
+        activeBankLink.setPaymentMethod(PaymentMethod.BANK_FORM);
+        activeBankLink.setTbankPaymentId("8634010801");
+        PaymentLink manualLink = new PaymentLink();
+        manualLink.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        manualLink.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(475L), any(Collection.class)))
+                .thenReturn(List.of(activeBankLink, manualLink));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.ensureCanCloseOrderManually(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
+    void blocksGenericPaidStatusForRefundedBankEvidenceEvenWithManualTask() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(476L);
+        PaymentLink refunded = new PaymentLink();
+        refunded.setStatus(PaymentLinkStatus.REFUNDED);
+        refunded.setPaymentMethod(PaymentMethod.SBP_QR);
+        refunded.setTbankPaymentId("8634010802");
+        PaymentLink manualLink = new PaymentLink();
+        manualLink.setStatus(PaymentLinkStatus.MANUAL_REPORTED);
+        manualLink.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(476L), any(Collection.class)))
+                .thenReturn(List.of(refunded, manualLink));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.ensureCanCloseOrderManually(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
+    void keepsGenericPaidStatusWhenNoBankRouteWasCreated() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(474L);
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(474L), any(Collection.class)))
+                .thenReturn(List.of());
+
+        service.ensureCanCloseOrderManually(order);
+    }
+
+    @Test
     void neverRetiresAnInitiatedProviderPaymentAsLocallyCanceled() {
         ManualPaymentAutoConfirmationService service = service();
         Order order = new Order();

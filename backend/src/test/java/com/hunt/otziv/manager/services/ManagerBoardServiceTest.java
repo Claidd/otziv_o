@@ -17,6 +17,7 @@ import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
@@ -32,6 +33,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
 import java.time.LocalDate;
@@ -41,6 +44,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -345,6 +349,34 @@ class ManagerBoardServiceTest {
                 eq(cutoff),
                 argThat(statuses -> statuses.containsAll(Set.of("Оплачено", "Архив", "Публикация")))
         );
+    }
+
+    @Test
+    void ownerAllManagersModeCanOpenSelectedManagerBoardFromManagerControl() {
+        Principal principal = () -> "owner-all";
+        Authentication owner = authentication("ROLE_OWNER");
+        Manager selectedManager = Manager.builder().id(42L).build();
+
+        when(managerAccessService.canAccessManager(42L, owner)).thenReturn(true);
+        when(managerService.getManagerById(42L)).thenReturn(selectedManager);
+
+        assertSame(selectedManager, service.resolveManagerFilter(42L, principal, owner));
+        verify(managerAccessService).canAccessManager(42L, owner);
+    }
+
+    @Test
+    void scopedOwnerStillCannotOpenUnassignedManagerBoard() {
+        Principal principal = () -> "owner-scoped";
+        Authentication owner = authentication("ROLE_OWNER");
+        when(managerAccessService.canAccessManager(42L, owner)).thenReturn(false);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.resolveManagerFilter(42L, principal, owner)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(managerService, never()).getManagerById(42L);
     }
 
     private Authentication authentication(String authority) {

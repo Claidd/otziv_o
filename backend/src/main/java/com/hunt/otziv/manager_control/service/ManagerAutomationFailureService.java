@@ -155,8 +155,13 @@ public class ManagerAutomationFailureService {
                 + (order == null || order.getId() == null ? "" : " · заказ #" + order.getId());
         String errorCode = safe(state.getLastErrorCode());
         String errorMessage = safe(state.getLastErrorMessage());
+        boolean paymentInstructionFailure = "payment_instruction_failed".equalsIgnoreCase(errorCode);
+        boolean existingPaymentConflict = paymentInstructionFailure && isExistingPaymentConflict(errorMessage);
         List<String> reasonParts = new ArrayList<>();
-        if ("payment_instruction_failed".equalsIgnoreCase(errorCode)) {
+        if (existingPaymentConflict) {
+            reasonParts.add("Почему в замечаниях: действующая платежная ссылка уже существует, но автоматика "
+                    + "не смогла повторно использовать ее для напоминания; новое сообщение клиенту не отправилось");
+        } else if (paymentInstructionFailure) {
             reasonParts.add("Почему в замечаниях: автоматика не смогла подготовить или отправить счет клиенту");
         } else {
             reasonParts.add("Почему в замечаниях: задача клиентской автоматизации завершилась ошибкой");
@@ -171,7 +176,13 @@ public class ManagerAutomationFailureService {
         if (state.getNextAttemptAt() != null) {
             reasonParts.add("следующая попытка: " + state.getNextAttemptAt());
         }
-        reasonParts.add("Нажмите «Починить»: система перепроверит источник и безопасно повторит задачу");
+        if (existingPaymentConflict) {
+            reasonParts.add("Нажмите «Починить»: система проверит состояние существующего платежа в T-Bank "
+                    + "и, если он по-прежнему ожидает оплату, повторно отправит клиенту эту же ссылку; "
+                    + "второй платеж не создается");
+        } else {
+            reasonParts.add("Нажмите «Починить»: система перепроверит источник и безопасно повторит задачу");
+        }
         String targetUrl = invoice != null
                 ? "/admin/common-billing?invoiceId=" + invoice.getId()
                 : orderTargetUrl(manager, companyTitle);
@@ -193,6 +204,14 @@ public class ManagerAutomationFailureService {
                 state.getLastAttemptAt(),
                 state.getNextAttemptAt()
         ));
+    }
+
+    private boolean isExistingPaymentConflict(String message) {
+        String normalized = safe(message).toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("уже есть платеж в процессе")
+                || normalized.contains("уже есть другой банковский платеж")
+                || normalized.contains("уже есть созданный банковский платеж")
+                || normalized.contains("уже существует другой банковский платеж");
     }
 
     private CommonInvoice activeCommonInvoice(Order order) {

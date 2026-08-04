@@ -203,7 +203,8 @@ export class ManagerBoardComponent implements OnDestroy {
     mutationKey: this.mutationKey,
     loadBoard: () => this.loadBoard(),
     patchBoard: (updater) => this.patchBoard(updater),
-    errorMessage: (err, fallback) => this.errorMessage(err, fallback)
+    errorMessage: (err, fallback) => this.errorMessage(err, fallback),
+    canOverrideActiveBankPayment: () => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
   });
   readonly editCompany = this.companyFacade.editCompany;
   readonly editDraft = this.companyFacade.editDraft;

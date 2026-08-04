@@ -3,11 +3,48 @@ import test from 'node:test';
 import { loadTsModule } from './load-ts-module.mjs';
 
 const {
+  COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL,
   commonInvoiceAttentionPolicy,
+  commonInvoiceNoPaymentActionHint,
+  commonInvoiceNoPaymentConfirmation,
+  commonInvoicePaymentInitInstructions,
   commonInvoicePaymentEvidence,
   commonInvoicePaymentEvidenceConfirmationLines,
   commonInvoicePaymentEvidenceSnapshot
 } = loadTsModule('src/app/shared/common-invoice-attention-policy.ts');
+
+test('explains the no-payment action and keeps it separate from paid and unpaid statuses', () => {
+  assert.equal(COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL, 'В T‑Bank оплаты нет — продолжить');
+  assert.match(commonInvoiceNoPaymentActionHint(), /по перечисленным OrderId и PaymentId в T‑Bank/u);
+  assert.match(commonInvoiceNoPaymentActionHint(), /не будет отмечен оплаченным/u);
+  assert.match(commonInvoiceNoPaymentActionHint(), /не перейдёт в статус «Не оплачено»/u);
+  assert.match(commonInvoiceNoPaymentActionHint(), /отдельным действием «Оплачено»/u);
+  assert.match(commonInvoiceNoPaymentActionHint(), /комментарий или чек/u);
+});
+
+test('distinguishes OrderId search from PaymentId verification and branches by payment outcome', () => {
+  const instructions = commonInvoicePaymentInitInstructions().join(' ');
+  assert.match(instructions, /поле «Номер заказа» вводите только OrderId/u);
+  assert.match(instructions, /PaymentId — это отдельный идентификатор платежа/u);
+  assert.match(instructions, /Не вводите его в поле «Номер заказа»/u);
+  assert.match(instructions, /переключите тип поиска на идентификатор платежа/u);
+  assert.match(instructions, /найден активный платёж/u);
+  assert.match(instructions, /найден успешный платёж/u);
+  assert.match(instructions, /отмена\/возврат/u);
+});
+
+test('confirmation acknowledges only the no-actionable-payment outcome', () => {
+  const confirmation = commonInvoiceNoPaymentConfirmation('\n\nOrderId example');
+  assert.match(confirmation, /РЕЗУЛЬТАТ ПРОВЕРКИ T‑BANK: ПО УКАЗАННЫМ ID ОПЛАТЫ НЕТ/u);
+  assert.match(confirmation, /ВСЕ перечисленные OrderId и PaymentId/u);
+  assert.match(confirmation, /не активен, не успешен/u);
+  assert.match(confirmation, /ТОЛЬКО отсутствие оплаты по перечисленным T‑Bank ID/u);
+  assert.match(confirmation, /НЕ отмечает счёт оплаченным/u);
+  assert.match(confirmation, /НЕ переводит его в «Не оплачено»/u);
+  assert.match(confirmation, /отдельным действием «Оплачено»/u);
+  assert.match(confirmation, /комментарий или чек/u);
+  assert.match(confirmation, /OrderId example/u);
+});
 
 test('classifies all manually confirmable payment-init failures and quarantines unsupported migration conflicts', () => {
   assert.equal(commonInvoiceAttentionPolicy('payment_init_exception: PKIX').paymentInitCheck, true);

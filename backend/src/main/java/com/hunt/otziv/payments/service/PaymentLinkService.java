@@ -57,6 +57,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -75,6 +76,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -88,6 +91,11 @@ public class PaymentLinkService {
     private static final String RECEIPT_CONSENT_PATH = "/receipt-consent";
     private static final String STATUS_PAYMENT = "Оплачено";
     private static final String MANUAL_PAID_RETIRED_REASON = "Заказ отмечен оплаченным вручную; старая ссылка закрыта";
+    private static final String MANUAL_CARD_PAYMENT_AUDIT_PREFIX = "Оплачено переводом на карту после отмены T-Bank";
+    private static final String MANUAL_CARD_PAYMENT_EVIDENCE_PREFIX = "Проверен перевод на карту; ожидается закрытие T-Bank";
+    private static final String MANUAL_CARD_PAYMENT_PENDING_PREFIX = "manual_card_payment_pending:";
+    private static final String MANUAL_CARD_PAYMENT_COMPLETED_PREFIX = "manual_card_payment_completed:";
+    private static final String MANUAL_UNPAID_CLOSED_AUDIT_PREFIX = "manual_payment_absent_verified";
     private static final String PREPAID_WAITING_ORDER_COMPLETION = "prepaid_waiting_order_completion";
     private static final Set<PaymentLinkStatus> REUSABLE_STATUSES = Set.of(
             PaymentLinkStatus.CREATED,
@@ -259,6 +267,8 @@ public class PaymentLinkService {
             requirePaymentLinksEnabled();
         }
 
+        ensureOrderNotCoveredByActiveCommonInvoice(orderId);
+
         LocalDateTime now = LocalDateTime.now();
         expireStaleManualLinks(now);
         // expireManualLinks is a bulk update with clearAutomatically=true. Reload the
@@ -269,6 +279,7 @@ public class PaymentLinkService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         List<PaymentLink> lockedOrderLinks = paymentLinkRepository.findByOrderIdForUpdate(orderId);
         recoverOrderBankInitReservationsBeforeCreation(lockedOrderLinks, now);
+        ensureNoPendingVerifiedManualRouteTransition(lockedOrderLinks);
 
         orderPaymentIntegrityService.assertPaymentCycleAllowed(order);
         if (paymentLinkRepository.existsByOrder_IdAndStatusIn(orderId, RECONCILIATION_BLOCKING_STATUSES)) {
@@ -298,6 +309,16 @@ public class PaymentLinkService {
                 );
             }
             ensurePaymentProfile(link);
+            // Once T-Bank has returned a PaymentId, BANK_FORM versus SBP_QR is
+            // the customer's choice inside the same public payment link, not a
+            // change of the order's configured payment route. Keep returning
+            // that immutable provider binding while its amount is current.
+            // Creating (or even preparing) a replacement here would either
+            // produce a false "old requisites" conflict or risk a duplicate
+            // provider payment.
+            if (canReuseStartedBankLink(link, amountKopecks)) {
+                return toManagerResponse(link);
+            }
             PaymentLink candidate = preparedCandidate(order, manager, profile, amountKopecks, now, link.getId());
             if (canReuseLink(link, candidate)) {
                 return toManagerResponse(link);
@@ -322,6 +343,31 @@ public class PaymentLinkService {
 
         PaymentLink link = preparedCandidate(order, manager, profile, amountKopecks, now, null);
         return toManagerResponse(paymentLinkRepository.save(link));
+    }
+
+    private void ensureOrderNotCoveredByActiveCommonInvoice(Long orderId) {
+        CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        if (commonBillingService == null) {
+            return;
+        }
+        final boolean covered;
+        try {
+            covered = commonBillingService.isOrderInActiveCommonInvoice(orderId);
+        } catch (RuntimeException e) {
+            log.warn("Не удалось проверить общий счет заказа {} перед созданием отдельной ссылки", orderId, e);
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Не удалось безопасно проверить общий счет заказа. Отдельная платежная ссылка не создана.",
+                    e
+            );
+        }
+        if (covered) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Заказ уже включен в активный общий счет. Используйте единую ссылку общего счета;"
+                            + " отдельная ссылка для этого заказа заблокирована."
+            );
+        }
     }
 
     private void requirePaymentLinksEnabled() {
@@ -480,6 +526,20 @@ public class PaymentLinkService {
                 && normalize(current.getManualPaymentUrl()).equals(normalize(candidate.getManualPaymentUrl()))
                 && normalize(current.getManualPaymentButtonLabel()).equals(normalize(candidate.getManualPaymentButtonLabel()))
                 && normalize(current.getManualComment()).equals(normalize(candidate.getManualComment()));
+    }
+
+    private boolean canReuseStartedBankLink(PaymentLink link, long currentAmountKopecks) {
+        if (link == null
+                || (link.getPaymentMethod() != PaymentMethod.BANK_FORM
+                && link.getPaymentMethod() != PaymentMethod.SBP_QR)
+                || normalize(link.getTbankPaymentId()).isBlank()
+                || hasBankCancelReservation(link)
+                || link.getBankCancelOriginStatus() != null
+                || link.getAmountKopecks() != currentAmountKopecks) {
+            return false;
+        }
+        Long reservedAmountKopecks = link.getReservedAmountKopecks();
+        return reservedAmountKopecks == null || reservedAmountKopecks == currentAmountKopecks;
     }
 
     private boolean canRetireStaleLink(PaymentLink link) {
@@ -646,6 +706,21 @@ public class PaymentLinkService {
             return null;
         }
 
+        return requestTbankState(link);
+    }
+
+    private BankStateObservation observeTbankStateForManualCardPayment(PaymentLink link) {
+        if (link == null
+                || !runtimeSettingsService.isTbankEnabled()
+                || (link.getPaymentMethod() != PaymentMethod.BANK_FORM
+                    && link.getPaymentMethod() != PaymentMethod.SBP_QR)
+                || normalize(link.getTbankPaymentId()).isBlank()) {
+            return null;
+        }
+        return requestTbankState(link);
+    }
+
+    private BankStateObservation requestTbankState(PaymentLink link) {
         String paymentId = normalize(link.getTbankPaymentId());
         try {
             PaymentProfile profile = resolvePaymentProfile(link);
@@ -1042,6 +1117,864 @@ public class PaymentLinkService {
         );
     }
 
+    /**
+     * Safely settles an order that was paid by a direct transfer while its
+     * T-Bank payment page was still open. The provider state is read first. A
+     * NEW payment session is canceled through T-Bank and the order is credited
+     * only after an explicit CANCELED response. Any paid, authorized,
+     * inconsistent or unknown provider state fails closed.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public AdminPaymentLinkResponse confirmPaidByManualCardTransferForOrder(
+            Long orderId,
+            boolean recipientStatementChecked,
+            boolean paymentReceived,
+            Long receivedAmountKopecks,
+            String note,
+            String receiptUrl,
+            String actor,
+            Authentication authentication
+    ) {
+        reconcileLegacyTerminalBankRoutesForManualCardPayment(orderId, authentication);
+        Long linkId = transactionExecutor.required(() -> {
+            if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден");
+            }
+            managerAccessService.requireOrderAccess(orderId, authentication);
+            List<PaymentLink> orderLinks = paymentLinkRepository.findByOrderIdForUpdate(orderId);
+            PaymentLink selected = selectManualCardPaymentRoute(orderLinks);
+            if (!isCompletedManualCardPayment(selected)) {
+                ensureOrderNotCoveredByActiveCommonInvoice(orderId);
+                boolean competingPayment = orderLinks.stream()
+                        .filter(candidate -> !sameLinkId(selected, candidate))
+                        .anyMatch(this::isCompetingManualCardPaymentRoute);
+                if (competingPayment) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "У заказа найден другой активный или подтвержденный способ оплаты. "
+                                    + "Оплата переводом не зачислена; нужна ручная сверка."
+                    );
+                }
+            }
+            return selected.getId();
+        });
+        return confirmPaidByManualCardTransfer(
+                linkId,
+                recipientStatementChecked,
+                paymentReceived,
+                receivedAmountKopecks,
+                note,
+                receiptUrl,
+                actor,
+                authentication
+        );
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public AdminPaymentLinkResponse confirmPaidByManualCardTransfer(
+            Long linkId,
+            boolean recipientStatementChecked,
+            boolean paymentReceived,
+            Long receivedAmountKopecks,
+            String note,
+            String receiptUrl,
+            String actor,
+            Authentication authentication
+    ) {
+        String cleanNote = normalize(note);
+        String cleanReceiptUrl = normalize(receiptUrl);
+        String cleanActor = normalize(actor);
+        if (!recipientStatementChecked
+                || !paymentReceived
+                || receivedAmountKopecks == null
+                || receivedAmountKopecks <= 0
+                || cleanNote.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Подтвердите проверку выписки получателя, поступление перевода, точную сумму и укажите обязательную заметку"
+            );
+        }
+
+        PaymentLink initialSnapshot = paymentLinkRepository.findByIdWithOrder(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        Long orderId = initialSnapshot.getOrder() == null ? null : initialSnapshot.getOrder().getId();
+        if (orderId == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
+        }
+        reconcileLegacyTerminalBankRoutesForManualCardPayment(orderId, authentication);
+        PaymentLink snapshot = paymentLinkRepository.findByIdWithOrder(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        if (!hasOrderBinding(snapshot, orderId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ платежной ссылки изменился во время сверки");
+        }
+        transactionExecutor.required(() -> {
+            if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
+            }
+            managerAccessService.requireOrderAccess(orderId, authentication);
+            return null;
+        });
+        if (isCompletedManualCardPayment(snapshot)) {
+            return toAdminResponse(snapshot);
+        }
+        ensureOrderNotCoveredByActiveCommonInvoice(orderId);
+        if (receivedAmountKopecks != snapshot.getAmountKopecks()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сумма перевода не равна полной сумме заказа. Оплата не зачислена; проверьте выписку и заказ."
+            );
+        }
+
+        ManualCardPaymentPlan plan;
+        if (isPendingManualCardPayment(snapshot)) {
+            plan = manualCardPaymentPlan(snapshot, null);
+        } else if (isUnstartedCreatedBankRoute(snapshot)) {
+            plan = transactionExecutor.requiredNoRollback(() ->
+                    prepareUnstartedManualCardPayment(
+                            linkId,
+                            orderId,
+                            cleanNote,
+                            cleanReceiptUrl,
+                            cleanActor,
+                            authentication
+                    )
+            );
+        } else if (isSafeHistoricalBankRoute(snapshot)) {
+            plan = manualCardPaymentPlan(snapshot, null);
+            ManualCardPaymentPlan verifiedPlan = plan;
+            transactionExecutor.requiredNoRollback(() -> {
+                markManualCardPaymentPending(
+                        verifiedPlan,
+                        cleanNote,
+                        cleanReceiptUrl,
+                        cleanActor,
+                        authentication
+                );
+                return null;
+            });
+        } else {
+            BankStateObservation observation = observeTbankStateForManualCardPayment(snapshot);
+            if (observation == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_GATEWAY,
+                        "Не удалось получить свежий статус платежа в T-Bank. Ручная оплата не зачислена."
+                );
+            }
+            plan = transactionExecutor.requiredNoRollback(() ->
+                    prepareManualCardPayment(
+                            linkId,
+                            orderId,
+                            observation,
+                            cleanNote,
+                            cleanReceiptUrl,
+                            cleanActor,
+                            authentication
+                    )
+            );
+        }
+        CancelReservation reservation = plan.cancelReservation();
+        if (reservation != null) {
+            PaymentLinkStatus incoming;
+            try {
+                TbankCancelResponse response = tbankClient.cancel(
+                        reservation.runtimeProfile(),
+                        new TbankCancelCommand(reservation.paymentId(), reservation.amountKopecks())
+                );
+                validateCancelResponse(reservation, response);
+                incoming = statusAfterCancel(response.status());
+            } catch (RuntimeException failure) {
+                recordAmbiguousCancelFailure(reservation, failure);
+                throw failure;
+            }
+            PaymentLinkStatus observedStatus = incoming;
+            transactionExecutor.requiredNoRollback(() -> {
+                applyCancelObservation(reservation, observedStatus);
+                if (observedStatus == PaymentLinkStatus.CANCELED) {
+                    markManualCardPaymentPending(plan, cleanNote, cleanReceiptUrl, cleanActor, authentication);
+                }
+                return null;
+            });
+            if (incoming != PaymentLinkStatus.CANCELED) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "T-Bank не подтвердил простое закрытие неоплаченной сессии. "
+                                + "Получен статус " + incoming + "; ручная оплата не зачислена, нужна сверка."
+                );
+            }
+        }
+
+        return transactionExecutor.required(() -> applyManualCardPayment(
+                plan,
+                cleanNote,
+                cleanReceiptUrl,
+                cleanActor,
+                authentication
+        ));
+    }
+
+    private void reconcileLegacyTerminalBankRoutesForManualCardPayment(
+            Long orderId,
+            Authentication authentication
+    ) {
+        List<Long> legacyLinkIds = transactionExecutor.required(() -> {
+            if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден");
+            }
+            managerAccessService.requireOrderAccess(orderId, authentication);
+            return paymentLinkRepository.findByOrderIdForUpdate(orderId).stream()
+                    .filter(this::isSelectableTerminalBankRouteForVerification)
+                    .filter(link -> !isSafeHistoricalBankRoute(link))
+                    .map(PaymentLink::getId)
+                    .filter(Objects::nonNull)
+                    .toList();
+        });
+
+        for (Long legacyLinkId : legacyLinkIds) {
+            PaymentLink snapshot = paymentLinkRepository.findByIdWithOrder(legacyLinkId)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Старая T-Bank ссылка изменилась до сверки. Ручная оплата не зачислена."
+                    ));
+            BankStateObservation observation = observeTbankStateForManualCardPayment(snapshot);
+            if (observation == null || observation.state() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_GATEWAY,
+                        "Не удалось получить свежий статус старой T-Bank ссылки. Ручная оплата не зачислена."
+                );
+            }
+            transactionExecutor.requiredNoRollback(() -> {
+                applyLegacyTerminalObservationForManualCardPayment(
+                        orderId,
+                        legacyLinkId,
+                        observation,
+                        authentication
+                );
+                return null;
+            });
+        }
+    }
+
+    private void applyLegacyTerminalObservationForManualCardPayment(
+            Long orderId,
+            Long linkId,
+            BankStateObservation observation,
+            Authentication authentication
+    ) {
+        if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден");
+        }
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Старая T-Bank ссылка изменилась до применения сверки."
+                ));
+        if (!hasOrderBinding(link, orderId)
+                || !sameObservedLink(link, observation)
+                || observation.orderId() == null
+                || !observation.orderId().equals(orderId)
+                || link.getStatus() != observation.status()
+                || link.getAmountKopecks() != observation.amountKopecks()
+                || !normalize(link.getTbankPaymentId()).equals(observation.paymentId())
+                || !normalize(link.getTbankOrderId()).equals(observation.tbankOrderId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Старая T-Bank ссылка изменилась во время сверки. Ручная оплата не зачислена."
+            );
+        }
+        if (isSafeHistoricalBankRoute(link)) {
+            return;
+        }
+        if (!isSelectableTerminalBankRouteForVerification(link)) {
+            throw ambiguousManualCardPaymentRoute();
+        }
+
+        applyObservedTbankStateIfCurrent(link, observation, orderId);
+        if (hasAuthoritativeProviderTerminalStatus(link)) {
+            return;
+        }
+
+        String providerStatus = normalize(observation.state().status()).toUpperCase(Locale.ROOT);
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Старая T-Bank ссылка имеет статус "
+                        + (providerStatus.isBlank() ? "UNKNOWN" : providerStatus)
+                        + ". Ручная оплата не зачислена: платеж может быть активен, оплачен или требовать возврата."
+        );
+    }
+
+    private ManualCardPaymentPlan prepareUnstartedManualCardPayment(
+            Long linkId,
+            Long orderId,
+            String note,
+            String receiptUrl,
+            String actor,
+            Authentication authentication
+    ) {
+        if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
+        }
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        ensureOrderNotCoveredByActiveCommonInvoice(orderId);
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        if (!hasOrderBinding(link, orderId) || !isUnstartedCreatedBankRoute(link)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Платежная ссылка изменилась до закрытия. Оплата переводом не зачислена."
+            );
+        }
+        link.setStatus(PaymentLinkStatus.CANCELED);
+        link.setManualComment(manualCardPaymentEvidence(note, receiptUrl));
+        link.setLastError(limit(
+                MANUAL_CARD_PAYMENT_PENDING_PREFIX + " local_route_closed; checked_by="
+                        + limit(actor.isBlank() ? "admin" : actor, 80),
+                512
+        ));
+        paymentLinkRepository.save(link);
+        return manualCardPaymentPlan(link, null);
+    }
+
+    private ManualCardPaymentPlan prepareManualCardPayment(
+            Long linkId,
+            Long orderId,
+            BankStateObservation observation,
+            String note,
+            String receiptUrl,
+            String actor,
+            Authentication authentication
+    ) {
+        Order order = orderRepository.findByIdForCounterUpdate(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        ensureOrderNotCoveredByActiveCommonInvoice(orderId);
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        if (!hasOrderBinding(link, orderId)
+                || !sameObservedLink(link, observation)
+                || observation.orderId() == null
+                || !observation.orderId().equals(orderId)
+                || link.getStatus() != observation.status()
+                || link.getAmountKopecks() != observation.amountKopecks()
+                || !normalize(link.getTbankPaymentId()).equals(observation.paymentId())
+                || !normalize(link.getTbankOrderId()).equals(observation.tbankOrderId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Платеж изменился во время сверки. Ручная оплата не зачислена; обновите журнал."
+            );
+        }
+        if (link.getPaymentMethod() != PaymentMethod.BANK_FORM
+                && link.getPaymentMethod() != PaymentMethod.SBP_QR) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Выбрана не банковская платежная ссылка");
+        }
+        boolean stableOpenSession = link.getStatus() == PaymentLinkStatus.INITIATED;
+        boolean stableSafeTerminalSession = isSafeTerminalBeforeManualCardPayment(link.getStatus());
+        if ((!stableOpenSession && !stableSafeTerminalSession)
+                || normalize(link.getTbankPaymentId()).isBlank()
+                || hasBankInitReservation(link)
+                || hasBankCancelReservation(link)
+                || link.getBankCancelOriginStatus() != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Безопасное зачисление доступно только для стабильной открытой T-Bank сессии"
+            );
+        }
+
+        TbankGetStateResponse state = observation.state();
+        String errorCode = normalize(state == null ? null : state.errorCode());
+        if (state == null || !state.success() || (!errorCode.isBlank() && !"0".equals(errorCode))) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "T-Bank не подтвердил актуальное состояние платежа. Ручная оплата не зачислена."
+            );
+        }
+        PaymentProfile profile = resolvePaymentProfile(link);
+        TbankPaymentProfile runtimeProfile = runtimeProfileForLink(profile, link);
+        if (!normalize(runtimeProfile.terminalKey()).equals(observation.terminalKey())
+                || !isStateConsistent(link, state, runtimeProfile)) {
+            paymentLinkRepository.save(link);
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Реквизиты ответа T-Bank не совпали со ссылкой. Ручная оплата не зачислена."
+            );
+        }
+
+        String providerStatus = normalize(state.status()).toUpperCase(Locale.ROOT);
+        applyObservedTbankStateIfCurrent(link, observation, orderId);
+        ManualCardPaymentPlan plan = manualCardPaymentPlan(link, null);
+        if ("NEW".equals(providerStatus) && link.getStatus() == PaymentLinkStatus.INITIATED) {
+            // This evidence marker is stored before the remote Cancel call. If
+            // that call times out but later reconciliation observes CANCELED,
+            // a manager retry can safely resume instead of leaving a permanent
+            // NEEDS_RECONCILIATION record.
+            link.setManualComment(manualCardPaymentEvidence(note, receiptUrl));
+            return manualCardPaymentPlan(link, reserveBankCancel(link, orderId));
+        }
+        if (("CANCELED".equals(providerStatus) && link.getStatus() == PaymentLinkStatus.CANCELED)
+                || ("REJECTED".equals(providerStatus) && link.getStatus() == PaymentLinkStatus.REJECTED)
+                || ("DEADLINE_EXPIRED".equals(providerStatus) && link.getStatus() == PaymentLinkStatus.EXPIRED)) {
+            markManualCardPaymentPending(plan, note, receiptUrl, actor, authentication);
+            return plan;
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "T-Bank вернул статус " + (providerStatus.isBlank() ? "UNKNOWN" : providerStatus)
+                        + ". Банковский платеж может быть активен, оплачен или требовать возврата; "
+                        + "ручная оплата не зачислена."
+        );
+    }
+
+    private void markManualCardPaymentPending(
+            ManualCardPaymentPlan plan,
+            String note,
+            String receiptUrl,
+            String actor,
+            Authentication authentication
+    ) {
+        if (orderRepository.findByIdForCounterUpdate(plan.orderId()).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
+        }
+        managerAccessService.requireOrderAccess(plan.orderId(), authentication);
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(plan.linkId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        requireManualCardPlanBinding(link, plan);
+        if (!isSafeHistoricalBankRoute(link)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "T-Bank сессия не имеет подтвержденного безопасного завершения. Ручная оплата не зачислена."
+            );
+        }
+        link.setManualComment(manualCardPaymentEvidence(note, receiptUrl));
+        link.setLastError(limit(
+                MANUAL_CARD_PAYMENT_PENDING_PREFIX + " checked_by=" + limit(actor.isBlank() ? "admin" : actor, 80),
+                512
+        ));
+        paymentLinkRepository.save(link);
+    }
+
+    private AdminPaymentLinkResponse applyManualCardPayment(
+            ManualCardPaymentPlan plan,
+            String note,
+            String receiptUrl,
+            String actor,
+            Authentication authentication
+    ) {
+        Order order = orderRepository.findByIdForCounterUpdate(plan.orderId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
+        managerAccessService.requireOrderAccess(plan.orderId(), authentication);
+        ensureOrderNotCoveredByActiveCommonInvoice(plan.orderId());
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(plan.linkId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        requireManualCardPlanBinding(link, plan);
+        if (isCompletedManualCardPayment(link)) {
+            return toAdminResponse(link);
+        }
+        if (!isPendingManualCardPayment(link) || !isSafeTerminalBeforeManualCardPayment(link.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Закрытие T-Bank сессии не подтверждено. Ручная оплата не зачислена."
+            );
+        }
+        if (!canApplyOrderPaymentNow(order)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Заказ еще не выполнен полностью; ручную оплату нельзя зачислить"
+            );
+        }
+        if (isAmountChanged(link)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сумма заказа изменилась после сверки T-Bank. Ручная оплата не зачислена."
+            );
+        }
+        if (orderPaymentIntegrityService.hasSettledPaymentEvidence(order)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Заказ уже имеет признаки оплаты. Автоматическое повторное зачисление заблокировано."
+            );
+        }
+
+        List<PaymentLink> links = paymentLinkRepository.findByOrderIdForUpdate(plan.orderId());
+        boolean competingPayment = links.stream()
+                .filter(candidate -> !sameLinkId(link, candidate))
+                .anyMatch(this::isCompetingManualCardPaymentRoute);
+        if (competingPayment) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "У заказа найден другой активный или подтвержденный способ оплаты. Нужна ручная сверка."
+            );
+        }
+
+        try {
+            handlePaymentStatusWithoutPrematureRepeat(order);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось зачислить ручную оплату заказа", e);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        PaymentLink manualEvidence = manualCardPaymentEvidenceLink(link, order, note, receiptUrl, actor, now);
+        paymentLinkRepository.save(manualEvidence);
+        link.setManualComment(manualCardPaymentAudit(note, receiptUrl));
+        link.setManualConfirmedAt(null);
+        link.setManualConfirmedBy(null);
+        link.setConfirmedAmountKopecks(null);
+        link.setReceiptStatus(null);
+        link.setLastError(limit(
+                MANUAL_CARD_PAYMENT_COMPLETED_PREFIX + " evidence_token=" + manualEvidence.getToken(),
+                512
+        ));
+        paymentLinkRepository.save(link);
+        closeManualPaymentAutomationAfterCommit(order);
+        log.warn(
+                "Order paid by manual card transfer after bank-route reconciliation: orderId={}, linkId={}, actor={}",
+                plan.orderId(),
+                plan.linkId(),
+                actor
+        );
+        return toAdminResponse(link);
+    }
+
+    private void requireManualCardPlanBinding(PaymentLink link, ManualCardPaymentPlan plan) {
+        if (!hasOrderBinding(link, plan.orderId())
+                || !normalize(link.getTbankPaymentId()).equals(plan.paymentId())
+                || !normalize(link.getTbankOrderId()).equals(plan.tbankOrderId())
+                || link.getAmountKopecks() != plan.amountKopecks()
+                || hasBankCancelReservation(link)
+                || link.getBankCancelOriginStatus() != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Платеж изменился после сверки. Ручная оплата не зачислена."
+            );
+        }
+    }
+
+    private ManualCardPaymentPlan manualCardPaymentPlan(PaymentLink link, CancelReservation reservation) {
+        if (link == null || link.getOrder() == null || link.getOrder().getId() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
+        }
+        return new ManualCardPaymentPlan(
+                link.getId(),
+                link.getOrder().getId(),
+                normalize(link.getTbankPaymentId()),
+                normalize(link.getTbankOrderId()),
+                link.getAmountKopecks(),
+                reservation
+        );
+    }
+
+    private boolean isPendingManualCardPayment(PaymentLink link) {
+        return isBankPaymentRoute(link)
+                && isSafeTerminalBeforeManualCardPayment(link.getStatus())
+                && link.getManualConfirmedAt() == null
+                && link.getConfirmedAmountKopecks() == null
+                && (normalize(link.getLastError()).startsWith(MANUAL_CARD_PAYMENT_PENDING_PREFIX)
+                    || normalize(link.getManualComment()).startsWith(MANUAL_CARD_PAYMENT_EVIDENCE_PREFIX));
+    }
+
+    private boolean isCompletedManualCardPayment(PaymentLink link) {
+        if (!isBankPaymentRoute(link)
+                || !isSafeTerminalBeforeManualCardPayment(link.getStatus())
+                || !normalize(link.getLastError()).startsWith(MANUAL_CARD_PAYMENT_COMPLETED_PREFIX)
+                || !normalize(link.getManualComment()).startsWith(MANUAL_CARD_PAYMENT_AUDIT_PREFIX)) {
+            return false;
+        }
+        // The order transition and these immutable audit fields are committed
+        // in one transaction. The audit marker therefore makes retries
+        // idempotent without dereferencing a possibly detached/lazy order.
+        return true;
+    }
+
+    private PaymentLink selectManualCardPaymentRoute(List<PaymentLink> orderLinks) {
+        List<PaymentLink> links = orderLinks == null ? List.of() : orderLinks;
+        List<PaymentLink> marked = links.stream()
+                .filter(link -> isCompletedManualCardPayment(link) || isPendingManualCardPayment(link))
+                .toList();
+        if (marked.size() > 1) {
+            throw ambiguousManualCardPaymentRoute();
+        }
+
+        List<PaymentLink> terminalToVerify = links.stream()
+                .filter(this::isSelectableTerminalBankRouteForVerification)
+                .filter(link -> !isSafeHistoricalBankRoute(link))
+                .toList();
+        if (terminalToVerify.size() > 1) {
+            throw ambiguousManualCardPaymentRoute();
+        }
+
+        boolean unsafeBankState = links.stream().anyMatch(this::isUnsafeManualCardPaymentBankRoute);
+        if (unsafeBankState) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "У заказа есть оплаченная, возвратная или неоднозначная T-Bank ссылка. "
+                            + "Оплата переводом не зачислена; нужна ручная сверка."
+            );
+        }
+
+        List<PaymentLink> active = links.stream()
+                .filter(this::isActivePublicBankRouteForManualCardPayment)
+                .toList();
+        int selectedRouteKinds = (marked.isEmpty() ? 0 : 1)
+                + (active.isEmpty() ? 0 : 1)
+                + (terminalToVerify.isEmpty() ? 0 : 1);
+        if (active.size() > 1 || selectedRouteKinds > 1) {
+            throw ambiguousManualCardPaymentRoute();
+        }
+        if (!marked.isEmpty()) {
+            return marked.getFirst();
+        }
+        if (!active.isEmpty()) {
+            return active.getFirst();
+        }
+        if (!terminalToVerify.isEmpty()) {
+            return terminalToVerify.getFirst();
+        }
+
+        return links.stream()
+                .filter(this::isSelectableProviderVerifiedTerminalBankRoute)
+                .max(Comparator
+                        .comparing(PaymentLink::getUpdatedAt, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(PaymentLink::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(PaymentLink::getId, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "У заказа нет активной или проверяемой завершенной T-Bank ссылки. "
+                                + "Оплата переводом не зачислена; откройте журнал платежей для сверки."
+                ));
+    }
+
+    private ResponseStatusException ambiguousManualCardPaymentRoute() {
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "У заказа найдено несколько активных или неоднозначных T-Bank ссылок. "
+                        + "Оплата переводом не зачислена; нужна ручная сверка."
+        );
+    }
+
+    private boolean isActivePublicBankRouteForManualCardPayment(PaymentLink link) {
+        return isBankPaymentRoute(link)
+                && !hasBankInitReservation(link)
+                && !hasBankCancelReservation(link)
+                && link.getBankCancelOriginStatus() == null
+                && (link.getStatus() == PaymentLinkStatus.CREATED
+                    || link.getStatus() == PaymentLinkStatus.INITIATED);
+    }
+
+    private boolean isSelectableProviderVerifiedTerminalBankRoute(PaymentLink link) {
+        return isSafeHistoricalBankRoute(link)
+                && !normalize(link.getTbankPaymentId()).isBlank();
+    }
+
+    private boolean isSelectableTerminalBankRouteForVerification(PaymentLink link) {
+        return isBankPaymentRoute(link)
+                && isSafeTerminalBeforeManualCardPayment(link.getStatus())
+                && !normalize(link.getTbankPaymentId()).isBlank()
+                && !hasBankInitReservation(link)
+                && !hasBankCancelReservation(link)
+                && link.getBankCancelOriginStatus() == null;
+    }
+
+    private boolean isSafeHistoricalBankRoute(PaymentLink link) {
+        if (!isBankPaymentRoute(link)
+                || !isSafeTerminalBeforeManualCardPayment(link.getStatus())
+                || hasBankInitReservation(link)
+                || hasBankCancelReservation(link)
+                || link.getBankCancelOriginStatus() != null) {
+            return false;
+        }
+        if (isPendingManualCardPayment(link) || isCompletedManualCardPayment(link)) {
+            return true;
+        }
+        if (normalize(link.getTbankPaymentId()).isBlank()) {
+            return true;
+        }
+        return hasAuthoritativeProviderTerminalStatus(link);
+    }
+
+    private boolean hasAuthoritativeProviderTerminalStatus(PaymentLink link) {
+        if (link == null) {
+            return false;
+        }
+        String providerStatus = normalize(link.getProviderTerminalStatus());
+        return switch (link.getStatus()) {
+            case CANCELED -> "CANCELED".equalsIgnoreCase(providerStatus);
+            case REJECTED -> "REJECTED".equalsIgnoreCase(providerStatus);
+            case EXPIRED -> "DEADLINE_EXPIRED".equalsIgnoreCase(providerStatus);
+            default -> false;
+        };
+    }
+
+    private boolean isUnsafeManualCardPaymentBankRoute(PaymentLink link) {
+        if (!isBankPaymentRoute(link)) {
+            return false;
+        }
+        if (hasBankInitReservation(link)
+                || hasBankCancelReservation(link)
+                || link.getBankCancelOriginStatus() != null) {
+            return true;
+        }
+        if (isCompletedManualCardPayment(link)
+                || isPendingManualCardPayment(link)
+                || isActivePublicBankRouteForManualCardPayment(link)
+                || isSelectableTerminalBankRouteForVerification(link)
+                || isSafeHistoricalBankRoute(link)) {
+            return false;
+        }
+        // Every remaining bank status is paid, refund/reversal-related,
+        // reconciliation-only, failed without authoritative proof, or an
+        // otherwise unexpected state. All of them stay fail-closed.
+        return true;
+    }
+
+    private boolean isCompetingManualCardPaymentRoute(PaymentLink link) {
+        if (link == null || isSafeHistoricalBankRoute(link)) {
+            return false;
+        }
+        if (isBankPaymentRoute(link)) {
+            return true;
+        }
+        return switch (link.getStatus()) {
+            case CANCELED, REJECTED, EXPIRED, FAILED -> false;
+            default -> true;
+        };
+    }
+
+    private boolean isBankPaymentRoute(PaymentLink link) {
+        return link != null
+                && (link.getPaymentMethod() == PaymentMethod.BANK_FORM
+                    || link.getPaymentMethod() == PaymentMethod.SBP_QR);
+    }
+
+    private boolean isUnstartedCreatedBankRoute(PaymentLink link) {
+        return link != null
+                && (link.getPaymentMethod() == PaymentMethod.BANK_FORM
+                    || link.getPaymentMethod() == PaymentMethod.SBP_QR)
+                && link.getStatus() == PaymentLinkStatus.CREATED
+                && normalize(link.getTbankPaymentId()).isBlank()
+                && !hasBankInitReservation(link)
+                && !hasBankCancelReservation(link)
+                && link.getBankCancelOriginStatus() == null;
+    }
+
+    private boolean isSafeTerminalBeforeManualCardPayment(PaymentLinkStatus status) {
+        return status == PaymentLinkStatus.CANCELED
+                || status == PaymentLinkStatus.REJECTED
+                || status == PaymentLinkStatus.EXPIRED;
+    }
+
+    private String manualCardPaymentAudit(String note, String receiptUrl) {
+        String receipt = normalize(receiptUrl);
+        return limit(
+                MANUAL_CARD_PAYMENT_AUDIT_PREFIX + ": " + normalize(note)
+                        + (receipt.isBlank() ? "" : "; документ=" + receipt),
+                255
+        );
+    }
+
+    private String manualCardPaymentEvidence(String note, String receiptUrl) {
+        String receipt = normalize(receiptUrl);
+        return limit(
+                MANUAL_CARD_PAYMENT_EVIDENCE_PREFIX + ": " + normalize(note)
+                        + (receipt.isBlank() ? "" : "; документ=" + receipt),
+                255
+        );
+    }
+
+    private PaymentLink manualCardPaymentEvidenceLink(
+            PaymentLink bankLink,
+            Order order,
+            String note,
+            String receiptUrl,
+            String actor,
+            LocalDateTime now
+    ) {
+        PaymentLink evidence = new PaymentLink();
+        evidence.setToken(newToken());
+        evidence.setOrder(order);
+        evidence.setAmountKopecks(bankLink.getAmountKopecks());
+        evidence.setConfirmedAmountKopecks(bankLink.getAmountKopecks());
+        evidence.setDescription(limit("Оплата переводом на карту: " + description(order), 140));
+        evidence.setStatus(PaymentLinkStatus.CONFIRMED);
+        evidence.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        evidence.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
+        evidence.setManualComment(manualCardPaymentAudit(note, receiptUrl));
+        evidence.setManualConfirmedAt(now);
+        evidence.setManualConfirmedBy(limit(actor.isBlank() ? "admin" : actor, 160));
+        evidence.setPaidAt(now);
+        evidence.setReceiptStatus(PaymentReceiptStatus.PENDING);
+        evidence.setPaymentSuccessNotificationRetryEligible(false);
+        evidence.setExpiresAt(now.plus(properties.getLinkTtl()));
+        return evidence;
+    }
+
+    private void closeManualPaymentAutomationAfterCommit(Order order) {
+        Long orderId = order == null ? null : order.getId();
+        Runnable cleanup = () -> {
+            try {
+                paymentInvoiceRetryScheduler.cancelPaymentAutomation(
+                        orderId,
+                        "Заказ оплачен переводом на карту; T-Bank сессия закрыта"
+                );
+            } catch (RuntimeException e) {
+                log.error("Не удалось закрыть платежные расписания после ручной оплаты orderId={}", orderId, e);
+            }
+        };
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            cleanup.run();
+            return;
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (status == STATUS_COMMITTED) {
+                            cleanup.run();
+                        }
+                    }
+                }
+        );
+    }
+
+    private void cancelBadReviewAutoBanAfterCommit(Order order, String reason) {
+        Long orderId = order == null ? null : order.getId();
+        if (orderId == null) {
+            return;
+        }
+        Runnable cleanup = () -> {
+            try {
+                paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, reason);
+            } catch (RuntimeException e) {
+                // Payment has already committed. The scheduler remains
+                // idempotent and can be reconciled independently; never turn a
+                // successful payment into FAILED because reminder cleanup was
+                // temporarily unavailable.
+                log.error("Не удалось закрыть расписание авто-бана после оплаты orderId={}", orderId, e);
+            }
+        };
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            // Payment mutations hold Order/PaymentLink. The scheduler worker
+            // may hold ScheduledState before reading Order, so touch scheduled
+            // state only after the payment transaction releases its locks.
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    if (status == STATUS_COMMITTED) {
+                        cleanup.run();
+                    }
+                }
+            });
+            return;
+        }
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            log.warn(
+                    "Пропущена синхронная очистка авто-бана без transaction synchronization orderId={}",
+                    orderId
+            );
+            return;
+        }
+        cleanup.run();
+    }
+
     private CancelReservation reserveCancelLocked(Long linkId, Long orderId) {
         if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ платежной ссылки изменился до возврата");
@@ -1064,6 +1997,10 @@ public class PaymentLinkService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Инициализация платежа еще не завершена");
         }
 
+        return reserveBankCancel(link, orderId);
+    }
+
+    private CancelReservation reserveBankCancel(PaymentLink link, Long orderId) {
         PaymentProfile profile = resolvePaymentProfile(link);
         TbankPaymentProfile runtimeProfile = runtimeProfileForLink(profile, link);
         PaymentLinkStatus originalStatus = link.getStatus();
@@ -1114,6 +2051,11 @@ public class PaymentLinkService {
                 );
             }
             if (link.getStatus() == incoming || link.getStatus() == PaymentLinkStatus.CANCELED) {
+                if (incoming == PaymentLinkStatus.CANCELED
+                        && link.getStatus() == PaymentLinkStatus.CANCELED) {
+                    link.setProviderTerminalStatus("CANCELED");
+                    paymentLinkRepository.save(link);
+                }
                 return toAdminResponse(link);
             }
             if (REFUND_OR_REVERSAL_BANK_STATUSES.contains(link.getStatus())) {
@@ -1149,6 +2091,9 @@ public class PaymentLinkService {
             );
         }
         link.setStatus(merged);
+        if (merged == PaymentLinkStatus.CANCELED && incoming == PaymentLinkStatus.CANCELED) {
+            link.setProviderTerminalStatus("CANCELED");
+        }
         clearBankCancelContext(link);
         link.setBankReconciliationAttemptedAt(null);
         link.setLastError(null);
@@ -1312,6 +2257,62 @@ public class PaymentLinkService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
     }
 
+    /**
+     * Retires only the selected manual payment instruction after an operator
+     * has checked the recipient statement and explicitly asserted that the
+     * transfer is absent. This operation deliberately does not mutate the
+     * order status and does not apply any payment to a common invoice.
+     */
+    @Transactional
+    public AdminPaymentLinkResponse closeManualAsUnpaid(
+            Long linkId,
+            boolean recipientStatementChecked,
+            boolean paymentAbsent,
+            String note,
+            String actor,
+            Authentication authentication
+    ) {
+        String cleanNote = normalize(note);
+        String cleanActor = normalize(actor);
+        if (!recipientStatementChecked || !paymentAbsent || cleanNote.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Подтвердите проверку выписки получателя, отсутствие перевода и укажите обязательную заметку"
+            );
+        }
+
+        PaymentLink snapshot = paymentLinkRepository.findByIdWithOrder(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        Long orderId = snapshot.getOrder() == null ? null : snapshot.getOrder().getId();
+        if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
+        }
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        if (!hasOrderBinding(link, orderId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ платежной ссылки изменился");
+        }
+        ensureManualPayment(link);
+        validateManualUnpaidClosable(link);
+
+        link.setStatus(PaymentLinkStatus.CANCELED);
+        link.setLastError(limit(
+                MANUAL_UNPAID_CLOSED_AUDIT_PREFIX
+                        + ": перевод не поступил; checked_by=" + limit(cleanActor.isBlank() ? "admin" : cleanActor, 160)
+                        + "; note=" + cleanNote,
+                512
+        ));
+        paymentLinkRepository.save(link);
+        log.warn(
+                "Manual payment instruction closed after recipient statement verification: linkId={}, orderId={}, actor={}",
+                linkId,
+                orderId,
+                cleanActor
+        );
+        return toAdminResponse(link);
+    }
+
     private void confirmManualLocked(Long linkId, Long orderId, String confirmedBy) {
         if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
@@ -1346,7 +2347,7 @@ public class PaymentLinkService {
             paymentLinkRepository.save(link);
             manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
             if (updated) {
-                paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(link.getOrder(), "Ручная оплата подтверждена");
+                cancelBadReviewAutoBanAfterCommit(link.getOrder(), "Ручная оплата подтверждена");
             }
             syncCommonInvoiceOrderPayment(link, "Ручная оплата заказа");
         } catch (Exception e) {
@@ -2378,8 +3379,16 @@ public class PaymentLinkService {
      * states are safe to apply immediately.
      */
     private boolean holdActiveCancelQuarantine(PaymentLink link, String incomingStatus) {
+        String status = normalize(incomingStatus).toUpperCase(Locale.ROOT);
+        boolean initiatedCancelAuthoritativeState = link != null
+                && link.getBankCancelOriginStatus() == PaymentLinkStatus.INITIATED
+                && ("CONFIRMED".equals(status)
+                    || "AUTHORIZED".equals(status)
+                    || "REJECTED".equals(status)
+                    || "DEADLINE_EXPIRED".equals(status));
         if (!hasBankCancelReservation(link)
                 || isExplicitCancelTerminalStatus(incomingStatus)
+                || initiatedCancelAuthoritativeState
                 || link.getBankCancelLeaseUntil() == null
                 || !link.getBankCancelLeaseUntil().isAfter(LocalDateTime.now())) {
             return false;
@@ -2425,6 +3434,24 @@ public class PaymentLinkService {
             }
             if ("CONFIRMED".equals(status) || isExplicitCancelTerminalStatus(status)
                     || "REJECTED".equals(status) || "DEADLINE_EXPIRED".equals(status)) {
+                return false;
+            }
+            keepCancelRecoveryQuarantined(link, status);
+            return true;
+        }
+
+        if (origin == PaymentLinkStatus.INITIATED) {
+            // A manual-card settlement may cancel a provider NEW session. An
+            // explicit terminal observation is authoritative and must release
+            // the quarantine. CONFIRMED is applied by the regular bank path,
+            // which closes the order from provider evidence and therefore
+            // prevents a second manual credit. NEW/unknown remains ambiguous.
+            if ("CANCELED".equals(status)
+                    || "REJECTED".equals(status)
+                    || "DEADLINE_EXPIRED".equals(status)
+                    || "CONFIRMED".equals(status)
+                    || "AUTHORIZED".equals(status)
+                    || isRefundOrReversalBankStatus(status)) {
                 return false;
             }
             keepCancelRecoveryQuarantined(link, status);
@@ -2553,14 +3580,15 @@ public class PaymentLinkService {
             }
             case "REJECTED" -> {
                 link.setStatus(PaymentLinkStatus.REJECTED);
+                link.setProviderTerminalStatus("REJECTED");
                 link.setLastError(errorCode);
             }
-            case "CANCELED" -> markFinalBankStatus(link, PaymentLinkStatus.CANCELED);
-            case "REVERSED" -> markFinalBankStatus(link, PaymentLinkStatus.REVERSED);
-            case "PARTIAL_REVERSED" -> markFinalBankStatus(link, PaymentLinkStatus.PARTIAL_REVERSED);
-            case "REFUNDED" -> markFinalBankStatus(link, PaymentLinkStatus.REFUNDED);
-            case "PARTIAL_REFUNDED" -> markFinalBankStatus(link, PaymentLinkStatus.PARTIAL_REFUNDED);
-            case "DEADLINE_EXPIRED" -> markFinalBankStatus(link, PaymentLinkStatus.EXPIRED);
+            case "CANCELED" -> markFinalBankStatus(link, PaymentLinkStatus.CANCELED, status);
+            case "REVERSED" -> markFinalBankStatus(link, PaymentLinkStatus.REVERSED, status);
+            case "PARTIAL_REVERSED" -> markFinalBankStatus(link, PaymentLinkStatus.PARTIAL_REVERSED, status);
+            case "REFUNDED" -> markFinalBankStatus(link, PaymentLinkStatus.REFUNDED, status);
+            case "PARTIAL_REFUNDED" -> markFinalBankStatus(link, PaymentLinkStatus.PARTIAL_REFUNDED, status);
+            case "DEADLINE_EXPIRED" -> markFinalBankStatus(link, PaymentLinkStatus.EXPIRED, status);
             default -> {
                 if (!success && !errorCode.isBlank() && !"0".equals(errorCode)) {
                     if (link.getStatus() == PaymentLinkStatus.NEEDS_RECONCILIATION) {
@@ -2632,7 +3660,7 @@ public class PaymentLinkService {
             rememberCompanyPayerEmail(link);
             prepareSuccessNotificationRetry(link);
             if (updated) {
-                paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(link.getOrder(), "T-Bank/SBP оплата подтверждена");
+                cancelBadReviewAutoBanAfterCommit(link.getOrder(), "T-Bank/SBP оплата подтверждена");
             }
             syncCommonInvoiceOrderPayment(link, "T-Bank/SBP оплата заказа");
         } catch (Exception e) {
@@ -2794,7 +3822,7 @@ public class PaymentLinkService {
             link.setLastError(null);
             paymentLinkRepository.save(link);
             if (updated) {
-                paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Предоплата применена после завершения заказа");
+                cancelBadReviewAutoBanAfterCommit(order, "Предоплата применена после завершения заказа");
             }
             syncCommonInvoiceOrderPayment(link, "Предоплата заказа применена после завершения");
             log.info("Предоплата по ссылке {} применена после завершения заказа {}", link.getId(), order.getId());
@@ -3223,6 +4251,23 @@ public class PaymentLinkService {
         }
     }
 
+    private void ensureNoPendingVerifiedManualRouteTransition(List<PaymentLink> links) {
+        boolean pendingCommonInvoiceTransition = links != null && links.stream().anyMatch(link ->
+                link != null
+                        && link.getStatus() == PaymentLinkStatus.CANCELED
+                        && isManualPayment(link)
+                        && normalize(link.getLastError()).startsWith(MANUAL_UNPAID_CLOSED_AUDIT_PREFIX + ":")
+        );
+        if (pendingCommonInvoiceTransition) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ручная инструкция закрыта после проверки отсутствия перевода. "
+                            + "Сначала завершите перенос заказа в общий счет; "
+                            + "до этого новый отдельный способ оплаты заблокирован."
+            );
+        }
+    }
+
     private void validateManualPaymentTargetAvailable(PaymentLink link) {
         boolean external = link.getPaymentMethod() == PaymentMethod.MANUAL_EXTERNAL_LINK
                 || link.getManualPaymentType() == ManualPaymentType.EXTERNAL_LINK;
@@ -3250,6 +4295,29 @@ public class PaymentLinkService {
         if (link.getStatus() != PaymentLinkStatus.WAITING_MANUAL_PAYMENT
                 && link.getStatus() != PaymentLinkStatus.MANUAL_REPORTED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ручная оплата недоступна для подтверждения");
+        }
+    }
+
+    private void validateManualUnpaidClosable(PaymentLink link) {
+        if (link.getStatus() != PaymentLinkStatus.WAITING_MANUAL_PAYMENT
+                && link.getStatus() != PaymentLinkStatus.MANUAL_REPORTED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "С результатом «перевод не поступил» можно закрыть только ожидающую ручную инструкцию"
+            );
+        }
+        boolean hasPaidEvidence = link.getPaidAt() != null
+                || link.getManualConfirmedAt() != null
+                || !normalize(link.getManualConfirmedBy()).isBlank()
+                || (link.getConfirmedAmountKopecks() != null && link.getConfirmedAmountKopecks() > 0)
+                || link.getReceiptStatus() == PaymentReceiptStatus.MARKED
+                || link.getReceiptStatus() == PaymentReceiptStatus.LEGACY_NOT_REQUIRED
+                || !normalize(link.getTbankPaymentId()).isBlank();
+        if (hasPaidEvidence) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "У инструкции уже есть признаки оплаты или банковского платежа; требуется отдельная сверка"
+            );
         }
     }
 
@@ -3768,9 +4836,77 @@ public class PaymentLinkService {
         return selectProfile(link.getOrder());
     }
 
-    private void markFinalBankStatus(PaymentLink link, PaymentLinkStatus status) {
+    private void markFinalBankStatus(
+            PaymentLink link,
+            PaymentLinkStatus status,
+            String providerTerminalStatus
+    ) {
         link.setStatus(status);
+        link.setProviderTerminalStatus(normalize(providerTerminalStatus).toUpperCase(Locale.ROOT));
         link.setLastError(null);
+        scheduleCommonInvoiceStandalonePaymentReversal(link, status);
+    }
+
+    private void scheduleCommonInvoiceStandalonePaymentReversal(
+            PaymentLink link,
+            PaymentLinkStatus terminalStatus
+    ) {
+        if (terminalStatus != PaymentLinkStatus.REVERSED
+                && terminalStatus != PaymentLinkStatus.PARTIAL_REVERSED
+                && terminalStatus != PaymentLinkStatus.REFUNDED
+                && terminalStatus != PaymentLinkStatus.PARTIAL_REFUNDED) {
+            return;
+        }
+        CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        Order order = link == null ? null : link.getOrder();
+        if (commonBillingService == null || link == null || link.getId() == null
+                || order == null || order.getId() == null) {
+            return;
+        }
+        Long orderId = order.getId();
+        Long paymentLinkId = link.getId();
+        Runnable reconciliation = () -> {
+            try {
+                commonBillingService.applyStandalonePaymentReversal(
+                        orderId,
+                        paymentLinkId,
+                        terminalStatus
+                );
+            } catch (RuntimeException ex) {
+                // The durable source link and provider status remain available for
+                // the next common-invoice operation to fail closed. Do not roll
+                // back an already committed provider webhook acknowledgement.
+                log.error(
+                        "Failed to quarantine common invoice after terminal payment reversal: orderId={}, linkId={}, status={}",
+                        orderId,
+                        paymentLinkId,
+                        terminalStatus,
+                        ex
+                );
+            }
+        };
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            // Provider reconciliation owns PaymentLink first. Running the common
+            // invoice path before commit would invert the global Order ->
+            // PaymentLink -> CommonInvoice lock order.
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    reconciliation.run();
+                }
+            });
+            return;
+        }
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            log.warn(
+                    "Skipped immediate common-invoice reversal quarantine because transaction synchronization is unavailable: orderId={}, linkId={}",
+                    orderId,
+                    paymentLinkId
+            );
+            return;
+        }
+        reconciliation.run();
     }
 
     private PaymentLinkStatus statusAfterUnsafeProviderUrl(String paymentId) {
@@ -4144,6 +5280,16 @@ public class PaymentLinkService {
             long amountKopecks,
             String terminalKey,
             TbankPaymentProfile runtimeProfile
+    ) {
+    }
+
+    private record ManualCardPaymentPlan(
+            Long linkId,
+            Long orderId,
+            String paymentId,
+            String tbankOrderId,
+            long amountKopecks,
+            CancelReservation cancelReservation
     ) {
     }
 

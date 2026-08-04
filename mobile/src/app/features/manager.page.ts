@@ -29,11 +29,13 @@ import {
   ManagerBoard,
   ManagerBoardSection,
   ManagerOption,
+  ManualPaymentConfirmationRequest,
   OrderEditPayload,
   OrderItem,
   OrderUpdateRequest,
   Page
 } from '../core/api.service';
+import { AuthService } from '../core/auth.service';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { millisecondsUntilNextBusinessDay } from '../shared/business-date';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
@@ -52,6 +54,11 @@ import {
 } from '../shared/mobile-board.helpers';
 import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-format';
 import { safeExternalSchemeUrl, safeHttpsExternalUrl } from '../shared/external-navigation';
+import { orderReviewCopyText } from '../shared/order-review-copy-text';
+import {
+  buildManualCardPaymentConfirmationRequest,
+  buildManualPaymentConfirmationRequest
+} from '../shared/manual-payment-confirmation';
 import {
   ALL_STATUS,
   COMPANY_ACTIONS,
@@ -85,6 +92,8 @@ type ManagerListState = {
 type CompanyFilialEditDraft = CompanyFilialUpdateRequest & { filialId: number };
 type CompanyNoteSaveState = ManagerNoteSaveState;
 type OrderNoteSaveState = CompanyNoteSaveState;
+const UNFINISHED_PROVIDER_PAYMENT_MESSAGE =
+  'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.';
 type CompanyCreateDraft = {
   source: CompanyCreateSource;
   leadId: number | null;
@@ -2211,6 +2220,7 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   constructor(
     private readonly api: ApiService,
+    private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly confirm: MobileConfirmService
@@ -3201,10 +3211,15 @@ export class ManagerPage implements OnInit, OnDestroy {
 
     try {
       if (order.commonInvoice) {
-        await this.applyCommonInvoiceStatus(order, action.status);
+        const changed = await this.applyCommonInvoiceStatus(order, action.status);
+        if (!changed) {
+          return;
+        }
       } else {
-        await firstValueFrom(this.api.updateManagerOrderStatus(order.id, action.status));
-        this.patchOrder(order.id, { status: action.status, waitingForClient: false });
+        const changed = await this.applyStandaloneOrderStatus(order, action.status);
+        if (!changed) {
+          return;
+        }
       }
       await this.load();
       this.error.set(null);
@@ -3228,7 +3243,60 @@ export class ManagerPage implements OnInit, OnDestroy {
     await this.updateOrderStatus(order, matchedAction);
   }
 
-  private async applyCommonInvoiceStatus(order: OrderItem, status: string): Promise<void> {
+  private async applyStandaloneOrderStatus(order: OrderItem, status: string): Promise<boolean> {
+    if (status !== 'Оплачено') {
+      await firstValueFrom(this.api.updateManagerOrderStatus(order.id, status));
+      this.patchOrder(order.id, { status, waitingForClient: false });
+      return true;
+    }
+
+    const amountKopecks = Math.round(this.orderPayableSum(order) * 100);
+    const manualCardRequest = buildManualCardPaymentConfirmationRequest(
+      amountKopecks,
+      `Явно подтверждено мобильной кнопкой «Оплатили» после проверки выписки; заказ #${order.id}`
+    );
+    if (!manualCardRequest) {
+      throw new Error('Не удалось определить точную сумму заказа. Оплата не отмечена.');
+    }
+    const amountLabel = `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amountKopecks / 100)} ₽`;
+    const confirmed = await this.confirm.confirm({
+      title: 'Подтвердить оплату',
+      message: `Подтвердите по заказу #${order.id}: выписка получателя проверена и перевод ${amountLabel} действительно поступил. `
+        + 'Сообщение клиента «Я оплатил» само по себе этого не доказывает. '
+        + 'Если обнаружится незавершённая неоплаченная T-Bank/СБП-ссылка, владелец или администратор безопасно закроет её перед зачислением.',
+      confirmText: 'Деньги поступили'
+    });
+    if (!confirmed) {
+      return false;
+    }
+
+    try {
+      await firstValueFrom(this.api.updateManagerOrderStatus(order.id, status));
+    } catch (error) {
+      if (!this.canUsePrivilegedPaymentFallback() || !this.isUnfinishedProviderPaymentConflict(error)) {
+        throw error;
+      }
+      await firstValueFrom(this.api.confirmManagerManualCardPayment(order.id, manualCardRequest));
+    }
+
+    this.patchOrder(order.id, { status, waitingForClient: false });
+    return true;
+  }
+
+  private canUsePrivilegedPaymentFallback(): boolean {
+    return this.auth.hasAnyRealmRole(['OWNER', 'ADMIN']);
+  }
+
+  private isUnfinishedProviderPaymentConflict(error: unknown): boolean {
+    return error instanceof HttpErrorResponse
+      && error.status === 409
+      && this.apiErrorMessage(error, '') === UNFINISHED_PROVIDER_PAYMENT_MESSAGE;
+  }
+
+  private async applyCommonInvoiceStatus(order: OrderItem, status: string): Promise<boolean> {
     const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
     if (!invoiceId) {
       throw new Error('Не найден ID общего счета');
@@ -3237,22 +3305,59 @@ export class ManagerPage implements OnInit, OnDestroy {
     switch (status) {
       case 'Выставлен счет':
         await firstValueFrom(this.api.sendCommonInvoice(invoiceId));
-        return;
+        return true;
       case 'Напоминание':
         await firstValueFrom(this.api.remindCommonInvoice(invoiceId));
-        return;
+        return true;
       case 'Не оплачено':
         await firstValueFrom(this.api.markCommonInvoiceUnpaid(invoiceId));
-        return;
+        return true;
       case 'Бан':
         await firstValueFrom(this.api.markCommonInvoiceBan(invoiceId));
-        return;
-      case 'Оплачено':
-        await firstValueFrom(this.api.markCommonInvoicePaid(invoiceId));
-        return;
+        return true;
+      case 'Оплачено': {
+        const evidence = await this.requestCommonInvoiceManualPaymentEvidence(invoiceId);
+        if (!evidence) {
+          return false;
+        }
+        await firstValueFrom(this.api.markCommonInvoicePaid(invoiceId, evidence));
+        return true;
+      }
       default:
         throw new Error('Для общего счета нет такого действия');
     }
+  }
+
+  private async requestCommonInvoiceManualPaymentEvidence(
+    invoiceId: number
+  ): Promise<ManualPaymentConfirmationRequest | null> {
+    const confirmed = await this.confirm.confirm({
+      title: 'Подтверждение поступления денег',
+      message: `Отметьте общий счёт №${invoiceId} оплаченным только если вы проверили выписку `
+        + 'и деньги фактически поступили получателю. Сообщение клиента «Я оплатил» не является подтверждением.',
+      confirmText: 'Деньги поступили'
+    });
+    if (!confirmed) {
+      return null;
+    }
+    const comment = window.prompt(
+      'Комментарий к проверке оплаты (например: «сверено по выписке, 04.08 15:30»). Если есть только чек — оставьте пустым.'
+    );
+    if (comment === null) {
+      return null;
+    }
+    const receiptUrl = window.prompt(
+      'Ссылка на чек или платёжный документ (необязательно, если заполнен комментарий):'
+    );
+    if (receiptUrl === null) {
+      return null;
+    }
+    const evidence = buildManualPaymentConfirmationRequest(comment, receiptUrl);
+    if (!evidence) {
+      this.error.set('Оплата не отмечена: укажите комментарий по проверке или ссылку на чек.');
+      return null;
+    }
+    return evidence;
   }
 
   canManageOrderClientWaiting(order: OrderItem): boolean {
@@ -3523,13 +3628,7 @@ export class ManagerPage implements OnInit, OnDestroy {
     }
 
     const reviewUrl = this.orderReviewUrl(order);
-    const text = [
-      this.orderTitle(order),
-      order.firstOrderForCompany
-        ? 'Здравствуйте, это новые тексты на проверку. Проверьте, пожалуйста, их в течение трёх дней.'
-        : 'Здравствуйте, текст отзывов для новых отзывов на следующий месяц готов.',
-      reviewUrl ? `Ссылка на проверку отзывов: ${reviewUrl}` : ''
-    ].filter(Boolean).join('\n\n');
+    const text = orderReviewCopyText(order, reviewUrl);
 
     await this.copyText(text, `order-review-${order.id}`, 'Не удалось скопировать текст.');
   }
@@ -4585,8 +4684,12 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   private apiErrorMessage(error: unknown, fallback: string): string {
     if (error instanceof HttpErrorResponse) {
-      const backendMessage = typeof error.error === 'object' && error.error && 'message' in error.error
-        ? String((error.error as { message?: unknown }).message ?? '')
+      const backendMessage = typeof error.error === 'object' && error.error
+        ? ('message' in error.error
+          ? String((error.error as { message?: unknown }).message ?? '')
+          : 'detail' in error.error
+            ? String((error.error as { detail?: unknown }).detail ?? '')
+            : '')
         : typeof error.error === 'string'
           ? error.error
           : '';

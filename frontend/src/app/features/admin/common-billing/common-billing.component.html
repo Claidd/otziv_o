@@ -297,7 +297,7 @@
             @if (attentionHasPaymentInitCheck()) {
               <button type="button" class="success" (click)="confirmPaymentInitCheck()" [disabled]="!!mutating() || !paymentInitCheckReady()">
                 <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
-                Сверено
+                {{ paymentInitNoPaymentButtonLabel }}
               </button>
             }
             @if (attentionRetryEnabled()) {

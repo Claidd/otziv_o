@@ -124,7 +124,7 @@ export type MobileOrderCopyKind = 'review' | 'payment';
             rel="noopener"
             [class.disabled]="!safeReviewHref"
             (click)="guardLink($event, safeReviewHref)"
-          >{{ isCommonInvoice ? 'ссылка' : 'url' }}</a>
+          >перейти</a>
           <button type="button" (click)="copyText.emit('payment')">
             {{ copiedKey === paymentCopyKey ? '✓' : 'счет' }}
           </button>

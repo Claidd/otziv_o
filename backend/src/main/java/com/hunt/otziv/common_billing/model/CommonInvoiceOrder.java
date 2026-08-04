@@ -63,6 +63,10 @@ public class CommonInvoiceOrder {
     @Column(name = "payment_method", length = 32)
     private String paymentMethod;
 
+    /** Durable provenance of a standalone payment applied to this invoice position. */
+    @Column(name = "source_payment_link_id")
+    private Long sourcePaymentLinkId;
+
     @Column(name = "manual_paid_by", length = 160)
     private String manualPaidBy;
 

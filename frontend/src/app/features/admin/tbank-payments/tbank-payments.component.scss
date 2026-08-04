@@ -258,6 +258,7 @@ input[type='search']::placeholder {
 .primary-action,
 .icon-action,
 .refund-action,
+.unpaid-action,
 .archive-run-action,
 .copy-line,
 .mode-pill,
@@ -272,6 +273,7 @@ input[type='search']::placeholder {
 .primary-action,
 .icon-action,
 .refund-action,
+.unpaid-action,
 .archive-run-action {
   min-height: 2.25rem;
   justify-content: center;
@@ -1549,6 +1551,7 @@ button.copy-line.copy-line.copy-line {
 
 .icon-action .material-icons-sharp,
 .refund-action .material-icons-sharp,
+.unpaid-action .material-icons-sharp,
 .confirm-action .material-icons-sharp,
 .receipt-action .material-icons-sharp,
 .archive-label .material-icons-sharp,
@@ -1558,6 +1561,7 @@ button.copy-line.copy-line.copy-line {
 }
 
 .refund-action.refund-action,
+.unpaid-action.unpaid-action,
 .confirm-action.confirm-action,
 .receipt-action.receipt-action {
   min-width: 0;
@@ -1570,6 +1574,11 @@ button.copy-line.copy-line.copy-line {
 .refund-action.refund-action {
   border-color: rgba(255, 198, 0, 0.62);
   color: #6e5200;
+}
+
+.unpaid-action.unpaid-action {
+  border-color: rgba(196, 66, 80, 0.42);
+  color: var(--otziv-danger);
 }
 
 .confirm-action.confirm-action {
@@ -1598,6 +1607,7 @@ button.copy-line.copy-line.copy-line {
 }
 
 .refund-action:not(:disabled):hover,
+.unpaid-action:not(:disabled):hover,
 .confirm-action:not(:disabled):hover,
 .receipt-action:not(:disabled):hover,
 .quiet-action:hover,
@@ -1609,6 +1619,7 @@ button.copy-line.copy-line.copy-line {
 
 button:disabled,
 .refund-action:disabled,
+.unpaid-action:disabled,
 .confirm-action:disabled,
 .receipt-action:disabled {
   cursor: not-allowed;

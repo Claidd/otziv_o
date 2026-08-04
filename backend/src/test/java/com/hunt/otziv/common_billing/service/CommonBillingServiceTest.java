@@ -425,6 +425,8 @@ class CommonBillingServiceTest {
         lockOrder.verify(invoiceOrderRepository).findOrderIdsByInvoiceId(10L);
         lockOrder.verify(orderAggregateMutationLockService).lock(101L);
         lockOrder.verify(orderAggregateMutationLockService).lock(102L);
+        lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
+        lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(102L);
         lockOrder.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
         lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
         lockOrder.verify(orderTransactionService).handlePaymentStatus(firstOrder, false);
@@ -461,6 +463,7 @@ class CommonBillingServiceTest {
                 paymentLinkRepository
         );
         lockOrder.verify(orderAggregateMutationLockService).lock(101L);
+        lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
         lockOrder.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
         lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
     }
@@ -488,7 +491,7 @@ class CommonBillingServiceTest {
 
         assertEquals(409, exception.getStatusCode().value());
         verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
-        verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
+        verify(paymentLinkRepository, times(2)).findByOrderIdForUpdate(101L);
     }
 
     @Test
@@ -562,15 +565,20 @@ class CommonBillingServiceTest {
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.REMINDER);
         Order paidOrder = order(101L);
+        paidOrder.setStatus(status("Оплачено"));
         Order openOrder = order(102L);
         CommonInvoiceOrder paidItem = item(invoice, paidOrder);
         CommonInvoiceOrder openItem = item(invoice, openOrder);
         List<CommonInvoiceOrder> items = List.of(paidItem, openItem);
         LocalDateTime paidAt = LocalDateTime.of(2026, 6, 10, 18, 54, 53);
+        PaymentLink confirmed = confirmedStandaloneBankPayment(501L, paidOrder, 100_000L);
+        confirmed.setPaidAt(paidAt);
 
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of(confirmed));
         when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(paidItem));
         when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
+        when(badReviewTaskService.getPayableSum(paidOrder)).thenReturn(BigDecimal.valueOf(1000));
         when(badReviewTaskService.getPayableSum(openOrder)).thenReturn(BigDecimal.valueOf(1000));
 
         boolean applied = service.applyConfirmedOrderPayment(101L, paidAt, "T-Bank/SBP оплата заказа");
@@ -582,7 +590,9 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
         assertEquals(200_000L, invoice.getAmountKopecks());
         assertEquals(100_000L, invoice.getPaidKopecks());
-        verify(orderTransactionService).handlePaymentStatus(paidOrder, false);
+        assertEquals(501L, paidItem.getSourcePaymentLinkId());
+        assertNull(confirmed.getLastError());
+        verify(orderTransactionService, never()).handlePaymentStatus(paidOrder, false);
         verify(orderTransactionService, never()).handlePaymentStatus(openOrder, false);
         verify(manualPaymentAutoConfirmationService).retireOpenLinksForPaidOrder(paidOrder);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(paidOrder, "Оплата общего счета");
@@ -594,14 +604,20 @@ class CommonBillingServiceTest {
                         PaymentLinkStatus.CONFIRMED
                 );
 
-        var lockOrder = inOrder(orderAggregateMutationLockService, invoiceOrderRepository, invoiceRepository);
+        var lockOrder = inOrder(
+                orderAggregateMutationLockService,
+                paymentLinkRepository,
+                invoiceOrderRepository,
+                invoiceRepository
+        );
         lockOrder.verify(orderAggregateMutationLockService).lock(101L);
+        lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
         lockOrder.verify(invoiceOrderRepository).findByOrderIdWithInvoice(101L);
         lockOrder.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
     }
 
     @Test
-    void invoiceRefreshMarksLinkedItemPaidWhenOrderHasConfirmedStandalonePayment() throws Exception {
+    void ordinaryInvoiceRefreshDoesNotApplyStandalonePaymentWithoutPaymentLinkLocks() throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.REMINDER);
@@ -610,43 +626,28 @@ class CommonBillingServiceTest {
         CommonInvoiceOrder paidItem = item(invoice, paidOrder);
         CommonInvoiceOrder openItem = item(invoice, openOrder);
         List<CommonInvoiceOrder> items = List.of(paidItem, openItem);
-        LocalDateTime paidAt = LocalDateTime.of(2026, 6, 10, 18, 54, 53);
-        PaymentLink link = new PaymentLink();
-        link.setId(501L);
-        link.setOrder(paidOrder);
-        link.setStatus(PaymentLinkStatus.CONFIRMED);
-        link.setAmountKopecks(100_000L);
-        link.setConfirmedAmountKopecks(100_000L);
-        link.setPaidAt(paidAt);
-
         when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
         when(badReviewTaskService.getPayableSum(paidOrder)).thenReturn(BigDecimal.valueOf(1000));
         when(badReviewTaskService.getPayableSum(openOrder)).thenReturn(BigDecimal.valueOf(1000));
-        when(paymentLinkRepository.findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(
-                101L,
-                PaymentLinkStatus.CONFIRMED
-        )).thenReturn(Optional.of(link));
-        when(paymentLinkRepository.findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(
-                102L,
-                PaymentLinkStatus.CONFIRMED
-        )).thenReturn(Optional.empty());
         when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
 
         CommonInvoiceDetailsResponse response = service.invoice(10L);
 
-        assertTrue(paidItem.isPaid());
-        assertEquals(paidAt, paidItem.getPaidAt());
+        assertFalse(paidItem.isPaid());
+        assertNull(paidItem.getPaidAt());
         assertFalse(openItem.isPaid());
-        assertEquals(CommonInvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
-        assertEquals(BigDecimal.valueOf(1000).setScale(2), response.summary().paid());
-        assertEquals(BigDecimal.valueOf(1000).setScale(2), response.summary().remaining());
-        verify(orderTransactionService).handlePaymentStatus(paidOrder, false);
+        assertEquals(CommonInvoiceStatus.REMINDER, invoice.getStatus());
+        assertEquals(BigDecimal.ZERO.setScale(2), response.summary().paid());
+        assertEquals(BigDecimal.valueOf(2000).setScale(2), response.summary().remaining());
+        verify(orderTransactionService, never()).handlePaymentStatus(paidOrder, false);
         verify(orderTransactionService, never()).handlePaymentStatus(openOrder, false);
-        verify(manualPaymentAutoConfirmationService).retireOpenLinksForPaidOrder(paidOrder);
-        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(paidOrder, "Оплата общего счета");
+        verify(manualPaymentAutoConfirmationService, never()).retireOpenLinksForPaidOrder(paidOrder);
+        verify(paymentInvoiceRetryScheduler, never()).cancelBadReviewAutoBan(paidOrder, "Оплата общего счета");
         verify(nextOrderRequestService, never()).openForPaidOrder(any());
+        verify(paymentLinkRepository, never())
+                .findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(anyLong(), any());
     }
 
     @Test
@@ -2330,7 +2331,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void attachOrderStartsNewCycleWhenExistingInvoiceWasAlreadySent() {
+    void attachOrderBlocksCreatedStandaloneTokenBecauseDisclosureCannotBeProvedAbsent() {
         CommonBillingAccount account = account();
         account.setEnabled(true);
         CommonBillingAccountCompany link = new CommonBillingAccountCompany();
@@ -2338,14 +2339,139 @@ class CommonBillingServiceTest {
         link.setCompany(company());
         link.setEnabled(true);
         Order order = order(101L);
+        PaymentLink pristineStandaloneLink = new PaymentLink();
+        pristineStandaloneLink.setId(501L);
+        pristineStandaloneLink.setOrder(order);
+        pristineStandaloneLink.setStatus(PaymentLinkStatus.CREATED);
+        pristineStandaloneLink.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        pristineStandaloneLink.setExpiresAt(LocalDateTime.now().plusDays(1));
 
         when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
         when(invoiceOrderRepository.findByOrder_Id(101L)).thenReturn(Optional.empty());
+        when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of(pristineStandaloneLink));
+
+        ResponseStatusException conflict = assertThrows(
+                ResponseStatusException.class,
+                () -> service.attachOrderIfNeeded(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertEquals(PaymentLinkStatus.CREATED, pristineStandaloneLink.getStatus());
+        assertNull(pristineStandaloneLink.getLastError());
+        verify(paymentLinkRepository, never()).save(pristineStandaloneLink);
+        verify(invoiceOrderRepository, never()).save(any(CommonInvoiceOrder.class));
+        verify(accountRepository, never()).findByIdWithRelationsForUpdate(anyLong());
+    }
+
+    @Test
+    void attachOrderWithoutPreexistingRouteIsIdempotentAndDoesNotDoubleAmount() {
+        CommonBillingAccount account = account();
+        account.setEnabled(true);
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setAccount(account);
+        link.setCompany(company());
+        link.setEnabled(true);
+        Order order = order(101L);
+        CommonInvoiceOrder[] attachedItem = new CommonInvoiceOrder[1];
+        CommonInvoice[] createdInvoice = new CommonInvoice[1];
+
+        when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
+        when(invoiceOrderRepository.findByOrder_Id(101L))
+                .thenAnswer(ignored -> Optional.ofNullable(attachedItem[0]));
         when(invoiceOrderRepository.findMembershipByOrderIdForRead(101L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
         when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L)).thenReturn(List.of(link));
         when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L)).thenReturn(Optional.of(link));
         when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of());
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of());
+        doAnswer(invocation -> {
+            CommonInvoice created = invocation.getArgument(0);
+            created.setId(99L);
+            createdInvoice[0] = created;
+            return created;
+        }).when(invoiceRepository).save(any(CommonInvoice.class));
+        doAnswer(invocation -> {
+            CommonInvoiceOrder saved = invocation.getArgument(0);
+            attachedItem[0] = saved;
+            return saved;
+        }).when(invoiceOrderRepository).save(any(CommonInvoiceOrder.class));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(99L)).thenAnswer(ignored ->
+                attachedItem[0] == null ? List.of() : List.of(attachedItem[0])
+        );
+
+        assertTrue(service.attachOrderIfNeeded(order));
+        assertTrue(service.attachOrderIfNeeded(order));
+
+        assertEquals(100_000L, attachedItem[0].getAmountKopecks());
+        assertEquals(100_000L, createdInvoice[0].getAmountKopecks());
+        verify(invoiceOrderRepository).save(any(CommonInvoiceOrder.class));
+        verify(badReviewTaskService).getPayableSum(order);
+    }
+
+    @Test
+    void attachOrderBlocksAlreadySentManualPaymentRouteUntilExplicitReconciliation() {
+        CommonBillingAccount account = account();
+        account.setEnabled(true);
+        CommonBillingAccountCompany accountCompany = new CommonBillingAccountCompany();
+        accountCompany.setAccount(account);
+        accountCompany.setCompany(company());
+        accountCompany.setEnabled(true);
+        Order order = order(102L);
+        PaymentLink manualLink = new PaymentLink();
+        manualLink.setId(502L);
+        manualLink.setOrder(order);
+        manualLink.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        manualLink.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.MANUAL_MOBILE_BANK);
+        manualLink.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(orderRepository.findCompanyIdByOrderId(102L)).thenReturn(Optional.of(20L));
+        when(invoiceOrderRepository.findByOrder_Id(102L)).thenReturn(Optional.empty());
+        when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(accountCompany));
+        when(orderAggregateMutationLockService.lock(102L)).thenReturn(order);
+        when(paymentLinkRepository.findByOrderIdForUpdate(102L)).thenReturn(List.of(manualLink));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.attachOrderIfNeeded(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertTrue(exception.getReason().contains("ручным реквизитам"));
+        verify(paymentLinkRepository, never()).save(manualLink);
+        verify(invoiceOrderRepository, never()).save(any(CommonInvoiceOrder.class));
+        verify(accountRepository, never()).findByIdWithRelationsForUpdate(anyLong());
+    }
+
+    @Test
+    void attachOrderConsumesVerifiedAbsentManualRouteOnlyAfterMembershipIsSaved() {
+        CommonBillingAccount account = account();
+        account.setEnabled(true);
+        CommonBillingAccountCompany accountCompany = new CommonBillingAccountCompany();
+        accountCompany.setAccount(account);
+        accountCompany.setCompany(company());
+        accountCompany.setEnabled(true);
+        Order order = order(103L);
+        PaymentLink manuallyClosedRoute = new PaymentLink();
+        manuallyClosedRoute.setId(503L);
+        manuallyClosedRoute.setOrder(order);
+        manuallyClosedRoute.setStatus(PaymentLinkStatus.CANCELED);
+        manuallyClosedRoute.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.MANUAL_MOBILE_BANK);
+        manuallyClosedRoute.setLastError("manual_payment_absent_verified: checked_by=owner; checked_at=2026-08-04T12:00");
+        CommonInvoiceOrder[] attachedItem = new CommonInvoiceOrder[1];
+
+        when(orderRepository.findCompanyIdByOrderId(103L)).thenReturn(Optional.of(20L));
+        when(invoiceOrderRepository.findByOrder_Id(103L)).thenReturn(Optional.empty());
+        when(invoiceOrderRepository.findMembershipByOrderIdForRead(103L)).thenReturn(Optional.empty());
+        when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(accountCompany));
+        when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L)).thenReturn(List.of(accountCompany));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L)).thenReturn(Optional.of(accountCompany));
+        when(orderAggregateMutationLockService.lock(103L)).thenReturn(order);
+        when(paymentLinkRepository.findByOrderIdForUpdate(103L)).thenReturn(List.of(manuallyClosedRoute));
         when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
         when(invoiceRepository.findCurrentForAccount(any(), any(), any())).thenReturn(List.of());
@@ -2354,20 +2480,297 @@ class CommonBillingServiceTest {
             created.setId(99L);
             return created;
         }).when(invoiceRepository).save(any(CommonInvoice.class));
-        doAnswer(invocation -> invocation.getArgument(0))
-                .when(invoiceOrderRepository).save(any(CommonInvoiceOrder.class));
-        when(invoiceOrderRepository.findByInvoiceIdWithOrders(99L)).thenReturn(List.of());
+        doAnswer(invocation -> {
+            CommonInvoiceOrder saved = invocation.getArgument(0);
+            attachedItem[0] = saved;
+            return saved;
+        }).when(invoiceOrderRepository).save(any(CommonInvoiceOrder.class));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(99L)).thenAnswer(ignored ->
+                attachedItem[0] == null ? List.of() : List.of(attachedItem[0])
+        );
 
         assertTrue(service.attachOrderIfNeeded(order));
 
+        assertEquals(PaymentLinkStatus.CANCELED, manuallyClosedRoute.getStatus());
+        assertTrue(manuallyClosedRoute.getLastError().startsWith("common_invoice_route_attached; invoice=99; "));
+        assertTrue(manuallyClosedRoute.getLastError().contains("manual_payment_absent_verified:"));
+        var persistenceOrder = inOrder(invoiceOrderRepository, paymentLinkRepository);
+        persistenceOrder.verify(invoiceOrderRepository).save(any(CommonInvoiceOrder.class));
+        persistenceOrder.verify(paymentLinkRepository).save(manuallyClosedRoute);
+    }
+
+    @Test
+    void commonInvoiceRouteCheckDoesNotIgnoreConfirmedWithoutProvenance() {
+        CommonInvoice invoice = invoice(account());
+        Order paidOrder = order(201L);
+        Order unpaidOrder = order(202L);
+        CommonInvoiceOrder paidItem = item(invoice, paidOrder);
+        paidItem.setPaid(true);
+        CommonInvoiceOrder unpaidItem = item(invoice, unpaidOrder);
+        unpaidItem.setPaid(false);
+
+        PaymentLink historicalConfirmed = new PaymentLink();
+        historicalConfirmed.setId(601L);
+        historicalConfirmed.setOrder(paidOrder);
+        historicalConfirmed.setStatus(PaymentLinkStatus.CONFIRMED);
+        historicalConfirmed.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        historicalConfirmed.setTbankPaymentId("paid-payment");
+
+        PaymentLink stillActive = new PaymentLink();
+        stillActive.setId(604L);
+        stillActive.setOrder(paidOrder);
+        stillActive.setStatus(PaymentLinkStatus.INITIATED);
+        stillActive.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        stillActive.setTbankPaymentId("still-active-payment");
+
+        PaymentLink pristineUnpaidRoute = new PaymentLink();
+        pristineUnpaidRoute.setId(602L);
+        pristineUnpaidRoute.setOrder(unpaidOrder);
+        pristineUnpaidRoute.setStatus(PaymentLinkStatus.CREATED);
+        pristineUnpaidRoute.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        pristineUnpaidRoute.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        Map<Long, List<PaymentLink>> allLinks = Map.of(
+                201L, List.of(historicalConfirmed, stillActive),
+                202L, List.of(pristineUnpaidRoute)
+        );
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<Collection<CommonInvoiceStatus>> statuses =
-                ArgumentCaptor.forClass((Class) Collection.class);
-        verify(accountRepository).findByIdWithRelationsForUpdate(1L);
-        verify(invoiceRepository, times(2)).findCurrentForAccount(any(), statuses.capture(), any());
-        assertFalse(statuses.getValue().contains(CommonInvoiceStatus.INVOICED));
-        assertFalse(statuses.getValue().contains(CommonInvoiceStatus.REMINDER));
-        assertFalse(statuses.getValue().contains(CommonInvoiceStatus.PARTIALLY_PAID));
+        Map<Long, List<PaymentLink>> routeLinks = ReflectionTestUtils.invokeMethod(
+                service,
+                "paymentLinksRequiringCommonInvoiceRouteCheck",
+                allLinks,
+                List.of(paidItem, unpaidItem),
+                Set.of()
+        );
+
+        assertEquals(Set.of(201L, 202L), routeLinks.keySet());
+        assertEquals(List.of(historicalConfirmed, stillActive), routeLinks.get(201L));
+        assertEquals(List.of(pristineUnpaidRoute), routeLinks.get(202L));
+        assertEquals(PaymentLinkStatus.CONFIRMED, historicalConfirmed.getStatus());
+        assertEquals(PaymentLinkStatus.INITIATED, stillActive.getStatus());
+        assertEquals(PaymentLinkStatus.CREATED, pristineUnpaidRoute.getStatus());
+        verify(paymentLinkRepository, never()).save(pristineUnpaidRoute);
+        verify(paymentLinkRepository, never()).save(historicalConfirmed);
+    }
+
+    @Test
+    void competingRouteValidationNeverExpiresCreatedTokenBeforeFindingAnotherBlocker() {
+        Order firstOrder = order(201L);
+        PaymentLink created = new PaymentLink();
+        created.setId(601L);
+        created.setOrder(firstOrder);
+        created.setStatus(PaymentLinkStatus.CREATED);
+        created.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+
+        Order secondOrder = order(202L);
+        PaymentLink initiated = new PaymentLink();
+        initiated.setId(602L);
+        initiated.setOrder(secondOrder);
+        initiated.setStatus(PaymentLinkStatus.INITIATED);
+        initiated.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        initiated.setTbankPaymentId("provider-payment");
+
+        Map<Long, List<PaymentLink>> routes = new LinkedHashMap<>();
+        routes.put(201L, List.of(created));
+        routes.put(202L, List.of(initiated));
+
+        assertThrows(ResponseStatusException.class, () -> ReflectionTestUtils.invokeMethod(
+                service,
+                "ensureNoCompetingStandaloneRoutesOrThrow",
+                routes
+        ));
+
+        assertEquals(PaymentLinkStatus.CREATED, created.getStatus());
+        assertNull(created.getLastError());
+        assertEquals(PaymentLinkStatus.INITIATED, initiated.getStatus());
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+        verify(paymentLinkRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void confirmedStandaloneSynchronizationRejectsTwoConfirmedPaymentsWithoutPartialMutation() {
+        CommonInvoice invoice = invoice(account());
+        Order order = order(201L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentLink first = confirmedStandaloneBankPayment(601L, order, 100_000L);
+        PaymentLink second = confirmedStandaloneBankPayment(602L, order, 100_000L);
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class, () ->
+                ReflectionTestUtils.invokeMethod(
+                        service,
+                        "synchronizeConfirmedStandalonePaymentsOrThrow",
+                        invoice,
+                        List.of(item),
+                        Map.of(201L, List.of(first, second))
+                )
+        );
+
+        assertTrue(conflict.getReason().contains("несколько подтвержденных"));
+        assertFalse(item.isPaid());
+        assertNull(first.getLastError());
+        assertNull(second.getLastError());
+        verify(invoiceOrderRepository, never()).saveAll(any());
+        verify(paymentLinkRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void confirmedStandaloneSynchronizationRejectsAmountMismatchWithoutPartialMutation() {
+        CommonInvoice invoice = invoice(account());
+        Order order = order(201L);
+        order.setStatus(status("Оплачено"));
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentLink link = confirmedStandaloneBankPayment(601L, order, 100_000L);
+        link.setConfirmedAmountKopecks(90_000L);
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class, () ->
+                ReflectionTestUtils.invokeMethod(
+                        service,
+                        "synchronizeConfirmedStandalonePaymentsOrThrow",
+                        invoice,
+                        List.of(item),
+                        Map.of(201L, List.of(link))
+                )
+        );
+
+        assertTrue(conflict.getReason().contains("сумма не совпадает"));
+        assertFalse(item.isPaid());
+        assertNull(link.getLastError());
+        verify(invoiceOrderRepository, never()).saveAll(any());
+        verify(paymentLinkRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void confirmedStandaloneSynchronizationRejectsExistingCommonPaymentSource() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setPaymentUrl("https://securepayments.tinkoff.ru/common-payment");
+        invoice.setTbankPaymentId("common-payment-id");
+        Order order = order(201L);
+        order.setStatus(status("Оплачено"));
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentLink link = confirmedStandaloneBankPayment(601L, order, 100_000L);
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class, () ->
+                ReflectionTestUtils.invokeMethod(
+                        service,
+                        "synchronizeConfirmedStandalonePaymentsOrThrow",
+                        invoice,
+                        List.of(item),
+                        Map.of(201L, List.of(link))
+                )
+        );
+
+        assertTrue(conflict.getReason().contains("в общем счете уже есть платежный источник"));
+        assertFalse(item.isPaid());
+        assertNull(link.getLastError());
+        verify(invoiceOrderRepository, never()).saveAll(any());
+        verify(paymentLinkRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void confirmedStandaloneSynchronizationRejectsPaidItemWithoutDurableSource() {
+        CommonInvoice invoice = invoice(account());
+        Order order = order(201L);
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setPaid(true);
+        item.setPaidAt(LocalDateTime.of(2026, 8, 4, 12, 30));
+        item.setPaymentMethod("TBANK");
+        PaymentLink link = confirmedStandaloneBankPayment(601L, order, 100_000L);
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class, () ->
+                ReflectionTestUtils.invokeMethod(
+                        service,
+                        "synchronizeConfirmedStandalonePaymentsOrThrow",
+                        invoice,
+                        List.of(item),
+                        Map.of(201L, List.of(link))
+                )
+        );
+
+        assertTrue(conflict.getReason().contains("недоказанный источник оплаты"));
+        assertNull(link.getLastError());
+        verify(invoiceOrderRepository, never()).saveAll(any());
+        verify(paymentLinkRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void providerConfirmedDeadlineExpiryClosesRouteButLocalExpiryWithProviderIdsDoesNot() {
+        Order order = order(201L);
+        PaymentLink providerExpired = new PaymentLink();
+        providerExpired.setId(601L);
+        providerExpired.setOrder(order);
+        providerExpired.setStatus(PaymentLinkStatus.EXPIRED);
+        providerExpired.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        providerExpired.setTbankPaymentId("payment-601");
+        providerExpired.setTbankOrderId("order-601");
+        providerExpired.setProviderTerminalStatus("DEADLINE_EXPIRED");
+
+        PaymentLink locallyExpired = new PaymentLink();
+        locallyExpired.setId(602L);
+        locallyExpired.setOrder(order);
+        locallyExpired.setStatus(PaymentLinkStatus.EXPIRED);
+        locallyExpired.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        locallyExpired.setTbankPaymentId("payment-602");
+        locallyExpired.setTbankOrderId("order-602");
+
+        Boolean providerClosed = ReflectionTestUtils.invokeMethod(
+                service,
+                "isSafelyClosedStandaloneRoute",
+                providerExpired
+        );
+        Boolean localClosed = ReflectionTestUtils.invokeMethod(
+                service,
+                "isSafelyClosedStandaloneRoute",
+                locallyExpired
+        );
+
+        assertTrue(Boolean.TRUE.equals(providerClosed));
+        assertFalse(Boolean.TRUE.equals(localClosed));
+    }
+
+    @Test
+    void reversalOfDurableStandaloneSourceQuarantinesInvoiceWithoutClearingPaidEvidence() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
+        Order order = order(201L);
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setPaid(true);
+        item.setPaidAt(LocalDateTime.of(2026, 8, 4, 12, 30));
+        item.setPaymentMethod("TBANK");
+        item.setSourcePaymentLinkId(601L);
+        PaymentLink refunded = confirmedStandaloneBankPayment(601L, order, 100_000L);
+        refunded.setStatus(PaymentLinkStatus.REFUNDED);
+        refunded.setProviderTerminalStatus("REFUNDED");
+
+        when(paymentLinkRepository.findByOrderIdForUpdate(201L)).thenReturn(List.of(refunded));
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(201L)).thenReturn(Optional.of(item));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+
+        boolean quarantined = service.applyStandalonePaymentReversal(
+                201L,
+                601L,
+                PaymentLinkStatus.REFUNDED
+        );
+
+        assertTrue(quarantined);
+        assertTrue(item.isPaid());
+        assertEquals(601L, item.getSourcePaymentLinkId());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertNull(invoice.getNextReminderAt());
+        assertTrue(invoice.getLastError().startsWith("standalone_payment_reversed:"));
+        verify(invoiceRepository).save(invoice);
+
+        var lockOrder = inOrder(
+                orderAggregateMutationLockService,
+                paymentLinkRepository,
+                invoiceRepository
+        );
+        lockOrder.verify(orderAggregateMutationLockService).lock(201L);
+        lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(201L);
+        lockOrder.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
     }
 
     @Test
@@ -2620,6 +3023,89 @@ class CommonBillingServiceTest {
         assertTrue(invoice.getLastError().contains("review_recovery_active"));
         assertNotNull(invoice.getNextReminderAt());
         verify(invoiceRepository, times(2)).save(invoice);
+        verify(messageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void dueReminderPersistsAttentionAndDoesNotSendForLegacyDualPaymentRoute() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.REMINDER);
+        invoice.setNextReminderAt(LocalDateTime.now().minusMinutes(5));
+        invoice.setPaymentUrl("https://securepayments.tinkoff.ru/common-active");
+        invoice.setTbankPaymentId("common-payment-117");
+        invoice.setTbankOrderId("g117-active");
+        Order order = order(23_824L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentLink manualRoute = new PaymentLink();
+        manualRoute.setId(11_700L);
+        manualRoute.setOrder(order);
+        manualRoute.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        manualRoute.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.MANUAL_MOBILE_BANK);
+        manualRoute.setAmountKopecks(100_000L);
+
+        when(invoiceRepository.findReminderCandidates(any(), any(), any())).thenReturn(List.of(invoice));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(23_824L));
+        when(orderAggregateMutationLockService.lock(23_824L)).thenReturn(order);
+        when(paymentLinkRepository.findByOrderIdForUpdate(23_824L)).thenReturn(List.of(manualRoute));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+
+        assertEquals(0, service.sendDueReminders(10));
+
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertNull(invoice.getNextReminderAt());
+        assertTrue(invoice.getLastError().startsWith("standalone_payment_route_conflict:"));
+        assertTrue(invoice.getLastError().contains("Заказ #23824"));
+        assertEquals("common-payment-117", invoice.getTbankPaymentId());
+        assertEquals("g117-active", invoice.getTbankOrderId());
+        assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, manualRoute.getStatus());
+        verify(invoiceRepository).save(invoice);
+        verify(paymentLinkRepository, never()).save(manualRoute);
+        verify(messageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void dueReminderSynchronizesLockedConfirmedStandalonePaymentBeforeRouteValidation() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.REMINDER);
+        invoice.setNextReminderAt(LocalDateTime.now().minusMinutes(5));
+        Order paidOrder = order(101L);
+        paidOrder.setStatus(status("Оплачено"));
+        Order unpaidOrder = order(102L);
+        CommonInvoiceOrder paidItem = item(invoice, paidOrder);
+        CommonInvoiceOrder unpaidItem = item(invoice, unpaidOrder);
+        PaymentLink confirmed = confirmedStandaloneBankPayment(501L, paidOrder, 100_000L);
+        List<CommonInvoiceOrder> items = List.of(paidItem, unpaidItem);
+
+        when(invoiceRepository.findReminderCandidates(any(), any(), any())).thenReturn(List.of(invoice));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L, 102L));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(paidOrder);
+        when(orderAggregateMutationLockService.lock(102L)).thenReturn(unpaidOrder);
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of(confirmed));
+        when(paymentLinkRepository.findByOrderIdForUpdate(102L)).thenReturn(List.of());
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(items);
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
+        when(badReviewTaskService.getPayableSum(paidOrder)).thenReturn(BigDecimal.valueOf(1000));
+        when(badReviewTaskService.getPayableSum(unpaidOrder)).thenReturn(BigDecimal.valueOf(1000));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(false);
+
+        assertEquals(0, service.sendDueReminders(10));
+
+        assertTrue(paidItem.isPaid());
+        assertFalse(paidItem.isUnpaid());
+        assertEquals(confirmed.getPaidAt(), paidItem.getPaidAt());
+        assertEquals("TBANK", paidItem.getPaymentMethod());
+        assertEquals(501L, paidItem.getSourcePaymentLinkId());
+        assertNull(confirmed.getLastError());
+        assertEquals(CommonInvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
+        assertEquals(100_000L, invoice.getPaidKopecks());
+        assertFalse(invoice.getLastError().startsWith("standalone_payment_route_conflict:"));
+        verify(invoiceOrderRepository).saveAll(List.of(paidItem));
+        verify(paymentLinkRepository, never()).saveAll(any());
         verify(messageSender, never()).send(any(), any(), any(), any());
     }
 
@@ -5573,6 +6059,21 @@ class CommonBillingServiceTest {
         item.setReady(true);
         item.setAmountKopecks(100_000L);
         return item;
+    }
+
+    private PaymentLink confirmedStandaloneBankPayment(Long id, Order order, long amountKopecks) {
+        PaymentLink link = new PaymentLink();
+        link.setId(id);
+        link.setOrder(order);
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        link.setAmountKopecks(amountKopecks);
+        link.setConfirmedAmountKopecks(amountKopecks);
+        link.setPaidAt(LocalDateTime.of(2026, 8, 4, 12, 0).plusSeconds(id == null ? 0 : id));
+        link.setTbankPaymentId("payment-" + id);
+        link.setTbankOrderId("order-" + id);
+        link.setTbankTerminalKey("terminal");
+        return link;
     }
 
     private CommonInvoicePaymentRef paymentRef(

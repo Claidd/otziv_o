@@ -16,6 +16,7 @@ import {
   ReviewCheckReview,
   ReviewCheckUpdateRequest
 } from '../core/api.service';
+import { AuthService } from '../core/auth.service';
 import { reviewCapabilityToken } from '../core/review-capability-token';
 import {
   ReviewCheckLoadGuard,
@@ -25,9 +26,18 @@ import {
 } from './review-check-load.guard';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
+import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
 import { MobileReviewFieldEditorComponent } from '../shared/mobile-review-field-editor.component';
 import { safeHttpsOrInternalUrl } from '../shared/external-navigation';
+import {
+  buildManualCardPaymentConfirmationRequest,
+  exactPaymentAmountKopecks,
+  manualCardPaymentConfirmationPrompt,
+  manualCardPaymentFallbackAccessDecision,
+  manualCardPaymentFallbackDecision,
+  shouldSubmitManualCardPaymentFallback
+} from '../shared/manual-payment-confirmation';
 
 type ReviewEditableField = 'text' | 'answer';
 type ReviewCheckAction = 'load' | 'save' | 'approve' | 'correction' | 'send-check' | 'pay-ok';
@@ -1022,8 +1032,10 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
 
   constructor(
     private readonly api: ApiService,
+    private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly confirm: MobileConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -1154,10 +1166,122 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     );
   }
 
-  markPaid(): void {
-    this.runAction('pay-ok', 'Оплата отмечена', () =>
-      this.api.markReviewCheckPaid(this.requiredOrderDetailId())
-    );
+  async markPaid(): Promise<void> {
+    if (this.busy()) {
+      return;
+    }
+    const routeTicket = this.captureReviewCheckRoute();
+    const sourceDetails = this.details();
+    if (!routeTicket || !sourceDetails) {
+      return;
+    }
+
+    const key: ReviewCheckAction = 'pay-ok';
+    const activeIndex = this.activeReviewIndex();
+    const activeId = sourceDetails.reviews[activeIndex]?.id;
+    this.mutationKey.set(key);
+    this.error.set(null);
+    this.statusMessage.set(null);
+
+    try {
+      let updatedDetails: ReviewCheckPayload;
+      try {
+        updatedDetails = await firstValueFrom(
+          this.api.markReviewCheckPaid(this.requiredOrderDetailId())
+        );
+      } catch (genericError) {
+        if (!this.acceptsReviewCheckRoute(routeTicket)) {
+          return;
+        }
+        const fallbackAccess = manualCardPaymentFallbackAccessDecision(
+          genericError,
+          this.auth.user()?.roles,
+          sourceDetails.orderId
+        );
+        if (!fallbackAccess.allowed) {
+          if (fallbackAccess.userMessage) {
+            this.error.set(fallbackAccess.userMessage);
+            return;
+          }
+          throw genericError;
+        }
+
+        let authoritativeOrder;
+        try {
+          authoritativeOrder = await firstValueFrom(
+            this.api.getManagerOrderDetails(sourceDetails.orderId!)
+          );
+        } catch {
+          this.error.set('Не удалось загрузить точную сумму заказа. Оплата не отмечена, ссылка T-Bank/СБП не закрыта.');
+          return;
+        }
+        const amountKopecks = exactPaymentAmountKopecks(
+          authoritativeOrder.totalSumWithBadReviews ?? authoritativeOrder.sum
+        );
+        const fallback = manualCardPaymentFallbackDecision(
+          genericError,
+          this.auth.user()?.roles,
+          sourceDetails.orderId,
+          amountKopecks
+        );
+        if (!fallback.allowed) {
+          this.error.set(fallback.userMessage ?? 'Безопасное ручное подтверждение оплаты недоступно.');
+          return;
+        }
+
+        const prompt = manualCardPaymentConfirmationPrompt(sourceDetails.orderId!, amountKopecks!);
+        if (!prompt) {
+          this.error.set('Не удалось подготовить безопасное подтверждение. Оплата не изменена.');
+          return;
+        }
+        const explicitlyConfirmed = await this.confirm.confirm(prompt);
+        if (!this.acceptsReviewCheckRoute(routeTicket)) {
+          return;
+        }
+        if (!shouldSubmitManualCardPaymentFallback(fallback, explicitlyConfirmed)) {
+          this.statusMessage.set('Оплата не изменена');
+          return;
+        }
+
+        const request = buildManualCardPaymentConfirmationRequest(
+          amountKopecks!,
+          `Владелец/администратор проверил выписку и полное поступление по кнопке «Оплатили» в проверке отзывов; заказ #${sourceDetails.orderId}`
+        );
+        if (!request) {
+          this.error.set('Не удалось сформировать запрос с точной суммой. Оплата не изменена.');
+          return;
+        }
+        await firstValueFrom(
+          this.api.confirmManagerManualCardPayment(sourceDetails.orderId!, request)
+        );
+        if (!this.acceptsReviewCheckRoute(routeTicket)) {
+          return;
+        }
+        updatedDetails = await firstValueFrom(
+          this.api.getReviewCheck(this.requiredOrderDetailId())
+        );
+      }
+
+      if (!this.acceptsReviewCheckRoute(routeTicket)) {
+        return;
+      }
+      this.applyDetails(updatedDetails);
+      if (activeId) {
+        this.restoreActiveReview(activeId);
+      } else {
+        this.activeReviewIndex.set(Math.max(0, Math.min(activeIndex, this.reviewCardCount(updatedDetails) - 1)));
+        this.scrollActiveReview();
+      }
+      this.statusMessage.set('Оплата отмечена');
+    } catch (err) {
+      if (this.acceptsReviewCheckRoute(routeTicket)) {
+        this.error.set(this.errorMessage(err, 'Не удалось отметить оплату.'));
+      }
+    } finally {
+      if (this.acceptsReviewCheckRoute(routeTicket) && this.mutationKey() === key) {
+        this.mutationKey.set(null);
+      }
+    }
   }
 
   previousReview(): void {

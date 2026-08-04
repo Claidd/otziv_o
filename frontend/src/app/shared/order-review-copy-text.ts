@@ -42,7 +42,7 @@ function reviewLink(order: OrderCardItem): string {
   const url = order.orderDetailsId
     ? absoluteAppUrl(reviewCheckPath(order.orderDetailsId))
     : '';
-  return `Ссылка на проверку отзывов: ${url}`;
+  return url ? `Перейти к проверке отзывов:\n${url}` : '';
 }
 
 function buildReviewCopyText(heading: string, text: string, link: string): string {

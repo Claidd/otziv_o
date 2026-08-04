@@ -24,6 +24,10 @@ public class ManualPaymentAutoConfirmationService {
             PaymentMethod.MANUAL_MOBILE_BANK,
             PaymentMethod.MANUAL_EXTERNAL_LINK
     );
+    private static final Set<PaymentMethod> BANK_PAYMENT_METHODS = Set.of(
+            PaymentMethod.BANK_FORM,
+            PaymentMethod.SBP_QR
+    );
     private static final Set<PaymentLinkStatus> CONFIRMABLE_STATUSES = Set.of(
             PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
             PaymentLinkStatus.MANUAL_REPORTED
@@ -49,10 +53,17 @@ public class ManualPaymentAutoConfirmationService {
             return;
         }
 
-        boolean hasBankPaymentInProgress = paymentLinkRepository
-                .findByOrder_IdAndStatusIn(order.getId(), BANK_REVIEW_STATUSES)
-                .stream()
-                .anyMatch(this::hasStartedBankPayment);
+        List<PaymentLink> links = paymentLinkRepository
+                .findByOrder_IdAndStatusIn(order.getId(), BANK_REVIEW_STATUSES);
+        boolean hasOrdinaryManualPayment = links.stream().anyMatch(link ->
+                link != null
+                        && MANUAL_PAYMENT_METHODS.contains(link.getPaymentMethod())
+                        && (CONFIRMABLE_STATUSES.contains(link.getStatus())
+                            || link.getStatus() == PaymentLinkStatus.CONFIRMED
+                            || link.getStatus() == PaymentLinkStatus.TEST_CONFIRMED)
+        );
+        boolean hasBankPaymentInProgress = links.stream()
+                .anyMatch(link -> requiresPrivilegedBankRouteReconciliation(link, hasOrdinaryManualPayment));
 
         if (hasBankPaymentInProgress) {
             throw new ResponseStatusException(
@@ -60,6 +71,55 @@ public class ManualPaymentAutoConfirmationService {
                     "У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием."
             );
         }
+    }
+
+    private boolean requiresPrivilegedBankRouteReconciliation(
+            PaymentLink link,
+            boolean hasOrdinaryManualPayment
+    ) {
+        if (link == null || !BANK_PAYMENT_METHODS.contains(link.getPaymentMethod())) {
+            return false;
+        }
+        if (!normalize(link.getBankInitNonce()).isBlank()
+                || !normalize(link.getBankCancelNonce()).isBlank()
+                || link.getBankCancelOriginStatus() != null) {
+            return true;
+        }
+        if (link.getStatus() == PaymentLinkStatus.CANCELED
+                || link.getStatus() == PaymentLinkStatus.REJECTED
+                || link.getStatus() == PaymentLinkStatus.EXPIRED) {
+            if (normalize(link.getTbankPaymentId()).isBlank()) {
+                return !hasOrdinaryManualPayment;
+            }
+            // A provider-created route can be ignored by the generic manual
+            // flow only when its matching terminal state was durably observed
+            // and an ordinary manual instruction is the current route.
+            return !hasOrdinaryManualPayment || !hasAuthoritativeProviderTerminalStatus(link);
+        }
+        if (link.getStatus() == PaymentLinkStatus.FAILED
+                && normalize(link.getTbankPaymentId()).isBlank()) {
+            return !hasOrdinaryManualPayment;
+        }
+        // CREATED is already a public /pay route; INITIATED/AUTHORIZED and all
+        // ambiguous, paid, reversed or refunded states are always blocking.
+        return true;
+    }
+
+    private boolean hasAuthoritativeProviderTerminalStatus(PaymentLink link) {
+        if (link == null) {
+            return false;
+        }
+        String providerStatus = normalize(link.getProviderTerminalStatus());
+        return switch (link.getStatus()) {
+            case CANCELED -> "CANCELED".equalsIgnoreCase(providerStatus);
+            case REJECTED -> "REJECTED".equalsIgnoreCase(providerStatus);
+            case EXPIRED -> "DEADLINE_EXPIRED".equalsIgnoreCase(providerStatus);
+            default -> false;
+        };
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim();
     }
 
     @Transactional

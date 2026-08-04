@@ -18,6 +18,7 @@ import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-f
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileOrderCardComponent } from '../shared/mobile-order-card.component';
+import { orderReviewCopyText } from '../shared/order-review-copy-text';
 
 type CommonBillingDraft = {
   name: string;
@@ -985,7 +986,10 @@ export class CommonBillingAdminPage implements OnInit, OnDestroy {
 
   async copyOrderText(order: OrderItem, kind: 'review' | 'payment'): Promise<void> {
     if (kind === 'review') {
-      await this.copyText(this.orderReviewUrl(order), `common-order-review-${order.id}`);
+      await this.copyText(
+        orderReviewCopyText(order, this.orderReviewUrl(order)),
+        `common-order-review-${order.id}`
+      );
       return;
     }
     await this.copyText(this.currentInvoice()?.publicUrl ?? '', `common-order-payment-${order.id}`);

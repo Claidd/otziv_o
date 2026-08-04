@@ -7,6 +7,7 @@ type ManagerBoardActionApi = Pick<
   ManagerApi,
   | 'updateCompanyStatus'
   | 'updateOrderStatus'
+  | 'confirmManualCardPayment'
   | 'updateOrderClientWaiting'
   | 'updateCompanyNote'
   | 'updateOrderCompanyNote'
@@ -22,9 +23,13 @@ export type ManagerBoardActionFacadeDeps = {
   loadBoard: () => void;
   patchBoard?: (updater: (board: ManagerBoard) => ManagerBoard) => void;
   errorMessage: (err: unknown, fallback: string) => string;
+  canOverrideActiveBankPayment: () => boolean;
 };
 
 export class ManagerBoardActionFacade {
+  private static readonly ACTIVE_BANK_PAYMENT_CONFLICT =
+    'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.';
+
   constructor(private readonly deps: ManagerBoardActionFacadeDeps) {}
 
   updateCompanyStatus(company: CompanyCardItem, action: StatusAction): void {
@@ -57,10 +62,87 @@ export class ManagerBoardActionFacade {
         this.deps.loadBoard();
       },
       error: (err) => {
+        if (this.canFallbackToManualCardPayment(order, action, err)) {
+          this.confirmManualCardPayment(order, key);
+          return;
+        }
         this.deps.mutationKey.set(null);
         this.deps.toastService.error('Статус не изменен', this.deps.errorMessage(err, 'Не удалось изменить статус заказа'));
       }
     });
+  }
+
+  private confirmManualCardPayment(order: OrderCardItem, mutationKey: string): void {
+    const amountRubles = order.totalSumWithBadReviews ?? order.sum ?? 0;
+    const amountKopecks = Math.round(amountRubles * 100);
+    if (!Number.isSafeInteger(amountKopecks) || amountKopecks <= 0) {
+      this.deps.mutationKey.set(null);
+      this.deps.toastService.error('Оплата не отмечена', 'Не удалось определить точную сумму заказа');
+      return;
+    }
+    const amountLabel = new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: 'RUB',
+      minimumFractionDigits: 0
+    }).format(amountRubles);
+    const confirmed = window.confirm(
+      `Подтвердите финансовый факт по заказу #${order.id}:\n\n`
+      + `• выписка карты получателя проверена;\n`
+      + `• перевод ${amountLabel} действительно получен;\n`
+      + `• это не оплата по ссылке T-Bank.\n\n`
+      + 'После подтверждения система безопасно закроет неоплаченную T-Bank-ссылку и отметит заказ оплаченным.'
+    );
+    if (!confirmed) {
+      this.deps.mutationKey.set(null);
+      return;
+    }
+
+    this.deps.mutationKey.set(mutationKey);
+    this.deps.managerApi.confirmManualCardPayment(order.id, {
+      recipientStatementChecked: true,
+      paymentReceived: true,
+      receivedAmountKopecks: amountKopecks,
+      note: `Явно подтверждено кнопкой «Оплатили» после проверки выписки; заказ #${order.id}`
+    }).subscribe({
+      next: () => {
+        this.patchOrder(order.id, { status: 'Оплачено', waitingForClient: false });
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.success(
+          'Оплата переводом подтверждена',
+          `${order.companyTitle}: T-Bank ссылка закрыта, напоминания остановлены`
+        );
+        this.deps.loadBoard();
+      },
+      error: (err) => {
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.error(
+          'Оплата не отмечена',
+          this.deps.errorMessage(err, 'Не удалось безопасно подтвердить перевод на карту')
+        );
+      }
+    });
+  }
+
+  private canFallbackToManualCardPayment(order: OrderCardItem, action: StatusAction, err: unknown): boolean {
+    if (action.status !== 'Оплачено'
+      || order.commonInvoice
+      || !this.deps.canOverrideActiveBankPayment()) {
+      return false;
+    }
+    if (!err || typeof err !== 'object' || !('status' in err) || err.status !== 409 || !('error' in err)) {
+      return false;
+    }
+    const payload = err.error;
+    const message = typeof payload === 'string'
+      ? payload
+      : payload && typeof payload === 'object'
+        ? ('message' in payload && typeof payload.message === 'string'
+          ? payload.message
+          : 'detail' in payload && typeof payload.detail === 'string'
+            ? payload.detail
+            : '')
+        : '';
+    return message.trim() === ManagerBoardActionFacade.ACTIVE_BANK_PAYMENT_CONFLICT;
   }
 
   toggleOrderClientWaiting(order: OrderCardItem): void {

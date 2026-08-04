@@ -36,6 +36,11 @@ import {
   type PaymentNavigationPurpose
 } from '../../../shared/payment-navigation';
 import { ToastService } from '../../../shared/toast.service';
+import {
+  canCloseManualPaymentAsUnpaid,
+  manualPaymentUnpaidCloseConfirmation,
+  manualPaymentUnpaidCloseNotePrompt
+} from './manual-payment-unpaid-close';
 
 type PaymentMetric = {
   label: string;
@@ -840,6 +845,47 @@ export class TbankPaymentsComponent implements OnDestroy {
     });
   }
 
+  closeManualAsUnpaid(link: AdminPaymentLinkResponse): void {
+    if (!this.canCloseManualAsUnpaid(link) || this.mutatingId()) {
+      return;
+    }
+    if (!window.confirm(manualPaymentUnpaidCloseConfirmation(link))) {
+      return;
+    }
+    const note = window.prompt(manualPaymentUnpaidCloseNotePrompt(), '')?.trim() ?? '';
+    if (!note) {
+      this.toastService.error(
+        'Инструкция не закрыта',
+        'Для истории проверки нужна заметка: когда и какая выписка получателя проверена.'
+      );
+      return;
+    }
+
+    this.mutatingId.set(link.id);
+    this.paymentsApi.closeAdminManualPaymentLinkAsUnpaid(link.id, {
+      recipientStatementChecked: true,
+      paymentAbsent: true,
+      note
+    }).subscribe({
+      next: (updated) => {
+        this.replaceLink(updated);
+        this.mutatingId.set(null);
+        this.toastService.success(
+          'Ручная инструкция закрыта',
+          'Перевод не засчитан. Статус оплаты заказа не изменён.'
+        );
+        this.loadProfilesOnly();
+        this.loadPaymentLinks();
+        this.loadRecipientMonthlySummary();
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось закрыть ручную инструкцию');
+        this.mutatingId.set(null);
+        this.toastService.error('Инструкция не закрыта', message);
+      }
+    });
+  }
+
   markManualReceipt(link: AdminPaymentLinkResponse): void {
     if (!this.canMarkManualReceipt(link) || this.mutatingId()) {
       return;
@@ -1247,6 +1293,10 @@ export class TbankPaymentsComponent implements OnDestroy {
     return !link.archived
       && this.isManualPayment(link)
       && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
+  }
+
+  canCloseManualAsUnpaid(link: AdminPaymentLinkResponse): boolean {
+    return !link.archived && canCloseManualPaymentAsUnpaid(link);
   }
 
   canMarkManualReceipt(link: AdminPaymentLinkResponse): boolean {

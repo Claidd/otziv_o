@@ -165,6 +165,10 @@ public class PaymentLink {
     @Column(name = "last_error", length = 512)
     private String lastError;
 
+    /** Last authoritative terminal state reported by the payment provider. */
+    @Column(name = "provider_terminal_status", length = 32)
+    private String providerTerminalStatus;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
