@@ -56,6 +56,42 @@ function Assert-Order {
     }
 }
 
+function Get-LocalNodeDependencyClosure {
+    param([Parameter(Mandatory = $true)][string]$EntryPath)
+
+    $whatsappRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'whatsapp'))
+    $whatsappPrefix = $whatsappRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    $pending = [Collections.Generic.Stack[string]]::new()
+    $visited = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $pending.Push([IO.Path]::GetFullPath($EntryPath))
+
+    while ($pending.Count -gt 0) {
+        $currentPath = $pending.Pop()
+        if (-not $visited.Add($currentPath)) {
+            continue
+        }
+        if (-not [IO.File]::Exists($currentPath)) {
+            throw "Local Node dependency does not exist: $currentPath"
+        }
+
+        $source = [IO.File]::ReadAllText($currentPath)
+        foreach ($match in [regex]::Matches($source, 'require\(["''](?<relative>\./[^"'']+)["'']\)')) {
+            $dependencyPath = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetDirectoryName($currentPath)) $match.Groups['relative'].Value))
+            if ([string]::IsNullOrEmpty([IO.Path]::GetExtension($dependencyPath))) {
+                $dependencyPath += '.js'
+            }
+            if (-not $dependencyPath.StartsWith($whatsappPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "WhatsApp local dependency escapes its source directory: $dependencyPath"
+            }
+            if (-not $visited.Contains($dependencyPath)) {
+                $pending.Push($dependencyPath)
+            }
+        }
+    }
+
+    return @($visited)
+}
+
 $workerBuildBlocks = [regex]::Matches($buildCompose, '(?m)^  external-review-worker:\s*$')
 if ($workerBuildBlocks.Count -ne 1) {
     throw "docker-compose.build.yaml must define external-review-worker exactly once; found $($workerBuildBlocks.Count)."
@@ -144,6 +180,11 @@ Assert-Match $deploy 'assert_compose_service_image external-review-worker "`\$ex
 Assert-Match $deploy 'assert_running_service_image app "`\$app_image"[\s\S]{0,1500}assert_running_service_image nginx "`\$web_image"' 'Backend and frontend image IDs must be verified during the rollout.'
 Assert-Match $deploy 'whatsapp\\chromium-launch\.js' 'Deploy bundle must include the shared audited Chromium launch arguments.'
 Assert-Match $deploy 'whatsapp\\chromium-smoke\.js' 'Deploy bundle must include the real Chromium launch smoke test.'
+$whatsappRuntimeDependencies = Get-LocalNodeDependencyClosure -EntryPath $whatsappIndexPath
+foreach ($dependencyPath in $whatsappRuntimeDependencies) {
+    $relativePath = [IO.Path]::GetRelativePath($repoRoot, $dependencyPath).Replace('/', '\')
+    Assert-Match $deploy ('"' + [regex]::Escape($relativePath) + '"') "Deploy bundle must include WhatsApp runtime dependency: $relativePath"
+}
 Assert-Match $whatsappIndex 'chromiumLaunchArgs\(proxyServerArg\(\)\)' 'WhatsApp clients must use the shared audited Chromium launch arguments.'
 Assert-Match $whatsappIndex 'webVersionCache:\s*\{[\s\S]{0,300}type:\s*"none"' 'WhatsApp Web cache must stay disabled because its default local persistence targets the read-only application directory before READY.'
 Assert-Match $whatsappPackage '"brace-expansion"\s*:\s*"2\.1\.4"' 'WhatsApp must retain the patched brace-expansion override.'

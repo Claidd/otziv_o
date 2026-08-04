@@ -579,6 +579,7 @@ $deployBundlePaths = @(
     "whatsapp\chromium-smoke.js",
     "whatsapp\internal-auth.js",
     "whatsapp\message-webhook.js",
+    "whatsapp\raw-chat-reconciliation.js",
     "whatsapp\group-invite.js",
     "whatsapp\groups-cache.js",
     "infrastructure\nginx",

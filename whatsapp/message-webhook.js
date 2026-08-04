@@ -363,7 +363,7 @@ async function groupMetadata(message, groupId, log) {
     };
   } catch (error) {
     if (typeof log === "function") {
-      log("warn", "WhatsApp chat metadata unavailable; using message identifiers", {
+      log("info", "WhatsApp chat metadata fallback used; delivery continuing", {
         stage: "get_chat",
         groupId,
         messageId: messageId(message) || undefined,

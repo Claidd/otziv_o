@@ -41,6 +41,8 @@ test("delivers group webhook when getChat throws", async () => {
   assert.equal(calls[0].payload.groupId, "12001@g.us");
   assert.equal(calls[0].payload.groupName, "");
   assert.equal(calls[0].payload.message, "Отключить уведомления");
+  assert.equal(logs[0].level, "info");
+  assert.equal(logs[0].message, "WhatsApp chat metadata fallback used; delivery continuing");
   assert.equal(logs[0].extra.stage, "get_chat");
 });
 

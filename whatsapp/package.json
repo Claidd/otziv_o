@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test message-webhook.test.js group-invite.test.js groups-cache.test.js internal-auth.test.js"
+    "test": "node --test message-webhook.test.js group-invite.test.js groups-cache.test.js internal-auth.test.js raw-chat-reconciliation.test.js"
   },
   "dependencies": {
     "express": "^4.19.2",

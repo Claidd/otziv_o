@@ -24,6 +24,7 @@ const {
   createInternalAuthMiddleware,
 } = require("./internal-auth");
 const { chromiumLaunchArgs } = require("./chromium-launch");
+const { fetchRecentMessagesFromRawChat } = require("./raw-chat-reconciliation");
 
 const CLIENT_ID = process.env.CLIENT_ID || "whatsapp_default";
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
@@ -958,25 +959,64 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
   const batches = await mapWithConcurrency(cursors, WHATSAPP_RECONCILE_CONCURRENCY, async (cursor) => {
     const { groupId, afterTimestamp } = cursor;
     try {
-      const chat = await client.getChatById(groupId);
-      const recent = await withTimeout(
-        () => chat.fetchMessages({ limit: 100, fromMe: false }),
+      const direct = await withTimeout(
+        async () => {
+          const chat = await client.getChatById(groupId);
+          if (!chat) {
+            throw new Error(`WhatsApp chat ${groupId} was not found`);
+          }
+          return {
+            groupName: chat.name || "",
+            messages: await chat.fetchMessages({ limit: 100, fromMe: false }),
+          };
+        },
         WHATSAPP_GROUPS_TIMEOUT_MS,
         `Recent messages for ${groupId}`
       );
       return reconciliationPayloads({
         clientId: CLIENT_ID,
         groupId,
-        groupName: chat.name || "",
+        groupName: direct.groupName,
         afterTimestamp,
-        messages: recent,
+        messages: direct.messages,
       });
-    } catch (error) {
-      log("warn", "WhatsApp message reconciliation skipped for group", {
-        groupId,
-        error: errorMessage(error),
-      });
-      return [];
+    } catch (primaryError) {
+      try {
+        const raw = await withTimeout(
+          () => fetchRecentMessagesFromRawChat(client, groupId, 100),
+          WHATSAPP_GROUPS_TIMEOUT_MS,
+          `Raw recent messages for ${groupId}`
+        );
+        if (!raw.found) {
+          log("warn", "WhatsApp message reconciliation group is unavailable", {
+            groupId,
+            primaryError: errorMessage(primaryError),
+          });
+          return [];
+        }
+        const cachedGroup = groupsCache && Array.isArray(groupsCache.groups)
+          ? groupsCache.groups.find((group) => group && group.groupId === groupId)
+          : null;
+        log("info", "WhatsApp message reconciliation used raw chat fallback", {
+          groupId,
+          messageCount: raw.messages.length,
+          primaryError: errorMessage(primaryError).split(/\r?\n/, 1)[0],
+        });
+        return reconciliationPayloads({
+          clientId: CLIENT_ID,
+          groupId,
+          groupName: raw.groupName || cachedGroup && cachedGroup.name || "",
+          afterTimestamp,
+          messages: raw.messages,
+        });
+      } catch (fallbackError) {
+        log("warn", "WhatsApp message reconciliation skipped for group", {
+          groupId,
+          primaryError: errorMessage(primaryError),
+          fallbackError: errorMessage(fallbackError),
+        });
+        return [];
+      }
     }
   });
 
