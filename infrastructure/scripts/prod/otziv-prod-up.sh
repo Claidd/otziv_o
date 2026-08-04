@@ -35,12 +35,13 @@ if [[ ! -r "$compose_file" || ! -r "$env_file" ]]; then
   exit 1
 fi
 
-if [[ -x /usr/local/bin/docker-compose ]]; then
+compose_project_name="otziv-prod"
+if docker compose version >/dev/null 2>&1; then
+  compose=(docker compose)
+elif [[ -x /usr/local/bin/docker-compose ]]; then
   compose=(/usr/local/bin/docker-compose)
 elif command -v docker-compose >/dev/null 2>&1; then
   compose=(docker-compose)
-elif docker compose version >/dev/null 2>&1; then
-  compose=(docker compose)
 else
   echo "Docker Compose is unavailable for production self-heal." >&2
   exit 1
@@ -63,7 +64,12 @@ case "$external_review_enabled" in
     ;;
 esac
 
-compose_args=(-f "$compose_file" --env-file "$env_file")
+compose_args=(
+  --project-name "$compose_project_name"
+  --project-directory "$deploy_path"
+  -f "$compose_file"
+  --env-file "$env_file"
+)
 if [[ "$external_review_enabled" == "true" ]]; then
   "${compose[@]}" "${compose_args[@]}" --profile external-review up -d
 else

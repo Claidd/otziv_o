@@ -1393,10 +1393,10 @@ unset COMPOSE_ENV_FILES COMPOSE_DISABLE_ENV_FILE
 compose_project_name="otziv-prod"
 
 compose() {
-  if command -v docker-compose >/dev/null 2>&1; then
-    docker-compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
-  elif docker compose version >/dev/null 2>&1; then
+  if docker compose version >/dev/null 2>&1; then
     docker compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
   else
     echo "Docker Compose is not installed. Install docker-compose or the Docker Compose plugin." >&2
     exit 1
