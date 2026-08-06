@@ -3301,7 +3301,7 @@ class PaymentLinkServiceTest {
     }
 
     @Test
-    void managerManualCardReportUsesServerAmountAndRequestsOwnerReview() throws Exception {
+    void managerManualCardReportCancelsFormShowedUsingServerAmountAndRequestsOwnerReview() throws Exception {
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -3320,7 +3320,7 @@ class PaymentLinkServiceTest {
             return saved;
         });
         when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5270")))
-                .thenReturn(tbankState("NEW", "payment-5270", "order-5270", 100_000L));
+                .thenReturn(tbankState("FORM_SHOWED", "payment-5270", "order-5270", 100_000L));
         when(tbankClient.cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class)))
                 .thenReturn(new TbankCancelResponse(
                         true, "0", null, null, "terminal", "CANCELED",
@@ -3343,6 +3343,7 @@ class PaymentLinkServiceTest {
         assertEquals(100_000L, notification.getValue().amountKopecks());
         assertEquals("Клиент оплатил переводом по номеру телефона", notification.getValue().reason());
         assertEquals(5270L, notification.getValue().bankLinkId());
+        verify(tbankClient).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService).handlePaymentStatus(order);
     }
 

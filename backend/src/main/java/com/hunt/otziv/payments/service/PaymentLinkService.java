@@ -1659,7 +1659,8 @@ public class PaymentLinkService {
         String providerStatus = normalize(state.status()).toUpperCase(Locale.ROOT);
         applyObservedTbankStateIfCurrent(link, observation, orderId);
         ManualCardPaymentPlan plan = manualCardPaymentPlan(link, null);
-        if ("NEW".equals(providerStatus) && link.getStatus() == PaymentLinkStatus.INITIATED) {
+        if (isCancellableUnpaidProviderStatus(providerStatus)
+                && link.getStatus() == PaymentLinkStatus.INITIATED) {
             // This evidence marker is stored before the remote Cancel call. If
             // that call times out but later reconciliation observes CANCELED,
             // a manager retry can safely resume instead of leaving a permanent
@@ -1680,6 +1681,13 @@ public class PaymentLinkService {
                         + ". Банковский платеж может быть активен, оплачен или требовать возврата; "
                         + "ручная оплата не зачислена."
         );
+    }
+
+    private boolean isCancellableUnpaidProviderStatus(String providerStatus) {
+        // FORM_SHOWED means that the customer reached the payment form, not
+        // that money was authorized. It is still settled only after T-Bank
+        // explicitly accepts Cancel and returns CANCELED.
+        return "NEW".equals(providerStatus) || "FORM_SHOWED".equals(providerStatus);
     }
 
     private void markManualCardPaymentPending(
