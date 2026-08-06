@@ -302,6 +302,7 @@ export class CommonBillingComponent implements OnDestroy {
     return error.startsWith('late_tbank_payment') || error.startsWith('late_payment_');
   });
   readonly attentionHasFinalCancelFailure = computed(() => this.attentionError().startsWith('payment_cancel_failed_final'));
+  readonly attentionHasStandaloneRouteConflict = computed(() => this.attentionError().startsWith('standalone_payment_route_conflict'));
   readonly attentionHasPaymentInitCheck = computed(() => isPaymentInitManualCheckError(this.attentionError()));
   readonly attentionIsMigrationPaymentRegistry = computed(() => isMigrationPaymentRegistryError(this.attentionError()));
   readonly attentionPaymentEvidence = computed(() => {
@@ -411,10 +412,13 @@ export class CommonBillingComponent implements OnDestroy {
       .find((url) => Boolean(url)) ?? '';
   });
   readonly paymentNotificationCopyText = computed(() => this.buildPaymentNotificationText());
-  readonly attentionRetryEnabled = computed(() => this.invoiceNeedsAttention() && !this.attentionRequiresManualCheck());
+  readonly attentionRetryEnabled = computed(() => this.invoiceNeedsAttention()
+    && !this.attentionRequiresManualCheck()
+    && !this.attentionHasStandaloneRouteConflict());
   readonly attentionResolveEnabled = computed(() => {
     return this.invoiceNeedsAttention()
-      && !this.attentionRequiresManualCheck();
+      && !this.attentionRequiresManualCheck()
+      && !this.attentionHasStandaloneRouteConflict();
   });
   readonly readyForSending = computed(() => {
     const invoice = this.currentInvoice();
@@ -940,6 +944,19 @@ export class CommonBillingComponent implements OnDestroy {
     );
   }
 
+  repairPaymentRoute(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || invoice.status !== 'NEEDS_ATTENTION' || !this.attentionHasStandaloneRouteConflict() || this.mutating()) {
+      return;
+    }
+    this.invoiceAction(
+      invoice.id,
+      'repair-payment-route',
+      () => this.commonBillingApi.repairPaymentRoute(invoice.id),
+      'Единый платежный маршрут восстановлен'
+    );
+  }
+
   resolveAttention(): void {
     const invoice = this.currentInvoice();
     if (!invoice || invoice.status !== 'NEEDS_ATTENTION' || !this.attentionResolveEnabled() || this.mutating()) {
@@ -1096,6 +1113,26 @@ export class CommonBillingComponent implements OnDestroy {
         return 'Подтверждено вручную · старые данные';
       default:
         return 'Способ не указан';
+    }
+  }
+
+  paymentRouteLabel(invoice: CommonInvoiceSummaryResponse): string {
+    const profile = invoice.paymentRouteProfileName?.trim();
+    switch (invoice.paymentRouteType) {
+      case 'TBANK_LINK':
+        return profile ? `T-Bank · ${profile}` : 'T-Bank';
+      case 'MANUAL_EXTERNAL_LINK':
+        return invoice.paymentRouteManualTaskId
+          ? `Внешняя ссылка · задание #${invoice.paymentRouteManualTaskId}`
+          : 'Внешняя ссылка';
+      case 'MANUAL_MOBILE_BANK':
+        return invoice.paymentRouteManualTaskId
+          ? `Мобильный банк · задание #${invoice.paymentRouteManualTaskId}`
+          : 'Мобильный банк';
+      case 'MANAGER_TEXT':
+        return 'Текст менеджера';
+      default:
+        return 'Не выбран';
     }
   }
 

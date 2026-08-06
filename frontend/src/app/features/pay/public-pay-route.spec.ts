@@ -163,6 +163,7 @@ function invoice(token: string): PublicCommonInvoice {
     paidKopecks: 0,
     remainingKopecks: 10_000,
     payable: true,
+    paymentRouteType: 'TBANK_LINK',
     orders: []
   };
 }

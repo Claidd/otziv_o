@@ -41,6 +41,7 @@ import com.hunt.otziv.payments.model.PaymentReceiptStatus;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
+import com.hunt.otziv.payments.service.ManualCardPaymentReviewNotificationService;
 import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.PaymentLinkTransactionExecutor;
@@ -87,6 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -142,6 +144,9 @@ class PaymentLinkServiceTest {
 
     @Mock
     private ManagerAccessService managerAccessService;
+
+    @Mock
+    private ManualCardPaymentReviewNotificationService manualCardPaymentReviewNotificationService;
 
     @Mock
     private Authentication authentication;
@@ -564,6 +569,43 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void publicInitBlocksLegacyStandaloneTokenAfterOrderMovesToCommonInvoice() {
+        CommonBillingService commonBillingService = org.mockito.Mockito.mock(CommonBillingService.class);
+        PaymentLinkService service = service(properties(), new TbankTokenSigner(), commonBillingService);
+        Order order = order(903L, "ООО Общий счет", BigDecimal.valueOf(1000));
+        PaymentLink link = new PaymentLink();
+        link.setId(9030L);
+        link.setToken("legacy-public-token");
+        link.setOrder(order);
+        link.setStatus(PaymentLinkStatus.CREATED);
+        link.setPaymentMethod(PaymentMethod.BANK_FORM);
+        link.setAmountKopecks(100_000L);
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(paymentLinkRepository.findByTokenWithOrder("legacy-public-token")).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(903L)).thenReturn(Optional.of(order));
+        when(commonBillingService.isOrderInActiveCommonInvoice(903L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.init(
+                        "legacy-public-token",
+                        "payer@example.ru",
+                        true,
+                        true,
+                        true,
+                        "203.0.113.9",
+                        "JUnit UA"
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertTrue(exception.getReason().contains("активный общий счет"));
+        verify(paymentLinkRepository, never()).findByTokenForUpdate("legacy-public-token");
+        verify(tbankClient, never()).init(any(TbankPaymentProfile.class), any(TbankInitCommand.class));
+    }
+
+    @Test
     void createForOrderBlocksNewRouteAfterVerifiedManualNonPaymentUntilCommonInvoiceAttach() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(902L, "ООО Перенос в общий счет", BigDecimal.valueOf(1000));
@@ -923,6 +965,64 @@ class PaymentLinkServiceTest {
                 any(PaymentLinkStatus.class),
                 any()
         );
+    }
+
+    @Test
+    void commonInvoiceRouteUsesManagerTextWithoutRequiringTbankProfile() {
+        PaymentLinkService service = service(properties());
+        Manager manager = manager("manager-text");
+        manager.setPayText("Оплатите по реквизитам Альфа-Банка и пришлите чек.");
+        when(runtimeSettingsService.paymentInstructionSource())
+                .thenReturn(TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT);
+
+        var route = service.selectCommonInvoiceRoute(manager, 230_000L);
+
+        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT, route.routeType());
+        assertEquals("Оплатите по реквизитам Альфа-Банка и пришлите чек.", route.instructionText());
+        assertNull(route.paymentProfileId());
+        verify(paymentProfileService, never()).selectForManager(any());
+        verify(manualPaymentTaskService, never()).findRoutableTask(any(), any(), anyLong(), any());
+    }
+
+    @Test
+    void commonInvoiceRouteUsesActiveManualTaskInTbankLinkMode() {
+        PaymentLinkService service = service(properties());
+        Manager manager = manager("manager-task");
+        PaymentProfile profile = profile(3L, "manual", "Ручной профиль", "manual-terminal");
+        ManualPaymentTask task = new ManualPaymentTask();
+        task.setId(77L);
+        task.setPaymentProfile(profile);
+        task.setStatus(ManualPaymentTaskStatus.ACTIVE);
+        task.setManualPaymentType(ManualPaymentType.EXTERNAL_LINK);
+        task.setManualPaymentUrl("https://pay.alfabank.ru/sc/common");
+        task.setManualPaymentButtonLabel("Оплатить через Альфа-Банк");
+        task.setManualRecipientName("Получатель");
+        task.setComment("Общий счет");
+        task.setTargetAmountKopecks(500_000L);
+
+        when(runtimeSettingsService.paymentInstructionSource())
+                .thenReturn(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK);
+        when(paymentProfileService.selectForManager(manager)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(new TbankPaymentProfile(
+                3L,
+                "manual",
+                "Ручной профиль",
+                true,
+                "manual-terminal",
+                "password",
+                false
+        ));
+        when(manualPaymentTaskService.findRoutableTask(manager, profile, 230_000L, null))
+                .thenReturn(Optional.of(task));
+
+        var route = service.selectCommonInvoiceRoute(manager, 230_000L);
+
+        assertEquals(PaymentMethod.MANUAL_EXTERNAL_LINK.name(), route.routeType());
+        assertEquals(ManualPaymentSource.MANUAL_TASK.name(), route.manualSource());
+        assertEquals(77L, route.manualTaskId());
+        assertEquals("https://pay.alfabank.ru/sc/common", route.manualPaymentUrl());
+        assertTrue(route.instructionText().contains("Получатель"));
     }
 
     @Test
@@ -3201,6 +3301,67 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void managerManualCardReportUsesServerAmountAndRequestsOwnerReview() throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(25070L, "Оплата по номеру телефона", BigDecimal.valueOf(1000));
+        PaymentLink link = initiatedBankLink(5270L, order, 100_000L);
+
+        when(orderRepository.findByIdForCounterUpdate(25070L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25070L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(5270L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(5270L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> {
+            PaymentLink saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(9270L);
+            }
+            return saved;
+        });
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5270")))
+                .thenReturn(tbankState("NEW", "payment-5270", "order-5270", 100_000L));
+        when(tbankClient.cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class)))
+                .thenReturn(new TbankCancelResponse(
+                        true, "0", null, null, "terminal", "CANCELED",
+                        "payment-5270", "order-5270", 100_000L, 100_000L, 0L
+                ));
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+
+        service.reportPaidByManualCardTransferForOrder(
+                25070L,
+                "Клиент оплатил переводом по номеру телефона",
+                "manager@example.ru",
+                authentication
+        );
+
+        assertTrue(link.getManualComment().startsWith("Заявлено менеджером: оплата переводом"));
+        ArgumentCaptor<ManualCardPaymentReviewNotificationService.ReviewRequest> notification =
+                ArgumentCaptor.forClass(ManualCardPaymentReviewNotificationService.ReviewRequest.class);
+        verify(manualCardPaymentReviewNotificationService).notifyAfterCommit(notification.capture());
+        assertEquals(25070L, notification.getValue().orderId());
+        assertEquals(100_000L, notification.getValue().amountKopecks());
+        assertEquals("Клиент оплатил переводом по номеру телефона", notification.getValue().reason());
+        assertEquals(5270L, notification.getValue().bankLinkId());
+        verify(orderTransactionService).handlePaymentStatus(order);
+    }
+
+    @Test
+    void managerManualCardReportRequiresReasonBeforeReadingPaymentData() {
+        PaymentLinkService service = service(properties());
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reportPaidByManualCardTransferForOrder(25070L, "  ", "manager", authentication)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        verify(orderRepository, never()).findByIdForCounterUpdate(anyLong());
+        verify(paymentLinkRepository, never()).findByOrderIdForUpdate(anyLong());
+        verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
+    }
+
+    @Test
     void manualCardPaymentSelectsCurrentActiveRouteAndIgnoresProviderExpiredHistory() throws Exception {
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
@@ -4698,6 +4859,7 @@ class PaymentLinkServiceTest {
                 commonBillingServiceProvider,
                 orderPaymentIntegrityService,
                 managerAccessService,
+                manualCardPaymentReviewNotificationService,
                 new PaymentLinkTransactionExecutor()
         );
     }

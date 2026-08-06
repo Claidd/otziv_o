@@ -50,11 +50,14 @@ import com.hunt.otziv.payments.dto.TbankCancelResponse;
 import com.hunt.otziv.payments.dto.TbankInitCommand;
 import com.hunt.otziv.payments.dto.TbankInitResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
+import com.hunt.otziv.payments.dto.PaymentRouteSelection;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentProfileService;
+import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.TbankClient;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
@@ -149,6 +152,12 @@ class CommonBillingServiceTest {
     @Mock
     private PaymentLinkRepository paymentLinkRepository;
     @Mock
+    private PaymentLinkService paymentLinkService;
+    @Mock
+    private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+    @Mock
+    private ManualPaymentTaskService manualPaymentTaskService;
+    @Mock
     private ManagerRepository managerRepository;
     @Mock
     private OrderDtoMapper orderDtoMapper;
@@ -221,8 +230,29 @@ class CommonBillingServiceTest {
         ReflectionTestUtils.setField(service, "nextOrderRequestService", nextOrderRequestService);
         ReflectionTestUtils.setField(service, "publicationApprovalServiceProvider", publicationApprovalServiceProvider);
         ReflectionTestUtils.setField(service, "orderDeletionServiceProvider", orderDeletionServiceProvider);
+        ReflectionTestUtils.setField(service, "paymentLinkServiceProvider", paymentLinkServiceProvider);
         lenient().when(publicationApprovalServiceProvider.getObject()).thenReturn(publicationApprovalService);
         lenient().when(orderDeletionServiceProvider.getObject()).thenReturn(orderDeletionService);
+        lenient().when(paymentLinkServiceProvider.getObject()).thenReturn(paymentLinkService);
+        lenient().when(paymentLinkService.selectCommonInvoiceRoute(any(), anyLong())).thenReturn(
+                new PaymentRouteSelection(
+                        TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK,
+                        1L,
+                        TbankPaymentProfile.PRIMARY_CODE,
+                        "Основной магазин",
+                        "",
+                        null,
+                        null,
+                        null,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        ""
+                )
+        );
+        lenient().when(paymentProfileService.lockByIdForRouting(1L)).thenAnswer(ignored -> paymentProfile());
         lenient().when(transactionManager.getTransaction(any())).thenAnswer(ignored -> new SimpleTransactionStatus());
         lenient().when(accountRepository.findByIdWithRelationsForUpdate(anyLong())).thenAnswer(invocation -> {
             CommonBillingAccount locked = account();
@@ -1098,6 +1128,65 @@ class CommonBillingServiceTest {
 
         assertTrue(response.payable());
         assertEquals(CommonInvoiceStatus.COLLECTING.name(), response.status());
+        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK, response.paymentRouteType());
+        assertNotNull(invoice.getPaymentRouteSelectedAt());
+    }
+
+    @Test
+    void publicInvoiceFreezesManagerTextRouteAndReusesItAfterSettingsChange() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+        PaymentRouteSelection managerText = new PaymentRouteSelection(
+                TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT,
+                null,
+                "",
+                "",
+                "",
+                null,
+                null,
+                null,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "Оплатите единый счет по реквизитам менеджера."
+        );
+
+        when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentLinkService.selectCommonInvoiceRoute(any(), eq(100_000L))).thenReturn(managerText);
+
+        var first = service.publicInvoice("token");
+        var second = service.publicInvoice("token");
+
+        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT, first.paymentRouteType());
+        assertEquals("Оплатите единый счет по реквизитам менеджера.", first.paymentInstructionText());
+        assertEquals(first.paymentRouteType(), second.paymentRouteType());
+        verify(paymentLinkService, times(1)).selectCommonInvoiceRoute(any(), eq(100_000L));
+    }
+
+    @Test
+    void frozenCommonPaymentRouteRejectsCompositionChanges() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setPaymentRouteType(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.now());
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> ReflectionTestUtils.invokeMethod(
+                        service,
+                        "attachOrderWithoutInvoiceRefresh",
+                        invoice,
+                        order(101L)
+                )
+        );
+
+        assertTrue(error.getReason().contains("Состав общего счета уже зафиксирован"));
+        verify(invoiceOrderRepository, never()).save(any(CommonInvoiceOrder.class));
     }
 
     @Test
@@ -2236,9 +2325,9 @@ class CommonBillingServiceTest {
         assertNull(invoice.getPaymentUrl());
         assertTrue(invoice.getLastError().startsWith("payment_cached_invalid_url"));
         verify(tbankClient, never()).init(any(), any());
-        // refreshInvoiceAmounts persists the recalculated total first; the
-        // second save commits the durable NEEDS_ATTENTION quarantine.
-        verify(invoiceRepository, times(2)).save(invoice);
+        // The recalculated total and frozen route are persisted before the
+        // durable NEEDS_ATTENTION quarantine.
+        verify(invoiceRepository, times(3)).save(invoice);
     }
 
     @Test
@@ -2331,7 +2420,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void attachOrderBlocksCreatedStandaloneTokenBecauseDisclosureCannotBeProvedAbsent() {
+    void attachOrderAutoClosesCreatedStandaloneTokenBeforeContinuing() {
         CommonBillingAccount account = account();
         account.setEnabled(true);
         CommonBillingAccountCompany link = new CommonBillingAccountCompany();
@@ -2358,11 +2447,11 @@ class CommonBillingServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
-        assertEquals(PaymentLinkStatus.CREATED, pristineStandaloneLink.getStatus());
-        assertNull(pristineStandaloneLink.getLastError());
-        verify(paymentLinkRepository, never()).save(pristineStandaloneLink);
+        assertEquals(PaymentLinkStatus.CANCELED, pristineStandaloneLink.getStatus());
+        assertTrue(pristineStandaloneLink.getLastError().startsWith("common_invoice_unstarted_route_auto_closed:"));
+        verify(paymentLinkRepository).saveAll(List.of(pristineStandaloneLink));
         verify(invoiceOrderRepository, never()).save(any(CommonInvoiceOrder.class));
-        verify(accountRepository, never()).findByIdWithRelationsForUpdate(anyLong());
+        verify(accountRepository).findByIdWithRelationsForUpdate(1L);
     }
 
     @Test
@@ -2584,6 +2673,76 @@ class CommonBillingServiceTest {
         assertNull(created.getLastError());
         assertEquals(PaymentLinkStatus.INITIATED, initiated.getStatus());
         verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+        verify(paymentLinkRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void commonInvoiceRouteRepairClosesOnlyProvablyUnstartedBankRoutes() {
+        Order firstOrder = order(201L);
+        PaymentLink first = new PaymentLink();
+        first.setId(601L);
+        first.setOrder(firstOrder);
+        first.setStatus(PaymentLinkStatus.CREATED);
+        first.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        first.setExpiresAt(LocalDateTime.now().plusDays(30));
+
+        Order secondOrder = order(202L);
+        PaymentLink second = new PaymentLink();
+        second.setId(602L);
+        second.setOrder(secondOrder);
+        second.setStatus(PaymentLinkStatus.CREATED);
+        second.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        second.setExpiresAt(LocalDateTime.now().plusDays(30));
+
+        int closed = ReflectionTestUtils.invokeMethod(
+                service,
+                "closeProvablyUnstartedStandaloneRoutesOrThrow",
+                Map.of(201L, List.of(first), 202L, List.of(second)),
+                10L
+        );
+
+        assertEquals(2, closed);
+        assertEquals(PaymentLinkStatus.CANCELED, first.getStatus());
+        assertEquals(PaymentLinkStatus.CANCELED, second.getStatus());
+        assertTrue(first.getLastError().contains("invoice=10"));
+        assertTrue(first.getLastError().contains("order=201"));
+        verify(paymentLinkRepository).saveAll(org.mockito.ArgumentMatchers.argThat(saved -> {
+            if (saved == null) {
+                return false;
+            }
+            List<PaymentLink> actual = java.util.stream.StreamSupport.stream(saved.spliterator(), false).toList();
+            return actual.size() == 2 && actual.containsAll(List.of(first, second));
+        }));
+    }
+
+    @Test
+    void commonInvoiceRouteRepairIsAtomicWhenAnyRouteHasProviderEvidence() {
+        Order firstOrder = order(201L);
+        PaymentLink closable = new PaymentLink();
+        closable.setId(601L);
+        closable.setOrder(firstOrder);
+        closable.setStatus(PaymentLinkStatus.CREATED);
+        closable.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        closable.setExpiresAt(LocalDateTime.now().plusDays(30));
+
+        Order secondOrder = order(202L);
+        PaymentLink started = new PaymentLink();
+        started.setId(602L);
+        started.setOrder(secondOrder);
+        started.setStatus(PaymentLinkStatus.INITIATED);
+        started.setPaymentMethod(com.hunt.otziv.payments.model.PaymentMethod.BANK_FORM);
+        started.setTbankPaymentId("provider-payment");
+
+        assertThrows(ResponseStatusException.class, () -> ReflectionTestUtils.invokeMethod(
+                service,
+                "closeProvablyUnstartedStandaloneRoutesOrThrow",
+                Map.of(201L, List.of(closable), 202L, List.of(started)),
+                10L
+        ));
+
+        assertEquals(PaymentLinkStatus.CREATED, closable.getStatus());
+        assertNull(closable.getLastError());
+        assertEquals(PaymentLinkStatus.INITIATED, started.getStatus());
         verify(paymentLinkRepository, never()).saveAll(any());
     }
 
@@ -4884,8 +5043,6 @@ class CommonBillingServiceTest {
         Order order = order(101L);
         CommonInvoiceOrder item = item(invoice, order);
 
-        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
-        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
         when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
@@ -4949,8 +5106,6 @@ class CommonBillingServiceTest {
         assertEquals("payment_init_in_progress", invoice.getLastError());
 
         invoice.setTbankPaymentCreatedAt(LocalDateTime.now().minusMinutes(31));
-        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
-        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
         when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));

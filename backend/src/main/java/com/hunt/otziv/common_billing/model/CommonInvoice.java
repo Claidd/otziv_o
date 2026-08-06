@@ -1,5 +1,7 @@
 package com.hunt.otziv.common_billing.model;
 
+import com.hunt.otziv.payments.model.ManualPaymentSource;
+import com.hunt.otziv.payments.model.ManualPaymentType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -105,6 +107,56 @@ public class CommonInvoice {
 
     @Column(name = "payment_method", length = 32)
     private String paymentMethod;
+
+    @Column(name = "payment_route_type", length = 32)
+    private String paymentRouteType;
+
+    @Column(name = "payment_route_profile_id")
+    private Long paymentRouteProfileId;
+
+    @Column(name = "payment_route_profile_code", length = 64)
+    private String paymentRouteProfileCode;
+
+    @Column(name = "payment_route_profile_name", length = 120)
+    private String paymentRouteProfileName;
+
+    @Column(name = "payment_route_terminal_key", length = 64)
+    private String paymentRouteTerminalKey;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_route_manual_source", length = 32)
+    private ManualPaymentSource paymentRouteManualSource;
+
+    @Column(name = "payment_route_manual_task_id")
+    private Long paymentRouteManualTaskId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_route_manual_type", length = 32)
+    private ManualPaymentType paymentRouteManualType;
+
+    @Column(name = "payment_route_manual_phone", length = 32)
+    private String paymentRouteManualPhone;
+
+    @Column(name = "payment_route_manual_recipient", length = 160)
+    private String paymentRouteManualRecipient;
+
+    @Column(name = "payment_route_manual_url", length = 512)
+    private String paymentRouteManualUrl;
+
+    @Column(name = "payment_route_manual_button", length = 80)
+    private String paymentRouteManualButton;
+
+    @Column(name = "payment_route_manual_comment", length = 255)
+    private String paymentRouteManualComment;
+
+    @Column(name = "payment_route_instruction_text", length = 1000)
+    private String paymentRouteInstructionText;
+
+    @Column(name = "payment_route_amount_kopecks")
+    private Long paymentRouteAmountKopecks;
+
+    @Column(name = "payment_route_selected_at")
+    private LocalDateTime paymentRouteSelectedAt;
 
     @Column(name = "manual_paid_by", length = 160)
     private String manualPaidBy;

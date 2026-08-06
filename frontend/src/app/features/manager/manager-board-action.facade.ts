@@ -73,43 +73,36 @@ export class ManagerBoardActionFacade {
   }
 
   private confirmManualCardPayment(order: OrderCardItem, mutationKey: string): void {
-    const amountRubles = order.totalSumWithBadReviews ?? order.sum ?? 0;
-    const amountKopecks = Math.round(amountRubles * 100);
-    if (!Number.isSafeInteger(amountKopecks) || amountKopecks <= 0) {
+    const enteredReason = window.prompt(
+      `Почему заказ #${order.id} отмечается оплаченным вручную?`,
+      ''
+    );
+    if (enteredReason === null) {
       this.deps.mutationKey.set(null);
-      this.deps.toastService.error('Оплата не отмечена', 'Не удалось определить точную сумму заказа');
       return;
     }
-    const amountLabel = new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      minimumFractionDigits: 0
-    }).format(amountRubles);
-    const confirmed = window.confirm(
-      `Подтвердите финансовый факт по заказу #${order.id}:\n\n`
-      + `• выписка карты получателя проверена;\n`
-      + `• перевод ${amountLabel} действительно получен;\n`
-      + `• это не оплата по ссылке T-Bank.\n\n`
-      + 'После подтверждения система безопасно закроет неоплаченную T-Bank-ссылку и отметит заказ оплаченным.'
-    );
-    if (!confirmed) {
+    const reason = enteredReason.trim();
+    if (!reason) {
       this.deps.mutationKey.set(null);
+      this.deps.toastService.error('Оплата не отмечена', 'Укажите короткую причину ручной оплаты');
+      return;
+    }
+    if (reason.length > 500) {
+      this.deps.mutationKey.set(null);
+      this.deps.toastService.error('Оплата не отмечена', 'Причина не должна превышать 500 символов');
       return;
     }
 
     this.deps.mutationKey.set(mutationKey);
     this.deps.managerApi.confirmManualCardPayment(order.id, {
-      recipientStatementChecked: true,
-      paymentReceived: true,
-      receivedAmountKopecks: amountKopecks,
-      note: `Явно подтверждено кнопкой «Оплатили» после проверки выписки; заказ #${order.id}`
+      reason
     }).subscribe({
       next: () => {
         this.patchOrder(order.id, { status: 'Оплачено', waitingForClient: false });
         this.deps.mutationKey.set(null);
         this.deps.toastService.success(
-          'Оплата переводом подтверждена',
-          `${order.companyTitle}: T-Bank ссылка закрыта, напоминания остановлены`
+          'Оплата отмечена',
+          `${order.companyTitle}: T-Bank ссылка закрыта, владельцам отправлена причина`
         );
         this.deps.loadBoard();
       },

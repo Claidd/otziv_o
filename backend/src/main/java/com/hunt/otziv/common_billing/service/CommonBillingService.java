@@ -55,6 +55,7 @@ import com.hunt.otziv.p_products.status.policy.OrderManualArchivePolicy;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
+import com.hunt.otziv.payments.dto.PaymentRouteSelection;
 import com.hunt.otziv.payments.dto.TbankCancelCommand;
 import com.hunt.otziv.payments.dto.TbankCancelResponse;
 import com.hunt.otziv.payments.dto.TbankInitCommand;
@@ -62,11 +63,15 @@ import com.hunt.otziv.payments.dto.TbankInitResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.model.ManualPaymentSource;
+import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.service.PaymentProfileService;
+import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
 import com.hunt.otziv.payments.service.PaymentUrlPolicy;
 import com.hunt.otziv.payments.service.TbankClient;
@@ -403,6 +408,8 @@ public class CommonBillingService {
     private final NextOrderRequestRepository nextOrderRequestRepository;
     private final ObjectProvider<OrderDeletionService> orderDeletionServiceProvider;
     private final PaymentLinkRepository paymentLinkRepository;
+    private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+    private final ManualPaymentTaskService manualPaymentTaskService;
     private final OrderDtoMapper orderDtoMapper;
     private final OrderStatusService orderStatusService;
     @Autowired
@@ -1048,6 +1055,10 @@ public class CommonBillingService {
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
         refreshInvoiceAmounts(invoice, items);
         long remaining = remainingKopecks(invoice);
+        boolean payable = remaining > 0 && canAcceptPublicPayment(invoice);
+        if (payable) {
+            ensureCommonPaymentRouteSelected(invoice, remaining);
+        }
         return new PublicCommonInvoiceResponse(
                 invoice.getToken(),
                 invoice.getTitle(),
@@ -1059,8 +1070,15 @@ public class CommonBillingService {
                 invoice.getAmountKopecks(),
                 invoice.getPaidKopecks(),
                 remaining,
-                remaining > 0
-                        && canAcceptPublicPayment(invoice),
+                payable,
+                normalize(invoice.getPaymentRouteType()),
+                invoice.getPaymentRouteManualType() == null ? "" : invoice.getPaymentRouteManualType().name(),
+                normalize(invoice.getPaymentRouteManualPhone()),
+                normalize(invoice.getPaymentRouteManualRecipient()),
+                safeCommonManualPaymentUrl(invoice),
+                normalize(invoice.getPaymentRouteManualButton()),
+                normalize(invoice.getPaymentRouteManualComment()),
+                normalize(invoice.getPaymentRouteInstructionText()),
                 items.stream().map(this::toOrderResponse).toList()
         );
     }
@@ -1351,6 +1369,7 @@ public class CommonBillingService {
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureCommonInvoiceNotNeedsAttention(invoice);
         ensureCommonInvoiceCanChangePositions(invoice);
+        ensureCommonPaymentRouteAllowsCompositionChange(invoice);
         CommonInvoiceOrder item = invoiceOrderRepository.findByOrderIdWithInvoice(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден в общем счете"));
         if (!invoice.getId().equals(item.getInvoice().getId())) {
@@ -1593,6 +1612,68 @@ public class CommonBillingService {
             );
         }
         resolvePreparedPaymentInitAfterManualCheck(invoice);
+        resolveAttentionByCurrentItems(invoice, items);
+        return invoiceAfterOrderPrelude(invoiceId);
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CommonInvoiceDetailsResponse repairStandalonePaymentRouteConflict(Long invoiceId) {
+        CommonInvoice snapshot = invoiceRepository.findByIdWithAccount(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(snapshot);
+        if (!attentionError(snapshot).startsWith(STANDALONE_PAYMENT_ROUTE_CONFLICT)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ошибка отдельного платежного маршрута уже изменилась; обновите общий счет"
+            );
+        }
+
+        List<Long> orderIds = invoiceOrderRepository.findOrderIdsByInvoiceId(invoiceId).stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        for (Long orderId : orderIds) {
+            paymentLinkService().reconcileActiveLinkForOrder(orderId);
+        }
+
+        CommonInvoiceDetailsResponse repaired = writeTransaction(() ->
+                repairStandalonePaymentRouteConflictLocked(invoiceId)
+        );
+        if (repaired != null
+                && repaired.summary() != null
+                && (CommonInvoiceStatus.READY.name().equals(repaired.summary().status())
+                || CommonInvoiceStatus.PARTIALLY_PAID.name().equals(repaired.summary().status()))) {
+            return sendInvoice(invoiceId, true);
+        }
+        return repaired;
+    }
+
+    private CommonInvoiceDetailsResponse repairStandalonePaymentRouteConflictLocked(Long invoiceId) {
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        ensureCommonInvoiceNeedsAttention(invoice);
+        if (!attentionError(invoice).startsWith(STANDALONE_PAYMENT_ROUTE_CONFLICT)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ошибка отдельного платежного маршрута уже изменилась; обновите общий счет"
+            );
+        }
+
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        Set<PaymentLink> appliedStandalonePayments = synchronizeConfirmedStandalonePaymentsOrThrow(
+                invoice,
+                items,
+                paymentPrelude.paymentLinksByOrder()
+        );
+        closeProvablyUnstartedStandaloneRoutesOrThrow(
+                paymentLinksRequiringCommonInvoiceRouteCheck(
+                        paymentPrelude.paymentLinksByOrder(),
+                        items,
+                        appliedStandalonePayments
+                ),
+                invoiceId
+        );
         resolveAttentionByCurrentItems(invoice, items);
         return invoiceAfterOrderPrelude(invoiceId);
     }
@@ -2109,9 +2190,6 @@ public class CommonBillingService {
         if (!offerConsent || !privacyConsent || !receiptConsent) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвердите согласия для оплаты");
         }
-        if (!runtimeSettingsService.isPaymentLinksEnabled() || !runtimeSettingsService.isTbankEnabled()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках");
-        }
         String cleanEmail = normalize(email);
         if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите e-mail для электронного чека");
@@ -2266,12 +2344,13 @@ public class CommonBillingService {
                     items,
                     paymentPrelude.paymentLinksByOrder()
             );
-            ensureNoCompetingStandaloneRoutesOrThrow(
+            closeProvablyUnstartedStandaloneRoutesOrThrow(
                     paymentLinksRequiringCommonInvoiceRouteCheck(
                             paymentPrelude.paymentLinksByOrder(),
                             items,
                             appliedStandalonePayments
-                    )
+                    ),
+                    invoice.getId()
             );
         } catch (ResponseStatusException conflict) {
             markStandalonePaymentRouteConflict(invoice, conflict);
@@ -2315,6 +2394,17 @@ public class CommonBillingService {
                     new PublicPaymentInitResponse("", "", invoice.getStatus().name()),
                     null
             );
+        }
+
+        ensureCommonPaymentRouteSelected(invoice, remaining);
+        if (!isTbankCommonRoute(invoice)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Для общего счета выбран другой способ оплаты. Используйте реквизиты на странице счета."
+            );
+        }
+        if (!runtimeSettingsService.isPaymentLinksEnabled() || !runtimeSettingsService.isTbankEnabled()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках");
         }
 
         String cachedPaymentUrl = PaymentUrlPolicy.safe(
@@ -2421,10 +2511,13 @@ public class CommonBillingService {
 
         ensureNoBlockingPaymentRefsForNewInit(invoice);
 
-        Manager manager = manager(invoice);
-        var profile = paymentProfileService.selectForManager(manager);
-        profile = paymentProfileService.lockForRouting(profile);
-        TbankPaymentProfile runtimeProfile = paymentProfileService.toRuntime(profile);
+        PaymentProfile profile = lockedCommonPaymentProfile(invoice);
+        TbankPaymentProfile runtimeProfile = normalize(invoice.getPaymentRouteTerminalKey()).isBlank()
+                ? paymentProfileService.toRuntime(profile)
+                : paymentProfileService.toRuntimeForTerminal(profile, invoice.getPaymentRouteTerminalKey());
+        if (runtimeProfile == null) {
+            runtimeProfile = paymentProfileService.toRuntime(profile);
+        }
         if (!runtimeProfile.hasCredentials()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Не заданы TerminalKey или Password Т-Банка");
         }
@@ -3550,11 +3643,6 @@ public class CommonBillingService {
         return Map.copyOf(selected);
     }
 
-    /**
-     * Validation is deliberately non-mutating. A CREATED local token does not
-     * prove that its public URL was never disclosed, so even that state must be
-     * reconciled explicitly before switching the order to a common invoice.
-     */
     private void ensureNoCompetingStandaloneRoutesOrThrow(
             Map<Long, List<PaymentLink>> paymentLinksByOrder
     ) {
@@ -3576,6 +3664,52 @@ public class CommonBillingService {
                 );
             }
         }
+    }
+
+    private int closeProvablyUnstartedStandaloneRoutesOrThrow(
+            Map<Long, List<PaymentLink>> paymentLinksByOrder,
+            Long invoiceId
+    ) {
+        Map<Long, List<PaymentLink>> routes = paymentLinksByOrder == null
+                ? Map.of()
+                : paymentLinksByOrder;
+        List<PaymentLink> closable = new ArrayList<>();
+        for (Map.Entry<Long, List<PaymentLink>> entry : routes.entrySet()) {
+            for (PaymentLink link : entry.getValue()) {
+                if (isSafelyClosedStandaloneRoute(link)) {
+                    continue;
+                }
+                if (!StandaloneBankPaymentPolicy.canAutoCloseForCommonInvoice(link)) {
+                    ensureNoCompetingStandaloneRoutesOrThrow(Map.of(entry.getKey(), List.of(link)));
+                }
+                closable.add(link);
+            }
+        }
+
+        if (closable.isEmpty()) {
+            return 0;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (PaymentLink link : closable) {
+            Long orderId = link.getOrder() == null ? null : link.getOrder().getId();
+            link.setStatus(PaymentLinkStatus.CANCELED);
+            link.setExpiresAt(link.getExpiresAt() == null || link.getExpiresAt().isAfter(now)
+                    ? now
+                    : link.getExpiresAt());
+            link.setLastError(limit(
+                    "common_invoice_unstarted_route_auto_closed: invoice="
+                            + (invoiceId == null ? "pending" : invoiceId)
+                            + "; order=" + (orderId == null ? "?" : orderId),
+                    512
+            ));
+        }
+        paymentLinkRepository.saveAll(closable);
+        log.info(
+                "Автоматически закрыты неинициализированные отдельные платежные маршруты: invoice={}, links={}",
+                invoiceId,
+                closable.stream().map(PaymentLink::getId).toList()
+        );
+        return closable.size();
     }
 
     private Set<PaymentLink> synchronizeConfirmedStandalonePaymentsOrThrow(
@@ -4162,7 +4296,7 @@ public class CommonBillingService {
         Map<Long, Order> lockedOrders = lockOrderAggregatesWithEntities(orderIdsToLock);
         Map<Long, List<PaymentLink>> lockedBackfillPaymentLinks =
                 lockPaymentLinksForOrders(expectedBackfillOrderIds);
-        ensureNoCompetingStandaloneRoutesOrThrow(lockedBackfillPaymentLinks);
+        closeProvablyUnstartedStandaloneRoutesOrThrow(lockedBackfillPaymentLinks, null);
         Map<Long, CommonBillingAccount> lockedAccounts = lockAccountsInCanonicalOrder(accountSnapshots);
         Map<Long, CommonInvoice> lockedInvoices = lockInvoicesInCanonicalOrder(invoiceSnapshots);
 
@@ -4519,7 +4653,7 @@ public class CommonBillingService {
         orderIdsToLock.add(orderId);
         Map<Long, Order> lockedOrders = lockOrderAggregatesWithEntities(orderIdsToLock);
         Map<Long, List<PaymentLink>> lockedPaymentLinks = lockPaymentLinksForOrders(Set.of(orderId));
-        ensureNoCompetingStandaloneRoutesOrThrow(lockedPaymentLinks);
+        closeProvablyUnstartedStandaloneRoutesOrThrow(lockedPaymentLinks, null);
         Map<Long, CommonBillingAccount> lockedAccounts = lockAccountsInCanonicalOrder(
                 Map.of(accountId, accountSnapshot)
         );
@@ -4563,6 +4697,7 @@ public class CommonBillingService {
     }
 
     private CommonInvoiceOrder attachOrderWithoutInvoiceRefresh(CommonInvoice invoice, Order order) {
+        ensureCommonPaymentRouteAllowsCompositionChange(invoice);
         CommonInvoiceOrder item = new CommonInvoiceOrder();
         item.setInvoice(invoice);
         item.setOrder(order);
@@ -4814,12 +4949,13 @@ public class CommonBillingService {
                     items,
                     paymentPrelude.paymentLinksByOrder()
             );
-            ensureNoCompetingStandaloneRoutesOrThrow(
+            closeProvablyUnstartedStandaloneRoutesOrThrow(
                     paymentLinksRequiringCommonInvoiceRouteCheck(
                             paymentPrelude.paymentLinksByOrder(),
                             items,
                             appliedStandalonePayments
-                    )
+                    ),
+                    invoice.getId()
             );
         } catch (ResponseStatusException conflict) {
             markStandalonePaymentRouteConflict(invoice, conflict);
@@ -4866,6 +5002,7 @@ public class CommonBillingService {
             return null;
         }
 
+        ensureCommonPaymentRouteSelected(invoice, remainingKopecks(invoice));
         Company chatCompany = chatCompany(invoice);
         Manager manager = manager(invoice);
         invoice.setLastError(MESSAGE_SEND_IN_PROGRESS);
@@ -5665,6 +5802,7 @@ public class CommonBillingService {
         invoice.setLastError(null);
         notifyPaymentSuccessIfNeeded(invoice, items);
         invoiceRepository.save(invoice);
+        manualPaymentTaskService.completeCommonInvoiceTaskIfTargetReached(invoice.getPaymentRouteManualTaskId());
         List<String> nextOrderFailures = openNextOrdersIfEnabled(invoice, items);
         if (!nextOrderFailures.isEmpty()) {
             invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
@@ -6439,7 +6577,11 @@ public class CommonBillingService {
                 invoice.getTbankPaymentId(),
                 invoice.getTbankPaymentAmountKopecks(),
                 normalize(tbankTerminalLabel).isBlank() ? null : tbankTerminalLabel,
-                normalize(invoice.getTbankTerminalKey()).isBlank() ? null : invoice.getTbankTerminalKey()
+                normalize(invoice.getTbankTerminalKey()).isBlank() ? null : invoice.getTbankTerminalKey(),
+                normalize(invoice.getPaymentRouteType()),
+                normalize(invoice.getPaymentRouteProfileName()),
+                invoice.getPaymentRouteManualTaskId(),
+                invoice.getPaymentRouteSelectedAt()
         );
     }
 
@@ -6920,7 +7062,8 @@ public class CommonBillingService {
                 item.isReady(),
                 item.isPaid(),
                 item.isUnpaid(),
-                item.getInvoice().getStatus() != CommonInvoiceStatus.PAID
+                !hasFrozenCommonPaymentRoute(item.getInvoice())
+                        && item.getInvoice().getStatus() != CommonInvoiceStatus.PAID
                         && item.getInvoice().getStatus() != CommonInvoiceStatus.UNPAID
                         && item.getInvoice().getStatus() != CommonInvoiceStatus.BAN
                         && item.getInvoice().getStatus() != CommonInvoiceStatus.ARCHIVED
@@ -7026,7 +7169,12 @@ public class CommonBillingService {
         builder.append(reminder ? "Напоминаем об оплате общего счета." : "Все заказы из общего счета выполнены.");
         builder.append("\n\nЗаказов: ").append(items.size());
         builder.append("\nК оплате: ").append(money(amountRubles(remainingKopecks(invoice)))).append(" руб.");
-        builder.append("\nСсылка на оплату: ").append(publicInvoiceUrl(invoice));
+        if (isManagerTextCommonRoute(invoice)) {
+            builder.append("\n\n").append(normalize(invoice.getPaymentRouteInstructionText()));
+            builder.append("\nСтраница общего счета: ").append(publicInvoiceUrl(invoice));
+        } else {
+            builder.append("\nСсылка на оплату: ").append(publicInvoiceUrl(invoice));
+        }
         builder.append("\n\nСостав:");
         items.stream().limit(12).forEach(item -> builder
                 .append("\n- №").append(item.getOrder().getId())
@@ -7038,6 +7186,134 @@ public class CommonBillingService {
             builder.append("\n- еще ").append(items.size() - 12).append(" заказов");
         }
         return builder.toString();
+    }
+
+    private void ensureCommonPaymentRouteSelected(CommonInvoice invoice, long remainingKopecks) {
+        if (invoice == null || invoice.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден");
+        }
+        if (hasFrozenCommonPaymentRoute(invoice)) {
+            return;
+        }
+
+        PaymentRouteSelection route = hasCurrentCommonPaymentRoute(invoice)
+                ? legacyTbankRoute(invoice, remainingKopecks)
+                : paymentLinkService().selectCommonInvoiceRoute(manager(invoice), remainingKopecks);
+        applyCommonPaymentRoute(invoice, route, remainingKopecks);
+        invoiceRepository.save(invoice);
+        log.info(
+                "За общим счетом {} закреплен маршрут оплаты {}: profile={}, task={}, amountKopecks={}",
+                invoice.getId(),
+                invoice.getPaymentRouteType(),
+                invoice.getPaymentRouteProfileId(),
+                invoice.getPaymentRouteManualTaskId(),
+                invoice.getPaymentRouteAmountKopecks()
+        );
+    }
+
+    private boolean hasFrozenCommonPaymentRoute(CommonInvoice invoice) {
+        return invoice != null
+                && invoice.getPaymentRouteSelectedAt() != null
+                && !normalize(invoice.getPaymentRouteType()).isBlank();
+    }
+
+    private PaymentLinkService paymentLinkService() {
+        return paymentLinkServiceProvider.getObject();
+    }
+
+    private void ensureCommonPaymentRouteAllowsCompositionChange(CommonInvoice invoice) {
+        if (hasFrozenCommonPaymentRoute(invoice)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Состав общего счета уже зафиксирован платежным маршрутом. Создайте следующий общий счет."
+            );
+        }
+    }
+
+    private PaymentRouteSelection legacyTbankRoute(CommonInvoice invoice, long remainingKopecks) {
+        PaymentProfile profile = paymentProfileService.findByTerminalKey(invoice.getTbankTerminalKey())
+                .orElseGet(() -> paymentProfileService.selectForManager(manager(invoice)));
+        profile = paymentProfileService.lockForRouting(profile);
+        TbankPaymentProfile runtimeProfile = normalize(invoice.getTbankTerminalKey()).isBlank()
+                ? paymentProfileService.toRuntime(profile)
+                : paymentProfileService.toRuntimeForTerminal(profile, invoice.getTbankTerminalKey());
+        if (runtimeProfile == null) {
+            runtimeProfile = paymentProfileService.toRuntime(profile);
+        }
+        return new PaymentRouteSelection(
+                TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK,
+                profile == null ? null : profile.getId(),
+                normalize(profile == null ? null : profile.getCode()),
+                normalize(profile == null ? null : profile.getName()),
+                normalize(runtimeProfile == null ? invoice.getTbankTerminalKey() : runtimeProfile.terminalKey()),
+                null,
+                null,
+                null,
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        );
+    }
+
+    private PaymentProfile lockedCommonPaymentProfile(CommonInvoice invoice) {
+        PaymentProfile assigned = paymentProfileService.selectForManager(manager(invoice));
+        if (assigned != null && Objects.equals(assigned.getId(), invoice.getPaymentRouteProfileId())) {
+            return paymentProfileService.lockForRouting(assigned);
+        }
+        return paymentProfileService.lockByIdForRouting(invoice.getPaymentRouteProfileId());
+    }
+
+    private void applyCommonPaymentRoute(
+            CommonInvoice invoice,
+            PaymentRouteSelection route,
+            long remainingKopecks
+    ) {
+        if (route == null || normalize(route.routeType()).isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось выбрать способ оплаты общего счета");
+        }
+        invoice.setPaymentRouteType(limit(normalize(route.routeType()).toUpperCase(Locale.ROOT), 32));
+        invoice.setPaymentRouteProfileId(route.paymentProfileId());
+        invoice.setPaymentRouteProfileCode(limit(route.paymentProfileCode(), 64));
+        invoice.setPaymentRouteProfileName(limit(route.paymentProfileName(), 120));
+        invoice.setPaymentRouteTerminalKey(limit(route.paymentProfileTerminalKey(), 64));
+        invoice.setPaymentRouteManualSource(enumValue(ManualPaymentSource.class, route.manualSource()));
+        invoice.setPaymentRouteManualTaskId(route.manualTaskId());
+        invoice.setPaymentRouteManualType(enumValue(ManualPaymentType.class, route.manualPaymentType()));
+        invoice.setPaymentRouteManualPhone(limit(route.manualPhone(), 32));
+        invoice.setPaymentRouteManualRecipient(limit(route.manualRecipientName(), 160));
+        invoice.setPaymentRouteManualUrl(limit(route.manualPaymentUrl(), 512));
+        invoice.setPaymentRouteManualButton(limit(route.manualPaymentButtonLabel(), 80));
+        invoice.setPaymentRouteManualComment(limit(route.manualComment(), 255));
+        invoice.setPaymentRouteInstructionText(limit(route.instructionText(), 1000));
+        invoice.setPaymentRouteAmountKopecks(remainingKopecks);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.now());
+    }
+
+    private <T extends Enum<T>> T enumValue(Class<T> type, String value) {
+        String clean = normalize(value).toUpperCase(Locale.ROOT);
+        return clean.isBlank() ? null : Enum.valueOf(type, clean);
+    }
+
+    private boolean isManagerTextCommonRoute(CommonInvoice invoice) {
+        return TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT.equals(
+                normalize(invoice == null ? null : invoice.getPaymentRouteType()).toUpperCase(Locale.ROOT)
+        );
+    }
+
+    private boolean isTbankCommonRoute(CommonInvoice invoice) {
+        return TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK.equals(
+                normalize(invoice == null ? null : invoice.getPaymentRouteType()).toUpperCase(Locale.ROOT)
+        );
+    }
+
+    private String safeCommonManualPaymentUrl(CommonInvoice invoice) {
+        return PaymentUrlPolicy.safe(
+                invoice == null ? null : invoice.getPaymentRouteManualUrl(),
+                PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL
+        );
     }
 
     private Company chatCompany(CommonInvoice invoice) {

@@ -32,7 +32,7 @@
           <article class="checkout-card">
             <div class="method-title">
               <div>
-                <h2>Оплата остатка</h2>
+                <h2>{{ routeTitle() }}</h2>
                 <p>{{ item?.title || 'Общий счет' }}</p>
               </div>
               <span>{{ statusLabel() }}</span>
@@ -69,7 +69,52 @@
               }
             </section>
 
-            <form class="pay-form" (ngSubmit)="submitPayment()" aria-label="Данные для оплаты">
+            @if (managerTextRoute()) {
+              <section class="common-route-instruction" aria-label="Инструкция по оплате">
+                <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
+                <div>
+                  <strong>Оплатите общий счет по реквизитам менеджера</strong>
+                  <p>{{ item?.paymentInstructionText }}</p>
+                  <small>После оплаты отправьте один чек менеджеру.</small>
+                </div>
+              </section>
+            } @else if (manualRoute()) {
+              <section class="manual-details" aria-label="Реквизиты общего счета">
+                @if (externalManualRoute()) {
+                  @if (manualPaymentUrl()) {
+                    <button type="button" class="manual-external-pay" (click)="openManualPaymentUrl()">
+                      <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
+                      {{ manualPaymentButtonLabel() }}
+                    </button>
+                    <button type="button" (click)="copyPaymentValue(manualPaymentUrl())" title="Скопировать ссылку оплаты">
+                      <small>Ссылка оплаты</small>
+                      <strong>{{ manualPaymentUrl() }}</strong>
+                      <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+                    </button>
+                  } @else {
+                    <p class="pay-error" role="alert">Ссылка оплаты не настроена. Обратитесь к менеджеру.</p>
+                  }
+                } @else {
+                  <button type="button" (click)="copyPaymentValue(item?.manualPhone)" title="Скопировать телефон">
+                    <small>Телефон</small>
+                    <strong>{{ item?.manualPhone || 'не указан' }}</strong>
+                    <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+                  </button>
+                }
+                <button type="button" (click)="copyPaymentValue(item?.manualRecipientName)" title="Скопировать получателя">
+                  <small>Получатель</small>
+                  <strong>{{ item?.manualRecipientName || 'не указан' }}</strong>
+                  <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+                </button>
+                <button type="button" (click)="copyPaymentValue(manualComment())" title="Скопировать комментарий">
+                  <small>Комментарий</small>
+                  <strong>{{ manualComment() }}</strong>
+                  <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+                </button>
+                <p class="common-route-note">После оплаты отправьте один чек менеджеру.</p>
+              </section>
+            } @else if (tbankRoute()) {
+              <form class="pay-form" (ngSubmit)="submitPayment()" aria-label="Данные для оплаты">
               <label class="email-field">
                 <span>E-mail для электронного чека</span>
                 <input
@@ -130,7 +175,10 @@
                 Если сайт банка попросит сертификат, установите сертификаты Минцифры на
                 <a href="https://www.gosuslugi.ru/crt" target="_blank" rel="noopener noreferrer">Госуслугах</a>.
               </p>
-            </form>
+              </form>
+            } @else if (item?.payable) {
+              <p class="pay-error" role="alert">Способ оплаты еще не подготовлен. Обратитесь к менеджеру.</p>
+            }
           </article>
         }
 
@@ -159,18 +207,20 @@
       </div>
     </div>
     <div class="pay-side-card">
-      <span class="material-icons-sharp" aria-hidden="true">verified_user</span>
-      <strong>Платеж проходит на стороне банка</strong>
-      <small>Сумма формы банка создается на текущий остаток</small>
+      <span class="material-icons-sharp" aria-hidden="true">{{ tbankRoute() ? 'verified_user' : 'receipt_long' }}</span>
+      <strong>{{ tbankRoute() ? 'Платеж проходит на стороне банка' : 'Один платеж на весь общий счет' }}</strong>
+      <small>{{ tbankRoute() ? 'Сумма формы банка создается на текущий остаток' : 'Используйте только реквизиты, указанные на этой странице' }}</small>
     </div>
-    <div class="pay-side-card">
-      <span class="material-icons-sharp" aria-hidden="true">admin_panel_settings</span>
-      <strong>Сертификаты Минцифры</strong>
-      <small>
-        Если банк не открывается из-за сертификата:
-        <a href="https://www.gosuslugi.ru/crt" target="_blank" rel="noopener noreferrer">Госуслуги</a>
-      </small>
-    </div>
+    @if (tbankRoute()) {
+      <div class="pay-side-card">
+        <span class="material-icons-sharp" aria-hidden="true">admin_panel_settings</span>
+        <strong>Сертификаты Минцифры</strong>
+        <small>
+          Если банк не открывается из-за сертификата:
+          <a href="https://www.gosuslugi.ru/crt" target="_blank" rel="noopener noreferrer">Госуслуги</a>
+        </small>
+      </div>
+    }
     <nav aria-label="Публичные ссылки">
       <a routerLink="/">
         <span class="material-icons-sharp" aria-hidden="true">home</span>

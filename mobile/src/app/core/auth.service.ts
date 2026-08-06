@@ -9,6 +9,12 @@ import type { AuthStatus, AuthUser, StoredTokens, TokenEndpointResponse } from '
 import { MobileAuthStorageService } from './mobile-auth-storage.service';
 import { MobilePushService } from './mobile-push.service';
 
+class TokenEndpointHttpError extends Error {
+  constructor(readonly statusCode: number) {
+    super(`Keycloak token request failed: ${statusCode}`);
+  }
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly isNative = Capacitor.isNativePlatform();
@@ -225,6 +231,12 @@ export class AuthService {
         if (refreshGeneration !== this.sessionGeneration) {
           return false;
         }
+        if (!this.isTerminalRefreshError(error)) {
+          this.status.set('authenticated');
+          this.error.set('Не удалось обновить сессию. Проверьте соединение, приложение повторит попытку автоматически.');
+          this.scheduleRefresh();
+          return true;
+        }
         await this.clearSession('anonymous');
         this.error.set(this.errorMessage(error));
         return false;
@@ -387,7 +399,7 @@ export class AuthService {
       });
 
       if (response.status < 200 || response.status >= 300) {
-        throw new Error(`Keycloak token request failed: ${response.status}`);
+        throw new TokenEndpointHttpError(response.status);
       }
 
       return this.parseTokenResponse(response.data);
@@ -403,10 +415,15 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      throw new Error(`Keycloak token request failed: ${response.status}`);
+      throw new TokenEndpointHttpError(response.status);
     }
 
     return response.json() as Promise<TokenEndpointResponse>;
+  }
+
+  private isTerminalRefreshError(error: unknown): boolean {
+    return error instanceof TokenEndpointHttpError
+      && (error.statusCode === 400 || error.statusCode === 401 || error.statusCode === 403);
   }
 
   private parseTokenResponse(data: unknown): TokenEndpointResponse {

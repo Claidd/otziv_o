@@ -40,6 +40,10 @@ export interface CommonInvoiceSummaryResponse {
   tbankPaymentAmountKopecks?: number | null;
   tbankTerminalLabel?: string | null;
   tbankTerminalKey?: string | null;
+  paymentRouteType?: string | null;
+  paymentRouteProfileName?: string | null;
+  paymentRouteManualTaskId?: number | null;
+  paymentRouteSelectedAt?: string | null;
 }
 
 export interface CommonBillingAccountResponse {
@@ -267,6 +271,13 @@ export class CommonBillingApi {
   resolveAttention(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/attention/resolve`,
+      {}
+    );
+  }
+
+  repairPaymentRoute(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/attention/repair-payment-route`,
       {}
     );
   }

@@ -15,6 +15,14 @@ public record PublicCommonInvoiceResponse(
         long paidKopecks,
         long remainingKopecks,
         boolean payable,
+        String paymentRouteType,
+        String manualPaymentType,
+        String manualPhone,
+        String manualRecipientName,
+        String manualPaymentUrl,
+        String manualPaymentButtonLabel,
+        String manualComment,
+        String paymentInstructionText,
         List<CommonInvoiceOrderResponse> orders
 ) {
 }

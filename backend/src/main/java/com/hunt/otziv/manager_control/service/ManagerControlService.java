@@ -1404,6 +1404,21 @@ public class ManagerControlService {
                     "Повторно отправлено напоминание по общему счету"
             );
         }
+        if (commonInvoiceStandaloneRouteRepairable(invoice)) {
+            CommonInvoiceDetailsResponse details = commonBillingService.repairStandalonePaymentRouteConflict(invoiceId);
+            String lastError = details == null || details.summary() == null ? "" : safe(details.summary().lastError());
+            if (lastError.toLowerCase(Locale.ROOT).startsWith("standalone_payment_route_conflict")) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Автопочинка остановлена: отдельный платеж начат или его состояние неоднозначно. "
+                                + "Проверьте T-Bank и ручные поступления."
+                );
+            }
+            return new CommonInvoiceRepairOutcome(
+                    "Одиночные платежи сверены, неинициализированные ссылки закрыты, общий счет пересчитан и отправлен заново",
+                    "Восстановлен единый платежный маршрут общего счета"
+            );
+        }
         if (commonInvoiceUnsentTlsInitRepairable(invoice)) {
             CommonInvoiceDetailsResponse details = commonBillingService.recoverUnsentPaymentInitTlsFailure(invoiceId);
             String recoveredStatus = details == null || details.summary() == null
@@ -6037,6 +6052,11 @@ public class ManagerControlService {
             }
             return "Проблема при создании платежной ссылки T-Bank. Рекомендация: откройте «Счет» и сверьте состояние платежа в банке.";
         }
+        if (error.startsWith("standalone_payment_route_conflict")) {
+            return "У заказа внутри общего счета осталась отдельная платежная ссылка. Нажмите «Починить»: "
+                    + "система сверит начатые платежи, зачтет подтвержденные оплаты и закроет только ссылки без "
+                    + "банковских или ручных признаков оплаты. При неоднозначном состоянии автоматическая починка остановится.";
+        }
         if (error.startsWith("close_failed")) {
             return "Оплата получена, но часть заказов не закрылась. Рекомендация: исправьте заказы и повторите действие в карточке счета.";
         }
@@ -6194,6 +6214,13 @@ public class ManagerControlService {
         return !orderIds.isEmpty()
                 && paymentLinkRepository.findByOrderIdInForRead(orderIds).stream()
                 .anyMatch(StandaloneBankPaymentPolicy::blocksCommonInvoiceTlsRecovery);
+    }
+
+    private boolean commonInvoiceStandaloneRouteRepairable(CommonInvoice invoice) {
+        return invoice != null
+                && invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
+                && safe(invoice.getLastError()).toLowerCase(Locale.ROOT)
+                .startsWith("standalone_payment_route_conflict");
     }
 
     private boolean commonInvoicePaymentNotificationRepairable(CommonInvoice invoice) {

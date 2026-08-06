@@ -32,6 +32,10 @@ public record CommonInvoiceSummaryResponse(
         String tbankPaymentId,
         Long tbankPaymentAmountKopecks,
         String tbankTerminalLabel,
-        String tbankTerminalKey
+        String tbankTerminalKey,
+        String paymentRouteType,
+        String paymentRouteProfileName,
+        Long paymentRouteManualTaskId,
+        LocalDateTime paymentRouteSelectedAt
 ) {
 }

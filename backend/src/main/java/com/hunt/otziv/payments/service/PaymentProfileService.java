@@ -173,6 +173,18 @@ public class PaymentProfileService {
         return paymentProfileRepository.findByIdForUpdate(profile.getId()).orElse(profile);
     }
 
+    @Transactional
+    public PaymentProfile lockByIdForRouting(Long profileId) {
+        if (profileId == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "У платежного маршрута не указан профиль");
+        }
+        return paymentProfileRepository.findByIdForUpdate(profileId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Платежный профиль общего счета больше не существует"
+                ));
+    }
+
     @Transactional(readOnly = true)
     public Optional<PaymentProfile> findByCode(String code) {
         String clean = normalize(code);

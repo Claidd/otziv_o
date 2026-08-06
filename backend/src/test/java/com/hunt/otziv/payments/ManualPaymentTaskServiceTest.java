@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.model.ManualPaymentTask;
 import com.hunt.otziv.payments.model.ManualPaymentTaskStatus;
@@ -30,6 +31,8 @@ class ManualPaymentTaskServiceTest {
     @Mock
     private PaymentLinkRepository paymentLinkRepository;
     @Mock
+    private CommonInvoiceRepository commonInvoiceRepository;
+    @Mock
     private ManagerRepository managerRepository;
     @Mock
     private PaymentProfileService paymentProfileService;
@@ -41,6 +44,7 @@ class ManualPaymentTaskServiceTest {
         service = new ManualPaymentTaskService(
                 taskRepository,
                 paymentLinkRepository,
+                commonInvoiceRepository,
                 managerRepository,
                 paymentProfileService
         );

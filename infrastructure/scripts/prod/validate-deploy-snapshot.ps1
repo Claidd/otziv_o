@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$RepoRoot,
-    [Parameter(Mandatory = $true)][string]$BaseRevision
+    [Parameter(Mandatory = $true)][string]$BaseRevision,
+    [switch]$FastBackendValidation
 )
 
 Set-StrictMode -Version Latest
@@ -77,6 +78,7 @@ $hasFrontendChanges = @($changedFiles | Where-Object { $_ -like 'frontend/*' }).
 $hasMobileChanges = @($changedFiles | Where-Object { $_ -like 'mobile/*' }).Count -gt 0
 $hasWhatsAppChanges = @($changedFiles | Where-Object { $_ -like 'whatsapp/*' }).Count -gt 0
 $hasExternalWorkerChanges = @($changedFiles | Where-Object { $_ -like 'backend/external-review-worker/*' }).Count -gt 0
+$hasFlywayMigrationChanges = @($changedFiles | Where-Object { $_ -like 'backend/src/main/resources/db/migration/*' }).Count -gt 0
 
 if ($hasFrontendChanges) {
     $frontend = Join-Path $root 'frontend'
@@ -119,10 +121,25 @@ if ($hasExternalWorkerChanges) {
 }
 
 if ($hasBackendChanges) {
-    if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+    if ($FastBackendValidation -and -not $hasFlywayMigrationChanges) {
+        Write-Warning 'Fast backend validation active: skipping backend full Maven verify and running package with tests skipped.'
+        if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+            Invoke-SnapshotCheck -Name 'backend package without tests' -WorkingDirectory (Join-Path $root 'backend') `
+                -FilePath '.\mvnw.cmd' -Arguments @('-B', '-ntp', '-DskipTests', 'package')
+        } else {
+            Invoke-SnapshotCheck -Name 'backend package without tests' -WorkingDirectory (Join-Path $root 'backend') `
+                -FilePath 'bash' -Arguments @('./mvnw', '-B', '-ntp', '-DskipTests', 'package')
+        }
+    } elseif ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+        if ($FastBackendValidation -and $hasFlywayMigrationChanges) {
+            Write-Warning 'Fast backend validation requested, but Flyway migrations changed; running backend full Maven verify.'
+        }
         Invoke-SnapshotCheck -Name 'backend full test suite' -WorkingDirectory (Join-Path $root 'backend') `
             -FilePath '.\mvnw.cmd' -Arguments @('-B', '-ntp', 'verify')
     } else {
+        if ($FastBackendValidation -and $hasFlywayMigrationChanges) {
+            Write-Warning 'Fast backend validation requested, but Flyway migrations changed; running backend full Maven verify.'
+        }
         Invoke-SnapshotCheck -Name 'backend full test suite' -WorkingDirectory (Join-Path $root 'backend') `
             -FilePath 'bash' -Arguments @('./mvnw', '-B', '-ntp', 'verify')
     }

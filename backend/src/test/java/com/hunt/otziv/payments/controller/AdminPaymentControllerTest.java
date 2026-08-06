@@ -3,6 +3,7 @@ package com.hunt.otziv.payments.controller;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.CloseManualPaymentUnpaidRequest;
 import com.hunt.otziv.payments.dto.ConfirmManualCardPaymentRequest;
+import com.hunt.otziv.payments.dto.ReportManualCardPaymentRequest;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
@@ -38,17 +39,17 @@ class AdminPaymentControllerTest {
     private Authentication authentication;
 
     @Test
-    void orderManualCardFallbackIsRestrictedToOwnerAndAdmin() throws Exception {
+    void orderManualCardReportIsAvailableToManagersOwnersAndAdmins() throws Exception {
         PreAuthorize authorization = AdminPaymentController.class
                 .getMethod(
                         "confirmOrderManualCardPayment",
                         Long.class,
-                        ConfirmManualCardPaymentRequest.class,
+                        ReportManualCardPaymentRequest.class,
                         Authentication.class
                 )
                 .getAnnotation(PreAuthorize.class);
 
-        assertEquals("hasAnyRole('ADMIN', 'OWNER')", authorization.value());
+        assertEquals("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')", authorization.value());
     }
 
     @Test
@@ -93,31 +94,23 @@ class AdminPaymentControllerTest {
     }
 
     @Test
-    void confirmOrderManualCardPaymentPassesOrderEvidenceAndDoesNotReturnProviderData() {
+    void confirmOrderManualCardPaymentPassesOnlyManagerReasonAndDoesNotReturnProviderData() {
         AdminPaymentController controller = new AdminPaymentController(
                 paymentLinkService,
                 paymentProfileService,
                 runtimeSettingsService,
                 manualPaymentTaskService
         );
-        ConfirmManualCardPaymentRequest request = new ConfirmManualCardPaymentRequest(
-                true,
-                true,
-                100_000L,
-                "04.08 20:40, карта *1234, перевод за заказ",
-                null
+        ReportManualCardPaymentRequest request = new ReportManualCardPaymentRequest(
+                "Клиент оплатил переводом по номеру телефона"
         );
         when(authentication.getName()).thenReturn("manager@example.ru");
 
         controller.confirmOrderManualCardPayment(25047L, request, authentication);
 
-        verify(paymentLinkService).confirmPaidByManualCardTransferForOrder(
+        verify(paymentLinkService).reportPaidByManualCardTransferForOrder(
                 25047L,
-                true,
-                true,
-                100_000L,
-                request.note(),
-                null,
+                request.reason(),
                 "manager@example.ru",
                 authentication
         );

@@ -67,6 +67,54 @@
   white-space: nowrap;
 }
 
+.common-route-instruction {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.65rem;
+  border: 1px solid rgba(47, 127, 223, 0.2);
+  border-radius: 0.5rem;
+  padding: 0.78rem;
+  color: #263241;
+  background: #f5f9ff;
+}
+
+.common-route-instruction > .material-icons-sharp {
+  color: #2f7fdf;
+  font-size: 1.3rem;
+}
+
+.common-route-instruction strong,
+.common-route-instruction p,
+.common-route-instruction small,
+.common-route-note {
+  display: block;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.common-route-instruction strong {
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.common-route-instruction p {
+  margin-top: 0.4rem;
+  white-space: pre-wrap;
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.common-route-instruction small,
+.common-route-note {
+  margin-top: 0.45rem;
+  color: #737b87;
+  font-size: 0.68rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
 @media (max-width: 760px) {
   .group-orders {
     max-height: 11rem;

@@ -8,6 +8,7 @@ import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
 import com.hunt.otziv.payments.dto.PaymentLinkArchiveRunResponse;
+import com.hunt.otziv.payments.dto.ReportManualCardPaymentRequest;
 import com.hunt.otziv.payments.dto.ResolveAmbiguousBankInitRequest;
 import com.hunt.otziv.payments.dto.TbankClientPaymentModeResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfilesResponse;
@@ -93,20 +94,16 @@ public class AdminPaymentController {
         );
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/manager/orders/{orderId}/confirm-manual-card-payment")
     public void confirmOrderManualCardPayment(
             @PathVariable Long orderId,
-            @RequestBody ConfirmManualCardPaymentRequest request,
+            @RequestBody ReportManualCardPaymentRequest request,
             Authentication authentication
     ) {
-        paymentLinkService.confirmPaidByManualCardTransferForOrder(
+        paymentLinkService.reportPaidByManualCardTransferForOrder(
                 orderId,
-                request != null && Boolean.TRUE.equals(request.recipientStatementChecked()),
-                request != null && Boolean.TRUE.equals(request.paymentReceived()),
-                request == null ? null : request.receivedAmountKopecks(),
-                request == null ? null : request.note(),
-                request == null ? null : request.receiptUrl(),
+                request == null ? null : request.reason(),
                 actor(authentication),
                 authentication
         );

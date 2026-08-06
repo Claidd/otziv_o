@@ -49,7 +49,7 @@ function createFacade(config: {
           : throwError(() => config.orderStatusError);
       },
       confirmManualCardPayment: (orderId: number, request) => {
-        calls.push(`manual-card:${orderId}:${request.receivedAmountKopecks}:${request.note}`);
+        calls.push(`manual-card:${orderId}:${request.reason}`);
         return of(void 0);
       },
       updateOrderClientWaiting: (orderId: number, waitingForClient: boolean) => {
@@ -127,7 +127,7 @@ describe('ManagerBoardActionFacade', () => {
     expect(toastMessages).toContain('error:Статус не изменен:Не удалось изменить статус компании');
   });
 
-  it('uses the safe manual-card fallback only after the exact active-bank conflict and explicit confirmation', () => {
+  it('uses the safe manual-card fallback only after the exact active-bank conflict and a reason', () => {
     const conflict = {
       status: 409,
       error: {
@@ -135,7 +135,7 @@ describe('ManagerBoardActionFacade', () => {
       }
     };
     const { facade, calls, mutationKey, toastMessages } = createFacade({ orderStatusError: conflict });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.spyOn(window, 'prompt').mockReturnValue('Клиент оплатил переводом по номеру телефона');
 
     facade.updateOrderStatus(order({
       id: 25047,
@@ -149,15 +149,15 @@ describe('ManagerBoardActionFacade', () => {
     });
 
     expect(calls[0]).toBe('order-status:25047:Оплачено');
-    expect(calls[1]).toContain('manual-card:25047:100000:Явно подтверждено кнопкой «Оплатили»');
+    expect(calls[1]).toBe('manual-card:25047:Клиент оплатил переводом по номеру телефона');
     expect(calls[2]).toBe('load-board');
     expect(mutationKey()).toBeNull();
     expect(toastMessages).toContain(
-      'success:Оплата переводом подтверждена:Мастер на дом: T-Bank ссылка закрыта, напоминания остановлены'
+      'success:Оплата отмечена:Мастер на дом: T-Bank ссылка закрыта, владельцам отправлена причина'
     );
   });
 
-  it('does not send the fallback when the financial confirmation is declined', () => {
+  it('does not send the fallback when entering a reason is canceled', () => {
     const conflict = {
       status: 409,
       error: {
@@ -165,7 +165,7 @@ describe('ManagerBoardActionFacade', () => {
       }
     };
     const { facade, calls, mutationKey } = createFacade({ orderStatusError: conflict });
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    vi.spyOn(window, 'prompt').mockReturnValue(null);
 
     facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
       label: 'оплатили',
@@ -175,6 +175,24 @@ describe('ManagerBoardActionFacade', () => {
 
     expect(calls).toEqual(['order-status:25047:Оплачено']);
     expect(mutationKey()).toBeNull();
+  });
+
+  it('requires a non-blank reason for a manual payment report', () => {
+    const conflict = {
+      status: 409,
+      error: {
+        message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+      }
+    };
+    const { facade, calls, toastMessages } = createFacade({ orderStatusError: conflict });
+    vi.spyOn(window, 'prompt').mockReturnValue('   ');
+
+    facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
+      label: 'оплатили', status: 'Оплачено', icon: 'payments'
+    });
+
+    expect(calls).toEqual(['order-status:25047:Оплачено']);
+    expect(toastMessages).toContain('error:Оплата не отмечена:Укажите короткую причину ручной оплаты');
   });
 
   it('does not bypass an active bank payment for a manager', () => {
@@ -218,14 +236,14 @@ describe('ManagerBoardActionFacade', () => {
         }
       }
     });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.spyOn(window, 'prompt').mockReturnValue('Оплата по номеру телефона');
 
     facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
       label: 'оплатили', status: 'Оплачено', icon: 'payments'
     });
 
     expect(calls[0]).toBe('order-status:25047:Оплачено');
-    expect(calls[1]).toContain('manual-card:25047:100000:');
+    expect(calls[1]).toBe('manual-card:25047:Оплата по номеру телефона');
   });
 
   it('toggles client waiting for an order', () => {

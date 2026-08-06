@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
+import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
@@ -49,9 +51,18 @@ public class ManualPaymentTaskService {
             PaymentMethod.MANUAL_MOBILE_BANK,
             PaymentMethod.MANUAL_EXTERNAL_LINK
     );
+    private static final Set<CommonInvoiceStatus> ACTIVE_COMMON_ROUTE_STATUSES = Set.of(
+            CommonInvoiceStatus.COLLECTING,
+            CommonInvoiceStatus.READY,
+            CommonInvoiceStatus.INVOICED,
+            CommonInvoiceStatus.REMINDER,
+            CommonInvoiceStatus.PARTIALLY_PAID,
+            CommonInvoiceStatus.NEEDS_ATTENTION
+    );
 
     private final ManualPaymentTaskRepository manualPaymentTaskRepository;
     private final PaymentLinkRepository paymentLinkRepository;
+    private final CommonInvoiceRepository commonInvoiceRepository;
     private final ManagerRepository managerRepository;
     private final PaymentProfileService paymentProfileService;
 
@@ -204,7 +215,7 @@ public class ManualPaymentTaskService {
         return updateStatus(taskById(taskId), status, actor);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Optional<ManualPaymentTask> findRoutableTask(
             Manager manager,
             PaymentProfile profile,
@@ -238,6 +249,15 @@ public class ManualPaymentTaskService {
         task.setStatus(ManualPaymentTaskStatus.COMPLETED);
         task.setCompletedAt(LocalDateTime.now());
         manualPaymentTaskRepository.save(task);
+    }
+
+    @Transactional
+    public void completeCommonInvoiceTaskIfTargetReached(Long taskId) {
+        if (taskId == null) {
+            return;
+        }
+        manualPaymentTaskRepository.findByIdForUpdate(taskId)
+                .ifPresent(this::completeIfConfirmedTargetReached);
     }
 
     private ManualPaymentTaskResponse updateTask(
@@ -340,6 +360,9 @@ public class ManualPaymentTaskService {
                 MANUAL_PAYMENT_METHODS,
                 PENDING_STATUSES,
                 LocalDateTime.now()
+        ) + commonInvoiceRepository.countActivePaymentRoutesForTask(
+                taskId,
+                ACTIVE_COMMON_ROUTE_STATUSES
         );
         Manager manager = task.getManager();
         User user = manager == null ? null : manager.getUser();
@@ -385,13 +408,41 @@ public class ManualPaymentTaskService {
         if (taskId == null) {
             return 0;
         }
-        return paymentLinkRepository.sumManualReservedAndConfirmedForTask(
+        long standalone = paymentLinkRepository.sumManualReservedAndConfirmedForTask(
                 taskId,
                 MANUAL_PAYMENT_METHODS,
                 statuses,
                 LocalDateTime.now(),
                 PaymentLinkStatus.CONFIRMED,
                 excludedLinkId
+        );
+        boolean confirmedOnly = statuses.size() == 1 && statuses.contains(PaymentLinkStatus.CONFIRMED);
+        long common = confirmedOnly
+                ? commonInvoiceRepository.sumConfirmedPaymentRouteForTask(taskId)
+                : commonInvoiceRepository.sumReservedAndConfirmedPaymentRouteForTask(
+                        taskId,
+                        ACTIVE_COMMON_ROUTE_STATUSES,
+                        CommonInvoiceStatus.PAID
+                );
+        return standalone + common;
+    }
+
+    @Transactional(readOnly = true)
+    public long commonInvoiceProfileUsageForPeriod(
+            Long profileId,
+            LocalDateTime from,
+            LocalDateTime to
+    ) {
+        if (profileId == null || from == null || to == null || !from.isBefore(to)) {
+            return 0;
+        }
+        return commonInvoiceRepository.sumReservedAndConfirmedProfilePaymentRoutesForPeriod(
+                profileId,
+                com.hunt.otziv.payments.model.ManualPaymentSource.PROFILE_MONTHLY_LIMIT,
+                from,
+                to,
+                ACTIVE_COMMON_ROUTE_STATUSES,
+                CommonInvoiceStatus.PAID
         );
     }
 

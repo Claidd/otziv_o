@@ -28,8 +28,9 @@
                 name="username"
                 value="${(login.username!'')}"
                 type="text"
-                autofocus
-                autocomplete="${(enableWebAuthnConditionalUI?has_content)?then('username webauthn', 'username')}"
+                autocomplete="username"
+                autocapitalize="none"
+                spellcheck="false"
                 aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
                 dir="ltr"
               >

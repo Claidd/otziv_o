@@ -68,6 +68,14 @@ export interface PublicCommonInvoice {
   paidKopecks: number;
   remainingKopecks: number;
   payable: boolean;
+  paymentRouteType?: string | null;
+  manualPaymentType?: string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  manualComment?: string | null;
+  paymentInstructionText?: string | null;
   orders: PublicCommonInvoiceOrder[];
 }
 

@@ -346,11 +346,7 @@ export interface CompanyFilialEditItem {
 }
 
 export interface ManualCardPaymentConfirmationRequest {
-  recipientStatementChecked: true;
-  paymentReceived: true;
-  receivedAmountKopecks: number;
-  note: string;
-  receiptUrl?: string;
+  reason: string;
 }
 
 export interface FilialDeletionPreview {

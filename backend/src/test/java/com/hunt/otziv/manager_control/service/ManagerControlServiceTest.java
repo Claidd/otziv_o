@@ -1008,6 +1008,27 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void standaloneRouteConflictReasonOffersGuardedAutomaticRepair() throws Exception {
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(51L);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("standalone_payment_route_conflict: order=23293; link=940; status=CREATED");
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "commonInvoiceLastErrorReason",
+                CommonInvoice.class,
+                String.class,
+                List.class
+        );
+        method.setAccessible(true);
+        String reason = (String) method.invoke(service, invoice, invoice.getLastError(), List.of());
+
+        assertTrue(reason.contains("Нажмите «Починить»"));
+        assertTrue(reason.contains("сверит начатые платежи"));
+        assertTrue(reason.contains("автоматическая починка остановится"));
+    }
+
+    @Test
     void repairTelegramChatBindingResolvesWhenSharedSyncFindsBinding() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);

@@ -22,6 +22,7 @@ param(
     [switch]$NoBuildCache,
     [switch]$AllowDirtyWorktree,
     [switch]$SkipAutoSnapshotValidation,
+    [switch]$FastAutoSnapshotValidation,
     [switch]$PrepareSnapshotOnly,
     [switch]$PreparedDeploySnapshot,
     [string]$DeploySnapshotBaseRevision = "",
@@ -54,6 +55,7 @@ Useful options:
   -NoBuildCache                  Build images without Docker cache.
   -AllowDirtyWorktree            Emergency only: bypass the clean automatic snapshot.
   -SkipAutoSnapshotValidation    Emergency only: skip local gates for an automatic snapshot.
+  -FastAutoSnapshotValidation    Keep snapshot gates, but package backend without tests unless Flyway migrations changed.
   -PrepareSnapshotOnly           Build and verify an automatic snapshot without contacting VPS.
 
 When deployment inputs contain local changes, this script automatically creates an
@@ -447,7 +449,7 @@ function Assert-DownloadedPreDeployBackup {
     }
 }
 
-function Get-MobileReleaseArtifact {
+function Get-MobileReleaseCandidate {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,
         [string]$RequestedPath = ""
@@ -493,26 +495,43 @@ function Get-MobileReleaseArtifact {
         return $null
     }
 
+    return [pscustomobject]@{
+        File = $selected.File
+        VersionName = $selected.VersionName
+        VersionCode = [int]$selected.VersionCode
+        ArtifactSha256 = (Get-FileHash -LiteralPath $selected.File.FullName -Algorithm SHA256).Hash.ToUpperInvariant()
+    }
+}
+
+function Confirm-MobileReleaseArtifact {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)]$Candidate
+    )
+
     $verifierPath = Join-Path $RepoRoot "mobile\scripts\verify-android-release.ps1"
     if (-not (Test-Path -LiteralPath $verifierPath -PathType Leaf)) {
         throw "Android release verifier not found: $verifierPath"
     }
     try {
         $verified = & $verifierPath `
-            -ApkPath $selected.File.FullName `
-            -ExpectedVersionCode $selected.VersionCode `
-            -ExpectedVersionName $selected.VersionName `
+            -ApkPath $Candidate.File.FullName `
+            -ExpectedVersionCode $Candidate.VersionCode `
+            -ExpectedVersionName $Candidate.VersionName `
             -PassThru `
             -Quiet
     } catch {
-        throw "Mobile APK verification failed for $($selected.File.Name): $($_.Exception.Message)"
+        throw "Mobile APK verification failed for $($Candidate.File.Name): $($_.Exception.Message)"
     }
     if ($null -eq $verified) {
-        throw "Mobile APK verifier returned no release metadata for $($selected.File.Name)."
+        throw "Mobile APK verifier returned no release metadata for $($Candidate.File.Name)."
+    }
+    if ($verified.ArtifactSha256 -cne $Candidate.ArtifactSha256) {
+        throw "Mobile APK hash changed during verification for $($Candidate.File.Name)."
     }
 
     return [pscustomobject]@{
-        File = $selected.File
+        File = $Candidate.File
         VersionName = $verified.VersionName
         VersionCode = [int]$verified.VersionCode
         PackageName = $verified.PackageName
@@ -600,7 +619,11 @@ if ($PreparedDeploySnapshot) {
             if (-not (Test-Path -LiteralPath $snapshotValidator -PathType Leaf)) {
                 throw 'Automatic deploy snapshot does not contain its required validator.'
             }
-            & $snapshotValidator -RepoRoot $snapshotWorktree -BaseRevision $snapshot.BaseRevision
+            if ($FastAutoSnapshotValidation) {
+                & $snapshotValidator -RepoRoot $snapshotWorktree -BaseRevision $snapshot.BaseRevision -FastBackendValidation
+            } else {
+                & $snapshotValidator -RepoRoot $snapshotWorktree -BaseRevision $snapshot.BaseRevision
+            }
             if ($LASTEXITCODE -ne 0) {
                 throw 'Automatic deploy snapshot validation failed.'
             }
@@ -717,7 +740,7 @@ $remoteBundleUploaded = $false
 $remoteDeployLockAcquired = $false
 $remotePreBackupInvocationStarted = $false
 $remoteRolloutStarted = $false
-$mobileRelease = if ($SkipMobileApkUpload) { $null } else { Get-MobileReleaseArtifact -RepoRoot $repoRoot -RequestedPath $MobileApkPath }
+$mobileRelease = if ($SkipMobileApkUpload) { $null } else { Get-MobileReleaseCandidate -RepoRoot $repoRoot -RequestedPath $MobileApkPath }
 $sshArgs = @()
 $scpArgs = @()
 if (-not [string]::IsNullOrWhiteSpace($SshKey)) {
@@ -794,9 +817,9 @@ if ($EnableExternalReviewWorker) {
     Write-Host "  EXTERNAL_REVIEW_WORKER=disabled (use -EnableExternalReviewWorker to opt in)"
 }
 if ($null -ne $mobileRelease) {
-    Write-Host "  MOBILE_APK=$($mobileRelease.File.FullName) (version $($mobileRelease.VersionName), code $($mobileRelease.VersionCode))"
+    Write-Host "  MOBILE_APK_CANDIDATE=$($mobileRelease.File.FullName) (version $($mobileRelease.VersionName), code $($mobileRelease.VersionCode))"
 } elseif (-not $SkipMobileApkUpload) {
-    Write-Warning "No signed release APK found in mobile/builds. Mobile publication will be skipped."
+    Write-Warning "No release APK found in mobile/builds. Mobile publication will be skipped."
 }
 
 if ($DockerLogin) {
@@ -882,6 +905,9 @@ fi
         $mobileRelease = $null
     } elseif ($remoteMobileState -ne "MISSING") {
         throw "Unexpected mobile release check response from VPS: $remoteMobileState"
+    } else {
+        Write-Host "Mobile APK code $($mobileRelease.VersionCode) is newer than the published VPS release; verifying before bundling..."
+        $mobileRelease = Confirm-MobileReleaseArtifact -RepoRoot $repoRoot -Candidate $mobileRelease
     }
 }
 

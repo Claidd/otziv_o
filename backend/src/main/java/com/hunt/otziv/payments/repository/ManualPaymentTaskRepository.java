@@ -6,6 +6,8 @@ import com.hunt.otziv.payments.model.PaymentProfile;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -44,6 +46,11 @@ public interface ManualPaymentTaskRepository extends CrudRepository<ManualPaymen
     """)
     Optional<ManualPaymentTask> findByIdWithDetails(@Param("id") Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT task FROM ManualPaymentTask task WHERE task.id = :id")
+    Optional<ManualPaymentTask> findByIdForUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT task
         FROM ManualPaymentTask task

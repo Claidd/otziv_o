@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import java.util.Set;
@@ -60,6 +61,56 @@ public final class StandaloneBankPaymentPolicy {
             return hasText(link.getLastError());
         }
         return true;
+    }
+
+    /**
+     * A route can be retired automatically only while it is still a purely
+     * local placeholder. Any customer trace, provider identity, manual route
+     * or in-flight reservation makes the outcome ambiguous and requires a
+     * normal reconciliation instead.
+     */
+    public static boolean canAutoCloseForCommonInvoice(PaymentLink link) {
+        if (link == null
+                || link.getStatus() != PaymentLinkStatus.CREATED
+                || (link.getPaymentMethod() != PaymentMethod.BANK_FORM
+                && link.getPaymentMethod() != PaymentMethod.SBP_QR)) {
+            return false;
+        }
+        return !hasText(link.getTbankPaymentId())
+                && !hasText(link.getTbankOrderId())
+                && !hasText(link.getTbankTerminalKey())
+                && !hasText(link.getPaymentUrl())
+                && !hasText(link.getSbpQrPayload())
+                && !hasText(link.getSbpQrImage())
+                && !hasText(link.getSbpQrDataType())
+                && link.getSbpQrCreatedAt() == null
+                && !hasText(link.getBankInitNonce())
+                && link.getBankInitLeaseUntil() == null
+                && !hasText(link.getBankCancelNonce())
+                && link.getBankCancelLeaseUntil() == null
+                && link.getBankCancelOriginStatus() == null
+                && !hasText(link.getBankCancelOriginError())
+                && link.getInitiatedAt() == null
+                && link.getPaidAt() == null
+                && link.getBankReconciliationAttemptedAt() == null
+                && !hasText(link.getProviderTerminalStatus())
+                && !hasText(link.getLastError())
+                && link.getManualSource() == null
+                && link.getManualPaymentTask() == null
+                && link.getManualPaymentType() == null
+                && !hasText(link.getManualPhone())
+                && !hasText(link.getManualRecipientName())
+                && !hasText(link.getManualPaymentUrl())
+                && !hasText(link.getManualPaymentButtonLabel())
+                && !hasText(link.getManualComment())
+                && link.getManualReportedAt() == null
+                && link.getManualConfirmedAt() == null
+                && !hasText(link.getManualConfirmedBy())
+                && link.getOfferConsentAt() == null
+                && link.getPrivacyConsentAt() == null
+                && link.getReceiptConsentAt() == null
+                && !hasText(link.getConsentIp())
+                && !hasText(link.getConsentUserAgent());
     }
 
     private static boolean hasText(String value) {

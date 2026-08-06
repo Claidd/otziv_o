@@ -2,6 +2,7 @@ package com.hunt.otziv.common_billing.repository;
 
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
+import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.u_users.model.Manager;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
@@ -363,4 +364,61 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         ORDER BY invoice.id ASC
     """)
     List<Long> findIdsByTbankPaymentId(@Param("tbankPaymentId") String tbankPaymentId);
+
+    @Query("""
+        SELECT COALESCE(SUM(invoice.paymentRouteAmountKopecks), 0)
+        FROM CommonInvoice invoice
+        WHERE invoice.paymentRouteManualTaskId = :taskId
+          AND invoice.paymentRouteSelectedAt IS NOT NULL
+          AND invoice.paymentRouteAmountKopecks > 0
+          AND (invoice.status IN :activeStatuses OR invoice.status = :paidStatus)
+    """)
+    long sumReservedAndConfirmedPaymentRouteForTask(
+            @Param("taskId") Long taskId,
+            @Param("activeStatuses") Collection<CommonInvoiceStatus> activeStatuses,
+            @Param("paidStatus") CommonInvoiceStatus paidStatus
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(invoice.paymentRouteAmountKopecks), 0)
+        FROM CommonInvoice invoice
+        WHERE invoice.paymentRouteManualTaskId = :taskId
+          AND invoice.paymentRouteSelectedAt IS NOT NULL
+          AND invoice.paymentRouteAmountKopecks > 0
+          AND invoice.paidKopecks >= invoice.amountKopecks
+    """)
+    long sumConfirmedPaymentRouteForTask(@Param("taskId") Long taskId);
+
+    @Query("""
+        SELECT COUNT(invoice)
+        FROM CommonInvoice invoice
+        WHERE invoice.paymentRouteManualTaskId = :taskId
+          AND invoice.paymentRouteSelectedAt IS NOT NULL
+          AND invoice.paymentRouteAmountKopecks > 0
+          AND invoice.status IN :activeStatuses
+          AND invoice.paidKopecks < invoice.amountKopecks
+    """)
+    long countActivePaymentRoutesForTask(
+            @Param("taskId") Long taskId,
+            @Param("activeStatuses") Collection<CommonInvoiceStatus> activeStatuses
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(invoice.paymentRouteAmountKopecks), 0)
+        FROM CommonInvoice invoice
+        WHERE invoice.paymentRouteProfileId = :profileId
+          AND invoice.paymentRouteManualSource = :manualSource
+          AND invoice.paymentRouteSelectedAt >= :from
+          AND invoice.paymentRouteSelectedAt < :to
+          AND invoice.paymentRouteAmountKopecks > 0
+          AND (invoice.status IN :activeStatuses OR invoice.status = :paidStatus)
+    """)
+    long sumReservedAndConfirmedProfilePaymentRoutesForPeriod(
+            @Param("profileId") Long profileId,
+            @Param("manualSource") ManualPaymentSource manualSource,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("activeStatuses") Collection<CommonInvoiceStatus> activeStatuses,
+            @Param("paidStatus") CommonInvoiceStatus paidStatus
+    );
 }

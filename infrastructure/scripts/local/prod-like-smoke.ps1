@@ -2014,7 +2014,7 @@ function Sync-LocalKeycloakManagedUsers {
         [Parameter(Mandatory = $true)][string]$ApiRoot,
         [Parameter(Mandatory = $true)][hashtable]$Headers,
         [Parameter(Mandatory = $true)][object[]]$DatabaseUsers,
-        [Parameter(Mandatory = $true)][object[]]$KeycloakUsers
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$KeycloakUsers
     )
 
     Ensure-LocalKeycloakManagedMarkerProfile -ApiRoot $ApiRoot -Headers $Headers

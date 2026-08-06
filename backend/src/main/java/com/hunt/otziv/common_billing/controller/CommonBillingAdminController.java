@@ -125,6 +125,12 @@ public class CommonBillingAdminController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/attention/repair-payment-route")
+    public CommonInvoiceDetailsResponse repairPaymentRoute(@PathVariable Long invoiceId) {
+        return commonBillingService.repairStandalonePaymentRouteConflict(invoiceId);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/technical-tail/resolve")
     public CommonInvoiceDetailsResponse resolveTechnicalTail(@PathVariable Long invoiceId) {
         return commonBillingService.resolveTechnicalTail(invoiceId);

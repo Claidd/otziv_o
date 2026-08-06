@@ -7,6 +7,7 @@ import { LatestRouteRequest } from '../../core/latest-route-request';
 import { RouteEpoch, RouteEpochTicket } from '../../core/route-epoch';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { navigateToPaymentTarget } from '../../shared/payment-navigation';
 
 @Component({
@@ -40,10 +41,34 @@ export class PayGroupPageComponent {
   readonly statusLabel = computed(() => this.statusText(this.invoice()?.status));
   readonly paidOrders = computed(() => this.invoice()?.orders.filter((order) => order.paid).length ?? 0);
   readonly readyOrders = computed(() => this.invoice()?.orders.filter((order) => order.ready).length ?? 0);
+  readonly paymentRouteType = computed(() => (this.invoice()?.paymentRouteType ?? '').trim().toUpperCase());
+  readonly tbankRoute = computed(() => this.paymentRouteType() === 'TBANK_LINK');
+  readonly managerTextRoute = computed(() => this.paymentRouteType() === 'MANAGER_TEXT');
+  readonly manualRoute = computed(() => this.paymentRouteType() === 'MANUAL_MOBILE_BANK'
+    || this.paymentRouteType() === 'MANUAL_EXTERNAL_LINK');
+  readonly externalManualRoute = computed(() => this.paymentRouteType() === 'MANUAL_EXTERNAL_LINK'
+    || this.invoice()?.manualPaymentType === 'EXTERNAL_LINK');
+  readonly manualPaymentUrl = computed(() => this.invoice()?.manualPaymentUrl?.trim() ?? '');
+  readonly manualPaymentButtonLabel = computed(() => this.invoice()?.manualPaymentButtonLabel?.trim()
+    || 'Открыть ссылку оплаты');
+  readonly manualComment = computed(() => this.invoice()?.manualComment?.trim() || 'Оплата общего счета');
+  readonly routeTitle = computed(() => {
+    if (this.managerTextRoute()) {
+      return 'Реквизиты менеджера';
+    }
+    if (this.externalManualRoute()) {
+      return 'Оплата по ссылке банка';
+    }
+    if (this.manualRoute()) {
+      return 'Оплата по номеру телефона';
+    }
+    return 'Оплата остатка';
+  });
   readonly canSubmit = computed(() => {
     const email = this.email().trim();
     return Boolean(
       this.invoice()?.payable &&
+      this.tbankRoute() &&
       email &&
       email.includes('@') &&
       this.offerConsent() &&
@@ -52,6 +77,32 @@ export class PayGroupPageComponent {
       !this.submitting()
     );
   });
+
+  async copyPaymentValue(value?: string | null): Promise<void> {
+    const clean = value?.trim();
+    if (!clean) {
+      return;
+    }
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    const copied = await copyTextToClipboard(clean);
+    if (this.isActiveRoute(routeTicket)) {
+      this.message.set(copied ? 'Скопировано.' : 'Не получилось скопировать. Выделите текст вручную.');
+    }
+  }
+
+  openManualPaymentUrl(): void {
+    const routeTicket = this.captureRoute();
+    const url = this.manualPaymentUrl();
+    if (!routeTicket || !url) {
+      return;
+    }
+    if (!this.navigatePayment(url, routeTicket)) {
+      this.error.set('Ссылка оплаты имеет недопустимый формат.');
+    }
+  }
 
   constructor() {
     this.destroyRef.onDestroy(() => {

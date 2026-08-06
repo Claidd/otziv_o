@@ -50,7 +50,11 @@ function Resolve-AndroidSdkDirectory {
         $ConfiguredPath,
         $env:ANDROID_HOME,
         $env:ANDROID_SDK_ROOT,
-        (Read-AndroidSdkFromLocalProperties)
+        (Read-AndroidSdkFromLocalProperties),
+        $(if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { Join-Path $env:LOCALAPPDATA "Android\Sdk" } else { "" }),
+        $(if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) { Join-Path $env:USERPROFILE "AppData\Local\Android\Sdk" } else { "" }),
+        $(if (-not [string]::IsNullOrWhiteSpace($env:HOME)) { Join-Path $env:HOME "Android\Sdk" } else { "" }),
+        $(if (-not [string]::IsNullOrWhiteSpace($env:HOME)) { Join-Path $env:HOME "Library\Android\sdk" } else { "" })
     ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
     foreach ($candidate in $candidates) {

@@ -300,6 +300,12 @@
                 {{ paymentInitNoPaymentButtonLabel }}
               </button>
             }
+            @if (attentionHasStandaloneRouteConflict()) {
+              <button type="button" class="success" (click)="repairPaymentRoute()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">build_circle</span>
+                Починить
+              </button>
+            }
             @if (attentionRetryEnabled()) {
               <button type="button" (click)="retryAttention()" [disabled]="!!mutating()">
                 <span class="material-icons-sharp" aria-hidden="true">restart_alt</span>
@@ -366,8 +372,11 @@
           }
         </div>
 
-        @if (invoice?.sentAt || invoice?.lastReminderAt || invoice?.nextReminderAt || invoice?.lastError || invoice?.paymentSuccessNotificationError) {
+        @if (invoice?.paymentRouteSelectedAt || invoice?.sentAt || invoice?.lastReminderAt || invoice?.nextReminderAt || invoice?.lastError || invoice?.paymentSuccessNotificationError) {
           <div class="invoice-timeline">
+            @if (invoice?.paymentRouteSelectedAt && invoice) {
+              <span>Маршрут: {{ paymentRouteLabel(invoice) }} · {{ invoice.paymentRouteSelectedAt | date:'dd.MM HH:mm' }}</span>
+            }
             @if (invoice?.sentAt) {
               <span>Отправлен {{ invoice?.sentAt | date:'dd.MM HH:mm' }}</span>
             }
