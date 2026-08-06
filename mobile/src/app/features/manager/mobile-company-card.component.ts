@@ -11,7 +11,13 @@ import { type CompanyStatusAction, type ManagerNoteSaveState } from './manager-b
   template: `
     <article [class]="'lead-card manager-card company-mobile-card lead-card--' + tone">
       <header class="lead-card-head">
-        <a [href]="chatUrl" target="_blank" rel="noopener">
+        <a
+          [href]="chatUrl"
+          [class.chat-bot-link-pending]="hasActiveChatBindingIssue"
+          target="_blank"
+          rel="noopener"
+          (click)="guardChatLink($event)"
+        >
           {{ company.title || 'Без названия' }}
         </a>
         <span>
@@ -25,7 +31,13 @@ import { type CompanyStatusAction, type ManagerNoteSaveState } from './manager-b
       </header>
 
       <div class="lead-phone-row">
-        <a [href]="chatUrl" target="_blank" rel="noopener">
+        <a
+          [href]="chatUrl"
+          [class.chat-bot-link-pending]="hasActiveChatBindingIssue"
+          target="_blank"
+          rel="noopener"
+          (click)="guardChatLink($event)"
+        >
           {{ phone }}
         </a>
         <button type="button" (click)="copyPhone.emit(company)" aria-label="Скопировать телефон">
@@ -115,6 +127,13 @@ import { type CompanyStatusAction, type ManagerNoteSaveState } from './manager-b
       text-decoration: none;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .company-mobile-card .lead-card-head a.chat-bot-link-pending,
+    .company-mobile-card .lead-phone-row a.chat-bot-link-pending {
+      color: var(--otziv-danger);
+      border-color: rgba(207, 64, 64, 0.36);
+      background: rgba(207, 64, 64, 0.08);
     }
 
     .order-note-badge {
@@ -286,6 +305,7 @@ export class MobileCompanyCardComponent {
   @Output() openOrders = new EventEmitter<CompanyItem>();
   @Output() showAllOrders = new EventEmitter<void>();
   @Output() edit = new EventEmitter<CompanyItem>();
+  @Output() chatBindingRepair = new EventEmitter<CompanyItem>();
 
   get tone(): 'default' | 'new' | 'work' | 'send' {
     const status = (this.company.status ?? '').trim().toLocaleLowerCase('ru-RU');
@@ -310,6 +330,27 @@ export class MobileCompanyCardComponent {
 
   get phone(): string {
     return displayPhone(this.company.telephone);
+  }
+
+  get hasActiveChatBindingIssue(): boolean {
+    return Boolean(this.chatBindingWarning);
+  }
+
+  get chatBindingWarning(): string {
+    const platform = this.chatPlatformFromUrl(this.company.urlChat);
+    if (platform === 'unknown') {
+      return (this.company.urlChat ?? '').trim() ? 'Мессенджер по ссылке не распознан' : '';
+    }
+    if (platform === 'whatsapp' && !(this.company.groupId ?? '').trim()) {
+      return 'WhatsApp-группа не привязана';
+    }
+    if (platform === 'telegram' && this.company.telegramGroupChatId == null) {
+      return 'Telegram-группа не привязана';
+    }
+    if (platform === 'max' && this.company.maxGroupChatId == null) {
+      return 'MAX-группа не привязана';
+    }
+    return '';
   }
 
   get noteBadge(): string {
@@ -347,5 +388,28 @@ export class MobileCompanyCardComponent {
 
   isMutating(action: CompanyStatusAction): boolean {
     return this.mutationKey === `company-${this.company.id}-${action.status}`;
+  }
+
+  guardChatLink(event: MouseEvent): void {
+    if (!this.hasActiveChatBindingIssue) {
+      return;
+    }
+
+    event.preventDefault();
+    this.chatBindingRepair.emit(this.company);
+  }
+
+  private chatPlatformFromUrl(value?: string | null): 'whatsapp' | 'telegram' | 'max' | 'unknown' {
+    const normalized = (value ?? '').trim().toLowerCase();
+    if (normalized.includes('chat.whatsapp.com/')) {
+      return 'whatsapp';
+    }
+    if (normalized.includes('t.me/') || normalized.includes('telegram.me/') || normalized.includes('telegram.dog/') || normalized.startsWith('tg://')) {
+      return 'telegram';
+    }
+    if (normalized.includes('max.ru/') || normalized.includes('max.com/')) {
+      return 'max';
+    }
+    return 'unknown';
   }
 }

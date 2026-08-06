@@ -5,6 +5,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$env:NG_CLI_ANALYTICS = 'false'
 
 function Invoke-SnapshotCheck {
     param(
@@ -80,41 +81,41 @@ $hasExternalWorkerChanges = @($changedFiles | Where-Object { $_ -like 'backend/e
 if ($hasFrontendChanges) {
     $frontend = Join-Path $root 'frontend'
     Invoke-SnapshotCheck -Name 'frontend dependency install' -WorkingDirectory $frontend `
-        -FilePath 'npm' -Arguments @('ci', '--no-audit', '--no-fund')
+        -FilePath 'corepack' -Arguments @('npm', 'ci', '--no-audit', '--no-fund')
     Invoke-SnapshotCheck -Name 'frontend unit tests' -WorkingDirectory $frontend `
-        -FilePath 'npm' -Arguments @('test', '--', '--watch=false')
+        -FilePath 'corepack' -Arguments @('npm', 'test', '--', '--watch=false')
     Invoke-SnapshotCheck -Name 'frontend production build' -WorkingDirectory $frontend `
-        -FilePath 'npm' -Arguments @('run', 'build', '--', '--configuration', 'production')
+        -FilePath 'corepack' -Arguments @('npm', 'run', 'build', '--', '--configuration', 'production')
 }
 
 if ($hasMobileChanges) {
     $mobile = Join-Path $root 'mobile'
     Invoke-SnapshotCheck -Name 'mobile dependency install' -WorkingDirectory $mobile `
-        -FilePath 'npm' -Arguments @('ci', '--no-audit', '--no-fund')
+        -FilePath 'corepack' -Arguments @('npm', 'ci', '--no-audit', '--no-fund')
     Invoke-SnapshotCheck -Name 'mobile unit tests' -WorkingDirectory $mobile `
-        -FilePath 'npm' -Arguments @('run', 'test:unit')
+        -FilePath 'corepack' -Arguments @('npm', 'run', 'test:unit')
     Invoke-SnapshotCheck -Name 'mobile production build' -WorkingDirectory $mobile `
-        -FilePath 'npm' -Arguments @('run', 'build:prod')
+        -FilePath 'corepack' -Arguments @('npm', 'run', 'build:prod')
 }
 
 if ($hasWhatsAppChanges) {
     $whatsApp = Join-Path $root 'whatsapp'
     Invoke-SnapshotCheck -Name 'WhatsApp dependency install' -WorkingDirectory $whatsApp `
-        -FilePath 'npm' -Arguments @('ci', '--ignore-scripts', '--no-audit', '--no-fund')
+        -FilePath 'corepack' -Arguments @('npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund')
     Invoke-SnapshotCheck -Name 'WhatsApp tests' -WorkingDirectory $whatsApp `
-        -FilePath 'npm' -Arguments @('test')
+        -FilePath 'corepack' -Arguments @('npm', 'test')
 }
 
 if ($hasExternalWorkerChanges) {
     $externalWorker = Join-Path $root 'backend\external-review-worker'
     Invoke-SnapshotCheck -Name 'external worker dependency install' -WorkingDirectory $externalWorker `
-        -FilePath 'npm' -Arguments @('ci', '--ignore-scripts', '--no-audit', '--no-fund')
+        -FilePath 'corepack' -Arguments @('npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund')
     Get-ChildItem -LiteralPath (Join-Path $externalWorker 'src') -Recurse -File -Filter '*.js' | ForEach-Object {
         Invoke-SnapshotCheck -Name "external worker syntax $($_.Name)" -WorkingDirectory $externalWorker `
             -FilePath 'node' -Arguments @('--check', $_.FullName)
     }
     Invoke-SnapshotCheck -Name 'external worker tests' -WorkingDirectory $externalWorker `
-        -FilePath 'npm' -Arguments @('test')
+        -FilePath 'corepack' -Arguments @('npm', 'test')
 }
 
 if ($hasBackendChanges) {

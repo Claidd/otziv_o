@@ -72,6 +72,10 @@ export class ManagerOrderCardComponent implements OnDestroy {
     return managerOrderNeedsChatBot(this.order);
   }
 
+  hasActiveChatBindingIssue(): boolean {
+    return Boolean(this.chatBindingWarning()) && !this.chatBindingNotRequired();
+  }
+
   chatBotInviteKind(): ManagerChatBotInviteKind {
     return managerOrderChatBotInviteKind(this.order);
   }
@@ -374,8 +378,9 @@ export class ManagerOrderCardComponent implements OnDestroy {
     }
   }
 
-  handleChatLinkClick(): void {
-    if (this.needsChatBot()) {
+  handleChatLinkClick(event: MouseEvent): void {
+    if (this.hasActiveChatBindingIssue()) {
+      event.preventDefault();
       this.chatBotInviteOpened.emit();
     }
   }

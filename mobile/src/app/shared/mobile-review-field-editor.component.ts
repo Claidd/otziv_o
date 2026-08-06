@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, type OnChanges, type SimpleChanges } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IonModal } from '@ionic/angular/standalone';
 
@@ -11,8 +11,8 @@ import { IonModal } from '@ionic/angular/standalone';
       readonly
       [disabled]="disabled"
       [ngModel]="value"
-      (focus)="requestStart()"
-      (click)="requestStart()"
+      (focus)="requestStart($event)"
+      (click)="requestStart($event)"
       [placeholder]="placeholder"
     ></textarea>
 
@@ -29,14 +29,14 @@ import { IonModal } from '@ionic/angular/standalone';
       (didDismiss)="handleDismiss()"
     >
       <ng-template>
-        <form class="sheet-body sheet-form review-text-edit-form" (ngSubmit)="save.emit()">
+        <form class="sheet-body sheet-form review-text-edit-form" (ngSubmit)="requestSave($event)">
           <header class="sheet-head review-text-edit-head">
             <div>
               @if (context) {
                 <p class="sheet-note">{{ context }}</p>
               }
             </div>
-            <button class="icon-button" type="button" (click)="cancel.emit()" [disabled]="disabled" aria-label="Закрыть">
+            <button class="icon-button" type="button" (click)="requestCancel($event)" [disabled]="disabled" aria-label="Закрыть">
               <span class="material-icons-sharp">close</span>
             </button>
           </header>
@@ -54,7 +54,7 @@ import { IonModal } from '@ionic/angular/standalone';
           </label>
 
           <footer class="sheet-actions review-text-edit-actions mobile-keyboard-actions">
-            <button class="secondary" type="button" (click)="cancel.emit()" [disabled]="disabled">Отмена</button>
+            <button class="secondary" type="button" (click)="requestCancel($event)" [disabled]="disabled">Отмена</button>
             <button type="submit" [disabled]="saveDisabled">
               {{ disabled ? 'Сохраняю' : 'Сохранить' }}
             </button>
@@ -131,7 +131,10 @@ import { IonModal } from '@ionic/angular/standalone';
 
   `]
 })
-export class MobileReviewFieldEditorComponent {
+export class MobileReviewFieldEditorComponent implements OnChanges {
+  private static readonly reopenSuppressionMs = 900;
+  private suppressStartUntil = 0;
+
   @Input() value = '';
   @Input() placeholder = '';
   @Input() context = '';
@@ -148,13 +151,52 @@ export class MobileReviewFieldEditorComponent {
   @Output() cancel = new EventEmitter<void>();
   @Output() save = new EventEmitter<void>();
 
-  requestStart(): void {
-    if (!this.readOnly && !this.disabled) {
-      this.start.emit();
+  ngOnChanges(changes: SimpleChanges): void {
+    const editingChange = changes['editing'];
+    if (editingChange?.previousValue === true && editingChange.currentValue === false) {
+      this.markEditorDismissed();
     }
   }
 
+  requestStart(event?: Event): void {
+    if (this.editing || this.readOnly || this.disabled) {
+      return;
+    }
+
+    if (this.isStartSuppressed()) {
+      event?.preventDefault();
+      event?.stopPropagation();
+      this.blurEventTarget(event);
+      return;
+    }
+
+    this.start.emit();
+  }
+
+  requestCancel(event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (this.disabled) {
+      return;
+    }
+
+    this.markEditorDismissed();
+    this.cancel.emit();
+  }
+
+  requestSave(event?: Event): void {
+    event?.stopPropagation();
+    if (this.disabled || this.saveDisabled) {
+      event?.preventDefault();
+      return;
+    }
+
+    this.markEditorDismissed();
+    this.save.emit();
+  }
+
   handleDismiss(): void {
+    this.markEditorDismissed();
     if (this.editing && !this.disabled) {
       this.cancel.emit();
     }
@@ -162,6 +204,36 @@ export class MobileReviewFieldEditorComponent {
 
   focusEditor(event: CustomEvent): void {
     const modal = event.target as HTMLElement | null;
-    window.setTimeout(() => modal?.querySelector<HTMLTextAreaElement>('textarea[name="reviewTextFullEditor"]')?.focus(), 50);
+    window.setTimeout(() => {
+      if (!this.editing || this.disabled) {
+        return;
+      }
+
+      modal?.querySelector<HTMLTextAreaElement>('textarea[name="reviewTextFullEditor"]')?.focus();
+    }, 50);
+  }
+
+  private markEditorDismissed(): void {
+    this.suppressStartUntil = Date.now() + MobileReviewFieldEditorComponent.reopenSuppressionMs;
+    this.blurActiveControl();
+  }
+
+  private isStartSuppressed(): boolean {
+    return Date.now() < this.suppressStartUntil;
+  }
+
+  private blurEventTarget(event?: Event): void {
+    const target = event?.target;
+    if (target instanceof HTMLElement) {
+      target.blur();
+    }
+    this.blurActiveControl();
+  }
+
+  private blurActiveControl(): void {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
   }
 }

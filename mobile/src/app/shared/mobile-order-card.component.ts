@@ -101,7 +101,13 @@ export type MobileOrderCopyKind = 'review' | 'payment';
         </div>
       } @else if (canSeePhoneAndPayment) {
         <div class="lead-phone-row order-phone-row phone-row">
-          <a [href]="safePhoneHref || '#'" target="_blank" rel="noopener" (click)="guardLink($event, safePhoneHref)">
+          <a
+            [href]="safePhoneHref || '#'"
+            [class.chat-bot-link-pending]="hasActiveChatBindingIssue"
+            target="_blank"
+            rel="noopener"
+            (click)="guardPhoneLink($event, safePhoneHref)"
+          >
             {{ phoneLabel }}
           </a>
           <button type="button" (click)="copyPhone.emit()" aria-label="Скопировать телефон">
@@ -590,6 +596,12 @@ export type MobileOrderCopyKind = 'review' | 'payment';
       -webkit-text-size-adjust: 100%;
     }
 
+    .phone-row a.chat-bot-link-pending {
+      color: var(--otziv-danger);
+      border-color: rgba(207, 64, 64, 0.36);
+      background: rgba(207, 64, 64, 0.08);
+    }
+
     .phone-row button {
       min-width: 2rem;
       padding: 0;
@@ -913,6 +925,7 @@ export class MobileOrderCardComponent {
   @Output() companyNoteSave = new EventEmitter<void>();
   @Output() details = new EventEmitter<void>();
   @Output() workerClick = new EventEmitter<void>();
+  @Output() chatBindingRepair = new EventEmitter<void>();
 
   communicationPopoverOpen = false;
   titlePopoverOpen = false;
@@ -941,6 +954,10 @@ export class MobileOrderCardComponent {
     }
 
     return status.tone;
+  }
+
+  get hasActiveChatBindingIssue(): boolean {
+    return Boolean(this.chatBindingWarning);
   }
 
   get communicationTitle(): string {
@@ -1220,6 +1237,16 @@ export class MobileOrderCardComponent {
     if (!href || href === '#') {
       event.preventDefault();
     }
+  }
+
+  guardPhoneLink(event: MouseEvent, href: string): void {
+    if (this.hasActiveChatBindingIssue) {
+      event.preventDefault();
+      this.chatBindingRepair.emit();
+      return;
+    }
+
+    this.guardLink(event, href);
   }
 
   private openFilialFromTitle(): void {

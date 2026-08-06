@@ -63,6 +63,10 @@ import { MobileExternalLinkService } from '../shared/mobile-external-link.servic
                   <span class="material-icons-sharp">{{ submitting() ? 'hourglass_top' : 'payments' }}</span>
                   {{ submitting() ? 'Открываем банк...' : 'Оплатить счет' }}
                 </button>
+                <p class="cert-help">
+                  Если сайт банка попросит сертификат, установите сертификаты Минцифры на
+                  <a href="https://www.gosuslugi.ru/crt" target="_blank" rel="noopener noreferrer">Госуслугах</a>.
+                </p>
               </form>
             } @else {
               <section class="state-card"><span class="material-icons-sharp">lock</span><strong>Этот счет недоступен для оплаты.</strong></section>
@@ -79,7 +83,7 @@ import { MobileExternalLinkService } from '../shared/mobile-external-link.servic
     .summary-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem;padding:.8rem}.summary-card div{display:grid;gap:.12rem}.summary-card small,.pay-form label>span{color:var(--otziv-info);font-size:.66rem;font-weight:1000;text-transform:uppercase}.summary-card strong,.summary-card b{overflow:hidden;color:var(--otziv-dark);font-size:.9rem;text-overflow:ellipsis}.summary-card b{color:#16735f;font-size:1.2rem}
     .order-list{display:grid;gap:.5rem}.order-list article{display:grid;grid-template-columns:minmax(0,1fr)auto;gap:.55rem;align-items:center;padding:.75rem}.order-list article.paid{opacity:.68}.order-list strong,.order-list small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.order-list small{color:var(--otziv-info);font-weight:800}.order-list b{color:#16735f}
     .pay-form{display:grid;gap:.62rem;padding:.85rem}.pay-form label{display:grid;gap:.3rem}.pay-form input{min-height:2.5rem;border:1px solid rgba(103,116,131,.18);border-radius:.75rem;padding:0 .75rem;color:var(--otziv-dark);background:var(--otziv-white);font:900 .9rem/1 var(--otziv-font-family)}.check-row{grid-template-columns:auto minmax(0,1fr);align-items:center}.check-row input{min-height:1rem}.check-row span{color:var(--otziv-dark);font-size:.75rem;text-transform:none}.check-row a{color:var(--otziv-primary)}
-    button{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-height:2.55rem;border:1px solid rgba(108,155,207,.25);border-radius:.82rem;color:var(--otziv-primary);background:var(--otziv-white);font:1000 .82rem/1 var(--otziv-font-family)}button.primary{color:#fff;background:var(--otziv-primary)}button:disabled{opacity:.55}.state-card{display:grid;place-items:center;gap:.35rem;min-height:5.5rem;padding:1rem;text-align:center}.state-card.error{color:var(--otziv-danger)}.state-card.ok{color:#16735f}
+    button{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-height:2.55rem;border:1px solid rgba(108,155,207,.25);border-radius:.82rem;color:var(--otziv-primary);background:var(--otziv-white);font:1000 .82rem/1 var(--otziv-font-family)}button.primary{color:#fff;background:var(--otziv-primary)}button:disabled{opacity:.55}.cert-help{margin:0;color:var(--otziv-info);font-size:.7rem;font-weight:800;line-height:1.35;text-align:center}.cert-help a{color:var(--otziv-primary);font-weight:1000}.state-card{display:grid;place-items:center;gap:.35rem;min-height:5.5rem;padding:1rem;text-align:center}.state-card.error{color:var(--otziv-danger)}.state-card.ok{color:#16735f}
   `]
 })
 export class PublicPayGroupPage implements OnDestroy {

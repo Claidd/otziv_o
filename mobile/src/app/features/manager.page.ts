@@ -12,6 +12,7 @@ import {
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
   ApiService,
+  CompanyChatBindingRepair,
   CommonBillingAccountResponse,
   CompanyEditPayload,
   CompanyFilialEditItem,
@@ -224,6 +225,7 @@ type CompanyPreservedFields = Pick<
                   (openOrders)="openCompanyOrders($event)"
                   (showAllOrders)="showAllCompanyOrders()"
                   (edit)="openCompanyEdit($event)"
+                  (chatBindingRepair)="repairCompanyChatBinding($event)"
                 />
               } @empty {
                 <div class="empty-state compact-empty">Компаний для отображения нет.</div>
@@ -272,6 +274,7 @@ type CompanyPreservedFields = Pick<
                   (noteBlur)="saveOrderNoteNow(order)"
                   (details)="openOrderDetails(order)"
                   (workerClick)="openOrderEdit(order)"
+                  (chatBindingRepair)="repairOrderChatBinding(order)"
                 />
               } @empty {
                 <div class="empty-state compact-empty">Заказов для отображения нет.</div>
@@ -3610,6 +3613,111 @@ export class ManagerPage implements OnInit, OnDestroy {
     }
 
     await this.copyText(phone, `order-phone-${order.id}`, 'Не удалось скопировать телефон.');
+  }
+
+  repairCompanyChatBinding(company: CompanyItem): void {
+    this.repairChatBinding(company.id, company.title, this.companyChatRepairFallbackUrl(company));
+  }
+
+  repairOrderChatBinding(order: OrderItem): void {
+    if (!order.companyId) {
+      this.error.set('Для заказа не указан ID компании.');
+      return;
+    }
+
+    this.repairChatBinding(order.companyId, order.companyTitle, this.orderChatRepairFallbackUrl(order));
+  }
+
+  private repairChatBinding(companyId: number, title: string | null | undefined, fallbackUrl: string): void {
+    const popup = fallbackUrl ? window.open('about:blank', '_blank') : null;
+    if (popup) {
+      popup.opener = null;
+    }
+
+    this.api.repairManagerCompanyChatBinding(companyId).subscribe({
+      next: (response) => {
+        this.applyChatBindingRepair(response);
+        if (response.repaired) {
+          if (popup && !popup.closed) {
+            popup.close();
+          }
+          this.error.set(null);
+          return;
+        }
+
+        const launchUrl = safeHttpsExternalUrl(response.launchUrl) ?? safeHttpsExternalUrl(fallbackUrl) ?? '';
+        if (launchUrl) {
+          if (popup && !popup.closed) {
+            popup.location.href = launchUrl;
+          } else {
+            window.open(launchUrl, '_blank', 'noopener');
+          }
+          window.setTimeout(() => this.reload(), 8000);
+          return;
+        }
+
+        if (popup && !popup.closed) {
+          popup.close();
+        }
+        this.error.set(response.message || `Чат компании "${title || companyId}" не привязан.`);
+      },
+      error: (error) => {
+        if (popup && !popup.closed) {
+          popup.close();
+        }
+        this.error.set(this.apiErrorMessage(error, 'Не удалось проверить привязку чата.'));
+      }
+    });
+  }
+
+  private applyChatBindingRepair(response: CompanyChatBindingRepair): void {
+    this.board.update((board) => board ? {
+      ...board,
+      companies: {
+        ...board.companies,
+        content: board.companies.content.map((company) => company.id === response.companyId
+          ? {
+            ...company,
+            urlChat: response.urlChat || company.urlChat,
+            groupId: response.groupId ?? company.groupId,
+            telegramGroupChatId: response.telegramGroupChatId,
+            telegramBotInviteUrl: response.telegramBotInviteUrl,
+            maxGroupChatId: response.maxGroupChatId,
+            maxBotInviteUrl: response.maxBotInviteUrl
+          }
+          : company
+        )
+      },
+      orders: {
+        ...board.orders,
+        content: board.orders.content.map((order) => order.companyId === response.companyId
+          ? {
+            ...order,
+            companyUrlChat: response.urlChat || order.companyUrlChat,
+            groupId: response.groupId ?? order.groupId,
+            telegramGroupChatId: response.telegramGroupChatId,
+            telegramBotInviteUrl: response.telegramBotInviteUrl,
+            maxGroupChatId: response.maxGroupChatId,
+            maxBotInviteUrl: response.maxBotInviteUrl
+          }
+          : order
+        )
+      }
+    } : board);
+  }
+
+  private companyChatRepairFallbackUrl(company: CompanyItem): string {
+    return safeHttpsExternalUrl(company.telegramBotInviteUrl)
+      ?? safeHttpsExternalUrl(company.maxBotInviteUrl)
+      ?? safeHttpsExternalUrl(company.urlChat)
+      ?? '';
+  }
+
+  private orderChatRepairFallbackUrl(order: OrderItem): string {
+    return safeHttpsExternalUrl(order.telegramBotInviteUrl)
+      ?? safeHttpsExternalUrl(order.maxBotInviteUrl)
+      ?? safeHttpsExternalUrl(order.companyUrlChat)
+      ?? '';
   }
 
   async copyManagerOrderText(order: OrderItem, kind: MobileOrderCopyKind): Promise<void> {

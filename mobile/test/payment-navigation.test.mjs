@@ -36,6 +36,8 @@ for (const value of [
 
 for (const value of [
   'https://qr.nspk.ru/AS100000000111',
+  'https://www.tbank.ru/mybank/payments/qr-pay/AD100018PU4SB0748MTQ2RG6K2S26V24',
+  'https://payzonaecom.com/mobile-public/goto/qr/AD10001VKP9AV8AC9CGR2FHJ7LNIUJ9C',
   'bank100000000111://qr.nspk.ru/AS100000000111',
   'bankb2b100000000111://qr.nspk.ru/AR100000000111',
   'bankapp://pay/payment-sbp-bank'
@@ -47,6 +49,14 @@ for (const value of [
 
 test('keeps a valid public payment URL byte-for-byte unchanged', () => {
   const value = 'https://securepay.tinkoff.ru/pay?order=42#confirm';
+  const navigated = [];
+
+  assert.equal(navigateToPaymentTarget(value, 'payment', (target) => navigated.push(target)), true);
+  assert.deepEqual(navigated, [value]);
+});
+
+test('allows current T-Bank short payment URLs from production', () => {
+  const value = 'https://pay.tbank.ru/CwEMz5Cw';
   const navigated = [];
 
   assert.equal(navigateToPaymentTarget(value, 'payment', (target) => navigated.push(target)), true);

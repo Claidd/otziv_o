@@ -9,11 +9,11 @@
     @if (hasCompanyHeaderUrl()) {
       <a
         [href]="companyHeaderUrl()"
-        [class.chat-bot-link-pending]="needsChatBot()"
+        [class.chat-bot-link-pending]="hasActiveChatBindingIssue()"
         [title]="chatLinkTitle()"
         target="_blank"
         rel="noopener"
-        (click)="handleChatLinkClick()"
+        (click)="handleChatLinkClick($event)"
       >
         {{ company.title || 'Без названия' }}
       </a>
@@ -43,11 +43,11 @@
   <div class="phone-row">
     <a
       [href]="companyChatUrl()"
-      [class.chat-bot-link-pending]="needsChatBot()"
+      [class.chat-bot-link-pending]="hasActiveChatBindingIssue()"
       [title]="chatLinkTitle()"
       target="_blank"
       rel="noopener"
-      (click)="handleChatLinkClick()"
+      (click)="handleChatLinkClick($event)"
     >
       {{ companyPhoneLabel() }}
     </a>

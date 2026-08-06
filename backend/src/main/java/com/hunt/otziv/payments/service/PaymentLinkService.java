@@ -1941,7 +1941,7 @@ public class PaymentLinkService {
         }
         Runnable cleanup = () -> {
             try {
-                paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, reason);
+                paymentInvoiceRetryScheduler.cancelBadReviewAutoBanInNewTransaction(orderId, reason);
             } catch (RuntimeException e) {
                 // Payment has already committed. The scheduler remains
                 // idempotent and can be reconciled independently; never turn a

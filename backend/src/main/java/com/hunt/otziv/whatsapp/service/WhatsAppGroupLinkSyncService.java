@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @Slf4j
@@ -285,9 +286,9 @@ public class WhatsAppGroupLinkSyncService {
     }
 
     /**
-     * Repairs the dangerous case where one stored WhatsApp groupId belongs to companies
-     * with different invite links. A normal group list sync cannot help while getChats()
-     * is unavailable, so only the small conflicting subset is resolved directly by invite.
+     * Resolves the small conflicting subset directly by invite. Besides correcting a
+     * wrong groupId, this also replaces an expired rotated link when WhatsApp confirms
+     * one current link for the stored group and its title confirms the affected companies.
      */
     int repairConflictingInviteGroupIds(
             List<WhatsAppProperties.ClientConfig> configuredClients,
@@ -327,22 +328,97 @@ public class WhatsAppGroupLinkSyncService {
                     companiesByInvite.size(),
                     companiesByInvite.values().stream().mapToInt(List::size).sum()
             );
-            for (List<Company> inviteCompanies : companiesByInvite.values()) {
-                repaired += repairInviteCompaniesDirectly(inviteCompanies, configuredClients, source);
+            repaired += repairConflictingGroup(
+                    groupEntry.getKey(),
+                    companiesByInvite,
+                    configuredClients,
+                    source
+            );
+        }
+        return repaired;
+    }
+
+    private int repairConflictingGroup(
+            String storedGroupId,
+            Map<String, List<Company>> companiesByInvite,
+            List<WhatsAppProperties.ClientConfig> configuredClients,
+            String source
+    ) {
+        int repaired = 0;
+        Map<String, WhatsAppGroupInfo> resolvedByInvite = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Company>> inviteEntry : companiesByInvite.entrySet()) {
+            Optional<WhatsAppGroupInfo> resolved = resolveInvite(
+                    inviteEntry.getValue().getFirst(),
+                    configuredClients
+            );
+            if (resolved.isEmpty()) {
+                continue;
+            }
+
+            WhatsAppGroupInfo group = resolved.get();
+            resolvedByInvite.put(inviteEntry.getKey(), group);
+            if (!storedGroupId.equals(group.groupId())) {
+                int updated = groupCompanyLinker.linkByInvite(
+                        group.groupId(),
+                        inviteEntry.getValue().getFirst().getUrlChat(),
+                        inviteEntry.getValue()
+                );
+                repaired += updated;
+                if (updated > 0) {
+                    log.info(
+                            "WhatsApp groupId conflict repaired source={} inviteCompanies={} newGroupId={}",
+                            source,
+                            updated,
+                            group.groupId()
+                    );
+                }
+            }
+        }
+
+        Set<String> resolvedGroupIds = resolvedByInvite.values().stream()
+                .map(WhatsAppGroupInfo::groupId)
+                .filter(StringUtils::hasText)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        List<Map.Entry<String, WhatsAppGroupInfo>> currentInvites = resolvedByInvite.entrySet().stream()
+                .filter(entry -> storedGroupId.equals(entry.getValue().groupId()))
+                .toList();
+        if (resolvedGroupIds.size() != 1 || currentInvites.size() != 1) {
+            return repaired;
+        }
+
+        Map.Entry<String, WhatsAppGroupInfo> currentInvite = currentInvites.getFirst();
+        WhatsAppGroupInfo currentGroup = currentInvite.getValue();
+        if (!hasText(currentGroup.inviteLink()) || !hasText(currentGroup.name())) {
+            return repaired;
+        }
+
+        for (Map.Entry<String, List<Company>> inviteEntry : companiesByInvite.entrySet()) {
+            if (resolvedByInvite.containsKey(inviteEntry.getKey())) {
+                continue;
+            }
+            int updated = groupCompanyLinker.refreshRotatedInviteLink(
+                    storedGroupId,
+                    currentGroup.name(),
+                    currentGroup.inviteLink(),
+                    inviteEntry.getValue()
+            );
+            repaired += updated;
+            if (updated > 0) {
+                log.info(
+                        "WhatsApp rotated invite repaired source={} groupId={} companies={}",
+                        source,
+                        storedGroupId,
+                        updated
+                );
             }
         }
         return repaired;
     }
 
-    private int repairInviteCompaniesDirectly(
-            List<Company> companies,
-            List<WhatsAppProperties.ClientConfig> configuredClients,
-            String source
+    private Optional<WhatsAppGroupInfo> resolveInvite(
+            Company representative,
+            List<WhatsAppProperties.ClientConfig> configuredClients
     ) {
-        if (companies == null || companies.isEmpty()) {
-            return 0;
-        }
-        Company representative = companies.getFirst();
         for (WhatsAppProperties.ClientConfig client : configuredClients) {
             if (client == null || !hasText(client.getId()) || !hasText(client.getUrl())) {
                 continue;
@@ -355,23 +431,9 @@ public class WhatsAppGroupLinkSyncService {
                 continue;
             }
 
-            int updated = groupCompanyLinker.linkByInvite(
-                    resolved.get().groupId(),
-                    representative.getUrlChat(),
-                    companies
-            );
-            if (updated > 0) {
-                log.info(
-                        "WhatsApp groupId conflict repaired source={} client={} inviteCompanies={} newGroupId={}",
-                        source,
-                        client.getId(),
-                        updated,
-                        resolved.get().groupId()
-                );
-            }
-            return updated;
+            return resolved;
         }
-        return 0;
+        return Optional.empty();
     }
 
     int syncClientGroups(String clientId) {

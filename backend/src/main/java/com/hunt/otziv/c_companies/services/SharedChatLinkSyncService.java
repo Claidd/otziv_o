@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -94,7 +95,7 @@ public class SharedChatLinkSyncService {
                             entry.getKey(),
                             group,
                             company -> company.getMaxGroupChatId() == null ? null : String.valueOf(company.getMaxGroupChatId()),
-                            (company, value) -> company.setMaxGroupChatId(Long.valueOf(value)),
+                            SharedChatLinkSyncService::writeMaxGroupChatId,
                             updatedCompanies,
                             totals::addMax
                     );
@@ -119,6 +120,109 @@ public class SharedChatLinkSyncService {
         );
         log.info(
                 "Shared chat link sync finished: scannedCompanies={} sharedChatGroups={} updatedCompanies={} whatsappLinked={} telegramLinked={} maxLinked={} conflictGroups={}",
+                response.scannedCompanies(),
+                response.sharedChatGroups(),
+                response.updatedCompanies(),
+                response.whatsappLinked(),
+                response.telegramLinked(),
+                response.maxLinked(),
+                response.conflictGroups()
+        );
+        return response;
+    }
+
+    @Transactional
+    public SharedChatLinkSyncResponse syncCompanyChatId(Long companyId) {
+        return syncCompanyChatId(companyId, null);
+    }
+
+    @Transactional
+    public SharedChatLinkSyncResponse syncCompanyChatId(Long companyId, String authoritativeChatId) {
+        if (companyId == null) {
+            return emptyResponse();
+        }
+
+        Company target = companyRepository.findById(companyId).orElse(null);
+        if (target == null) {
+            return emptyResponse();
+        }
+
+        Optional<String> targetKey = normalizedChatKey(target.getUrlChat());
+        if (targetKey.isEmpty()) {
+            return emptyResponse();
+        }
+
+        List<Company> companies = companyRepository.findAllWithChatUrl();
+        List<Company> group = companies.stream()
+                .filter(company -> targetKey.get().equals(normalizedChatKey(company.getUrlChat()).orElse(null)))
+                .toList();
+        if (group.isEmpty()) {
+            group = List.of(target);
+        }
+
+        SyncTotals totals = new SyncTotals(companies.size());
+        if (group.size() > 1) {
+            totals.sharedChatGroups++;
+        }
+
+        Set<Company> updatedCompanies = new LinkedHashSet<>();
+        ChatPlatform platform = platformFromChatKey(targetKey.get());
+        String authoritativeId = normalizeNullable(authoritativeChatId);
+        switch (platform) {
+            case WHATSAPP -> syncPlatformTargeted(
+                    "WhatsApp",
+                    targetKey.get(),
+                    group,
+                    companyId,
+                    authoritativeId,
+                    company -> normalizeNullable(company.getGroupId()),
+                    (company, value) -> company.setGroupId(value),
+                    updatedCompanies,
+                    totals::addWhatsApp
+            );
+            case TELEGRAM -> syncPlatformTargeted(
+                    "Telegram",
+                    targetKey.get(),
+                    group,
+                    companyId,
+                    authoritativeId,
+                    company -> company.getTelegramGroupChatId() == null ? null : String.valueOf(company.getTelegramGroupChatId()),
+                    (company, value) -> company.setTelegramGroupChatId(Long.valueOf(value)),
+                    updatedCompanies,
+                    totals::addTelegram
+            );
+            case MAX -> syncPlatformTargeted(
+                    "MAX",
+                    targetKey.get(),
+                    group,
+                    companyId,
+                    firstNonBlank(authoritativeId, directMaxWebChatId(targetKey.get())),
+                    company -> company.getMaxGroupChatId() == null ? null : String.valueOf(company.getMaxGroupChatId()),
+                    SharedChatLinkSyncService::writeMaxGroupChatId,
+                    updatedCompanies,
+                    totals::addMax
+            );
+            case UNKNOWN -> log.warn("Targeted chat link sync skipped companyId={} chatKey={} because messenger type is unknown",
+                    companyId, targetKey.get());
+        }
+
+        if (!updatedCompanies.isEmpty()) {
+            companyRepository.saveAll(updatedCompanies);
+        }
+
+        SharedChatLinkSyncResponse response = new SharedChatLinkSyncResponse(
+                totals.scannedCompanies,
+                totals.sharedChatGroups,
+                updatedCompanies.size(),
+                totals.whatsappLinked,
+                totals.telegramLinked,
+                totals.maxLinked,
+                totals.conflictGroups
+        );
+        log.info(
+                "Targeted chat link sync finished companyId={} chatKey={} scannedCompanies={} sharedChatGroups={} updatedCompanies={} whatsappLinked={} telegramLinked={} maxLinked={} conflictGroups={}",
+                companyId,
+                targetKey.get(),
                 response.scannedCompanies(),
                 response.sharedChatGroups(),
                 response.updatedCompanies(),
@@ -175,6 +279,67 @@ public class SharedChatLinkSyncService {
         }
     }
 
+    private void syncPlatformTargeted(
+            String platform,
+            String chatKey,
+            List<Company> companies,
+            Long targetCompanyId,
+            String authoritativeId,
+            ChatIdReader reader,
+            ChatIdWriter writer,
+            Set<Company> updatedCompanies,
+            Counter counter
+    ) {
+        Set<String> knownIds = new LinkedHashSet<>();
+        boolean hasAuthoritativeId = normalizeNullable(authoritativeId) != null;
+        if (hasAuthoritativeId) {
+            knownIds.add(authoritativeId.trim());
+        }
+        for (Company company : companies) {
+            if (!hasAuthoritativeId && Objects.equals(company.getId(), targetCompanyId)) {
+                continue;
+            }
+            String value = normalizeNullable(reader.read(company));
+            if (value != null) {
+                knownIds.add(value);
+            }
+        }
+
+        if (knownIds.isEmpty()) {
+            return;
+        }
+        if (knownIds.size() > 1 && normalizeNullable(authoritativeId) == null) {
+            log.warn("Targeted chat link sync skipped {} for chatKey={} because companies have conflicting ids: {}",
+                    platform, chatKey, knownIds);
+            return;
+        }
+
+        String sharedId = normalizeNullable(authoritativeId) != null
+                ? authoritativeId.trim()
+                : knownIds.iterator().next();
+        int linked = 0;
+        for (Company company : companies) {
+            if (!isTargetedSyncTarget(company, targetCompanyId)) {
+                continue;
+            }
+
+            String current = normalizeNullable(reader.read(company));
+            if (Objects.equals(current, sharedId)) {
+                continue;
+            }
+
+            writer.write(company, sharedId);
+            updatedCompanies.add(company);
+            linked++;
+        }
+
+        if (linked > 0) {
+            counter.add(linked);
+            log.info("Targeted chat link sync wrote {} id={} to {} company(s) for chatKey={}",
+                    platform, sharedId, linked, chatKey);
+        }
+    }
+
     private int conflictCount(List<Company> companies, ChatPlatform platform) {
         Set<String> values = switch (platform) {
             case WHATSAPP -> distinctValues(companies, company -> normalizeNullable(company.getGroupId()));
@@ -208,7 +373,7 @@ public class SharedChatLinkSyncService {
 
         Matcher whatsAppMatcher = WHATSAPP_INVITE_URL.matcher(trimmed);
         if (whatsAppMatcher.matches()) {
-            return Optional.of("whatsapp:" + whatsAppMatcher.group(1).toLowerCase(Locale.ROOT));
+            return Optional.of("whatsapp:" + whatsAppMatcher.group(1));
         }
 
         Matcher telegramMatcher = TELEGRAM_CHAT_URL.matcher(trimmed);
@@ -277,12 +442,40 @@ public class SharedChatLinkSyncService {
         return value.trim();
     }
 
+    private static String firstNonBlank(String first, String second) {
+        String normalizedFirst = normalizeNullable(first);
+        return normalizedFirst != null ? normalizedFirst : normalizeNullable(second);
+    }
+
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
     }
 
     private static boolean isTelegramBotStartGroupLink(String value) {
         return hasText(value) && value.toLowerCase(Locale.ROOT).contains("startgroup=");
+    }
+
+    private static boolean isTargetedSyncTarget(Company company, Long targetCompanyId) {
+        return company != null
+                && (Objects.equals(company.getId(), targetCompanyId) || CompanyChatBindingPolicy.isRequired(company));
+    }
+
+    private static String directMaxWebChatId(String chatKey) {
+        String prefix = "max:web:";
+        if (!hasText(chatKey) || !chatKey.startsWith(prefix)) {
+            return null;
+        }
+        return chatKey.substring(prefix.length());
+    }
+
+    private static void writeMaxGroupChatId(Company company, String value) {
+        company.setMaxGroupChatId(Long.valueOf(value));
+        company.setMaxLinkUserId(null);
+        company.setMaxLinkRequestedAt(null);
+    }
+
+    private static SharedChatLinkSyncResponse emptyResponse() {
+        return new SharedChatLinkSyncResponse(0, 0, 0, 0, 0, 0, 0);
     }
 
     private interface ChatIdReader {

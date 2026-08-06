@@ -196,6 +196,21 @@ export interface CompanyCardItem {
   allowWorkerPublicationDateEdit?: boolean;
 }
 
+export interface CompanyChatBindingRepair {
+  companyId: number;
+  companyTitle: string;
+  platform: 'whatsapp' | 'telegram' | 'max' | 'unknown';
+  urlChat: string;
+  groupId?: string | null;
+  telegramGroupChatId?: number | null;
+  maxGroupChatId?: number | null;
+  telegramBotInviteUrl?: string;
+  maxBotInviteUrl?: string;
+  repaired: boolean;
+  launchUrl: string;
+  message: string;
+}
+
 export interface ClientMessageStatus {
   state: 'sent' | 'scheduled' | 'waiting_recovery' | 'failed' | 'manual_control' | 'not_required' | 'none';
   label: string;
@@ -935,6 +950,13 @@ export class ManagerApi {
 
   updateCompany(companyId: number, request: CompanyUpdateRequest): Observable<CompanyEditPayload> {
     return this.http.put<CompanyEditPayload>(`${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}`, request);
+  }
+
+  repairCompanyChatBinding(companyId: number): Observable<CompanyChatBindingRepair> {
+    return this.http.post<CompanyChatBindingRepair>(
+      `${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/chat-binding/repair`,
+      {}
+    );
   }
 
   updateCompanyNote(companyId: number, companyComments: string): Observable<void> {

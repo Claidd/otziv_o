@@ -66,6 +66,10 @@ export class ManagerCompanyCardComponent {
     return managerCompanyNeedsChatBot(this.company);
   }
 
+  hasActiveChatBindingIssue(): boolean {
+    return Boolean(this.chatBindingWarning()) && !this.chatBindingNotRequired();
+  }
+
   chatBotInviteKind(): ManagerChatBotInviteKind {
     return managerCompanyChatBotInviteKind(this.company);
   }
@@ -96,8 +100,9 @@ export class ManagerCompanyCardComponent {
     return managerCompanyChatBindingNotRequired(this.company);
   }
 
-  handleChatLinkClick(): void {
-    if (this.needsChatBot()) {
+  handleChatLinkClick(event: MouseEvent): void {
+    if (this.hasActiveChatBindingIssue()) {
+      event.preventDefault();
       this.chatBotInviteOpened.emit();
     }
   }

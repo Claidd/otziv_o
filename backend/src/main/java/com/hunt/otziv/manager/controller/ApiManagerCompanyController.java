@@ -20,6 +20,7 @@ import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
 import com.hunt.otziv.manager.dto.api.CompanyEditResponse;
+import com.hunt.otziv.manager.dto.api.CompanyChatBindingRepairResponse;
 import com.hunt.otziv.manager.dto.api.CompanyNoteUpdateRequest;
 import com.hunt.otziv.manager.dto.api.CompanyOrderCreateRequest;
 import com.hunt.otziv.manager.dto.api.CompanyOrderCreateResponse;
@@ -206,6 +207,57 @@ public class ApiManagerCompanyController {
         return managerBoardEditAssembler.buildCompanyEditResponse(companyService.getCompaniesDTOById(companyId), principal, authentication);
     }
 
+    @PostMapping("/companies/{companyId}/chat-binding/repair")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public CompanyChatBindingRepairResponse repairCompanyChatBinding(
+            @PathVariable Long companyId,
+            Authentication authentication
+    ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
+        Company company = companyService.getCompaniesById(companyId);
+        if (company == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Компания не найдена");
+        }
+
+        String chatUrl = blankToNull(company.getUrlChat());
+        ChatPlatform platform = chatPlatform(chatUrl);
+        if (platform == ChatPlatform.UNKNOWN) {
+            CompanyDTO dto = companyService.getCompaniesDTOById(companyId);
+            return chatBindingRepairResponse(
+                    dto,
+                    platform,
+                    false,
+                    "",
+                    "Ссылка на чат не распознана"
+            );
+        }
+
+        try {
+            if (platform == ChatPlatform.WHATSAPP) {
+                whatsAppGroupLinkSyncService.repairCompanyLink(company);
+                sharedChatLinkSyncService.syncCompanyChatId(companyId);
+            } else {
+                sharedChatLinkSyncService.syncCompanyChatId(companyId);
+            }
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Company chat binding repair failed companyId={} chatUrl={}: {}",
+                    companyId,
+                    chatUrl,
+                    exception.getMessage(),
+                    exception
+            );
+        }
+
+        CompanyDTO refreshed = companyService.getCompaniesDTOById(companyId);
+        boolean repaired = isChatBindingReady(refreshed, platform);
+        String launchUrl = repaired ? "" : chatBindingLaunchUrl(refreshed, platform);
+        String message = repaired
+                ? "Группа привязана"
+                : "Группа не привязана, откройте привязку бота";
+        return chatBindingRepairResponse(refreshed, platform, repaired, launchUrl, message);
+    }
+
     private void syncChatBindingAfterCompanySave(Long companyId, String chatUrl, boolean chatUrlChanged) {
         if (!chatUrlChanged || isBlank(chatUrl)) {
             return;
@@ -214,7 +266,7 @@ public class ApiManagerCompanyController {
             if (isWhatsAppChatUrl(chatUrl)) {
                 whatsAppGroupLinkSyncService.runNow();
             } else if (isTelegramChatUrl(chatUrl) || isMaxChatUrl(chatUrl)) {
-                sharedChatLinkSyncService.syncSharedChatIds();
+                sharedChatLinkSyncService.syncCompanyChatId(companyId);
             }
         } catch (RuntimeException exception) {
             log.warn(
@@ -240,6 +292,66 @@ public class ApiManagerCompanyController {
     private boolean isMaxChatUrl(String value) {
         String normalized = normalize(value).toLowerCase(Locale.ROOT);
         return normalized.contains("max.ru/") || normalized.contains("max.com/");
+    }
+
+    private CompanyChatBindingRepairResponse chatBindingRepairResponse(
+            CompanyDTO company,
+            ChatPlatform platform,
+            boolean repaired,
+            String launchUrl,
+            String message
+    ) {
+        return new CompanyChatBindingRepairResponse(
+                company == null ? null : company.getId(),
+                company == null ? "" : safe(company.getTitle()),
+                platform.value,
+                company == null ? "" : safe(company.getUrlChat()),
+                company == null ? null : safe(company.getGroupId()),
+                company == null ? null : company.getTelegramGroupChatId(),
+                company == null ? null : company.getMaxGroupChatId(),
+                company == null ? "" : safe(company.getTelegramBotInviteUrl()),
+                company == null ? "" : safe(company.getMaxBotInviteUrl()),
+                repaired,
+                safe(launchUrl),
+                safe(message)
+        );
+    }
+
+    private boolean isChatBindingReady(CompanyDTO company, ChatPlatform platform) {
+        if (company == null) {
+            return false;
+        }
+        return switch (platform) {
+            case WHATSAPP -> !isBlank(company.getGroupId());
+            case TELEGRAM -> company.getTelegramGroupChatId() != null;
+            case MAX -> company.getMaxGroupChatId() != null;
+            case UNKNOWN -> false;
+        };
+    }
+
+    private String chatBindingLaunchUrl(CompanyDTO company, ChatPlatform platform) {
+        if (company == null) {
+            return "";
+        }
+        return switch (platform) {
+            case TELEGRAM -> safe(company.getTelegramBotInviteUrl());
+            case MAX -> safe(company.getMaxBotInviteUrl());
+            case WHATSAPP -> safe(company.getUrlChat());
+            case UNKNOWN -> "";
+        };
+    }
+
+    private ChatPlatform chatPlatform(String value) {
+        if (isWhatsAppChatUrl(value)) {
+            return ChatPlatform.WHATSAPP;
+        }
+        if (isTelegramChatUrl(value)) {
+            return ChatPlatform.TELEGRAM;
+        }
+        if (isMaxChatUrl(value)) {
+            return ChatPlatform.MAX;
+        }
+        return ChatPlatform.UNKNOWN;
     }
 
     @PutMapping("/companies/{companyId}/note")
@@ -622,5 +734,18 @@ public class ApiManagerCompanyController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Статус не указан");
         }
         return request.status().trim();
+    }
+
+    private enum ChatPlatform {
+        WHATSAPP("whatsapp"),
+        TELEGRAM("telegram"),
+        MAX("max"),
+        UNKNOWN("unknown");
+
+        private final String value;
+
+        ChatPlatform(String value) {
+            this.value = value;
+        }
     }
 }

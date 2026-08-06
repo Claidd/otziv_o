@@ -886,6 +886,23 @@
   text-align: center;
 }
 
+.pay-cert-help {
+  margin: -0.08rem 0 0;
+  color: #7b828e;
+  font-size: 0.64rem;
+  font-weight: 780;
+  line-height: 1.32;
+  text-align: center;
+}
+
+.pay-cert-help a,
+.pay-side-card a {
+  color: #3769d6;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 0.14rem;
+}
+
 .pay-message,
 .pay-error {
   margin: 0;

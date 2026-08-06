@@ -66,7 +66,7 @@ public class WhatsAppGroupCompanyLinker {
 
         String code = inviteCode.get();
         List<Company> candidates = companiesWithChatUrl == null
-                ? companyRepository.findByUrlChatContainingIgnoreCase(code)
+                ? companyRepository.findByUrlChatContainingIgnoreCase(code.toLowerCase(Locale.ROOT))
                 : companiesWithSameInviteCode(code, companiesWithChatUrl);
         int updated = 0;
         for (Company candidate : candidates) {
@@ -221,7 +221,7 @@ public class WhatsAppGroupCompanyLinker {
 
         String trimmed = value.trim();
         if (trimmed.matches("^[A-Za-z0-9_-]{10,}$")) {
-            return Optional.of(trimmed.toLowerCase(Locale.ROOT));
+            return Optional.of(trimmed);
         }
 
         Matcher matcher = WHATSAPP_INVITE_URL.matcher(trimmed);
@@ -229,7 +229,62 @@ public class WhatsAppGroupCompanyLinker {
             return Optional.empty();
         }
 
-        return Optional.of(matcher.group(1).toLowerCase(Locale.ROOT));
+        return Optional.of(matcher.group(1));
+    }
+
+    int refreshRotatedInviteLink(
+            String groupId,
+            String groupName,
+            String activeInviteLink,
+            List<Company> companies
+    ) {
+        Optional<String> activeCode = whatsAppInviteCode(activeInviteLink);
+        if (!hasText(groupId) || !hasText(groupName) || activeCode.isEmpty()
+                || companies == null || companies.isEmpty()) {
+            return 0;
+        }
+
+        String normalizedGroupName = normalizeTitle(groupName);
+        if (normalizedGroupName.isBlank()) {
+            return 0;
+        }
+
+        List<Company> targets = new ArrayList<>();
+        for (Company company : companies) {
+            // Invite rotation only refreshes metadata; the confirmed groupId is never changed.
+            if (!Objects.equals(groupId, company.getGroupId())
+                    || activeCode.get().equals(whatsAppInviteCode(company.getUrlChat()).orElse(null))) {
+                continue;
+            }
+
+            String companyTitle = normalizeTitle(company.getTitle());
+            if (!isContainedTitleMatch(normalizedGroupName, companyTitle)) {
+                log.warn(
+                        "WhatsApp invite rotation skipped groupId={} groupName='{}' reason=company_title_not_confirmed companyId={} title='{}'",
+                        groupId,
+                        groupName,
+                        company.getId(),
+                        company.getTitle()
+                );
+                return 0;
+            }
+            targets.add(company);
+        }
+
+        String canonicalLink = "https://chat.whatsapp.com/" + activeCode.get();
+        for (Company target : targets) {
+            String previousLink = target.getUrlChat();
+            target.setUrlChat(canonicalLink);
+            companyRepository.save(target);
+            log.info(
+                    "WhatsApp invite link for company id={} title='{}' refreshed after rotation: {} -> {}",
+                    target.getId(),
+                    target.getTitle(),
+                    previousLink,
+                    canonicalLink
+            );
+        }
+        return targets.size();
     }
 
     private static Map<String, List<Company>> companiesByNormalizedTitle(List<Company> companies) {

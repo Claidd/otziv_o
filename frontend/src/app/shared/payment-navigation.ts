@@ -1,7 +1,8 @@
 export type PaymentNavigationPurpose = 'manual' | 'payment' | 'sbp';
 
-const PAYMENT_PROVIDER_HOSTS = new Set(['securepay.tinkoff.ru', 'securepay.tbank.ru']);
-const SBP_WEB_HOST = 'qr.nspk.ru';
+const PAYMENT_PROVIDER_HOSTS = new Set(['securepay.tinkoff.ru', 'securepay.tbank.ru', 'pay.tbank.ru']);
+const NSPK_QR_HOST = 'qr.nspk.ru';
+const SBP_WEB_HOSTS = new Set(['qr.nspk.ru', 'www.tbank.ru', 'payzonaecom.com']);
 const NSPK_BANK_PROTOCOL = /^bank(?:b2b)?[0-9]{12}:$/i;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/;
 const ENCODED_CONTROL = /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i;
@@ -56,7 +57,7 @@ export function safePaymentNavigationTarget(
       if (purpose === 'payment') {
         return PAYMENT_PROVIDER_HOSTS.has(hostname) ? target : null;
       }
-      return hostname === SBP_WEB_HOST ? target : null;
+      return SBP_WEB_HOSTS.has(hostname) ? target : null;
     }
     if (purpose !== 'sbp' || !url.hostname || url.username || url.password) {
       return null;
@@ -64,7 +65,7 @@ export function safePaymentNavigationTarget(
     if (protocol === 'bankapp:') {
       return url.hostname.toLowerCase() === 'pay' ? target : null;
     }
-    return NSPK_BANK_PROTOCOL.test(protocol) && url.hostname.toLowerCase() === SBP_WEB_HOST
+    return NSPK_BANK_PROTOCOL.test(protocol) && url.hostname.toLowerCase() === NSPK_QR_HOST
       ? target
       : null;
   } catch {

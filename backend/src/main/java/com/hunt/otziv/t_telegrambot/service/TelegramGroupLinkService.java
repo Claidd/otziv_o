@@ -2,6 +2,7 @@ package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
@@ -39,18 +40,21 @@ public class TelegramGroupLinkService {
     private final UserRepository userRepository;
     private final ManagerRepository managerRepository;
     private final OneTimeGroupLinkTokenStore tokenStore;
+    private final SharedChatLinkSyncService sharedChatLinkSyncService;
 
     @Autowired
     public TelegramGroupLinkService(
             CompanyRepository companyRepository,
             UserRepository userRepository,
             ManagerRepository managerRepository,
-            OneTimeGroupLinkTokenStore tokenStore
+            OneTimeGroupLinkTokenStore tokenStore,
+            SharedChatLinkSyncService sharedChatLinkSyncService
     ) {
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.managerRepository = managerRepository;
         this.tokenStore = tokenStore;
+        this.sharedChatLinkSyncService = sharedChatLinkSyncService;
     }
 
     public TelegramGroupLinkService(
@@ -58,7 +62,13 @@ public class TelegramGroupLinkService {
             UserRepository userRepository,
             ManagerRepository managerRepository
     ) {
-        this(companyRepository, userRepository, managerRepository, new OneTimeGroupLinkTokenStore());
+        this(
+                companyRepository,
+                userRepository,
+                managerRepository,
+                new OneTimeGroupLinkTokenStore(),
+                new SharedChatLinkSyncService(companyRepository)
+        );
     }
 
     @Value("${telegram.bot.username:}")
@@ -183,6 +193,7 @@ public class TelegramGroupLinkService {
 
         company.setTelegramGroupChatId(chatId);
         companyRepository.save(company);
+        syncSharedTelegramChatId(company.getId(), chatId);
         log.info("Telegram group chatId={} linked by public username @{} to company id={} title='{}'",
                 chatId, username, company.getId(), company.getTitle());
 
@@ -222,10 +233,25 @@ public class TelegramGroupLinkService {
 
         company.setTelegramGroupChatId(chatId);
         companyRepository.save(company);
+        syncSharedTelegramChatId(company.getId(), chatId);
         log.info("Telegram group chatId={} linked to company id={} title='{}'", chatId, company.getId(), company.getTitle());
 
         String title = hasText(company.getTitle()) ? company.getTitle().trim() : "Компания";
         return Optional.of("Готово: Telegram-группа привязана к компании \"" + title + "\".");
+    }
+
+    private void syncSharedTelegramChatId(Long companyId, Long authoritativeChatId) {
+        if (sharedChatLinkSyncService == null || companyId == null) {
+            return;
+        }
+        try {
+            sharedChatLinkSyncService.syncCompanyChatId(
+                    companyId,
+                    authoritativeChatId == null ? null : String.valueOf(authoritativeChatId)
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Telegram shared chat id sync failed companyId={}: {}", companyId, exception.getMessage(), exception);
+        }
     }
 
     private Optional<String> handleWorkerGroupStartCommand(long chatId, String payload) {

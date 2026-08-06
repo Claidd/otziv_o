@@ -126,6 +126,30 @@ class WhatsAppGroupLinkSyncServiceTest {
     }
 
     @Test
+    void doesNotLinkWhatsAppInviteCodeWithDifferentCase() {
+        Company company = new Company();
+        company.setId(3L);
+        company.setTitle("Case-sensitive invite");
+        company.setUrlChat("https://chat.whatsapp.com/abcdefghijklmnopqrstuv");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo(
+                        "120363125@g.us",
+                        "Unrelated group",
+                        "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv"
+                )
+        ));
+        when(companyRepository.findByUrlChatContainingIgnoreCase("abcdefghijklmnopqrstuv"))
+                .thenReturn(List.of(company));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals(null, company.getGroupId());
+        verify(companyRepository, never()).save(company);
+    }
+
+    @Test
     void fallsBackToFullCompanyListWhenInviteLookupMissesCompanyWithSameLink() {
         Company armana = new Company();
         armana.setId(958L);
@@ -781,6 +805,76 @@ class WhatsAppGroupLinkSyncServiceTest {
         verify(companyRepository).save(bestShop);
         verify(companyRepository).save(elitDovatora);
         verify(companyRepository, never()).save(elitInterPlaza);
+    }
+
+    @Test
+    void replacesExpiredRotatedInviteForStoppedCompanyWhenCurrentGroupNameConfirmsCompany() {
+        WhatsAppProperties.ClientConfig client = new WhatsAppProperties.ClientConfig();
+        client.setId("whatsapp_lika");
+        client.setUrl("http://whatsapp_lika:3000");
+        properties.setClients(List.of(client));
+
+        Company oldLink = company(1672L, "Шашлычная у Севы");
+        oldLink.setUrlChat("https://chat.whatsapp.com/KDB9CKpunB6GInM2Z2Xt90");
+        oldLink.setGroupId("120363395760954659@g.us");
+        CompanyStatus stopped = new CompanyStatus();
+        stopped.setTitle("На стопе");
+        oldLink.setStatus(stopped);
+        Company currentLink = company(3056L, "Вкус Огня");
+        currentLink.setUrlChat("https://chat.whatsapp.com/Eujk9KHGZtZHOvWBkVCSOv?mode=gi_t");
+        currentLink.setGroupId("120363395760954659@g.us");
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(oldLink, currentLink));
+        when(whatsAppService.resolveGroupByInvite("whatsapp_lika", oldLink.getUrlChat()))
+                .thenReturn(Optional.empty());
+        when(whatsAppService.resolveGroupByInvite("whatsapp_lika", currentLink.getUrlChat()))
+                .thenReturn(Optional.of(new WhatsAppGroupInfo(
+                        "120363395760954659@g.us",
+                        "АБ Вкус Огня, Шашлычная у Севы 2 гис",
+                        "https://chat.whatsapp.com/Eujk9KHGZtZHOvWBkVCSOv"
+                )));
+
+        int repaired = service.repairConflictingInviteGroupIds(properties.getClients(), "test");
+
+        assertEquals(1, repaired);
+        assertEquals(
+                "https://chat.whatsapp.com/Eujk9KHGZtZHOvWBkVCSOv",
+                oldLink.getUrlChat()
+        );
+        assertEquals("120363395760954659@g.us", oldLink.getGroupId());
+        verify(companyRepository).save(oldLink);
+        verify(companyRepository, never()).save(currentLink);
+    }
+
+    @Test
+    void keepsExpiredInviteWhenCurrentGroupNameDoesNotConfirmCompany() {
+        WhatsAppProperties.ClientConfig client = new WhatsAppProperties.ClientConfig();
+        client.setId("whatsapp_lika");
+        client.setUrl("http://whatsapp_lika:3000");
+        properties.setClients(List.of(client));
+
+        Company oldLink = company(1L, "Unrelated company");
+        oldLink.setUrlChat("https://chat.whatsapp.com/OldInviteCode123456789");
+        oldLink.setGroupId("120363123@g.us");
+        Company currentLink = company(2L, "Current company");
+        currentLink.setUrlChat("https://chat.whatsapp.com/CurrentInviteCode12345");
+        currentLink.setGroupId("120363123@g.us");
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(oldLink, currentLink));
+        when(whatsAppService.resolveGroupByInvite("whatsapp_lika", oldLink.getUrlChat()))
+                .thenReturn(Optional.empty());
+        when(whatsAppService.resolveGroupByInvite("whatsapp_lika", currentLink.getUrlChat()))
+                .thenReturn(Optional.of(new WhatsAppGroupInfo(
+                        "120363123@g.us",
+                        "Current company. Отзывы",
+                        currentLink.getUrlChat()
+                )));
+
+        int repaired = service.repairConflictingInviteGroupIds(properties.getClients(), "test");
+
+        assertEquals(0, repaired);
+        assertEquals("https://chat.whatsapp.com/OldInviteCode123456789", oldLink.getUrlChat());
+        verify(companyRepository, never()).save(oldLink);
     }
 
     private static Company company(Long id, String title) {

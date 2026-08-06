@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
@@ -49,6 +50,25 @@ class CommonInvoiceArchiveRepositoryTest {
                 .doesNotContain("invoice_idFROM")
                 .contains("DISTINCT ci.invoice_id\nFROM common_invoices ci")
                 .contains("DISTINCT aci.invoice_id\nFROM archive_common_invoices aci");
+    }
+
+    @Test
+    void findKeepsWhitespaceBetweenSortDirectionAndLimit() {
+        CommonInvoiceArchiveRepository repository = new CommonInvoiceArchiveRepository(jdbc);
+
+        repository.find(ArchiveAccessScope.all(), "", 0, 50, "desc");
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbc).query(
+                sqlCaptor.capture(),
+                any(MapSqlParameterSource.class),
+                any(RowMapper.class)
+        );
+        String sql = sqlCaptor.getValue().replace("\r\n", "\n");
+
+        assertThat(sql)
+                .doesNotContain("DESCLIMIT")
+                .contains(", invoice_id DESC\nLIMIT :limit OFFSET :offset");
     }
 
     @Test

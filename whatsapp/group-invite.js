@@ -105,8 +105,50 @@ function groupFromInviteInfo(info, inviteCode) {
   };
 }
 
+function groupFromSnapshot(group, inviteCode) {
+  if (!group || typeof group !== "object") {
+    return null;
+  }
+
+  const expectedCode = normalizeInviteCode(inviteCode);
+  const actualCode = normalizeInviteCode(
+    group.inviteCode || group.inviteLink || group.invite || group.link || group.url
+  );
+  if (!expectedCode || actualCode !== expectedCode) {
+    return null;
+  }
+
+  const groupId = serializedGroupId(group.groupId || group.id || group.chatId);
+  if (!groupId) {
+    return null;
+  }
+
+  return {
+    groupId,
+    id: groupId,
+    chatId: groupId,
+    name: firstText([group.name, group.title, group.subject]),
+    inviteCode: expectedCode,
+    inviteLink: `https://chat.whatsapp.com/${expectedCode}`,
+  };
+}
+
+function findGroupByInviteCode(snapshot, inviteCode) {
+  const groups = snapshot && Array.isArray(snapshot.groups) ? snapshot.groups : [];
+  const matches = new Map();
+  for (const candidate of groups) {
+    const group = groupFromSnapshot(candidate, inviteCode);
+    if (group) {
+      matches.set(group.groupId, group);
+    }
+  }
+  return matches.size === 1 ? matches.values().next().value : null;
+}
+
 module.exports = {
+  findGroupByInviteCode,
   groupFromInviteInfo,
+  groupFromSnapshot,
   normalizeInviteCode,
   serializedGroupId,
 };

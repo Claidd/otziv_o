@@ -673,6 +673,21 @@ export interface CompanyEditPayload {
   canChangeManager: boolean;
 }
 
+export interface CompanyChatBindingRepair {
+  companyId: number;
+  companyTitle: string;
+  platform: 'whatsapp' | 'telegram' | 'max' | 'unknown';
+  urlChat: string;
+  groupId?: string | null;
+  telegramGroupChatId?: number | null;
+  maxGroupChatId?: number | null;
+  telegramBotInviteUrl?: string;
+  maxBotInviteUrl?: string;
+  repaired: boolean;
+  launchUrl: string;
+  message: string;
+}
+
 export interface CompanyUpdateRequest {
   title: string;
   urlChat: string;
@@ -1221,7 +1236,10 @@ export interface CompanyItem {
   commentsCompany?: string;
   countFilials?: number;
   dateNewTry?: string;
+  groupId?: string | null;
+  telegramGroupChatId?: number | null;
   telegramBotInviteUrl?: string;
+  maxGroupChatId?: number | null;
   maxBotInviteUrl?: string;
   nextOrderRequestsCount?: number;
   failedNextOrderRequestsCount?: number;
@@ -4183,6 +4201,13 @@ export class ApiService {
 
   updateManagerCompany(companyId: number, request: CompanyUpdateRequest): Observable<CompanyEditPayload> {
     return this.http.put<CompanyEditPayload>(this.apiUrl(`/api/manager/companies/${companyId}`), request);
+  }
+
+  repairManagerCompanyChatBinding(companyId: number): Observable<CompanyChatBindingRepair> {
+    return this.http.post<CompanyChatBindingRepair>(
+      this.apiUrl(`/api/manager/companies/${companyId}/chat-binding/repair`),
+      {}
+    );
   }
 
   getManagerCompanySubcategories(categoryId: number): Observable<ManagerOption[]> {

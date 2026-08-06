@@ -30,6 +30,8 @@ describe('payment navigation policy', () => {
 
   it.each([
     'https://qr.nspk.ru/AS100000000111',
+    'https://www.tbank.ru/mybank/payments/qr-pay/AD100018PU4SB0748MTQ2RG6K2S26V24',
+    'https://payzonaecom.com/mobile-public/goto/qr/AD10001VKP9AV8AC9CGR2FHJ7LNIUJ9C',
     'bank100000000111://qr.nspk.ru/AS100000000111',
     'bankb2b100000000111://qr.nspk.ru/AR100000000111',
     'bankapp://pay/payment-sbp-bank'
@@ -43,6 +45,14 @@ describe('payment navigation policy', () => {
 
     expect(navigateToPaymentTarget(target, 'payment', navigate)).toBe(true);
     expect(navigate).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledWith(target);
+  });
+
+  it('allows current T-Bank short payment URLs from production', () => {
+    const target = 'https://pay.tbank.ru/CwEMz5Cw';
+    const navigate = vi.fn();
+
+    expect(navigateToPaymentTarget(target, 'payment', navigate)).toBe(true);
     expect(navigate).toHaveBeenCalledWith(target);
   });
 

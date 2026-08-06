@@ -13,6 +13,7 @@ const {
   reconciliationPayloads,
 } = require("./message-webhook");
 const {
+  findGroupByInviteCode,
   groupFromInviteInfo,
   normalizeInviteCode,
   serializedGroupId,
@@ -1055,6 +1056,16 @@ app.post("/groups/resolve-invite", asyncRoute(async (req, res) => {
     return;
   }
 
+  const cachedGroup = findGroupByInviteCode(groupsCache, inviteCode);
+  if (cachedGroup) {
+    log("info", "WhatsApp group resolved by cached invite", {
+      groupId: cachedGroup.groupId,
+      namePresent: Boolean(cachedGroup.name),
+    });
+    res.json({ status: "ok", clientId: CLIENT_ID, source: "cache", group: cachedGroup });
+    return;
+  }
+
   try {
     const inviteInfo = await withTimeout(
       () => client.getInviteInfo(inviteCode),
@@ -1080,7 +1091,7 @@ app.post("/groups/resolve-invite", asyncRoute(async (req, res) => {
       groupId: group.groupId,
       namePresent: Boolean(group.name),
     });
-    res.json({ status: "ok", clientId: CLIENT_ID, group });
+    res.json({ status: "ok", clientId: CLIENT_ID, source: "direct", group });
   } catch (error) {
     const detail = errorMessage(error);
     log("warn", "WhatsApp direct invite lookup failed", { error: detail });

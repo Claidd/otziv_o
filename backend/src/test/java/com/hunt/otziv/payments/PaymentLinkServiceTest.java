@@ -161,6 +161,7 @@ class PaymentLinkServiceTest {
             );
 
             verify(paymentInvoiceRetryScheduler, never()).cancelBadReviewAutoBan(any(), anyString());
+            verify(paymentInvoiceRetryScheduler, never()).cancelBadReviewAutoBanInNewTransaction(any(), anyString());
             List<org.springframework.transaction.support.TransactionSynchronization> synchronizations =
                     org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations();
             assertEquals(1, synchronizations.size());
@@ -168,7 +169,7 @@ class PaymentLinkServiceTest {
                     org.springframework.transaction.support.TransactionSynchronization.STATUS_COMMITTED
             );
 
-            verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Оплата подтверждена");
+            verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBanInNewTransaction(409L, "Оплата подтверждена");
         } finally {
             org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
             org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(false);
@@ -1247,7 +1248,7 @@ class PaymentLinkServiceTest {
         assertNotNull(link.getManualConfirmedAt());
         assertNotNull(link.getPaidAt());
         verify(orderTransactionService).handlePaymentStatus(order);
-        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Ручная оплата подтверждена");
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBanInNewTransaction(15L, "Ручная оплата подтверждена");
         verify(paymentLinkRepository).save(link);
         InOrder lockOrder = inOrder(orderRepository, paymentLinkRepository);
         lockOrder.verify(paymentLinkRepository).findByIdWithOrder(15L);
@@ -1300,6 +1301,7 @@ class PaymentLinkServiceTest {
         assertSame(originalOrderStatus, order.getStatus());
         verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
         verify(paymentInvoiceRetryScheduler, never()).cancelBadReviewAutoBan(any(Order.class), anyString());
+        verify(paymentInvoiceRetryScheduler, never()).cancelBadReviewAutoBanInNewTransaction(any(), anyString());
 
         InOrder lockOrder = inOrder(orderRepository, paymentLinkRepository);
         lockOrder.verify(paymentLinkRepository).findByIdWithOrder(1510L);
@@ -1654,7 +1656,7 @@ class PaymentLinkServiceTest {
         verify(orderTransactionService).handlePaymentStatus(order, false);
         verify(orderTransactionService, never()).handlePaymentStatus(order);
         verify(paymentSuccessNotificationDeliveryService).deliverAfterCommit(link.getId());
-        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "T-Bank/SBP оплата подтверждена");
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBanInNewTransaction(21L, "T-Bank/SBP оплата подтверждена");
         verify(commonBillingService).applyConfirmedOrderPayment(
                 eq(21L),
                 any(LocalDateTime.class),

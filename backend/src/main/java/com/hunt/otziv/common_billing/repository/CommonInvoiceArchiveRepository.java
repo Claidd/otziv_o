@@ -75,7 +75,7 @@ public class CommonInvoiceArchiveRepository {
                 """ + archiveSelect(scope, true) + """
                 ) common_invoice_archive
                 ORDER BY COALESCE(archived_at, closed_at) """ + direction
-                + ", invoice_id " + direction + """
+                + ", invoice_id " + direction + "\n" + """
                 LIMIT :limit OFFSET :offset
                 """;
         return jdbc.query(sql, params, (rs, rowNum) -> item(rs));

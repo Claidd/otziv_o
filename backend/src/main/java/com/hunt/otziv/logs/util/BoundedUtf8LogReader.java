@@ -14,6 +14,7 @@ public final class BoundedUtf8LogReader {
 
     private static final String TRUNCATED_SUFFIX = " … [truncated]";
     private static final int TRUNCATED_SUFFIX_BYTES = TRUNCATED_SUFFIX.getBytes(StandardCharsets.UTF_8).length;
+    private static final int SCAN_BUFFER_BYTES = 8 * 1_024;
 
     private BoundedUtf8LogReader() {
     }
@@ -123,34 +124,46 @@ public final class BoundedUtf8LogReader {
 
             long boundedEnd = Math.max(0L, endExclusive);
             int scannedBytes = 0;
+            byte[] scanBuffer = new byte[Math.min(SCAN_BUFFER_BYTES, maxScanBytes)];
             while (file.getFilePointer() < boundedEnd && scannedBytes < maxScanBytes) {
-                int next = file.read();
-                if (next == -1) {
+                int readLimit = (int) Math.min(
+                        Math.min((long) scanBuffer.length, maxScanBytes - (long) scannedBytes),
+                        boundedEnd - file.getFilePointer()
+                );
+                int bytesRead = file.read(scanBuffer, 0, readLimit);
+                if (bytesRead == -1) {
                     break;
                 }
-                scannedBytes++;
 
-                if (skipLineFeed) {
-                    skipLineFeed = false;
-                    if (next == '\n') {
-                        continue;
+                for (int index = 0; index < bytesRead; index++) {
+                    int next = scanBuffer[index] & 0xFF;
+                    scannedBytes++;
+
+                    if (skipLineFeed) {
+                        skipLineFeed = false;
+                        if (next == '\n') {
+                            continue;
+                        }
                     }
-                }
 
-                if (next == '\n') {
-                    return new ScanResult(completeLine(), scannedBytes);
-                }
-                if (next == '\r') {
-                    // Consume a possible LF on the next invocation. This also
-                    // works when CR and LF arrive in different file snapshots.
-                    skipLineFeed = true;
-                    return new ScanResult(completeLine(), scannedBytes);
-                }
+                    if (next == '\n' || next == '\r') {
+                        int unreadBytes = bytesRead - index - 1;
+                        if (unreadBytes > 0) {
+                            file.seek(file.getFilePointer() - unreadBytes);
+                        }
+                        if (next == '\r') {
+                            // Consume a possible LF on the next invocation. This also
+                            // works when CR and LF arrive in different file snapshots.
+                            skipLineFeed = true;
+                        }
+                        return new ScanResult(completeLine(), scannedBytes);
+                    }
 
-                if (buffer.size() < maxValueBytes) {
-                    buffer.write(next);
-                } else {
-                    truncated = true;
+                    if (buffer.size() < maxValueBytes) {
+                        buffer.write(next);
+                    } else {
+                        truncated = true;
+                    }
                 }
             }
             return new ScanResult(null, scannedBytes);

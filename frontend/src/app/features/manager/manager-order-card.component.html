@@ -43,7 +43,7 @@
       <button
         type="button"
         class="order-title-button"
-        [class.chat-bot-link-pending]="needsChatBot()"
+        [class.chat-bot-link-pending]="hasActiveChatBindingIssue()"
         [attr.aria-label]="orderFullTitle()"
         [attr.aria-expanded]="titlePopoverOpen"
         (click)="toggleTitlePopover($event)"
@@ -94,11 +94,11 @@
     <div class="phone-row">
       <a
         [href]="orderChatUrl()"
-        [class.chat-bot-link-pending]="needsChatBot()"
+        [class.chat-bot-link-pending]="hasActiveChatBindingIssue()"
         [title]="chatLinkTitle()"
         target="_blank"
         rel="noopener"
-        (click)="handleChatLinkClick()"
+        (click)="handleChatLinkClick($event)"
       >
         {{ orderPhoneLabel() }}
       </a>

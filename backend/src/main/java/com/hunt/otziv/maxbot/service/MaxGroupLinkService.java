@@ -3,6 +3,7 @@ package com.hunt.otziv.maxbot.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.webhook.security.OneTimeGroupLinkTokenStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,20 +33,23 @@ public class MaxGroupLinkService {
     private final CompanyRepository companyRepository;
     private final MaxBotClient maxBotClient;
     private final OneTimeGroupLinkTokenStore tokenStore;
+    private final SharedChatLinkSyncService sharedChatLinkSyncService;
 
     @Autowired
     public MaxGroupLinkService(
             CompanyRepository companyRepository,
             MaxBotClient maxBotClient,
-            OneTimeGroupLinkTokenStore tokenStore
+            OneTimeGroupLinkTokenStore tokenStore,
+            SharedChatLinkSyncService sharedChatLinkSyncService
     ) {
         this.companyRepository = companyRepository;
         this.maxBotClient = maxBotClient;
         this.tokenStore = tokenStore;
+        this.sharedChatLinkSyncService = sharedChatLinkSyncService;
     }
 
     public MaxGroupLinkService(CompanyRepository companyRepository, MaxBotClient maxBotClient) {
-        this(companyRepository, maxBotClient, new OneTimeGroupLinkTokenStore());
+        this(companyRepository, maxBotClient, new OneTimeGroupLinkTokenStore(), new SharedChatLinkSyncService(companyRepository));
     }
 
     @Value("${max.bot.username:}")
@@ -121,6 +125,14 @@ public class MaxGroupLinkService {
         company.setMaxLinkUserId(userId);
         company.setMaxLinkRequestedAt(LocalDateTime.now());
         companyRepository.save(company);
+        syncSharedMaxChatId(company.getId());
+        Company refreshed = companyRepository.findById(company.getId()).orElse(company);
+        if (refreshed.getMaxGroupChatId() != null) {
+            String title = companyTitle(refreshed);
+            log.info("MAX group link completed by shared chat sync for company id={} title='{}' chatId={}",
+                    refreshed.getId(), title, refreshed.getMaxGroupChatId());
+            return Optional.of("Готово: MAX-группа уже была привязана по такой же ссылке для компании \"" + title + "\".");
+        }
 
         String title = companyTitle(company);
         log.info("MAX group link prepared for company id={} title='{}' by userId={}", company.getId(), title, userId);
@@ -161,10 +173,29 @@ public class MaxGroupLinkService {
         company.setMaxLinkUserId(null);
         company.setMaxLinkRequestedAt(null);
         companyRepository.save(company);
+        syncSharedMaxChatId(company.getId(), chatId);
 
         String title = companyTitle(company);
         log.info("MAX group chatId={} linked to company id={} title='{}'", chatId, company.getId(), title);
         return Optional.of("Готово: MAX-группа привязана к компании \"" + title + "\".");
+    }
+
+    private void syncSharedMaxChatId(Long companyId) {
+        syncSharedMaxChatId(companyId, null);
+    }
+
+    private void syncSharedMaxChatId(Long companyId, Long authoritativeChatId) {
+        if (sharedChatLinkSyncService == null || companyId == null) {
+            return;
+        }
+        try {
+            sharedChatLinkSyncService.syncCompanyChatId(
+                    companyId,
+                    authoritativeChatId == null ? null : String.valueOf(authoritativeChatId)
+            );
+        } catch (RuntimeException exception) {
+            log.warn("MAX shared chat id sync failed companyId={}: {}", companyId, exception.getMessage(), exception);
+        }
     }
 
     private Company findCompanyByMaxWebChatId(Long chatId) {

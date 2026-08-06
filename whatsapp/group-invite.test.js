@@ -1,7 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  findGroupByInviteCode,
   groupFromInviteInfo,
+  groupFromSnapshot,
   normalizeInviteCode,
   serializedGroupId,
 } = require("./group-invite");
@@ -49,4 +51,62 @@ test("builds a group from direct invite information", () => {
 
 test("rejects invite information without a group id", () => {
   assert.equal(groupFromInviteInfo({ subject: "Drivevision" }, "LcXNWVfU4RpHayV7wJOFZw"), null);
+});
+
+test("builds a group from an exact case-sensitive cache match", () => {
+  assert.deepEqual(
+    groupFromSnapshot({
+      groupId: "120363503@g.us",
+      name: "Drivevision",
+      inviteLink: "https://chat.whatsapp.com/LcXNWVfU4RpHayV7wJOFZw?mode=gi_t",
+    }, "LcXNWVfU4RpHayV7wJOFZw"),
+    {
+      groupId: "120363503@g.us",
+      id: "120363503@g.us",
+      chatId: "120363503@g.us",
+      name: "Drivevision",
+      inviteCode: "LcXNWVfU4RpHayV7wJOFZw",
+      inviteLink: "https://chat.whatsapp.com/LcXNWVfU4RpHayV7wJOFZw",
+    }
+  );
+  assert.equal(
+    groupFromSnapshot({
+      groupId: "120363503@g.us",
+      inviteCode: "lcxnwvfu4rphayv7wjofzw",
+    }, "LcXNWVfU4RpHayV7wJOFZw"),
+    null
+  );
+});
+
+test("finds one unambiguous cached group by invite code", () => {
+  const snapshot = {
+    groups: [
+      {
+        groupId: "120363503@g.us",
+        name: "Drivevision",
+        inviteCode: "LcXNWVfU4RpHayV7wJOFZw",
+      },
+      {
+        groupId: "120363504@g.us",
+        name: "Other",
+        inviteCode: "OtherInviteCode123456",
+      },
+    ],
+  };
+
+  assert.equal(
+    findGroupByInviteCode(snapshot, "https://chat.whatsapp.com/LcXNWVfU4RpHayV7wJOFZw").groupId,
+    "120363503@g.us"
+  );
+});
+
+test("rejects an ambiguous cached invite mapping", () => {
+  const snapshot = {
+    groups: [
+      { groupId: "120363503@g.us", inviteCode: "LcXNWVfU4RpHayV7wJOFZw" },
+      { groupId: "120363504@g.us", inviteCode: "LcXNWVfU4RpHayV7wJOFZw" },
+    ],
+  };
+
+  assert.equal(findGroupByInviteCode(snapshot, "LcXNWVfU4RpHayV7wJOFZw"), null);
 });

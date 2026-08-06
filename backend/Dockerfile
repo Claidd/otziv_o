@@ -17,15 +17,29 @@ RUN groupadd --system --gid "$OTZIV_GID" otziv \
     && useradd --system --uid "$OTZIV_UID" --gid "$OTZIV_GID" \
         --home-dir /app --shell /usr/sbin/nologin otziv
 
-# MAX moved its API to a chain rooted at the official Russian Trusted Root CA.
-# Validate the published certificate fingerprint before adding it to the OS and
-# JVM trust stores; TLS verification remains enabled for every request.
+# MAX and some T-Bank endpoints use chains rooted at the official Russian
+# Trusted Root CA. Validate the published certificate fingerprints before adding
+# them to the OS and JVM trust stores; TLS verification remains enabled.
 COPY docker/certs/russian_trusted_root_ca.crt /usr/local/share/ca-certificates/russian_trusted_root_ca.crt
+COPY docker/certs/russian_trusted_sub_ca.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt
+COPY docker/certs/russian_trusted_sub_ca_2024.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca_2024.crt
 RUN test "$(openssl x509 -in /usr/local/share/ca-certificates/russian_trusted_root_ca.crt -noout -fingerprint -sha256 | cut -d= -f2)" = "D2:6D:2D:02:31:B7:C3:9F:92:CC:73:85:12:BA:54:10:35:19:E4:40:5D:68:B5:BD:70:3E:97:88:CA:8E:CF:31" \
+    && test "$(openssl x509 -in /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt -noout -fingerprint -sha256 | cut -d= -f2)" = "BB:BD:E2:10:3E:79:0B:99:9E:C6:2B:D0:3C:F6:25:A5:A2:E7:C3:16:E1:0A:FE:6A:49:0E:ED:EA:D8:B3:FD:9B" \
+    && test "$(openssl x509 -in /usr/local/share/ca-certificates/russian_trusted_sub_ca_2024.crt -noout -fingerprint -sha256 | cut -d= -f2)" = "21:55:78:50:36:C9:00:DB:B5:F1:BB:2A:15:69:C8:0C:55:59:5B:D6:BF:94:86:7A:29:BB:DD:BC:7D:88:A3:F2" \
     && update-ca-certificates \
     && keytool -importcert -noprompt -trustcacerts \
         -alias russian-trusted-root-ca \
         -file /usr/local/share/ca-certificates/russian_trusted_root_ca.crt \
+        -keystore "$JAVA_HOME/lib/security/cacerts" \
+        -storepass changeit \
+    && keytool -importcert -noprompt -trustcacerts \
+        -alias russian-trusted-sub-ca \
+        -file /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt \
+        -keystore "$JAVA_HOME/lib/security/cacerts" \
+        -storepass changeit \
+    && keytool -importcert -noprompt -trustcacerts \
+        -alias russian-trusted-sub-ca-2024 \
+        -file /usr/local/share/ca-certificates/russian_trusted_sub_ca_2024.crt \
         -keystore "$JAVA_HOME/lib/security/cacerts" \
         -storepass changeit
 

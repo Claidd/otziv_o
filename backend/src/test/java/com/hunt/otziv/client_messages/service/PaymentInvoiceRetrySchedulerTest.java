@@ -7,12 +7,16 @@ import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepo
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,6 +30,42 @@ class PaymentInvoiceRetrySchedulerTest {
     private AppSettingService appSettingService;
     @Mock
     private ClientMessageSlotPlanner slotPlanner;
+
+    @Test
+    void afterCommitBadReviewAutoBanCancellationAlwaysOpensNewTransaction() throws Exception {
+        Transactional transactional = PaymentInvoiceRetryScheduler.class
+                .getMethod("cancelBadReviewAutoBanInNewTransaction", Long.class, String.class)
+                .getAnnotation(Transactional.class);
+
+        assertNotNull(transactional);
+        assertEquals(Propagation.REQUIRES_NEW, transactional.propagation());
+    }
+
+    @Test
+    void afterCommitBadReviewAutoBanCancellationClosesActiveStateByOrderId() {
+        PaymentInvoiceRetryScheduler scheduler = new PaymentInvoiceRetryScheduler(
+                stateRepository,
+                appSettingService,
+                slotPlanner
+        );
+        ScheduledClientMessageState activeAutoBan = state(
+                ClientMessageScenario.BAD_REVIEW_AUTO_BAN,
+                ScheduledMessageStateStatus.ACTIVE
+        );
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.BAD_REVIEW_AUTO_BAN,
+                "bad-review-auto-ban:order:25047"
+        )).thenReturn(Optional.of(activeAutoBan));
+
+        scheduler.cancelBadReviewAutoBanInNewTransaction(25047L, "Оплата подтверждена");
+
+        assertEquals(ScheduledMessageStateStatus.DONE, activeAutoBan.getStatus());
+        assertNull(activeAutoBan.getNextAttemptAt());
+        assertNull(activeAutoBan.getLockedUntil());
+        assertEquals("bad_review_auto_ban_canceled", activeAutoBan.getLastErrorCode());
+        assertEquals("Оплата подтверждена", activeAutoBan.getLastErrorMessage());
+        verify(stateRepository).save(activeAutoBan);
+    }
 
     @Test
     void finalManualPaymentClosesActiveAndPausedPaymentAutomation() {

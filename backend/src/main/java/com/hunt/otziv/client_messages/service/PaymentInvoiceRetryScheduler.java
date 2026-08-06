@@ -142,6 +142,19 @@ public class PaymentInvoiceRetryScheduler {
         );
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void cancelBadReviewAutoBanInNewTransaction(Long orderId, String reason) {
+        if (orderId == null || orderId <= 0) {
+            return;
+        }
+        cancelActiveState(
+                ClientMessageScenario.BAD_REVIEW_AUTO_BAN,
+                badReviewAutoBanTargetKey(orderId),
+                "bad_review_auto_ban_canceled",
+                reason == null || reason.isBlank() ? "Автобан после плохих отменен" : reason
+        );
+    }
+
     /**
      * Closes every still-running payment-message task for an order that has
      * just been settled outside the automatic payment route. This removes an
@@ -190,6 +203,15 @@ public class PaymentInvoiceRetryScheduler {
         if (!canSchedule(order)) {
             return;
         }
+        cancelActiveState(scenario, targetKey, errorCode, errorMessage);
+    }
+
+    private void cancelActiveState(
+            ClientMessageScenario scenario,
+            String targetKey,
+            String errorCode,
+            String errorMessage
+    ) {
         stateRepository.findByScenarioAndTargetKeyForUpdate(scenario, targetKey).ifPresent(state -> {
             if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
                 return;
@@ -347,7 +369,11 @@ public class PaymentInvoiceRetryScheduler {
     }
 
     private String badReviewAutoBanTargetKey(Order order) {
-        return "bad-review-auto-ban:order:" + order.getId();
+        return badReviewAutoBanTargetKey(order.getId());
+    }
+
+    private String badReviewAutoBanTargetKey(Long orderId) {
+        return "bad-review-auto-ban:order:" + orderId;
     }
 
     private LocalDateTime orderStatusChangedAt(Order order) {

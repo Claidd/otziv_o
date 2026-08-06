@@ -14,6 +14,7 @@ import { MetricSnapshotApi } from '../../core/metric-snapshot.api';
 import { PaymentsApi } from '../../core/payments.api';
 import {
   CompanyCardItem,
+  CompanyChatBindingRepair,
   ManagerApi,
   ManagerBoard,
   ManagerMetric,
@@ -38,6 +39,7 @@ import {
 } from '../../shared/mobile/mobile-status-slider.component';
 import { PersonalRemindersComponent } from '../../shared/personal-reminders.component';
 import { phoneDigits } from '../../shared/phone-format';
+import { safeHttpsExternalUrl } from '../../shared/external-navigation';
 import { ToastService } from '../../shared/toast.service';
 import {
   DEFAULT_MANAGER_COMPANY_STATUSES,
@@ -674,7 +676,7 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   handleChatBotInviteOpened(company: CompanyCardItem): void {
-    this.startChatBotLinkPoll(company.id, company.title, company);
+    this.repairChatBinding(company.id, company.title, company);
   }
 
   handleOrderChatBotInviteOpened(order: OrderCardItem): void {
@@ -682,25 +684,144 @@ export class ManagerBoardComponent implements OnDestroy {
       return;
     }
 
-    this.startChatBotLinkPoll(order.companyId, order.companyTitle, order);
+    this.repairChatBinding(order.companyId, order.companyTitle, order);
   }
 
-  private startChatBotLinkPoll(companyId: number, title: string | null | undefined, item: CompanyCardItem | OrderCardItem): void {
-    if (!this.itemNeedsChatBot(item)) {
+  private repairChatBinding(companyId: number, title: string | null | undefined, item: CompanyCardItem | OrderCardItem): void {
+    const platform = managerChatBotInviteKind(item);
+    const fallbackUrl = this.chatBindingFallbackUrl(item);
+    const popup = fallbackUrl ? window.open('about:blank', '_blank') : null;
+    if (popup) {
+      popup.opener = null;
+    }
+
+    this.managerApi.repairCompanyChatBinding(companyId).subscribe({
+      next: (response) => {
+        this.applyChatBindingRepair(response);
+        const actualPlatform = platform ?? this.chatBindingRepairPlatform(response);
+        const launchUrl = safeHttpsExternalUrl(response.launchUrl) ?? safeHttpsExternalUrl(fallbackUrl) ?? '';
+        if (response.repaired) {
+          if (popup && !popup.closed) {
+            popup.close();
+          }
+          this.clearChatBotLinkPoll(companyId);
+          this.toastService.success(
+            actualPlatform ? this.chatBotLinkedTitle(actualPlatform) : 'Группа привязана',
+            title || response.companyTitle || `Компания #${companyId}`
+          );
+          return;
+        }
+
+        if (launchUrl) {
+          if (popup && !popup.closed) {
+            popup.location.href = launchUrl;
+          } else {
+            window.open(launchUrl, '_blank', 'noopener');
+          }
+          if (actualPlatform) {
+            this.startChatBotLinkPoll(companyId, title, item, actualPlatform, launchUrl);
+          }
+          return;
+        }
+
+        if (popup && !popup.closed) {
+          popup.close();
+        }
+        this.toastService.warning('Чат не привязан', response.message || 'Не удалось подготовить ссылку привязки');
+      },
+      error: (err) => {
+        if (popup && !popup.closed) {
+          popup.close();
+        }
+        this.toastService.error('Чат не починен', this.errorMessage(err, 'Не удалось проверить привязку чата'));
+      }
+    });
+  }
+
+  private applyChatBindingRepair(response: CompanyChatBindingRepair): void {
+    this.patchBoard((board) => ({
+      ...board,
+      companies: {
+        ...board.companies,
+        content: (board.companies.content ?? []).map((company) => company.id === response.companyId
+          ? this.patchCompanyChatBinding(company, response)
+          : company
+        )
+      },
+      orders: {
+        ...board.orders,
+        content: (board.orders.content ?? []).map((order) => order.companyId === response.companyId
+          ? this.patchOrderChatBinding(order, response)
+          : order
+        )
+      }
+    }));
+  }
+
+  private patchCompanyChatBinding(company: CompanyCardItem, response: CompanyChatBindingRepair): CompanyCardItem {
+    return {
+      ...company,
+      urlChat: response.urlChat || company.urlChat,
+      groupId: response.groupId ?? company.groupId,
+      telegramGroupChatId: response.telegramGroupChatId,
+      telegramGroupLinked: response.telegramGroupChatId != null,
+      telegramBotInviteUrl: response.telegramBotInviteUrl ?? company.telegramBotInviteUrl,
+      maxGroupChatId: response.maxGroupChatId,
+      maxGroupLinked: response.maxGroupChatId != null,
+      maxBotInviteUrl: response.maxBotInviteUrl ?? company.maxBotInviteUrl
+    };
+  }
+
+  private patchOrderChatBinding(order: OrderCardItem, response: CompanyChatBindingRepair): OrderCardItem {
+    return {
+      ...order,
+      companyUrlChat: response.urlChat || order.companyUrlChat,
+      groupId: response.groupId ?? order.groupId,
+      telegramGroupChatId: response.telegramGroupChatId,
+      telegramGroupLinked: response.telegramGroupChatId != null,
+      telegramBotInviteUrl: response.telegramBotInviteUrl ?? order.telegramBotInviteUrl,
+      maxGroupChatId: response.maxGroupChatId,
+      maxGroupLinked: response.maxGroupChatId != null,
+      maxBotInviteUrl: response.maxBotInviteUrl ?? order.maxBotInviteUrl
+    };
+  }
+
+  private chatBindingRepairPlatform(response: CompanyChatBindingRepair): ChatBotLinkPlatform | null {
+    return response.platform === 'telegram' || response.platform === 'max' ? response.platform : null;
+  }
+
+  private chatBindingFallbackUrl(item: CompanyCardItem | OrderCardItem): string {
+    const inviteUrl = managerChatBotInviteUrl(item);
+    if (inviteUrl) {
+      return inviteUrl;
+    }
+
+    return 'title' in item ? (item.urlChat ?? '').trim() : (item.companyUrlChat ?? '').trim();
+  }
+
+  private startChatBotLinkPoll(
+    companyId: number,
+    title: string | null | undefined,
+    item: CompanyCardItem | OrderCardItem,
+    platformOverride?: ChatBotLinkPlatform,
+    inviteUrlOverride?: string
+  ): void {
+    if (!this.itemNeedsChatBot(item) && !inviteUrlOverride) {
       return;
     }
 
-    const platform = managerChatBotInviteKind(item);
+    const platform = platformOverride ?? managerChatBotInviteKind(item);
     if (!platform) {
       return;
     }
+    const inviteUrl = inviteUrlOverride ?? managerChatBotInviteUrl(item);
 
     const alreadyWaiting = this.chatBotLinkPolls.has(companyId);
     this.chatBotLinkPolls.set(companyId, { startedAt: Date.now(), platform });
     this.scheduleChatBotLinkRefresh(companyId, this.chatBotLinkPollDelayMs);
 
     if (!alreadyWaiting) {
-      this.showChatBotInviteToast(platform, managerChatBotInviteUrl(item), title || `Компания #${companyId}`);
+      this.showChatBotInviteToast(platform, inviteUrl, title || `Компания #${companyId}`);
     }
   }
 

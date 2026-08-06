@@ -28,6 +28,8 @@ backend/.idea
 *.pem
 .yaml
 !backend/docker/certs/russian_trusted_root_ca.crt
+!backend/docker/certs/russian_trusted_sub_ca.crt
+!backend/docker/certs/russian_trusted_sub_ca_2024.crt
 .env
 .env.*
 !.env.example
