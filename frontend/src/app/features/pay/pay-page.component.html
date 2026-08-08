@@ -62,6 +62,13 @@
                 <strong>{{ item?.manualRecipientName || 'не указан' }}</strong>
                 <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
               </button>
+              @if (item?.manualBankName) {
+              <button type="button" (click)="copyManualValue(item?.manualBankName)" title="Скопировать название банка">
+                <small>Банк получателя</small>
+                <strong>{{ item?.manualBankName }}</strong>
+                <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+              </button>
+              }
             }
             <button type="button" (click)="copyManualValue(item?.manualComment)" title="Скопировать комментарий">
               <small>Комментарий</small>

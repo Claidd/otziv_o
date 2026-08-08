@@ -457,6 +457,16 @@ class WorkloadTransferRepositoryContractTest {
     void rollbackComparesMutableStateWithTheCapturedAuditBaseline() {
         assertQueryContains(
                 WorkloadTransferExecutionRepository.class,
+                "lockRollbackOrderIds",
+                "ORDER BY orders.order_id"
+        );
+        assertQueryContains(
+                WorkloadTransferExecutionRepository.class,
+                "lockRollbackOrderIds",
+                "FOR UPDATE"
+        );
+        assertQueryContains(
+                WorkloadTransferExecutionRepository.class,
                 "auditOrders",
                 "'counter', COALESCE(orders.order_counter, 0)"
         );
@@ -494,6 +504,16 @@ class WorkloadTransferRepositoryContractTest {
                 WorkloadTransferExecutionRepository.class,
                 "rollbackOrders",
                 "'$.counter'"
+        );
+        assertQueryContains(
+                WorkloadTransferExecutionRepository.class,
+                "rollbackOrders",
+                "NOT EXISTS ("
+        );
+        assertQueryContains(
+                WorkloadTransferExecutionRepository.class,
+                "rollbackOrders",
+                "frozen_allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')"
         );
         assertQueryContains(
                 WorkloadTransferExecutionRepository.class,

@@ -1,19 +1,25 @@
 package com.hunt.otziv.z_zp.repository;
 
 import com.hunt.otziv.r_review.model.Amount;
+import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.z_zp.dto.ZpStatRow;
 import com.hunt.otziv.z_zp.dto.ZpStatView;
 import com.hunt.otziv.z_zp.model.Zp;
 import jakarta.validation.constraints.NotNull;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Repository
@@ -23,7 +29,113 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
 
     List<Zp> findByOrderIdAndActiveTrue(Long orderId);
 
+    /** Durable per-source mutex used by the ledger repair on every node. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT z FROM Zp z WHERE z.id = :id")
+    Optional<Zp> findByIdForContractorLedgerUpdate(@Param("id") Long id);
+
     boolean existsByOrderIdAndSourceAndActiveTrue(Long orderId, String source);
+
+    boolean existsByOrderIdAndSourceAndContractorRoleAndActiveTrue(
+            Long orderId,
+            String source,
+            ContractorRole contractorRole
+    );
+
+    Optional<Zp> findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
+            Long orderId,
+            String source,
+            ContractorRole contractorRole,
+            Long professionId
+    );
+
+    List<Zp> findByOrderIdAndSourceAndActiveTrue(Long orderId, String source);
+
+    @Query("""
+        SELECT z
+        FROM Zp z
+        WHERE z.userId = :userId
+          AND z.contractorRole = :role
+          AND z.id > :startZpId
+        ORDER BY z.created, z.id
+    """)
+    List<Zp> findContractorRewards(@Param("userId") Long userId,
+                                   @Param("role") ContractorRole role,
+                                   @Param("startZpId") long startZpId);
+
+    @Query("""
+        SELECT z
+        FROM Zp z
+        WHERE z.contractorRole = :role
+          AND z.id > :startZpId
+        ORDER BY z.id
+    """)
+    List<Zp> findContractorRewardsByRoleAfterId(@Param("role") ContractorRole role,
+                                                @Param("startZpId") long startZpId);
+
+    @Query("""
+        SELECT z
+        FROM Zp z
+        WHERE z.contractorRole = :role
+          AND z.updatedAt >= :updatedSince
+          AND z.id <= :maxZpId
+        ORDER BY z.id
+    """)
+    List<Zp> findChangedContractorRewardsByRole(@Param("role") ContractorRole role,
+                                                @Param("updatedSince") LocalDateTime updatedSince,
+                                                @Param("maxZpId") long maxZpId);
+
+    @Query("""
+        SELECT z
+        FROM Zp z
+        WHERE z.userId = :userId
+          AND z.contractorRole = :role
+          AND z.updatedAt >= :updatedSince
+          AND z.id <= :maxZpId
+        ORDER BY z.id
+    """)
+    List<Zp> findChangedContractorRewards(@Param("userId") Long userId,
+                                          @Param("role") ContractorRole role,
+                                          @Param("updatedSince") LocalDateTime updatedSince,
+                                          @Param("maxZpId") long maxZpId);
+
+    @Query("""
+        SELECT z
+        FROM Zp z
+        WHERE z.contractorRole IS NOT NULL
+          AND NOT EXISTS (
+              SELECT repair.sourceZpId
+              FROM ContractorRewardRepairClaim repair
+              WHERE repair.sourceZpId = z.id
+                AND (
+                    (repair.leaseUntil IS NOT NULL AND repair.leaseUntil >= :now)
+                    OR (repair.nextRetryAt IS NOT NULL AND repair.nextRetryAt > :now)
+                )
+          )
+          AND (
+              NOT EXISTS (
+                  SELECT marker.id
+                  FROM ContractorRewardSyncMarker marker
+                  WHERE marker.sourceZpId = z.id
+              )
+              OR EXISTS (
+                  SELECT marker.id
+                  FROM ContractorRewardSyncMarker marker
+                  WHERE marker.sourceZpId = z.id
+                    AND (
+                        marker.sourceActive <> z.active
+                        OR marker.sourceUpdatedAt IS NULL
+                        OR (z.updatedAt IS NOT NULL AND marker.sourceUpdatedAt < z.updatedAt)
+                    )
+              )
+          )
+        ORDER BY z.id
+    """)
+    List<Zp> findContractorRewardsNeedingGlobalRepair(@Param("now") LocalDateTime now,
+                                                       Pageable pageable);
+
+    @Query("SELECT COALESCE(MAX(z.id), 0) FROM Zp z")
+    long findCurrentMaxId();
 
     @Query("SELECT z FROM Zp z WHERE z.userId = :userId AND z.created >= :startDate AND z.created < :endDate")
     List<Zp> getAllWorkerZpInPeriod(@Param("userId") Long userId,

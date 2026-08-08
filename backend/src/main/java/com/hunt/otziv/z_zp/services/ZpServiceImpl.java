@@ -1,6 +1,11 @@
 package com.hunt.otziv.z_zp.services;
 
 import com.hunt.otziv.l_lead.model.Lead;
+import com.hunt.otziv.contractor_payments.model.ContractorRole;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
+import com.hunt.otziv.contractor_payments.service.ContractorRewardAttributionService;
+import com.hunt.otziv.contractor_payments.service.ContractorRewardAttributionSnapshotCodec;
+import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -31,6 +36,9 @@ public class ZpServiceImpl implements ZpService{
 
     private final ZpRepository zpRepository;
     private final UserService userService;
+    private final ContractorRewardAttributionService contractorRewardAttributionService;
+    private final ContractorPaymentRuntimeSwitch contractorPaymentRuntimeSwitch;
+    private final ContractorRewardLedgerService contractorRewardLedgerService;
 
     public List<Zp> getAllWorkerZp(String login){
         LocalDate localDate = LocalDate.now();
@@ -217,11 +225,15 @@ public class ZpServiceImpl implements ZpService{
     public boolean save(Order order, BigDecimal sum, int amount) { // Сохранить ЗП и Чек в БД
         try {
             saveZpManager(order, sum, amount);
-            saveZpWorker(order, sum, amount);
+            if (liveRewardAttributionEnabled()) {
+                saveZpWorkers(order, sum);
+            } else {
+                saveZpWorker(order, sum, amount);
+            }
             return true;
         } catch (Exception e) {
-            log.error("Ошибка при сохранении ЗП и Чека в БД", e);
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+            log.error("Ошибка при сохранении начислений и чека в БД", e);
+            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
         }
     }// Сохранить ЗП и Чек в БД
 
@@ -233,7 +245,7 @@ public class ZpServiceImpl implements ZpService{
             return true;
         }
         catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
         }
     } // Сохранить ЗП за Лида
 
@@ -255,9 +267,12 @@ public class ZpServiceImpl implements ZpService{
             managerZp.setProfessionId(order.getManager().getId());
             managerZp.setAmount(amount);
             managerZp.setActive(true);
-            zpRepository.save(managerZp);
+            managerZp.setSource("ORDER_MANAGER_REWARD");
+            managerZp.setContractorRole(ContractorRole.MANAGER);
+            Zp saved = zpRepository.save(managerZp);
+            contractorRewardLedgerService.synchronizeSourcesSafely(List.of(saved));
         } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
         }
 
     } // Сохранить ЗП Менеджера в БД
@@ -270,6 +285,10 @@ public class ZpServiceImpl implements ZpService{
 
     @Transactional
     protected void saveZpWorker(Order order, BigDecimal sum, int amount){ // Сохранить ЗП Работника в БД
+        saveZpWorker(order, sum, amount, false);
+    }
+
+    private void saveZpWorker(Order order, BigDecimal sum, int amount, boolean attributionFinal) {
         try {
             Zp workerZp = new Zp();
             workerZp.setFio(order.getWorker().getUser().getFio());
@@ -279,16 +298,105 @@ public class ZpServiceImpl implements ZpService{
             workerZp.setProfessionId(order.getWorker().getId());
             workerZp.setAmount(amount);
             workerZp.setActive(true);
-            zpRepository.save(workerZp);
+            workerZp.setSource("ORDER_SPECIALIST_REWARD");
+            workerZp.setContractorRole(ContractorRole.SPECIALIST);
+            workerZp.setAttributionFinal(attributionFinal);
+            workerZp.setRewardBasis(sum);
+            if (!attributionFinal) {
+                workerZp.setAttributionSnapshot(legacyAttributionSnapshot(order, sum, amount));
+            }
+            Zp saved = zpRepository.save(workerZp);
+            contractorRewardLedgerService.synchronizeSourcesSafely(List.of(saved));
         } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
         }
 
     } // Сохранить ЗП Работника в БД
+
+    /**
+     * The attribution snapshot feeds only the contractor test ledger. It must
+     * never become a new failure condition for the legacy reward write.
+     */
+    private String legacyAttributionSnapshot(Order order, BigDecimal rewardBasis, int amount) {
+        try {
+            String snapshot = ContractorRewardAttributionSnapshotCodec.encode(
+                    contractorRewardAttributionService.attributeRecordedWork(order)
+            );
+            if (snapshot != null) {
+                return snapshot;
+            }
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Снимок распределения начисления сформирован по текущему специалисту: orderId={}, failure={}",
+                    order == null ? null : order.getId(),
+                    exception.getClass().getSimpleName()
+            );
+        }
+
+        try {
+            Worker worker = order == null ? null : order.getWorker();
+            if (worker == null
+                    || worker.getId() == null
+                    || worker.getUser() == null
+                    || worker.getUser().getId() == null) {
+                return null;
+            }
+            return ContractorRewardAttributionSnapshotCodec.encode(List.of(
+                    new ContractorRewardAttributionService.SpecialistShare(
+                            worker.getUser(),
+                            worker.getId(),
+                            rewardBasis == null ? BigDecimal.ZERO : rewardBasis,
+                            Math.max(0, amount)
+                    )
+            ));
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Снимок распределения начисления пропущен без отмены основного начисления: orderId={}, failure={}",
+                    order == null ? null : order.getId(),
+                    exception.getClass().getSimpleName()
+            );
+            return null;
+        }
+    }
+
+    @Transactional
+    protected void saveZpWorkers(Order order, BigDecimal payableSum) {
+        List<ContractorRewardAttributionService.SpecialistShare> shares =
+                contractorRewardAttributionService.attribute(order, payableSum);
+        if (shares.isEmpty()) {
+            // The LIVE attribution decision is durable even when attribution
+            // legitimately falls back to the current specialist. Otherwise a
+            // later flag toggle could re-split this already-issued source.
+            saveZpWorker(order, payableSum, order == null ? 0 : order.getAmount(), true);
+            return;
+        }
+        for (ContractorRewardAttributionService.SpecialistShare share : shares) {
+            User user = share.user();
+            BigDecimal coefficient = user.getCoefficient() == null ? BigDecimal.ZERO : user.getCoefficient();
+            Zp workerZp = new Zp();
+            workerZp.setFio(user.getFio());
+            workerZp.setSum(share.grossAmount().multiply(coefficient));
+            workerZp.setOrderId(order.getId());
+            workerZp.setUserId(user.getId());
+            workerZp.setProfessionId(share.workerId());
+            workerZp.setAmount(share.workUnits());
+            workerZp.setActive(true);
+            workerZp.setSource("ORDER_SPECIALIST_REWARD");
+            workerZp.setContractorRole(ContractorRole.SPECIALIST);
+            workerZp.setAttributionFinal(true);
+            workerZp.setRewardBasis(share.grossAmount());
+            Zp saved = zpRepository.save(workerZp);
+            contractorRewardLedgerService.synchronizeSourcesSafely(List.of(saved));
+        }
+    }
+
+    private boolean liveRewardAttributionEnabled() {
+        return contractorPaymentRuntimeSwitch.rewardAttributionLiveEnabled();
+    }
     @Transactional
     protected void saveZpMarketolog(Lead lead){ // Сохранить ЗП Маркетолога в БД
         if (lead == null || lead.getMarketolog() == null || lead.getMarketolog().getUser() == null) {
-            log.debug("ЗП маркетолога за лид не начислена: у лида не указан маркетолог");
+            log.debug("Вознаграждение маркетолога за лид не начислено: у лида не указан маркетолог");
             return;
         }
 
@@ -305,7 +413,7 @@ public class ZpServiceImpl implements ZpService{
             marketologZp.setActive(true);
             zpRepository.save(marketologZp);
         } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
         }
 
     } // Сохранить ЗП Маркетолога в БД
@@ -313,7 +421,7 @@ public class ZpServiceImpl implements ZpService{
     @Transactional
     protected void saveZpOperator(Lead lead){ // Сохранить ЗП Оператора в БД
         if (lead == null || lead.getOperator() == null || lead.getOperator().getUser() == null) {
-            log.debug("ЗП оператора за лид не начислена: у лида не указан оператор");
+            log.debug("Вознаграждение оператора за лид не начислено: у лида не указан оператор");
             return;
         }
 
@@ -330,7 +438,7 @@ public class ZpServiceImpl implements ZpService{
             operatorZp.setActive(true);
             zpRepository.save(operatorZp);
         } catch (Exception e){
-            throw new RuntimeException("Ошибка при сохранении ЗП и Чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
+            throw new RuntimeException("Ошибка при сохранении начислений и чека в БД", e); // выбрасываем исключение, чтобы откатить транзакцию
         }
 
     } // Сохранить ЗП Оператора в БД

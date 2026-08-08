@@ -50,16 +50,11 @@ public class ManagerServiceImpl implements ManagerService {
 
     @Override
     public void deleteManager(User user) { // Удалить менеджера
-        log.info("Вошли в проверку есть ли такой менеджер при смене роли");
-        Manager manager = getManagerByUserId(user.getId());
-        log.info("Достали менеджера");
-        if (manager != null){
-            managerRepository.delete(manager);
-            log.info("Удалили менеджера");
-        }
-        else {
-            log.info("Не удалили менеджера так как такого нет в списке");
-        }
+        // Manager is a durable identity referenced by companies, orders and
+        // accounting history. Eligibility is removed by role/profile state;
+        // the identity row must not be physically deleted.
+        log.info("Сохранили запись менеджера при смене роли пользователя {}",
+                user == null ? null : user.getId());
     } // Удалить менеджера
 
     @Override

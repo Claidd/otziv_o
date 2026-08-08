@@ -106,7 +106,7 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
   {
     id: 'analytics',
     label: 'Аналитика',
-    description: 'Оборот, зарплата и графики',
+    description: 'Оборот, вознаграждения и графики',
     icon: 'analytics',
     active: 'analytics',
     group: 'home',

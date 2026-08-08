@@ -305,6 +305,10 @@
                 <span class="material-icons-sharp" aria-hidden="true">build_circle</span>
                 Починить
               </button>
+              <button type="button" class="success" (click)="reportManualCardPayment()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">payments</span>
+                Оплатили
+              </button>
             }
             @if (attentionRetryEnabled()) {
               <button type="button" (click)="retryAttention()" [disabled]="!!mutating()">

@@ -220,9 +220,12 @@ class PublicCapabilitySecurityContractTest {
                         .contentType("application/json")
                         .content(PAYMENT_REQUEST))
                 .andExpect(status().isOk());
+        mockMvc.perform(post("/api/payments/public/group/invoice-token/reported-paid"))
+                .andExpect(status().isOk());
 
         CommonBillingService commonBillingService = context.getBean(CommonBillingService.class);
         verify(commonBillingService).publicInvoice("invoice-token");
+        verify(commonBillingService).reportPublicCommonPayment("invoice-token");
         verify(commonBillingService).initPublicPayment(
                 "invoice-token",
                 "client@example.com",

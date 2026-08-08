@@ -112,7 +112,7 @@
 </section>
 
 <section th:fragment="analyse_zp" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
-    <h1>Зарплаты</h1>
+    <h1>Вознаграждения</h1>
         <!-- Аналитика -->
         <div class="analyse">
             <div th:class="${stats.percent1Day > 25} ? 'green' : (${stats.percent1Day >= 0} ?  'blue' : (${stats.percent1Day > -25} ? 'yellow' : 'red'))">
@@ -167,7 +167,7 @@
 </section>
 
 <section th:fragment="analyse_order" xmlns:th="http://www.w3.org/1999/xhtml" xmlns:sec="http://www.w3.org/1999/xhtml">
-    <h1>Зарплаты</h1>
+    <h1>Вознаграждения</h1>
         <!-- Аналитика -->
         <div class="analyse">
             <div th:class="${stats.percent1Year > 25} ? 'green' : (${stats.percent1Year >= 0} ?  'blue' : (${stats.percent1Year > -25} ? 'yellow' : 'red'))">

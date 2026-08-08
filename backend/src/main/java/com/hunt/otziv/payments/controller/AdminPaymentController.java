@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.controller;
 
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
 import com.hunt.otziv.payments.dto.CloseManualPaymentUnpaidRequest;
@@ -45,6 +46,7 @@ public class AdminPaymentController {
     private final PaymentProfileService paymentProfileService;
     private final TbankRuntimeSettingsService runtimeSettingsService;
     private final ManualPaymentTaskService manualPaymentTaskService;
+    private final ContractorPaymentTargetAccessPolicy contractorPaymentTargetAccessPolicy;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @GetMapping("/api/admin/payments/tbank-links")
@@ -66,12 +68,14 @@ public class AdminPaymentController {
             @RequestParam(defaultValue = "true") boolean dryRun,
             @RequestParam(required = false) Integer batchSize
     ) {
+        contractorPaymentTargetAccessPolicy.requireCanManageAllPaymentLinks();
         return paymentLinkService.archiveClosedLinks(dryRun, batchSize);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @PostMapping("/api/admin/payments/tbank-links/{linkId}/cancel")
     public AdminPaymentLinkResponse cancelTbankPayment(@PathVariable Long linkId) {
+        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
         return paymentLinkService.cancel(linkId);
     }
 
@@ -82,6 +86,7 @@ public class AdminPaymentController {
             @RequestBody ConfirmManualCardPaymentRequest request,
             Authentication authentication
     ) {
+        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
         return paymentLinkService.confirmPaidByManualCardTransfer(
                 linkId,
                 request != null && Boolean.TRUE.equals(request.recipientStatementChecked()),
@@ -116,6 +121,7 @@ public class AdminPaymentController {
             @RequestBody ResolveAmbiguousBankInitRequest request,
             Authentication authentication
     ) {
+        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
         return paymentLinkService.releaseAmbiguousBankInit(
                 linkId,
                 request != null && Boolean.TRUE.equals(request.bankPaymentAbsent()),
@@ -130,6 +136,7 @@ public class AdminPaymentController {
             @PathVariable Long linkId,
             Authentication authentication
     ) {
+        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
         return paymentLinkService.confirmManual(linkId, actor(authentication));
     }
 
@@ -140,6 +147,7 @@ public class AdminPaymentController {
             @RequestBody CloseManualPaymentUnpaidRequest request,
             Authentication authentication
     ) {
+        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
         return paymentLinkService.closeManualAsUnpaid(
                 linkId,
                 request != null && Boolean.TRUE.equals(request.recipientStatementChecked()),
@@ -156,6 +164,7 @@ public class AdminPaymentController {
             @PathVariable Long linkId,
             Authentication authentication
     ) {
+        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
         return paymentLinkService.markManualReceipt(linkId, actor(authentication));
     }
 
@@ -165,6 +174,7 @@ public class AdminPaymentController {
             @PathVariable Long linkId,
             Authentication authentication
     ) {
+        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
         return paymentLinkService.markManualReceiptLegacyNotRequired(linkId, actor(authentication));
     }
 

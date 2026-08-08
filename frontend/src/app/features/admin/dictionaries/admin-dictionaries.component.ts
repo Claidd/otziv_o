@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { concat, forkJoin, Observable, of, tap } from 'rxjs';
 import {
   AdminBot,
@@ -61,6 +61,10 @@ import {
   WorkerCellularAccessSettingsRequest
 } from '../../../core/admin-dictionaries.api';
 import { AuthService } from '../../../core/auth.service';
+import {
+  ContractorPaymentSystemStatus,
+  ContractorPaymentsApi
+} from '../../../core/contractor-payments.api';
 import { ReputationAiApi } from '../../../core/reputation-ai.api';
 import type { ReputationAiProvider, ReputationAiStatus } from '../../../core/reputation-ai.api';
 import {
@@ -87,6 +91,14 @@ import {
   workerCellularAccessReasons
 } from './worker-cellular-access-settings';
 import { ManagerAuditSettingsComponent } from './manager-audit-settings.component';
+import {
+  CONTRACTOR_SYSTEM_ACTIVATION_CONFIRMATION,
+  canActivateContractorSystem as isContractorSystemActivationAllowed,
+  canChangeContractorRouting as isContractorRoutingChangeAllowed,
+  contractorRoutingConfirmation,
+  contractorSystemFirstDayOfMonth,
+  contractorSystemModeLabel
+} from './contractor-payment-system-settings';
 
 type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'messageDictionary' | 'specialistTransfer' | 'gamification' | 'settings' | 'audit' | 'aiProvider' | 'autoresponder' | 'autoresponderMonitor';
 
@@ -214,7 +226,7 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
 
 @Component({
   selector: 'app-admin-dictionaries',
-  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, UiTooltipDirective, SpecialistTransferComponent, ManagerAuditSettingsComponent],
+  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, RouterLink, UiTooltipDirective, SpecialistTransferComponent, ManagerAuditSettingsComponent],
   templateUrl: './admin-dictionaries.component.html',
   styleUrls: ['./admin-dictionaries.component.scss', './admin-dictionaries-monitor.component.scss']
 })
@@ -222,6 +234,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly route = inject(ActivatedRoute);
   private readonly dictionariesApi = inject(AdminDictionariesApi);
+  private readonly contractorPaymentsApi = inject(ContractorPaymentsApi);
   private readonly phonesApi = inject(OperatorPhonesApi);
   private readonly auth = inject(AuthService);
   private readonly rewardsApi = inject(AdminGamificationRewardsApi);
@@ -232,6 +245,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   private dictionaryLoadEpoch = 0;
   private aiProviderLoadEpoch = 0;
   private botDetailLoadEpoch = 0;
+  private contractorSystemLoadEpoch = 0;
 
   private readonly allTabs: DictionaryTab[] = [
     { key: 'categories', label: 'Категории', icon: 'category' },
@@ -324,6 +338,15 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly otherGamificationBalances = computed(() => this.withoutRoles(this.gamificationBalances()?.balances ?? [], ['WORKER', 'MANAGER']));
   readonly recentGamificationEvents = computed(() => this.gamificationEvents().slice(0, 6));
   readonly clientMessageSettings = signal<AdminClientMessageSettings | null>(null);
+  readonly contractorSystemStatus = signal<ContractorPaymentSystemStatus | null>(null);
+  readonly contractorSystemLoading = signal(false);
+  readonly contractorSystemSaving = signal(false);
+  readonly contractorSystemError = signal<string | null>(null);
+  readonly contractorSystemActivationOpen = signal(false);
+  readonly contractorSystemRoutingOpen = signal(false);
+  readonly contractorRoutingTargetEnabled = signal(false);
+  readonly contractorSystemToday = businessDateIso();
+  readonly contractorActivationConfirmation = CONTRACTOR_SYSTEM_ACTIVATION_CONFIRMATION;
   readonly aiProviderStatus = signal<ReputationAiStatus | null>(null);
   readonly aiProviderError = signal<string | null>(null);
   readonly switchingAiProvider = signal(false);
@@ -362,6 +385,18 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN']);
   });
+  readonly canControlContractorSystem = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasRealmRole('OWNER');
+  });
+  readonly canActivateContractorSystem = computed(() => isContractorSystemActivationAllowed(
+    this.contractorSystemStatus(),
+    this.canControlContractorSystem()
+  ));
+  readonly canChangeContractorRouting = computed(() => isContractorRoutingChangeAllowed(
+    this.contractorSystemStatus(),
+    this.canControlContractorSystem()
+  ));
   readonly tabs = computed<DictionaryTab[]>(() => this.canManageAllDictionaries() ? this.allTabs : this.managerTabs);
 
   readonly categoryForm = this.fb.nonNullable.group({
@@ -452,6 +487,17 @@ export class AdminDictionariesComponent implements OnDestroy {
     blockDesktopOrUnknownDevice: [false],
     blockUnknownNetwork: [false],
     enforceNativeVirtualDevice: [true]
+  });
+
+  readonly contractorSystemActivationForm = this.fb.nonNullable.group({
+    attributionStartDate: [contractorSystemFirstDayOfMonth(businessDateIso()), [Validators.required]],
+    reason: ['', [Validators.required]],
+    confirmation: ['', [Validators.required]]
+  });
+
+  readonly contractorSystemRoutingForm = this.fb.nonNullable.group({
+    reason: ['', [Validators.required]],
+    confirmation: ['', [Validators.required]]
   });
 
   readonly gamificationForm = this.fb.nonNullable.group({
@@ -783,6 +829,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.dictionaryLoadEpoch += 1;
     this.aiProviderLoadEpoch += 1;
     this.botDetailLoadEpoch += 1;
+    this.contractorSystemLoadEpoch += 1;
     this.stopClientMessageMonitorPolling();
   }
 
@@ -812,6 +859,169 @@ export class AdminDictionariesComponent implements OnDestroy {
 
   loadAll(): void {
     this.loadActive();
+  }
+
+  loadContractorPaymentSystemStatus(): void {
+    const requestId = ++this.contractorSystemLoadEpoch;
+    this.contractorSystemLoading.set(true);
+    this.contractorSystemError.set(null);
+    this.contractorPaymentsApi.getSystemStatus().subscribe({
+      next: (status) => {
+        if (requestId !== this.contractorSystemLoadEpoch || this.activeTab() !== 'settings') {
+          return;
+        }
+        this.contractorSystemStatus.set(status);
+        this.contractorSystemLoading.set(false);
+      },
+      error: (error: unknown) => {
+        if (requestId !== this.contractorSystemLoadEpoch || this.activeTab() !== 'settings') {
+          return;
+        }
+        this.contractorSystemError.set(apiErrorMessage(
+          error,
+          'Не удалось загрузить статус новой системы расчётов.'
+        ));
+        this.contractorSystemLoading.set(false);
+      }
+    });
+  }
+
+  requestContractorSystemActivation(event: Event): void {
+    event.preventDefault();
+    if (!this.canActivateContractorSystem() || this.contractorSystemSaving()) {
+      return;
+    }
+    this.contractorSystemError.set(null);
+    this.contractorSystemActivationForm.reset({
+      attributionStartDate: contractorSystemFirstDayOfMonth(businessDateIso()),
+      reason: '',
+      confirmation: ''
+    });
+    this.contractorSystemActivationOpen.set(true);
+  }
+
+  closeContractorSystemActivation(): void {
+    if (!this.contractorSystemSaving()) {
+      this.contractorSystemActivationOpen.set(false);
+    }
+  }
+
+  contractorSystemActivationReady(): boolean {
+    return this.contractorSystemActivationForm.valid
+      && this.contractorSystemActivationForm.controls.confirmation.value.trim()
+        === CONTRACTOR_SYSTEM_ACTIVATION_CONFIRMATION;
+  }
+
+  activateContractorSystem(): void {
+    const status = this.contractorSystemStatus();
+    if (
+      !status
+      || !this.canActivateContractorSystem()
+      || !this.contractorSystemActivationReady()
+      || this.contractorSystemSaving()
+    ) {
+      this.contractorSystemActivationForm.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.contractorSystemActivationForm.getRawValue();
+    this.contractorSystemSaving.set(true);
+    this.contractorSystemError.set(null);
+    this.contractorPaymentsApi.activateSystem({
+      attributionStartDate: raw.attributionStartDate,
+      confirmation: raw.confirmation.trim(),
+      reason: raw.reason.trim(),
+      expectedRevision: status.revision
+    }).subscribe({
+      next: (updated) => {
+        this.contractorSystemStatus.set(updated);
+        this.contractorSystemSaving.set(false);
+        this.contractorSystemActivationOpen.set(false);
+        this.toastService.success(
+          'Новая система расчётов активирована',
+          'Возврат к старому учёту невозможен.'
+        );
+      },
+      error: (error: unknown) => {
+        const message = apiErrorMessage(error, 'Активация не выполнена. Обновите статус и проверьте причины блокировки.');
+        this.contractorSystemError.set(message);
+        this.contractorSystemSaving.set(false);
+        this.toastService.error('Новая система не активирована', message);
+      }
+    });
+  }
+
+  openContractorRoutingChange(enabled: boolean): void {
+    if (!this.canChangeContractorRouting() || this.contractorSystemSaving()) {
+      return;
+    }
+    this.contractorSystemError.set(null);
+    this.contractorRoutingTargetEnabled.set(enabled);
+    this.contractorSystemRoutingForm.reset({ reason: '', confirmation: '' });
+    this.contractorSystemRoutingOpen.set(true);
+  }
+
+  closeContractorRoutingChange(): void {
+    if (!this.contractorSystemSaving()) {
+      this.contractorSystemRoutingOpen.set(false);
+    }
+  }
+
+  contractorRoutingConfirmationPrompt(): string {
+    return contractorRoutingConfirmation(this.contractorRoutingTargetEnabled());
+  }
+
+  contractorRoutingChangeReady(): boolean {
+    return this.contractorSystemRoutingForm.valid
+      && this.contractorSystemRoutingForm.controls.confirmation.value.trim()
+        === this.contractorRoutingConfirmationPrompt();
+  }
+
+  updateContractorRouting(): void {
+    const status = this.contractorSystemStatus();
+    if (
+      !status
+      || !this.canChangeContractorRouting()
+      || !this.contractorRoutingChangeReady()
+      || this.contractorSystemSaving()
+    ) {
+      this.contractorSystemRoutingForm.markAllAsTouched();
+      return;
+    }
+
+    const enabled = this.contractorRoutingTargetEnabled();
+    const raw = this.contractorSystemRoutingForm.getRawValue();
+    this.contractorSystemSaving.set(true);
+    this.contractorSystemError.set(null);
+    this.contractorPaymentsApi.updateSystemRouting({
+      enabled,
+      confirmation: raw.confirmation.trim(),
+      reason: raw.reason.trim(),
+      expectedRevision: status.revision
+    }).subscribe({
+      next: (updated) => {
+        this.contractorSystemStatus.set(updated);
+        this.contractorSystemSaving.set(false);
+        this.contractorSystemRoutingOpen.set(false);
+        this.toastService.success(
+          enabled ? 'Выдача реквизитов запрошена' : 'Выдача реквизитов приостановлена',
+          enabled && !updated.liveRoutingEffective
+            ? 'Запрос сохранён, но боевые предохранители пока не дают выдавать реквизиты.'
+            : 'Новые счета будут обрабатываться по обновлённому режиму.'
+        );
+      },
+      error: (error: unknown) => {
+        const message = apiErrorMessage(error, 'Не удалось изменить режим выдачи реквизитов. Обновите статус и повторите.');
+        this.contractorSystemError.set(message);
+        this.contractorSystemSaving.set(false);
+        this.toastService.error('Режим реквизитов не изменён', message);
+      }
+    });
+  }
+
+  contractorPaymentSystemModeLabel(): string {
+    const status = this.contractorSystemStatus();
+    return status ? contractorSystemModeLabel(status.mode) : '—';
   }
 
   searchActive(): void {
@@ -2593,6 +2803,7 @@ export class AdminDictionariesComponent implements OnDestroy {
         });
         break;
       case 'settings':
+        this.loadContractorPaymentSystemStatus();
         request = forkJoin({
           nagulSettings: this.dictionariesApi.getNagulSettings(),
           telegramReportSettings: this.dictionariesApi.getTelegramReportSettings(),

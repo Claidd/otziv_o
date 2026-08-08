@@ -7,6 +7,9 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
+import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -125,6 +128,9 @@ public class OrderStatusTransitionService {
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final AppSettingService appSettingService;
     private final BusinessAuditService businessAuditService;
+    private final ContractorPaymentShadowService contractorPaymentShadowService;
+    private final ContractorCompletionRewardService contractorCompletionRewardService;
+    private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final ReviewRecoveryGateService recoveryGateService;
     private final ApplicationEventPublisher eventPublisher;
@@ -327,8 +333,37 @@ public class OrderStatusTransitionService {
     private boolean handleNotPaidStatus(Order order) {
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_NOT_PAID));
         orderRepository.save(order);
+        scheduleContractorReservationRelease(order.getId());
         badReviewTaskService.createTasksForUnpaidOrder(order);
         return true;
+    }
+
+    private void scheduleContractorReservationRelease(Long orderId) {
+        if (orderId == null) {
+            return;
+        }
+        Runnable release = () -> {
+            try {
+                contractorPaymentShadowService.releaseForUnpaidOrder(
+                        orderId,
+                        "Заказ переведен в статус \"Не оплачено\""
+                );
+            } catch (RuntimeException e) {
+                log.error("Не удалось освободить тестовый резерв заказа {}", orderId, e);
+            }
+        };
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            release.run();
+                        }
+                    }
+            );
+        } else {
+            release.run();
+        }
     }
 
     private boolean handlePaymentStatus(Order order) throws Exception {
@@ -793,6 +828,7 @@ public class OrderStatusTransitionService {
     }
 
     private boolean handleCorrectionStatus(Order order) {
+        contractorRouteAssignmentGuard.requirePayableMutationAllowed(order == null ? null : order.getId());
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'КОРРЕКЦИЯ' ===");
             String currentStatus = safeStatusTitle(order);
@@ -884,6 +920,7 @@ public class OrderStatusTransitionService {
 
             orderBotLifecycleService.assignBotsIfNeeded(order);
             orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_PUBLIC);
+            contractorCompletionRewardService.ensureOrderCompletionAccrualNow(order.getId());
 
             String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
             String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;

@@ -14,9 +14,9 @@ import lombok.NoArgsConstructor;
 public class UserData {
     private String fio;        // Имя пользователя
     private String role;        // Роль пользователя
-    private Long salary;        // Зарплата
+    private Long salary;        // Начислено за выполненные работы (legacy-имя поля API)
     private Long totalSum;      // Сумма чеков
-    private Long zpTotal;      // Сумма всех ЗП
+    private Long zpTotal;      // Общая сумма начислений (legacy-имя поля API)
     private Long newCompanies;  // Количество новых компаний
     private Long newOrders;     // Количество новых заказов
     private Long correctOrders;     // Количество в коррекции

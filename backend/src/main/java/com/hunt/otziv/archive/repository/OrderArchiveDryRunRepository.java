@@ -257,6 +257,127 @@ public class OrderArchiveDryRunRepository {
                 """, Map.of(), Long.class).size();
     }
 
+    public List<Long> findPreparedCandidateContractorRewardIds() {
+        return jdbc.queryForList("""
+                SELECT z.zp_id
+                FROM zp z
+                JOIN archive_candidate_orders candidate
+                  ON candidate.order_id = z.zp_order
+                WHERE z.zp_contractor_role IS NOT NULL
+                ORDER BY z.zp_id
+                """, Map.of(), Long.class);
+    }
+
+    /** Latest SHADOW and LIVE accounting decisions whose durable evidence is
+     * about to leave the live tables. The archive service reconciles these
+     * while holding all source locks until copy/delete commits. */
+    public List<Long> findPreparedCandidateContractorAllocationIds() {
+        return jdbc.queryForList("""
+                SELECT allocation.id
+                FROM contractor_payment_allocations allocation
+                WHERE allocation.attempt_no = (
+                    SELECT MAX(latest.attempt_no)
+                    FROM contractor_payment_allocations latest
+                    WHERE latest.mode = allocation.mode
+                      AND latest.source_type = allocation.source_type
+                      AND latest.source_id = allocation.source_id
+                )
+                  AND (
+                        (
+                            allocation.source_type = 'PAYMENT_LINK'
+                            AND EXISTS (
+                                SELECT 1
+                                FROM payment_links link
+                                JOIN archive_candidate_orders candidate
+                                  ON candidate.order_id = link.order_id
+                                WHERE link.id = allocation.source_id
+                            )
+                        )
+                        OR (
+                            allocation.source_type = 'COMMON_INVOICE'
+                            AND EXISTS (
+                                SELECT 1
+                                FROM archive_candidate_common_invoices candidate_invoice
+                                WHERE candidate_invoice.invoice_id = allocation.source_id
+                            )
+                        )
+                  )
+                ORDER BY allocation.source_type, allocation.source_id, allocation.mode, allocation.id
+                """, Map.of(), Long.class);
+    }
+
+    /** Must be evaluated after candidate Orders and common invoices are
+     * locked. A prepared source is not archivable until the durable SHADOW
+     * decision for that exact generation exists. */
+    public boolean hasPreparedCandidateUnmaterializedShadowRoutes() {
+        Long missing = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM payment_links link
+                    JOIN archive_candidate_orders candidate_order
+                      ON candidate_order.order_id = link.order_id
+                    WHERE link.shadow_route_generation IS NOT NULL
+                      AND link.shadow_route_prepared_at IS NOT NULL
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM contractor_payment_allocations allocation
+                          WHERE allocation.mode = 'SHADOW'
+                            AND allocation.source_type = 'PAYMENT_LINK'
+                            AND allocation.source_id = link.id
+                            AND allocation.source_generation_snapshot = link.shadow_route_generation
+                      )
+                    UNION ALL
+                    SELECT 1
+                    FROM common_invoices invoice
+                    JOIN archive_candidate_common_invoices candidate_invoice
+                      ON candidate_invoice.invoice_id = invoice.invoice_id
+                    WHERE invoice.shadow_route_generation IS NOT NULL
+                      AND invoice.shadow_route_prepared_at IS NOT NULL
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM contractor_payment_allocations allocation
+                          WHERE allocation.mode = 'SHADOW'
+                            AND allocation.source_type = 'COMMON_INVOICE'
+                            AND allocation.source_id = invoice.invoice_id
+                            AND allocation.source_generation_snapshot = invoice.shadow_route_generation
+                      )
+                )
+                """, Map.of(), Long.class);
+        return missing != null && missing > 0;
+    }
+
+    public boolean hasPreparedCandidateUnrecordedContractorManualEvidence() {
+        Long pending = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM payment_links evidence
+                    JOIN archive_candidate_orders candidate
+                      ON candidate.order_id = evidence.order_id
+                    JOIN contractor_payment_allocations allocation
+                      ON allocation.source_type = 'PAYMENT_LINK'
+                     AND allocation.source_id = evidence.contractor_evidence_original_link_id
+                     AND allocation.recipient_profile_id IS NOT NULL
+                     AND allocation.attempt_no = (
+                         SELECT MAX(latest.attempt_no)
+                         FROM contractor_payment_allocations latest
+                         WHERE latest.mode = allocation.mode
+                           AND latest.source_type = allocation.source_type
+                           AND latest.source_id = allocation.source_id
+                     )
+                    WHERE evidence.contractor_evidence_original_link_id IS NOT NULL
+                      AND evidence.status = 'CONFIRMED'
+                      AND evidence.payment_method = 'MANUAL_MOBILE_BANK'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM contractor_payment_allocation_events event
+                          WHERE event.allocation_id = allocation.id
+                            AND event.external_ref = CONCAT('MANUAL_EVIDENCE:', evidence.id)
+                      )
+                )
+                """, Map.of(), Long.class);
+        return pending != null && pending > 0;
+    }
+
     public int countPreparedCandidateCommonInvoices() {
         return Math.toIntExact(count("SELECT COUNT(*) FROM archive_candidate_common_invoices"));
     }

@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +23,12 @@ import java.util.Set;
 
 @Repository
 public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, Long> {
+
+    @Query("SELECT t.order.id FROM BadReviewTask t WHERE t.id = :taskId")
+    Optional<Long> findOrderIdById(@Param("taskId") Long taskId);
+
+    @Query("SELECT t.status FROM BadReviewTask t WHERE t.id = :taskId")
+    Optional<BadReviewTaskStatus> findStatusById(@Param("taskId") Long taskId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -58,6 +65,84 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
     List<BadReviewTask> findAllByOrderIdOrderByCreatedDesc(@Param("orderId") Long orderId);
 
     List<BadReviewTask> findAllByOrderIdAndStatus(Long orderId, BadReviewTaskStatus status);
+
+    /** Missing DONE markers share the order-level durable backoff queue. */
+    @Query(value = """
+        SELECT DISTINCT task.bad_review_task_order
+        FROM bad_review_tasks task
+        WHERE task.bad_review_task_status = :completedStatus
+          AND NOT EXISTS (
+              SELECT marker.id
+              FROM contractor_completion_reward_markers marker
+              WHERE marker.order_id = task.bad_review_task_order
+                AND marker.logical_source = CONCAT(:markerPrefix, task.bad_review_task_id)
+          )
+          AND NOT EXISTS (
+              SELECT repair.order_id
+              FROM contractor_completion_reward_repair_state repair
+              WHERE repair.order_id = task.bad_review_task_order
+                AND repair.next_attempt_at > :dueAt
+          )
+        ORDER BY task.bad_review_task_order
+    """, nativeQuery = true)
+    List<Long> findCompletionRewardRepairGapOrderIds(
+            @Param("completedStatus") String completedStatus,
+            @Param("markerPrefix") String markerPrefix,
+            @Param("dueAt") LocalDateTime dueAt,
+            Pageable pageable
+    );
+
+    /**
+     * A CANCELED task needs a cancellation marker only when it was previously
+     * completed: either the DONE marker or an active DONE reward row is the
+     * immutable evidence. Pre-cutover evidence is included and will fail
+     * closed in the service until opening balance is explicitly corrected.
+     */
+    @Query(value = """
+        SELECT task.bad_review_task_id
+        FROM bad_review_tasks task
+        WHERE task.bad_review_task_status = :canceledStatus
+          AND NOT EXISTS (
+              SELECT cancel_marker.id
+              FROM contractor_completion_reward_markers cancel_marker
+              WHERE cancel_marker.order_id = task.bad_review_task_order
+                AND cancel_marker.logical_source = CONCAT(:cancelMarkerPrefix, task.bad_review_task_id)
+          )
+          AND (
+              EXISTS (
+                  SELECT done_marker.id
+                  FROM contractor_completion_reward_markers done_marker
+                  WHERE done_marker.order_id = task.bad_review_task_order
+                    AND done_marker.logical_source = CONCAT(:doneMarkerPrefix, task.bad_review_task_id)
+              )
+              OR EXISTS (
+                  SELECT reward.zp_id
+                  FROM zp reward
+                  WHERE reward.zp_order = task.bad_review_task_order
+                    AND reward.zp_active = 1
+                    AND reward.zp_source IN (
+                        CONCAT(:doneManagerPrefix, task.bad_review_task_id),
+                        CONCAT(:doneSpecialistPrefix, task.bad_review_task_id)
+                    )
+              )
+          )
+          AND NOT EXISTS (
+              SELECT repair.order_id
+              FROM contractor_completion_reward_repair_state repair
+              WHERE repair.order_id = task.bad_review_task_order
+                AND repair.next_attempt_at > :dueAt
+          )
+        ORDER BY task.bad_review_task_id
+    """, nativeQuery = true)
+    List<Long> findCompletionRewardCancellationRepairGapTaskIds(
+            @Param("canceledStatus") String canceledStatus,
+            @Param("doneMarkerPrefix") String doneMarkerPrefix,
+            @Param("cancelMarkerPrefix") String cancelMarkerPrefix,
+            @Param("doneManagerPrefix") String doneManagerPrefix,
+            @Param("doneSpecialistPrefix") String doneSpecialistPrefix,
+            @Param("dueAt") LocalDateTime dueAt,
+            Pageable pageable
+    );
 
     @Modifying
     @Query("DELETE FROM BadReviewTask t WHERE t.order.id = :orderId")

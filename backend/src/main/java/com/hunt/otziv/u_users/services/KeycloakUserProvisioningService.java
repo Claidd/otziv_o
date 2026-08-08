@@ -1,6 +1,7 @@
 package com.hunt.otziv.u_users.services;
 
 import com.hunt.otziv.config.cache.CacheConfig;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
 import com.hunt.otziv.u_users.dto.AdminUserResponse;
 import com.hunt.otziv.u_users.dto.AssignmentOptionResponse;
 import com.hunt.otziv.u_users.dto.AssignmentOptionsResponse;
@@ -105,6 +106,7 @@ public class KeycloakUserProvisioningService {
     private final TelegramGroupLinkService telegramGroupLinkService;
     private final CacheManager cacheManager;
     private final UserAuthEpochService authEpochService;
+    private final ContractorPaymentProfileService contractorPaymentProfileService;
 
     /** ADMIN always remains global; OWNER cannot manage ADMIN/OWNER accounts unless explicitly enabled. */
     @Value("${otziv.security.owner-manage-privileged-users:false}")
@@ -140,6 +142,7 @@ public class KeycloakUserProvisioningService {
             User saved = userRepository.saveAndFlush(user);
             createRoleAssignments(saved, localRoles);
             userRepository.flush();
+            contractorPaymentProfileService.ensureForUser(saved.getId());
             clearCabinetCaches();
 
             return toResponse(saved, keycloakRoles);
@@ -267,6 +270,7 @@ public class KeycloakUserProvisioningService {
             managerService.save(manager);
         }
         userRepository.flush();
+        contractorPaymentProfileService.ensureForUser(user.getId());
 
         if (hasText(user.getKeycloakId())) {
             String keycloakId = updateKeycloakUserAndRepairIdIfNeeded(user, oldUsername, newUsername, request);
@@ -313,6 +317,7 @@ public class KeycloakUserProvisioningService {
         user.setActive(false);
         authEpochService.deactivated(user);
         userRepository.flush();
+        contractorPaymentProfileService.ensureForUser(user.getId());
 
         if (hasText(user.getKeycloakId())) {
             UpdateKeycloakUserRequest request = deactivationRequest(user);

@@ -110,6 +110,44 @@ public class PaymentLink {
     @Column(name = "payment_profile_name", length = 120)
     private String paymentProfileName;
 
+    /** LIVE contractor allocation whose immutable snapshots produced the
+     * client-facing requisites. Null while routing remains in shadow mode. */
+    @Column(name = "contractor_allocation_id")
+    private Long contractorAllocationId;
+
+    /** Immutable test-route inputs captured while this payment source is
+     * prepared. The after-commit worker must never reconstruct them from the
+     * mutable Order assignment. */
+    @Column(name = "shadow_route_generation", length = 36)
+    private String shadowRouteGeneration;
+
+    @Column(name = "shadow_route_order_id")
+    private Long shadowRouteOrderId;
+
+    @Column(name = "shadow_route_worker_id")
+    private Long shadowRouteWorkerId;
+
+    @Column(name = "shadow_route_worker_user_id")
+    private Long shadowRouteWorkerUserId;
+
+    @Column(name = "shadow_route_manager_id")
+    private Long shadowRouteManagerId;
+
+    @Column(name = "shadow_route_manager_user_id")
+    private Long shadowRouteManagerUserId;
+
+    @Column(name = "shadow_route_amount_kopecks")
+    private Long shadowRouteAmountKopecks;
+
+    @Column(name = "shadow_route_prepared_at")
+    private LocalDateTime shadowRoutePreparedAt;
+
+    /** Durable outbox-style relation for a separate manual-card evidence row.
+     * It keeps both rows out of archive until every contractor allocation has
+     * recorded the evidence event. */
+    @Column(name = "contractor_evidence_original_link_id")
+    private Long contractorEvidenceOriginalLinkId;
+
     @Column(name = "payment_url", length = 1024)
     private String paymentUrl;
 
@@ -130,6 +168,9 @@ public class PaymentLink {
 
     @Column(name = "manual_recipient_name", length = 160)
     private String manualRecipientName;
+
+    @Column(name = "manual_bank_name", length = 120)
+    private String manualBankName;
 
     @Column(name = "manual_payment_url", length = 512)
     private String manualPaymentUrl;

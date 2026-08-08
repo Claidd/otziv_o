@@ -1,18 +1,49 @@
 export async function copyTextToClipboard(text: string): Promise<boolean> {
-  if (!text) {
+  const value = normalizeClipboardText(text);
+  if (!value) {
     return false;
   }
 
-  if (navigator.clipboard?.writeText && window.isSecureContext) {
+  if (typeof navigator.clipboard?.writeText === 'function' && window.isSecureContext) {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(value);
       return true;
     } catch {
       // Safari and in-app browsers can reject the async Clipboard API even on HTTPS.
     }
   }
 
-  return copyTextWithTextarea(text);
+  return copyTextWithTextarea(value);
+}
+
+export async function copyDeferredTextToClipboard(loadText: () => Promise<string>): Promise<boolean> {
+  const textPromise = loadText().then((text) => {
+    const value = normalizeClipboardText(text);
+    if (!value) {
+      throw new Error('Cannot copy empty text');
+    }
+    return value;
+  });
+
+  if (typeof navigator.clipboard?.write === 'function' && typeof ClipboardItem !== 'undefined' && window.isSecureContext) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/plain': textPromise.then((value) => new Blob([value], { type: 'text/plain' }))
+        })
+      ]);
+      return true;
+    } catch {
+      // iOS Safari needs the write call to start in the tap handler, but other
+      // browsers may still allow a normal write after the deferred value loads.
+    }
+  }
+
+  return copyTextToClipboard(await textPromise);
+}
+
+function normalizeClipboardText(text: string): string {
+  return (text ?? '').trim();
 }
 
 function copyTextWithTextarea(text: string): boolean {

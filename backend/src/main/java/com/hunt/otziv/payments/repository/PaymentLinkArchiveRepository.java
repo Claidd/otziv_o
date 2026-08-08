@@ -43,6 +43,16 @@ public class PaymentLinkArchiveRepository {
             "payment_profile_id",
             "payment_profile_code",
             "payment_profile_name",
+            "contractor_allocation_id",
+            "shadow_route_generation",
+            "shadow_route_order_id",
+            "shadow_route_worker_id",
+            "shadow_route_worker_user_id",
+            "shadow_route_manager_id",
+            "shadow_route_manager_user_id",
+            "shadow_route_amount_kopecks",
+            "shadow_route_prepared_at",
+            "contractor_evidence_original_link_id",
             "payment_url",
             "sbp_qr_payload",
             "sbp_qr_image",
@@ -50,6 +60,7 @@ public class PaymentLinkArchiveRepository {
             "sbp_qr_created_at",
             "manual_phone",
             "manual_recipient_name",
+            "manual_bank_name",
             "manual_payment_url",
             "manual_payment_button_label",
             "manual_comment",
@@ -107,36 +118,173 @@ public class PaymentLinkArchiveRepository {
             """;
 
     /**
+     * The generic closed-link archiver has no contractor reconciliation
+     * service. It may move a routed source only after every current SHADOW/LIVE
+     * attempt is terminal, has no unresolved return, has no in-flight claim,
+     * and was reconciled after the latest source change. Order archiving uses
+     * its own two-phase strict reconciliation and intentionally bypasses this
+     * selection-only fence.
+     */
+    private static final String CONTRACTOR_ARCHIVE_SELECTION_BLOCKER_SQL = """
+            (
+            (
+                pl.shadow_route_generation IS NOT NULL
+                AND pl.shadow_route_prepared_at IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM contractor_payment_allocations prepared_shadow
+                    WHERE prepared_shadow.mode = 'SHADOW'
+                      AND prepared_shadow.source_type = 'PAYMENT_LINK'
+                      AND prepared_shadow.source_id = pl.id
+                      AND prepared_shadow.source_generation_snapshot = pl.shadow_route_generation
+                )
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM contractor_payment_allocations contractor_allocation
+                WHERE contractor_allocation.source_type = 'PAYMENT_LINK'
+                  AND contractor_allocation.source_id = pl.id
+                  AND contractor_allocation.attempt_no = (
+                      SELECT MAX(contractor_latest.attempt_no)
+                      FROM contractor_payment_allocations contractor_latest
+                      WHERE contractor_latest.mode = contractor_allocation.mode
+                        AND contractor_latest.source_type = contractor_allocation.source_type
+                        AND contractor_latest.source_id = contractor_allocation.source_id
+                  )
+                  AND (
+                      contractor_allocation.status NOT IN (
+                          'CONFIRMED',
+                          'SIMULATED_PAID',
+                          'LATE_PAYMENT_AFTER_RELEASE',
+                          'OWNER_FALLBACK',
+                          'RELEASED_UNPAID',
+                          'EXPIRED',
+                          'CANCELED',
+                          'RETURNED',
+                          'PARTIALLY_RETURNED'
+                      )
+                      OR contractor_allocation.needs_return_amount = TRUE
+                      OR contractor_allocation.reconcile_claim_token IS NOT NULL
+                      OR contractor_allocation.last_reconciled_at IS NULL
+                      OR pl.updated_at > contractor_allocation.last_reconciled_at
+                  )
+            ))
+            """;
+
+    /** Keeps both the original bank link and its separate manual evidence row
+     * live until every current contractor allocation has durably recorded the
+     * evidence event. */
+    private static final String CONTRACTOR_MANUAL_EVIDENCE_BLOCKER_SQL = """
+            EXISTS (
+                SELECT 1
+                FROM payment_links contractor_evidence
+                JOIN contractor_payment_allocations contractor_allocation
+                  ON contractor_allocation.source_type = 'PAYMENT_LINK'
+                 AND contractor_allocation.source_id = contractor_evidence.contractor_evidence_original_link_id
+                 AND contractor_allocation.recipient_profile_id IS NOT NULL
+                 AND contractor_allocation.attempt_no = (
+                     SELECT MAX(contractor_latest.attempt_no)
+                     FROM contractor_payment_allocations contractor_latest
+                     WHERE contractor_latest.mode = contractor_allocation.mode
+                       AND contractor_latest.source_type = contractor_allocation.source_type
+                       AND contractor_latest.source_id = contractor_allocation.source_id
+                 )
+                WHERE (contractor_evidence.id = pl.id
+                       OR contractor_evidence.contractor_evidence_original_link_id = pl.id)
+                  AND contractor_evidence.contractor_evidence_original_link_id IS NOT NULL
+                  AND contractor_evidence.status = 'CONFIRMED'
+                  AND contractor_evidence.payment_method = 'MANUAL_MOBILE_BANK'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM contractor_payment_allocation_events contractor_event
+                      WHERE contractor_event.allocation_id = contractor_allocation.id
+                        AND contractor_event.external_ref = CONCAT(
+                            'MANUAL_EVIDENCE:', contractor_evidence.id
+                        )
+                  )
+            )
+            """;
+
+    /**
+     * MySQL forbids a DELETE target from being read again by a correlated
+     * subquery (error 1093). DISTINCT makes this bounded derived table
+     * non-mergeable, so deletion evaluates the exact same evidence fence from
+     * a materialized snapshot of only the requested source/evidence rows.
+     */
+    private static final String CONTRACTOR_MANUAL_EVIDENCE_DELETE_BLOCKER_SQL = """
+            EXISTS (
+                SELECT 1
+                FROM (
+                    SELECT DISTINCT
+                        contractor_evidence_source.id,
+                        contractor_evidence_source.contractor_evidence_original_link_id,
+                        contractor_evidence_source.status,
+                        contractor_evidence_source.payment_method
+                    FROM payment_links contractor_evidence_source
+                    WHERE contractor_evidence_source.id IN (:ids)
+                       OR contractor_evidence_source.contractor_evidence_original_link_id IN (:ids)
+                ) contractor_evidence
+                JOIN contractor_payment_allocations contractor_allocation
+                  ON contractor_allocation.source_type = 'PAYMENT_LINK'
+                 AND contractor_allocation.source_id = contractor_evidence.contractor_evidence_original_link_id
+                 AND contractor_allocation.recipient_profile_id IS NOT NULL
+                 AND contractor_allocation.attempt_no = (
+                     SELECT MAX(contractor_latest.attempt_no)
+                     FROM contractor_payment_allocations contractor_latest
+                     WHERE contractor_latest.mode = contractor_allocation.mode
+                       AND contractor_latest.source_type = contractor_allocation.source_type
+                       AND contractor_latest.source_id = contractor_allocation.source_id
+                 )
+                WHERE (contractor_evidence.id = pl.id
+                       OR contractor_evidence.contractor_evidence_original_link_id = pl.id)
+                  AND contractor_evidence.contractor_evidence_original_link_id IS NOT NULL
+                  AND contractor_evidence.status = 'CONFIRMED'
+                  AND contractor_evidence.payment_method = 'MANUAL_MOBILE_BANK'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM contractor_payment_allocation_events contractor_event
+                      WHERE contractor_event.allocation_id = contractor_allocation.id
+                        AND contractor_event.external_ref = CONCAT(
+                            'MANUAL_EVIDENCE:', contractor_evidence.id
+                        )
+                  )
+            )
+            """;
+
+    /**
      * Candidate discovery may pass an abandoned claim only after its database
      * lease has expired and the payment link no longer represents retryable
      * notification work. A live lease remains an unconditional blocker.
      */
     private static final String ARCHIVE_SELECTION_BLOCKER_SQL = """
             (
-                """ + ARCHIVE_STATE_BLOCKER_SQL + """
+                %s
                 OR EXISTS (
                     SELECT 1
                     FROM payment_success_notification_retry_claims notification_claim
                     WHERE notification_claim.payment_link_id = pl.id
                       AND notification_claim.processing_lease_until > CURRENT_TIMESTAMP(6)
                 )
+                OR %s
+                OR %s
             )
-            """;
+            """.formatted(
+            ARCHIVE_STATE_BLOCKER_SQL,
+            CONTRACTOR_ARCHIVE_SELECTION_BLOCKER_SQL,
+            CONTRACTOR_MANUAL_EVIDENCE_BLOCKER_SQL
+    );
 
     /**
      * Copy/delete and hard-delete guards remain strict: cleanup must have
      * removed every expired, ineligible claim before any live row can move.
      */
-    private static final String ARCHIVE_FINAL_BLOCKER_SQL = """
-            (
-                """ + ARCHIVE_STATE_BLOCKER_SQL + """
-                OR EXISTS (
-                    SELECT 1
-                    FROM payment_success_notification_retry_claims notification_claim
-                    WHERE notification_claim.payment_link_id = pl.id
-                )
-            )
-            """;
+    private static final String ARCHIVE_FINAL_BLOCKER_SQL = archiveFinalBlockerSql(
+            CONTRACTOR_MANUAL_EVIDENCE_BLOCKER_SQL
+    );
+
+    private static final String ARCHIVE_DELETE_BLOCKER_SQL = archiveFinalBlockerSql(
+            CONTRACTOR_MANUAL_EVIDENCE_DELETE_BLOCKER_SQL
+    );
 
     private static final String ARCHIVE_ELIGIBILITY_SQL = """
             (
@@ -165,9 +313,17 @@ public class PaymentLinkArchiveRepository {
             Long searchId,
             LocalDate from,
             LocalDate to,
+            boolean excludePrivilegedTargets,
             String publicBaseUrl
     ) {
-        MapSqlParameterSource params = filterParams(statusFilter, search, searchId, from, to)
+        MapSqlParameterSource params = filterParams(
+                statusFilter,
+                search,
+                searchId,
+                from,
+                to,
+                excludePrivilegedTargets
+        )
                 .addValue("limit", Math.max(1, size))
                 .addValue("offset", Math.max(0, page) * Math.max(1, size));
         return jdbc.query("""
@@ -184,9 +340,17 @@ public class PaymentLinkArchiveRepository {
             String search,
             Long searchId,
             LocalDate from,
-            LocalDate to
+            LocalDate to,
+            boolean excludePrivilegedTargets
     ) {
-        MapSqlParameterSource params = filterParams(statusFilter, search, searchId, from, to);
+        MapSqlParameterSource params = filterParams(
+                statusFilter,
+                search,
+                searchId,
+                from,
+                to,
+                excludePrivilegedTargets
+        );
         return jdbc.queryForObject("""
                 SELECT
                   COUNT(*) AS total_elements,
@@ -223,7 +387,7 @@ public class PaymentLinkArchiveRepository {
             LocalDateTime finalCutoff,
             int limit
     ) {
-        return jdbc.queryForList("""
+        String sql = """
                 SELECT pl.id
                 FROM payment_links pl
                 WHERE NOT EXISTS (
@@ -231,11 +395,12 @@ public class PaymentLinkArchiveRepository {
                     FROM archive_payment_links apl
                     WHERE apl.id = pl.id
                 )
-                  AND """ + ARCHIVE_ELIGIBILITY_SQL + """
-                  AND NOT """ + ARCHIVE_SELECTION_BLOCKER_SQL + """
+                  AND %s
+                  AND NOT %s
                 ORDER BY pl.created_at ASC, pl.id ASC
                 LIMIT :limit
-                """, new MapSqlParameterSource()
+                """.formatted(ARCHIVE_ELIGIBILITY_SQL, ARCHIVE_SELECTION_BLOCKER_SQL);
+        return jdbc.queryForList(sql, new MapSqlParameterSource()
                 .addValue("paidCutoff", Timestamp.valueOf(paidCutoff))
                 .addValue("finalCutoff", Timestamp.valueOf(finalCutoff))
                 .addValue("limit", Math.max(1, limit)), Long.class);
@@ -276,7 +441,7 @@ public class PaymentLinkArchiveRepository {
                 || lockedOrderIds == null || lockedOrderIds.isEmpty()) {
             return List.of();
         }
-        return jdbc.queryForList("""
+        String sql = """
                 SELECT pl.id
                 FROM payment_links pl
                 WHERE pl.id IN (:snapshotIds)
@@ -286,11 +451,12 @@ public class PaymentLinkArchiveRepository {
                       FROM archive_payment_links archived
                       WHERE archived.id = pl.id
                   )
-                  AND """ + ARCHIVE_ELIGIBILITY_SQL + """
-                  AND NOT """ + ARCHIVE_SELECTION_BLOCKER_SQL + """
+                  AND %s
+                  AND NOT %s
                 ORDER BY pl.order_id, pl.id
                 FOR UPDATE SKIP LOCKED
-                """, new MapSqlParameterSource()
+                """.formatted(ARCHIVE_ELIGIBILITY_SQL, ARCHIVE_SELECTION_BLOCKER_SQL);
+        return jdbc.queryForList(sql, new MapSqlParameterSource()
                 .addValue("snapshotIds", snapshotIds)
                 .addValue("lockedOrderIds", lockedOrderIds)
                 .addValue("paidCutoff", Timestamp.valueOf(paidCutoff))
@@ -340,14 +506,15 @@ public class PaymentLinkArchiveRepository {
         if (orderId == null) {
             return false;
         }
-        Long present = jdbc.queryForObject("""
+        String sql = """
                 SELECT EXISTS(
                     SELECT 1
                     FROM payment_links pl
                     WHERE pl.order_id = :orderId
-                      AND """ + ARCHIVE_FINAL_BLOCKER_SQL + """
+                      AND %s
                 )
-                """, Map.of("orderId", orderId), Long.class);
+                """.formatted(ARCHIVE_FINAL_BLOCKER_SQL);
+        Long present = jdbc.queryForObject(sql, Map.of("orderId", orderId), Long.class);
         return present != null && present > 0;
     }
 
@@ -362,14 +529,15 @@ public class PaymentLinkArchiveRepository {
     }
 
     public boolean hasPreparedOrderArchiveBlocker() {
-        Long present = jdbc.queryForObject("""
+        String sql = """
                 SELECT EXISTS(
                     SELECT 1
                     FROM payment_links pl
                     JOIN archive_candidate_orders co ON co.order_id = pl.order_id
-                    WHERE """ + ARCHIVE_FINAL_BLOCKER_SQL + """
+                    WHERE %s
                 )
-                """, Map.of(), Long.class);
+                """.formatted(ARCHIVE_FINAL_BLOCKER_SQL);
+        Long present = jdbc.queryForObject(sql, Map.of(), Long.class);
         return present != null && present > 0;
     }
 
@@ -419,8 +587,8 @@ public class PaymentLinkArchiveRepository {
                 LEFT JOIN managers m ON m.manager_id = o.order_manager
                 LEFT JOIN users u ON u.id = m.user_id
                 WHERE pl.id IN (:ids)
-                  AND NOT """ + ARCHIVE_FINAL_BLOCKER_SQL + """
-                """).formatted(columns, selectColumns);
+                  AND NOT %s
+                """).formatted(columns, selectColumns, ARCHIVE_FINAL_BLOCKER_SQL);
         return jdbc.update(sql, new MapSqlParameterSource()
                 .addValue("ids", ids)
                 .addValue("archivedAt", Timestamp.valueOf(archivedAt))
@@ -432,17 +600,37 @@ public class PaymentLinkArchiveRepository {
         if (ids == null || ids.isEmpty()) {
             return 0;
         }
-        return jdbc.update("""
+        String sql = """
                 DELETE pl
                 FROM payment_links pl
                 WHERE pl.id IN (:ids)
-                  AND NOT """ + ARCHIVE_FINAL_BLOCKER_SQL + """
+                  AND NOT %s
                   AND EXISTS (
                       SELECT 1
                       FROM archive_payment_links archived
                       WHERE archived.id = pl.id
                   )
-                """, Map.of("ids", ids));
+                """.formatted(ARCHIVE_DELETE_BLOCKER_SQL);
+        return jdbc.update(sql, Map.of("ids", ids));
+    }
+
+    private static String archiveFinalBlockerSql(String manualEvidenceBlockerSql) {
+        return """
+                (
+                    %s
+                    OR EXISTS (
+                        SELECT 1
+                        FROM payment_success_notification_retry_claims notification_claim
+                        WHERE notification_claim.payment_link_id = pl.id
+                    )
+                    OR %s
+                    OR %s
+                )
+                """.formatted(
+                ARCHIVE_STATE_BLOCKER_SQL,
+                CONTRACTOR_ARCHIVE_SELECTION_BLOCKER_SQL,
+                manualEvidenceBlockerSql
+        );
     }
 
     private MapSqlParameterSource filterParams(
@@ -450,7 +638,8 @@ public class PaymentLinkArchiveRepository {
             String search,
             Long searchId,
             LocalDate from,
-            LocalDate to
+            LocalDate to,
+            boolean excludePrivilegedTargets
     ) {
         String normalizedSearch = normalize(search);
         return new MapSqlParameterSource()
@@ -458,13 +647,27 @@ public class PaymentLinkArchiveRepository {
                 .addValue("searchText", normalizedSearch.isBlank() ? null : "%" + normalizedSearch.toLowerCase(Locale.ROOT) + "%")
                 .addValue("searchId", searchId)
                 .addValue("from", from == null ? null : Timestamp.valueOf(from.atStartOfDay()))
-                .addValue("to", to == null ? null : Timestamp.valueOf(to.plusDays(1).atStartOfDay()));
+                .addValue("to", to == null ? null : Timestamp.valueOf(to.plusDays(1).atStartOfDay()))
+                .addValue("excludePrivilegedTargets", excludePrivilegedTargets);
     }
 
     private String filterWhereClause() {
         return """
                 WHERE (:from IS NULL OR apl.created_at >= :from)
                   AND (:to IS NULL OR apl.created_at < :to)
+                  AND (
+                    :excludePrivilegedTargets = FALSE
+                    OR NOT EXISTS (
+                      SELECT 1
+                      FROM contractor_payment_allocations allocation
+                      JOIN users_roles recipient_user_role
+                        ON recipient_user_role.user_id = allocation.recipient_user_id
+                      JOIN roles recipient_role
+                        ON recipient_role.id = recipient_user_role.role_id
+                      WHERE allocation.id = apl.contractor_allocation_id
+                        AND recipient_role.name IN ('ROLE_ADMIN', 'ROLE_OWNER')
+                    )
+                  )
                   AND (
                     :statusFilter = 'all'
                     OR (:statusFilter = 'active' AND apl.status IN ('CREATED', 'INITIATED', 'AUTHORIZED', 'WAITING_MANUAL_PAYMENT', 'MANUAL_REPORTED'))
@@ -484,11 +687,14 @@ public class PaymentLinkArchiveRepository {
                     OR LOWER(COALESCE(apl.payment_profile_name, '')) LIKE :searchText
                     OR LOWER(COALESCE(apl.tbank_terminal_key, '')) LIKE :searchText
                     OR LOWER(COALESCE(apl.payer_email, '')) LIKE :searchText
-                    OR LOWER(COALESCE(apl.manual_phone, '')) LIKE :searchText
-                    OR LOWER(COALESCE(apl.manual_recipient_name, '')) LIKE :searchText
+                    OR (COALESCE(apl.manual_source, '') <> 'CONTRACTOR_PAYMENT_PROFILE'
+                        AND LOWER(COALESCE(apl.manual_phone, '')) LIKE :searchText)
+                    OR (COALESCE(apl.manual_source, '') <> 'CONTRACTOR_PAYMENT_PROFILE'
+                        AND LOWER(COALESCE(apl.manual_recipient_name, '')) LIKE :searchText)
                     OR LOWER(COALESCE(apl.manual_payment_url, '')) LIKE :searchText
                     OR LOWER(COALESCE(apl.manual_payment_button_label, '')) LIKE :searchText
-                    OR LOWER(COALESCE(apl.manual_comment, '')) LIKE :searchText
+                    OR (COALESCE(apl.manual_source, '') <> 'CONTRACTOR_PAYMENT_PROFILE'
+                        AND LOWER(COALESCE(apl.manual_comment, '')) LIKE :searchText)
                     OR LOWER(COALESCE(apl.payment_success_notification_error, '')) LIKE :searchText
                     OR LOWER(COALESCE(apl.last_error, '')) LIKE :searchText
                     OR (:searchId IS NOT NULL AND (apl.id = :searchId OR apl.order_id = :searchId))
@@ -499,6 +705,8 @@ public class PaymentLinkArchiveRepository {
     private AdminPaymentLinkResponse archivedResponse(ResultSet rs, String publicBaseUrl) throws SQLException {
         long amountKopecks = rs.getLong("amount_kopecks");
         String token = rs.getString("token");
+        String manualSource = value(rs, "manual_source");
+        boolean contractorRoute = "CONTRACTOR_PAYMENT_PROFILE".equals(manualSource);
         return new AdminPaymentLinkResponse(
                 rs.getLong("id"),
                 token,
@@ -515,20 +723,26 @@ public class PaymentLinkArchiveRepository {
                 value(rs, "payment_method"),
                 value(rs, "payment_profile_code"),
                 value(rs, "payment_profile_name"),
-                value(rs, "manual_source"),
+                manualSource,
                 nullableLong(rs, "manual_task_id"),
-                value(rs, "manual_recipient_name"),
+                contractorRoute ? "" : value(rs, "manual_recipient_name"),
                 value(rs, "tbank_terminal_key"),
                 value(rs, "tbank_payment_id"),
                 value(rs, "tbank_order_id"),
                 value(rs, "payer_email"),
                 PaymentUrlPolicy.safe(value(rs, "payment_url"), PaymentUrlPolicy.Purpose.TBANK_PAYMENT),
                 value(rs, "manual_payment_type"),
-                value(rs, "manual_phone"),
-                value(rs, "manual_recipient_name"),
-                PaymentUrlPolicy.safe(value(rs, "manual_payment_url"), PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL),
+                contractorRoute ? "" : value(rs, "manual_phone"),
+                contractorRoute ? "" : value(rs, "manual_recipient_name"),
+                contractorRoute ? "" : value(rs, "manual_bank_name"),
+                contractorRoute
+                        ? ""
+                        : PaymentUrlPolicy.safe(
+                        value(rs, "manual_payment_url"),
+                        PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL
+                ),
                 value(rs, "manual_payment_button_label"),
-                value(rs, "manual_comment"),
+                contractorRoute ? "" : value(rs, "manual_comment"),
                 nullableDateTime(rs, "manual_reported_at"),
                 value(rs, "manual_confirmed_by"),
                 nullableDateTime(rs, "manual_confirmed_at"),

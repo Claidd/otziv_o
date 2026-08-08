@@ -27,7 +27,9 @@ public class CredentialEncryptionBackfill implements ApplicationRunner {
                     "archive_bad_review_tasks",
                     "bad_review_task_id",
                     "bad_review_task_bot_password_snapshot"
-            )
+            ),
+            new CredentialColumn("contractor_payment_profiles", "id", "payment_comment"),
+            new CredentialColumn("contractor_payment_allocations", "id", "payment_comment_snapshot")
     );
 
     private final JdbcTemplate jdbc;

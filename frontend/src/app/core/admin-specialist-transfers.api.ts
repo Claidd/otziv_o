@@ -40,6 +40,7 @@ export interface SpecialistTransferPreview {
   activeOrderCount: number;
   unpublishedReviewCount: number;
   badReviewTaskCount: number;
+  reviewRecoveryTaskCount: number;
   targetAlreadyAssignedCompanyCount: number;
   companiesWithoutActiveOrdersCount: number;
   targetWorkerMissingManagerLinksCount: number;
@@ -58,6 +59,7 @@ export interface SpecialistTransferResult {
   activeOrderCount: number;
   unpublishedReviewCount: number;
   badReviewTaskCount: number;
+  reviewRecoveryTaskCount: number;
 }
 
 export interface SpecialistTransferAudit {
@@ -73,6 +75,7 @@ export interface SpecialistTransferAudit {
   orderCount: number;
   reviewCount: number;
   badReviewTaskCount: number;
+  reviewRecoveryTaskCount: number;
   comment?: string | null;
 }
 

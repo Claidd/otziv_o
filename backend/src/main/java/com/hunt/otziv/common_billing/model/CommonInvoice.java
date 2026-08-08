@@ -120,6 +120,42 @@ public class CommonInvoice {
     @Column(name = "payment_route_profile_name", length = 120)
     private String paymentRouteProfileName;
 
+    /** LIVE contractor allocation frozen together with the common route. */
+    @Column(name = "contractor_allocation_id")
+    private Long contractorAllocationId;
+
+    /** Immutable inputs for the asynchronous test route. They are captured in
+     * the same transaction that freezes the public invoice route. */
+    @Column(name = "shadow_route_generation", length = 36)
+    private String shadowRouteGeneration;
+
+    @Column(name = "shadow_route_worker_state", length = 24)
+    private String shadowRouteWorkerState;
+
+    @Column(name = "shadow_route_worker_id")
+    private Long shadowRouteWorkerId;
+
+    @Column(name = "shadow_route_worker_user_id")
+    private Long shadowRouteWorkerUserId;
+
+    @Column(name = "shadow_route_manager_id")
+    private Long shadowRouteManagerId;
+
+    @Column(name = "shadow_route_manager_user_id")
+    private Long shadowRouteManagerUserId;
+
+    @Column(name = "shadow_route_amount_kopecks")
+    private Long shadowRouteAmountKopecks;
+
+    @Column(name = "shadow_route_membership_hash", length = 64)
+    private String shadowRouteMembershipHash;
+
+    @Column(name = "shadow_route_contractor_eligible", nullable = false)
+    private boolean shadowRouteContractorEligible;
+
+    @Column(name = "shadow_route_prepared_at")
+    private LocalDateTime shadowRoutePreparedAt;
+
     @Column(name = "payment_route_terminal_key", length = 64)
     private String paymentRouteTerminalKey;
 
@@ -140,6 +176,9 @@ public class CommonInvoice {
     @Column(name = "payment_route_manual_recipient", length = 160)
     private String paymentRouteManualRecipient;
 
+    @Column(name = "payment_route_manual_bank_name", length = 120)
+    private String paymentRouteManualBankName;
+
     @Column(name = "payment_route_manual_url", length = 512)
     private String paymentRouteManualUrl;
 
@@ -157,6 +196,10 @@ public class CommonInvoice {
 
     @Column(name = "payment_route_selected_at")
     private LocalDateTime paymentRouteSelectedAt;
+
+    /** Client statement only; this is never treated as confirmed receipt. */
+    @Column(name = "client_reported_at")
+    private LocalDateTime clientReportedAt;
 
     @Column(name = "manual_paid_by", length = 160)
     private String manualPaidBy;

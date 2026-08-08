@@ -373,6 +373,11 @@ VALUES
   ('payments.tbank.tpay-enabled', 'false', NOW(6)),
   ('payments.tbank.sberpay-enabled', 'false', NOW(6)),
   ('payments.tbank.mirpay-enabled', 'false', NOW(6)),
+  ('contractor-payments.shadow-enabled', 'true', NOW(6)),
+  ('contractor-payments.live-routing-enabled', 'false', NOW(6)),
+  ('contractor-payments.reward-attribution-live-enabled', 'false', NOW(6)),
+  ('contractor-payments.live-readiness-confirmed', 'false', NOW(6)),
+  ('contractor-payments.completion-attribution-start-date', '', NOW(6)),
   ('client.messages.payment-instruction-source', 'MANAGER_TEXT', NOW(6))
 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at);
 "@
@@ -427,6 +432,73 @@ SET review_recovery_task_bot_password_snapshot = NULL;
 
 UPDATE archive_bad_review_tasks
 SET bad_review_task_bot_password_snapshot = NULL;
+
+-- A production snapshot may contain contractor recipient envelopes encrypted
+-- with a production-only key. Prod-like deliberately uses a distinct local
+-- key, so remove recipient PII before the application can read or backfill it.
+-- Financial amounts/statuses remain available for migration and accounting
+-- tests; routes with removed recipient details fail closed locally.
+SET @has_contractor_profiles = (
+    SELECT COUNT(*)
+    FROM information_schema.tables
+    WHERE table_schema = DATABASE()
+      AND table_name = 'contractor_payment_profiles'
+);
+SET @sanitize_contractor_profiles = IF(
+    @has_contractor_profiles = 1,
+    'UPDATE contractor_payment_profiles SET enabled = FALSE, recipient_name = NULL, payment_phone = NULL, bank_name = NULL, payment_comment = NULL',
+    'SELECT 1'
+);
+PREPARE sanitize_contractor_profiles_statement FROM @sanitize_contractor_profiles;
+EXECUTE sanitize_contractor_profiles_statement;
+DEALLOCATE PREPARE sanitize_contractor_profiles_statement;
+
+SET @has_contractor_live_enabled = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'contractor_payment_profiles'
+      AND column_name = 'live_enabled'
+);
+SET @disable_contractor_live = IF(
+    @has_contractor_live_enabled = 1,
+    'UPDATE contractor_payment_profiles SET live_enabled = FALSE',
+    'SELECT 1'
+);
+PREPARE disable_contractor_live_statement FROM @disable_contractor_live;
+EXECUTE disable_contractor_live_statement;
+DEALLOCATE PREPARE disable_contractor_live_statement;
+
+SET @has_contractor_allocations = (
+    SELECT COUNT(*)
+    FROM information_schema.tables
+    WHERE table_schema = DATABASE()
+      AND table_name = 'contractor_payment_allocations'
+);
+SET @sanitize_contractor_allocations = IF(
+    @has_contractor_allocations = 1,
+    'UPDATE contractor_payment_allocations SET recipient_name_snapshot = NULL, payment_phone_snapshot = NULL, bank_name_snapshot = NULL',
+    'SELECT 1'
+);
+PREPARE sanitize_contractor_allocations_statement FROM @sanitize_contractor_allocations;
+EXECUTE sanitize_contractor_allocations_statement;
+DEALLOCATE PREPARE sanitize_contractor_allocations_statement;
+
+SET @has_contractor_allocation_comment = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'contractor_payment_allocations'
+      AND column_name = 'payment_comment_snapshot'
+);
+SET @sanitize_contractor_allocation_comment = IF(
+    @has_contractor_allocation_comment = 1,
+    'UPDATE contractor_payment_allocations SET payment_comment_snapshot = NULL',
+    'SELECT 1'
+);
+PREPARE sanitize_contractor_allocation_comment_statement FROM @sanitize_contractor_allocation_comment;
+EXECUTE sanitize_contractor_allocation_comment_statement;
+DEALLOCATE PREPARE sanitize_contractor_allocation_comment_statement;
 "@
 
     Invoke-External -FilePath 'docker' -Arguments ($ComposeArguments + @(
@@ -439,7 +511,7 @@ SET bad_review_task_bot_password_snapshot = NULL;
         $sql
     ))
 
-    Write-Host 'Restored local DB third-party passwords were replaced with non-production values.'
+    Write-Host 'Restored local DB third-party passwords and contractor recipient details were replaced with non-production values.'
 }
 
 if ($Help) {

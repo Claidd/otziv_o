@@ -106,7 +106,7 @@ const myChart = new Chart(ctx, {
     data: {
         labels: dates,
         datasets: [{
-            label: 'ЗП по дням',
+            label: 'Начисления по дням',
             data: orders,
             backgroundColor: 'rgba(75, 192, 192, 0.2)',
             borderColor: 'rgba(75, 192, 192, 1)',

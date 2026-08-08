@@ -34,7 +34,8 @@ class CredentialEncryptionBackfillMySqlIntegrationTest {
                 MYSQL.getPassword()
         ));
         for (String table : new String[]{
-                "telephones", "bots", "bad_review_tasks", "review_recovery_tasks", "archive_bad_review_tasks"
+                "telephones", "bots", "bad_review_tasks", "review_recovery_tasks", "archive_bad_review_tasks",
+                "contractor_payment_profiles", "contractor_payment_allocations"
         }) {
             jdbc.execute("DROP TABLE IF EXISTS " + table);
         }
@@ -70,6 +71,18 @@ class CredentialEncryptionBackfillMySqlIntegrationTest {
                     bad_review_task_bot_password_snapshot VARCHAR(1024)
                 ) ENGINE=InnoDB
                 """);
+        jdbc.execute("""
+                CREATE TABLE contractor_payment_profiles (
+                    id BIGINT PRIMARY KEY,
+                    payment_comment VARCHAR(2048)
+                ) ENGINE=InnoDB
+                """);
+        jdbc.execute("""
+                CREATE TABLE contractor_payment_allocations (
+                    id BIGINT PRIMARY KEY,
+                    payment_comment_snapshot VARCHAR(2048)
+                ) ENGINE=InnoDB
+                """);
     }
 
     @Test
@@ -100,6 +113,16 @@ class CredentialEncryptionBackfillMySqlIntegrationTest {
                 "avito-secret",
                 "mail-secret"
         );
+        jdbc.update(
+                "INSERT INTO contractor_payment_profiles (id, payment_comment) VALUES (?, ?)",
+                5L,
+                "без персональных данных"
+        );
+        jdbc.update(
+                "INSERT INTO contractor_payment_allocations (id, payment_comment_snapshot) VALUES (?, ?)",
+                6L,
+                oldCipher.encrypt("старый комментарий")
+        );
 
         CredentialEncryptionBackfill backfill = new CredentialEncryptionBackfill(
                 jdbc,
@@ -125,6 +148,12 @@ class CredentialEncryptionBackfillMySqlIntegrationTest {
         assertThat(activeCipher.decrypt(value(
                 "telephones", "telephone_id", 4L, "telephone_mail_password"
         ))).isEqualTo("mail-secret");
+        assertThat(activeCipher.decrypt(value(
+                "contractor_payment_profiles", "id", 5L, "payment_comment"
+        ))).isEqualTo("без персональных данных");
+        assertThat(activeCipher.decrypt(value(
+                "contractor_payment_allocations", "id", 6L, "payment_comment_snapshot"
+        ))).isEqualTo("старый комментарий");
 
         backfill.run(null);
         assertThat(value("bots", "bot_id", 1L, "bot_password")).isEqualTo(first);

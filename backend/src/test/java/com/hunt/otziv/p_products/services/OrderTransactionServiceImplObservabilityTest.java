@@ -6,6 +6,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentRolloutStateService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
@@ -49,6 +50,7 @@ class OrderTransactionServiceImplObservabilityTest {
     @Mock private MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
     @Mock private GamificationEventService gamificationEventService;
     @Mock private R0ObservabilityMetrics observabilityMetrics;
+    @Mock private ContractorPaymentRolloutStateService contractorPaymentRolloutStateService;
 
     @InjectMocks private OrderTransactionServiceImpl service;
 

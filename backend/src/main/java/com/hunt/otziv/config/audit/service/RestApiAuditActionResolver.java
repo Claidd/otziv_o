@@ -314,6 +314,9 @@ public class RestApiAuditActionResolver {
         put(actions, "DELETE", "/api/admin/phones/{id}", "удаление телефона оператора {id}");
         put(actions, "GET", "/api/admin/settings/nagul", "загрузка настройки времени между выгулами");
         put(actions, "PUT", "/api/admin/settings/nagul", "редактирование настройки времени между выгулами");
+        put(actions, "GET", "/api/admin/contractor-payments/system", "загрузка состояния расчётов с самозанятыми");
+        put(actions, "POST", "/api/admin/contractor-payments/system/activate", "необратимое включение нового учёта самозанятых");
+        put(actions, "POST", "/api/admin/contractor-payments/system/routing", "изменение подстановки реквизитов самозанятых: {enabled}");
         put(actions, "GET", "/api/admin/workload-shadow/settings", "загрузка настроек наблюдения за нагрузкой");
         put(actions, "PUT", "/api/admin/workload-shadow/settings", "редактирование настроек наблюдения за нагрузкой");
         put(actions, "POST", "/api/admin/workload-shadow/monitor/recalculate", "ручной теневой пересчёт нагрузки");

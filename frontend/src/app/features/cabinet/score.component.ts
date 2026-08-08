@@ -84,7 +84,7 @@ export class ScoreComponent {
         performance ? { label: 'База KPI', value: `${performance.performanceScore} без нагрузки` } : null,
         performance ? { label: 'Нагрузка', value: `${this.workloadLabel(performance.workloadLevel)} · ${this.decimal(performance.avgDailyWorkload)} в день` } : null,
         performance ? { label: 'К действию', value: this.amount(performance.actionTotal) } : null,
-        this.financeRow('ЗП', user.salary),
+        this.financeRow('Начислено', user.salary),
         this.financeRow('Новые компании', user.newCompanies, ' шт.'),
         { label: 'Заказы', value: this.count(user.order1Month) },
         { label: 'Отзывы', value: this.count(user.review1Month) },
@@ -94,7 +94,7 @@ export class ScoreComponent {
 
     if (section.key === 'workers') {
       return [
-        this.financeRow('ЗП', user.salary),
+        this.financeRow('Начислено', user.salary),
         { label: 'Заказы', value: this.count(user.order1Month) },
         { label: 'Отзывы', value: this.count(user.review1Month) },
         { label: 'Выгул', value: this.count(user.inVigul) },
@@ -103,7 +103,7 @@ export class ScoreComponent {
     }
 
     return [
-      this.financeRow('ЗП', user.salary),
+      this.financeRow('Начислено', user.salary),
       { label: 'Новые', value: this.count(user.leadsNew) },
       { label: 'В работе', value: this.count(user.leadsInWork) },
       { label: 'Конверсия', value: `${user.percentInWork || 0}%` }

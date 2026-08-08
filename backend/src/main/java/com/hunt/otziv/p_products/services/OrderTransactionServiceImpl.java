@@ -6,6 +6,9 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
+import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
+import com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentRolloutStateService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
@@ -42,6 +45,8 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
     private final GamificationEventService gamificationEventService;
     private final R0ObservabilityMetrics observabilityMetrics;
+    private final ContractorPaymentRolloutStateService contractorPaymentRolloutStateService;
+    private final ContractorCompletionRewardService contractorCompletionRewardService;
 
     public static final String STATUS_PAYMENT = "Оплачено";
     public static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
@@ -58,7 +63,9 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
             NextOrderRequestService nextOrderRequestService,
             MobilePushBusinessNotificationService mobilePushBusinessNotificationService,
             GamificationEventService gamificationEventService,
-            R0ObservabilityMetrics observabilityMetrics
+            R0ObservabilityMetrics observabilityMetrics,
+            ContractorPaymentRolloutStateService contractorPaymentRolloutStateService,
+            ContractorCompletionRewardService contractorCompletionRewardService
     ) {
         this.companyService = companyService;
         this.zpService = zpService;
@@ -72,6 +79,8 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         this.mobilePushBusinessNotificationService = mobilePushBusinessNotificationService;
         this.gamificationEventService = gamificationEventService;
         this.observabilityMetrics = observabilityMetrics;
+        this.contractorPaymentRolloutStateService = contractorPaymentRolloutStateService;
+        this.contractorCompletionRewardService = contractorCompletionRewardService;
     }
 
     @Override
@@ -112,8 +121,18 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
                     payableAmount
             );
 
-            if (zpService.save(order, payableSum, payableAmount)) {
-                log.info("Сохранили ЗП");
+            boolean rewardsReady;
+            ContractorPaymentAccountingAuthority accountingAuthority =
+                    contractorPaymentRolloutStateService.lockAccountingAuthority();
+            if (accountingAuthority == ContractorPaymentAccountingAuthority.COMPLETION) {
+                contractorCompletionRewardService.ensureOrderCompletionAccrual(order.getId());
+                rewardsReady = true;
+            } else {
+                rewardsReady = zpService.save(order, payableSum, payableAmount);
+            }
+
+            if (rewardsReady) {
+                log.info("Сохранили начисления");
                 paymentCheckService.save(order, payableSum);
                 log.info("Сохранили чек");
 
@@ -137,7 +156,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
                     }
                 }
             } else {
-                log.error("Проблемы при сохранении ЗП");
+                log.error("Проблемы при сохранении начислений");
             }
         }
 

@@ -353,7 +353,7 @@
               [checked]="form.controls.enabled.value"
               disabled
             >
-            <span>{{ selectedUser()?.active ? 'Работает · доступ включён' : 'Уволен · доступ отключён' }}</span>
+            <span>{{ selectedUser()?.active ? 'Активен · доступ включён' : 'Деактивирован · доступ отключён' }}</span>
           </label>
 
           @if (!isAdminUser(selectedUser())) {
@@ -362,11 +362,11 @@
                 {{ selectedUser()?.active ? 'person_off' : 'person_add' }}
               </span>
               <div>
-                <strong>{{ selectedUser()?.active ? 'Увольнение без потери истории' : 'Сотрудник находится в архиве' }}</strong>
+                <strong>{{ selectedUser()?.active ? 'Отключение без потери истории' : 'Пользователь находится в архиве' }}</strong>
                 <small>
                   {{ selectedUser()?.active
-                    ? 'Профиль, заказы, отзывы и статистика сохранятся. Сотрудник исчезнет из текущих рабочих списков.'
-                    : 'Верните сотрудника в штат, чтобы восстановить вход и снова показывать его в рабочих списках.' }}
+                    ? 'Профиль, заказы, отзывы и статистика сохранятся. Пользователь исчезнет из текущих рабочих списков.'
+                    : 'Восстановите доступ, чтобы снова показывать пользователя в рабочих списках.' }}
                 </small>
               </div>
               <button
@@ -377,7 +377,7 @@
                 [disabled]="saving()"
               >
                 <span class="material-icons-sharp">{{ selectedUser()?.active ? 'person_remove' : 'person_add' }}</span>
-                {{ selectedUser()?.active ? 'Уволить' : 'Вернуть в штат' }}
+                {{ selectedUser()?.active ? 'Отключить доступ' : 'Восстановить доступ' }}
               </button>
             </section>
           }
@@ -429,6 +429,678 @@
 
           @if (deleteError()) {
             <p class="error compact">{{ deleteError() }}</p>
+          }
+
+          @if (contractorProfilesLoading() || contractorProfiles().length > 0 || contractorProfilesError()) {
+            <section class="contractor-payments">
+              <div class="editor-title">
+                <div>
+                  <p class="eyebrow">REWARD ROUTING</p>
+                  <h2>Платёжные профили вознаграждений</h2>
+                </div>
+                <span
+                  class="routing-mode-badge"
+                  [class.live]="contractorRoutingModeClass() === 'live'"
+                  [class.shadow]="contractorRoutingModeClass() === 'shadow'"
+                  [class.disabled]="contractorRoutingModeClass() === 'disabled'"
+                >
+                  {{ contractorRoutingModeLabel() }}
+                </span>
+              </div>
+
+              <p class="form-hint">
+                Персональный допуск влияет только на новые счета после включения глобальной выдачи реквизитов.
+                Если допуск специалиста выключен, система проверяет менеджера заказа; если выключен и допуск
+                менеджера, сразу используются реквизиты владельца. Тестовый расчёт остаётся отдельной настройкой.
+              </p>
+
+              @if (!canManageContractorProfiles()) {
+                <p class="contractor-profile-readonly">
+                  Вы видите актуальные настройки. Изменять платёжные профили и персональные допуски может
+                  администратор или владелец.
+                </p>
+              }
+
+              @if (contractorProfilesLoading()) {
+                <p class="hint compact">Загружаю платёжные профили…</p>
+              }
+
+              @if (contractorProfilesError()) {
+                <p class="error compact">{{ contractorProfilesError() }}</p>
+              }
+
+              <div class="contractor-profile-list">
+                @for (profile of contractorProfiles(); track profile.id) {
+                  <article class="contractor-profile-card">
+                    <header>
+                      <div>
+                        <strong>{{ contractorRoleLabel(profile.role) }}</strong>
+                        <small>Постоянный профиль пользователя</small>
+                      </div>
+                      <label class="checkbox">
+                        <input
+                          type="checkbox"
+                          [checked]="profile.enabled"
+                          [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
+                          (change)="updateContractorProfile(profile.id, 'enabled', $any($event.target).checked)"
+                        >
+                        <span>Участвует в тестовом расчёте</span>
+                      </label>
+                    </header>
+
+                    <section
+                      class="contractor-personal-routing"
+                      [attr.data-tone]="contractorProfileRoutingState(profile).tone"
+                      aria-label="Персональный допуск реквизитов"
+                    >
+                      <div>
+                        <strong>Использовать реквизиты в новых счетах</strong>
+                        <small>{{ contractorProfileRoutingState(profile).detail }}</small>
+                      </div>
+                      <label class="contractor-routing-switch">
+                        <input
+                          type="checkbox"
+                          [checked]="profile.liveEnabled"
+                          [disabled]="!canEditContractorRouting(profile)"
+                          (change)="updateContractorProfile(profile.id, 'liveEnabled', $any($event.target).checked)"
+                        >
+                        <span aria-hidden="true"></span>
+                        <strong>{{ contractorProfileRoutingState(profile).label }}</strong>
+                      </label>
+                    </section>
+
+                    <div class="contractor-profile-fields">
+                      <label>
+                        <span>ФИО получателя</span>
+                        <input
+                          type="text"
+                          [value]="profile.recipientName || ''"
+                          [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
+                          (input)="updateContractorProfile(profile.id, 'recipientName', $any($event.target).value)"
+                        >
+                      </label>
+                      <label>
+                        <span>Номер для перевода</span>
+                        <input
+                          type="text"
+                          [value]="profile.paymentPhone || ''"
+                          [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
+                          (input)="updateContractorProfile(profile.id, 'paymentPhone', $any($event.target).value)"
+                        >
+                      </label>
+                      <label>
+                        <span>Банк</span>
+                        <input
+                          type="text"
+                          [value]="profile.bankName || ''"
+                          [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
+                          (input)="updateContractorProfile(profile.id, 'bankName', $any($event.target).value)"
+                        >
+                      </label>
+                      <label>
+                        <span>Переходящий остаток, ₽</span>
+                        <input
+                          type="text"
+                          inputmode="decimal"
+                          [value]="profile.openingBalanceRubles"
+                          [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
+                          (input)="updateContractorProfile(profile.id, 'openingBalanceRubles', $any($event.target).value)"
+                        >
+                      </label>
+                      @if (contractorOpeningBalanceChanged(profile)) {
+                        <label class="wide opening-balance-reason">
+                          <span>Причина изменения переходящего остатка</span>
+                          <input
+                            type="text"
+                            [value]="profile.openingBalanceReason"
+                            [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
+                            (input)="updateContractorProfile(profile.id, 'openingBalanceReason', $any($event.target).value)"
+                            placeholder="Обязательно: источник расчёта, дата среза и причина"
+                          >
+                          <small>
+                            Изменение будет записано в журнал аудита без платёжных реквизитов.
+                          </small>
+                        </label>
+                      }
+                      <label class="wide">
+                        <span>Комментарий к переводу (без персональных данных)</span>
+                        <input
+                          type="text"
+                          [value]="profile.paymentComment || ''"
+                          [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
+                          (input)="updateContractorProfile(profile.id, 'paymentComment', $any($event.target).value)"
+                          placeholder="Не указывайте ФИО, телефон, карту или другие реквизиты"
+                        >
+                      </label>
+                    </div>
+
+                    <div class="contractor-profile-metrics">
+                      <span><small>Начислено за месяц</small><strong>{{ moneyKopecks(profile.accruedMonthKopecks) }}</strong></span>
+                      <span><small>Зарезервировано</small><strong>{{ moneyKopecks(profile.reservedKopecks) }}</strong></span>
+                      <span><small>Клиент сообщил</small><strong>{{ moneyKopecks(profile.clientReportedKopecks) }}</strong></span>
+                      <span><small>Частично подтверждено · остаток</small><strong>{{ moneyKopecks(profile.partiallyConfirmedOutstandingKopecks) }}</strong></span>
+                      <span><small>{{ profile.reportingLive ? 'Подтверждено за месяц' : 'Смоделировано за месяц' }}</small><strong>{{ moneyKopecks(profile.grossConfirmedMonthKopecks) }}</strong></span>
+                      <span><small>Возвращено за месяц</small><strong>{{ moneyKopecks(profile.returnedMonthKopecks) }}</strong></span>
+                      <span><small>Закрыто без поступления</small><strong>{{ moneyKopecks(profile.closedWithoutPaymentMonthKopecks) }}</strong></span>
+                      <span><small>Получено за вычетом возвратов</small><strong>{{ moneyKopecks(profile.netReceivedMonthKopecks) }}</strong></span>
+                      <span><small>Доступно</small><strong>{{ moneyKopecks(profile.availableKopecks) }}</strong></span>
+                    </div>
+                    @if (profile.exposureOverrunKopecks > 0) {
+                      <p class="error compact">
+                        Требуется ручная сверка: поступления и активные назначения превышают обязательство на
+                        {{ moneyKopecks(profile.exposureOverrunKopecks) }}.
+                      </p>
+                    }
+
+                    <details
+                      class="opening-history"
+                      (toggle)="loadContractorOpeningHistory(profile.id, $any($event.target).open)"
+                    >
+                      <summary>История переходящего остатка</summary>
+                      @if (contractorOpeningHistoryLoadingId() === profile.id) {
+                        <p>Загружаю историю…</p>
+                      } @else if (contractorOpeningHistoryError()) {
+                        <p class="error compact">{{ contractorOpeningHistoryError() }}</p>
+                      } @else if ((contractorOpeningHistory()[profile.id] || []).length === 0) {
+                        <p>Изменений пока не было.</p>
+                      } @else {
+                        <ol>
+                          @for (adjustment of contractorOpeningHistory()[profile.id]; track adjustment.id) {
+                            <li>
+                              <span>{{ contractorDateTime(adjustment.effectiveAt) }}</span>
+                              <strong>
+                                {{ moneyKopecks(adjustment.oldBalanceKopecks) }} →
+                                {{ moneyKopecks(adjustment.newBalanceKopecks) }}
+                              </strong>
+                              <span>{{ adjustment.reason }}</span>
+                              <small>{{ adjustment.changedBy }}</small>
+                            </li>
+                          }
+                        </ol>
+                      }
+                    </details>
+
+                    <details
+                      class="direct-settlements"
+                      (toggle)="loadContractorDirectSettlements(profile.id, $any($event.target).open)"
+                    >
+                      <summary>Фактические переводы и корректировки</summary>
+                      <p class="form-hint compact">
+                        Здесь учитывается перевод, сделанный владельцем напрямую. В тестовом режиме запись
+                        только моделирует поступление. В поле подтверждения указывайте лишь ID внутреннего
+                        документа — без ФИО, телефона, карты или счёта.
+                      </p>
+
+                      @if (contractorDirectSettlementsError()) {
+                        <p class="error compact">{{ contractorDirectSettlementsError() }}</p>
+                      }
+
+                      <div class="direct-settlement-form">
+                        <label>
+                          <span>Сумма, ₽</span>
+                          <input
+                            type="text"
+                            inputmode="decimal"
+                            [value]="contractorDirectSettlementDraft('payment:' + profile.id).amountRubles"
+                            (input)="updateContractorDirectSettlementDraft('payment:' + profile.id, 'amountRubles', $any($event.target).value)"
+                          >
+                        </label>
+                        <label>
+                          <span>Дата и время</span>
+                          <input
+                            type="datetime-local"
+                            [value]="contractorDirectSettlementDraft('payment:' + profile.id).effectiveAt"
+                            (input)="updateContractorDirectSettlementDraft('payment:' + profile.id, 'effectiveAt', $any($event.target).value)"
+                          >
+                        </label>
+                        <label>
+                          <span>Основание</span>
+                          <input
+                            type="text"
+                            maxlength="255"
+                            placeholder="Например, перевод по акту за июль"
+                            [value]="contractorDirectSettlementDraft('payment:' + profile.id).reason"
+                            (input)="updateContractorDirectSettlementDraft('payment:' + profile.id, 'reason', $any($event.target).value)"
+                          >
+                        </label>
+                        <label>
+                          <span>ID подтверждающего документа</span>
+                          <input
+                            type="text"
+                            maxlength="160"
+                            placeholder="Например, bank-proof-2026-08-001"
+                            [value]="contractorDirectSettlementDraft('payment:' + profile.id).evidenceReference"
+                            (input)="updateContractorDirectSettlementDraft('payment:' + profile.id, 'evidenceReference', $any($event.target).value)"
+                          >
+                        </label>
+                        <button
+                          type="button"
+                          (click)="createContractorDirectSettlement(profile)"
+                          [disabled]="contractorDirectSettlementSavingKey() === 'payment:' + profile.id"
+                        >
+                          {{ contractorDirectSettlementSavingKey() === 'payment:' + profile.id
+                            ? 'Учитываю'
+                            : (profile.reportingLive ? 'Учесть фактический перевод' : 'Смоделировать перевод') }}
+                        </button>
+                      </div>
+
+                      @if (contractorDirectSettlementsLoadingId() === profile.id) {
+                        <p>Загружаю переводы…</p>
+                      } @else if ((contractorDirectSettlements()[profile.id] || []).length === 0) {
+                        <p>Прямых переводов пока не было.</p>
+                      } @else {
+                        <ol class="direct-settlement-history">
+                          @for (settlement of contractorDirectSettlements()[profile.id] || []; track settlement.id) {
+                            <li>
+                              <div>
+                                <span>{{ contractorDateTime(settlement.effectiveAt) }}</span>
+                                <strong>
+                                  {{ settlement.type === 'PAYMENT' ? 'Перевод' : 'Корректировка' }} ·
+                                  {{ moneyKopecks(settlement.amountKopecks) }}
+                                </strong>
+                                <small>
+                                  {{ settlement.simulated ? 'Тестовый учёт' : 'Фактический учёт' }} ·
+                                  документ {{ settlement.evidenceReference }} · {{ settlement.actor }}
+                                </small>
+                                <span>{{ settlement.reason }}</span>
+                              </div>
+
+                              @if (settlement.type === 'PAYMENT'
+                                && contractorDirectSettlementRemaining(profile.id, settlement) > 0) {
+                                <details class="direct-reversal-form">
+                                  <summary>
+                                    Учесть корректировку · доступно
+                                    {{ moneyKopecks(contractorDirectSettlementRemaining(profile.id, settlement)) }}
+                                  </summary>
+                                  <div>
+                                    <label>
+                                      <span>Сумма, ₽</span>
+                                      <input
+                                        type="text"
+                                        inputmode="decimal"
+                                        [value]="contractorDirectSettlementDraft('reversal:' + settlement.id).amountRubles"
+                                        (input)="updateContractorDirectSettlementDraft('reversal:' + settlement.id, 'amountRubles', $any($event.target).value)"
+                                      >
+                                    </label>
+                                    <label>
+                                      <span>Дата и время</span>
+                                      <input
+                                        type="datetime-local"
+                                        [value]="contractorDirectSettlementDraft('reversal:' + settlement.id).effectiveAt"
+                                        (input)="updateContractorDirectSettlementDraft('reversal:' + settlement.id, 'effectiveAt', $any($event.target).value)"
+                                      >
+                                    </label>
+                                    <label>
+                                      <span>Основание</span>
+                                      <input
+                                        type="text"
+                                        maxlength="255"
+                                        [value]="contractorDirectSettlementDraft('reversal:' + settlement.id).reason"
+                                        (input)="updateContractorDirectSettlementDraft('reversal:' + settlement.id, 'reason', $any($event.target).value)"
+                                      >
+                                    </label>
+                                    <label>
+                                      <span>ID подтверждающего документа</span>
+                                      <input
+                                        type="text"
+                                        maxlength="160"
+                                        [value]="contractorDirectSettlementDraft('reversal:' + settlement.id).evidenceReference"
+                                        (input)="updateContractorDirectSettlementDraft('reversal:' + settlement.id, 'evidenceReference', $any($event.target).value)"
+                                      >
+                                    </label>
+                                    <button
+                                      type="button"
+                                      (click)="reverseContractorDirectSettlement(profile, settlement)"
+                                      [disabled]="contractorDirectSettlementSavingKey() === 'reversal:' + settlement.id"
+                                    >
+                                      {{ contractorDirectSettlementSavingKey() === 'reversal:' + settlement.id
+                                        ? 'Учитываю'
+                                        : 'Учесть корректировку' }}
+                                    </button>
+                                  </div>
+                                </details>
+                              }
+                            </li>
+                          }
+                        </ol>
+                      }
+                    </details>
+
+                    <div class="actions">
+                      <button
+                        type="button"
+                        (click)="saveContractorPaymentProfile(profile)"
+                        [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
+                      >
+                        <span class="material-icons-sharp">account_balance_wallet</span>
+                        {{ contractorProfileSavingId() === profile.id ? 'Сохраняю' : 'Сохранить платёжный профиль' }}
+                      </button>
+                    </div>
+                  </article>
+                }
+              </div>
+
+              <section
+                class="contractor-queue-health"
+                [class.has-problems]="contractorQueueHasProblems()"
+                aria-label="Состояние фоновой сверки"
+              >
+                <header>
+                  <div>
+                    <p class="eyebrow">QUEUE HEALTH</p>
+                    <h3>Фоновая сверка и восстановление</h3>
+                  </div>
+                  <button
+                    type="button"
+                    class="secondary"
+                    (click)="loadContractorQueueHealth()"
+                    [disabled]="contractorQueueHealthLoading()"
+                  >
+                    {{ contractorQueueHealthLoading() ? 'Обновляю' : 'Обновить' }}
+                  </button>
+                </header>
+                @if (contractorQueueHealthError()) {
+                  <p class="error compact">{{ contractorQueueHealthError() }}</p>
+                } @else if (contractorQueueHealth()) {
+                  <div class="queue-health-grid">
+                    <span>
+                      <small>Сверка поступлений</small>
+                      <strong>{{ contractorQueueHealth()?.allocationReconciliation?.retrying || 0 }} повторов</strong>
+                      <em>{{ contractorQueueHealth()?.allocationReconciliation?.dueRetries || 0 }} просрочено</em>
+                      <em>{{ contractorQueueHealth()?.allocationReconciliation?.expiredClaims || 0 }} истёкших lease</em>
+                    </span>
+                    <span>
+                      <small>Восстановление начислений</small>
+                      <strong>{{ contractorQueueHealth()?.rewardRepair?.retrying || 0 }} повторов</strong>
+                      <em>{{ contractorQueueHealth()?.rewardRepair?.dueRetries || 0 }} просрочено</em>
+                      <em>{{ contractorQueueHealth()?.rewardRepair?.expiredClaims || 0 }} истёкших lease</em>
+                    </span>
+                    <span>
+                      <small>Подготовка тестовых маршрутов</small>
+                      <strong>{{ contractorQueueHealth()?.shadowBackfill?.retrying || 0 }} повторов</strong>
+                      <em>{{ contractorQueueHealth()?.shadowBackfill?.dueRetries || 0 }} просрочено</em>
+                      <em>{{ contractorQueueHealth()?.shadowBackfill?.expiredClaims || 0 }} истёкших lease</em>
+                    </span>
+                    <span>
+                      <small>Начисления за выполненные работы</small>
+                      <strong>{{ contractorQueueHealth()?.completionRewardRepair?.retrying || 0 }} повторов</strong>
+                      <em>{{ contractorQueueHealth()?.completionRewardRepair?.dueRetries || 0 }} просрочено</em>
+                      <em>Код: {{ contractorQueueHealth()?.completionRewardRepair?.lastErrorCode || '—' }}</em>
+                    </span>
+                  </div>
+                  <small>Срез: {{ contractorDateTime(contractorQueueHealth()?.observedAt) }}</small>
+                }
+              </section>
+
+              <section class="contractor-allocation-journal" aria-label="Журнал решений по счетам">
+                <div class="journal-toolbar">
+                  <div>
+                    <p class="eyebrow">DECISION JOURNAL</p>
+                    <h3>Журнал решений по счетам</h3>
+                    <small>
+                      Пользователь: {{ contractorJournalAllUsers()
+                        ? 'все пользователи'
+                        : (selectedUser()?.fio || selectedUser()?.username) }}
+                    </small>
+                  </div>
+                  <div class="journal-filters">
+                    <label>
+                      <span>Пользователь</span>
+                      <select
+                        [value]="contractorJournalAllUsers() ? 'all' : 'selected'"
+                        (change)="changeContractorJournalUserScope($any($event.target).value)"
+                      >
+                        <option value="selected">Выбранный</option>
+                        <option value="all">Все</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Статус</span>
+                      <select
+                        [value]="contractorJournalStatus()"
+                        (change)="changeContractorJournalStatus($any($event.target).value)"
+                      >
+                        <option value="">Все статусы</option>
+                        @for (status of contractorJournalStatuses; track status) {
+                          <option [value]="status">{{ contractorAllocationStatusLabel(status) }}</option>
+                        }
+                      </select>
+                    </label>
+                    <label>
+                      <span>Режим</span>
+                      <select
+                        [value]="contractorJournalMode()"
+                        (change)="changeContractorJournalMode($any($event.target).value)"
+                      >
+                        <option value="">Все режимы</option>
+                        <option value="SHADOW">Тестовый</option>
+                        <option value="LIVE">Боевой</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Тип счёта</span>
+                      <select
+                        [value]="contractorJournalSourceType()"
+                        (change)="changeContractorJournalSourceType($any($event.target).value)"
+                      >
+                        <option value="">Все типы</option>
+                        <option value="PAYMENT_LINK">Платёжная ссылка</option>
+                        <option value="COMMON_INVOICE">Общий счёт</option>
+                        <option value="DIRECT_SETTLEMENT">Прямой перевод</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Номер счёта/ссылки</span>
+                      <input
+                        type="number"
+                        min="1"
+                        [value]="contractorJournalSourceId() || ''"
+                        (change)="changeContractorJournalSourceId($any($event.target).value)"
+                        placeholder="Все"
+                      >
+                    </label>
+                  </div>
+                </div>
+
+                @if (contractorReturnError()) {
+                  <p class="journal-return-error">{{ contractorReturnError() }}</p>
+                }
+
+                @if (contractorJournalError()) {
+                  <div class="journal-state error">
+                    <span>{{ contractorJournalError() }}</span>
+                    <button type="button" class="secondary" (click)="loadContractorPaymentJournal()">Повторить</button>
+                  </div>
+                } @else if (contractorJournalLoading() && !contractorJournal()) {
+                  <p class="journal-state">Загружаю журнал…</p>
+                } @else if (contractorJournal()?.content?.length === 0) {
+                  <p class="journal-state">Для выбранного пользователя и статуса решений пока нет.</p>
+                } @else {
+                  <div class="journal-list" [class.loading]="contractorJournalLoading()">
+                    @for (item of contractorJournal()?.content || []; track item.id) {
+                      <article class="journal-card">
+                        <header>
+                          <div>
+                            <strong>{{ contractorAllocationSource(item) }}</strong>
+                            <small>Попытка {{ item.attemptNo }} · {{ item.mode === 'SHADOW' ? 'тест' : 'боевой режим' }}</small>
+                          </div>
+                          <span class="journal-status" [attr.data-status]="item.status">
+                            {{ contractorAllocationStatusLabel(item.status) }}
+                          </span>
+                        </header>
+
+                        <dl class="journal-grid">
+                          <div>
+                            <dt>Получатель</dt>
+                            <dd>{{ contractorAllocationRecipient(item) }}</dd>
+                          </div>
+                          <div>
+                            <dt>Сумма счёта</dt>
+                            <dd>{{ moneyKopecks(item.amountKopecks) }}</dd>
+                          </div>
+                          <div>
+                            <dt>Подтверждено</dt>
+                            <dd>{{ moneyKopecks(item.confirmedKopecks) }}</dd>
+                          </div>
+                          <div>
+                            <dt>Возвращено</dt>
+                            <dd>{{ moneyKopecks(item.returnedKopecks) }}</dd>
+                          </div>
+                          <div>
+                            <dt>Заказ</dt>
+                            <dd>{{ item.orderId || '—' }}</dd>
+                          </div>
+                          <div>
+                            <dt>Общий счёт</dt>
+                            <dd>{{ item.commonInvoiceId || '—' }}</dd>
+                          </div>
+                          <div>
+                            <dt>Текущий специалист</dt>
+                            <dd>{{ item.currentWorkerId || '—' }}</dd>
+                          </div>
+                          <div>
+                            <dt>Текущий менеджер</dt>
+                            <dd>{{ item.currentManagerId || '—' }}</dd>
+                          </div>
+                        </dl>
+
+                        @if (item.routingDecisionReason || item.specialistRejectionReason || item.managerRejectionReason) {
+                          <dl class="journal-routing-decision" aria-label="Обоснование выбора получателя">
+                            @if (item.routingDecisionReason) {
+                              <div>
+                                <dt>Итог маршрута</dt>
+                                <dd>{{ contractorRoutingDecisionLabel(item.routingDecisionReason) }}</dd>
+                              </div>
+                            }
+                            @if (item.specialistRejectionReason) {
+                              <div>
+                                <dt>Проверка специалиста</dt>
+                                <dd>{{ contractorRoutingDecisionLabel(item.specialistRejectionReason) }}</dd>
+                              </div>
+                            }
+                            @if (item.managerRejectionReason) {
+                              <div>
+                                <dt>Проверка менеджера</dt>
+                                <dd>{{ contractorRoutingDecisionLabel(item.managerRejectionReason) }}</dd>
+                              </div>
+                            }
+                          </dl>
+                        }
+
+                        <div class="journal-timeline">
+                          <span><small>Создано</small>{{ contractorDateTime(item.createdAt) }}</span>
+                          <span><small>Резерв</small>{{ contractorDateTime(item.reservedAt) }}</span>
+                          <span><small>Сообщение клиента</small>{{ contractorDateTime(item.clientReportedAt) }}</span>
+                          <span><small>Подтверждение</small>{{ contractorDateTime(item.confirmedAt) }}</span>
+                          <span><small>Освобождение</small>{{ contractorDateTime(item.releasedAt) }}</span>
+                        </div>
+
+                        @if (item.reconcileAttempts > 0 || item.reconcileNextRetryAt || item.reconcileLastErrorCode) {
+                          <div class="journal-reconcile-health" aria-label="Состояние автоматической сверки">
+                            <span><small>Попыток сверки</small>{{ item.reconcileAttempts }}</span>
+                            <span><small>Следующая попытка</small>{{ contractorDateTime(item.reconcileNextRetryAt) }}</span>
+                            <span><small>Код последней ошибки</small>{{ item.reconcileLastErrorCode || '—' }}</span>
+                          </div>
+                        }
+
+                        @if (item.reason) {
+                          <p class="journal-reason"><strong>Причина:</strong> {{ item.reason }}</p>
+                        }
+
+                        @if (canRecordContractorReturnedAmount(item)) {
+                          <details
+                            class="journal-return-form"
+                            [open]="item.status === 'RETURN_AMOUNT_PENDING' || item.status === 'PARTIALLY_RETURNED'"
+                          >
+                            <summary>Указать итоговую сумму возврата</summary>
+                            <div>
+                              <label>
+                                <span>Возвращено всего, ₽</span>
+                                <input
+                                  type="text"
+                                  inputmode="decimal"
+                                  [value]="contractorReturnDraft(item).amountRubles"
+                                  (input)="updateContractorReturnDraft(item, 'amountRubles', $any($event.target).value)"
+                                >
+                              </label>
+                              <label>
+                                <span>Основание</span>
+                                <input
+                                  type="text"
+                                  [value]="contractorReturnDraft(item).reason"
+                                  (input)="updateContractorReturnDraft(item, 'reason', $any($event.target).value)"
+                                  placeholder="Например, подтверждено выпиской"
+                                >
+                              </label>
+                              <button
+                                type="button"
+                                (click)="saveContractorReturnedAmount(item)"
+                                [disabled]="contractorReturnSavingId() === item.id"
+                              >
+                                {{ contractorReturnSavingId() === item.id ? 'Сохраняю' : 'Учесть возврат' }}
+                              </button>
+                            </div>
+                            <small>
+                              Указывается накопительный итог, не сумма последней операции. Максимум:
+                              {{ moneyKopecks(item.confirmedKopecks) }}.
+                            </small>
+                          </details>
+                        }
+
+                        @if (item.sourceType === 'COMMON_INVOICE' && item.status === 'RETURN_AMOUNT_PENDING') {
+                          <p class="journal-return-note">
+                            Итог возврата общего счёта нельзя вводить вручную: сначала нужна сверка
+                            поступлений по самому общему счёту и его платёжным подтверждениям.
+                          </p>
+                        }
+
+                        @if (item.events.length > 0) {
+                          <details class="journal-events">
+                            <summary>История изменений ({{ item.events.length }})</summary>
+                            <ol>
+                              @for (event of item.events; track event.id) {
+                                <li>
+                                  <span>{{ contractorDateTime(event.effectiveAt) }}</span>
+                                  <strong>{{ contractorAllocationEventLabel(event.eventType) }}</strong>
+                                  <span>{{ moneyKopecks(event.amountKopecks) }}</span>
+                                  @if (event.reason) {
+                                    <small>{{ event.reason }}</small>
+                                  }
+                                </li>
+                              }
+                            </ol>
+                          </details>
+                        }
+                      </article>
+                    }
+                  </div>
+
+                  @if ((contractorJournal()?.totalPages || 0) > 1) {
+                    <nav class="journal-pagination" aria-label="Страницы журнала решений">
+                      <button
+                        type="button"
+                        class="secondary"
+                        [disabled]="contractorJournal()?.first || contractorJournalLoading()"
+                        (click)="changeContractorJournalPage(contractorJournalPage() - 1)"
+                      >
+                        Назад
+                      </button>
+                      <span>
+                        {{ contractorJournalPage() + 1 }} из {{ contractorJournal()?.totalPages }}
+                      </span>
+                      <button
+                        type="button"
+                        class="secondary"
+                        [disabled]="contractorJournal()?.last || contractorJournalLoading()"
+                        (click)="changeContractorJournalPage(contractorJournalPage() + 1)"
+                      >
+                        Далее
+                      </button>
+                    </nav>
+                  }
+                }
+              </section>
+            </section>
           }
 
           <section class="password-reset" [formGroup]="passwordForm">

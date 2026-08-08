@@ -2848,6 +2848,166 @@
           }
 
           @case ('settings') {
+            <section class="contractor-system-settings" aria-label="Запуск новой системы расчётов">
+              <header class="contractor-system-head">
+                <div>
+                  <p class="eyebrow">GLOBAL CONTROL</p>
+                  <h3>Новая система расчётов по вознаграждениям</h3>
+                  <p>
+                    До активации действует старый режим. После активации учёт по завершённой работе
+                    включается необратимо и не зависит от паузы реквизитов.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="secondary contractor-system-refresh"
+                  (click)="loadContractorPaymentSystemStatus()"
+                  [disabled]="contractorSystemLoading() || contractorSystemSaving()"
+                >
+                  <span class="material-icons-sharp">refresh</span>
+                  {{ contractorSystemLoading() ? 'Обновляю' : 'Обновить статус' }}
+                </button>
+              </header>
+
+              <a class="contractor-personal-settings-link" routerLink="/admin/users">
+                <span class="material-icons-sharp">manage_accounts</span>
+                <span>
+                  <strong>Настроить персональные допуски</strong>
+                  <small>Выберите специалиста или менеджера в разделе «Пользователи» и откройте его платёжный профиль.</small>
+                </span>
+                <span class="material-icons-sharp" aria-hidden="true">arrow_forward</span>
+              </a>
+
+              @if (contractorSystemError()) {
+                <p class="error compact">{{ contractorSystemError() }}</p>
+              }
+
+              @if (contractorSystemLoading() && !contractorSystemStatus()) {
+                <p class="contractor-system-loading">Загружаю фактический режим с сервера…</p>
+              } @else if (contractorSystemStatus(); as status) {
+                <div class="contractor-system-switch-row">
+                  <label
+                    class="checkbox contractor-system-main-switch"
+                    [class.irreversible]="status.systemEnabled"
+                    appTooltip="В старом режиме переключатель запускает отдельное подтверждение. После активации выключить новый учёт нельзя."
+                  >
+                    <input
+                      class="switch"
+                      type="checkbox"
+                      [checked]="status.systemEnabled"
+                      [disabled]="
+                        status.systemEnabled
+                        || !canActivateContractorSystem()
+                        || contractorSystemSaving()
+                      "
+                      (click)="requestContractorSystemActivation($event)"
+                    >
+                    <span>{{ status.systemEnabled ? 'Новая система включена' : 'Новая система выключена' }}</span>
+                  </label>
+                  <span
+                    class="contractor-system-mode"
+                    [class.live]="status.mode === 'ROUTING_LIVE'"
+                    [class.paused]="status.mode === 'ROUTING_PAUSED'"
+                    [class.error]="status.mode === 'CONFIGURATION_ERROR'"
+                  >
+                    {{ contractorPaymentSystemModeLabel() }}
+                  </span>
+                </div>
+
+                <div class="contractor-system-metrics">
+                  <article>
+                    <small>Учёт завершённой работы</small>
+                    <strong>{{ status.completionAccountingEffective ? 'активен' : 'старый режим' }}</strong>
+                  </article>
+                  <article>
+                    <small>Реквизиты специалистов и менеджеров</small>
+                    <strong>
+                      {{ status.liveRoutingEffective
+                        ? 'выдаются'
+                        : status.routingRequested
+                          ? 'запрошены, но заблокированы'
+                          : 'не выдаются' }}
+                    </strong>
+                  </article>
+                  <article>
+                    <small>Проверка очереди завершений</small>
+                    <strong>{{ status.completionBacklogReady ? 'готово' : 'не готово' }}</strong>
+                  </article>
+                  <article>
+                    <small>Ревизия настроек</small>
+                    <strong>{{ status.revision }}</strong>
+                  </article>
+                </div>
+
+                <div class="contractor-system-safety">
+                  <p>
+                    <span class="material-icons-sharp">lock</span>
+                    @if (status.legacyBehavior) {
+                      До активации счета и расчёты продолжают работать по старому режиму.
+                    } @else {
+                      Новый учёт включён необратимо. Отключение реквизитов не возвращает старый учёт.
+                    }
+                  </p>
+                  <p>
+                    <span class="material-icons-sharp">account_balance_wallet</span>
+                    Пауза реквизитов отправляет новые счета владельцу, но не возвращает старый учёт.
+                  </p>
+                  @if (status.attributionStartDate) {
+                    <p>
+                      <span class="material-icons-sharp">event_available</span>
+                      Граница нового учёта: <strong>{{ status.attributionStartDate | date:'dd.MM.yyyy' }}</strong>.
+                    </p>
+                  }
+                </div>
+
+                @if (status.activationBlockedReasons.length > 0) {
+                  <div class="contractor-system-blockers" role="status">
+                    <strong>Текущие предохранители и причины блокировки:</strong>
+                    <ul>
+                      @for (reason of status.activationBlockedReasons; track reason) {
+                        <li>{{ reason }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+
+                <div class="contractor-system-deployment">
+                  <span>
+                    Routing master:
+                    <strong>{{ status.liveRoutingMasterEnabled ? 'включён' : 'выключен' }}</strong>
+                  </span>
+                  <span>
+                    Accounting master:
+                    <strong>{{ status.rewardAttributionMasterEnabled ? 'включён' : 'выключен' }}</strong>
+                  </span>
+                </div>
+
+                @if (!canControlContractorSystem()) {
+                  <p class="contractor-system-owner-note">
+                    Статус доступен для просмотра. Активация и управление глобальным режимом доступны только владельцу.
+                  </p>
+                }
+
+                @if (status.systemEnabled) {
+                  <div class="contractor-system-actions">
+                    <button
+                      type="button"
+                      [class.danger]="status.routingRequested"
+                      [disabled]="!canChangeContractorRouting() || contractorSystemSaving()"
+                      (click)="openContractorRoutingChange(!status.routingRequested)"
+                    >
+                      <span class="material-icons-sharp">
+                        {{ status.routingRequested ? 'pause_circle' : 'play_circle' }}
+                      </span>
+                      {{ status.routingRequested ? 'Приостановить реквизиты' : 'Включить реквизиты' }}
+                    </button>
+                  </div>
+                }
+              } @else {
+                <p class="contractor-system-loading">Статус ещё не загружен.</p>
+              }
+            </section>
+
             <form class="settings-form" [formGroup]="settingsForm" (ngSubmit)="saveActive()">
               <div class="settings-section">
                 <h3>Выгул</h3>
@@ -3585,6 +3745,182 @@
       </button>
     }
   </section>
+
+  @if (contractorSystemActivationOpen()) {
+    <section class="dictionary-modal-backdrop" (click)="closeContractorSystemActivation()">
+      <article
+        class="dictionary-modal contractor-system-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Необратимая активация новой системы расчётов"
+        (click)="$event.stopPropagation()"
+      >
+        <header>
+          <div>
+            <p class="eyebrow">НЕОБРАТИМОЕ ДЕЙСТВИЕ</p>
+            <h2>Включить новую систему расчётов</h2>
+          </div>
+          <button
+            type="button"
+            class="row-icon-button"
+            title="Закрыть"
+            [disabled]="contractorSystemSaving()"
+            (click)="closeContractorSystemActivation()"
+          >
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        <p class="contractor-system-modal-warning">
+          После подтверждения завершённая работа будет учитываться по новой системе с выбранной даты.
+          Вернуть старый способ учёта переключателем нельзя.
+        </p>
+
+        <form
+          class="contractor-system-confirmation-form"
+          [formGroup]="contractorSystemActivationForm"
+          (ngSubmit)="activateContractorSystem()"
+        >
+          <label>
+            <span>Дата начала нового учёта</span>
+            <input
+              type="date"
+              formControlName="attributionStartDate"
+              [max]="contractorSystemToday"
+            >
+          </label>
+
+          <label>
+            <span>Причина активации</span>
+            <textarea
+              rows="3"
+              formControlName="reason"
+              placeholder="Например: тестовый контур сверен, расхождений нет"
+            ></textarea>
+          </label>
+
+          <label>
+            <span>Введите без изменений: <strong>{{ contractorActivationConfirmation }}</strong></span>
+            <input
+              type="text"
+              formControlName="confirmation"
+              autocomplete="off"
+              spellcheck="false"
+            >
+          </label>
+
+          @if (contractorSystemActivationForm.touched && !contractorSystemActivationReady()) {
+            <p class="error compact">Заполните дату и причину, затем точно введите фразу подтверждения.</p>
+          }
+
+          <div class="actions">
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="contractorSystemSaving()"
+              (click)="closeContractorSystemActivation()"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              class="danger"
+              [disabled]="!contractorSystemActivationReady() || contractorSystemSaving()"
+            >
+              {{ contractorSystemSaving() ? 'Активирую' : 'Включить необратимо' }}
+            </button>
+          </div>
+        </form>
+      </article>
+    </section>
+  }
+
+  @if (contractorSystemRoutingOpen()) {
+    <section class="dictionary-modal-backdrop" (click)="closeContractorRoutingChange()">
+      <article
+        class="dictionary-modal contractor-system-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Изменение режима выдачи реквизитов"
+        (click)="$event.stopPropagation()"
+      >
+        <header>
+          <div>
+            <p class="eyebrow">РЕКВИЗИТЫ В СЧЕТАХ</p>
+            <h2>
+              {{ contractorRoutingTargetEnabled() ? 'Включить реквизиты' : 'Приостановить реквизиты' }}
+            </h2>
+          </div>
+          <button
+            type="button"
+            class="row-icon-button"
+            title="Закрыть"
+            [disabled]="contractorSystemSaving()"
+            (click)="closeContractorRoutingChange()"
+          >
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        <p class="contractor-system-modal-warning">
+          @if (contractorRoutingTargetEnabled()) {
+            Система запросит выдачу реквизитов специалистов и менеджеров для новых счетов.
+            Фактический запуск произойдёт только если все боевые предохранители готовы.
+          } @else {
+            Новые счета будут получать реквизиты владельца. Уже созданные назначения сохраняются,
+            а новый учёт завершённой работы останется включённым.
+          }
+        </p>
+
+        <form
+          class="contractor-system-confirmation-form"
+          [formGroup]="contractorSystemRoutingForm"
+          (ngSubmit)="updateContractorRouting()"
+        >
+          <label>
+            <span>Причина изменения</span>
+            <textarea rows="3" formControlName="reason"></textarea>
+          </label>
+
+          <label>
+            <span>Введите без изменений: <strong>{{ contractorRoutingConfirmationPrompt() }}</strong></span>
+            <input
+              type="text"
+              formControlName="confirmation"
+              autocomplete="off"
+              spellcheck="false"
+            >
+          </label>
+
+          @if (contractorSystemRoutingForm.touched && !contractorRoutingChangeReady()) {
+            <p class="error compact">Укажите причину и точно введите фразу подтверждения.</p>
+          }
+
+          <div class="actions">
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="contractorSystemSaving()"
+              (click)="closeContractorRoutingChange()"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              [class.danger]="!contractorRoutingTargetEnabled()"
+              [disabled]="!contractorRoutingChangeReady() || contractorSystemSaving()"
+            >
+              {{ contractorSystemSaving()
+                ? 'Применяю'
+                : contractorRoutingTargetEnabled()
+                  ? 'Включить реквизиты'
+                  : 'Приостановить реквизиты' }}
+            </button>
+          </div>
+        </form>
+      </article>
+    </section>
+  }
 
   @if (categoryEditorOpen()) {
     <section class="dictionary-modal-backdrop" (click)="closeCategoryEditor()">

@@ -2,6 +2,7 @@ package com.hunt.otziv.p_products.review.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
@@ -39,6 +40,7 @@ public class OrderReviewMutationService {
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+    private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
 
     @Transactional
     public boolean addNewReview(Long orderId) {
@@ -46,6 +48,7 @@ public class OrderReviewMutationService {
             log.info("1. Зашли в добавление нового отзыва");
 
             Order saveOrder = orderAggregateMutationLockService.lock(orderId);
+            contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId);
             assignmentMutationGuardService.assertOrder(orderId);
 
             OrderDetails orderDetails = getFirstDetail(saveOrder);
@@ -96,6 +99,7 @@ public class OrderReviewMutationService {
     public boolean deleteNewReview(Long orderId, Long reviewId) {
         try {
             Order saveOrder = orderAggregateMutationLockService.lock(orderId);
+            contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId);
             assignmentMutationGuardService.assertOrder(orderId);
 
             OrderDetails orderDetails = getFirstDetail(saveOrder);

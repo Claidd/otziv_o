@@ -5,6 +5,13 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
+import com.hunt.otziv.contractor_payments.service.ContractorRewardSourceCodes;
+import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
+import com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentRolloutStateService;
+import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.p_products.deletion.service.OrderDeletionService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
@@ -47,7 +54,8 @@ public class OrderPaymentCancellationService {
             PaymentLinkStatus.TEST_CONFIRMED,
             PaymentLinkStatus.CONFIRMED,
             PaymentLinkStatus.AMOUNT_MISMATCH,
-            PaymentLinkStatus.NEEDS_RECONCILIATION
+            PaymentLinkStatus.NEEDS_RECONCILIATION,
+            PaymentLinkStatus.MANUAL_REPORTED
     );
 
     private final OrderRepository orderRepository;
@@ -63,6 +71,11 @@ public class OrderPaymentCancellationService {
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final BusinessAuditService businessAuditService;
     private final CommonBillingService commonBillingService;
+    private final ContractorRewardLedgerService contractorRewardLedgerService;
+    private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
+    private final ContractorCompletionRewardService contractorCompletionRewardService;
+    private final ContractorPaymentRolloutStateService rolloutStateService;
+    private final ContractorPaymentRuntimeSwitch contractorPaymentRuntimeSwitch;
 
     @Transactional
     public void cancelPayment(Long orderId, Principal principal) {
@@ -72,11 +85,18 @@ public class OrderPaymentCancellationService {
         if (!STATUS_PAYMENT.equals(safeStatusTitle(order))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Отменить оплату можно только у заказа в статусе \"Оплачено\"");
         }
+        contractorRouteAssignmentGuard.requirePaymentCancellationAllowed(orderId);
         if (paymentLinkRepository.existsByOrder_IdAndStatusIn(orderId, REAL_PAYMENT_STATUSES)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "У заказа есть подтвержденный или требующий сверки платеж по ссылке. "
                             + "Для него нужна ручная сверка или возврат, а не отмена оплаты в карточке."
+            );
+        }
+        if (commonBillingService.hasClientReportedPaymentForOrder(orderId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Клиент уже сообщил об оплате общего счета. Сначала выполните ручную сверку поступления"
             );
         }
 
@@ -85,22 +105,40 @@ public class OrderPaymentCancellationService {
         order = orderRepository.findByIdForMutation(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден после отката следующего заказа"));
 
+        ContractorPaymentAccountingAuthority accountingAuthority =
+                rolloutStateService.lockAccountingAuthority();
+        boolean completionAttributionEnabled =
+                accountingAuthority == ContractorPaymentAccountingAuthority.COMPLETION
+                        || contractorPaymentRuntimeSwitch.rewardAttributionLiveEnabled();
+        if (completionAttributionEnabled) {
+            contractorCompletionRewardService.migrateLegacyRewardsBeforePaymentCancellation(orderId);
+        }
         List<PaymentCheck> activeChecks = paymentCheckRepository.findByOrderIdAndActiveTrue(orderId);
         List<Zp> activeZp = zpRepository.findByOrderIdAndActiveTrue(orderId);
+        List<Zp> paymentDependentZp = activeZp.stream()
+                .filter(zp -> !ContractorCompletionRewardService.isCompletionBasedSource(zp.getSource()))
+                .filter(zp -> !completionAttributionEnabled
+                        || !ContractorRewardSourceCodes.isLegacyEarnedReward(zp.getSource()))
+                .toList();
+        contractorRewardLedgerService.requireCancellationRepresentable(paymentDependentZp);
 
         BigDecimal canceledSum = activeChecks.stream()
                 .map(PaymentCheck::getSum)
                 .filter(sum -> sum != null)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        int canceledAmount = activeZp.stream()
+        int canceledAmount = paymentDependentZp.stream()
                 .map(Zp::getAmount)
                 .max(Comparator.naturalOrder())
                 .orElse(order.getAmount());
 
         activeChecks.forEach(check -> check.setActive(false));
-        activeZp.forEach(zp -> zp.setActive(false));
+        paymentDependentZp.forEach(zp -> zp.setActive(false));
         paymentCheckRepository.saveAll(activeChecks);
-        zpRepository.saveAll(activeZp);
+        zpRepository.saveAll(paymentDependentZp);
+        // Deactivation must reach the contractor ledger in this transaction.
+        // Otherwise released capacity could be routed while the old reward is
+        // still counted, or vice versa. A failure deliberately aborts cancel.
+        contractorRewardLedgerService.synchronizeSources(paymentDependentZp);
 
         rollbackCompanyTotals(order, canceledSum, canceledAmount);
 
@@ -122,7 +160,8 @@ public class OrderPaymentCancellationService {
                 oldStatus,
                 STATUS_REMINDER,
                 "checks=" + activeChecks.size()
-                        + ";zp=" + activeZp.size()
+                        + ";zp=" + paymentDependentZp.size()
+                        + ";completionRewardsPreserved=" + (activeZp.size() - paymentDependentZp.size())
                         + ";sum=" + canceledSum
                         + ";amount=" + canceledAmount
                         + ";paymentLink=restored"
@@ -131,7 +170,7 @@ public class OrderPaymentCancellationService {
                 "Оплата заказа {} отменена: checks={}, zp={}, sum={}, amount={}",
                 orderId,
                 activeChecks.size(),
-                activeZp.size(),
+                paymentDependentZp.size(),
                 canceledSum,
                 canceledAmount
         );

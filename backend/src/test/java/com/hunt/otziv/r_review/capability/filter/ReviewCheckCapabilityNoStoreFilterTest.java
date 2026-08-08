@@ -36,9 +36,13 @@ class ReviewCheckCapabilityNoStoreFilterTest {
                 "/api/review-check/2ca03e9b-8768-4c84-b222-d718c15c80c9",
                 "/review/editReviews/2ca03e9b-8768-4c84-b222-d718c15c80c9",
                 "/review/editReviewses/2ca03e9b-8768-4c84-b222-d718c15c80c9",
-                "/api/payments/public/payment-token"
+                "/api/payments/public/payment-token",
+                "/api/payments/public/group/payment-token/reported-paid"
         )) {
-            MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
+            MockHttpServletRequest request = new MockHttpServletRequest(
+                    path.endsWith("reported-paid") ? "POST" : "GET",
+                    path
+            );
             request.setServletPath(path);
             MockHttpServletResponse response = new MockHttpServletResponse();
             FilterChain chain = (ignoredRequest, ignoredResponse) -> response.setStatus(200);

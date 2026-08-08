@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.services;
 
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.MarketologDTO;
 import com.hunt.otziv.u_users.dto.OperatorDTO;
@@ -42,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,6 +60,7 @@ class UserServiceImplAuthEpochTest {
     @Mock private ImageService imageService;
     @Mock private UserAuthEpochService authEpochService;
     @Mock private KeycloakAdminClient keycloakAdminClient;
+    @Mock private ContractorPaymentProfileService contractorPaymentProfileService;
     @InjectMocks private UserServiceImpl service;
 
     @AfterEach
@@ -126,8 +129,29 @@ class UserServiceImplAuthEpochTest {
 
         assertFalse(user.isActive());
         verify(authEpochService).deactivated(user);
+        verify(userRepository).flush();
+        verify(contractorPaymentProfileService).ensureForUser(44L);
         verify(userRepository).save(user);
         verify(keycloakAdminClient).logoutUserSessions("kc-linked-worker");
+    }
+
+    @Test
+    void legacyProfileUpdateFailsClosedWhenLockedRepositoryUserHasNoPersistentId() {
+        User user = legacyUser("broken-worker", true, role("ROLE_WORKER"));
+        user.setId(null);
+        RegistrationUserDTO request = requestFor(user);
+        request.setActive(false);
+        when(userRepository.lockByUsername("broken-worker")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameWithAssignments("broken-worker")).thenReturn(Optional.of(user));
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> updateProfile(request, "ROLE_WORKER")
+        );
+
+        assertTrue(error.getMessage().contains("идентификатора"));
+        verify(userRepository, never()).save(user);
+        verifyNoInteractions(authEpochService, contractorPaymentProfileService, keycloakAdminClient);
     }
 
     @Test
@@ -259,6 +283,7 @@ class UserServiceImplAuthEpochTest {
 
     private User legacyUser(String username, boolean active, Role... roles) {
         return User.builder()
+                .id(44L)
                 .username(username)
                 .active(active)
                 .roles(new ArrayList<>(List.of(roles)))

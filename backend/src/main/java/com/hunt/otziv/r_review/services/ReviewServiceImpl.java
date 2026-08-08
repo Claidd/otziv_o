@@ -10,6 +10,7 @@ import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -93,6 +94,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final GamificationEventService gamificationEventService;
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+    private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
 
     @Override
     public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(List<Long> workerIds, LocalDate localDate) {
@@ -734,6 +736,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (orderId == null || reviewId == null) {
             return false;
         }
+        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId);
         Review review = reviewRepository.findById(reviewId).orElse(null);
         Order actualOrder = extractOrder(review);
         if (review == null || actualOrder == null || !Objects.equals(orderId, actualOrder.getId())) {
@@ -779,6 +782,7 @@ public class ReviewServiceImpl implements ReviewService {
         assignmentMutationGuardService.assertReview(reviewId);
         Review saveReview = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Отзыв '%d' не найден", reviewId)));
+        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(saveReview));
 
         boolean isChanged = false;
         boolean publishChanged = false;
@@ -1114,6 +1118,8 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Transactional
     public void deleteReviewsByOrderId(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId).orElse(null);
+        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(review));
         reviewRepository.deleteReviewByReviewId(reviewId);
     }
 
@@ -1158,6 +1164,7 @@ public class ReviewServiceImpl implements ReviewService {
         Review saveReview = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewId)));
         OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(saveOrderDetails));
 
         UUID reviewOrderDetailsId = saveReview.getOrderDetails() == null
                 ? null
@@ -1219,6 +1226,7 @@ public class ReviewServiceImpl implements ReviewService {
 
         orderAggregateMutationLockService.lockForOrderDetail(orderDetailsDTO.getId());
         OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(saveOrderDetails));
         Map<Long, Review> reviewsById = safeReviews(saveOrderDetails).stream()
                 .filter(Objects::nonNull)
                 .filter(review -> review.getId() != null)
@@ -1287,6 +1295,7 @@ public class ReviewServiceImpl implements ReviewService {
         try {
             orderAggregateMutationLockService.lockForOrderDetail(orderDetailsDTO.getId());
             OrderDetails liveDetail = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+            contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(liveDetail));
             return applyPublicationDates(List.of(liveDetail), List.of(orderDetailsDTO), false);
         } catch (Exception exception) {
             return publicationDateFailure(exception);
@@ -1304,6 +1313,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
         try {
             orderAggregateMutationLockService.lock(orderId);
+            contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId);
             List<OrderDetails> liveDetails = orderDetailsService
                     .getOrderDetailsForReviewCheckByOrderId(orderId);
             return applyPublicationDates(liveDetails, orderDetails, true);
@@ -1543,6 +1553,21 @@ public class ReviewServiceImpl implements ReviewService {
 
     private LocalDate getLocalDate(int botCounter) {
         return botCounter < 2 ? LocalDate.now().plusDays(2) : LocalDate.now();
+    }
+
+    private Long orderId(Review review) {
+        return Optional.ofNullable(review)
+                .map(Review::getOrderDetails)
+                .map(OrderDetails::getOrder)
+                .map(Order::getId)
+                .orElse(null);
+    }
+
+    private Long orderId(OrderDetails details) {
+        return Optional.ofNullable(details)
+                .map(OrderDetails::getOrder)
+                .map(Order::getId)
+                .orElse(null);
     }
 
     private boolean applyPublicationUpdate(Review saveReview, ReviewDTO reviewDTO, LocalDate localDate) {

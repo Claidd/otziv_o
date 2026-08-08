@@ -1212,6 +1212,9 @@ export class TbankPaymentsComponent implements OnDestroy {
   }
 
   manualSourceLabel(link: AdminPaymentLinkResponse): string {
+    if (link.manualSource === 'CONTRACTOR_PAYMENT_PROFILE') {
+      return 'Платёжный профиль исполнителя';
+    }
     if (link.manualSource === 'MANUAL_TASK') {
       return link.manualTaskTitle ? `Задание: ${link.manualTaskTitle}` : 'Ручное задание';
     }
@@ -1231,6 +1234,9 @@ export class TbankPaymentsComponent implements OnDestroy {
   }
 
   recipientSummarySourceLabel(item: ManualPaymentRecipientMonthlySummaryItem): string {
+    if (item.manualSource === 'CONTRACTOR_PAYMENT_PROFILE') {
+      return 'Платёжный профиль исполнителя';
+    }
     return item.manualSource === 'MANUAL_TASK' ? 'Ручное задание' : 'Лимит профиля';
   }
 

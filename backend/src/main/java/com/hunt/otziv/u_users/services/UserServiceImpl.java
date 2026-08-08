@@ -1,6 +1,7 @@
 package com.hunt.otziv.u_users.services;
 
 
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.keycloak.client.KeycloakAdminClient;
 import com.hunt.otziv.u_users.model.*;
@@ -49,6 +50,7 @@ public class UserServiceImpl implements UserService {
     private final ImageService imageService;
     private final UserAuthEpochService authEpochService;
     private final KeycloakAdminClient keycloakAdminClient;
+    private final ContractorPaymentProfileService contractorPaymentProfileService;
 
     // ===================================== SECURITY =====================================
 
@@ -364,6 +366,7 @@ public class UserServiceImpl implements UserService {
         }
 
         User saveUser = requireLockedUserWithAssignments(userDTO.getUsername());
+        Long persistedUserId = requirePersistedUserId(saveUser);
         log.info("Достали юзера по имени из дто");
 
         String requestedRole = canonicalLocalRole(role);
@@ -538,6 +541,14 @@ public class UserServiceImpl implements UserService {
             log.info("Начали сохранять обновленного юзера в БД");
             userRepository.save(saveUser);
             log.info("Сохранили обновленного юзера в БД");
+            if (activeChanged || securityRoleChanged) {
+                // The contractor profile is the routing eligibility mutex.
+                // Flush User/role changes first, then enable/disable the
+                // profile in this same transaction before any route can see a
+                // half-applied eligibility change.
+                userRepository.flush();
+                contractorPaymentProfileService.ensureForUser(persistedUserId);
+            }
             if ((activeChanged || securityRoleChanged)
                     && saveUser.getKeycloakId() != null
                     && !saveUser.getKeycloakId().isBlank()) {
@@ -546,6 +557,13 @@ public class UserServiceImpl implements UserService {
         } else {
             log.info("Изменений не было, сущность в БД не изменена");
         }
+    }
+
+    private Long requirePersistedUserId(User user) {
+        if (user == null || user.getId() == null) {
+            throw new IllegalStateException("Загруженный пользователь не имеет устойчивого идентификатора");
+        }
+        return user.getId();
     }
 
     private String canonicalLocalRole(String role) {

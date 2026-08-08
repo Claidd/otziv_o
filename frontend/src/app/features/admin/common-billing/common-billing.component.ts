@@ -957,6 +957,30 @@ export class CommonBillingComponent implements OnDestroy {
     );
   }
 
+  reportManualCardPayment(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || invoice.status !== 'NEEDS_ATTENTION' || !this.attentionHasStandaloneRouteConflict() || this.mutating()) {
+      return;
+    }
+    const reasonValue = window.prompt(
+      `Клиент оплатил общий счет №${invoice.id} переводом на карту. Укажите краткую причину:`
+    );
+    if (reasonValue === null) {
+      return;
+    }
+    const reason = reasonValue.trim();
+    if (!reason) {
+      this.toastService.error('Оплата не подтверждена', 'Укажите причину ручной оплаты.');
+      return;
+    }
+    this.invoiceAction(
+      invoice.id,
+      'manual-card-paid',
+      () => this.commonBillingApi.reportManualCardPayment(invoice.id, reason),
+      'Общий счет закрыт ручной оплатой'
+    );
+  }
+
   resolveAttention(): void {
     const invoice = this.currentInvoice();
     if (!invoice || invoice.status !== 'NEEDS_ATTENTION' || !this.attentionResolveEnabled() || this.mutating()) {

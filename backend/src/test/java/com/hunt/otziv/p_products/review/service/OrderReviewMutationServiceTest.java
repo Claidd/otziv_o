@@ -6,6 +6,7 @@ import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
@@ -59,6 +60,9 @@ class OrderReviewMutationServiceTest {
 
     @Mock
     private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+
+    @Mock
+    private ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
 
     @Test
     void addNewReviewCreatesReviewRecalculatesTotalsAndIncrementsCompanyCounter() {
@@ -198,7 +202,8 @@ class OrderReviewMutationServiceTest {
                 companyService,
                 accountWalkScheduleService,
                 orderAggregateMutationLockService,
-                assignmentMutationGuardService
+                assignmentMutationGuardService,
+                contractorRouteAssignmentGuard
         );
     }
 

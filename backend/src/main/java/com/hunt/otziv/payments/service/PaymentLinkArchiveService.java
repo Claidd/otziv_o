@@ -40,11 +40,19 @@ public class PaymentLinkArchiveService {
             String search,
             Long searchId,
             LocalDate from,
-            LocalDate to
+            LocalDate to,
+            boolean excludePrivilegedTargets
     ) {
         int resolvedPage = Math.max(0, page);
         int resolvedSize = Math.max(10, Math.min(size, 100));
-        PaymentLinkAdminSummary summary = repository.summarizeArchived(statusFilter, search, searchId, from, to);
+        PaymentLinkAdminSummary summary = repository.summarizeArchived(
+                statusFilter,
+                search,
+                searchId,
+                from,
+                to,
+                excludePrivilegedTargets
+        );
         long total = summary == null ? 0 : summary.safeTotalElements();
         int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / resolvedSize);
         return new AdminPaymentLinksPageResponse(
@@ -56,6 +64,7 @@ public class PaymentLinkArchiveService {
                         searchId,
                         from,
                         to,
+                        excludePrivilegedTargets,
                         properties.getPublicBaseUrl()
                 ),
                 resolvedPage,

@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.repository;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -9,6 +10,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
+import java.sql.ResultSet;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentLinkArchiveRepositoryContractTest {
@@ -92,11 +96,22 @@ class PaymentLinkArchiveRepositoryContractTest {
         ArgumentCaptor<String> copySql = ArgumentCaptor.forClass(String.class);
         verify(jdbc).update(copySql.capture(), any(MapSqlParameterSource.class));
         assertArchiveFinalFence(copySql.getValue());
+        assertTrue(copySql.getValue().contains("contractor_allocation_id"));
+        assertTrue(copySql.getValue().contains("shadow_route_generation"));
+        assertTrue(copySql.getValue().contains("contractor_evidence_original_link_id"));
+        assertTrue(copySql.getValue().contains("manual_bank_name"));
 
         ArgumentCaptor<String> deleteSql = ArgumentCaptor.forClass(String.class);
         verify(jdbc).update(deleteSql.capture(), anyMap());
         assertArchiveFinalFence(deleteSql.getValue());
         assertTrue(deleteSql.getValue().contains("archive_payment_links"));
+        assertTrue(deleteSql.getValue().contains("SELECT DISTINCT"));
+        assertTrue(deleteSql.getValue().contains("FROM payment_links contractor_evidence_source"));
+        assertTrue(deleteSql.getValue().contains("contractor_evidence_source.id IN (:ids)"));
+        assertTrue(deleteSql.getValue().contains(
+                "contractor_evidence_source.contractor_evidence_original_link_id IN (:ids)"
+        ));
+        assertFalse(deleteSql.getValue().contains("FROM payment_links contractor_evidence\n"));
     }
 
     @Test
@@ -116,6 +131,94 @@ class PaymentLinkArchiveRepositoryContractTest {
     }
 
     @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void archivedContractorSearchNeverUsesScrubbedPlaintextPii() {
+        when(jdbc.query(
+                anyString(),
+                any(MapSqlParameterSource.class),
+                any(RowMapper.class)
+        )).thenReturn(List.of());
+
+        repository.findArchivedPage(
+                0,
+                20,
+                "all",
+                "получатель",
+                null,
+                null,
+                null,
+                true,
+                "https://example.ru"
+        );
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbc).query(
+                sql.capture(),
+                any(MapSqlParameterSource.class),
+                any(RowMapper.class)
+        );
+        assertTrue(sql.getValue().contains(
+                "COALESCE(apl.manual_source, '') <> 'CONTRACTOR_PAYMENT_PROFILE'"
+        ));
+        assertTrue(sql.getValue().contains("LOWER(COALESCE(apl.manual_comment, '')) LIKE :searchText"));
+        assertTrue(sql.getValue().contains("allocation.id = apl.contractor_allocation_id"));
+        assertTrue(sql.getValue().contains("recipient_role.name IN ('ROLE_ADMIN', 'ROLE_OWNER')"));
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void archivedContractorResponseRedactsEveryLegacyPlaintextRecipientField() throws Exception {
+        when(jdbc.query(
+                anyString(),
+                any(MapSqlParameterSource.class),
+                any(RowMapper.class)
+        )).thenAnswer(invocation -> {
+            RowMapper<AdminPaymentLinkResponse> mapper = invocation.getArgument(2);
+            ResultSet rs = org.mockito.Mockito.mock(ResultSet.class);
+            when(rs.getLong(anyString())).thenAnswer(valueInvocation -> switch (
+                    valueInvocation.getArgument(0, String.class)
+            ) {
+                case "id" -> 42L;
+                case "amount_kopecks" -> 100_00L;
+                default -> 0L;
+            });
+            when(rs.getString(anyString())).thenAnswer(valueInvocation -> switch (
+                    valueInvocation.getArgument(0, String.class)
+            ) {
+                case "token" -> "archived-token";
+                case "manual_source" -> "CONTRACTOR_PAYMENT_PROFILE";
+                case "manual_phone" -> "+79990000000";
+                case "manual_recipient_name" -> "Получатель";
+                case "manual_bank_name" -> "Банк";
+                case "manual_payment_url" -> "https://example.ru/private";
+                case "manual_comment" -> "Секретный комментарий";
+                default -> null;
+            });
+            return List.of(mapper.mapRow(rs, 0));
+        });
+
+        List<AdminPaymentLinkResponse> page = repository.findArchivedPage(
+                0,
+                20,
+                "all",
+                "",
+                null,
+                null,
+                null,
+                false,
+                "https://example.ru"
+        );
+
+        AdminPaymentLinkResponse response = page.get(0);
+        assertEquals("", response.manualPhone());
+        assertEquals("", response.manualRecipientName());
+        assertEquals("", response.manualTaskTitle());
+        assertEquals("", response.manualBankName());
+        assertEquals("", response.manualPaymentUrl());
+        assertEquals("", response.manualComment());
+    }
+
+    @Test
     void hardDeleteAndPreparedOrderGuardsUseTheFullArchiveFence() {
         when(jdbc.queryForObject(anyString(), anyMap(), eq(Long.class))).thenReturn(0L);
 
@@ -129,15 +232,29 @@ class PaymentLinkArchiveRepositoryContractTest {
     }
 
     private static void assertArchiveSelectionFence(String sql) {
+        assertSqlTokensSeparated(sql);
         assertArchiveStateFence(sql);
         assertTrue(sql.contains("payment_success_notification_retry_claims"));
         assertTrue(sql.contains("notification_claim.processing_lease_until > CURRENT_TIMESTAMP(6)"));
+        assertTrue(sql.contains("contractor_payment_allocations contractor_allocation"));
+        assertTrue(sql.contains("contractor_allocation.reconcile_claim_token IS NOT NULL"));
+        assertTrue(sql.contains("contractor_allocation.last_reconciled_at IS NULL"));
+        assertTrue(sql.contains("pl.updated_at > contractor_allocation.last_reconciled_at"));
+        assertTrue(sql.contains("contractor_allocation.needs_return_amount = TRUE"));
+        assertTrue(sql.contains("contractor_allocation.status NOT IN"));
+        assertTrue(sql.contains("prepared_shadow.source_generation_snapshot = pl.shadow_route_generation"));
+        assertTrue(sql.contains("contractor_evidence_original_link_id"));
+        assertTrue(sql.contains("MANUAL_EVIDENCE:"));
     }
 
     private static void assertArchiveFinalFence(String sql) {
+        assertSqlTokensSeparated(sql);
         assertArchiveStateFence(sql);
         assertTrue(sql.contains("payment_success_notification_retry_claims"));
         assertFalse(sql.contains("notification_claim.processing_lease_until"));
+        assertTrue(sql.contains("contractor_payment_allocations contractor_allocation"));
+        assertTrue(sql.contains("contractor_evidence_original_link_id"));
+        assertTrue(sql.contains("source_generation_snapshot"));
     }
 
     private static void assertArchiveStateFence(String sql) {
@@ -148,5 +265,11 @@ class PaymentLinkArchiveRepositoryContractTest {
         assertTrue(sql.contains("COALESCE(pl.status, '') NOT IN"));
         assertTrue(sql.contains("receipt_status"));
         assertTrue(sql.contains("payment_success_notification_retry_eligible"));
+    }
+
+    private static void assertSqlTokensSeparated(String sql) {
+        assertFalse(sql.contains("AND NOT("));
+        assertFalse(sql.contains("OR("));
+        assertFalse(sql.contains("OREXISTS"));
     }
 }

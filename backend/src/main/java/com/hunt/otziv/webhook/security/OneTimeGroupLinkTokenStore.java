@@ -19,6 +19,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class OneTimeGroupLinkTokenStore {
 
     private static final String HMAC_SHA256 = "HmacSHA256";
+    private static final int NONCE_LENGTH = 24;
+    private static final int SIGNATURE_LENGTH = 16;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final Duration ttl;
@@ -52,7 +54,10 @@ public class OneTimeGroupLinkTokenStore {
         SECURE_RANDOM.nextBytes(random);
         String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
         String signature = signature(scope, targetId, nonce, secret);
-        String token = nonce + "." + signature;
+        // Telegram deep-link parameters only accept Base64URL characters.
+        // Keep the token separator-free so the same opaque token is valid in
+        // startgroup links as well as in MAX links.
+        String token = nonce + signature;
         links.put(token, new LinkTarget(scope, targetId));
         String previous = latestTokens.asMap().put(targetKey, token);
         if (previous != null) {
@@ -66,12 +71,12 @@ public class OneTimeGroupLinkTokenStore {
         if (!hasText(token) || !hasText(expectedScope) || !isStrongSecret(secret)) {
             return Optional.empty();
         }
-        int separator = token.lastIndexOf('.');
-        if (separator <= 0 || separator == token.length() - 1) {
+        TokenParts tokenParts = splitToken(token);
+        if (tokenParts == null) {
             return Optional.empty();
         }
-        String nonce = token.substring(0, separator);
-        String providedSignature = token.substring(separator + 1);
+        String nonce = tokenParts.nonce();
+        String providedSignature = tokenParts.signature();
         AtomicReference<Long> consumed = new AtomicReference<>();
         links.asMap().computeIfPresent(token, (key, target) -> {
             if (!expectedScope.equals(target.scope())) {
@@ -120,6 +125,24 @@ public class OneTimeGroupLinkTokenStore {
         );
     }
 
+    private static TokenParts splitToken(String token) {
+        if (token.length() == NONCE_LENGTH + SIGNATURE_LENGTH
+                && token.matches("^[A-Za-z0-9_-]+$")) {
+            return new TokenParts(
+                    token.substring(0, NONCE_LENGTH),
+                    token.substring(NONCE_LENGTH)
+            );
+        }
+
+        // Accept the legacy in-memory format for compatibility with callers
+        // that may consume a token issued before a rolling application update.
+        int separator = token.lastIndexOf('.');
+        if (separator <= 0 || separator == token.length() - 1) {
+            return null;
+        }
+        return new TokenParts(token.substring(0, separator), token.substring(separator + 1));
+    }
+
     private static Duration bound(Duration value) {
         Duration safe = value == null || value.isNegative() || value.isZero() ? Duration.ofMinutes(15) : value;
         if (safe.compareTo(Duration.ofMinutes(1)) < 0) {
@@ -137,5 +160,8 @@ public class OneTimeGroupLinkTokenStore {
     }
 
     private record LinkTarget(String scope, Long id) {
+    }
+
+    private record TokenParts(String nonce, String signature) {
     }
 }

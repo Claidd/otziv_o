@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -52,6 +53,8 @@ class WorkloadTransferRollbackServiceTest {
         when(repository.claimRollback(eq(71L), any())).thenReturn(1);
         when(repository.findRollbackContext(71L))
                 .thenReturn(Optional.of(context));
+        when(repository.findAuditEntityIds(71L, "ORDER")).thenReturn(List.of(101L));
+        when(repository.lockRollbackOrderIds(71L, List.of(101L))).thenReturn(List.of(101L));
         when(repository.countRollbackUnsafeEntities(71L, 22L)).thenReturn(1L);
 
         assertThatThrownBy(() -> service.rollback(
@@ -72,6 +75,7 @@ class WorkloadTransferRollbackServiceTest {
                 .thenReturn(Optional.of(context));
         when(repository.countRollbackUnsafeEntities(71L, 22L)).thenReturn(0L);
         when(repository.findAuditEntityIds(71L, "ORDER")).thenReturn(List.of(101L));
+        when(repository.lockRollbackOrderIds(71L, List.of(101L))).thenReturn(List.of(101L));
         when(repository.findAuditEntityIds(71L, "REVIEW"))
                 .thenReturn(List.of(201L, 202L));
         when(repository.findAuditEntityIds(71L, "BAD_TASK")).thenReturn(List.of(301L));
@@ -119,6 +123,11 @@ class WorkloadTransferRollbackServiceTest {
         verify(repository).clearCredentialPreparations(List.of(201L, 202L));
         verify(repository).removeTargetCompanyLinkIfUnused(51L, 22L);
         verify(repository).markRolledBack(eq(71L), any());
+        var lockOrder = inOrder(repository);
+        lockOrder.verify(repository).findAuditEntityIds(71L, "ORDER");
+        lockOrder.verify(repository).lockRollbackOrderIds(71L, List.of(101L));
+        lockOrder.verify(repository).countRollbackUnsafeEntities(71L, 22L);
+        lockOrder.verify(repository).rollbackOrders(71L, List.of(101L), 11L, 22L, 51L);
     }
 
     private RollbackContextProjection context() {

@@ -77,6 +77,22 @@ class OrderArchiveDryRunRepositoryContractTest {
     }
 
     @Test
+    void preparedRouteAndManualEvidenceFencesSurviveUntilDurableAccounting() {
+        when(jdbc.queryForObject(anyString(), anyMap(), eq(Long.class))).thenReturn(1L);
+
+        assertTrue(repository.hasPreparedCandidateUnmaterializedShadowRoutes());
+        assertTrue(repository.hasPreparedCandidateUnrecordedContractorManualEvidence());
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbc, times(2)).queryForObject(sql.capture(), anyMap(), eq(Long.class));
+        String contract = String.join("\n", sql.getAllValues());
+        assertTrue(contract.contains("source_generation_snapshot"));
+        assertTrue(contract.contains("shadow_route_generation"));
+        assertTrue(contract.contains("contractor_evidence_original_link_id"));
+        assertTrue(contract.contains("MANUAL_EVIDENCE:"));
+    }
+
+    @Test
     void reviewArchiveCopyPersistsTheEffectiveFilialTitleSnapshot() {
         when(jdbc.queryForList(anyString(), anyMap(), eq(String.class)))
                 .thenReturn(List.of("review_id"));

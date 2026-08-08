@@ -15,6 +15,7 @@ public record SpecialistTransferAuditResponse(
         int orderCount,
         int reviewCount,
         int badReviewTaskCount,
+        int reviewRecoveryTaskCount,
         String comment
 ) {
 }

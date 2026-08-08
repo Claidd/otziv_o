@@ -17,11 +17,14 @@ import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRe
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentBusinessClock;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
@@ -90,6 +93,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final ReviewBotAssignmentGuardService assignmentGuardService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+    private final OrderRepository orderRepository;
+    private final ContractorCompletionRewardService contractorCompletionRewardService;
+    private final ContractorPaymentBusinessClock contractorPaymentBusinessClock;
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -105,7 +111,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 .toList();
 
         int created = 0;
-        LocalDate startDate = LocalDate.now();
+        LocalDate startDate = contractorPaymentBusinessClock.today();
         for (Review review : publishedReviews) {
             if (review.getId() == null || hasActiveOrDoneTask(order.getId(), review.getId())) {
                 continue;
@@ -188,17 +194,26 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Override
     @Transactional
     public BadReviewTask completeTask(Long taskId) {
+        if (taskStatus(taskId) != BadReviewTaskStatus.NEW) {
+            return requireTask(taskId);
+        }
+        Long orderId = prepareTaskPayableChange(
+                taskId,
+                "Выполненная дополнительная задача изменила сумму счета"
+        );
         BadReviewTask task = requireTask(taskId);
         if (task.getStatus() != BadReviewTaskStatus.NEW) {
             return task;
         }
 
         task.setStatus(BadReviewTaskStatus.DONE);
-        task.setCompletedDate(LocalDate.now());
+        task.setCompletedDate(contractorPaymentBusinessClock.today());
         releaseCrossCityBotAfterCompletion(task);
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
+        contractorCompletionRewardService.ensureCompletedBadReviewTask(savedTask);
+        boolean linkedToCommonInvoice = refreshLinkedCommonInvoiceStrict(orderId);
         gamificationEventService.recordBadReviewTaskDone(savedTask);
-        runCompletionSideEffects(savedTask);
+        runCompletionSideEffects(savedTask, linkedToCommonInvoice);
         auditTaskCompleted(savedTask);
         log.info("Плохая задача {} выполнена, заказ {}, доплата {}",
                 savedTask.getId(),
@@ -212,12 +227,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         return requireTask(taskId);
     }
 
-    private void runCompletionSideEffects(BadReviewTask savedTask) {
+    private void runCompletionSideEffects(BadReviewTask savedTask, boolean linkedToCommonInvoice) {
         Long orderId = savedTask.getOrder() != null ? savedTask.getOrder().getId() : null;
         try {
             BadReviewTaskSummary summary = orderId == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(orderId);
             expireStalePaymentLinks(savedTask.getOrder());
-            sendBadReviewInvoiceIfEnabled(savedTask, summary);
+            sendBadReviewInvoiceIfEnabled(savedTask, summary, linkedToCommonInvoice);
             createTaskCompletionReminder(savedTask, summary);
             createOrderReadyReminderIfNeeded(savedTask.getOrder(), summary);
         } catch (RuntimeException e) {
@@ -226,7 +241,11 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         }
     }
 
-    private void sendBadReviewInvoiceIfEnabled(BadReviewTask task, BadReviewTaskSummary summary) {
+    private void sendBadReviewInvoiceIfEnabled(
+            BadReviewTask task,
+            BadReviewTaskSummary summary,
+            boolean linkedToCommonInvoice
+    ) {
         Order order = task != null ? task.getOrder() : null;
         if (order == null || order.getId() == null) {
             log.warn("Счет после плохого отзыва не отправлен: заказ не найден, taskId={}", task == null ? null : task.getId());
@@ -237,7 +256,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (isBadReviewFinalInvoice(summary)) {
             paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Финальный счет после плохих пересчитывается");
         }
-        if (refreshCommonInvoiceForLinkedOrder(order)) {
+        if (linkedToCommonInvoice) {
             log.info("Счет после плохого отзыва не отправлен отдельно: заказ {} входит в общий счет", order.getId());
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "common_billing_linked",
                     "Заказ входит в общий счет; сумма общего счета пересчитана", safeBadReviewInvoicePreview(order, summary), 0);
@@ -307,19 +326,6 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return;
         }
         paymentInvoiceRetryScheduler.scheduleBadReviewAutoBan(order);
-    }
-
-    private boolean refreshCommonInvoiceForLinkedOrder(Order order) {
-        if (order == null || order.getId() == null) {
-            return false;
-        }
-        try {
-            CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
-            return commonBillingService != null && commonBillingService.refreshLinkedOrderAmount(order.getId());
-        } catch (RuntimeException e) {
-            log.warn("Не удалось пересчитать общий счет после плохого отзыва для заказа {}", order.getId(), e);
-            return false;
-        }
     }
 
     private boolean isBadReviewFinalInvoice(BadReviewTaskSummary summary) {
@@ -502,9 +508,19 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Override
     @Transactional
     public BadReviewTask cancelTask(Long taskId) {
+        BadReviewTaskStatus snapshotStatus = taskStatus(taskId);
+        if (snapshotStatus == BadReviewTaskStatus.CANCELED) {
+            return requireTask(taskId);
+        }
+        Long preparedOrderId = snapshotStatus == BadReviewTaskStatus.DONE
+                ? prepareTaskPayableChange(
+                        taskId,
+                        "Отмена выполненной дополнительной задачи изменила сумму счета"
+                )
+                : null;
         BadReviewTask task = requireTask(taskId);
         if (isPaid(task)) {
-            throw new IllegalStateException("После оплаты заказа отмена плохих задач не пересчитывает чек и ЗП");
+            throw new IllegalStateException("После оплаты заказа отмена плохих задач не пересчитывает чек и начисления");
         }
         if (task.getStatus() == BadReviewTaskStatus.CANCELED) {
             return task;
@@ -516,6 +532,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             releaseCrossCityBotAfterCompletion(task);
         }
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
+        if (!wasNew) {
+            Long orderId = savedTask.getOrder() == null ? preparedOrderId : savedTask.getOrder().getId();
+            contractorCompletionRewardService.adjustCanceledBadReviewTaskAccrual(orderId, savedTask.getId());
+            refreshLinkedCommonInvoiceStrict(orderId);
+            auditTaskCanceled(savedTask);
+        }
         Order order = savedTask.getOrder();
         User managerUser = managerUser(order);
         if (managerUser != null && savedTask.getId() != null) {
@@ -532,7 +554,6 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             expireStalePaymentLinks(order);
             paymentInvoiceRetryScheduler.cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
             paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
-            refreshCommonInvoiceForLinkedOrder(order);
             if (summary.pending() == 0 && summary.done() > 0) {
                 createOrderReadyReminderIfNeeded(order, summary);
             } else {
@@ -540,6 +561,52 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             }
         }
         return savedTask;
+    }
+
+    private Long prepareTaskPayableChange(Long taskId, String reason) {
+        validateTaskIdAndAccess(taskId);
+        Long orderId = badReviewTaskRepository.findOrderIdById(taskId)
+                .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
+
+        PaymentLinkService paymentLinkService = paymentLinkServiceProvider.getIfAvailable();
+        if (paymentLinkService != null) {
+            // Performs the provider observation without retaining local locks,
+            // then the checks below lock the authoritative rows.
+            paymentLinkService.reconcileActiveLinkForOrder(orderId);
+        }
+        CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        if (commonBillingService != null) {
+            // lockedInvoice() acquires every member Order in sorted order before
+            // the invoice, matching the common-billing routing prelude.
+            commonBillingService.prepareLinkedOrderPayableChange(orderId);
+        }
+        orderRepository.findByIdForCounterUpdate(orderId)
+                .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
+        if (paymentLinkService != null) {
+            paymentLinkService.retireOpenLinksBeforePayableChange(orderId, reason);
+        }
+        return orderId;
+    }
+
+    private boolean refreshLinkedCommonInvoiceStrict(Long orderId) {
+        if (orderId == null) {
+            return false;
+        }
+        CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        return commonBillingService != null && commonBillingService.refreshLinkedOrderAmount(orderId);
+    }
+
+    private BadReviewTaskStatus taskStatus(Long taskId) {
+        validateTaskIdAndAccess(taskId);
+        return badReviewTaskRepository.findStatusById(taskId)
+                .orElseThrow(() -> new EntityNotFoundException("Плохая задача не найдена: " + taskId));
+    }
+
+    private void validateTaskIdAndAccess(Long taskId) {
+        if (taskId == null || taskId <= 0) {
+            throw new EntityNotFoundException("Плохая задача не найдена");
+        }
+        assignmentMutationGuardService.assertBadTask(taskId);
     }
 
     @Override
@@ -965,7 +1032,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return;
         }
 
-        LocalDate baseDate = task.getCompletedDate() != null ? task.getCompletedDate() : LocalDate.now();
+        LocalDate baseDate = task.getCompletedDate() != null
+                ? task.getCompletedDate()
+                : contractorPaymentBusinessClock.today();
         botCooldownService.markReleasedFrom(task.getBot(), baseDate, "bad review cross-city task finished");
     }
 
@@ -1135,7 +1204,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     private LocalDate safeDate(LocalDate date) {
-        return date == null ? LocalDate.now() : date;
+        return date == null ? contractorPaymentBusinessClock.today() : date;
     }
 
     private String keyword(String keyword) {
@@ -1195,6 +1264,22 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 BadReviewTaskStatus.NEW,
                 BadReviewTaskStatus.DONE,
                 "Плохая задача отмечена выполненной"
+        );
+    }
+
+    private void auditTaskCanceled(BadReviewTask task) {
+        if (task == null || task.getId() == null) {
+            return;
+        }
+        businessAuditService.recordSafely(
+                "bad_review_task_reward_adjusted",
+                "bad_review_task",
+                task.getId(),
+                task.getOrder() == null ? null : task.getOrder().getId(),
+                task.getSourceReview() == null ? null : task.getSourceReview().getId(),
+                BadReviewTaskStatus.DONE,
+                BadReviewTaskStatus.CANCELED,
+                "Отмена выполненной задачи; создана датированная отрицательная корректировка начисления"
         );
     }
 

@@ -32,6 +32,16 @@ import { ManagerControlComponent } from '../admin/manager-control/manager-contro
 import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
 import { ManagerReportReviewAccessApi } from '../../core/manager-report-review-access.api';
 import { WorkloadShadowApi } from '../../core/workload-shadow.api';
+import {
+  ContractorPaymentSummary,
+  ContractorPaymentsApi
+} from '../../core/contractor-payments.api';
+import {
+  contractorCoverageStartLabel,
+  contractorPaymentModeClass as paymentModeClass,
+  contractorPaymentModeLabel as paymentModeLabel,
+  shouldShowLegacyCabinetMetrics
+} from './contractor-payment-coverage';
 
 type DashboardAction = {
   label: string;
@@ -139,6 +149,10 @@ export class HomeComponent {
   readonly transferPreferenceLoading = signal(false);
   readonly transferPreferenceSaving = signal(false);
   readonly transferPreferenceError = signal<string | null>(null);
+  readonly contractorPayments = signal<ContractorPaymentSummary[]>([]);
+  readonly contractorPaymentsLoading = signal(false);
+  readonly contractorPaymentsError = signal<string | null>(null);
+  private contractorPaymentsRequested = false;
 
   readonly actions: DashboardAction[] = [
     {
@@ -258,6 +272,16 @@ export class HomeComponent {
   readonly showTransferPreference = computed(() => {
     return this.currentRoles().some((role) => normalizeRole(role) === 'WORKER');
   });
+  readonly showContractorPayments = computed(() => this.contractorPayments().length > 0
+    || this.currentRoles().some((role) => {
+      const normalized = normalizeRole(role);
+      return normalized === 'WORKER' || normalized === 'MANAGER';
+    }));
+  readonly showLegacyCabinetMetrics = computed(() => shouldShowLegacyCabinetMetrics(
+    this.showContractorPayments(),
+    this.contractorPaymentsError(),
+    this.contractorPayments()
+  ));
 
   readonly visibleActions = computed(() => {
     if (!this.auth.authenticated()) {
@@ -347,6 +371,7 @@ export class HomeComponent {
     private readonly cabinetApi: CabinetApi,
     readonly reportReviewAccess: ManagerReportReviewAccessApi,
     private readonly workloadShadowApi: WorkloadShadowApi,
+    private readonly contractorPaymentsApi: ContractorPaymentsApi,
     private readonly toastService: ToastService,
     private readonly router: Router
   ) {
@@ -361,6 +386,9 @@ export class HomeComponent {
         this.loadCabinet();
         if (this.showTransferPreference()) {
           this.loadTransferPreference();
+        }
+        if (!this.isClientUser()) {
+          this.loadContractorPayments();
         }
         if (this.isManagerUser() && this.showManualPaymentSettings()) {
           this.loadManualPaymentSettings();
@@ -396,6 +424,9 @@ export class HomeComponent {
           && this.transferPreference() == null
           && !this.transferPreferenceLoading()) {
           this.loadTransferPreference();
+        }
+        if (!this.isClientUser() && !this.contractorPaymentsRequested) {
+          this.loadContractorPayments();
         }
         if (this.isManagerUser()
           && this.showManualPaymentSettings()
@@ -482,7 +513,7 @@ export class HomeComponent {
         }
         this.cabinetError.set(this.requestWarning(
           'Личный кабинет не загрузился',
-          'Зарплата, графики и профиль временно недоступны для выбранной даты.',
+          'Вознаграждения, графики и профиль временно недоступны для выбранной даты.',
           err,
           'dashboard'
         ));
@@ -493,6 +524,9 @@ export class HomeComponent {
 
   refreshCabinet(): void {
     this.loadCabinet(true);
+    if (!this.isClientUser()) {
+      this.loadContractorPayments(true);
+    }
     if (this.showTransferPreference()) {
       this.loadTransferPreference();
     }
@@ -1075,6 +1109,55 @@ export class HomeComponent {
 
   private todayIso(): string {
     return businessDateIso();
+  }
+
+  loadContractorPayments(force = false): void {
+    if (this.isClientUser() || this.contractorPaymentsLoading()) {
+      return;
+    }
+    if (this.contractorPaymentsRequested && !force) {
+      return;
+    }
+
+    this.contractorPaymentsRequested = true;
+    this.contractorPaymentsLoading.set(true);
+    this.contractorPaymentsError.set(null);
+    this.contractorPaymentsApi.getMySummary().subscribe({
+      next: (summaries) => {
+        this.contractorPayments.set(summaries);
+        this.contractorPaymentsLoading.set(false);
+      },
+      error: (error) => {
+        this.contractorPaymentsError.set(apiErrorDetail(
+          error,
+          'Расчёты по вознаграждениям временно недоступны.'
+        ));
+        this.contractorPaymentsLoading.set(false);
+      }
+    });
+  }
+
+  contractorPaymentRoleLabel(role: ContractorPaymentSummary['role']): string {
+    return role === 'SPECIALIST' ? 'Специалист' : 'Менеджер';
+  }
+
+  contractorPaymentModeLabel(summary: ContractorPaymentSummary): string {
+    return paymentModeLabel(summary);
+  }
+
+  contractorPaymentModeClass(summary: ContractorPaymentSummary): string {
+    return paymentModeClass(summary);
+  }
+
+  contractorMoney(kopecks?: number | null): string {
+    return `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format((kopecks ?? 0) / 100)} руб.`;
+  }
+
+  contractorCoverageStartLabel(summary: ContractorPaymentSummary): string {
+    return contractorCoverageStartLabel(summary.trackingStartedAt);
   }
 
   private requestWarning(title: string, message: string, err: unknown, icon: string): DashboardWarning {

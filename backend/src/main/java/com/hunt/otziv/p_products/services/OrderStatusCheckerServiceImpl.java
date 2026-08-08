@@ -4,6 +4,7 @@ import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.email.service.EmailService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
@@ -34,6 +35,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     private final ReviewRecoveryGateService recoveryGateService;
     private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
+    private final ContractorCompletionRewardService contractorCompletionRewardService;
 
     private static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
@@ -94,6 +96,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
             return;
         }
         if (currentOrder.getAmount() <= currentOrder.getCounter() && !recoveryGateService.hasActiveRecoveryTasks(currentOrder.getId())) {
+            contractorCompletionRewardService.ensureOrderCompletionAccrualNow(currentOrder.getId());
             String newStatus = handlePublicStatus(currentOrder);
             log.info("Счётчик достиг лимита. Статус заказа {} изменён на {}", currentOrder.getId(), newStatus);
         } else if (currentOrder.getAmount() <= currentOrder.getCounter()) {

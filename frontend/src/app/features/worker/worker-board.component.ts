@@ -23,7 +23,7 @@ import {
   WorkerSection
 } from '../../core/worker.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
-import { copyTextToClipboard } from '../../shared/clipboard-copy';
+import { copyDeferredTextToClipboard, copyTextToClipboard } from '../../shared/clipboard-copy';
 import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { MobileBottomPagerComponent } from '../../shared/mobile/mobile-bottom-pager.component';
@@ -886,7 +886,7 @@ export class WorkerBoardComponent implements OnDestroy {
       return;
     }
 
-    let value = {
+    const value = {
       url: review.filialUrl,
       login: '',
       password: '',
@@ -900,48 +900,47 @@ export class WorkerBoardComponent implements OnDestroy {
     const isCredential = kind === 'login' || kind === 'password';
 
     if (isCredential) {
-      const revealed = await this.revealReviewCredential(review, kind);
-      if (revealed === null) {
+      try {
+        if (!(await this.copyDeferredText(
+          () => this.revealReviewCredential(review, kind),
+          copiedKey,
+          `${copyLabel} скопирован`,
+          false
+        ))) {
+          return;
+        }
+      } catch (err) {
+        this.toastService.error(
+          'Данные не скопированы',
+          this.errorMessage(err, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.')
+        );
         return;
       }
-      value = revealed;
-    }
-
-    if (!(await this.copyText(value, copiedKey, `${copyLabel} скопирован`, !isCredential))) {
+      this.showCopySuccess(copiedKey, `${copyLabel} скопирован и подтвержден`);
+      this.markPublishCredentialCopied(review, kind);
       return;
     }
 
-    if (isCredential) {
-      this.showCopySuccess(copiedKey, `${copyLabel} скопирован и подтвержден`);
-      this.markPublishCredentialCopied(review, kind);
-    }
+    await this.copyText(value, copiedKey, `${copyLabel} скопирован`);
   }
 
   async copyReviewTitle(review: WorkerReviewItem, title: string): Promise<void> {
     await this.copyText(title, `title-${review.id}`, 'Название скопировано');
   }
 
-  private async revealReviewCredential(review: WorkerReviewItem, kind: 'login' | 'password'): Promise<string | null> {
-    try {
-      const target = workerCredentialCopyTarget(review);
-      const request = target.resource === 'recovery-task'
-        ? this.workerApi.revealRecoveryTaskCredential(target.id, kind, this.workerActivitySource())
-        : target.resource === 'bad-review-task'
-          ? this.workerApi.revealBadReviewTaskCredential(target.id, kind, this.workerActivitySource())
-          : this.workerApi.revealReviewCredential(target.id, kind, this.workerActivitySource());
-      const response = await firstValueFrom(request);
-      const value = response.value?.trim();
-      if (!value) {
-        throw new Error('Credential reveal returned an empty value');
-      }
-      return value;
-    } catch (err) {
-      this.toastService.error(
-        'Данные не скопированы',
-        this.errorMessage(err, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.')
-      );
-      return null;
+  private async revealReviewCredential(review: WorkerReviewItem, kind: 'login' | 'password'): Promise<string> {
+    const target = workerCredentialCopyTarget(review);
+    const request = target.resource === 'recovery-task'
+      ? this.workerApi.revealRecoveryTaskCredential(target.id, kind, this.workerActivitySource())
+      : target.resource === 'bad-review-task'
+        ? this.workerApi.revealBadReviewTaskCredential(target.id, kind, this.workerActivitySource())
+        : this.workerApi.revealReviewCredential(target.id, kind, this.workerActivitySource());
+    const response = await firstValueFrom(request);
+    const value = response.value?.trim();
+    if (!value) {
+      throw new Error('Credential reveal returned an empty value');
     }
+    return value;
   }
 
   private markPublishCredentialCopied(review: WorkerReviewItem, kind: ReviewCopyKind): void {
@@ -1565,6 +1564,23 @@ export class WorkerBoardComponent implements OnDestroy {
     }
 
     if (await copyTextToClipboard(value)) {
+      if (showSuccess) {
+        this.showCopySuccess(copiedKey, toast);
+      }
+      return true;
+    }
+
+    this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+    return false;
+  }
+
+  private async copyDeferredText(
+    loadText: () => Promise<string>,
+    copiedKey: string,
+    toast: string,
+    showSuccess = true
+  ): Promise<boolean> {
+    if (await copyDeferredTextToClipboard(loadText)) {
       if (showSuccess) {
         this.showCopySuccess(copiedKey, toast);
       }

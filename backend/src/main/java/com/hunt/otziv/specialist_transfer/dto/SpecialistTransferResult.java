@@ -12,6 +12,7 @@ public record SpecialistTransferResult(
         int companyLinksRemoved,
         int activeOrderCount,
         int unpublishedReviewCount,
-        int badReviewTaskCount
+        int badReviewTaskCount,
+        int reviewRecoveryTaskCount
 ) {
 }

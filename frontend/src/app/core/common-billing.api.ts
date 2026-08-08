@@ -282,6 +282,13 @@ export class CommonBillingApi {
     );
   }
 
+  reportManualCardPayment(invoiceId: number, reason: string): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/attention/manual-card-paid`,
+      { reason }
+    );
+  }
+
   resolveTechnicalTail(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/technical-tail/resolve`,

@@ -78,7 +78,8 @@ describe('public payment route isolation', () => {
         .mockReturnValueOnce(withTeardown(first, firstTeardown))
         .mockReturnValueOnce(second)
         .mockReturnValueOnce(of(invoice('C'))),
-      initPublicCommonInvoicePayment: vi.fn(() => withTeardown(mutation, mutationTeardown))
+      initPublicCommonInvoicePayment: vi.fn(() => withTeardown(mutation, mutationTeardown)),
+      reportPublicCommonInvoicePaid: vi.fn()
     };
     await configure(PayGroupPageComponent, params, paymentsApi);
     const fixture = TestBed.createComponent(PayGroupPageComponent);
@@ -113,6 +114,38 @@ describe('public payment route isolation', () => {
 
     mutation.complete();
     expect(mutationTeardown).toHaveBeenCalledOnce();
+    fixture.destroy();
+  });
+
+  it('group contractor route records client report separately from confirmed payment', async () => {
+    const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
+    const current: PublicCommonInvoice = {
+      ...invoice('A'),
+      paymentRouteType: 'MANUAL_MOBILE_BANK',
+      clientReportable: true
+    };
+    const reported = new Subject<PublicCommonInvoice>();
+    const paymentsApi = {
+      getPublicCommonInvoice: vi.fn(() => of(current)),
+      initPublicCommonInvoicePayment: vi.fn(),
+      reportPublicCommonInvoicePaid: vi.fn(() => reported)
+    };
+    await configure(PayGroupPageComponent, params, paymentsApi);
+    const fixture = TestBed.createComponent(PayGroupPageComponent);
+    const component = fixture.componentInstance;
+
+    component.reportPaid();
+
+    expect(paymentsApi.reportPublicCommonInvoicePaid).toHaveBeenCalledWith('A');
+    expect(component.reportingPaid()).toBe(true);
+    reported.next({
+      ...current,
+      clientReportable: false,
+      clientReportedAt: '2026-08-07T12:00:00'
+    });
+    expect(component.clientReported()).toBe(true);
+    expect(component.invoice()?.paidKopecks).toBe(0);
+    expect(component.reportingPaid()).toBe(false);
     fixture.destroy();
   });
 });
@@ -164,6 +197,7 @@ function invoice(token: string): PublicCommonInvoice {
     remainingKopecks: 10_000,
     payable: true,
     paymentRouteType: 'TBANK_LINK',
+    clientReportable: false,
     orders: []
   };
 }

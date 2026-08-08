@@ -240,7 +240,7 @@ export class TeamComponent implements OnDestroy {
         return [];
       }
       return [
-        { label: 'ЗП', value: this.money(member.sum1Month) },
+        { label: 'Начислено', value: this.money(member.sum1Month) },
         { label: 'Выручка', value: this.money(member.payment1Month) },
         { label: 'Заказы', value: this.count(member.order1Month) },
         { label: 'Отзывы', value: this.count(member.review1Month) }
@@ -258,7 +258,7 @@ export class TeamComponent implements OnDestroy {
       const networkEpisodes = Number(violations?.visible ? violations.episodeCount : 0);
       const monthMode = this.progressMode() === 'month';
       return [
-        { label: 'ЗП', value: this.money(member.sum1Month) },
+      { label: 'Начислено', value: this.money(member.sum1Month) },
         {
           label: 'Восстановления',
           value: monthMode ? this.publicationRatePercentLabel(recoveries, publications) : this.count(recoveries),
@@ -304,7 +304,7 @@ export class TeamComponent implements OnDestroy {
     }
 
     return [
-      { label: 'ЗП', value: this.money(member.sum1Month) },
+        { label: 'Начислено', value: this.money(member.sum1Month) },
       { label: 'Новые', value: this.count(member.leadsNew) },
       { label: 'В работе', value: this.count(member.leadsInWork) },
       { label: 'Конверсия', value: `${member.percentInWork || 0}%` }

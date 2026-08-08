@@ -167,6 +167,21 @@ public interface WorkloadTransferExecutionRepository
                         WHERE unsafe_check.check_order = unsafe_order.order_id
                           AND COALESCE(unsafe_check.check_active, 0) = 1
                     )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM contractor_payment_allocations unsafe_allocation
+                        WHERE (
+                              unsafe_allocation.order_id = unsafe_order.order_id
+                              OR EXISTS (
+                                  SELECT 1
+                                  FROM common_invoice_orders unsafe_invoice_item
+                                  WHERE unsafe_invoice_item.invoice_id = unsafe_allocation.common_invoice_id
+                                    AND unsafe_invoice_item.order_id = unsafe_order.order_id
+                              )
+                          )
+                          AND unsafe_allocation.mode = 'LIVE'
+                          AND unsafe_allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                    )
               )
             """, nativeQuery = true)
     long countFinanciallyUnsafeOrders(
@@ -855,6 +870,21 @@ public interface WorkloadTransferExecutionRepository
                                )) AS UNSIGNED),
                                COALESCE(orders.order_client_text_expected, 0)
                            )
+                        OR EXISTS (
+                            SELECT 1
+                            FROM contractor_payment_allocations allocation
+                            WHERE (
+                                  allocation.order_id = orders.order_id
+                                  OR EXISTS (
+                                      SELECT 1
+                                      FROM common_invoice_orders frozen_invoice_item
+                                      WHERE frozen_invoice_item.invoice_id = allocation.common_invoice_id
+                                        AND frozen_invoice_item.order_id = orders.order_id
+                                  )
+                              )
+                              AND allocation.mode = 'LIVE'
+                              AND allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                        )
                   )
             ) + (
                 SELECT COUNT(*)
@@ -1044,6 +1074,27 @@ public interface WorkloadTransferExecutionRepository
             @Param("targetWorkerId") long targetWorkerId
     );
 
+    /**
+     * Serializes rollback with every payment-route creation path. Those paths
+     * acquire the canonical order row before freezing contractor requisites,
+     * so the unsafe-entity recheck below cannot race a new LIVE allocation.
+     */
+    @Query(value = """
+            SELECT orders.order_id
+            FROM workload_transfer_assignment_audit audit
+            JOIN orders orders
+              ON orders.order_id = audit.entity_id
+            WHERE audit.execution_id = :executionId
+              AND audit.entity_type = 'ORDER'
+              AND orders.order_id IN (:entityIds)
+            ORDER BY orders.order_id
+            FOR UPDATE
+            """, nativeQuery = true)
+    List<Long> lockRollbackOrderIds(
+            @Param("executionId") long executionId,
+            @Param("entityIds") Collection<Long> entityIds
+    );
+
     @Modifying
     @Query(value = """
             UPDATE orders orders
@@ -1096,6 +1147,21 @@ public interface WorkloadTransferExecutionRepository
                       )) AS UNSIGNED),
                       COALESCE(orders.order_client_text_expected, 0)
                   )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM contractor_payment_allocations frozen_allocation
+                  WHERE (
+                        frozen_allocation.order_id = orders.order_id
+                        OR EXISTS (
+                            SELECT 1
+                            FROM common_invoice_orders frozen_invoice_item
+                            WHERE frozen_invoice_item.invoice_id = frozen_allocation.common_invoice_id
+                              AND frozen_invoice_item.order_id = orders.order_id
+                        )
+                    )
+                    AND frozen_allocation.mode = 'LIVE'
+                    AND frozen_allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+              )
             """, nativeQuery = true)
     int rollbackOrders(
             @Param("executionId") long executionId,

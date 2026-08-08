@@ -61,6 +61,51 @@ public class SpecialistTransferService {
 
         MapSqlParameterSource params = baseParams(context);
 
+        // Canonical mutex shared with invoice/link routing. Every order that
+        // may change its current specialist is locked in deterministic order
+        // before the frozen-recipient guard is re-evaluated. All following
+        // bulk updates are constrained to this exact locked snapshot, so an
+        // order entering the scope concurrently cannot slip into the UPDATE.
+        List<Long> lockedOrderIds = jdbc.query("""
+                SELECT o.order_id
+                FROM orders o
+                WHERE o.order_worker = :fromWorkerId
+                  AND o.order_company IN (:companyIds)
+                  AND o.order_complete = 0
+                ORDER BY o.order_id
+                FOR UPDATE
+                """, params, (rs, rowNum) -> rs.getLong("order_id"));
+        params.addValue(
+                "lockedOrderIds",
+                lockedOrderIds.isEmpty() ? List.of(-1L) : lockedOrderIds
+        );
+
+        Long frozenRoutes = jdbc.queryForObject("""
+                SELECT COUNT(DISTINCT o.order_id)
+                FROM orders o
+                JOIN contractor_payment_allocations allocation ON (
+                       allocation.order_id = o.order_id
+                       OR EXISTS (
+                           SELECT 1
+                           FROM common_invoice_orders frozen_item
+                           WHERE frozen_item.invoice_id = allocation.common_invoice_id
+                             AND frozen_item.order_id = o.order_id
+                       )
+                )
+                WHERE o.order_id IN (:lockedOrderIds)
+                  AND o.order_worker = :fromWorkerId
+                  AND o.order_company IN (:companyIds)
+                  AND o.order_complete = 0
+                  AND allocation.mode = 'LIVE'
+                  AND allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                """, params, Long.class);
+        if (frozenRoutes != null && frozenRoutes > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Перенос остановлен: у части заказов уже зафиксирован получатель платежа"
+            );
+        }
+
         int companyLinksAdded = jdbc.update("""
                 INSERT INTO workers_companies (company_id, worker_id)
                 SELECT source.company_id, :toWorkerId
@@ -84,8 +129,9 @@ public class SpecialistTransferService {
                 JOIN orders o ON o.order_id = od.order_detail_order
                 SET r.review_worker = :toWorkerId,
                     r.row_version = r.row_version + 1
-                WHERE r.review_publish = 0
-                  AND o.order_worker = :fromWorkerId
+                 WHERE r.review_publish = 0
+                   AND o.order_id IN (:lockedOrderIds)
+                   AND o.order_worker = :fromWorkerId
                   AND o.order_complete = 0
                   AND o.order_company IN (:companyIds)
                 """, params);
@@ -94,8 +140,25 @@ public class SpecialistTransferService {
                 UPDATE bad_review_tasks brt
                 JOIN orders o ON o.order_id = brt.bad_review_task_order
                 SET brt.bad_review_task_worker = :toWorkerId
-                WHERE brt.bad_review_task_status = 'NEW'
-                  AND o.order_worker = :fromWorkerId
+                 WHERE brt.bad_review_task_status = 'NEW'
+                   AND o.order_id IN (:lockedOrderIds)
+                   AND o.order_worker = :fromWorkerId
+                  AND o.order_complete = 0
+                  AND o.order_company IN (:companyIds)
+                """, params);
+
+        int reviewRecoveryTaskCount = jdbc.update("""
+                UPDATE review_recovery_tasks task
+                JOIN review_recovery_batches batch
+                  ON batch.review_recovery_batch_id = task.review_recovery_task_batch
+                JOIN orders o ON o.order_id = task.review_recovery_task_order
+                SET task.review_recovery_task_worker = :toWorkerId,
+                    task.review_recovery_task_updated_at = CURRENT_TIMESTAMP(6)
+                 WHERE task.review_recovery_task_status = 'PLANNED'
+                   AND batch.review_recovery_batch_status = 'OPEN'
+                   AND task.review_recovery_task_worker = :fromWorkerId
+                   AND o.order_id IN (:lockedOrderIds)
+                   AND o.order_worker = :fromWorkerId
                   AND o.order_complete = 0
                   AND o.order_company IN (:companyIds)
                 """, params);
@@ -104,19 +167,30 @@ public class SpecialistTransferService {
                 UPDATE orders o
                 SET o.order_worker = :toWorkerId,
                     o.row_version = o.row_version + 1
-                WHERE o.order_worker = :fromWorkerId
+                WHERE o.order_id IN (:lockedOrderIds)
+                  AND o.order_worker = :fromWorkerId
                   AND o.order_company IN (:companyIds)
                   AND o.order_complete = 0
                 """, params);
 
-        int companyLinksRemoved = jdbc.update("""
-                DELETE FROM workers_companies
-                WHERE worker_id = :fromWorkerId
-                  AND company_id IN (:companyIds)
-                """, params);
+        // Keep the source membership intentionally. A new order may be created
+        // for the old specialist after the locked order snapshot was taken;
+        // deleting workers_companies here would race that creator unless every
+        // order-creation path shared an additional company/link mutex. A stale
+        // membership is harmless and auditable; a missing live membership is
+        // not. Cleanup, if ever needed, must be a separate fully locked job.
+        int companyLinksRemoved = 0;
 
         LocalDateTime createdAt = LocalDateTime.now();
-        Long auditId = insertAudit(context, createdAt, preview.companyCount(), activeOrderCount, unpublishedReviewCount, badReviewTaskCount);
+        Long auditId = insertAudit(
+                context,
+                createdAt,
+                preview.companyCount(),
+                activeOrderCount,
+                unpublishedReviewCount,
+                badReviewTaskCount,
+                reviewRecoveryTaskCount
+        );
 
         return new SpecialistTransferResult(
                 auditId,
@@ -128,7 +202,8 @@ public class SpecialistTransferService {
                 companyLinksRemoved,
                 activeOrderCount,
                 unpublishedReviewCount,
-                badReviewTaskCount
+                badReviewTaskCount,
+                reviewRecoveryTaskCount
         );
     }
 
@@ -153,6 +228,7 @@ public class SpecialistTransferService {
                     audit.order_count,
                     audit.review_count,
                     audit.bad_review_task_count,
+                    audit.review_recovery_task_count,
                     audit.comment
                 FROM specialist_transfer_audit audit
                 LEFT JOIN users actor ON actor.id = audit.actor_user_id
@@ -177,6 +253,7 @@ public class SpecialistTransferService {
                 rs.getInt("order_count"),
                 rs.getInt("review_count"),
                 rs.getInt("bad_review_task_count"),
+                rs.getInt("review_recovery_task_count"),
                 rs.getString("comment")
         ));
     }
@@ -328,6 +405,7 @@ public class SpecialistTransferService {
                     0,
                     0,
                     0,
+                    0,
                     List.of(),
                     warnings
             );
@@ -356,6 +434,19 @@ public class SpecialistTransferService {
                 FROM bad_review_tasks brt
                 JOIN orders o ON o.order_id = brt.bad_review_task_order
                 WHERE brt.bad_review_task_status = 'NEW'
+                  AND o.order_worker = :fromWorkerId
+                  AND o.order_complete = 0
+                  AND o.order_company IN (:companyIds)
+                """, params);
+        int reviewRecoveryTaskCount = count("""
+                SELECT COUNT(*)
+                FROM review_recovery_tasks task
+                JOIN review_recovery_batches batch
+                  ON batch.review_recovery_batch_id = task.review_recovery_task_batch
+                JOIN orders o ON o.order_id = task.review_recovery_task_order
+                WHERE task.review_recovery_task_status = 'PLANNED'
+                  AND batch.review_recovery_batch_status = 'OPEN'
+                  AND task.review_recovery_task_worker = :fromWorkerId
                   AND o.order_worker = :fromWorkerId
                   AND o.order_complete = 0
                   AND o.order_company IN (:companyIds)
@@ -421,6 +512,7 @@ public class SpecialistTransferService {
                 activeOrderCount,
                 unpublishedReviewCount,
                 badReviewTaskCount,
+                reviewRecoveryTaskCount,
                 targetAlreadyAssigned,
                 companiesWithoutActiveOrders,
                 missingManagerLinks,
@@ -459,7 +551,8 @@ public class SpecialistTransferService {
             int companyCount,
             int orderCount,
             int reviewCount,
-            int badReviewTaskCount
+            int badReviewTaskCount,
+            int reviewRecoveryTaskCount
     ) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbc.getJdbcTemplate().update(connection -> {
@@ -473,10 +566,11 @@ public class SpecialistTransferService {
                         order_count,
                         review_count,
                         bad_review_task_count,
+                        review_recovery_task_count,
                         company_ids_json,
                         comment
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, Statement.RETURN_GENERATED_KEYS);
             statement.setTimestamp(1, Timestamp.valueOf(createdAt));
             statement.setLong(2, context.actor().userId());
@@ -486,8 +580,9 @@ public class SpecialistTransferService {
             statement.setInt(6, orderCount);
             statement.setInt(7, reviewCount);
             statement.setInt(8, badReviewTaskCount);
-            statement.setString(9, companyIdsJson(context.companyIds()));
-            statement.setString(10, context.comment());
+            statement.setInt(9, reviewRecoveryTaskCount);
+            statement.setString(10, companyIdsJson(context.companyIds()));
+            statement.setString(11, context.comment());
             return statement;
         }, keyHolder);
 

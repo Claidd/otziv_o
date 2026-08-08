@@ -13,11 +13,14 @@ import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRe
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentBusinessClock;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
@@ -115,6 +118,15 @@ class BadReviewTaskServiceImplTest {
     @Mock
     private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
+    @Mock
+    private OrderRepository orderRepository;
+
+    @Mock
+    private ContractorCompletionRewardService contractorCompletionRewardService;
+
+    @Mock
+    private ContractorPaymentBusinessClock contractorPaymentBusinessClock;
+
     @InjectMocks
     private BadReviewTaskServiceImpl service;
 
@@ -131,6 +143,7 @@ class BadReviewTaskServiceImplTest {
         lenient().when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of());
         lenient().when(assignmentGuardService.lockIfEligible(any(), any()))
                 .thenAnswer(invocation -> Optional.of(invocation.getArgument(0)));
+        lenient().when(contractorPaymentBusinessClock.today()).thenReturn(LocalDate.of(2026, 8, 7));
     }
 
     @Test
@@ -161,7 +174,7 @@ class BadReviewTaskServiceImplTest {
                         && "real-password".equals(task.getBotPasswordSnapshot())
                         && "Аккаунт П.".equals(task.getBotFioSnapshot())
                         && "хороший опубликованный текст".equals(task.getTaskText())
-                        && LocalDate.now().equals(task.getScheduledDate())
+                        && LocalDate.of(2026, 8, 7).equals(task.getScheduledDate())
         ));
     }
 
@@ -553,7 +566,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
 
-        when(badReviewTaskRepository.findById(40L)).thenReturn(Optional.of(task));
+        stubPayableMutation(task);
         when(badReviewTaskRepository.save(task)).thenReturn(task);
         when(badReviewTaskRepository.summarizeByOrderId(10L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 2L, BigDecimal.valueOf(600)}
@@ -595,7 +608,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
 
-        when(badReviewTaskRepository.findById(41L)).thenReturn(Optional.of(task));
+        stubPayableMutation(task);
         when(badReviewTaskRepository.save(task)).thenReturn(task);
         when(badReviewTaskRepository.summarizeByOrderId(11L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.NEW, 1L, BigDecimal.valueOf(300)},
@@ -628,7 +641,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
 
-        when(badReviewTaskRepository.findById(44L)).thenReturn(Optional.of(task));
+        stubPayableMutation(task);
         when(badReviewTaskRepository.save(task)).thenReturn(task);
         when(badReviewTaskRepository.summarizeByOrderId(14L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 2L, BigDecimal.valueOf(600)}
@@ -674,7 +687,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
 
-        when(badReviewTaskRepository.findById(50L)).thenReturn(Optional.of(task));
+        stubPayableMutation(task);
         when(badReviewTaskRepository.save(task)).thenReturn(task);
         when(badReviewTaskRepository.summarizeByOrderId(20L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
@@ -684,7 +697,7 @@ class BadReviewTaskServiceImplTest {
 
         verify(botCooldownService).markReleasedFrom(
                 crossCityBot,
-                LocalDate.now(),
+                LocalDate.of(2026, 8, 7),
                 "bad review cross-city task finished"
         );
     }
@@ -703,7 +716,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
 
-        when(badReviewTaskRepository.findById(48L)).thenReturn(Optional.of(task));
+        stubPayableMutation(task);
         when(badReviewTaskRepository.save(task)).thenReturn(task);
         when(badReviewTaskRepository.summarizeByOrderId(18L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
@@ -733,7 +746,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
 
-        when(badReviewTaskRepository.findById(47L)).thenReturn(Optional.of(task));
+        stubPayableMutation(task);
         when(badReviewTaskRepository.save(task)).thenReturn(task);
         when(badReviewTaskRepository.summarizeByOrderId(17L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
@@ -763,7 +776,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
 
-        when(badReviewTaskRepository.findById(42L)).thenReturn(Optional.of(task));
+        stubPayableMutation(task);
         when(badReviewTaskRepository.save(task)).thenReturn(task);
         when(badReviewTaskRepository.summarizeByOrderId(12L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
@@ -812,7 +825,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
 
-        when(badReviewTaskRepository.findById(43L)).thenReturn(Optional.of(task));
+        stubPayableMutation(task);
         when(badReviewTaskRepository.save(task)).thenReturn(task);
         when(badReviewTaskRepository.summarizeByOrderId(13L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)},
@@ -851,7 +864,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
 
-        when(badReviewTaskRepository.findById(46L)).thenReturn(Optional.of(task));
+        stubPayableMutation(task);
         when(badReviewTaskRepository.save(task)).thenReturn(task);
         when(badReviewTaskRepository.summarizeByOrderId(16L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)},
@@ -885,7 +898,7 @@ class BadReviewTaskServiceImplTest {
                 .price(BigDecimal.valueOf(300))
                 .build();
 
-        when(badReviewTaskRepository.findById(49L)).thenReturn(Optional.of(task));
+        stubPayableMutation(task);
         when(badReviewTaskRepository.save(task)).thenReturn(task);
         when(badReviewTaskRepository.summarizeByOrderId(19L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)},
@@ -918,6 +931,16 @@ class BadReviewTaskServiceImplTest {
         order.setCompany(company);
         order.setSum(BigDecimal.valueOf(1000));
         return order;
+    }
+
+    private void stubPayableMutation(BadReviewTask task) {
+        Long taskId = task.getId();
+        Order order = task.getOrder();
+        Long orderId = order.getId();
+        when(badReviewTaskRepository.findStatusById(taskId)).thenReturn(Optional.of(task.getStatus()));
+        when(badReviewTaskRepository.findOrderIdById(taskId)).thenReturn(Optional.of(orderId));
+        when(orderRepository.findByIdForCounterUpdate(orderId)).thenReturn(Optional.of(order));
+        when(badReviewTaskRepository.findByIdForMutation(taskId)).thenReturn(Optional.of(task));
     }
 
     private Worker worker(Long id, String username) {

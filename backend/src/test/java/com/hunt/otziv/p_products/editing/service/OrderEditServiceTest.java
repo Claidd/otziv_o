@@ -10,11 +10,13 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
+import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -32,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -65,6 +68,9 @@ class OrderEditServiceTest {
 
     @Mock
     private OrderAggregateMutationLockService orderAggregateMutationLockService;
+
+    @Mock
+    private ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
 
     @Test
     void updateOrderChangesFilialOnOrderAndReviews() {
@@ -116,6 +122,29 @@ class OrderEditServiceTest {
         assertEquals(true, order.getCompany().getWorkers().contains(newWorker));
         verify(orderRepository).save(order);
         verifyNoInteractions(reviewService);
+    }
+
+    @Test
+    void updateOrderCannotChangeManagerAfterRecipientRouteWasFrozen() {
+        OrderEditService service = service();
+        Order order = orderWithDetails(null, null, List.of());
+        OrderDTO dto = OrderDTO.builder()
+                .manager(ManagerDTO.builder().managerId(51L).build())
+                .build();
+        when(orderAggregateMutationLockService.lock(10L)).thenReturn(order);
+        doThrow(new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT,
+                "получатель уже зафиксирован"
+        )).when(contractorRouteAssignmentGuard).requireManagerReassignmentAllowed(10L);
+
+        assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.updateOrder(dto, 100L, 10L)
+        );
+
+        verify(contractorRouteAssignmentGuard).requireManagerReassignmentAllowed(10L);
+        verify(managerService, never()).getManagerById(51L);
+        verify(orderRepository, never()).save(order);
     }
 
     @Test
@@ -214,7 +243,8 @@ class OrderEditServiceTest {
                 reviewRepository,
                 badReviewTaskService,
                 reviewRecoveryTaskService,
-                orderAggregateMutationLockService
+                orderAggregateMutationLockService,
+                contractorRouteAssignmentGuard
         );
     }
 

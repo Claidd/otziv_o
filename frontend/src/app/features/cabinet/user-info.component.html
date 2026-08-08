@@ -46,7 +46,7 @@
 
     <section class="chart-grid">
       <app-cabinet-bar-chart
-        heading="Зарплаты по дням"
+        heading="Вознаграждения по дням"
         [subtitle]="payload()?.date || ''"
         [legendLabel]="selectedMonthLabel()"
         [legendColor]="'#9a7bd9'"
@@ -55,9 +55,9 @@
       />
 
       <app-cabinet-line-chart
-        heading="Зарплаты по месяцам"
+        heading="Вознаграждения по месяцам"
         subtitle="все годы"
-        ariaLabel="Зарплаты по месяцам"
+        ariaLabel="Вознаграждения по месяцам"
         [chart]="yearlyLineChartFrom(payload()?.workerZp?.zpPayMapMonth)"
       />
     </section>

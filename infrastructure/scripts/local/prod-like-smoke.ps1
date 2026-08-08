@@ -624,7 +624,14 @@ function Assert-ScheduledMessageReconciliationHealthy {
             -or $appLogs -match "Column 'state_status' in field list is ambiguous") {
         throw "Scheduled client message reconciliation failed in prod-like backend logs."
     }
+    if ($appLogs -match "Illegal mix of collations" `
+            -or $appLogs -match "Contractor shadow route backfill failed" `
+            -or $appLogs -match "Не удалось восстановить начисления завершенного заказа" `
+            -or $appLogs -match "Unexpected error occurred in scheduled task") {
+        throw "Contractor payment background processing failed in prod-like backend logs."
+    }
     Write-Host "Scheduled client message reconciliation log check is clean."
+    Write-Host "Contractor payment background-processing log check is clean."
 }
 
 function Assert-LegacyReviewCapabilityNotLogged {
@@ -933,6 +940,72 @@ function New-LocalRandomSecret {
     }
 
     return [System.BitConverter]::ToString($randomBytes).Replace('-', '').ToLowerInvariant()
+}
+
+function New-LocalRandomBase64Key {
+    param([ValidateRange(32, 32)][int]$ByteCount = 32)
+
+    $randomBytes = New-Object byte[] $ByteCount
+    $randomSource = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $randomSource.GetBytes($randomBytes)
+        return [Convert]::ToBase64String($randomBytes)
+    } finally {
+        [Array]::Clear($randomBytes, 0, $randomBytes.Length)
+        $randomSource.Dispose()
+    }
+}
+
+function Initialize-LocalCredentialEncryptionKey {
+    param([Parameter(Mandatory = $true)][string]$EnvPath)
+
+    $keyId = if (-not [string]::IsNullOrWhiteSpace($env:OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID)) {
+        $env:OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID.Trim()
+    } else {
+        Get-EnvValue -Path $EnvPath -Name 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID'
+    }
+    if ([string]::IsNullOrWhiteSpace($keyId)) {
+        $keyId = 'prod-local'
+    }
+    if ($keyId -notmatch '^[A-Za-z0-9._-]{1,64}$') {
+        throw 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID must match [A-Za-z0-9._-]{1,64}.'
+    }
+
+    $encodedKey = if (-not [string]::IsNullOrWhiteSpace($env:OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64)) {
+        $env:OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64.Trim()
+    } else {
+        Get-EnvValue -Path $EnvPath -Name 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64'
+    }
+    if ([string]::IsNullOrWhiteSpace($encodedKey)) {
+        $encodedKey = New-LocalRandomBase64Key
+        Set-LocalEnvFileValues -Path $EnvPath -Values @{
+            OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED = 'true'
+            OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID = $keyId
+            OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 = $encodedKey
+        }
+        Write-Host 'Created a protected local-only credential encryption key in the external prod-local env file.'
+    }
+
+    $decodedKey = $null
+    try {
+        $decodedKey = [Convert]::FromBase64String($encodedKey)
+        if ($decodedKey.Length -ne 32) {
+            throw 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 must decode to exactly 32 bytes.'
+        }
+    } catch [System.FormatException] {
+        throw 'OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 must be valid Base64 encoding exactly 32 bytes.'
+    } finally {
+        if ($null -ne $decodedKey) {
+            [Array]::Clear($decodedKey, 0, $decodedKey.Length)
+        }
+    }
+
+    # Process values override stale or incomplete external Compose defaults,
+    # while the generated key remains stable across -SkipProdDbRestore runs.
+    $env:OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED = 'true'
+    $env:OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID = $keyId
+    $env:OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64 = $encodedKey
+    Write-Host "Local credential encryption is enabled with key id '$keyId'."
 }
 
 function Initialize-LocalBotLinkSecrets {
@@ -2985,6 +3058,314 @@ function Invoke-ReputationAiRoleSmoke {
     }
 }
 
+function Invoke-ContractorPaymentShadowSmoke {
+    param(
+        [Parameter(Mandatory = $true)][string]$EnvPath,
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments
+    )
+
+    Write-Host "Running contractor payment SHADOW safety smoke..."
+    $mysqlUser = Get-EnvValue -Path $EnvPath -Name "MYSQL_USER"
+    $mysqlPassword = Get-EnvValue -Path $EnvPath -Name "MYSQL_PASSWORD"
+    $mysqlDatabase = Get-EnvValue -Path $EnvPath -Name "MYSQL_DATABASE"
+    if ([string]::IsNullOrWhiteSpace($mysqlUser) `
+            -or [string]::IsNullOrWhiteSpace($mysqlPassword) `
+            -or [string]::IsNullOrWhiteSpace($mysqlDatabase)) {
+        throw "MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE are required for contractor payment schema smoke."
+    }
+
+    $contractorSchemaSql = @"
+SELECT CONCAT('MIGRATIONS=', COUNT(*))
+FROM flyway_schema_history
+WHERE version IN (
+  '1.10.217', '1.10.218', '1.10.219', '1.10.220', '1.10.221', '1.10.222',
+  '1.10.223', '1.10.224', '1.10.225', '1.10.226', '1.10.227', '1.10.228',
+  '1.10.229'
+)
+  AND success = 1;
+
+SELECT CONCAT('REQUIRED_TABLES=', COUNT(*))
+FROM information_schema.tables
+WHERE table_schema = DATABASE()
+  AND table_name IN (
+    'contractor_direct_settlements',
+    'contractor_payment_accounting_phase',
+    'contractor_payment_rollout_state',
+    'contractor_completion_reward_markers',
+    'contractor_completion_reward_repair_state',
+    'contractor_completion_cutover_state'
+  );
+
+SELECT CONCAT('SAFE_SETTINGS=', COUNT(*))
+FROM app_settings
+WHERE (setting_key = 'contractor-payments.shadow-enabled' AND setting_value = 'true')
+   OR (setting_key = 'contractor-payments.live-routing-enabled' AND setting_value = 'false')
+   OR (setting_key = 'contractor-payments.reward-attribution-live-enabled' AND setting_value = 'false')
+   OR (setting_key = 'contractor-payments.live-readiness-confirmed' AND setting_value = 'false')
+   OR (setting_key = 'contractor-payments.completion-attribution-start-date' AND setting_value = '');
+
+SELECT CONCAT('ACCOUNTING_SHADOW=', COUNT(*))
+FROM contractor_payment_accounting_phase
+WHERE id = 1 AND phase = 'SHADOW';
+
+SELECT CONCAT('ROLLOUT_LEGACY=', COUNT(*))
+FROM contractor_payment_rollout_state
+WHERE id = 1
+  AND accounting_authority = 'LEGACY'
+  AND routing_requested = FALSE
+  AND attribution_start_date IS NULL;
+
+SELECT CONCAT('LIVE_ALLOCATIONS=', COUNT(*))
+FROM contractor_payment_allocations
+WHERE mode = 'LIVE';
+
+SELECT CONCAT('CUTOVER_ROWS=', COUNT(*))
+FROM contractor_completion_cutover_state;
+
+SELECT CONCAT('REPAIR_ROWS=', COUNT(*))
+FROM contractor_completion_reward_repair_state;
+
+SELECT CONCAT('CUTOVER_CHECK=', COUNT(*))
+FROM information_schema.check_constraints
+WHERE constraint_schema = DATABASE()
+  AND constraint_name = 'chk_contractor_completion_cutover_singleton'
+  AND REPLACE(check_clause, CHAR(96), '') LIKE '%id = 1%';
+
+SELECT CONCAT('COMPLETION_KEY=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND table_name = 'zp'
+  AND column_name = 'zp_completion_idempotency_key'
+  AND extra LIKE '%STORED GENERATED%';
+
+SELECT CONCAT('SOURCE_GENERATION=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND table_name = 'contractor_payment_allocations'
+  AND column_name = 'source_generation_snapshot';
+
+SELECT CONCAT('GENERATION_COLLATIONS=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND collation_name = 'utf8mb4_unicode_ci'
+  AND (
+    (table_name IN (
+      'payment_links',
+      'archive_payment_links',
+      'common_invoices',
+      'archive_common_invoices'
+    ) AND column_name = 'shadow_route_generation')
+    OR
+    (table_name = 'contractor_payment_allocations'
+      AND column_name = 'source_generation_snapshot')
+  );
+
+SELECT CONCAT('PAYMENT_GENERATION_JOIN=', IF(COUNT(*) >= 0, 1, 0))
+FROM contractor_payment_allocations allocation
+JOIN payment_links link
+  ON allocation.source_generation_snapshot = link.shadow_route_generation;
+
+SELECT CONCAT('COMMON_GENERATION_JOIN=', IF(COUNT(*) >= 0, 1, 0))
+FROM contractor_payment_allocations allocation
+JOIN common_invoices invoice
+  ON allocation.source_generation_snapshot = invoice.shadow_route_generation;
+
+SELECT CONCAT('CLAIM_KEY_JOIN=', IF(COUNT(*) >= 0, 1, 0))
+FROM contractor_shadow_backfill_claims claim
+LEFT JOIN payment_links link
+  ON claim.claim_key = CONCAT('PAYMENT_LINK:', link.id);
+
+SELECT CONCAT('COMPLETION_BASE_GAP_QUERY=', IF(COUNT(*) >= 0, 1, 0))
+FROM (
+  SELECT orders_row.order_id
+  FROM orders orders_row
+  JOIN order_statuses status_row
+    ON status_row.order_status_id = orders_row.order_status
+  WHERE status_row.order_status_title IN (
+    'Опубликовано', 'Выставлен счет', 'Ожидает общего счета',
+    'Напоминание', 'Не оплачено', 'Бан', 'Оплачено'
+  )
+    AND (
+      SELECT COUNT(DISTINCT marker.logical_source)
+      FROM contractor_completion_reward_markers marker
+      WHERE marker.order_id = orders_row.order_id
+        AND marker.logical_source IN (
+          'ORDER_COMPLETION_MANAGER',
+          'ORDER_COMPLETION_SPECIALIST',
+          'PERFORMER_PRODUCT_COMPLETION'
+        )
+    ) < 3
+    AND NOT EXISTS (
+      SELECT repair.order_id
+      FROM contractor_completion_reward_repair_state repair
+      WHERE repair.order_id = orders_row.order_id
+        AND repair.next_attempt_at > CURRENT_TIMESTAMP(6)
+    )
+  ORDER BY orders_row.order_id
+  LIMIT 1
+) completion_base_gap;
+
+SELECT CONCAT('COMPLETION_DONE_TASK_GAP_QUERY=', IF(COUNT(*) >= 0, 1, 0))
+FROM (
+  SELECT DISTINCT task.bad_review_task_order
+  FROM bad_review_tasks task
+  WHERE task.bad_review_task_status = 'DONE'
+    AND NOT EXISTS (
+      SELECT marker.id
+      FROM contractor_completion_reward_markers marker
+      WHERE marker.order_id = task.bad_review_task_order
+        AND marker.logical_source = CONCAT('BAD_REVIEW_DONE:', task.bad_review_task_id)
+    )
+    AND NOT EXISTS (
+      SELECT repair.order_id
+      FROM contractor_completion_reward_repair_state repair
+      WHERE repair.order_id = task.bad_review_task_order
+        AND repair.next_attempt_at > CURRENT_TIMESTAMP(6)
+    )
+  ORDER BY task.bad_review_task_order
+  LIMIT 1
+) completion_done_task_gap;
+
+SELECT CONCAT('COMPLETION_CANCEL_TASK_GAP_QUERY=', IF(COUNT(*) >= 0, 1, 0))
+FROM (
+  SELECT task.bad_review_task_id
+  FROM bad_review_tasks task
+  WHERE task.bad_review_task_status = 'CANCELED'
+    AND NOT EXISTS (
+      SELECT cancel_marker.id
+      FROM contractor_completion_reward_markers cancel_marker
+      WHERE cancel_marker.order_id = task.bad_review_task_order
+        AND cancel_marker.logical_source = CONCAT('BAD_REVIEW_CANCEL:', task.bad_review_task_id)
+    )
+    AND (
+      EXISTS (
+        SELECT done_marker.id
+        FROM contractor_completion_reward_markers done_marker
+        WHERE done_marker.order_id = task.bad_review_task_order
+          AND done_marker.logical_source = CONCAT('BAD_REVIEW_DONE:', task.bad_review_task_id)
+      )
+      OR EXISTS (
+        SELECT reward.zp_id
+        FROM zp reward
+        WHERE reward.zp_order = task.bad_review_task_order
+          AND reward.zp_active = 1
+          AND reward.zp_source IN (
+            CONCAT('BAD_REVIEW_DONE_MANAGER:', task.bad_review_task_id),
+            CONCAT('BAD_REVIEW_DONE_SPECIALIST:', task.bad_review_task_id)
+          )
+      )
+    )
+    AND NOT EXISTS (
+      SELECT repair.order_id
+      FROM contractor_completion_reward_repair_state repair
+      WHERE repair.order_id = task.bad_review_task_order
+        AND repair.next_attempt_at > CURRENT_TIMESTAMP(6)
+    )
+  ORDER BY task.bad_review_task_id
+  LIMIT 1
+) completion_cancel_task_gap;
+
+SELECT CONCAT('ROUTING_REASON_COLUMNS=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND table_name = 'contractor_payment_allocations'
+  AND column_name IN (
+    'routing_decision_reason',
+    'specialist_rejection_reason',
+    'manager_rejection_reason'
+  );
+
+SELECT CONCAT('ENCRYPTED_COMMENT_COLUMNS=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND (
+    (table_name = 'contractor_payment_profiles'
+      AND column_name = 'payment_comment'
+      AND character_maximum_length = 2048)
+    OR
+    (table_name = 'contractor_payment_allocations'
+      AND column_name = 'payment_comment_snapshot'
+      AND character_maximum_length = 2048)
+  );
+
+SELECT CONCAT('PII_CHECKS=', COUNT(*))
+FROM information_schema.check_constraints
+WHERE constraint_schema = DATABASE()
+  AND constraint_name IN (
+    'ck_common_invoices_contractor_pii_blank',
+    'ck_archive_common_invoices_contractor_pii_blank'
+  )
+  AND check_clause LIKE '%payment_route_instruction_text%';
+"@
+    $schemaOutput = & docker @($ComposeArguments + @(
+        "exec", "-T", "-e", "MYSQL_PWD=$mysqlPassword", "mysql",
+        "mysql",
+        "--default-character-set=utf8mb4",
+        "-u$mysqlUser",
+        $mysqlDatabase,
+        "-N", "-B",
+        "-e",
+        $contractorSchemaSql
+    )) 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $schemaError = ($schemaOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        throw "Could not verify contractor payment Flyway/schema state: $schemaError"
+    }
+    $schemaFacts = @(
+        $schemaOutput |
+            ForEach-Object { $_.ToString().Trim() } |
+            Where-Object { $_ -match "^[A-Z_]+=[0-9]+$" }
+    )
+    foreach ($expectedFact in @(
+        "MIGRATIONS=13",
+        "REQUIRED_TABLES=6",
+        "SAFE_SETTINGS=5",
+        "ACCOUNTING_SHADOW=1",
+        "ROLLOUT_LEGACY=1",
+        "LIVE_ALLOCATIONS=0",
+        "CUTOVER_ROWS=0",
+        "REPAIR_ROWS=0",
+        "CUTOVER_CHECK=1",
+        "COMPLETION_KEY=1",
+        "SOURCE_GENERATION=1",
+        "GENERATION_COLLATIONS=5",
+        "PAYMENT_GENERATION_JOIN=1",
+        "COMMON_GENERATION_JOIN=1",
+        "CLAIM_KEY_JOIN=1",
+        "COMPLETION_BASE_GAP_QUERY=1",
+        "COMPLETION_DONE_TASK_GAP_QUERY=1",
+        "COMPLETION_CANCEL_TASK_GAP_QUERY=1",
+        "ROUTING_REASON_COLUMNS=3",
+        "ENCRYPTED_COMMENT_COLUMNS=2",
+        "PII_CHECKS=2"
+    )) {
+        if ($schemaFacts -notcontains $expectedFact) {
+            throw "Contractor payment schema invariant '$expectedFact' is missing. Actual: $($schemaFacts -join ', ')."
+        }
+    }
+
+    $masterOutput = & docker @($ComposeArguments + @(
+        "exec", "-T", "app", "sh", "-lc",
+        'printf "LIVE_MASTER=%s\nREWARD_MASTER=%s\n" "$OTZIV_CONTRACTOR_PAYMENTS_LIVE_ROUTING_MASTER_ENABLED" "$OTZIV_CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_MASTER_ENABLED"'
+    )) 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $masterError = ($masterOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        throw "Could not verify contractor payment deployment masters: $masterError"
+    }
+    $masterFacts = @(
+        $masterOutput |
+            ForEach-Object { $_.ToString().Trim().ToLowerInvariant() } |
+            Where-Object { $_ -match "^(live|reward)_master=(true|false)$" }
+    )
+    foreach ($expectedMaster in @("live_master=false", "reward_master=false")) {
+        if ($masterFacts -notcontains $expectedMaster) {
+            throw "Unsafe contractor payment deployment master. Expected '$expectedMaster'; actual: $($masterFacts -join ', ')."
+        }
+    }
+
+    Write-Host "Contractor payment SHADOW safety smoke OK: V217-V229 schema is complete, generation joins are collation-safe, accounting/routing remain LEGACY/SHADOW, completion cutover is unset, and both deployment masters are false."
+}
+
 function Invoke-WorkloadShadowSmoke {
     param(
         [Parameter(Mandatory = $true)][string]$RootUrl,
@@ -3606,6 +3987,7 @@ if (-not $InitializeLocalKeycloakUserSnapshot -and -not (Test-Path -LiteralPath 
 }
 
 Write-Host "Using env file: $envPath"
+Initialize-LocalCredentialEncryptionKey -EnvPath $envPath
 Initialize-LocalBotLinkSecrets -EnvPath $envPath
 $localLoginConfiguration = Resolve-LocalKeycloakLoginConfiguration `
     -EnvPath $envPath `
@@ -3815,6 +4197,9 @@ try {
     Assert-LegacyUserMigrationDisabled -BaseUrl $BaseUrl
     Assert-LegacyReviewCapabilityNotLogged -BaseUrl $BaseUrl -ComposeArguments $composeArgs
     Invoke-TbankPaymentConfigSmoke -BaseUrl $BaseUrl -EnvPath $envPath
+    Invoke-ContractorPaymentShadowSmoke `
+        -EnvPath $envPath `
+        -ComposeArguments $composeArgs
     if (-not $SkipWorkloadShadowSmoke) {
         Invoke-WorkloadShadowSmoke `
             -RootUrl $BaseUrl `

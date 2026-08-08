@@ -170,21 +170,137 @@
       }
 
       @if (cabinet()) {
-        <section class="cabinet-metrics">
-          @for (metric of cabinetMetrics(); track metric.label) {
-            <article class="metric-card" [class]="tone(metric.percent)">
-              <div>
-                <h3>{{ metric.label }}</h3>
-                <h1>{{ metric.value }}</h1>
-              </div>
-              <span>{{ metric.percent }}%</span>
-            </article>
-          }
-        </section>
+        @if (showLegacyCabinetMetrics()) {
+          <section class="cabinet-metrics">
+            @for (metric of cabinetMetrics(); track metric.label) {
+              <article class="metric-card" [class]="tone(metric.percent)">
+                <div>
+                  <h3>{{ metric.label }}</h3>
+                  <h1>{{ metric.value }}</h1>
+                </div>
+                <span>{{ metric.percent }}%</span>
+              </article>
+            }
+          </section>
+        }
 
-        <section class="chart-grid">
+        @if (showContractorPayments()) {
+          <section class="panel contractor-payment-summary" aria-label="Расчёты по вознаграждениям">
+            <div class="panel-title">
+              <span class="material-icons-sharp">account_balance_wallet</span>
+              <div>
+                <p class="eyebrow">МОИ РАСЧЁТЫ</p>
+                <h2>Вознаграждения и переводы</h2>
+              </div>
+            </div>
+
+            @if (contractorPaymentsLoading()) {
+              <p class="contractor-payment-state">Загружаю расчёты…</p>
+            } @else if (contractorPaymentsError()) {
+              <div class="contractor-payment-state error-state">
+                <span>{{ contractorPaymentsError() }}</span>
+                <button type="button" class="secondary" (click)="loadContractorPayments(true)">Повторить</button>
+              </div>
+            } @else if (contractorPayments().length === 0) {
+              <p class="contractor-payment-state">Платёжный профиль для вашей роли ещё не создан.</p>
+            } @else {
+              <div class="contractor-payment-role-list">
+                @for (summary of contractorPayments(); track summary.profileId) {
+                  <article class="contractor-payment-role">
+                    <header>
+                      <div>
+                        <strong>{{ contractorPaymentRoleLabel(summary.role) }}</strong>
+                        <small>Начисления и состояние переводов</small>
+                      </div>
+                      <span
+                        class="contractor-payment-mode"
+                        [class.live]="contractorPaymentModeClass(summary) === 'live'"
+                        [class.shadow]="contractorPaymentModeClass(summary) === 'shadow'"
+                        [class.disabled]="contractorPaymentModeClass(summary) === 'disabled'"
+                      >
+                        {{ contractorPaymentModeLabel(summary) }}
+                      </span>
+                    </header>
+
+                    @if (!summary.currentMonthCoverageComplete) {
+                      <p class="contractor-payment-coverage-note">
+                        Новый расчёт по этому профилю показан с даты подключения —
+                        {{ contractorCoverageStartLabel(summary) }}. Полная история за месяц
+                        остаётся в прежних показателях и графиках ниже.
+                      </p>
+                    }
+
+                    <div class="contractor-payment-metrics">
+                      <span>
+                        <small>Начислено</small>
+                        <strong>{{ contractorMoney(summary.accruedTotalKopecks) }}</strong>
+                        <em>за месяц {{ contractorMoney(summary.accruedMonthKopecks) }}</em>
+                      </span>
+                      <span>
+                        <small>Зарезервировано</small>
+                        <strong>{{ contractorMoney(summary.reservedKopecks) }}</strong>
+                      </span>
+                      <span>
+                        <small>Клиент сообщил</small>
+                        <strong>{{ contractorMoney(summary.clientReportedKopecks) }}</strong>
+                      </span>
+                      <span>
+                        <small>Частично подтверждено · остаток</small>
+                        <strong>{{ contractorMoney(summary.partiallyConfirmedOutstandingKopecks) }}</strong>
+                      </span>
+                      <span>
+                        <small>{{ summary.reportingLive ? 'Подтверждено поступление' : 'Смоделировано поступление' }}</small>
+                        <strong>{{ contractorMoney(summary.grossConfirmedTotalKopecks) }}</strong>
+                        <em>за месяц {{ contractorMoney(summary.grossConfirmedMonthKopecks) }}</em>
+                      </span>
+                      <span>
+                        <small>Возвращено</small>
+                        <strong>{{ contractorMoney(summary.returnedTotalKopecks) }}</strong>
+                        <em>за месяц {{ contractorMoney(summary.returnedMonthKopecks) }}</em>
+                      </span>
+                      <span>
+                        <small>Закрыто без поступления</small>
+                        <strong>{{ contractorMoney(summary.closedWithoutPaymentTotalKopecks) }}</strong>
+                        <em>за месяц {{ contractorMoney(summary.closedWithoutPaymentMonthKopecks) }}</em>
+                      </span>
+                      <span>
+                        <small>Получено за вычетом возвратов</small>
+                        <strong>{{ contractorMoney(summary.netReceivedTotalKopecks) }}</strong>
+                        <em>за месяц {{ contractorMoney(summary.netReceivedMonthKopecks) }}</em>
+                      </span>
+                      @if (summary.creditKopecks > 0) {
+                        <span class="credit">
+                          <small>Кредит (аванс)</small>
+                          <strong>{{ contractorMoney(summary.creditKopecks) }}</strong>
+                        </span>
+                      } @else {
+                        <span class="available">
+                          <small>Доступно для маршрутизации</small>
+                          <strong>{{ contractorMoney(summary.availableKopecks) }}</strong>
+                        </span>
+                      }
+                      @if (summary.exposureOverrunKopecks > 0) {
+                        <span class="credit">
+                          <small>Требуется сверка: превышение обязательства</small>
+                          <strong>{{ contractorMoney(summary.exposureOverrunKopecks) }}</strong>
+                        </span>
+                      }
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </section>
+        }
+
+        @if (showContractorPayments()) {
+          <p class="contractor-payment-history-note">
+            Полная историческая статистика вознаграждений сохранена в прежних графиках.
+          </p>
+        }
+        <section class="chart-grid" aria-label="Полная историческая статистика вознаграждений">
           <app-cabinet-bar-chart
-            heading="Зарплаты по дням"
+            heading="Вознаграждения по дням"
             [headingLevel]="2"
             [subtitle]="cabinet()?.date || ''"
             [legendLabel]="selectedMonthLabel()"
@@ -195,10 +311,10 @@
           />
 
           <app-cabinet-line-chart
-            heading="Зарплаты по месяцам"
+            heading="Вознаграждения по месяцам"
             [headingLevel]="2"
             subtitle="все годы"
-            ariaLabel="Зарплаты по месяцам"
+            ariaLabel="Вознаграждения по месяцам"
             [chart]="yearlyLineChartFrom(cabinet()?.workerZp?.zpPayMapMonth)"
             [compact]="true"
           />

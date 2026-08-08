@@ -26,6 +26,7 @@ public record PublicPaymentLinkResponse(
         String manualPaymentType,
         String manualPhone,
         String manualRecipientName,
+        String manualBankName,
         String manualPaymentUrl,
         String manualPaymentButtonLabel,
         String manualComment,

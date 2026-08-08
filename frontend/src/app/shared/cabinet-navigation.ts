@@ -12,7 +12,7 @@ export type CabinetNavigationLink = {
 
 export const CABINET_HOME_LINK: CabinetNavigationLink = {
   label: 'Личный кабинет',
-  description: 'Зарплата, графики и профиль',
+  description: 'Вознаграждения, графики и профиль',
   icon: 'dashboard',
   active: 'dashboard',
   routerLink: '/',
@@ -47,7 +47,7 @@ export const CABINET_SECTION_LINKS: CabinetNavigationLink[] = [
   },
   {
     label: 'Аналитика',
-    description: 'Оборот, ЗП и графики',
+    description: 'Оборот, начисления и графики',
     icon: 'analytics',
     active: 'analytics',
     routerLink: '/admin/analyse',

@@ -32,6 +32,7 @@ public record AdminPaymentLinkResponse(
         String manualPaymentType,
         String manualPhone,
         String manualRecipientName,
+        String manualBankName,
         String manualPaymentUrl,
         String manualPaymentButtonLabel,
         String manualComment,

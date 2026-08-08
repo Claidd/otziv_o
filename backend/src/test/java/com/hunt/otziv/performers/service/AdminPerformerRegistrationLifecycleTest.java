@@ -1,6 +1,7 @@
 package com.hunt.otziv.performers.service;
 
 import com.hunt.otziv.c_cities.repository.CityRepository;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
 import com.hunt.otziv.performers.model.PerformerProfile;
 import com.hunt.otziv.performers.model.PerformerProfileStatus;
 import com.hunt.otziv.performers.repository.PerformerProfileRepository;
@@ -40,6 +41,7 @@ class AdminPerformerRegistrationLifecycleTest {
     @Mock private UserRepository userRepository;
     @Mock private KeycloakAdminClient keycloakAdminClient;
     @Mock private UserAuthEpochService authEpochService;
+    @Mock private ContractorPaymentProfileService contractorPaymentProfileService;
 
     @Test
     void pendingApplicationCannotActivateWithoutExplicitManualPhoneVerification() {
@@ -198,7 +200,8 @@ class AdminPerformerRegistrationLifecycleTest {
                 screenshotStorage,
                 userRepository,
                 keycloakAdminClient,
-                authEpochService
+                authEpochService,
+                contractorPaymentProfileService
         );
     }
 

@@ -2,6 +2,7 @@ package com.hunt.otziv.performers.service;
 
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_cities.repository.CityRepository;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
 import com.hunt.otziv.performers.dto.AdminPerformerControlResponse;
 import com.hunt.otziv.performers.dto.AdminPerformerManualRunResponse;
 import com.hunt.otziv.performers.dto.AdminPerformerResponse;
@@ -45,6 +46,7 @@ public class AdminPerformerService {
     private final UserRepository userRepository;
     private final KeycloakAdminClient keycloakAdminClient;
     private final UserAuthEpochService authEpochService;
+    private final ContractorPaymentProfileService contractorPaymentProfileService;
 
     @Transactional(readOnly = true)
     public AdminPerformerControlResponse control() {
@@ -83,6 +85,8 @@ public class AdminPerformerService {
         }
 
         synchronizeAccountEnabled(performer.getUser(), status == PerformerProfileStatus.ACTIVE);
+        userRepository.flush();
+        contractorPaymentProfileService.ensureForUser(performer.getUser().getId());
         performer.setStatus(status);
         performer.setBlockReason(status == PerformerProfileStatus.ACTIVE ? null : trimToNull(reason));
         performer.setModeratedAt(now);

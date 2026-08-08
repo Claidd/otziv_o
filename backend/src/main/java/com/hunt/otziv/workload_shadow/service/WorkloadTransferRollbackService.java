@@ -45,6 +45,14 @@ public class WorkloadTransferRollbackService {
         long sourceWorkerId = required(context.getSourceWorkerId(), "sourceWorkerId");
         long targetWorkerId = required(context.getTargetWorkerId(), "targetWorkerId");
         long companyId = required(context.getCompanyId(), "companyId");
+        List<Long> orderIds = ids(executionId, "ORDER");
+        if (!orderIds.isEmpty()) {
+            exact(
+                    repository.lockRollbackOrderIds(executionId, orderIds).size(),
+                    orderIds.size(),
+                    "Состав заказов передачи изменился до блокировки отката"
+            );
+        }
         long unsafe = repository.countRollbackUnsafeEntities(
                 executionId,
                 targetWorkerId
@@ -57,7 +65,6 @@ public class WorkloadTransferRollbackService {
             );
         }
 
-        List<Long> orderIds = ids(executionId, "ORDER");
         List<Long> reviewIds = ids(executionId, "REVIEW");
         List<Long> badTaskIds = ids(executionId, "BAD_TASK");
         List<Long> recoveryTaskIds = ids(executionId, "RECOVERY_TASK");

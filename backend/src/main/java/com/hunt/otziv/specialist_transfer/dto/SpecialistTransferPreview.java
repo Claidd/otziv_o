@@ -9,6 +9,7 @@ public record SpecialistTransferPreview(
         int activeOrderCount,
         int unpublishedReviewCount,
         int badReviewTaskCount,
+        int reviewRecoveryTaskCount,
         int targetAlreadyAssignedCompanyCount,
         int companiesWithoutActiveOrdersCount,
         int targetWorkerMissingManagerLinksCount,

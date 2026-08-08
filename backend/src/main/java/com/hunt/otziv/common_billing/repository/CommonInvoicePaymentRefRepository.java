@@ -114,6 +114,16 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
 
     boolean existsByInvoice_Id(Long invoiceId);
 
+    /** Current read used after the parent invoice mutex is held. */
+    @Query(value = """
+        SELECT payment_ref.payment_ref_id
+        FROM common_invoice_payment_refs payment_ref
+        WHERE payment_ref.invoice_id = :invoiceId
+        ORDER BY payment_ref.payment_ref_id
+        FOR UPDATE
+    """, nativeQuery = true)
+    List<Long> findIdsByInvoiceIdForUpdate(@Param("invoiceId") Long invoiceId);
+
     boolean existsByInvoice_IdAndStatusIn(Long invoiceId, java.util.Collection<String> statuses);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)

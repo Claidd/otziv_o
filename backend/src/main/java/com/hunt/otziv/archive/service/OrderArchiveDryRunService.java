@@ -11,7 +11,13 @@ import com.hunt.otziv.archive.dto.ArchiveOrdersSettingsResponse;
 import com.hunt.otziv.archive.dto.ArchiveRunResult;
 import com.hunt.otziv.archive.repository.OrderArchiveDryRunRepository;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
+import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
+import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
 import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
+import com.hunt.otziv.z_zp.model.Zp;
+import com.hunt.otziv.z_zp.repository.ZpRepository;
 import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.format.DateTimeFormatter;
@@ -21,6 +27,9 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,10 +51,24 @@ public class OrderArchiveDryRunService {
     private static final String DEFAULT_SCHEDULE_CRON = "0 15 4 * * *";
     private static final DateTimeFormatter SCHEDULE_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter LENIENT_SCHEDULE_TIME_FORMATTER = DateTimeFormatter.ofPattern("H:mm");
+    private static final Set<ContractorAllocationStatus> ARCHIVE_SAFE_ALLOCATION_STATUSES = EnumSet.of(
+            ContractorAllocationStatus.CONFIRMED,
+            ContractorAllocationStatus.SIMULATED_PAID,
+            ContractorAllocationStatus.LATE_PAYMENT_AFTER_RELEASE,
+            ContractorAllocationStatus.OWNER_FALLBACK,
+            ContractorAllocationStatus.RELEASED_UNPAID,
+            ContractorAllocationStatus.EXPIRED,
+            ContractorAllocationStatus.CANCELED,
+            ContractorAllocationStatus.RETURNED,
+            ContractorAllocationStatus.PARTIALLY_RETURNED
+    );
 
     private final OrderArchiveDryRunRepository repository;
     private final AppSettingService appSettingService;
     private final PaymentLinkArchiveService paymentLinkArchiveService;
+    private final ZpRepository zpRepository;
+    private final ContractorRewardLedgerService contractorRewardLedgerService;
+    private final ContractorPaymentShadowService contractorPaymentShadowService;
     private final Clock clock;
 
     @Value("${otziv.archive.orders.retention-days:90}")
@@ -76,17 +99,28 @@ public class OrderArchiveDryRunService {
     public OrderArchiveDryRunService(
             OrderArchiveDryRunRepository repository,
             AppSettingService appSettingService,
-            PaymentLinkArchiveService paymentLinkArchiveService
+            PaymentLinkArchiveService paymentLinkArchiveService,
+            ZpRepository zpRepository,
+            ContractorRewardLedgerService contractorRewardLedgerService,
+            ContractorPaymentShadowService contractorPaymentShadowService
     ) {
-        this(repository, appSettingService, paymentLinkArchiveService, Clock.system(DEFAULT_ZONE));
+        this(
+                repository,
+                appSettingService,
+                paymentLinkArchiveService,
+                zpRepository,
+                contractorRewardLedgerService,
+                contractorPaymentShadowService,
+                Clock.system(DEFAULT_ZONE)
+        );
     }
 
     OrderArchiveDryRunService(OrderArchiveDryRunRepository repository, Clock clock) {
-        this(repository, null, null, clock);
+        this(repository, null, null, null, null, null, clock);
     }
 
     OrderArchiveDryRunService(OrderArchiveDryRunRepository repository, AppSettingService appSettingService, Clock clock) {
-        this(repository, appSettingService, null, clock);
+        this(repository, appSettingService, null, null, null, null, clock);
     }
 
     OrderArchiveDryRunService(
@@ -95,9 +129,24 @@ public class OrderArchiveDryRunService {
             PaymentLinkArchiveService paymentLinkArchiveService,
             Clock clock
     ) {
+        this(repository, appSettingService, paymentLinkArchiveService, null, null, null, clock);
+    }
+
+    OrderArchiveDryRunService(
+            OrderArchiveDryRunRepository repository,
+            AppSettingService appSettingService,
+            PaymentLinkArchiveService paymentLinkArchiveService,
+            ZpRepository zpRepository,
+            ContractorRewardLedgerService contractorRewardLedgerService,
+            ContractorPaymentShadowService contractorPaymentShadowService,
+            Clock clock
+    ) {
         this.repository = repository;
         this.appSettingService = appSettingService;
         this.paymentLinkArchiveService = paymentLinkArchiveService;
+        this.zpRepository = zpRepository;
+        this.contractorRewardLedgerService = contractorRewardLedgerService;
+        this.contractorPaymentShadowService = contractorPaymentShadowService;
         this.clock = clock;
     }
 
@@ -188,6 +237,8 @@ public class OrderArchiveDryRunService {
         if (missingClosedAnalyticsMonths > 0) {
             throw new IllegalStateException("Closed analytics months are missing for selected archive candidates");
         }
+        List<Long> contractorAllocationIds = preparedContractorAllocationIds();
+        preflightPreparedContractorAllocations(contractorAllocationIds);
         int lockedOrders = repository.lockPreparedCandidateOrders();
         if (lockedOrders != selected.orders()) {
             throw new IllegalStateException(
@@ -208,6 +259,23 @@ public class OrderArchiveDryRunService {
                     "Order archive candidates changed while locks were acquired; retry with a fresh selection"
             );
         }
+        if (repository.hasPreparedCandidateUnmaterializedShadowRoutes()) {
+            throw new IllegalStateException(
+                    "Order archive blocked: a prepared test payment route is still waiting for its durable decision"
+            );
+        }
+        if (repository.hasPreparedCandidateUnrecordedContractorManualEvidence()) {
+            throw new IllegalStateException(
+                    "Order archive blocked: manual payment evidence is still waiting for contractor accounting"
+            );
+        }
+
+        // A backfill may have committed while source locks were being
+        // acquired. Re-read under the locks so its new allocation cannot be
+        // omitted from the strict archive reconciliation pass.
+        List<Long> lockedContractorAllocationIds = preparedContractorAllocationIds();
+        reconcilePreparedContractorAllocations(lockedContractorAllocationIds);
+        synchronizePreparedContractorRewards();
 
         Long batchId = repository.insertStartedArchiveBatch(
                 startedAt,
@@ -245,6 +313,75 @@ public class OrderArchiveDryRunService {
         );
         log.warn("Order archive live run completed: {}", result);
         return result;
+    }
+
+    private void synchronizePreparedContractorRewards() {
+        if (zpRepository == null || contractorRewardLedgerService == null) {
+            // Only legacy unit-test constructors omit production collaborators.
+            return;
+        }
+        List<Long> rewardIds = repository.findPreparedCandidateContractorRewardIds();
+        if (rewardIds.isEmpty()) {
+            return;
+        }
+        List<Zp> rewards = new ArrayList<>(rewardIds.size());
+        zpRepository.findAllById(rewardIds).forEach(rewards::add);
+        if (rewards.size() != rewardIds.size()) {
+            throw new IllegalStateException(
+                    "Contractor reward archive guard could not lock every selected source"
+            );
+        }
+        // Fail hard before archive copy/delete. Once zp is moved to archive_zp,
+        // the live repair queue can no longer reconstruct an unsynced source.
+        contractorRewardLedgerService.synchronizeSources(rewards);
+    }
+
+    private List<Long> preparedContractorAllocationIds() {
+        if (contractorPaymentShadowService == null) {
+            // Only legacy unit-test constructors omit production collaborators.
+            return List.of();
+        }
+        return repository.findPreparedCandidateContractorAllocationIds();
+    }
+
+    /**
+     * Commits newly discovered confirmation/return facts before the archive
+     * transaction can intentionally roll back on an unsafe state. The strict
+     * pass below still runs under source locks to close the race between this
+     * preflight and archive copy/delete.
+     */
+    private void preflightPreparedContractorAllocations(List<Long> allocationIds) {
+        if (contractorPaymentShadowService == null) {
+            return;
+        }
+        for (Long allocationId : allocationIds) {
+            ContractorPaymentAllocation reconciled =
+                    contractorPaymentShadowService.reconcileAllocationId(allocationId);
+            if (reconciled == null) {
+                throw new IllegalStateException(
+                        "Order archive preflight could not reconcile contractor payment allocation "
+                                + allocationId
+                );
+            }
+        }
+    }
+
+    private void reconcilePreparedContractorAllocations(List<Long> allocationIds) {
+        if (contractorPaymentShadowService == null) {
+            return;
+        }
+        for (Long allocationId : allocationIds) {
+            ContractorPaymentAllocation reconciled =
+                    contractorPaymentShadowService.reconcileAllocationForArchive(allocationId);
+            if (reconciled == null
+                    || reconciled.isNeedsReturnAmount()
+                    || !ARCHIVE_SAFE_ALLOCATION_STATUSES.contains(reconciled.getStatus())) {
+                throw new IllegalStateException(
+                        "Order archive blocked: contractor payment allocation " + allocationId
+                                + " still requires reconciliation"
+                );
+            }
+        }
     }
 
     @Transactional(readOnly = true)

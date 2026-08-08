@@ -479,14 +479,14 @@
                 <strong>{{ restorePaymentTotal(details) | number:'1.0-0' }}</strong>
               </article>
               <article>
-                <span>ЗП</span>
+                <span>Начисления</span>
                 <strong>{{ restoreZpTotal(details) | number:'1.0-0' }}</strong>
               </article>
             }
           </section>
 
           @if (canSeeArchiveFinance()) {
-            <section class="restore-finance-grid" aria-label="Оплаты и ЗП">
+            <section class="restore-finance-grid" aria-label="Оплаты и начисления">
               <article>
                 <header>
                   <h3>Оплаты</h3>
@@ -503,7 +503,7 @@
               </article>
               <article>
                 <header>
-                  <h3>ЗП</h3>
+                  <h3>Начисления</h3>
                   <span>{{ details.zp.length }}</span>
                 </header>
                 @for (zp of details.zp; track trackZp($index, zp)) {
@@ -512,7 +512,7 @@
                     <span>{{ (zp.sum || 0) | number:'1.0-0' }} руб.</span>
                   </p>
                 } @empty {
-                  <p class="restore-empty-line">ЗП нет</p>
+                  <p class="restore-empty-line">Начислений нет</p>
                 }
               </article>
             </section>

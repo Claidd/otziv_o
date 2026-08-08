@@ -9,6 +9,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -86,6 +88,33 @@ public class BusinessAuditService {
                 newValue,
                 details
         )));
+    }
+
+    /**
+     * Writes the audit row inside the caller's transaction. Financial state
+     * changes use this variant so the mutation and audit commit atomically.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordRequiredInCurrentTransaction(
+            String action,
+            String entityType,
+            Object entityId,
+            Long orderId,
+            Long reviewId,
+            Object oldValue,
+            Object newValue,
+            String details
+    ) {
+        repository.saveAndFlush(event(
+                action,
+                entityType,
+                entityId,
+                orderId,
+                reviewId,
+                oldValue,
+                newValue,
+                details
+        ));
     }
 
     private BusinessAuditEvent event(

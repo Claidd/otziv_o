@@ -76,6 +76,18 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
                     OR (:statusFilter = 'manual' AND link.paymentMethod IN :manualMethods)
                   )
                   AND (
+                    :excludePrivilegedTargets = false
+                    OR NOT EXISTS (
+                      SELECT recipientRole.id
+                      FROM ContractorPaymentAllocation allocation
+                      JOIN allocation.recipientProfile recipientProfile
+                      JOIN recipientProfile.user recipientUser
+                      JOIN recipientUser.roles recipientRole
+                      WHERE allocation.id = link.contractorAllocationId
+                        AND recipientRole.name IN ('ROLE_ADMIN', 'ROLE_OWNER')
+                    )
+                  )
+                  AND (
                     :searchText IS NULL
                     OR LOWER(COALESCE(c.title, '')) LIKE :searchText
                     OR LOWER(COALESCE(f.title, '')) LIKE :searchText
@@ -114,6 +126,18 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
                     OR (:statusFilter = 'manual' AND link.paymentMethod IN :manualMethods)
                   )
                   AND (
+                    :excludePrivilegedTargets = false
+                    OR NOT EXISTS (
+                      SELECT recipientRole.id
+                      FROM ContractorPaymentAllocation allocation
+                      JOIN allocation.recipientProfile recipientProfile
+                      JOIN recipientProfile.user recipientUser
+                      JOIN recipientUser.roles recipientRole
+                      WHERE allocation.id = link.contractorAllocationId
+                        AND recipientRole.name IN ('ROLE_ADMIN', 'ROLE_OWNER')
+                    )
+                  )
+                  AND (
                     :searchText IS NULL
                     OR LOWER(COALESCE(c.title, '')) LIKE :searchText
                     OR LOWER(COALESCE(f.title, '')) LIKE :searchText
@@ -145,6 +169,7 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             @Param("refundedStatuses") Collection<PaymentLinkStatus> refundedStatuses,
             @Param("failedStatuses") Collection<PaymentLinkStatus> failedStatuses,
             @Param("manualMethods") Collection<PaymentMethod> manualMethods,
+            @Param("excludePrivilegedTargets") boolean excludePrivilegedTargets,
             Pageable pageable
     );
 
@@ -189,6 +214,18 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             OR (:statusFilter = 'manual' AND link.paymentMethod IN :manualMethods)
           )
           AND (
+            :excludePrivilegedTargets = false
+            OR NOT EXISTS (
+              SELECT recipientRole.id
+              FROM ContractorPaymentAllocation allocation
+              JOIN allocation.recipientProfile recipientProfile
+              JOIN recipientProfile.user recipientUser
+              JOIN recipientUser.roles recipientRole
+              WHERE allocation.id = link.contractorAllocationId
+                AND recipientRole.name IN ('ROLE_ADMIN', 'ROLE_OWNER')
+            )
+          )
+          AND (
             :searchText IS NULL
             OR LOWER(COALESCE(c.title, '')) LIKE :searchText
             OR LOWER(COALESCE(f.title, '')) LIKE :searchText
@@ -223,7 +260,8 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             @Param("refundableStatuses") Collection<PaymentLinkStatus> refundableStatuses,
             @Param("rejectedStatuses") Collection<PaymentLinkStatus> rejectedStatuses,
             @Param("receiptPendingStatus") PaymentReceiptStatus receiptPendingStatus,
-            @Param("receiptOverdueBefore") LocalDateTime receiptOverdueBefore
+            @Param("receiptOverdueBefore") LocalDateTime receiptOverdueBefore,
+            @Param("excludePrivilegedTargets") boolean excludePrivilegedTargets
     );
 
     Optional<PaymentLink> findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
@@ -534,9 +572,108 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
         LEFT JOIN FETCH o.manager m
         LEFT JOIN FETCH m.user
         LEFT JOIN FETCH m.paymentProfile
+        LEFT JOIN FETCH o.worker w
+        LEFT JOIN FETCH w.user
         WHERE link.id = :id
     """)
     Optional<PaymentLink> findByIdWithOrder(@Param("id") Long id);
+
+    /**
+     * Finds public payment instructions created after the contractor-routing
+     * rollout that have not received a shadow decision yet. The durable
+     * payment_links row is the retry source when an afterCommit callback was
+     * interrupted by a process restart or a temporary database error.
+     */
+    @Query(value = """
+        SELECT link.id
+        FROM payment_links link
+        WHERE link.created_at >= :startedAt
+          AND (
+              link.shadow_route_generation IS NOT NULL
+              OR link.created_at >= :preparationStartedAt
+          )
+          AND link.reserved_amount_kopecks IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM contractor_payment_allocations allocation
+              WHERE allocation.mode = 'SHADOW'
+                AND allocation.source_type = 'PAYMENT_LINK'
+                AND allocation.source_id = link.id
+                AND (
+                    link.shadow_route_generation IS NULL
+                    OR allocation.source_generation_snapshot = link.shadow_route_generation
+                )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM contractor_shadow_backfill_claims claim
+              WHERE claim.claim_key = CONCAT('PAYMENT_LINK:', link.id)
+                AND (
+                    claim.completed_at IS NOT NULL
+                    OR claim.lease_until >= :now
+                    OR claim.next_retry_at > :now
+                )
+          )
+        ORDER BY link.created_at, link.id
+    """, nativeQuery = true)
+    List<Long> findMissingContractorShadowRouteIds(
+            @Param("startedAt") LocalDateTime startedAt,
+            @Param("preparationStartedAt") LocalDateTime preparationStartedAt,
+            @Param("now") LocalDateTime now,
+            Pageable pageable
+    );
+
+    /**
+     * Manual mobile-bank evidence is stored as a separate CONFIRMED payment
+     * row while the original T-Bank row remains terminal/cancelled. This query
+     * lets the contractor journal catch up if the immediate afterCommit hook
+     * did not run.
+     */
+    @Query(value = """
+        SELECT DISTINCT evidence.contractor_evidence_original_link_id AS originalLinkId,
+               evidence.id AS evidenceLinkId,
+               evidence.paid_at AS paidAt
+        FROM payment_links evidence
+        JOIN contractor_payment_allocations allocation
+          ON (allocation.mode = 'LIVE' OR (:includeShadow = TRUE AND allocation.mode = 'SHADOW'))
+         AND allocation.source_type = 'PAYMENT_LINK'
+         AND allocation.source_id = evidence.contractor_evidence_original_link_id
+         AND allocation.recipient_profile_id IS NOT NULL
+         AND allocation.attempt_no = (
+             SELECT MAX(latest.attempt_no)
+             FROM contractor_payment_allocations latest
+             WHERE latest.mode = allocation.mode
+               AND latest.source_type = allocation.source_type
+               AND latest.source_id = allocation.source_id
+         )
+        WHERE evidence.contractor_evidence_original_link_id IS NOT NULL
+          AND evidence.updated_at >= :startedAt
+          AND evidence.status = 'CONFIRMED'
+          AND evidence.payment_method = 'MANUAL_MOBILE_BANK'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM contractor_payment_allocation_events event
+              WHERE event.allocation_id = allocation.id
+                AND event.external_ref = CONCAT('MANUAL_EVIDENCE:', evidence.id)
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM contractor_shadow_backfill_claims claim
+              WHERE claim.claim_key = CONCAT('MANUAL_EVIDENCE:', evidence.id)
+                AND (
+                    claim.completed_at IS NOT NULL
+                    OR claim.lease_until >= :now
+                    OR claim.next_retry_at > :now
+                )
+          )
+        ORDER BY evidence.paid_at, evidence.id
+    """, nativeQuery = true)
+    List<ManualCardShadowEvidenceView> findUnrecordedContractorManualCardEvidence(
+            @Param("startedAt") LocalDateTime startedAt,
+            @Param("includeShadow") boolean includeShadow,
+            @Param("now") LocalDateTime now,
+            Pageable pageable
+    );
 
     @Query("""
         SELECT link
@@ -605,4 +742,12 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
         ORDER BY link.updatedAt ASC, link.id ASC
     """)
     List<PaymentLink> findSuccessNotificationRetryCandidates(Pageable pageable);
+
+    interface ManualCardShadowEvidenceView {
+        Long getOriginalLinkId();
+
+        Long getEvidenceLinkId();
+
+        LocalDateTime getPaidAt();
+    }
 }

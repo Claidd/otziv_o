@@ -102,6 +102,66 @@ export interface UpdateUserAssignmentsRequest {
   marketologIds: number[];
 }
 
+export type ContractorRole = 'SPECIALIST' | 'MANAGER';
+
+export interface ContractorPaymentProfile {
+  id: number;
+  userId: number;
+  role: ContractorRole;
+  rowVersion: number;
+  enabled: boolean;
+  liveEnabled: boolean;
+  recipientName?: string;
+  paymentPhone?: string;
+  bankName?: string;
+  paymentComment?: string;
+  openingBalanceKopecks: number;
+  trackingStartedAt: string;
+  accruedMonthKopecks: number;
+  accruedTotalKopecks: number;
+  reservedKopecks: number;
+  clientReportedKopecks: number;
+  partiallyConfirmedOutstandingKopecks: number;
+  grossConfirmedMonthKopecks: number;
+  grossConfirmedTotalKopecks: number;
+  returnedMonthKopecks: number;
+  returnedTotalKopecks: number;
+  closedWithoutPaymentMonthKopecks: number;
+  closedWithoutPaymentTotalKopecks: number;
+  netReceivedMonthKopecks: number;
+  netReceivedTotalKopecks: number;
+  availableKopecks: number;
+  exposureOverrunKopecks: number;
+  reportingLive: boolean;
+  shadowMode: boolean;
+  liveRouting: boolean;
+}
+
+export interface ContractorPaymentProfileRequest {
+  role: ContractorRole;
+  expectedVersion: number;
+  enabled: boolean;
+  liveEnabled: boolean;
+  recipientName?: string;
+  paymentPhone?: string;
+  bankName?: string;
+  paymentComment?: string;
+  openingBalanceKopecks: number;
+  openingBalanceReason?: string;
+}
+
+export interface ContractorPaymentProfileAdjustment {
+  id: number;
+  profileId: number;
+  oldBalanceKopecks: number;
+  newBalanceKopecks: number;
+  deltaKopecks: number;
+  reason: string;
+  changedBy: string;
+  effectiveAt: string;
+  createdAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AdminUsersApi {
   constructor(private readonly http: HttpClient) {}
@@ -167,6 +227,31 @@ export class AdminUsersApi {
     return this.http.put<UserAssignments>(
       `${appEnvironment.apiBaseUrl}/api/admin/users/${id}/assignments`,
       request
+    );
+  }
+
+  getContractorPaymentProfiles(id: number): Observable<ContractorPaymentProfile[]> {
+    return this.http.get<ContractorPaymentProfile[]>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${id}/contractor-payment-profiles`
+    );
+  }
+
+  updateContractorPaymentProfile(
+    id: number,
+    request: ContractorPaymentProfileRequest
+  ): Observable<ContractorPaymentProfile> {
+    return this.http.put<ContractorPaymentProfile>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${id}/contractor-payment-profiles`,
+      request
+    );
+  }
+
+  getContractorOpeningBalanceHistory(
+    userId: number,
+    profileId: number
+  ): Observable<ContractorPaymentProfileAdjustment[]> {
+    return this.http.get<ContractorPaymentProfileAdjustment[]>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${userId}/contractor-payment-profiles/${profileId}/opening-balance-history`
     );
   }
 }

@@ -194,6 +194,18 @@ public class AppSettingService {
     public static final String PERFORMERS_ROLLOUT_CITY_IDS = "performers.rollout.city-ids";
     public static final String PERFORMERS_ROLLOUT_PRODUCT_IDS = "performers.rollout.product-ids";
     public static final String ZP_PRODUCT_REWARD_PERCENT_ENABLED = "zp.product-reward-percent.enabled";
+    public static final String CONTRACTOR_PAYMENTS_SHADOW_ENABLED = "contractor-payments.shadow-enabled";
+    public static final String CONTRACTOR_PAYMENTS_LIVE_ROUTING_ENABLED = "contractor-payments.live-routing-enabled";
+    public static final String CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_LIVE_ENABLED =
+            "contractor-payments.reward-attribution-live-enabled";
+    public static final String CONTRACTOR_PAYMENTS_LIVE_READINESS_CONFIRMED =
+            "contractor-payments.live-readiness-confirmed";
+    public static final String CONTRACTOR_PAYMENTS_COMPLETION_ATTRIBUTION_START_DATE =
+            "contractor-payments.completion-attribution-start-date";
+    public static final String CONTRACTOR_PAYMENTS_SHADOW_BACKFILL_STARTED_AT =
+            "contractor-payments.shadow-backfill-started-at";
+    public static final String CONTRACTOR_PAYMENTS_SHADOW_PREPARATION_STARTED_AT =
+            "contractor-payments.shadow-preparation-started-at";
     public static final String MONITORING_DISK_LAST_LEVEL = "monitoring.disk.last-level";
     public static final String MONITORING_DISK_LAST_ALERT_AT = "monitoring.disk.last-alert-at";
 
@@ -245,6 +257,13 @@ public class AppSettingService {
         String value = repository.findFreshValueByKey(key).orElse(null);
         cache.put(key, CachedSetting.fresh(value, cacheTtl));
         return value == null ? fallbackWhenMissing : parseBoolean(value.trim(), false);
+    }
+
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    public String getStringFresh(String key, String fallbackWhenMissing) {
+        String value = repository.findFreshValueByKey(key).orElse(null);
+        cache.put(key, CachedSetting.fresh(value, cacheTtl));
+        return value == null ? fallbackWhenMissing : value.trim();
     }
 
     @Transactional

@@ -11,8 +11,11 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @Slf4j
@@ -20,29 +23,52 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class ManualCardPaymentReviewNotificationService {
 
     public static final String REMINDER_SOURCE = "MANAGER_REPORTED_MANUAL_CARD_PAYMENT";
+    public static final String COMMON_INVOICE_REMINDER_SOURCE =
+            "MANAGER_REPORTED_COMMON_INVOICE_CARD_PAYMENT";
 
     private final UserService userService;
     private final PersonalReminderService personalReminderService;
     private final TelegramService telegramService;
+    private final PlatformTransactionManager transactionManager;
 
     public void notifyAfterCommit(ReviewRequest request) {
         if (request == null || request.orderId() == null) {
             return;
         }
-        Runnable notification = () -> notifyNow(request);
+        runAfterCommit(() -> notifyNow(request));
+    }
+
+    public void notifyCommonInvoiceAfterCommit(CommonInvoiceReviewRequest request) {
+        if (request == null || request.invoiceId() == null) {
+            return;
+        }
+        runAfterCommit(() -> notifyCommonInvoiceNow(request));
+    }
+
+    private void runAfterCommit(Runnable notification) {
         if (TransactionSynchronizationManager.isActualTransactionActive()
                 && TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCompletion(int status) {
                     if (status == STATUS_COMMITTED) {
-                        notification.run();
+                        runInNewTransaction(notification);
                     }
                 }
             });
             return;
         }
         notification.run();
+    }
+
+    private void runInNewTransaction(Runnable notification) {
+        try {
+            TransactionTemplate template = new TransactionTemplate(transactionManager);
+            template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            template.executeWithoutResult(status -> notification.run());
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось сохранить уведомление о ручной оплате после коммита", exception);
+        }
     }
 
     private void notifyNow(ReviewRequest request) {
@@ -77,6 +103,51 @@ public class ManualCardPaymentReviewNotificationService {
                 log.warn(
                         "Не удалось отправить Telegram о ручной оплате orderId={}, userId={}",
                         request.orderId(),
+                        recipient.getId(),
+                        exception
+                );
+            }
+        }
+    }
+
+    private void notifyCommonInvoiceNow(CommonInvoiceReviewRequest request) {
+        String text = commonInvoiceNotificationText(request);
+        Long sourceOrderId = request.orderIds() == null || request.orderIds().isEmpty()
+                ? null
+                : request.orderIds().getFirst();
+        for (User recipient : recipients().values()) {
+            try {
+                if (!personalReminderService.hasOpenSystemReminder(
+                        recipient,
+                        COMMON_INVOICE_REMINDER_SOURCE,
+                        request.invoiceId()
+                )) {
+                    personalReminderService.createSystemReminderDueNow(
+                            recipient,
+                            "Проверить ручную оплату общего счета №" + request.invoiceId(),
+                            limit(text, 1000),
+                            COMMON_INVOICE_REMINDER_SOURCE,
+                            request.invoiceId(),
+                            sourceOrderId
+                    );
+                }
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "Не удалось создать напоминание о ручной оплате общего счета invoiceId={}, userId={}",
+                        request.invoiceId(),
+                        recipient.getId(),
+                        exception
+                );
+            }
+            if (recipient.getTelegramChatId() == null) {
+                continue;
+            }
+            try {
+                telegramService.sendMessage(recipient.getTelegramChatId(), text);
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "Не удалось отправить Telegram о ручной оплате общего счета invoiceId={}, userId={}",
+                        request.invoiceId(),
                         recipient.getId(),
                         exception
                 );
@@ -119,6 +190,24 @@ public class ManualCardPaymentReviewNotificationService {
                 + "\nОнлайн-платеж проверен и безопасно закрыт системой. Проверьте поступление в выписке.";
     }
 
+    private String commonInvoiceNotificationText(CommonInvoiceReviewRequest request) {
+        String title = valueOrDefault(request.invoiceTitle(), "общий счет");
+        String orders = request.orderIds() == null || request.orderIds().isEmpty()
+                ? "не указаны"
+                : request.orderIds().stream().map(id -> "№" + id).reduce((left, right) -> left + ", " + right).orElse("");
+        String routes = request.closedRouteIds() == null || request.closedRouteIds().isEmpty()
+                ? "не было"
+                : request.closedRouteIds().stream().map(id -> "№" + id).reduce((left, right) -> left + ", " + right).orElse("");
+        return "Менеджер отметил общий счет оплаченным переводом на карту."
+                + "\nОбщий счет: №" + request.invoiceId() + " · " + title
+                + "\nСумма вручную: " + rubles(request.amountKopecks()) + " ₽"
+                + "\nМенеджер: " + valueOrDefault(request.actor(), "не указан")
+                + "\nПричина: " + valueOrDefault(request.reason(), "не указана")
+                + "\nЗаказы: " + orders
+                + "\nЗакрытые одиночные инструкции: " + routes
+                + "\nПроверьте поступление в выписке.";
+    }
+
     private String paymentIdSuffix(String paymentId) {
         String value = clean(paymentId);
         if (value.isBlank()) {
@@ -159,6 +248,17 @@ public class ManualCardPaymentReviewNotificationService {
             String paymentId,
             String bankLinkStatus,
             String providerStatus
+    ) {
+    }
+
+    public record CommonInvoiceReviewRequest(
+            Long invoiceId,
+            String invoiceTitle,
+            long amountKopecks,
+            String actor,
+            String reason,
+            List<Long> orderIds,
+            List<Long> closedRouteIds
     ) {
     }
 }

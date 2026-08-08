@@ -93,6 +93,29 @@
   overflow-wrap: anywhere;
 }
 
+.reported-paid-action {
+  width: 100%;
+  margin-top: 0.7rem;
+}
+
+.client-reported-state {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin: 0.7rem 0 0;
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.7rem;
+  color: #176d4d;
+  background: rgba(49, 189, 111, 0.12);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.client-reported-state .material-icons-sharp {
+  font-size: 1.05rem;
+}
+
 .common-route-instruction strong {
   font-size: 0.82rem;
   font-weight: 900;

@@ -97,16 +97,12 @@ public class WorkerServiceImpl implements WorkerService {
 
     @Override
     public void deleteWorker(User user) {
-        log.info("Вошли в проверку есть ли такой работник при смене роли");
-        Worker worker = workerRepository.findByUserId(user.getId()).orElse(null);
-        log.info("Достали работника");
-
-        if (worker != null) {
-            workerRepository.delete(worker);
-            log.info("Удалили работника");
-        } else {
-            log.info("Не удалили работника так как такого нет в списке");
-        }
+        // Worker is a durable professional identity referenced by historical
+        // orders. Physical deletion can cascade into order history. A role
+        // change therefore only removes ROLE_WORKER and disables the routing
+        // profile; active worker queries already filter by that role.
+        log.info("Сохранили запись специалиста при смене роли пользователя {}",
+                user == null ? null : user.getId());
     }
 
     @Override

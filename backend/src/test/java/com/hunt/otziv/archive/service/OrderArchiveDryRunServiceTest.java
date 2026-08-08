@@ -8,7 +8,13 @@ import com.hunt.otziv.archive.dto.ArchiveOrdersSettingsResponse;
 import com.hunt.otziv.archive.dto.ArchiveRunResult;
 import com.hunt.otziv.archive.repository.OrderArchiveDryRunRepository;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
+import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
+import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
 import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
+import com.hunt.otziv.z_zp.model.Zp;
+import com.hunt.otziv.z_zp.repository.ZpRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -33,6 +39,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
 
 @ExtendWith(MockitoExtension.class)
 class OrderArchiveDryRunServiceTest {
@@ -45,6 +52,15 @@ class OrderArchiveDryRunServiceTest {
 
     @Mock
     private PaymentLinkArchiveService paymentLinkArchiveService;
+
+    @Mock
+    private ZpRepository zpRepository;
+
+    @Mock
+    private ContractorRewardLedgerService contractorRewardLedgerService;
+
+    @Mock
+    private ContractorPaymentShadowService contractorPaymentShadowService;
 
     @Test
     void dryRunCountsCandidatesAndWritesBatchLog() {
@@ -215,6 +231,47 @@ class OrderArchiveDryRunServiceTest {
     }
 
     @Test
+    void unsynchronizedContractorRewardIsPersistedToLedgerBeforeArchiveCopyAndDelete() {
+        ZoneId zone = ZoneId.of("Asia/Irkutsk");
+        Clock clock = Clock.fixed(Instant.parse("2026-05-10T00:00:00Z"), zone);
+        OrderArchiveDryRunService service = new OrderArchiveDryRunService(
+                repository,
+                null,
+                paymentLinkArchiveService,
+                zpRepository,
+                contractorRewardLedgerService,
+                null,
+                clock
+        );
+        service.setApplyEnabled(true);
+        service.setDefaultRetentionDays(90);
+        service.setDefaultBatchLimit(500);
+        service.setMaxBatchLimit(1000);
+        LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
+        ArchiveCandidateCounts counts = new ArchiveCandidateCounts(1, 0, 0, 0, 0, 1, 0);
+        Zp reward = new Zp();
+        reward.setId(71L);
+        when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
+        when(repository.countEligibleOrders(cutoffDate)).thenReturn(1L);
+        when(repository.countPreparedCandidates()).thenReturn(counts);
+        when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1)))
+                .thenReturn(0L);
+        when(repository.lockPreparedCandidateOrders()).thenReturn(1);
+        when(repository.findPreparedCandidateContractorRewardIds()).thenReturn(List.of(71L));
+        when(zpRepository.findAllById(List.of(71L))).thenReturn(List.of(reward));
+        when(repository.insertStartedArchiveBatch(any(), any(), anyInt(), eq(counts), any())).thenReturn(12L);
+        when(repository.countArchivedPreparedCandidates()).thenReturn(counts);
+        when(repository.deletePreparedCandidatesFromLive()).thenReturn(counts);
+
+        service.runArchive(null, 50, "guard-test", true);
+
+        var archiveOrder = inOrder(contractorRewardLedgerService, repository);
+        archiveOrder.verify(contractorRewardLedgerService).synchronizeSources(List.of(reward));
+        archiveOrder.verify(repository).copyPreparedCandidatesToArchive(eq(12L), any(), eq("guard-test"));
+        archiveOrder.verify(repository).deletePreparedCandidatesFromLive();
+    }
+
+    @Test
     void liveArchiveStopsBeforeCopyWhenSelectedOrdersCannotAllBeLocked() {
         OrderArchiveDryRunService service = serviceWithFixedClock();
         service.setApplyEnabled(true);
@@ -236,6 +293,135 @@ class OrderArchiveDryRunServiceTest {
         assertEquals("Order archive lock verification failed: selected=2, locked=1", exception.getMessage());
         verify(repository, never()).copyPreparedCandidatesToArchive(anyLong(), any(), any());
         verifyNoInteractions(paymentLinkArchiveService);
+    }
+
+    @Test
+    void contractorAllocationIsStrictlyReconciledBeforeArchiveCopyAndDelete() {
+        ZoneId zone = ZoneId.of("Asia/Irkutsk");
+        Clock clock = Clock.fixed(Instant.parse("2026-05-10T00:00:00Z"), zone);
+        OrderArchiveDryRunService service = new OrderArchiveDryRunService(
+                repository,
+                null,
+                paymentLinkArchiveService,
+                zpRepository,
+                contractorRewardLedgerService,
+                contractorPaymentShadowService,
+                clock
+        );
+        service.setApplyEnabled(true);
+        service.setDefaultRetentionDays(90);
+        service.setDefaultBatchLimit(500);
+        service.setMaxBatchLimit(1000);
+        LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
+        ArchiveCandidateCounts counts = new ArchiveCandidateCounts(1, 0, 0, 0, 0, 0, 0);
+        ContractorPaymentAllocation reconciled = new ContractorPaymentAllocation();
+        reconciled.setId(81L);
+        reconciled.setStatus(ContractorAllocationStatus.CONFIRMED);
+        when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
+        when(repository.countEligibleOrders(cutoffDate)).thenReturn(1L);
+        when(repository.countPreparedCandidates()).thenReturn(counts);
+        when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1)))
+                .thenReturn(0L);
+        when(repository.lockPreparedCandidateOrders()).thenReturn(1);
+        when(repository.findPreparedCandidateContractorAllocationIds()).thenReturn(List.of(81L));
+        when(contractorPaymentShadowService.reconcileAllocationId(81L)).thenReturn(reconciled);
+        when(contractorPaymentShadowService.reconcileAllocationForArchive(81L)).thenReturn(reconciled);
+        when(repository.findPreparedCandidateContractorRewardIds()).thenReturn(List.of());
+        when(repository.insertStartedArchiveBatch(any(), any(), anyInt(), eq(counts), any())).thenReturn(13L);
+        when(repository.countArchivedPreparedCandidates()).thenReturn(counts);
+        when(repository.deletePreparedCandidatesFromLive()).thenReturn(counts);
+
+        service.runArchive(null, 50, "allocation-guard", true);
+
+        var archiveOrder = inOrder(contractorPaymentShadowService, repository);
+        archiveOrder.verify(contractorPaymentShadowService).reconcileAllocationId(81L);
+        archiveOrder.verify(repository).lockPreparedCandidateOrders();
+        archiveOrder.verify(contractorPaymentShadowService).reconcileAllocationForArchive(81L);
+        archiveOrder.verify(repository).copyPreparedCandidatesToArchive(eq(13L), any(), eq("allocation-guard"));
+        archiveOrder.verify(repository).deletePreparedCandidatesFromLive();
+    }
+
+    @Test
+    void archiveStopsWhenStrictReconciliationStillHasUnresolvedReturnFlag() {
+        ZoneId zone = ZoneId.of("Asia/Irkutsk");
+        Clock clock = Clock.fixed(Instant.parse("2026-05-10T00:00:00Z"), zone);
+        OrderArchiveDryRunService service = new OrderArchiveDryRunService(
+                repository,
+                null,
+                paymentLinkArchiveService,
+                zpRepository,
+                contractorRewardLedgerService,
+                contractorPaymentShadowService,
+                clock
+        );
+        service.setApplyEnabled(true);
+        service.setDefaultRetentionDays(90);
+        service.setDefaultBatchLimit(500);
+        service.setMaxBatchLimit(1000);
+        LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
+        ArchiveCandidateCounts counts = new ArchiveCandidateCounts(1, 0, 0, 0, 0, 0, 0);
+        ContractorPaymentAllocation unresolved = new ContractorPaymentAllocation();
+        unresolved.setId(82L);
+        // The boolean is independently durable. Even if a stale/legacy status
+        // looks terminal, archive must not discard the source needed to
+        // resolve an unknown return amount.
+        unresolved.setStatus(ContractorAllocationStatus.CONFIRMED);
+        unresolved.setNeedsReturnAmount(true);
+        when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
+        when(repository.countEligibleOrders(cutoffDate)).thenReturn(1L);
+        when(repository.countPreparedCandidates()).thenReturn(counts);
+        when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1)))
+                .thenReturn(0L);
+        when(repository.lockPreparedCandidateOrders()).thenReturn(1);
+        when(repository.findPreparedCandidateContractorAllocationIds()).thenReturn(List.of(82L));
+        when(contractorPaymentShadowService.reconcileAllocationId(82L)).thenReturn(unresolved);
+        when(contractorPaymentShadowService.reconcileAllocationForArchive(82L)).thenReturn(unresolved);
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> service.runArchive(null, 50, "allocation-block", true)
+        );
+
+        verify(repository, never()).copyPreparedCandidatesToArchive(any(), any(), any());
+        verify(repository, never()).deletePreparedCandidatesFromLive();
+    }
+
+    @Test
+    void archiveStopsBeforeParentLocksWhenAccountingPreflightFails() {
+        ZoneId zone = ZoneId.of("Asia/Irkutsk");
+        Clock clock = Clock.fixed(Instant.parse("2026-05-10T00:00:00Z"), zone);
+        OrderArchiveDryRunService service = new OrderArchiveDryRunService(
+                repository,
+                null,
+                paymentLinkArchiveService,
+                zpRepository,
+                contractorRewardLedgerService,
+                contractorPaymentShadowService,
+                clock
+        );
+        service.setApplyEnabled(true);
+        service.setDefaultRetentionDays(90);
+        service.setDefaultBatchLimit(500);
+        service.setMaxBatchLimit(1000);
+        LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
+        ArchiveCandidateCounts counts = new ArchiveCandidateCounts(1, 0, 0, 0, 0, 0, 0);
+        when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
+        when(repository.countEligibleOrders(cutoffDate)).thenReturn(1L);
+        when(repository.countPreparedCandidates()).thenReturn(counts);
+        when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1)))
+                .thenReturn(0L);
+        when(repository.findPreparedCandidateContractorAllocationIds()).thenReturn(List.of(83L));
+        when(contractorPaymentShadowService.reconcileAllocationId(83L))
+                .thenThrow(new IllegalStateException("poison source"));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> service.runArchive(null, 50, "preflight-failure", true)
+        );
+
+        verify(repository, never()).lockPreparedCandidateOrders();
+        verify(repository, never()).copyPreparedCandidatesToArchive(any(), any(), any());
+        verify(repository, never()).deletePreparedCandidatesFromLive();
     }
 
     @Test

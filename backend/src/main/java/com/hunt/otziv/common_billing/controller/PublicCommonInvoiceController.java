@@ -23,6 +23,11 @@ public class PublicCommonInvoiceController {
         return commonBillingService.publicInvoice(token);
     }
 
+    @PostMapping("/api/payments/public/group/{token}/reported-paid")
+    public PublicCommonInvoiceResponse reportCommonInvoicePaid(@PathVariable String token) {
+        return commonBillingService.reportPublicCommonPayment(token);
+    }
+
     @PostMapping("/api/payments/public/group/{token}/init")
     public PublicPaymentInitResponse initCommonInvoicePayment(
             @PathVariable String token,

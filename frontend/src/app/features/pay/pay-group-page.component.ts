@@ -28,6 +28,7 @@ export class PayGroupPageComponent {
   readonly loading = signal(true);
   readonly refreshing = signal(false);
   readonly submitting = signal(false);
+  readonly reportingPaid = signal(false);
   readonly error = signal('');
   readonly message = signal('');
   readonly email = signal('');
@@ -52,6 +53,13 @@ export class PayGroupPageComponent {
   readonly manualPaymentButtonLabel = computed(() => this.invoice()?.manualPaymentButtonLabel?.trim()
     || 'Открыть ссылку оплаты');
   readonly manualComment = computed(() => this.invoice()?.manualComment?.trim() || 'Оплата общего счета');
+  readonly clientReported = computed(() => Boolean(this.invoice()?.clientReportedAt));
+  readonly canReportPaid = computed(() => Boolean(
+    this.invoice()?.clientReportable
+      && this.manualRoute()
+      && !this.clientReported()
+      && !this.reportingPaid()
+  ));
   readonly routeTitle = computed(() => {
     if (this.managerTextRoute()) {
       return 'Реквизиты менеджера';
@@ -178,6 +186,36 @@ export class PayGroupPageComponent {
     });
   }
 
+  reportPaid(): void {
+    if (!this.canReportPaid()) {
+      return;
+    }
+    const routeTicket = this.captureRoute();
+    const token = this.token();
+    if (!routeTicket || !token) {
+      return;
+    }
+    this.reportingPaid.set(true);
+    this.message.set('');
+    this.error.set('');
+    this.paymentsApi.reportPublicCommonInvoicePaid(token).subscribe({
+      next: (invoice) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
+        this.applyInvoice(invoice);
+        this.message.set('Сообщение об оплате принято. Поступление ещё будет проверено.');
+      },
+      error: (err) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
+        this.reportingPaid.set(false);
+        this.error.set(apiErrorMessage(err, 'Не удалось сообщить об оплате. Обновите счет и попробуйте снова.'));
+      }
+    });
+  }
+
   formatRubles(amount?: number | null): string {
     return new Intl.NumberFormat('ru-RU', {
       minimumFractionDigits: 0,
@@ -260,6 +298,7 @@ export class PayGroupPageComponent {
   private applyInvoice(invoice: PublicCommonInvoice): void {
     this.invoice.set(invoice);
     this.submitting.set(false);
+    this.reportingPaid.set(false);
   }
 
   private activateInvoiceRoute(rawToken: string | null): void {
@@ -284,6 +323,7 @@ export class PayGroupPageComponent {
     this.loading.set(false);
     this.refreshing.set(false);
     this.submitting.set(false);
+    this.reportingPaid.set(false);
     this.error.set('');
     this.message.set('');
     this.email.set('');

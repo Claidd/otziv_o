@@ -93,6 +93,7 @@ class TelegramGroupLinkServiceTest {
 
         String inviteUrl = service.buildWorkerInviteUrl(worker);
         String payload = inviteUrl.substring(inviteUrl.indexOf("startgroup=") + "startgroup=".length());
+        assertTrue(payload.matches("^[A-Za-z0-9_-]{1,64}$"));
         Optional<String> response = service.handleGroupStartCommand(-1001234567891L, "/start " + payload);
 
         assertTrue(response.orElse("").contains("Специалист"));

@@ -106,12 +106,37 @@
                   <strong>{{ item?.manualRecipientName || 'не указан' }}</strong>
                   <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
                 </button>
+                @if (item?.manualBankName) {
+                  <button type="button" (click)="copyPaymentValue(item?.manualBankName)" title="Скопировать название банка">
+                    <small>Банк получателя</small>
+                    <strong>{{ item?.manualBankName }}</strong>
+                    <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+                  </button>
+                }
                 <button type="button" (click)="copyPaymentValue(manualComment())" title="Скопировать комментарий">
                   <small>Комментарий</small>
                   <strong>{{ manualComment() }}</strong>
                   <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
                 </button>
                 <p class="common-route-note">После оплаты отправьте один чек менеджеру.</p>
+                @if (item?.clientReportedAt) {
+                  <p class="client-reported-state" role="status">
+                    <span class="material-icons-sharp" aria-hidden="true">schedule</span>
+                    Вы сообщили об оплате. Ожидаем подтверждение поступления.
+                  </p>
+                } @else if (item?.clientReportable) {
+                  <button
+                    type="button"
+                    class="primary-pay-button reported-paid-action"
+                    (click)="reportPaid()"
+                    [disabled]="!canReportPaid()"
+                  >
+                    <span class="material-icons-sharp" aria-hidden="true">
+                      {{ reportingPaid() ? 'hourglass_top' : 'done_all' }}
+                    </span>
+                    {{ reportingPaid() ? 'Отправляем сообщение' : 'Я оплатил' }}
+                  </button>
+                }
               </section>
             } @else if (tbankRoute()) {
               <form class="pay-form" (ngSubmit)="submitPayment()" aria-label="Данные для оплаты">

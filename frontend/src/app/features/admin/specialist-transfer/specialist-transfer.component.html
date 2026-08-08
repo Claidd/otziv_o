@@ -79,6 +79,10 @@
             <strong>{{ previewData.badReviewTaskCount }}</strong>
           </article>
           <article>
+            <span>Восстановление отзывов</span>
+            <strong>{{ previewData.reviewRecoveryTaskCount }}</strong>
+          </article>
+          <article>
             <span>Уже привязан</span>
             <strong>{{ previewData.targetAlreadyAssignedCompanyCount }}</strong>
           </article>
@@ -150,6 +154,10 @@
             <span>Плохие отзывы</span>
             <strong>{{ resultData.badReviewTaskCount }}</strong>
           </article>
+          <article>
+            <span>Восстановление отзывов</span>
+            <strong>{{ resultData.reviewRecoveryTaskCount }}</strong>
+          </article>
         </div>
       </section>
     }
@@ -170,7 +178,7 @@
               <strong>{{ transferTitle(transfer) }}</strong>
               <span>{{ transfer.createdAt | date:'dd.MM.yyyy HH:mm' }} · {{ transfer.actorName }}</span>
             </div>
-            <p>{{ transfer.companyCount }} компаний · {{ transfer.orderCount }} заказов · {{ transfer.reviewCount }} отзывов · {{ transfer.badReviewTaskCount }} плохих</p>
+            <p>{{ transfer.companyCount }} компаний · {{ transfer.orderCount }} заказов · {{ transfer.reviewCount }} отзывов · {{ transfer.badReviewTaskCount }} плохих · {{ transfer.reviewRecoveryTaskCount }} восстановлений</p>
           </article>
         } @empty {
           <p class="empty">Операций пока нет</p>

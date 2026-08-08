@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.editing.service;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
@@ -39,6 +40,7 @@ public class OrderEditService {
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
+    private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
 
     @Transactional
     public void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId) {
@@ -84,6 +86,7 @@ public class OrderEditService {
         if (!Objects.equals(dtoWorkerId, currentWorkerId) || unpublishedReviewMismatch) {
 
             log.info("Обновляем работника заказа");
+            contractorRouteAssignmentGuard.requireWorkerReassignmentAllowed(saveOrder.getId());
             Worker newWorker = convertWorkerDTOToWorker(orderDTO);
             requireWorkerBelongsToCompanyManager(newWorker, company);
             saveOrder.setWorker(newWorker);
@@ -105,6 +108,7 @@ public class OrderEditService {
         Long currentManagerId = currentManager != null ? currentManager.getId() : null;
         if (dtoManagerId != null && !Objects.equals(dtoManagerId, currentManagerId)) {
             log.info("Обновляем менеджера заказа");
+            contractorRouteAssignmentGuard.requireManagerReassignmentAllowed(saveOrder.getId());
             Manager newManager = convertManagerDTOToManager(orderDTO);
             if (newManager == null) {
                 throw new IllegalArgumentException("Менеджер не найден");
@@ -115,6 +119,7 @@ public class OrderEditService {
 
         if (!Objects.equals(orderDTO.isComplete(), saveOrder.isComplete())) {
             log.info("Обновляем статус выполнения Заказа");
+            contractorRouteAssignmentGuard.requirePayableMutationAllowed(saveOrder.getId());
             saveOrder.setComplete(orderDTO.isComplete());
             isChanged = true;
         }

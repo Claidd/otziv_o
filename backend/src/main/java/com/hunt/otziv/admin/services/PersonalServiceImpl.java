@@ -777,7 +777,7 @@ public class PersonalServiceImpl implements PersonalService {
         if (highlightedManagersRevenue > 0) {
             appendSummaryLine(report, "⭐", "Выручка выделенных менеджеров", money(highlightedManagersRevenue));
         }
-        appendSummaryLine(report, "💸", "ЗП всего", money(totalZp));
+        appendSummaryLine(report, "💸", "Вознаграждения всего", money(totalZp));
         appendSummaryLine(report, "🏢", "Новых компаний", String.valueOf(totalNewCompanies));
 
         if (!managers.isEmpty()) {
@@ -843,7 +843,7 @@ public class PersonalServiceImpl implements PersonalService {
 
     private void appendManagerBlock(StringBuilder report, String fio, UserData user) {
         report.append("👤 <b>").append(escapeHtml(fio)).append("</b>\n");
-        report.append("ЗП: <b>").append(money(safeLong(user.getSalary())))
+        report.append("Начислено: <b>").append(money(safeLong(user.getSalary())))
                 .append("</b> | лиды: <b>").append(safeLong(user.getLeadsNew())).append("</b>\n");
         report.append("Проверка: в проверку <b>").append(safeLong(user.getOrderToCheck()))
                 .append("</b>, на проверке <b>").append(safeLong(user.getOrderInCheck())).append("</b>\n");
@@ -857,7 +857,7 @@ public class PersonalServiceImpl implements PersonalService {
 
     private void appendWorkerBlock(StringBuilder report, String fio, UserData user) {
         report.append("👷 <b>").append(escapeHtml(fio)).append("</b>\n");
-        report.append("ЗП: <b>").append(money(safeLong(user.getSalary()))).append("</b>\n");
+        report.append("Начислено: <b>").append(money(safeLong(user.getSalary()))).append("</b>\n");
         appendOrderFlowLines(report, user);
         report.append("\n");
     }
@@ -870,7 +870,7 @@ public class PersonalServiceImpl implements PersonalService {
 
     private void appendMarketologBlock(StringBuilder report, String fio, UserData user) {
         report.append("📣 <b>").append(escapeHtml(fio)).append("</b>\n");
-        report.append("ЗП: <b>").append(money(safeLong(user.getSalary()))).append("</b>\n");
+        report.append("Начислено: <b>").append(money(safeLong(user.getSalary()))).append("</b>\n");
         report.append("Лиды: <b>").append(safeLong(user.getLeadsNew())).append("</b>\n");
         appendOrderFlowLines(report, user);
         report.append("\n");

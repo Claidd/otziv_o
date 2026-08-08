@@ -264,6 +264,33 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     Optional<Order> findByIdForCounterUpdate(@Param("orderId") Long orderId);
 
     @Query("""
+        SELECT o.id
+        FROM Order o
+        JOIN o.status s
+        WHERE s.title IN :completionStatuses
+          AND (
+              SELECT COUNT(DISTINCT marker.logicalSource)
+              FROM ContractorCompletionRewardMarker marker
+              WHERE marker.orderId = o.id
+                AND marker.logicalSource IN :requiredMarkers
+          ) < :requiredMarkerCount
+          AND NOT EXISTS (
+              SELECT repair.orderId
+              FROM ContractorCompletionRewardRepairState repair
+              WHERE repair.orderId = o.id
+                AND repair.nextAttemptAt > :dueAt
+          )
+        ORDER BY o.id
+    """)
+    List<Long> findCompletionRewardRepairOrderIds(
+            @Param("completionStatuses") Collection<String> completionStatuses,
+            @Param("requiredMarkers") Collection<String> requiredMarkers,
+            @Param("requiredMarkerCount") long requiredMarkerCount,
+            @Param("dueAt") java.time.LocalDateTime dueAt,
+            Pageable pageable
+    );
+
+    @Query("""
         SELECT DISTINCT o
         FROM Order o
         LEFT JOIN FETCH o.company c

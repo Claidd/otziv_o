@@ -25,6 +25,7 @@ export interface PublicPaymentLink {
   manualPaymentType?: ManualPaymentType | string | null;
   manualPhone?: string | null;
   manualRecipientName?: string | null;
+  manualBankName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;
   manualComment?: string | null;
@@ -72,10 +73,13 @@ export interface PublicCommonInvoice {
   manualPaymentType?: string | null;
   manualPhone?: string | null;
   manualRecipientName?: string | null;
+  manualBankName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;
   manualComment?: string | null;
   paymentInstructionText?: string | null;
+  clientReportable: boolean;
+  clientReportedAt?: string | null;
   orders: PublicCommonInvoiceOrder[];
 }
 
@@ -128,6 +132,7 @@ export interface AdminPaymentLinkResponse {
   manualPaymentType?: ManualPaymentType | string | null;
   manualPhone?: string | null;
   manualRecipientName?: string | null;
+  manualBankName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;
   manualComment?: string | null;
@@ -246,7 +251,7 @@ export type TbankPaymentPageMode = 'SBP_PRIMARY' | 'BANK_PRIMARY' | 'SBP_PAY_ONL
 export type PaymentPolicy = 'T_BANK_ONLY' | 'MANUAL_UNTIL_LIMIT_THEN_TBANK';
 export type PaymentMethod = 'BANK_FORM' | 'SBP_QR' | 'MANUAL_MOBILE_BANK' | 'MANUAL_EXTERNAL_LINK' | string;
 export type PaymentReceiptStatus = 'PENDING' | 'MARKED' | 'LEGACY_NOT_REQUIRED';
-export type ManualPaymentSource = 'PROFILE_MONTHLY_LIMIT' | 'MANUAL_TASK';
+export type ManualPaymentSource = 'PROFILE_MONTHLY_LIMIT' | 'MANUAL_TASK' | 'CONTRACTOR_PAYMENT_PROFILE';
 export type ManualPaymentType = 'MOBILE_BANK' | 'EXTERNAL_LINK';
 export type ManualPaymentTaskStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELED';
 
@@ -528,6 +533,14 @@ export class PaymentsApi {
     return this.http.post<AdminPaymentLinkResponse>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-links/${linkId}/confirm`,
       {}
+    );
+  }
+
+  reportPublicCommonInvoicePaid(token: string): Observable<PublicCommonInvoice> {
+    return this.http.post<PublicCommonInvoice>(
+      `${appEnvironment.apiBaseUrl}/api/payments/public/group/${encodeURIComponent(token)}/reported-paid`,
+      {},
+      { context: this.publicContext }
     );
   }
 

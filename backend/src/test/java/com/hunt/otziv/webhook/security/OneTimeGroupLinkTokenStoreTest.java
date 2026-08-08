@@ -21,7 +21,7 @@ class OneTimeGroupLinkTokenStoreTest {
         // asserting doesNotContain("42") makes this security test probabilistic.
         assertThat(first)
                 .isEqualTo(second)
-                .matches("^[A-Za-z0-9_-]{24}\\.[A-Za-z0-9_-]{16}$");
+                .matches("^[A-Za-z0-9_-]{40}$");
         assertThat(store.consume(first, "telegram-company", SECRET)).contains(42L);
         assertThat(store.consume(first, "telegram-company", SECRET)).isEmpty();
         assertThat(store.consume(first + "x", "telegram-company", SECRET)).isEmpty();

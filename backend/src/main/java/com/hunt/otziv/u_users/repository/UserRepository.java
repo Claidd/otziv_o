@@ -17,6 +17,18 @@ import java.util.Set;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
 
+    @Query("""
+        SELECT COUNT(role)
+        FROM User user
+        JOIN user.roles role
+        WHERE user.id = :userId
+          AND role.name IN :roleNames
+    """)
+    long countRolesByUserIdAndNames(
+            @Param("userId") Long userId,
+            @Param("roleNames") Set<String> roleNames
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM User u WHERE u.id = :userId")
     Optional<User> lockById(@Param("userId") Long userId);
@@ -24,6 +36,38 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM User u WHERE u.username = :username")
     Optional<User> lockByUsername(@Param("username") String username);
+
+    /**
+     * Scalar native reads deliberately bypass a possibly stale managed User
+     * already loaded through an Order graph. The user row is the mutex shared
+     * with deactivation and role-management transactions.
+     */
+    @Query(value = """
+        SELECT u.active
+        FROM users u
+        WHERE u.id = :userId
+        FOR UPDATE
+    """, nativeQuery = true)
+    Optional<Boolean> lockContractorActiveFlag(@Param("userId") Long userId);
+
+    /** Must be called after {@link #lockContractorActiveFlag(Long)}. */
+    @Query(value = """
+        SELECT user_role.role_id
+        FROM users_roles user_role
+        WHERE user_role.user_id = :userId
+          AND EXISTS (
+              SELECT 1
+              FROM roles role_row
+              WHERE role_row.id = user_role.role_id
+                AND role_row.name = :roleName
+          )
+        ORDER BY user_role.role_id
+        FOR UPDATE
+    """, nativeQuery = true)
+    List<Integer> lockContractorRoleIds(
+            @Param("userId") Long userId,
+            @Param("roleName") String roleName
+    );
 
     User findByEmail(String name);
 

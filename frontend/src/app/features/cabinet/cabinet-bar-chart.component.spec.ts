@@ -10,7 +10,7 @@ describe('CabinetBarChartComponent', () => {
 
   it('renders heading, legend, ticks and bars', () => {
     const fixture = TestBed.createComponent(CabinetBarChartComponent);
-    fixture.componentInstance.heading = 'Зарплаты по дням';
+    fixture.componentInstance.heading = 'Вознаграждения по дням';
     fixture.componentInstance.headingLevel = 2;
     fixture.componentInstance.subtitle = '2026-05-05';
     fixture.componentInstance.legendLabel = 'Месяц: Май';
@@ -26,7 +26,7 @@ describe('CabinetBarChartComponent', () => {
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
-    expect(element.querySelector('h2')?.textContent?.trim()).toBe('Зарплаты по дням');
+    expect(element.querySelector('h2')?.textContent?.trim()).toBe('Вознаграждения по дням');
     expect(element.querySelector('.chart-head small')?.textContent?.trim()).toBe('2026-05-05');
     expect(element.querySelector('.daily-legend')?.textContent).toContain('Месяц: Май');
     expect(Array.from(element.querySelectorAll('.y-axis span')).map((item) => item.textContent?.trim())).toEqual(['100', '50', '0']);

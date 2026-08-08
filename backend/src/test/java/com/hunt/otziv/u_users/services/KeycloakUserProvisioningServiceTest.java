@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.services;
 
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
 import com.hunt.otziv.u_users.dto.ChangeKeycloakPasswordRequest;
 import com.hunt.otziv.u_users.dto.CreateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.LegacyUserMigrationRequest;
@@ -89,6 +90,8 @@ class KeycloakUserProvisioningServiceTest {
     private CacheManager cacheManager;
     @Mock
     private UserAuthEpochService authEpochService;
+    @Mock
+    private ContractorPaymentProfileService contractorPaymentProfileService;
 
     @InjectMocks
     private KeycloakUserProvisioningService service;

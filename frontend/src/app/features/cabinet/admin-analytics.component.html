@@ -95,7 +95,7 @@
     <section class="analytics-section">
       <div class="section-title">
         <span class="material-icons-sharp">account_balance_wallet</span>
-        <h2>Зарплаты</h2>
+        <h2>Вознаграждения</h2>
       </div>
 
       <div class="metric-grid">
@@ -115,14 +115,14 @@
       </div>
 
       <app-cabinet-line-chart
-        heading="Зарплаты по месяцам"
+        heading="Вознаграждения по месяцам"
         [subtitle]="periodSubtitle()"
-        ariaLabel="Зарплаты по месяцам"
+        ariaLabel="Вознаграждения по месяцам"
         [chart]="yearlyLineChartFrom(stats()?.zpPayMapMonth)"
       />
 
       <app-cabinet-bar-chart
-        heading="Зарплаты по дням"
+        heading="Вознаграждения по дням"
         [subtitle]="analytics()?.date || ''"
         [chart]="dailyBarChartFrom(stats()?.zpPayMap)"
         [salary]="true"

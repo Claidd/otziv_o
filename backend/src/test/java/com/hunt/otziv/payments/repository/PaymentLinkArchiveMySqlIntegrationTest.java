@@ -241,6 +241,57 @@ class PaymentLinkArchiveMySqlIntegrationTest {
         )).isEqualTo(1);
     }
 
+    @Test
+    void allLiveAndArchiveContractorRouteConstraintsRejectPlaintextCommentSnapshots() {
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO payment_links (
+                    id,
+                    order_id,
+                    status,
+                    payment_method,
+                    manual_source,
+                    manual_comment,
+                    receipt_status,
+                    payment_success_notification_retry_eligible,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, 'WAITING_MANUAL_PAYMENT', 'MANUAL_MOBILE_BANK',
+                          'CONTRACTOR_PAYMENT_PROFILE', 'Комментарий с персональными данными',
+                          'PENDING', 0, CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6))
+                """, LINK_ID, ORDER_ID))
+                .isInstanceOf(Exception.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO archive_payment_links (
+                    id, manual_source, manual_comment
+                ) VALUES (?, 'CONTRACTOR_PAYMENT_PROFILE', 'Архивный персональный комментарий')
+                """, LINK_ID + 1))
+                .isInstanceOf(Exception.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO common_invoices (
+                    invoice_id, payment_route_manual_source, payment_route_manual_comment
+                ) VALUES (?, 'CONTRACTOR_PAYMENT_PROFILE', 'Комментарий общего счёта')
+                """, LINK_ID + 2))
+                .isInstanceOf(Exception.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO archive_common_invoices (
+                    invoice_id, payment_route_manual_source, payment_route_manual_comment
+                ) VALUES (?, 'CONTRACTOR_PAYMENT_PROFILE', 'Архивный комментарий общего счёта')
+                """, LINK_ID + 3))
+                .isInstanceOf(Exception.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO common_invoices (
+                    invoice_id, payment_route_manual_source, payment_route_instruction_text
+                ) VALUES (?, 'CONTRACTOR_PAYMENT_PROFILE', 'Перевести по персональным реквизитам')
+                """, LINK_ID + 4))
+                .isInstanceOf(Exception.class);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO archive_common_invoices (
+                    invoice_id, payment_route_manual_source, payment_route_instruction_text
+                ) VALUES (?, 'CONTRACTOR_PAYMENT_PROFILE', 'Архивная инструкция с реквизитами')
+                """, LINK_ID + 5))
+                .isInstanceOf(Exception.class);
+    }
+
     private void insertOldLink(long id, String status) {
         jdbc.update("""
                 INSERT INTO payment_links (
@@ -289,8 +340,12 @@ class PaymentLinkArchiveMySqlIntegrationTest {
     private void initializeSchema(DataSource dataSource) {
         JdbcTemplate setup = new JdbcTemplate(dataSource);
         setup.execute("DROP TABLE IF EXISTS payment_success_notification_retry_claims");
+        setup.execute("DROP TABLE IF EXISTS contractor_payment_allocation_events");
+        setup.execute("DROP TABLE IF EXISTS archive_common_invoices");
+        setup.execute("DROP TABLE IF EXISTS common_invoices");
         setup.execute("DROP TABLE IF EXISTS archive_payment_links");
         setup.execute("DROP TABLE IF EXISTS payment_links");
+        setup.execute("DROP TABLE IF EXISTS contractor_payment_allocations");
         setup.execute("DROP TABLE IF EXISTS orders");
         setup.execute("""
                 CREATE TABLE orders (
@@ -299,10 +354,53 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""
+                CREATE TABLE contractor_payment_allocations (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    mode VARCHAR(16) NOT NULL,
+                    source_type VARCHAR(24) NOT NULL,
+                    source_id BIGINT NOT NULL,
+                    source_generation_snapshot VARCHAR(36) NULL,
+                    attempt_no INT NOT NULL DEFAULT 1,
+                    recipient_profile_id BIGINT NULL,
+                    status VARCHAR(32) NOT NULL,
+                    needs_return_amount BOOLEAN NOT NULL DEFAULT FALSE,
+                    last_reconciled_at DATETIME(6) NULL,
+                    reconcile_claim_token VARCHAR(36) NULL,
+                    reconcile_lease_until DATETIME(6) NULL,
+                    reconcile_next_retry_at DATETIME(6) NULL,
+                    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                    PRIMARY KEY (id),
+                    CONSTRAINT uk_contractor_allocations_source_attempt
+                        UNIQUE (mode, source_type, source_id, attempt_no),
+                    KEY idx_contractor_allocations_source_generation
+                        (mode, source_type, source_id, source_generation_snapshot),
+                    KEY idx_contractor_allocations_reconcile
+                        (mode, source_type, status, reconcile_next_retry_at,
+                         reconcile_lease_until, last_reconciled_at, id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
                 CREATE TABLE payment_links (
                     id BIGINT NOT NULL,
                     order_id BIGINT NOT NULL,
                     status VARCHAR(32) NOT NULL,
+                    payment_method VARCHAR(32) NULL,
+                    manual_source VARCHAR(32) NULL,
+                    manual_phone VARCHAR(32) NULL,
+                    manual_recipient_name VARCHAR(160) NULL,
+                    manual_bank_name VARCHAR(120) NULL,
+                    manual_comment VARCHAR(255) NULL,
+                    contractor_allocation_id BIGINT NULL,
+                    shadow_route_generation VARCHAR(36) NULL,
+                    shadow_route_order_id BIGINT NULL,
+                    shadow_route_worker_id BIGINT NULL,
+                    shadow_route_worker_user_id BIGINT NULL,
+                    shadow_route_manager_id BIGINT NULL,
+                    shadow_route_manager_user_id BIGINT NULL,
+                    shadow_route_amount_kopecks BIGINT NULL,
+                    shadow_route_prepared_at DATETIME(6) NULL,
+                    contractor_evidence_original_link_id BIGINT NULL,
                     receipt_status VARCHAR(32) NULL,
                     bank_init_nonce VARCHAR(64) NULL,
                     bank_cancel_nonce VARCHAR(64) NULL,
@@ -313,13 +411,109 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                     updated_at DATETIME(6) NOT NULL,
                     paid_at DATETIME(6) NULL,
                     PRIMARY KEY (id),
-                    KEY idx_payment_links_order (order_id)
+                    CONSTRAINT uk_payment_links_contractor_allocation
+                        UNIQUE (contractor_allocation_id),
+                    CONSTRAINT fk_test_payment_links_order
+                        FOREIGN KEY (order_id) REFERENCES orders (order_id),
+                    CONSTRAINT fk_payment_links_contractor_allocation
+                        FOREIGN KEY (contractor_allocation_id)
+                        REFERENCES contractor_payment_allocations (id),
+                    CONSTRAINT ck_payment_links_contractor_pii_blank CHECK (
+                        COALESCE(manual_source, '') <> 'CONTRACTOR_PAYMENT_PROFILE'
+                        OR (
+                            COALESCE(TRIM(manual_phone), '') = ''
+                            AND COALESCE(TRIM(manual_recipient_name), '') = ''
+                            AND COALESCE(TRIM(manual_comment), '') = ''
+                        )
+                    ),
+                    KEY idx_payment_links_order (order_id),
+                    KEY idx_payment_links_contractor_shadow_backfill (created_at, id),
+                    KEY idx_payment_links_shadow_route_generation (shadow_route_generation),
+                    KEY idx_payment_links_contractor_evidence_original
+                        (contractor_evidence_original_link_id, id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE contractor_payment_allocation_events (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    allocation_id BIGINT NOT NULL,
+                    event_type VARCHAR(32) NOT NULL,
+                    amount_kopecks BIGINT NOT NULL DEFAULT 0,
+                    status_before VARCHAR(32) NULL,
+                    status_after VARCHAR(32) NULL,
+                    effective_at DATETIME(6) NOT NULL,
+                    observed_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                    reason VARCHAR(255) NULL,
+                    external_ref VARCHAR(160) NOT NULL,
+                    actor VARCHAR(150) NOT NULL DEFAULT 'system',
+                    PRIMARY KEY (id),
+                    CONSTRAINT uk_contractor_allocation_event_ref
+                        UNIQUE (allocation_id, external_ref),
+                    CONSTRAINT fk_contractor_allocation_event_allocation
+                        FOREIGN KEY (allocation_id)
+                        REFERENCES contractor_payment_allocations (id),
+                    KEY idx_contractor_allocation_event_profile_stats
+                        (event_type, effective_at, allocation_id),
+                    KEY idx_contractor_allocation_event_allocation_time
+                        (allocation_id, effective_at, id)
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""
                 CREATE TABLE archive_payment_links (
                     id BIGINT NOT NULL,
-                    PRIMARY KEY (id)
+                    manual_source VARCHAR(32) NULL,
+                    manual_phone VARCHAR(32) NULL,
+                    manual_recipient_name VARCHAR(160) NULL,
+                    manual_comment VARCHAR(255) NULL,
+                    PRIMARY KEY (id),
+                    CONSTRAINT ck_archive_payment_links_contractor_pii_blank CHECK (
+                        COALESCE(manual_source, '') <> 'CONTRACTOR_PAYMENT_PROFILE'
+                        OR (
+                            COALESCE(TRIM(manual_phone), '') = ''
+                            AND COALESCE(TRIM(manual_recipient_name), '') = ''
+                            AND COALESCE(TRIM(manual_comment), '') = ''
+                        )
+                    )
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE common_invoices (
+                    invoice_id BIGINT NOT NULL,
+                    payment_route_manual_source VARCHAR(32) NULL,
+                    payment_route_manual_phone VARCHAR(32) NULL,
+                    payment_route_manual_recipient VARCHAR(160) NULL,
+                    payment_route_manual_comment VARCHAR(255) NULL,
+                    payment_route_instruction_text VARCHAR(1000) NULL,
+                    PRIMARY KEY (invoice_id),
+                    CONSTRAINT ck_common_invoices_contractor_pii_blank CHECK (
+                        COALESCE(payment_route_manual_source, '') <> 'CONTRACTOR_PAYMENT_PROFILE'
+                        OR (
+                            COALESCE(TRIM(payment_route_manual_phone), '') = ''
+                            AND COALESCE(TRIM(payment_route_manual_recipient), '') = ''
+                            AND COALESCE(TRIM(payment_route_manual_comment), '') = ''
+                            AND COALESCE(TRIM(payment_route_instruction_text), '') = ''
+                        )
+                    )
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE archive_common_invoices (
+                    invoice_id BIGINT NOT NULL,
+                    payment_route_manual_source VARCHAR(32) NULL,
+                    payment_route_manual_phone VARCHAR(32) NULL,
+                    payment_route_manual_recipient VARCHAR(160) NULL,
+                    payment_route_manual_comment VARCHAR(255) NULL,
+                    payment_route_instruction_text VARCHAR(1000) NULL,
+                    PRIMARY KEY (invoice_id),
+                    CONSTRAINT ck_archive_common_invoices_contractor_pii_blank CHECK (
+                        COALESCE(payment_route_manual_source, '') <> 'CONTRACTOR_PAYMENT_PROFILE'
+                        OR (
+                            COALESCE(TRIM(payment_route_manual_phone), '') = ''
+                            AND COALESCE(TRIM(payment_route_manual_recipient), '') = ''
+                            AND COALESCE(TRIM(payment_route_manual_comment), '') = ''
+                            AND COALESCE(TRIM(payment_route_instruction_text), '') = ''
+                        )
+                    )
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""

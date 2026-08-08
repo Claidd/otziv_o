@@ -5,10 +5,12 @@ import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceArchivePreviewResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoiceManualCardPaymentRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentInitCheckRequest;
 import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ public class CommonBillingAdminController {
 
     private final CommonBillingService commonBillingService;
     private final CommonBillingPublicationApprovalFailureMarker publicationApprovalFailureMarker;
+    private final ContractorPaymentTargetAccessPolicy contractorPaymentTargetAccessPolicy;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @GetMapping("/api/common-billing/accounts")
@@ -87,18 +90,21 @@ public class CommonBillingAdminController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @DeleteMapping("/api/common-billing/invoices/{invoiceId}")
     public void deleteInvoice(@PathVariable Long invoiceId, Principal principal) {
+        requireCanMutateInvoice(invoiceId);
         commonBillingService.deleteInvoiceWithOrders(invoiceId, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/send")
     public CommonInvoiceDetailsResponse sendInvoice(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.sendInvoice(invoiceId, true);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/remind")
     public CommonInvoiceDetailsResponse remind(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.sendManualReminder(invoiceId);
     }
 
@@ -109,48 +115,67 @@ public class CommonBillingAdminController {
             @RequestBody ManualPaymentConfirmationRequest request,
             Principal principal
     ) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.markPaid(invoiceId, request, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/attention/retry")
     public CommonInvoiceDetailsResponse retryAttention(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.retryAttention(invoiceId);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/attention/resolve")
     public CommonInvoiceDetailsResponse resolveAttention(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.resolveAttention(invoiceId);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/attention/repair-payment-route")
     public CommonInvoiceDetailsResponse repairPaymentRoute(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.repairStandalonePaymentRouteConflict(invoiceId);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/attention/manual-card-paid")
+    public CommonInvoiceDetailsResponse reportManualCardPayment(
+            @PathVariable Long invoiceId,
+            @RequestBody CommonInvoiceManualCardPaymentRequest request,
+            Principal principal
+    ) {
+        requireCanMutateInvoice(invoiceId);
+        return commonBillingService.reportPaidByManualCardTransfer(invoiceId, request, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/technical-tail/resolve")
     public CommonInvoiceDetailsResponse resolveTechnicalTail(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.resolveTechnicalTail(invoiceId);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/payment-notification/resolve")
     public CommonInvoiceDetailsResponse resolvePaymentSuccessNotification(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.resolvePaymentSuccessNotification(invoiceId);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/attention/apply-late-payment")
     public CommonInvoiceDetailsResponse applyLatePayment(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.applyLatePayment(invoiceId);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/attention/confirm-final-cancel-check")
     public CommonInvoiceDetailsResponse confirmFinalPaymentCancelCheck(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.confirmFinalPaymentCancelCheck(invoiceId);
     }
 
@@ -160,18 +185,21 @@ public class CommonBillingAdminController {
             @PathVariable Long invoiceId,
             @RequestBody(required = false) CommonInvoicePaymentInitCheckRequest request
     ) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.confirmPaymentInitCheck(invoiceId, request);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/unpaid")
     public CommonInvoiceDetailsResponse markUnpaid(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.markUnpaid(invoiceId);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/ban")
     public CommonInvoiceDetailsResponse markBan(@PathVariable Long invoiceId, Principal principal) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.markBan(invoiceId, principal);
     }
 
@@ -188,6 +216,7 @@ public class CommonBillingAdminController {
             @RequestBody CommonInvoiceCloseRequest request,
             Principal principal
     ) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.archiveInvoice(invoiceId, request, principal);
     }
 
@@ -199,12 +228,14 @@ public class CommonBillingAdminController {
             @RequestBody ManualPaymentConfirmationRequest request,
             Principal principal
     ) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.markOrderPaid(invoiceId, orderId, request, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/orders/approve-review")
     public CommonInvoiceDetailsResponse approveReviewOrders(@PathVariable Long invoiceId) {
+        requireCanMutateInvoice(invoiceId);
         try {
             return commonBillingService.approveReviewOrders(invoiceId);
         } catch (RuntimeException exception) {
@@ -216,6 +247,11 @@ public class CommonBillingAdminController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @DeleteMapping("/api/common-billing/invoices/{invoiceId}/orders/{orderId}")
     public CommonInvoiceDetailsResponse detachOrder(@PathVariable Long invoiceId, @PathVariable Long orderId) {
+        requireCanMutateInvoice(invoiceId);
         return commonBillingService.detachOrder(invoiceId, orderId);
+    }
+
+    private void requireCanMutateInvoice(Long invoiceId) {
+        contractorPaymentTargetAccessPolicy.requireCanManageCommonInvoice(invoiceId);
     }
 }

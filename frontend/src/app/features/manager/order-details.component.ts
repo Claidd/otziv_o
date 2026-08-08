@@ -24,7 +24,7 @@ import { PaymentsApi } from '../../core/payments.api';
 import type { ManagerPaymentLinkResponse, TbankPaymentStatus } from '../../core/payments.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
-import { copyTextToClipboard } from '../../shared/clipboard-copy';
+import { copyDeferredTextToClipboard, copyTextToClipboard } from '../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
 import { MobileBottomPagerComponent } from '../../shared/mobile/mobile-bottom-pager.component';
@@ -394,22 +394,27 @@ export class OrderDetailsComponent {
       return;
     }
 
-    let value = item.value;
     if (kind === 'botLogin' || kind === 'botPassword') {
-      const revealed = await this.revealReviewCredential(review, kind);
-      if (revealed === null) {
+      try {
+        if (!(await this.copyDeferredText(
+          () => this.revealReviewCredential(review, kind),
+          `${review.id}-${kind}`,
+          item.label
+        ))) {
+          return;
+        }
+      } catch (err) {
+        this.toastService.error(
+          'Данные не скопированы',
+          this.errorMessage(err, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.')
+        );
         return;
       }
-      value = revealed;
-    }
-
-    if (!(await this.copyText(value, `${review.id}-${kind}`, item.label))) {
+      this.markReviewCredentialCopied(review, kind);
       return;
     }
 
-    if (kind === 'botLogin' || kind === 'botPassword') {
-      this.markReviewCredentialCopied(review, kind);
-    }
+    await this.copyText(item.value, `${review.id}-${kind}`, item.label);
   }
 
   reviewAccountActionLocked(review: OrderReviewItem): boolean {
@@ -2048,17 +2053,23 @@ export class OrderDetailsComponent {
 
     const label = kind === 'botLogin' ? 'Логин скопирован' : 'Пароль скопирован';
     try {
-      const response = await firstValueFrom(this.managerApi.revealBadReviewTaskCredential(
-        orderId,
-        task.id,
-        kind === 'botLogin' ? 'login' : 'password',
-        this.orderDetailsActivitySource()
-      ));
-      const value = response.value?.trim();
-      if (!value) {
-        throw new Error('Credential reveal returned an empty value');
-      }
-      await this.copyText(value, this.badReviewTaskCopyKey(task, kind), label);
+      await this.copyDeferredText(
+        async () => {
+          const response = await firstValueFrom(this.managerApi.revealBadReviewTaskCredential(
+            orderId,
+            task.id,
+            kind === 'botLogin' ? 'login' : 'password',
+            this.orderDetailsActivitySource()
+          ));
+          const value = response.value?.trim();
+          if (!value) {
+            throw new Error('Credential reveal returned an empty value');
+          }
+          return value;
+        },
+        this.badReviewTaskCopyKey(task, kind),
+        label
+      );
     } catch (err) {
       this.toastService.error(
         'Данные не скопированы',
@@ -3224,6 +3235,27 @@ export class OrderDetailsComponent {
     return false;
   }
 
+  private async copyDeferredText(
+    loadText: () => Promise<string>,
+    key: string,
+    toast: string,
+    failureToast = 'Браузер не дал доступ к буферу обмена'
+  ): Promise<boolean> {
+    if (await copyDeferredTextToClipboard(loadText)) {
+      this.copied.set(key);
+      this.toastService.success('Скопировано', toast);
+      window.setTimeout(() => {
+        if (this.copied() === key) {
+          this.copied.set(null);
+        }
+      }, 1200);
+      return true;
+    }
+
+    this.toastService.error('Не скопировано', failureToast);
+    return false;
+  }
+
   private markReviewCredentialCopied(review: OrderReviewItem, kind: ReviewCopyKind): void {
     if (kind !== 'botLogin' && kind !== 'botPassword') {
       return;
@@ -3471,27 +3503,19 @@ export class OrderDetailsComponent {
   private async revealReviewCredential(
     review: OrderReviewItem,
     kind: 'botLogin' | 'botPassword'
-  ): Promise<string | null> {
+  ): Promise<string> {
     const field = kind === 'botLogin' ? 'login' : 'password';
-    try {
-      const response = await firstValueFrom(this.managerApi.revealOrderReviewCredential(
-        review.orderId,
-        review.id,
-        field,
-        this.orderDetailsActivitySource()
-      ));
-      const value = response.value?.trim();
-      if (!value) {
-        throw new Error('Credential reveal returned an empty value');
-      }
-      return value;
-    } catch (err) {
-      this.toastService.error(
-        'Данные не скопированы',
-        this.errorMessage(err, 'Не удалось безопасно получить данные аккаунта. Буфер обмена не изменен.')
-      );
-      return null;
+    const response = await firstValueFrom(this.managerApi.revealOrderReviewCredential(
+      review.orderId,
+      review.id,
+      field,
+      this.orderDetailsActivitySource()
+    ));
+    const value = response.value?.trim();
+    if (!value) {
+      throw new Error('Credential reveal returned an empty value');
     }
+    return value;
   }
 
   private orderDetailsActivitySource(): { sourcePage: string; sourceEntry?: string; sourceSection?: string } {

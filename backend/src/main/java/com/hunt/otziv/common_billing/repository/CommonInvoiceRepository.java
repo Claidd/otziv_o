@@ -19,7 +19,72 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, Long> {
 
+    @Query("""
+        SELECT COUNT(item.id)
+        FROM CommonInvoiceOrder item
+        JOIN item.invoice invoice
+        WHERE item.order.id = :orderId
+          AND invoice.clientReportedAt IS NOT NULL
+    """)
+    long countClientReportedPaymentsByOrderId(@Param("orderId") Long orderId);
+
+    /**
+     * Durable retry source for common invoices whose payment route was frozen
+     * but whose best-effort afterCommit shadow write was interrupted.
+     */
+    @Query(value = """
+        SELECT invoice.invoice_id
+        FROM common_invoices invoice
+        WHERE invoice.payment_route_selected_at >= :startedAt
+          AND (
+              invoice.shadow_route_generation IS NOT NULL
+              OR invoice.payment_route_selected_at >= :preparationStartedAt
+          )
+          AND COALESCE(invoice.payment_route_amount_kopecks, 0) > 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM contractor_payment_allocations allocation
+              WHERE allocation.mode = 'SHADOW'
+                AND allocation.source_type = 'COMMON_INVOICE'
+                AND allocation.source_id = invoice.invoice_id
+                AND (
+                    invoice.shadow_route_generation IS NULL
+                    OR allocation.source_generation_snapshot = invoice.shadow_route_generation
+                )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM contractor_shadow_backfill_claims claim
+              WHERE claim.claim_key = CONCAT('COMMON_INVOICE:', invoice.invoice_id)
+                AND (
+                    claim.completed_at IS NOT NULL
+                    OR claim.lease_until >= :now
+                    OR claim.next_retry_at > :now
+                )
+          )
+        ORDER BY invoice.payment_route_selected_at, invoice.invoice_id
+    """, nativeQuery = true)
+    List<Long> findMissingContractorShadowRouteIds(
+            @Param("startedAt") LocalDateTime startedAt,
+            @Param("preparationStartedAt") LocalDateTime preparationStartedAt,
+            @Param("now") LocalDateTime now,
+            Pageable pageable
+    );
+
     Optional<CommonInvoice> findByToken(String token);
+
+    @Query("""
+        SELECT invoice.id AS invoiceId,
+               invoice.contractorAllocationId AS allocationId
+        FROM CommonInvoice invoice
+        WHERE invoice.token = :token
+    """)
+    Optional<ContractorRouteRef> findContractorRouteRefByToken(@Param("token") String token);
+
+    interface ContractorRouteRef {
+        Long getInvoiceId();
+        Long getAllocationId();
+    }
 
     @Query("""
         SELECT invoice
@@ -47,6 +112,11 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         WHERE invoice.id = :id
     """)
     Optional<CommonInvoice> findByIdWithAccountForUpdate(@Param("id") Long id);
+
+    /** Source-only mutex for contractor accounting; does not join-lock account rows. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT invoice FROM CommonInvoice invoice WHERE invoice.id = :id")
+    Optional<CommonInvoice> findByIdForUpdate(@Param("id") Long id);
 
     @Query("""
         SELECT invoice
