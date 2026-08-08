@@ -589,9 +589,19 @@ tr.unlinked td {
 
 .contractor-payments {
   display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  container-name: contractor-payments;
+  container-type: inline-size;
   gap: 0.75rem;
   border-top: 1px solid var(--otziv-light);
   padding-top: 0.9rem;
+}
+
+.contractor-payments > *,
+.contractor-payments .editor-title > div {
+  min-width: 0;
 }
 
 .routing-mode-badge.shadow {
@@ -611,8 +621,104 @@ tr.unlinked td {
   background: rgba(103, 116, 131, 0.08) !important;
 }
 
+.contractor-global-mode {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  box-sizing: border-box;
+  border: 1px solid rgba(108, 155, 207, 0.24);
+  border-radius: 0.85rem;
+  padding: 0.75rem;
+  background: rgba(108, 155, 207, 0.065);
+}
+
+.contractor-global-mode[data-tone='shadow'] {
+  border-color: rgba(218, 155, 48, 0.32);
+  background: rgba(255, 190, 69, 0.08);
+}
+
+.contractor-global-mode[data-tone='live'] {
+  border-color: rgba(27, 156, 133, 0.28);
+  background: rgba(27, 156, 133, 0.07);
+}
+
+.contractor-global-mode-copy {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.contractor-global-mode-copy > .material-icons-sharp {
+  color: var(--otziv-primary);
+  font-size: 1.4rem;
+}
+
+.contractor-global-mode-copy > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+}
+
+.contractor-global-mode-copy small,
+.contractor-global-mode-copy strong,
+.contractor-global-mode-copy > span:last-child > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.contractor-global-mode-copy small {
+  color: var(--otziv-info);
+  font-size: 0.63rem;
+  font-weight: 800;
+}
+
+.contractor-global-mode-copy strong {
+  color: var(--otziv-dark);
+  font-size: 0.8rem;
+}
+
+.contractor-global-mode-copy > span:last-child > span {
+  color: var(--otziv-info);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.contractor-global-mode > a {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 2.2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(108, 155, 207, 0.3);
+  border-radius: 999px;
+  padding: 0 0.75rem;
+  color: var(--otziv-primary);
+  background: var(--otziv-white);
+  font-size: 0.7rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+}
+
+.contractor-global-mode > a .material-icons-sharp {
+  flex: 0 0 auto;
+  font-size: 1rem;
+}
+
 .contractor-profile-list {
   display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   gap: 0.75rem;
 }
 
@@ -630,7 +736,11 @@ tr.unlinked td {
 
 .contractor-profile-card {
   display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   gap: 0.75rem;
+  box-sizing: border-box;
   border: 1px solid rgba(108, 155, 207, 0.22);
   border-radius: var(--otziv-small-radius);
   padding: 0.85rem;
@@ -639,6 +749,8 @@ tr.unlinked td {
 
 .contractor-profile-card > header {
   display: flex;
+  width: 100%;
+  min-width: 0;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
@@ -647,7 +759,19 @@ tr.unlinked td {
 
 .contractor-profile-card > header > div {
   display: grid;
+  min-width: 0;
   gap: 0.15rem;
+}
+
+.contractor-profile-card > header .checkbox {
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+}
+
+.contractor-profile-card > header .checkbox span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .contractor-profile-card > header strong {
@@ -663,9 +787,13 @@ tr.unlinked td {
 
 .contractor-personal-routing {
   display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  box-sizing: border-box;
   border: 1px solid rgba(103, 116, 131, 0.18);
   border-radius: 0.85rem;
   padding: 0.75rem;
@@ -674,20 +802,25 @@ tr.unlinked td {
 
 .contractor-personal-routing > div {
   display: grid;
+  min-width: 0;
   gap: 0.25rem;
 }
 
 .contractor-personal-routing > div > strong {
+  min-width: 0;
   color: var(--otziv-dark);
   font-size: 0.78rem;
+  overflow-wrap: anywhere;
 }
 
 .contractor-personal-routing > div > small {
+  min-width: 0;
   max-width: 48rem;
   color: var(--otziv-info);
   font-size: 0.66rem;
   font-weight: 700;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .contractor-personal-routing[data-tone='enabled'] {
@@ -706,6 +839,8 @@ tr.unlinked td {
 
 .contractor-routing-switch {
   display: grid;
+  max-width: 100%;
+  min-width: 0;
   grid-template-columns: auto minmax(5.5rem, auto);
   align-items: center;
   gap: 0.55rem;
@@ -764,15 +899,33 @@ tr.unlinked td {
 }
 
 .contractor-routing-switch > strong {
+  min-width: 0;
   color: var(--otziv-dark);
   font-size: 0.69rem;
+  overflow-wrap: anywhere;
   text-align: left;
 }
 
 .contractor-profile-fields {
   display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
+}
+
+.contractor-profile-fields > label,
+.contractor-profile-fields input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.opening-balance-field small {
+  color: var(--otziv-info);
+  font-size: 0.63rem;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .contractor-profile-fields .wide {
@@ -787,6 +940,9 @@ tr.unlinked td {
 
 .contractor-profile-metrics {
   display: grid;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.45rem;
 }
@@ -801,14 +957,18 @@ tr.unlinked td {
 }
 
 .contractor-profile-metrics small {
+  min-width: 0;
   color: var(--otziv-info);
   font-size: 0.61rem;
   font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .contractor-profile-metrics strong {
+  min-width: 0;
   color: var(--otziv-dark);
   font-size: 0.76rem;
+  overflow-wrap: anywhere;
 }
 
 .opening-history {
@@ -1401,13 +1561,98 @@ tr.unlinked td {
   }
 }
 
+/* The editor can be narrow even on a wide desktop because it shares the page
+   with the users table. Use its actual width instead of only the viewport. */
+@container contractor-payments (max-width: 48rem) {
+  .contractor-payments .editor-title,
+  .contractor-profile-card > header,
+  .contractor-global-mode,
+  .contractor-personal-routing {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .contractor-payments .editor-title > span {
+    align-self: flex-start;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .contractor-global-mode > a,
+  .contractor-profile-card > header .checkbox,
+  .contractor-routing-switch {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .contractor-profile-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contractor-profile-fields .wide {
+    grid-column: auto;
+  }
+
+  .contractor-profile-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .contractor-routing-switch {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+
+@container contractor-payments (max-width: 32rem) {
+  .contractor-profile-card {
+    padding: 0.7rem;
+  }
+
+  .contractor-profile-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 720px) {
+  .contractor-payments .editor-title,
+  .contractor-profile-card > header,
+  .contractor-global-mode {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .contractor-payments .editor-title > span {
+    align-self: flex-start;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .contractor-global-mode > a {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .contractor-profile-card {
+    padding: 0.7rem;
+  }
+
+  .contractor-profile-card > header .checkbox {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
   .contractor-personal-routing {
     align-items: stretch;
     flex-direction: column;
   }
 
   .contractor-routing-switch {
+    width: 100%;
     grid-template-columns: auto minmax(0, 1fr);
   }
 

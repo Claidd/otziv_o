@@ -448,6 +448,25 @@
                 </span>
               </div>
 
+              <div
+                class="contractor-global-mode"
+                [attr.data-tone]="contractorRoutingModeClass()"
+                aria-label="Общий режим системы вознаграждений"
+              >
+                <div class="contractor-global-mode-copy">
+                  <span class="material-icons-sharp" aria-hidden="true">settings_suggest</span>
+                  <span>
+                    <small>Общий режим для всех специалистов и менеджеров</small>
+                    <strong>{{ contractorRoutingModeLabel() }}</strong>
+                    <span>{{ contractorRoutingModeDescription() }}</span>
+                  </span>
+                </div>
+                <a routerLink="/admin/dictionaries" [queryParams]="{ tab: 'settings' }">
+                  <span class="material-icons-sharp" aria-hidden="true">tune</span>
+                  Открыть общий переключатель
+                </a>
+              </div>
+
               <p class="form-hint">
                 Персональный допуск влияет только на новые счета после включения глобальной выдачи реквизитов.
                 Если допуск специалиста выключен, система проверяет менеджера заказа; если выключен и допуск
@@ -537,8 +556,8 @@
                           (input)="updateContractorProfile(profile.id, 'bankName', $any($event.target).value)"
                         >
                       </label>
-                      <label>
-                        <span>Переходящий остаток, ₽</span>
+                      <label class="opening-balance-field">
+                        <span>Переходящий неоплаченный остаток, ₽</span>
                         <input
                           type="text"
                           inputmode="decimal"
@@ -546,6 +565,10 @@
                           [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
                           (input)="updateContractorProfile(profile.id, 'openingBalanceRubles', $any($event.target).value)"
                         >
+                        <small>
+                          Только долг перед исполнителем на дату запуска. Уже выплаченное не вносите;
+                          если долга нет — оставьте 0,00.
+                        </small>
                       </label>
                       @if (contractorOpeningBalanceChanged(profile)) {
                         <label class="wide opening-balance-reason">

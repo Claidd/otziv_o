@@ -421,7 +421,7 @@ export class UsersAdminComponent implements OnDestroy {
     }
     const openingBalance = Number(profile.openingBalanceRubles.replace(',', '.'));
     if (!Number.isFinite(openingBalance) || openingBalance < 0) {
-      this.contractorProfilesError.set('Переходящий остаток должен быть положительным числом.');
+      this.contractorProfilesError.set('Переходящий остаток должен быть равен нулю или быть положительным числом.');
       return;
     }
     const openingBalanceKopecks = Math.round(openingBalance * 100);
@@ -868,6 +868,23 @@ export class UsersAdminComponent implements OnDestroy {
       return 'live';
     }
     return profile?.shadowMode ? 'shadow' : 'disabled';
+  }
+
+  contractorRoutingModeDescription(): string {
+    const profile = this.contractorProfiles()[0];
+    if (!profile) {
+      return 'Откройте общие настройки, чтобы проверить фактический режим на сервере.';
+    }
+    if (profile.liveRouting) {
+      return 'Боевой маршрут активен: новые счета могут получать реквизиты допущенных исполнителей.';
+    }
+    if (profile.reportingLive) {
+      return 'Фактический учёт активен, но выдача реквизитов исполнителей новым счетам приостановлена.';
+    }
+    if (profile.shadowMode) {
+      return 'Тестовый расчёт не меняет получателя счёта и только показывает смоделированный результат.';
+    }
+    return 'Новая маршрутизация выключена: счета обрабатываются по прежним правилам.';
   }
 
   contractorAllocationStatusLabel(status: ContractorPaymentAllocationStatus): string {
