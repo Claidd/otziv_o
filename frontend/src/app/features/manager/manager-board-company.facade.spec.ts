@@ -57,6 +57,7 @@ function companyPayload(overrides: Partial<CompanyEditPayload> = {}): CompanyEdi
     active: true,
     publicationProgressReportsEnabled: true,
     allowWorkerPublicationDateEdit: false,
+    contractorPaymentRoutingEnabled: true,
     createDate: '2026-01-01',
     updateStatus: '2026-01-02',
     dateNewTry: '2026-01-03',
@@ -73,6 +74,7 @@ function companyPayload(overrides: Partial<CompanyEditPayload> = {}): CompanyEdi
     filials: [filial(21)],
     cities: [option(31, 'City')],
     canChangeManager: true,
+    canChangeContractorPaymentRouting: true,
     ...overrides
   };
 }
@@ -227,6 +229,7 @@ describe('ManagerBoardCompanyFacade', () => {
       active: true,
       publicationProgressReportsEnabled: true,
       allowWorkerPublicationDateEdit: false,
+      contractorPaymentRoutingEnabled: true,
       newWorkerId: null,
       newFilialCityId: null,
       newFilialTitle: '',

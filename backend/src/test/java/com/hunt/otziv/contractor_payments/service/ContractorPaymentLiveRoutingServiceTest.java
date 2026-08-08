@@ -182,6 +182,27 @@ class ContractorPaymentLiveRoutingServiceTest {
     }
 
     @Test
+    void companyAccountPaymentModeForcesPaymentLinkToOwner() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(10_001L, 10_101L);
+        Manager manager = manager(10_002L, 10_102L);
+        Order order = order(10_003L, worker, manager);
+        order.getCompany().setContractorPaymentRoutingEnabled(false);
+
+        ContractorPaymentAllocation allocation = service.reserveForPaymentLink(
+                paymentLink(10_004L, order, 100_000L)
+        );
+
+        assertEquals(ContractorRecipientType.OWNER, allocation.getRecipientType());
+        assertEquals(ContractorAllocationStatus.OWNER_FALLBACK, allocation.getStatus());
+        assertEquals(
+                ContractorRoutingDecisionReason.COMPANY_REQUIRES_OWNER_PAYMENT,
+                allocation.getRoutingDecisionReason()
+        );
+        verify(profileRepository, never()).findIdByUserIdAndRole(anyLong(), any());
+    }
+
+    @Test
     void fallsThroughToManagerOnlyWhenSpecialistDoesNotFit() {
         when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
         Worker worker = worker(11L, 111L);
@@ -622,6 +643,30 @@ class ContractorPaymentLiveRoutingServiceTest {
         );
         verify(profileRepository, never()).findByUserIdAndRoleForUpdate(112L, ContractorRole.SPECIALIST);
         verify(profileRepository, never()).findByUserIdAndRoleForUpdate(113L, ContractorRole.SPECIALIST);
+    }
+
+    @Test
+    void commonInvoiceWithAnyAccountPaymentCompanyForcesWholeInvoiceToOwner() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(12_001L, 12_101L);
+        Manager manager = manager(12_002L, 12_102L);
+        Order linkPaymentOrder = order(12_003L, worker, manager);
+        Order accountPaymentOrder = order(12_004L, worker, manager);
+        accountPaymentOrder.getCompany().setContractorPaymentRoutingEnabled(false);
+
+        ContractorPaymentAllocation allocation = service.reserveForCommonInvoice(
+                invoice(12_005L, 200_000L, 0L),
+                List.of(linkPaymentOrder, accountPaymentOrder),
+                manager,
+                200_000L
+        );
+
+        assertEquals(ContractorRecipientType.OWNER, allocation.getRecipientType());
+        assertEquals(
+                ContractorRoutingDecisionReason.COMPANY_REQUIRES_OWNER_PAYMENT,
+                allocation.getRoutingDecisionReason()
+        );
+        verify(profileRepository, never()).findIdByUserIdAndRole(anyLong(), any());
     }
 
     @Test
@@ -1268,6 +1313,9 @@ class ContractorPaymentLiveRoutingServiceTest {
         order.setId(id);
         order.setWorker(worker);
         order.setManager(manager);
+        Company company = new Company();
+        company.setContractorPaymentRoutingEnabled(true);
+        order.setCompany(company);
         return order;
     }
 

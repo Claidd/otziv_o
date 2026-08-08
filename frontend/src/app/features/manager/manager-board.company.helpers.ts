@@ -31,6 +31,7 @@ export function managerCompanyEditDraft(payload: CompanyEditPayload): CompanyUpd
     active: payload.active,
     publicationProgressReportsEnabled: payload.publicationProgressReportsEnabled,
     allowWorkerPublicationDateEdit: payload.allowWorkerPublicationDateEdit,
+    contractorPaymentRoutingEnabled: payload.contractorPaymentRoutingEnabled,
     newWorkerId: null,
     newFilialCityId: null,
     newFilialTitle: '',

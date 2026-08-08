@@ -39,6 +39,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
 class PerformerProductRewardZpServiceTest {
@@ -56,6 +59,17 @@ class PerformerProductRewardZpServiceTest {
 
     private PerformerProductRewardZpService service;
     private Order order;
+
+    @Test
+    void paidOrderAccrualAlwaysStartsAnIndependentTransaction() throws Exception {
+        Transactional transactional = AnnotatedElementUtils.findMergedAnnotation(
+                PerformerProductRewardZpService.class.getMethod("accrueForPaidOrder", Long.class),
+                Transactional.class
+        );
+
+        assertThat(transactional).isNotNull();
+        assertThat(transactional.propagation()).isEqualTo(Propagation.REQUIRES_NEW);
+    }
 
     @BeforeEach
     void setUp() {

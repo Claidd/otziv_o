@@ -5995,6 +5995,7 @@ public class CommonBillingService {
                     512
             ));
             invoiceRepository.save(invoice);
+            scheduleContractorShadowReconcile(invoice.getId());
             return;
         }
 
@@ -6135,6 +6136,7 @@ public class CommonBillingService {
                     512
             ));
             invoiceRepository.save(invoice);
+            scheduleContractorShadowReconcile(invoice.getId());
             return;
         }
 
@@ -6152,6 +6154,7 @@ public class CommonBillingService {
             ));
             invoiceRepository.save(invoice);
         }
+        scheduleContractorShadowReconcile(invoice.getId());
     }
 
     private void markInvoicePaidClosed(CommonInvoice invoice) {
@@ -7706,6 +7709,45 @@ public class CommonBillingService {
         } else {
             release.run();
         }
+    }
+
+    private void scheduleContractorShadowReconcile(Long invoiceId) {
+        if (invoiceId == null) {
+            return;
+        }
+        Runnable reconcile = () -> {
+            try {
+                contractorPaymentShadowService.reconcileCommonInvoiceId(invoiceId);
+            } catch (RuntimeException e) {
+                // The paid common invoice remains a durable retry source for
+                // the claim-based contractor reconciliation worker.
+                log.error(
+                        "Не удалось сразу сверить назначение оплаченного общего счета invoiceId={}, code={}",
+                        invoiceId,
+                        e.getClass().getSimpleName()
+                );
+            }
+        };
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()
+                && org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            reconcile.run();
+                        }
+                    }
+            );
+            return;
+        }
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            log.warn(
+                    "Пропущена немедленная сверка общего счета без transaction synchronization invoiceId={}",
+                    invoiceId
+            );
+            return;
+        }
+        reconcile.run();
     }
 
     private boolean hasFrozenCommonPaymentRoute(CommonInvoice invoice) {

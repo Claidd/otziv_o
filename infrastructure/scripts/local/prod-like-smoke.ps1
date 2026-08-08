@@ -2816,7 +2816,7 @@ function Remove-KeycloakSmokeClient {
         [Parameter(Mandatory = $true)][string]$RootUrl,
         [Parameter(Mandatory = $true)][string]$Realm,
         [Parameter(Mandatory = $true)][hashtable]$AdminHeaders,
-        [Parameter(Mandatory = $true)][object]$Client
+        [Parameter(Mandatory = $true)][AllowNull()][object]$Client
     )
 
     if ($null -eq $Client -or [string]::IsNullOrWhiteSpace($Client.ClientUuid)) {
@@ -2839,14 +2839,24 @@ function Remove-KeycloakSmokeClientsByPrefix {
     )
 
     $apiRoot = "$($RootUrl.TrimEnd('/'))/keycloak/admin/realms/$Realm"
-    $clientResponse = Invoke-RestMethod -Uri "$apiRoot/clients?clientId=otziv-smoke-ai" -Headers $AdminHeaders -TimeoutSec 30
-    $clients = @(ConvertTo-SmokeArray -Value $clientResponse) |
-        Where-Object { $_.clientId -like "otziv-smoke-ai-*" }
-    foreach ($client in $clients) {
-        Remove-KeycloakSmokeClient -RootUrl $RootUrl -Realm $Realm -AdminHeaders $AdminHeaders -Client ([pscustomobject]@{
-            ClientId = $client.clientId
-            ClientUuid = $client.id
-        })
+    foreach ($clientId in @(
+        "otziv-smoke-ai-admin",
+        "otziv-smoke-ai-manager",
+        "otziv-smoke-ai-marketolog"
+    )) {
+        $encodedClientId = [Uri]::EscapeDataString($clientId)
+        $clientResponse = Invoke-RestMethod `
+            -Uri "$apiRoot/clients?clientId=$encodedClientId" `
+            -Headers $AdminHeaders `
+            -TimeoutSec 30
+        $clients = @(ConvertTo-SmokeArray -Value $clientResponse) |
+            Where-Object { $_.clientId -eq $clientId }
+        foreach ($client in $clients) {
+            Remove-KeycloakSmokeClient -RootUrl $RootUrl -Realm $Realm -AdminHeaders $AdminHeaders -Client ([pscustomobject]@{
+                ClientId = $client.clientId
+                ClientUuid = $client.id
+            })
+        }
     }
 }
 
@@ -3080,7 +3090,7 @@ FROM flyway_schema_history
 WHERE version IN (
   '1.10.217', '1.10.218', '1.10.219', '1.10.220', '1.10.221', '1.10.222',
   '1.10.223', '1.10.224', '1.10.225', '1.10.226', '1.10.227', '1.10.228',
-  '1.10.229'
+  '1.10.229', '1.10.230'
 )
   AND success = 1;
 
@@ -3296,6 +3306,38 @@ WHERE constraint_schema = DATABASE()
     'ck_archive_common_invoices_contractor_pii_blank'
   )
   AND check_clause LIKE '%payment_route_instruction_text%';
+
+SELECT CONCAT('COMPANY_ROUTING_COLUMNS=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND (
+    (table_name = 'companies'
+      AND column_name = 'company_contractor_payment_routing_enabled')
+    OR
+    (table_name IN (
+      'payment_links',
+      'archive_payment_links',
+      'common_invoices',
+      'archive_common_invoices'
+    ) AND column_name = 'shadow_route_company_routing_allowed')
+  );
+
+SELECT CONCAT('COMPANY_ROUTING_DEFAULTS=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND column_default = '1'
+  AND is_nullable = 'NO'
+  AND (
+    (table_name = 'companies'
+      AND column_name = 'company_contractor_payment_routing_enabled')
+    OR
+    (table_name IN (
+      'payment_links',
+      'archive_payment_links',
+      'common_invoices',
+      'archive_common_invoices'
+    ) AND column_name = 'shadow_route_company_routing_allowed')
+  );
 "@
     $schemaOutput = & docker @($ComposeArguments + @(
         "exec", "-T", "-e", "MYSQL_PWD=$mysqlPassword", "mysql",
@@ -3317,7 +3359,7 @@ WHERE constraint_schema = DATABASE()
             Where-Object { $_ -match "^[A-Z_]+=[0-9]+$" }
     )
     foreach ($expectedFact in @(
-        "MIGRATIONS=13",
+        "MIGRATIONS=14",
         "REQUIRED_TABLES=6",
         "SAFE_SETTINGS=5",
         "ACCOUNTING_SHADOW=1",
@@ -3337,7 +3379,9 @@ WHERE constraint_schema = DATABASE()
         "COMPLETION_CANCEL_TASK_GAP_QUERY=1",
         "ROUTING_REASON_COLUMNS=3",
         "ENCRYPTED_COMMENT_COLUMNS=2",
-        "PII_CHECKS=2"
+        "PII_CHECKS=2",
+        "COMPANY_ROUTING_COLUMNS=5",
+        "COMPANY_ROUTING_DEFAULTS=5"
     )) {
         if ($schemaFacts -notcontains $expectedFact) {
             throw "Contractor payment schema invariant '$expectedFact' is missing. Actual: $($schemaFacts -join ', ')."
@@ -3363,7 +3407,7 @@ WHERE constraint_schema = DATABASE()
         }
     }
 
-    Write-Host "Contractor payment SHADOW safety smoke OK: V217-V229 schema is complete, generation joins are collation-safe, accounting/routing remain LEGACY/SHADOW, completion cutover is unset, and both deployment masters are false."
+    Write-Host "Contractor payment SHADOW safety smoke OK: V217-V230 schema is complete, company payment-routing defaults and source snapshots are present, generation joins are collation-safe, accounting/routing remain LEGACY/SHADOW, completion cutover is unset, and both deployment masters are false."
 }
 
 function Invoke-WorkloadShadowSmoke {

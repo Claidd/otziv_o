@@ -531,6 +531,7 @@ public class ApiManagerCompanyController {
                                 ? current.isAllowWorkerPublicationDateEdit()
                                 : request.allowWorkerPublicationDateEdit()
                 )
+                .contractorPaymentRoutingEnabled(contractorPaymentRoutingValue(current, request, authentication))
                 .status(CompanyStatusDTO.builder().id(firstId(request.statusId(), idOf(current.getStatus()))).build())
                 .categoryCompany(CategoryDTO.builder().id(firstId(request.categoryId(), idOf(current.getCategoryCompany()))).build())
                 .subCategory(SubCategoryDTO.builder().id(firstId(request.subCategoryId(), idOf(current.getSubCategory()))).build())
@@ -652,6 +653,14 @@ public class ApiManagerCompanyController {
         if (current == null || request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные компании не переданы");
         }
+        if (request.contractorPaymentRoutingEnabled() != null
+                && request.contractorPaymentRoutingEnabled() != current.isContractorPaymentRoutingEnabled()
+                && !managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Режим оплаты компании могут изменять только владелец или администратор"
+            );
+        }
         Long categoryId = firstId(request.categoryId(), idOf(current.getCategoryCompany()));
         Long subCategoryId = firstId(request.subCategoryId(), idOf(current.getSubCategory()));
         boolean categoryExists = categoryService.getAllCategories().stream()
@@ -684,6 +693,18 @@ public class ApiManagerCompanyController {
                 .noneMatch(city -> Objects.equals(city.getId(), request.newFilialCityId()))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Город филиала не найден");
         }
+    }
+
+    private boolean contractorPaymentRoutingValue(
+            CompanyDTO current,
+            CompanyUpdateRequest request,
+            Authentication authentication
+    ) {
+        if (!managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER")
+                || request.contractorPaymentRoutingEnabled() == null) {
+            return current.isContractorPaymentRoutingEnabled();
+        }
+        return request.contractorPaymentRoutingEnabled();
     }
 
     private boolean companyHasFilial(CompanyDTO company, Long filialId) {

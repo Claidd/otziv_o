@@ -37,6 +37,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -131,6 +132,7 @@ class CompanyServiceImplTest {
                 .active(true)
                 .publicationProgressReportsEnabled(true)
                 .allowWorkerPublicationDateEdit(false)
+                .contractorPaymentRoutingEnabled(false)
                 .filial(new LinkedHashSet<>())
                 .contacts(new LinkedHashSet<>())
                 .build();
@@ -156,6 +158,7 @@ class CompanyServiceImplTest {
         verify(publicationProgressPreferenceService).setCompanyPreference(1293L, false);
         verify(companyRepository).save(company);
         assertTrue(company.isAllowWorkerPublicationDateEdit());
+        assertFalse(company.isContractorPaymentRoutingEnabled());
     }
 
     @Test

@@ -12,6 +12,7 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class EndOfDayAchievementService {
+
+    private static final DateTimeFormatter MESSAGE_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
     public static final String ROLE_WORKER = "WORKER";
     public static final String ROLE_MANAGER = "MANAGER";
@@ -163,6 +166,7 @@ public class EndOfDayAchievementService {
         String eventCode;
         if (result.reached100()) {
             text = "🏆 <b>Команда закрыла день на 100%!</b>\n\n"
+                    + workdayLine(result.date())
                     + "👥 Все работники выполнили обязательную нагрузку дня: <b>"
                     + result.completedCount() + " из " + result.eligibleCount() + "</b>.\n"
                     + streakLine(result.streakDays(), true)
@@ -174,6 +178,7 @@ public class EndOfDayAchievementService {
         } else {
             long remaining = Math.max(0, result.eligibleCount() - result.completedCount());
             text = "📊 <b>Итоги общего прогресса команды</b>\n\n"
+                    + workdayLine(result.date())
                     + "✅ Дневную цель выполнили: <b>" + result.completedCount()
                     + " из " + result.eligibleCount() + "</b>.\n"
                     + "📈 Средний прогресс команды: <b>"
@@ -326,6 +331,12 @@ public class EndOfDayAchievementService {
         return "⏳ Поздняя входящая нагрузка: <b>" + ignoredLateCount
                 + " ед. работы</b>. Она не снизила результат дня, осталась у специалиста "
                 + "и войдёт в обязательную нагрузку следующего дня.\n";
+    }
+
+    private String workdayLine(LocalDate date) {
+        return date == null
+                ? ""
+                : "📅 Рабочий день: <b>" + MESSAGE_DATE_FORMATTER.format(date) + "</b>.\n";
     }
 
     private String workerWorkdayText(String name, AchievementResult result) {

@@ -246,6 +246,28 @@ class ContractorPaymentShadowServiceTest {
     }
 
     @Test
+    void companyAccountPaymentModeForcesPreparedPaymentLinkToOwner() {
+        Worker worker = worker(10_001L, 10_101L);
+        Manager manager = manager(10_002L, 10_102L);
+        Order order = order(10_003L, worker, manager);
+        order.getCompany().setContractorPaymentRoutingEnabled(false);
+        PaymentLink link = paymentLink(10_004L, order, 100_000L);
+
+        String generation = service.preparePaymentLinkSource(link, LocalDateTime.now());
+        order.getCompany().setContractorPaymentRoutingEnabled(true);
+        ContractorPaymentAllocation allocation = service.reserveForPaymentLinkId(10_004L, generation);
+
+        assertEquals(false, link.isShadowRouteCompanyRoutingAllowed());
+        assertEquals(ContractorRecipientType.OWNER, allocation.getRecipientType());
+        assertEquals(ContractorAllocationStatus.OWNER_FALLBACK, allocation.getStatus());
+        assertEquals(
+                ContractorRoutingDecisionReason.COMPANY_REQUIRES_OWNER_PAYMENT,
+                allocation.getRoutingDecisionReason()
+        );
+        verify(profileRepository, never()).findIdByUserIdAndRole(anyLong(), any());
+    }
+
+    @Test
     void fallsThroughToManagerWhenSpecialistBalanceDoesNotFit() {
         Worker worker = worker(11L, 101L);
         Manager manager = manager(21L, 201L);
@@ -509,6 +531,32 @@ class ContractorPaymentShadowServiceTest {
         );
         verify(profileRepository, never()).findByUserIdAndRoleForUpdate(102L, ContractorRole.SPECIALIST);
         verify(profileRepository, never()).findByUserIdAndRoleForUpdate(103L, ContractorRole.SPECIALIST);
+    }
+
+    @Test
+    void commonInvoiceWithAnyAccountPaymentCompanyForcesWholeInvoiceToOwner() {
+        Worker worker = worker(12_001L, 12_101L);
+        Manager manager = manager(12_002L, 12_102L);
+        Order linkPaymentOrder = order(12_003L, worker, manager);
+        Order accountPaymentOrder = order(12_004L, worker, manager);
+        accountPaymentOrder.getCompany().setContractorPaymentRoutingEnabled(false);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(12_005L);
+        invoice.setAmountKopecks(200_000L);
+
+        ContractorPaymentAllocation allocation = service.reserveForCommonInvoice(
+                invoice,
+                List.of(linkPaymentOrder, accountPaymentOrder),
+                manager,
+                200_000L
+        );
+
+        assertEquals(ContractorRecipientType.OWNER, allocation.getRecipientType());
+        assertEquals(
+                ContractorRoutingDecisionReason.COMPANY_REQUIRES_OWNER_PAYMENT,
+                allocation.getRoutingDecisionReason()
+        );
+        verify(profileRepository, never()).findIdByUserIdAndRole(anyLong(), any());
     }
 
     @Test
@@ -1298,6 +1346,23 @@ class ContractorPaymentShadowServiceTest {
     }
 
     @Test
+    void unpaidReleaseCallbacksAlwaysStartIndependentTransactions() throws Exception {
+        Transactional orderRelease = ContractorPaymentShadowService.class
+                .getMethod("releaseForUnpaidOrder", Long.class, String.class)
+                .getAnnotation(Transactional.class);
+        Transactional commonInvoiceRelease = ContractorPaymentShadowService.class
+                .getMethod("releaseForUnpaidCommonInvoice", Long.class, String.class)
+                .getAnnotation(Transactional.class);
+        Transactional commonInvoiceReconcile = ContractorPaymentShadowService.class
+                .getMethod("reconcileCommonInvoiceId", Long.class)
+                .getAnnotation(Transactional.class);
+
+        assertEquals(Propagation.REQUIRES_NEW, orderRelease.propagation());
+        assertEquals(Propagation.REQUIRES_NEW, commonInvoiceRelease.propagation());
+        assertEquals(Propagation.REQUIRES_NEW, commonInvoiceReconcile.propagation());
+    }
+
+    @Test
     void archivePreflightCommitsIndependentlyWhileStrictPassJoinsArchiveTransaction() throws Exception {
         Transactional preflight = ContractorPaymentShadowService.class
                 .getMethod("reconcileAllocationId", Long.class)
@@ -1350,6 +1415,9 @@ class ContractorPaymentShadowServiceTest {
         order.setId(id);
         order.setWorker(worker);
         order.setManager(manager);
+        Company company = new Company();
+        company.setContractorPaymentRoutingEnabled(true);
+        order.setCompany(company);
         return order;
     }
 

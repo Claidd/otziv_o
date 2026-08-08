@@ -585,12 +585,17 @@ public class ContractorPaymentLiveRoutingService {
         }
         accountingPhaseService.lockAndPromoteForLiveRoute();
 
-        ContractorPaymentRouteDecision decision = selectRoutableProfile(
-                order.getWorker(),
-                effectiveManager(order),
-                amount,
-                null
-        );
+        boolean companyAllowsRouting = link.getShadowRouteGeneration() != null
+                ? link.isShadowRouteCompanyRoutingAllowed()
+                : companyRoutingAllowed(order);
+        ContractorPaymentRouteDecision decision = companyAllowsRouting
+                ? selectRoutableProfile(
+                        order.getWorker(),
+                        effectiveManager(order),
+                        amount,
+                        null
+                )
+                : ownerRequiredByCompany();
 
         ContractorPaymentAllocation allocation = base(
                 ContractorAllocationSourceType.PAYMENT_LINK,
@@ -659,12 +664,17 @@ public class ContractorPaymentLiveRoutingService {
         boolean contractorEligible = invoice.getShadowRouteGeneration() != null
                 ? invoice.isShadowRouteContractorEligible()
                 : commonInvoiceHasNoPriorPaymentEvidence(invoice);
+        boolean companyAllowsRouting = invoice.getShadowRouteGeneration() != null
+                ? invoice.isShadowRouteCompanyRoutingAllowed()
+                : allCompaniesAllowContractorRouting(safeOrders);
         ContractorRoutingDecisionReason specialistPrecondition = commonSpecialistRejection(
                 safeOrders,
                 completeWorkerSet,
                 workers
         );
-        ContractorPaymentRouteDecision decision = contractorEligible
+        ContractorPaymentRouteDecision decision = !companyAllowsRouting
+                ? ownerRequiredByCompany()
+                : contractorEligible
                 ? selectRoutableProfile(
                         completeWorkerSet && workers.size() == 1 ? workers.getFirst() : null,
                         manager,
@@ -956,6 +966,26 @@ public class ContractorPaymentLiveRoutingService {
                 && normalize(invoice.getManualPaidBy()).isBlank()
                 && normalize(invoice.getManualPaymentComment()).isBlank()
                 && normalize(invoice.getManualPaymentReceiptUrl()).isBlank();
+    }
+
+    private boolean companyRoutingAllowed(Order order) {
+        return order != null
+                && order.getCompany() != null
+                && order.getCompany().isContractorPaymentRoutingEnabled();
+    }
+
+    private boolean allCompaniesAllowContractorRouting(List<Order> orders) {
+        return orders != null
+                && !orders.isEmpty()
+                && orders.stream().allMatch(this::companyRoutingAllowed);
+    }
+
+    private ContractorPaymentRouteDecision ownerRequiredByCompany() {
+        return ContractorPaymentRouteDecision.owner(
+                ContractorRoutingDecisionReason.COMPANY_REQUIRES_OWNER_PAYMENT,
+                null,
+                null
+        );
     }
 
     private User user(Object subject) {

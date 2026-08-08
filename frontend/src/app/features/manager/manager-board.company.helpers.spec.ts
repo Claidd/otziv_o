@@ -36,6 +36,7 @@ function payload(overrides: Partial<CompanyEditPayload> = {}): CompanyEditPayloa
     active: true,
     publicationProgressReportsEnabled: true,
     allowWorkerPublicationDateEdit: false,
+    contractorPaymentRoutingEnabled: true,
     createDate: '',
     updateStatus: '',
     dateNewTry: '',
@@ -52,6 +53,7 @@ function payload(overrides: Partial<CompanyEditPayload> = {}): CompanyEditPayloa
     filials: [],
     cities: [],
     canChangeManager: true,
+    canChangeContractorPaymentRouting: true,
     ...overrides
   };
 }
@@ -84,6 +86,7 @@ describe('manager-board company helpers', () => {
       active: true,
       publicationProgressReportsEnabled: true,
       allowWorkerPublicationDateEdit: false,
+      contractorPaymentRoutingEnabled: true,
       newWorkerId: null,
       newFilialCityId: null,
       newFilialTitle: '',

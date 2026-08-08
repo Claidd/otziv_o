@@ -168,6 +168,14 @@ public class Company {
     @Column(name = "company_allow_worker_publication_date_edit", nullable = false)
     private boolean allowWorkerPublicationDateEdit = false;
 
+    /**
+     * When enabled, new client payment sources may be routed to a specialist
+     * or manager. When disabled, the owner remains the only recipient.
+     */
+    @Builder.Default
+    @Column(name = "company_contractor_payment_routing_enabled", nullable = false)
+    private boolean contractorPaymentRoutingEnabled = true;
+
     @Column(name = "company_last_payer_email", length = 320)
     @Email
     private String lastPayerEmail;

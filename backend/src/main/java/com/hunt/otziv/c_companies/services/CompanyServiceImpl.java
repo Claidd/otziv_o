@@ -138,6 +138,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .active(true)
                 .publicationProgressReportsEnabled(companyDTO.isPublicationProgressReportsEnabled())
                 .allowWorkerPublicationDateEdit(companyDTO.isAllowWorkerPublicationDateEdit())
+                .contractorPaymentRoutingEnabled(companyDTO.isContractorPaymentRoutingEnabled())
                 .commentsCompany(companyDTO.getCommentsCompany())
                 .counterNoPay(0)
                 .counterPay(0)
@@ -973,6 +974,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setMaxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company));
             companyDTO.setPublicationProgressReportsEnabled(company.isPublicationProgressReportsEnabled());
             companyDTO.setAllowWorkerPublicationDateEdit(company.isAllowWorkerPublicationDateEdit());
+            companyDTO.setContractorPaymentRoutingEnabled(company.isContractorPaymentRoutingEnabled());
             // Convert related entities to DTOs
             companyDTO.setUser(convertToUserDto(company.getUser()));
             companyDTO.setManager(convertToManagerDto(company.getManager()));
@@ -1185,6 +1187,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .maxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company))
                 .publicationProgressReportsEnabled(company.isPublicationProgressReportsEnabled())
                 .allowWorkerPublicationDateEdit(company.isAllowWorkerPublicationDateEdit())
+                .contractorPaymentRoutingEnabled(company.isContractorPaymentRoutingEnabled())
                 .build();
     }
 
@@ -1438,6 +1441,12 @@ public class CompanyServiceImpl implements CompanyService{
         if (!Objects.equals(companyDTO.isAllowWorkerPublicationDateEdit(), saveCompany.isAllowWorkerPublicationDateEdit())){
             log.info("Обновляем разрешение специалистам менять даты публикации");
             saveCompany.setAllowWorkerPublicationDateEdit(companyDTO.isAllowWorkerPublicationDateEdit());
+            isChanged = true;
+        }
+        if (companyDTO.getContractorPaymentRoutingEnabled() != null
+                && companyDTO.isContractorPaymentRoutingEnabled() != saveCompany.isContractorPaymentRoutingEnabled()) {
+            log.info("Обновляем режим распределения платежных ссылок компании");
+            saveCompany.setContractorPaymentRoutingEnabled(companyDTO.isContractorPaymentRoutingEnabled());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany())){ /*Проверка комментарий*/
@@ -1735,7 +1744,6 @@ public class CompanyServiceImpl implements CompanyService{
         if (companyInfoSame(currentInfo, updatedInfo)) {
             return false;
         }
-
         if (updatedInfo == null) {
             if (currentInfo != null) {
                 companyInfoRepository.delete(currentInfo);

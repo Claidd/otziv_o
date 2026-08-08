@@ -388,6 +388,7 @@ export interface CompanyEditPayload {
   active: boolean;
   publicationProgressReportsEnabled: boolean;
   allowWorkerPublicationDateEdit: boolean;
+  contractorPaymentRoutingEnabled: boolean;
   createDate: string;
   updateStatus: string;
   dateNewTry: string;
@@ -404,6 +405,7 @@ export interface CompanyEditPayload {
   filials: CompanyFilialEditItem[];
   cities: ManagerOption[];
   canChangeManager: boolean;
+  canChangeContractorPaymentRouting: boolean;
 }
 
 export interface CompanyUpdateRequest {
@@ -432,6 +434,7 @@ export interface CompanyUpdateRequest {
   active: boolean;
   publicationProgressReportsEnabled: boolean;
   allowWorkerPublicationDateEdit: boolean;
+  contractorPaymentRoutingEnabled: boolean;
   newWorkerId: number | null;
   newFilialCityId: number | null;
   newFilialTitle: string;

@@ -127,6 +127,13 @@ public class CompanyDTO {
 
     private boolean allowWorkerPublicationDateEdit;
 
+    /** Null means that a legacy update form did not submit this setting. */
+    private Boolean contractorPaymentRoutingEnabled;
+
+    public boolean isContractorPaymentRoutingEnabled() {
+        return !Boolean.FALSE.equals(contractorPaymentRoutingEnabled);
+    }
+
     private Set<CompanyContactDTO> contacts;
 
     private CompanyInfoDTO info;

@@ -11,6 +11,7 @@ import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
 public class ThematicStaffNotificationJob {
 
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Irkutsk");
+    private static final DateTimeFormatter MESSAGE_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
     private static final String ENABLED = "worker.thematic-notifications.enabled";
     private static final String MAX_PER_DAY = "worker.thematic-notifications.max-per-day";
@@ -216,10 +218,10 @@ public class ThematicStaffNotificationJob {
                     .map(progressByWorker::get)
                     .filter(ThematicStaffNotificationJob::eligibleProgress)
                     .toList();
-            if (progress.isEmpty() || progress.stream().allMatch(DailyWorkProgressResponse::reached100)) {
+            if (progress.isEmpty() || progress.stream().allMatch(ThematicStaffNotificationJob::currentlyAtGoal)) {
                 continue;
             }
-            long atGoal = progress.stream().filter(DailyWorkProgressResponse::reached100).count();
+            long atGoal = progress.stream().filter(ThematicStaffNotificationJob::currentlyAtGoal).count();
             int average = (int) Math.round(progress.stream()
                     .mapToInt(DailyWorkProgressResponse::percent)
                     .average()
@@ -231,6 +233,7 @@ public class ThematicStaffNotificationJob {
                     date,
                     maxPerDay,
                     "📊 <b>Промежуточный прогресс команды</b>\n\n"
+                            + "📅 Рабочий день: <b>" + MESSAGE_DATE_FORMATTER.format(date) + "</b>.\n"
                             + "Дневную цель выполнили: <b>" + atGoal + " из " + progress.size() + "</b>.\n"
                             + "Средний прогресс: <b>" + average + "%</b>.\n"
                             + "Жека подсказывает: сейчас ещё есть время помочь тем, кто отстаёт."
@@ -289,6 +292,10 @@ public class ThematicStaffNotificationJob {
 
     private static boolean eligibleProgress(DailyWorkProgressResponse progress) {
         return progress != null && progress.visible() && progress.total() > 0;
+    }
+
+    private static boolean currentlyAtGoal(DailyWorkProgressResponse progress) {
+        return eligibleProgress(progress) && progress.completed() >= progress.total();
     }
 
     private static boolean loginWasToday(User user, LocalDate date) {

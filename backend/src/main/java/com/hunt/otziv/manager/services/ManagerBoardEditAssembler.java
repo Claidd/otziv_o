@@ -129,6 +129,7 @@ public class ManagerBoardEditAssembler {
                 company.isActive(),
                 company.isPublicationProgressReportsEnabled(),
                 company.isAllowWorkerPublicationDateEdit(),
+                company.isContractorPaymentRoutingEnabled(),
                 dateValue(company.getCreateDate()),
                 dateValue(company.getUpdateStatus()),
                 dateValue(company.getDateNewTry()),
@@ -144,7 +145,8 @@ public class ManagerBoardEditAssembler {
                 currentWorkerOptions(company),
                 filialOptions(company),
                 cityOptions(),
-                managerPermissionService.hasRole(authentication, "ADMIN")
+                managerPermissionService.hasRole(authentication, "ADMIN"),
+                managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER")
         );
     }
 

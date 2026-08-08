@@ -153,6 +153,9 @@ public class CommonInvoice {
     @Column(name = "shadow_route_contractor_eligible", nullable = false)
     private boolean shadowRouteContractorEligible;
 
+    @Column(name = "shadow_route_company_routing_allowed", nullable = false)
+    private boolean shadowRouteCompanyRoutingAllowed = true;
+
     @Column(name = "shadow_route_prepared_at")
     private LocalDateTime shadowRoutePreparedAt;
 

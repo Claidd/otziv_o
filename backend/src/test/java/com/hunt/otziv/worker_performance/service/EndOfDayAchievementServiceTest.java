@@ -212,6 +212,38 @@ class EndOfDayAchievementServiceTest {
     }
 
     @Test
+    void sendsManagerAchievementWithWorkday() {
+        User user = User.builder().id(80L).telegramChatId(800L).build();
+        Manager manager = Manager.builder()
+                .id(8L)
+                .user(user)
+                .auditTelegramGroupChatId(-800L)
+                .build();
+        EndOfDayAchievementService.AchievementResult result = new EndOfDayAchievementService.AchievementResult(
+                DATE, EndOfDayAchievementService.ROLE_MANAGER, 8L,
+                4, 4, 100, 0, true, 1, false
+        );
+        when(notificationMediaDeliveryService.send(
+                anyString(), eq(-800L), eq(80L), anyString(), eq("HTML"), anyList()
+        )).thenReturn(true);
+
+        service.notifyManager(manager, result);
+
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(notificationMediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.MANAGER_TEAM_PROGRESS_GROWING.code()),
+                eq(-800L),
+                eq(80L),
+                text.capture(),
+                eq("HTML"),
+                eq(List.of())
+        );
+        assertTrue(text.getValue().contains("Команда закрыла день на 100%"));
+        assertTrue(text.getValue().contains("Рабочий день: <b>17.07.2026</b>"));
+        assertTrue(text.getValue().contains("4 из 4"));
+    }
+
+    @Test
     void sendsManagerTeamProgressReminderWhenTeamDidNotReachGoal() {
         User user = User.builder().id(80L).telegramChatId(800L).build();
         Manager manager = Manager.builder()
@@ -239,6 +271,7 @@ class EndOfDayAchievementServiceTest {
                 eq(List.of())
         );
         assertTrue(text.getValue().contains("Итоги общего прогресса команды"));
+        assertTrue(text.getValue().contains("Рабочий день: <b>17.07.2026</b>"));
         assertTrue(text.getValue().contains("3 из 5"));
         assertTrue(text.getValue().contains("72.5%"));
         assertTrue(text.getValue().contains("не закрыли обязательную нагрузку: <b>2</b>"));

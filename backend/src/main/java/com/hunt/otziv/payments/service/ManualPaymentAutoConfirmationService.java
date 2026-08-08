@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
@@ -11,11 +12,15 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ManualPaymentAutoConfirmationService {
@@ -46,6 +51,7 @@ public class ManualPaymentAutoConfirmationService {
     private final PaymentLinkRepository paymentLinkRepository;
     private final ManualPaymentTaskService manualPaymentTaskService;
     private final PaymentSuccessNotificationDeliveryService paymentSuccessNotificationDeliveryService;
+    private final ContractorPaymentShadowService contractorPaymentShadowService;
 
     @Transactional(readOnly = true)
     public void ensureCanCloseOrderManually(Order order) {
@@ -205,5 +211,43 @@ public class ManualPaymentAutoConfirmationService {
         paymentLinkRepository.save(link);
         manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
         paymentSuccessNotificationDeliveryService.deliverAfterCommit(link.getId());
+        reconcileContractorRouteAfterCommit(link.getId());
+    }
+
+    private void reconcileContractorRouteAfterCommit(Long paymentLinkId) {
+        if (paymentLinkId == null) {
+            return;
+        }
+        Runnable reconcile = () -> {
+            try {
+                contractorPaymentShadowService.reconcilePaymentLinkId(paymentLinkId);
+            } catch (RuntimeException exception) {
+                // The confirmed PaymentLink remains a durable retry source for
+                // ContractorShadowRouteBackfillService.
+                log.error(
+                        "Не удалось сразу сверить назначение оплаченной ссылки linkId={}, code={}",
+                        paymentLinkId,
+                        exception.getClass().getSimpleName()
+                );
+            }
+        };
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    reconcile.run();
+                }
+            });
+            return;
+        }
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            log.warn(
+                    "Пропущена немедленная сверка оплаченной ссылки без transaction synchronization linkId={}",
+                    paymentLinkId
+            );
+            return;
+        }
+        reconcile.run();
     }
 }

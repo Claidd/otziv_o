@@ -136,6 +136,32 @@ class ManagerBoardEditAssemblerTest {
 
         assertEquals(List.of(11L), response.workers().stream().map(OptionResponse::id).toList());
         assertEquals(List.of(12L), response.currentWorkers().stream().map(OptionResponse::id).toList());
+        assertTrue(response.contractorPaymentRoutingEnabled());
+        assertTrue(response.canChangeContractorPaymentRouting());
+    }
+
+    @Test
+    void managerCanSeeCompanyEditButCannotChangePaymentRoutingMode() {
+        User managerUser = new User();
+        managerUser.setId(40L);
+        Manager manager = new Manager();
+        manager.setId(41L);
+        manager.setUser(managerUser);
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(managerUser));
+        when(managerService.getManagerByUserId(40L)).thenReturn(manager);
+        CompanyDTO company = CompanyDTO.builder()
+                .id(4L)
+                .contractorPaymentRoutingEnabled(false)
+                .build();
+
+        var response = assembler.buildCompanyEditResponse(
+                company,
+                () -> "manager",
+                authentication("ROLE_MANAGER")
+        );
+
+        assertFalse(response.contractorPaymentRoutingEnabled());
+        assertFalse(response.canChangeContractorPaymentRouting());
     }
 
     @Test

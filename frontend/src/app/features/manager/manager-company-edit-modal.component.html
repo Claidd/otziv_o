@@ -401,6 +401,40 @@
                     (ngModelChange)="setField('allowWorkerPublicationDateEdit', $event)"
                   >
                 </label>
+
+                @if (company.canChangeContractorPaymentRouting) {
+                  <div class="company-payment-routing" role="group" aria-label="По счёту или по ссылке">
+                    <span class="company-payment-routing__copy">
+                      <strong>По счёту / по ссылке</strong>
+                      <small>
+                        «По счёту» всегда использует реквизиты владельца. «По ссылке» разрешает распределение
+                        платежа специалисту, затем менеджеру, если доступного остатка специалиста недостаточно.
+                      </small>
+                    </span>
+                    <div class="company-payment-routing__options">
+                      <button
+                        type="button"
+                        class="company-payment-routing__option"
+                        [class.active]="!draft.contractorPaymentRoutingEnabled"
+                        [attr.aria-pressed]="!draft.contractorPaymentRoutingEnabled"
+                        (click)="setField('contractorPaymentRoutingEnabled', false)"
+                      >
+                        <strong>По счёту</strong>
+                        <small>Только владельцу</small>
+                      </button>
+                      <button
+                        type="button"
+                        class="company-payment-routing__option"
+                        [class.active]="draft.contractorPaymentRoutingEnabled"
+                        [attr.aria-pressed]="draft.contractorPaymentRoutingEnabled"
+                        (click)="setField('contractorPaymentRoutingEnabled', true)"
+                      >
+                        <strong>По ссылке</strong>
+                        <small>Распределение включено</small>
+                      </button>
+                    </div>
+                  </div>
+                }
               </div>
             </section>
 

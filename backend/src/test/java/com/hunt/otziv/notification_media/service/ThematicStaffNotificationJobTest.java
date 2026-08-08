@@ -240,6 +240,43 @@ class ThematicStaffNotificationJobTest {
         );
     }
 
+    @Test
+    void managerSummaryUsesCurrentGoalStateAndShowsWorkday() {
+        LocalDate date = LocalDate.of(2026, 8, 8);
+        Worker reachedEarlier = worker(19L, 109L, null, date.atTime(9, 0));
+        Worker currentlyIncomplete = worker(20L, 110L, null, date.atTime(9, 0));
+        List<Worker> workers = List.of(reachedEarlier, currentlyIncomplete);
+        when(workerService.getAllWorkers()).thenReturn(workers);
+        when(progressService.workerProgressByWorkers(workers, date)).thenReturn(Map.of(
+                19L, progress(date, 8, 10, date.atTime(10, 0), true),
+                20L, progress(date, 3, 10, date.atTime(10, 0), false)
+        ));
+        when(dispatchStore.activePublicationCounts(List.of(19L, 20L), date)).thenReturn(Map.of());
+
+        User managerUser = User.builder()
+                .id(202L)
+                .username("manager-current")
+                .active(true)
+                .telegramChatId(-202L)
+                .workers(Set.of(reachedEarlier, currentlyIncomplete))
+                .build();
+        Manager manager = Manager.builder().id(22L).user(managerUser).build();
+        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(managerRepository.findAllManagersWorkers(List.of(manager))).thenReturn(List.of(manager));
+
+        job.dispatchAt(date.atTime(17, 0));
+
+        verify(mediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.MANAGER_TEAM_PROGRESS_SLOWED.code()),
+                eq(-202L),
+                eq(202L),
+                argThat(message -> message.contains("Рабочий день: <b>08.08.2026</b>")
+                        && message.contains("Дневную цель выполнили: <b>0 из 2</b>")),
+                eq("HTML"),
+                eq(List.of())
+        );
+    }
+
     private void prepare(Worker worker, DailyWorkProgressResponse progress) {
         when(workerService.getAllWorkers()).thenReturn(List.of(worker));
         when(progressService.workerProgressByWorkers(List.of(worker), progress.date()))
@@ -268,6 +305,16 @@ class ThematicStaffNotificationJobTest {
             long total,
             LocalDateTime firstActivityAt
     ) {
+        return progress(date, completed, total, firstActivityAt, total > 0 && completed >= total);
+    }
+
+    private DailyWorkProgressResponse progress(
+            LocalDate date,
+            long completed,
+            long total,
+            LocalDateTime firstActivityAt,
+            boolean reached100
+    ) {
         int percent = total <= 0 ? 0 : (int) Math.round(completed * 100.0 / total);
         DailyWorkProgressResponse base = new DailyWorkProgressResponse(
                 true,
@@ -295,7 +342,7 @@ class ThematicStaffNotificationJobTest {
                 completed,
                 total,
                 percent,
-                total > 0 && completed >= total,
+                reached100,
                 firstActivityAt,
                 firstActivityAt
         );

@@ -35,6 +35,7 @@ import org.springframework.http.HttpStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -58,7 +59,7 @@ public class PerformerProductRewardZpService {
     private final com.hunt.otziv.contractor_payments.service.ContractorPaymentBusinessClock businessClock;
     private final ContractorOrderManagerResolver orderManagerResolver;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int accrueForPaidOrder(Long orderId) {
         // Under the completion rollout the publication/payment coordinator
         // owns this source. Never create the legacy paid-only aggregate.

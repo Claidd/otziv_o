@@ -139,6 +139,9 @@ public class PaymentLink {
     @Column(name = "shadow_route_amount_kopecks")
     private Long shadowRouteAmountKopecks;
 
+    @Column(name = "shadow_route_company_routing_allowed", nullable = false)
+    private boolean shadowRouteCompanyRoutingAllowed = true;
+
     @Column(name = "shadow_route_prepared_at")
     private LocalDateTime shadowRoutePreparedAt;
 

@@ -155,6 +155,7 @@ public class ContractorPaymentShadowService {
                 ? null
                 : manager.getUser().getId());
         link.setShadowRouteAmountKopecks(Math.max(0L, link.getAmountKopecks()));
+        link.setShadowRouteCompanyRoutingAllowed(companyRoutingAllowed(order));
         link.setShadowRoutePreparedAt(firstNonNull(preparedAt, LocalDateTime.now()));
         return generation;
     }
@@ -232,6 +233,7 @@ public class ContractorPaymentShadowService {
         invoice.setShadowRouteAmountKopecks(amount);
         invoice.setShadowRouteMembershipHash(membershipHash);
         invoice.setShadowRouteContractorEligible(contractorEligible);
+        invoice.setShadowRouteCompanyRoutingAllowed(allCompaniesAllowContractorRouting(safeOrders));
         invoice.setShadowRoutePreparedAt(firstNonNull(preparedAt, LocalDateTime.now()));
         return generation;
     }
@@ -269,14 +271,19 @@ public class ContractorPaymentShadowService {
                 amount
         );
         allocation.setAttemptNo(nextAttempt(existing));
-        ContractorPaymentRouteDecision decision = preparedSnapshot
-                ? selectRoutableProfileByUserIds(
-                        link.getShadowRouteWorkerUserId(),
-                        link.getShadowRouteManagerUserId(),
-                        amount,
-                        null
-                )
-                : selectRoutableProfile(order.getWorker(), effectiveManager(order), amount, null);
+        boolean companyAllowsRouting = preparedSnapshot
+                ? link.isShadowRouteCompanyRoutingAllowed()
+                : companyRoutingAllowed(order);
+        ContractorPaymentRouteDecision decision = companyAllowsRouting
+                ? preparedSnapshot
+                        ? selectRoutableProfileByUserIds(
+                                link.getShadowRouteWorkerUserId(),
+                                link.getShadowRouteManagerUserId(),
+                                amount,
+                                null
+                        )
+                        : selectRoutableProfile(order.getWorker(), effectiveManager(order), amount, null)
+                : ownerRequiredByCompany();
         allocation.setSourceGenerationSnapshot(link.getShadowRouteGeneration());
         if (preparedSnapshot) {
             allocation.setCurrentWorkerId(link.getShadowRouteWorkerId());
@@ -424,12 +431,17 @@ public class ContractorPaymentShadowService {
         boolean contractorEligible = preparedSnapshot
                 ? invoice.isShadowRouteContractorEligible()
                 : commonInvoiceHasNoPriorPaymentEvidence(invoice);
+        boolean companyAllowsRouting = preparedSnapshot
+                ? invoice.isShadowRouteCompanyRoutingAllowed()
+                : allCompaniesAllowContractorRouting(safeOrders);
         ContractorRoutingDecisionReason specialistPrecondition = commonSpecialistRejection(
                 safeOrders,
                 allOrdersHaveWorker,
                 workers
         );
-        ContractorPaymentRouteDecision decision = contractorEligible
+        ContractorPaymentRouteDecision decision = !companyAllowsRouting
+                ? ownerRequiredByCompany()
+                : contractorEligible
                 ? preparedSnapshot
                         ? selectRoutableProfileByUserIds(
                                 invoice.getShadowRouteWorkerUserId(),
@@ -549,7 +561,7 @@ public class ContractorPaymentShadowService {
         return reserveForCommonInvoice(invoice, source.orders(), null, preparedAmount);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int releaseForUnpaidOrder(Long orderId, String reason) {
         if (orderId == null) {
             return 0;
@@ -598,7 +610,7 @@ public class ContractorPaymentShadowService {
         return releasedAllocations.size();
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int releaseForUnpaidCommonInvoice(Long invoiceId, String reason) {
         if (invoiceId == null) {
             return 0;
@@ -839,6 +851,44 @@ public class ContractorPaymentShadowService {
             applyLinkStatus(allocation, link, LocalDateTime.now());
             allocationRepository.save(allocation);
             if (status != allocation.getStatus() || version != allocation.getRowVersion()) {
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    /** Reconciles one common-invoice source immediately after its payment
+     * transaction commits. The periodic dispatcher remains the durable retry
+     * path if this best-effort fast path cannot complete. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int reconcileCommonInvoiceId(Long invoiceId) {
+        if (invoiceId == null) {
+            return 0;
+        }
+        List<ContractorPaymentAllocation> snapshots = new ArrayList<>();
+        List<ContractorAllocationMode> modes = shadowEnabled()
+                ? List.of(ContractorAllocationMode.SHADOW, ContractorAllocationMode.LIVE)
+                : List.of(ContractorAllocationMode.LIVE);
+        for (ContractorAllocationMode mode : modes) {
+            ContractorPaymentAllocation snapshot = latestAllocation(
+                    mode,
+                    ContractorAllocationSourceType.COMMON_INVOICE,
+                    invoiceId
+            ).orElse(null);
+            if (snapshot != null) {
+                snapshots.add(snapshot);
+            }
+        }
+        int updated = 0;
+        for (ContractorPaymentAllocation snapshot : snapshots.stream()
+                .sorted(Comparator.comparing(ContractorPaymentAllocation::getId))
+                .toList()) {
+            long previousVersion = snapshot.getRowVersion();
+            ContractorAllocationStatus previousStatus = snapshot.getStatus();
+            ContractorPaymentAllocation reconciled = reconcileOneAllocation(snapshot.getId());
+            if (reconciled != null
+                    && (previousStatus != reconciled.getStatus()
+                    || previousVersion != reconciled.getRowVersion())) {
                 updated++;
             }
         }
@@ -1706,6 +1756,26 @@ public class ContractorPaymentShadowService {
                 && normalize(invoice.getManualPaidBy()).isBlank()
                 && normalize(invoice.getManualPaymentComment()).isBlank()
                 && normalize(invoice.getManualPaymentReceiptUrl()).isBlank();
+    }
+
+    private boolean companyRoutingAllowed(Order order) {
+        return order != null
+                && order.getCompany() != null
+                && order.getCompany().isContractorPaymentRoutingEnabled();
+    }
+
+    private boolean allCompaniesAllowContractorRouting(Collection<Order> orders) {
+        return orders != null
+                && !orders.isEmpty()
+                && orders.stream().allMatch(this::companyRoutingAllowed);
+    }
+
+    private ContractorPaymentRouteDecision ownerRequiredByCompany() {
+        return ContractorPaymentRouteDecision.owner(
+                ContractorRoutingDecisionReason.COMPANY_REQUIRES_OWNER_PAYMENT,
+                null,
+                null
+        );
     }
 
     private String membershipHash(Collection<Order> orders) {

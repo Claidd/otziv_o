@@ -449,6 +449,72 @@
   line-height: 1.32;
 }
 
+.company-payment-routing {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid rgba(108, 155, 207, 0.28);
+  border-radius: var(--otziv-small-radius, 0.55rem);
+  padding: 0.78rem 0.82rem;
+  background: rgba(108, 155, 207, 0.055);
+}
+
+.company-payment-routing__copy strong,
+.company-payment-routing__copy small {
+  display: block;
+  white-space: normal;
+}
+
+.company-payment-routing__copy strong {
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.84rem;
+  font-weight: 950;
+}
+
+.company-payment-routing__copy small {
+  margin-top: 0.22rem;
+  color: var(--otziv-muted, #77808d);
+  font-size: 0.69rem;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.company-payment-routing__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.company-payment-routing__option {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+  border: 1px solid #dce3eb;
+  border-radius: 0.48rem;
+  padding: 0.62rem 0.72rem;
+  color: var(--otziv-text, #1f2430);
+  text-align: left;
+  background: var(--otziv-white, #fff);
+  cursor: pointer;
+}
+
+.company-payment-routing__option.active {
+  border-color: var(--otziv-primary, #6c9bcf);
+  background: rgba(108, 155, 207, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(108, 155, 207, 0.12);
+}
+
+.company-payment-routing__option strong {
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.company-payment-routing__option small {
+  color: var(--otziv-muted, #77808d);
+  font-size: 0.65rem;
+  font-weight: 760;
+}
+
 .company-billing-section {
   display: grid;
   gap: 0.75rem;
@@ -1022,7 +1088,9 @@
   }
 
   .company-billing-grid,
-  .company-billing-toggles {
+  .company-billing-toggles,
+  .company-switch-grid,
+  .company-payment-routing__options {
     grid-template-columns: 1fr;
   }
 }

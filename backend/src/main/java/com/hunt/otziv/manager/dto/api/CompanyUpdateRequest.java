@@ -26,6 +26,7 @@ public record CompanyUpdateRequest(
         Boolean active,
         Boolean publicationProgressReportsEnabled,
         Boolean allowWorkerPublicationDateEdit,
+        Boolean contractorPaymentRoutingEnabled,
         Long newWorkerId,
         Long newFilialCityId,
         String newFilialTitle,

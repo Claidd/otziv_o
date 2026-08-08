@@ -46,6 +46,7 @@ function company(overrides: Partial<CompanyEditPayload> = {}): CompanyEditPayloa
     active: true,
     publicationProgressReportsEnabled: true,
     allowWorkerPublicationDateEdit: false,
+    contractorPaymentRoutingEnabled: true,
     createDate: '2026-05-01',
     updateStatus: '2026-05-02',
     dateNewTry: '2026-05-03',
@@ -62,6 +63,7 @@ function company(overrides: Partial<CompanyEditPayload> = {}): CompanyEditPayloa
     filials: [filial(7)],
     cities: [option(8, 'City')],
     canChangeManager: true,
+    canChangeContractorPaymentRouting: true,
     ...overrides
   };
 }
@@ -93,6 +95,7 @@ function draft(overrides: Partial<CompanyUpdateRequest> = {}): CompanyUpdateRequ
     active: true,
     publicationProgressReportsEnabled: true,
     allowWorkerPublicationDateEdit: false,
+    contractorPaymentRoutingEnabled: true,
     newWorkerId: null,
     newFilialCityId: null,
     newFilialTitle: '',
@@ -128,8 +131,36 @@ describe('ManagerCompanyEditModalComponent', () => {
     expect(element.textContent).toContain('Сейчас включены');
     expect(element.textContent).toContain('нажмите «Сохранить»');
     expect(element.textContent).toContain('Разрешить специалистам изменять даты публикации');
+    expect(element.textContent).toContain('По счёту / по ссылке');
+    expect(element.querySelectorAll('.company-payment-routing__option.active')[0]?.textContent).toContain('По ссылке');
     expect(element.textContent).toContain('Worker 6');
     expect(element.textContent).toContain('City: Filial 7');
+  });
+
+  it('allows only authorized company editors to change payment routing', async () => {
+    const fixture = TestBed.createComponent(ManagerCompanyEditModalComponent);
+    const component = fixture.componentInstance;
+    component.company = company();
+    component.draft = draft();
+    let change: ManagerCompanyEditDraftChange | null = null;
+    component.draftChange.subscribe((value) => {
+      change = value;
+    });
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const accountPaymentButton = Array.from(
+      element.querySelectorAll<HTMLButtonElement>('.company-payment-routing__option')
+    ).find((button) => button.textContent?.includes('По счёту'));
+    accountPaymentButton?.click();
+
+    expect(change).toEqual({ field: 'contractorPaymentRoutingEnabled', value: false });
+
+    component.company = company({ canChangeContractorPaymentRouting: false });
+    fixture.detectChanges();
+    expect(element.querySelector('.company-payment-routing')).toBeNull();
   });
 
   it('clearly shows when publication alerts are disabled', async () => {

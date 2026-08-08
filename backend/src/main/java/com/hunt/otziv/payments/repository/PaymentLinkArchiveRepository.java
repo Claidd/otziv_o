@@ -51,6 +51,7 @@ public class PaymentLinkArchiveRepository {
             "shadow_route_manager_id",
             "shadow_route_manager_user_id",
             "shadow_route_amount_kopecks",
+            "shadow_route_company_routing_allowed",
             "shadow_route_prepared_at",
             "contractor_evidence_original_link_id",
             "payment_url",

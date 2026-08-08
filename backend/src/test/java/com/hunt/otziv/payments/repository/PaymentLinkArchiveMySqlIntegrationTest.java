@@ -399,6 +399,7 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                     shadow_route_manager_id BIGINT NULL,
                     shadow_route_manager_user_id BIGINT NULL,
                     shadow_route_amount_kopecks BIGINT NULL,
+                    shadow_route_company_routing_allowed BOOLEAN NOT NULL DEFAULT TRUE,
                     shadow_route_prepared_at DATETIME(6) NULL,
                     contractor_evidence_original_link_id BIGINT NULL,
                     receipt_status VARCHAR(32) NULL,

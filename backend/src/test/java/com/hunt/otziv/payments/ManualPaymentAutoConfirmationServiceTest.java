@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments;
 
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.model.ManualPaymentTask;
 import com.hunt.otziv.payments.model.PaymentLink;
@@ -40,6 +41,8 @@ class ManualPaymentAutoConfirmationServiceTest {
     private ManualPaymentTaskService manualPaymentTaskService;
     @Mock
     private PaymentSuccessNotificationDeliveryService paymentSuccessNotificationDeliveryService;
+    @Mock
+    private ContractorPaymentShadowService contractorPaymentShadowService;
 
     @Test
     void confirmsLatestManualPaymentLinkForPaidOrder() {
@@ -75,6 +78,7 @@ class ManualPaymentAutoConfirmationServiceTest {
         assertNull(saved.getLastError());
         verify(manualPaymentTaskService).completeIfConfirmedTargetReached(task);
         verify(paymentSuccessNotificationDeliveryService).deliverAfterCommit(420L);
+        verify(contractorPaymentShadowService).reconcilePaymentLinkId(420L);
     }
 
     @Test
@@ -433,7 +437,8 @@ class ManualPaymentAutoConfirmationServiceTest {
         return new ManualPaymentAutoConfirmationService(
                 paymentLinkRepository,
                 manualPaymentTaskService,
-                paymentSuccessNotificationDeliveryService
+                paymentSuccessNotificationDeliveryService,
+                contractorPaymentShadowService
         );
     }
 }

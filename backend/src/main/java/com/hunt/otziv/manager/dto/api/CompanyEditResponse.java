@@ -28,6 +28,7 @@ public record CompanyEditResponse(
         boolean active,
         boolean publicationProgressReportsEnabled,
         boolean allowWorkerPublicationDateEdit,
+        boolean contractorPaymentRoutingEnabled,
         String createDate,
         String updateStatus,
         String dateNewTry,
@@ -43,6 +44,7 @@ public record CompanyEditResponse(
         List<OptionResponse> currentWorkers,
         List<FilialResponse> filials,
         List<OptionResponse> cities,
-        boolean canChangeManager
+        boolean canChangeManager,
+        boolean canChangeContractorPaymentRouting
 ) {
 }

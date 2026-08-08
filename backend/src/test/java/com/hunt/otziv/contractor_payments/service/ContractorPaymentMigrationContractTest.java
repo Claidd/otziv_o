@@ -166,6 +166,23 @@ class ContractorPaymentMigrationContractTest {
                 .doesNotContain("DELETE FROM contractor_payment_rollout_state");
     }
 
+    @Test
+    void companyPaymentRoutingPolicyDefaultsExistingAndNewCompaniesToLinkRouting() throws IOException {
+        String migration = migration(
+                "/db/migration/V1_10_230__company_contractor_payment_routing_policy.sql"
+        );
+
+        assertThat(migration)
+                .contains("company_contractor_payment_routing_enabled BOOLEAN NOT NULL DEFAULT TRUE")
+                .contains("ALTER TABLE payment_links")
+                .contains("ALTER TABLE archive_payment_links")
+                .contains("ALTER TABLE common_invoices")
+                .contains("ALTER TABLE archive_common_invoices")
+                .contains("shadow_route_company_routing_allowed BOOLEAN NOT NULL DEFAULT TRUE")
+                .doesNotContain("UPDATE companies")
+                .doesNotContain("DEFAULT FALSE");
+    }
+
     private String migration(String resource) throws IOException {
         try (var stream = getClass().getResourceAsStream(resource)) {
             if (stream == null) {
