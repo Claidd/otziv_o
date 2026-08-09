@@ -12,6 +12,7 @@ import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import java.time.LocalDateTime;
@@ -179,13 +180,86 @@ class ClientChatMessageTrackerServiceTest {
     }
 
     @Test
+    void actionCompletedWithoutReplyEvidenceStaysOpenForManager() {
+        ClientChatUnansweredItem open = openItem("Когда отправите готовые тексты?");
+        when(unansweredRepository.findById(54L)).thenReturn(Optional.of(open));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markFromManagerControl(
+                        54L,
+                        ManagerDailyControlActionType.RESOLVED,
+                        "Я ответила",
+                        10L,
+                        false
+                )
+        );
+
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, error.getStatusCode());
+        assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+        assertFalse(open.isAuditRequired());
+        verify(unansweredRepository, never()).save(open);
+    }
+
+    @Test
+    void actionCompletedWithStaffReplyEvidenceClosesAsAnswered() {
+        ClientChatUnansweredItem open = openItem("Когда отправите готовые тексты?");
+        open.setPlatform(ClientChatPlatform.WHATSAPP);
+        open.setChatId("12001@g.us");
+        ClientChatMessage reply = new ClientChatMessage();
+        reply.setSenderRole(ClientChatSenderRole.STAFF);
+        reply.setMessageText("Отправим готовые тексты сегодня до 18:00");
+        reply.setMessageAt(LocalDateTime.now());
+        when(unansweredRepository.findById(59L)).thenReturn(Optional.of(open));
+        when(messageRepository.findFirstByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+                ClientChatPlatform.WHATSAPP,
+                "12001@g.us",
+                ClientChatSenderRole.STAFF,
+                open.getLastClientMessageAt()
+        )).thenReturn(Optional.of(reply));
+
+        service.markFromManagerControl(
+                59L,
+                ManagerDailyControlActionType.RESOLVED,
+                "Ответ проверен",
+                10L,
+                false
+        );
+
+        assertEquals(ClientChatUnansweredStatus.ANSWERED, open.getStatus());
+        assertSame(reply, open.getResolutionMessage());
+        assertFalse(open.isAuditRequired());
+        verify(unansweredRepository).save(open);
+    }
+
+    @Test
+    void administrativeActionWithoutReplyEvidenceAlwaysRequiresAudit() {
+        ClientChatUnansweredItem open = openItem("Клиент просит выполнить действие");
+        when(unansweredRepository.findById(60L)).thenReturn(Optional.of(open));
+
+        service.markFromManagerControl(
+                60L,
+                ManagerDailyControlActionType.RESOLVED,
+                "Проверено владельцем: ответ клиенту не требовался",
+                10L,
+                true
+        );
+
+        assertEquals(ClientChatUnansweredStatus.ACTION_COMPLETED, open.getStatus());
+        assertTrue(open.isManualOverride());
+        assertTrue(open.isAuditRequired());
+        assertEquals("ACTION_COMPLETED_WITHOUT_REPLY_EVIDENCE", open.getResolutionReasonCode());
+        assertEquals(
+                com.hunt.otziv.client_chat_control.model.ClientChatReplyQuality.SUSPICIOUS,
+                open.getReplyQuality()
+        );
+        verify(unansweredRepository).save(open);
+    }
+
+    @Test
     void questionCannotBeMarkedAsNoResponseNeeded() {
         ClientChatUnansweredItem open = openItem("Когда опубликуете отзывы?");
         when(unansweredRepository.findById(55L)).thenReturn(Optional.of(open));
-        when(appSettingService.getBoolean(
-                AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
-                true
-        )).thenReturn(true);
 
         assertThrows(
                 ResponseStatusException.class,
@@ -204,10 +278,6 @@ class ClientChatMessageTrackerServiceTest {
     void acknowledgementCanBeMarkedAsNoResponseNeeded() {
         ClientChatUnansweredItem open = openItem("Спасибо большое");
         when(unansweredRepository.findById(56L)).thenReturn(Optional.of(open));
-        when(appSettingService.getBoolean(
-                AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
-                true
-        )).thenReturn(true);
 
         service.markFromManagerControl(
                 56L,
@@ -218,6 +288,27 @@ class ClientChatMessageTrackerServiceTest {
         );
 
         assertEquals(ClientChatUnansweredStatus.NO_RESPONSE_NEEDED, open.getStatus());
+    }
+
+    @Test
+    void administrativeNoResponseOverrideRejectsGenericMobileComment() {
+        ClientChatUnansweredItem open = openItem("Когда опубликуете отзывы?");
+        when(unansweredRepository.findById(61L)).thenReturn(Optional.of(open));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markFromManagerControl(
+                        61L,
+                        ManagerDailyControlActionType.ACKNOWLEDGED,
+                        "Сообщение клиента не требует ответа.",
+                        10L,
+                        true
+                )
+        );
+
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, error.getStatusCode());
+        assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+        verify(unansweredRepository, never()).save(open);
     }
 
     @Test

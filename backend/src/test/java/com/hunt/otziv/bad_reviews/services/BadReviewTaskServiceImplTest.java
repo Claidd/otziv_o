@@ -38,6 +38,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
@@ -60,9 +61,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.InOrder;
 
 @ExtendWith(MockitoExtension.class)
 class BadReviewTaskServiceImplTest {
@@ -127,6 +130,12 @@ class BadReviewTaskServiceImplTest {
     @Mock
     private ContractorPaymentBusinessClock contractorPaymentBusinessClock;
 
+    @Mock
+    private BadReviewTaskTransactionRunner transactionRunner;
+
+    @Mock
+    private PaymentLinkService paymentLinkService;
+
     @InjectMocks
     private BadReviewTaskServiceImpl service;
 
@@ -144,6 +153,10 @@ class BadReviewTaskServiceImplTest {
         lenient().when(assignmentGuardService.lockIfEligible(any(), any()))
                 .thenAnswer(invocation -> Optional.of(invocation.getArgument(0)));
         lenient().when(contractorPaymentBusinessClock.today()).thenReturn(LocalDate.of(2026, 8, 7));
+        lenient().when(transactionRunner.required(any())).thenAnswer(invocation -> {
+            Supplier<?> work = invocation.getArgument(0);
+            return work.get();
+        });
     }
 
     @Test
@@ -931,6 +944,52 @@ class BadReviewTaskServiceImplTest {
         order.setCompany(company);
         order.setSum(BigDecimal.valueOf(1000));
         return order;
+    }
+
+    @Test
+    void completeTaskObservesPaymentBeforeStartingLockedMutation() {
+        Order order = order(22L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(52L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(paymentLinkServiceProvider.getIfAvailable()).thenReturn(paymentLinkService);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        service.completeTask(52L);
+
+        InOrder orderOfCalls = inOrder(paymentLinkService, transactionRunner);
+        orderOfCalls.verify(paymentLinkService).reconcileActiveLinkForOrder(22L);
+        orderOfCalls.verify(transactionRunner).required(any());
+        orderOfCalls.verify(paymentLinkService)
+                .retireOpenLinksBeforePayableChange(22L, "Выполненная дополнительная задача изменила сумму счета");
+    }
+
+    @Test
+    void cancelDoneTaskObservesPaymentBeforeStartingLockedMutation() {
+        Order order = order(23L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(53L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(paymentLinkServiceProvider.getIfAvailable()).thenReturn(paymentLinkService);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        service.cancelTask(53L);
+
+        InOrder orderOfCalls = inOrder(paymentLinkService, transactionRunner);
+        orderOfCalls.verify(paymentLinkService).reconcileActiveLinkForOrder(23L);
+        orderOfCalls.verify(transactionRunner).required(any());
+        orderOfCalls.verify(paymentLinkService)
+                .retireOpenLinksBeforePayableChange(23L, "Отмена выполненной дополнительной задачи изменила сумму счета");
     }
 
     private void stubPayableMutation(BadReviewTask task) {

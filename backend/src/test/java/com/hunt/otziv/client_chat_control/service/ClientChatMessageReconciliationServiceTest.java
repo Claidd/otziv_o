@@ -2,7 +2,9 @@ package com.hunt.otziv.client_chat_control.service;
 
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
 import com.hunt.otziv.client_chat_control.dto.ClientChatReconciliationResult;
+import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
+import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
@@ -22,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -69,7 +72,7 @@ class ClientChatMessageReconciliationServiceTest {
         ClientChatReconciliationResult result = service.reconcileOpenWhatsAppMessages(manager);
 
         ArgumentCaptor<ClientChatMessageCommand> command = ArgumentCaptor.forClass(ClientChatMessageCommand.class);
-        verify(trackerService).track(command.capture());
+        verify(trackerService).track(command.capture(), isNull());
         assertEquals("message-42", command.getValue().externalMessageId());
         assertEquals("Ответ сотрудника", command.getValue().messageText());
         assertEquals(1, result.requestedChats());
@@ -79,5 +82,75 @@ class ClientChatMessageReconciliationServiceTest {
         ArgumentCaptor<List<WhatsAppChatMessageCursor>> cursors = ArgumentCaptor.forClass(List.class);
         verify(whatsAppService).reconcileGroupMessages(eq("whatsapp_vika"), cursors.capture());
         assertEquals("120363000000000000@g.us", cursors.getValue().getFirst().groupId());
+    }
+
+    @Test
+    void restoresMissedOutgoingManualReplyAsStaffEvidence() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        manager.setClientId("whatsapp_vika");
+        ClientChatUnansweredItem open = new ClientChatUnansweredItem();
+        open.setChatId("120363000000000000@g.us");
+        open.setLastClientMessageAt(LocalDateTime.of(2026, 7, 27, 14, 0));
+        when(unansweredRepository.findByManagerAndPlatformAndStatus(
+                manager,
+                ClientChatPlatform.WHATSAPP,
+                ClientChatUnansweredStatus.OPEN
+        )).thenReturn(List.of(open), List.of());
+        when(whatsAppService.reconcileGroupMessages(eq("whatsapp_vika"), anyList()))
+                .thenReturn(List.of(new WhatsAppReconciledMessage(
+                        "whatsapp_vika",
+                        "120363000000000000@g.us",
+                        "Клиент",
+                        "79990000000@c.us",
+                        "",
+                        "manual-reply-1",
+                        1_785_136_200L,
+                        true,
+                        false,
+                        "Ответ менеджера"
+                )));
+
+        service.reconcileOpenWhatsAppMessages(manager);
+
+        ArgumentCaptor<ClientChatMessageCommand> command = ArgumentCaptor.forClass(ClientChatMessageCommand.class);
+        verify(trackerService).track(command.capture(), eq(ClientChatSenderRole.STAFF));
+        assertEquals(ClientChatDirection.OUTGOING, command.getValue().direction());
+        assertEquals("manual-reply-1", command.getValue().externalMessageId());
+    }
+
+    @Test
+    void keepsReconciledGatewayMessageClassifiedAsBot() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        manager.setClientId("whatsapp_vika");
+        ClientChatUnansweredItem open = new ClientChatUnansweredItem();
+        open.setChatId("120363000000000000@g.us");
+        open.setLastClientMessageAt(LocalDateTime.of(2026, 7, 27, 14, 0));
+        when(unansweredRepository.findByManagerAndPlatformAndStatus(
+                manager,
+                ClientChatPlatform.WHATSAPP,
+                ClientChatUnansweredStatus.OPEN
+        )).thenReturn(List.of(open), List.of(open));
+        when(whatsAppService.reconcileGroupMessages(eq("whatsapp_vika"), anyList()))
+                .thenReturn(List.of(new WhatsAppReconciledMessage(
+                        "whatsapp_vika",
+                        "120363000000000000@g.us",
+                        "Клиент",
+                        "79990000000@c.us",
+                        "",
+                        "bot-message-1",
+                        1_785_136_200L,
+                        true,
+                        true,
+                        "Опубликован новый отзыв"
+                )));
+
+        service.reconcileOpenWhatsAppMessages(manager);
+
+        verify(trackerService).track(
+                org.mockito.ArgumentMatchers.any(ClientChatMessageCommand.class),
+                eq(ClientChatSenderRole.BOT)
+        );
     }
 }

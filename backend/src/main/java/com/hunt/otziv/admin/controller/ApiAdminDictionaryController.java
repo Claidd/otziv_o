@@ -870,8 +870,7 @@ public class ApiAdminDictionaryController {
         );
         appSettingService.setBoolean(
                 AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
-                request.unansweredResolutionEnforcementEnabled() == null
-                        || request.unansweredResolutionEnforcementEnabled()
+                true
         );
         appSettingService.setBoolean(
                 AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_GUARD_ENABLED,
@@ -1393,10 +1392,7 @@ public class ApiAdminDictionaryController {
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_ENABLED, true),
-                appSettingService.getBoolean(
-                        AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
-                        true
-                ),
+                true,
                 appSettingService.getBoolean(
                         AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_GUARD_ENABLED,
                         false

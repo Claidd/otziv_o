@@ -388,6 +388,6 @@ export class MobileHeaderComponent {
 
   logout(): void {
     this.closeMenu();
-    void this.auth.logout();
+    void this.auth.logoutFrom('header_menu');
   }
 }

@@ -25,7 +25,13 @@ public class ManagerWorkerDailyProgressService {
     private final ManagerRepository managerRepository;
     private final StaffDailyProgressService progressService;
 
-    @Transactional(readOnly = true)
+    /*
+     * Historical progress reads reconcile the finalized workload projection
+     * before returning it. Keep this orchestration transaction write-capable:
+     * a read-only outer transaction would otherwise force the nested
+     * reconciliation UPDATE to fail and leave the returned history stale.
+     */
+    @Transactional
     public Map<Long, ManagerWorkerProgress> progressByManagerIds(
             Collection<Long> managerIds,
             LocalDate date

@@ -4,6 +4,7 @@ import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
 import com.hunt.otziv.client_chat_control.dto.ClientChatReconciliationResult;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
+import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
@@ -66,9 +67,13 @@ public class ClientChatMessageReconciliationService {
                         .thenComparing(WhatsAppReconciledMessage::messageId))
                 .toList();
         for (WhatsAppReconciledMessage message : messages) {
+            boolean fromMe = Boolean.TRUE.equals(message.fromMe());
+            ClientChatSenderRole senderRoleOverride = Boolean.TRUE.equals(message.systemGenerated())
+                    ? ClientChatSenderRole.BOT
+                    : fromMe ? ClientChatSenderRole.STAFF : null;
             trackerService.track(new ClientChatMessageCommand(
                     ClientChatPlatform.WHATSAPP,
-                    ClientChatDirection.INCOMING,
+                    fromMe ? ClientChatDirection.OUTGOING : ClientChatDirection.INCOMING,
                     message.groupId(),
                     message.groupName(),
                     message.messageId(),
@@ -76,7 +81,7 @@ public class ClientChatMessageReconciliationService {
                     message.fromName(),
                     message.message(),
                     messageAt(message.timestamp())
-            ));
+            ), senderRoleOverride);
         }
 
         int openAfter = openItems(manager).size();

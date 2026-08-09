@@ -558,10 +558,12 @@ import {
                             {{ workerRequestButtonLabel(card) }}
                           </button>
                         }
-                        <button type="button" class="success" (click)="markResolved(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
-                          <span class="material-icons-sharp">task_alt</span>
-                          Проверено
-                        </button>
+                        @if (!isUnanswered(card)) {
+                          <button type="button" class="success" (click)="markResolved(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
+                            <span class="material-icons-sharp">task_alt</span>
+                            Проверено
+                          </button>
+                        }
                         <button type="button" class="muted" (click)="defer(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
                           <span class="material-icons-sharp">schedule</span>
                           Отложить
@@ -583,6 +585,10 @@ import {
                           <button type="button" class="muted wide" (click)="markNoAnswerNeeded(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
                             <span class="material-icons-sharp">visibility_off</span>
                             Не требует ответа
+                          </button>
+                          <button type="button" class="muted wide" (click)="verifyReply(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
+                            <span class="material-icons-sharp">sync</span>
+                            Проверить ответ
                           </button>
                         </div>
                       } @else if (card.contactText) {
@@ -1583,6 +1589,28 @@ export class ManagerControlPage implements OnInit, OnDestroy {
       actionType: 'ACKNOWLEDGED',
       comment: this.commentText(card) || 'Сообщение клиента не требует ответа.'
     }, 'Сообщение отмечено как не требующее ответа.');
+  }
+
+  async verifyReply(card: ManagerControlConcreteItem): Promise<void> {
+    const id = card.controlEntityId;
+    const managerId = this.selectedManagerId();
+    if (!id || !managerId || this.mutatingId() === id) {
+      return;
+    }
+    this.mutatingId.set(id);
+    this.error.set(null);
+    try {
+      const result = await this.api.reconcileManagerControlClientMessages(managerId).toPromise();
+      this.notice.set(result && result.closedItems > 0
+        ? 'Ответ найден. Отвеченные карточки закрыты.'
+        : 'Ответ не найден. Карточка остаётся в замечаниях.');
+      await this.loadDetails(managerId);
+      await this.loadSummaryOnly();
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось проверить чат.'));
+    } finally {
+      this.mutatingId.set(null);
+    }
   }
 
   async sendClientMessage(card: ManagerControlConcreteItem): Promise<void> {

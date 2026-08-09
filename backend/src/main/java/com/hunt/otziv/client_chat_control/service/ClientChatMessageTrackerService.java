@@ -258,24 +258,11 @@ public class ClientChatMessageTrackerService {
                 return;
             }
             if (actionType == ManagerDailyControlActionType.RESOLVED) {
-                if (!hasText(comment)) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Опишите выполненное действие по сообщению клиента"
-                    );
-                }
-                close(
+                markActionCompletedWithEvidence(
                         item,
-                        ClientChatUnansweredStatus.ACTION_COMPLETED,
-                        "Действие по сообщению клиента выполнено",
-                        ClientChatResolutionType.ACTION_COMPLETED,
-                        null,
-                        "ACTION_CONFIRMED",
                         comment,
                         resolvedByUserId,
-                        false,
-                        ClientChatReplyQuality.NOT_APPLICABLE,
-                        "Карточка закрыта выполненным действием"
+                        administrativeOverride
                 );
                 return;
             }
@@ -697,15 +684,11 @@ public class ClientChatMessageTrackerService {
             boolean administrativeOverride
     ) {
         ClientChatResolutionPolicy.Assessment assessment = resolutionPolicy.assess(item.getLastMessageText());
-        boolean enforce = appSettingService.getBoolean(
-                AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
-                true
-        );
         boolean overrideUsed = !assessment.safeNoResponse() && administrativeOverride;
-        if (enforce && !assessment.safeNoResponse() && !overrideUsed) {
+        if (!assessment.safeNoResponse() && !overrideUsed) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Сообщение похоже на вопрос, проблему или поручение. Ответьте клиенту, выполните действие или отложите карточку"
+                    "Сообщение похоже на вопрос, проблему или поручение. Ответьте клиенту или отложите карточку"
             );
         }
         if (overrideUsed && !hasMeaningfulOverrideComment(comment)) {
@@ -735,20 +718,9 @@ public class ClientChatMessageTrackerService {
             Long resolvedByUserId,
             boolean administrativeOverride
     ) {
-        ClientChatMessage evidence = messageRepository
-                .findFirstByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
-                        item.getPlatform(),
-                        item.getChatId(),
-                        ClientChatSenderRole.STAFF,
-                        item.getLastClientMessageAt()
-                )
-                .orElse(null);
-        boolean enforce = appSettingService.getBoolean(
-                AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
-                true
-        );
+        ClientChatMessage evidence = staffReplyEvidence(item);
         boolean overrideUsed = evidence == null && administrativeOverride;
-        if (evidence == null && enforce && !overrideUsed) {
+        if (evidence == null && !overrideUsed) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Исходящий ответ после сообщения клиента не найден. Ответьте из карточки или откройте чат и дождитесь синхронизации"
@@ -777,6 +749,75 @@ public class ClientChatMessageTrackerService {
                 quality.quality(),
                 quality.reason()
         );
+    }
+
+    private void markActionCompletedWithEvidence(
+            ClientChatUnansweredItem item,
+            String comment,
+            Long resolvedByUserId,
+            boolean administrativeOverride
+    ) {
+        ClientChatMessage evidence = staffReplyEvidence(item);
+        if (evidence != null) {
+            ClientChatReplyQualityService.Result quality =
+                    quality(item.getLastMessageText(), evidence.getMessageText());
+            close(
+                    item,
+                    ClientChatUnansweredStatus.ANSWERED,
+                    "Ответ сотрудника найден",
+                    ClientChatResolutionType.ANSWERED,
+                    evidence,
+                    "OUTGOING_STAFF_MESSAGE",
+                    comment,
+                    resolvedByUserId,
+                    false,
+                    quality.quality(),
+                    quality.reason()
+            );
+            return;
+        }
+        if (!administrativeOverride) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Исходящий ответ после сообщения клиента не найден. Ответьте клиенту, нажмите «Проверить ответ» или отложите карточку"
+            );
+        }
+        if (!hasMeaningfulOverrideComment(comment)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Для административного закрытия без найденного ответа укажите конкретную причину"
+            );
+        }
+        close(
+                item,
+                ClientChatUnansweredStatus.ACTION_COMPLETED,
+                "Действие подтверждено администратором без ответа в чате",
+                ClientChatResolutionType.ACTION_COMPLETED,
+                null,
+                "ACTION_COMPLETED_WITHOUT_REPLY_EVIDENCE",
+                comment,
+                resolvedByUserId,
+                true,
+                ClientChatReplyQuality.SUSPICIOUS,
+                "Исходящий ответ после сообщения клиента не найден"
+        );
+    }
+
+    private ClientChatMessage staffReplyEvidence(ClientChatUnansweredItem item) {
+        if (item == null || item.getPlatform() == null || !hasText(item.getChatId())) {
+            return null;
+        }
+        LocalDateTime after = item.getLastClientMessageAt() == null
+                ? LocalDateTime.of(1970, 1, 1, 0, 0)
+                : item.getLastClientMessageAt();
+        return messageRepository
+                .findFirstByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+                        item.getPlatform(),
+                        item.getChatId(),
+                        ClientChatSenderRole.STAFF,
+                        after
+                )
+                .orElse(null);
     }
 
     private void assertResolutionRateAllowed(ClientChatUnansweredItem item, Long resolvedByUserId) {
@@ -835,9 +876,10 @@ public class ClientChatMessageTrackerService {
 
     private boolean hasMeaningfulOverrideComment(String comment) {
         String value = safe(comment);
-        return value.length() >= 10
-                && !"Ответ клиенту проверен вручную".equalsIgnoreCase(value)
-                && !"Сообщение клиента не требует ответа".equalsIgnoreCase(value);
+        String normalized = value.replaceFirst("[\\p{P}\\s]+$", "");
+        return normalized.length() >= 10
+                && !"Ответ клиенту проверен вручную".equalsIgnoreCase(normalized)
+                && !"Сообщение клиента не требует ответа".equalsIgnoreCase(normalized);
     }
 
     private static String safe(String value) {

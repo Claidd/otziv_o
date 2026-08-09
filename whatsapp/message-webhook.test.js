@@ -8,9 +8,11 @@ const path = require("node:path");
 const {
   DeliveredMessageCache,
   FileDeliveryIdempotencyStore,
+  MemoryDeliveryIdempotencyStore,
   RecentOutboundRegistry,
   createMessageHandler,
   deriveGroupId,
+  generatedOutboundKey,
   reconciliationPayloads,
   trackedBody,
 } = require("./message-webhook");
@@ -151,12 +153,15 @@ test("delivers media-only group messages with a stable placeholder", async () =>
   assert.equal(calls[0].payload.message, "[Вложение: ptt]");
 });
 
-test("reconciliation returns only incoming messages newer than the open-card cursor", () => {
-  const payloads = reconciliationPayloads({
+test("reconciliation returns incoming and outgoing messages with generated-message evidence", async () => {
+  const outboundRegistry = new RecentOutboundRegistry();
+  outboundRegistry.begin("120363000000000000@g.us", "Автоматическое сообщение");
+  const payloads = await reconciliationPayloads({
     clientId: "whatsapp_vika",
     groupId: "120363000000000000@g.us",
     groupName: "Клиент",
     afterTimestamp: 100,
+    outboundRegistry,
     messages: [
       {
         id: { _serialized: "old" },
@@ -178,17 +183,27 @@ test("reconciliation returns only incoming messages newer than the open-card cur
         body: "Ответ сотрудника",
         fromMe: false,
       },
+      {
+        id: { _serialized: "manual" },
+        timestamp: 130,
+        body: "Ручной ответ менеджера",
+        fromMe: true,
+      },
     ],
   });
 
-  assert.equal(payloads.length, 1);
-  assert.equal(payloads[0].messageId, "reply");
-  assert.equal(payloads[0].message, "Ответ сотрудника");
-  assert.equal(payloads[0].fromMe, false);
+  assert.equal(payloads.length, 3);
+  assert.equal(payloads[0].messageId, "bot");
+  assert.equal(payloads[0].systemGenerated, true);
+  assert.equal(payloads[1].messageId, "reply");
+  assert.equal(payloads[1].fromMe, false);
+  assert.equal(payloads[2].messageId, "manual");
+  assert.equal(payloads[2].fromMe, true);
+  assert.equal(payloads[2].systemGenerated, false);
 });
 
-test("reconciliation normalizes timestamps and removes duplicate message ids", () => {
-  const payloads = reconciliationPayloads({
+test("reconciliation normalizes timestamps and removes duplicate message ids", async () => {
+  const payloads = await reconciliationPayloads({
     clientId: "whatsapp_vika",
     groupId: "120363000000000000@g.us",
     groupName: " Клиент ",
@@ -204,4 +219,26 @@ test("reconciliation normalizes timestamps and removes duplicate message ids", (
   assert.equal(payloads[0].messageId, "same");
   assert.equal(payloads[0].timestamp, 101);
   assert.equal(payloads[0].groupName, "Клиент");
+});
+
+test("reconciliation preserves generated-message identity after the recent registry expires", async () => {
+  const generatedMessageStore = new MemoryDeliveryIdempotencyStore(() => 1_000);
+  await generatedMessageStore.mark(generatedOutboundKey("durable-bot"), 60_000);
+
+  const payloads = await reconciliationPayloads({
+    clientId: "whatsapp_vika",
+    groupId: "120363000000000000@g.us",
+    groupName: "Клиент",
+    afterTimestamp: 100,
+    generatedMessageStore,
+    messages: [{
+      id: { _serialized: "durable-bot" },
+      timestamp: 101,
+      body: "Автоматический отчёт",
+      fromMe: true,
+    }],
+  });
+
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].systemGenerated, true);
 });

@@ -776,7 +776,11 @@ public class ApiWorkerBoardController {
                     SECTION_BAD,
                     "botId=" + valueOrDash(botId(task)) + ";"
             );
+        } catch (ResponseStatusException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
+            log.warn("Плохая задача не выполнена: taskId={}, user={}",
+                    taskId, authentication == null ? null : authentication.getName(), exception);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Плохая задача не выполнена", exception);
         }
     }
@@ -925,7 +929,11 @@ public class ApiWorkerBoardController {
                     SECTION_RECOVERY,
                     "botId=" + valueOrDash(botId(task)) + ";"
             );
+        } catch (ResponseStatusException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
+            log.warn("Задача восстановления не выполнена: taskId={}, user={}",
+                    taskId, authentication == null ? null : authentication.getName(), exception);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Задача восстановления не выполнена", exception);
         }
     }

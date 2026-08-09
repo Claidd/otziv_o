@@ -2173,10 +2173,9 @@
                       <input type="number" min="1" max="500" step="1" formControlName="unansweredAutoIgnoreMaxLength">
                     </label>
 
-                    <label class="checkbox" appTooltip="Запрещает закрывать вопросы, жалобы и поручения кнопкой «Не требует ответа», а «Отвечено» требует найденного исходящего сообщения.">
-                      <input class="switch" type="checkbox" formControlName="unansweredResolutionEnforcementEnabled">
-                      <span>Требовать доказательство ответа</span>
-                    </label>
+                    <div class="checkbox" appTooltip="Вопросы, жалобы и поручения нельзя закрыть без найденного исходящего ответа. Административное исключение всегда попадает в аудит владельца.">
+                      <span>Доказательство ответа обязательно</span>
+                    </div>
 
                     <label class="checkbox" appTooltip="После серии слишком быстрых закрытий временно останавливает дальнейшее прокликивание карточек. Включайте после проверки теневой статистики.">
                       <input class="switch" type="checkbox" formControlName="unansweredFastClickGuardEnabled">

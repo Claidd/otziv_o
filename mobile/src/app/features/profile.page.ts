@@ -114,6 +114,6 @@ export class ProfilePage implements OnInit {
   }
 
   logout(): void {
-    void this.auth.logout();
+    void this.auth.logoutFrom('profile');
   }
 }

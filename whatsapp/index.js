@@ -10,6 +10,7 @@ const {
   FileDeliveryIdempotencyStore,
   RecentOutboundRegistry,
   createMessageHandler,
+  generatedOutboundKey,
   reconciliationPayloads,
 } = require("./message-webhook");
 const {
@@ -55,6 +56,10 @@ const WHATSAPP_WEBHOOK_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_WEBHOO
 const WHATSAPP_WEBHOOK_RETRY_DELAY_MS = parsePositiveInt(process.env.WHATSAPP_WEBHOOK_RETRY_DELAY_MS, 500);
 const WHATSAPP_MESSAGE_DEDUP_TTL_MS = parsePositiveInt(process.env.WHATSAPP_MESSAGE_DEDUP_TTL_MS, 86400000);
 const WHATSAPP_OUTBOUND_MARK_TTL_MS = parsePositiveInt(process.env.WHATSAPP_OUTBOUND_MARK_TTL_MS, 600000);
+const WHATSAPP_OUTBOUND_DURABLE_TTL_MS = parsePositiveInt(
+  process.env.WHATSAPP_OUTBOUND_DURABLE_TTL_MS,
+  2592000000
+);
 const WHATSAPP_HTTP_BODY_LIMIT = boundedBodyBytes(process.env.WHATSAPP_HTTP_BODY_LIMIT);
 const WHATSAPP_HTTP_MAX_CONCURRENCY = parsePositiveInt(process.env.WHATSAPP_HTTP_MAX_CONCURRENCY, 16);
 const WHATSAPP_MAX_MESSAGE_CHARS = Math.min(
@@ -877,7 +882,21 @@ app.post("/send-group", asyncRoute(async (req, res) => {
   let sent;
   try {
     sent = await client.sendMessage(groupId, message);
-    outboundRegistry.complete(outboundToken, sent && sent.id ? sent.id._serialized : null);
+    const sentMessageId = sent && sent.id ? sent.id._serialized : null;
+    outboundRegistry.complete(outboundToken, sentMessageId);
+    if (sentMessageId) {
+      try {
+        await deliveryIdempotencyStore.mark(
+          generatedOutboundKey(sentMessageId),
+          Date.now() + WHATSAPP_OUTBOUND_DURABLE_TTL_MS
+        );
+      } catch (error) {
+        log("warn", "Generated outbound identity persistence failed", {
+          messageId: sentMessageId,
+          error: errorMessage(error),
+        });
+      }
+    }
   } catch (error) {
     outboundRegistry.cancel(outboundToken);
     throw error;
@@ -968,7 +987,7 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
           }
           return {
             groupName: chat.name || "",
-            messages: await chat.fetchMessages({ limit: 100, fromMe: false }),
+            messages: await chat.fetchMessages({ limit: 100 }),
           };
         },
         WHATSAPP_GROUPS_TIMEOUT_MS,
@@ -980,6 +999,8 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
         groupName: direct.groupName,
         afterTimestamp,
         messages: direct.messages,
+        outboundRegistry,
+        generatedMessageStore: deliveryIdempotencyStore,
       });
     } catch (primaryError) {
       try {
@@ -1009,6 +1030,8 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
           groupName: raw.groupName || cachedGroup && cachedGroup.name || "",
           afterTimestamp,
           messages: raw.messages,
+          outboundRegistry,
+          generatedMessageStore: deliveryIdempotencyStore,
         });
       } catch (fallbackError) {
         log("warn", "WhatsApp message reconciliation skipped for group", {

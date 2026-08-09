@@ -1526,14 +1526,36 @@ export class ManagerControlComponent implements OnInit {
     });
   }
 
-  completeUnansweredAction(example: ManagerControlConcreteItem): void {
+  verifyUnansweredReply(example: ManagerControlConcreteItem): void {
     const itemId = example.controlEntityId;
-    const comment = itemId ? this.detailConcreteComment(itemId).trim() : '';
-    if (!comment) {
-      this.toast.error('Опишите результат', 'Укажите, что именно сделано по просьбе клиента');
+    const detail = this.detail();
+    if (!itemId || !detail || this.isConcreteUpdating(itemId)) {
       return;
     }
-    this.markConcreteItem(example, 'RESOLVED', { comment });
+    this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
+    this.api.reconcileClientMessages(detail.managerId).subscribe({
+      next: (result) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        if (result.closedItems > 0) {
+          this.toast.success('Ответ найден', 'Чат синхронизирован, отвеченные карточки закрыты');
+        } else {
+          this.toast.info('Ответ не найден', 'Карточка остаётся в замечаниях до реального ответа клиенту');
+        }
+        this.refreshDetailsAfterReconciliation(detail.managerId);
+      },
+      error: (err) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        this.toast.error('Не удалось проверить чат', apiErrorMessage(err, 'Повторите проверку позже'));
+      }
+    });
   }
 
   markUnansweredAsStaffMessage(example: ManagerControlConcreteItem): void {

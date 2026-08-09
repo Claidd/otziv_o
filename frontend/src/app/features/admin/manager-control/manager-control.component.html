@@ -1399,12 +1399,12 @@
                               <button
                                 type="button"
                                 class="review-action secondary-action"
-                                (click)="completeUnansweredAction(example)"
+                                (click)="verifyUnansweredReply(example)"
                                 [disabled]="isConcreteUpdating(example.controlEntityId)"
-                                title="Закрыть после выполненного действия; результат укажите в комментарии"
+                                title="Повторно проверить чат и закрыть карточку только при найденном ответе сотрудника"
                               >
-                                <span class="material-icons-sharp">assignment_turned_in</span>
-                                Действие выполнено
+                                <span class="material-icons-sharp">sync</span>
+                                Проверить ответ
                               </button>
                               <button
                                 type="button"

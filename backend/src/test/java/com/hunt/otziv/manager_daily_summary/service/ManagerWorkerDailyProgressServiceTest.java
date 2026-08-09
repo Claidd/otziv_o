@@ -1,6 +1,8 @@
 package com.hunt.otziv.manager_daily_summary.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
 class ManagerWorkerDailyProgressServiceTest {
@@ -34,11 +37,11 @@ class ManagerWorkerDailyProgressServiceTest {
     @BeforeEach
     void setUp() {
         service = new ManagerWorkerDailyProgressService(managerRepository, progressService);
-        when(progressService.progressEnabled()).thenReturn(true);
     }
 
     @Test
     void returnsCurrentAndPreviousProgressForWorkersAssignedToManager() {
+        when(progressService.progressEnabled()).thenReturn(true);
         Worker worker = Worker.builder()
                 .id(50L)
                 .user(User.builder().id(500L).fio("Мария С.").username("maria").build())
@@ -68,6 +71,17 @@ class ManagerWorkerDailyProgressServiceTest {
         assertEquals(75, result.progressBar().percent());
         assertEquals("Мария С.", result.workers().getFirst().workerName());
         assertEquals(50, result.workers().getFirst().previous().percent());
+    }
+
+    @Test
+    void usesWriteCapableTransactionForFinalizedProjectionReconciliation()
+            throws NoSuchMethodException {
+        Transactional transaction = ManagerWorkerDailyProgressService.class
+                .getMethod("progressByManagerIds", java.util.Collection.class, LocalDate.class)
+                .getAnnotation(Transactional.class);
+
+        assertNotNull(transaction);
+        assertFalse(transaction.readOnly());
     }
 
     private DailyWorkProgressResponse progress(

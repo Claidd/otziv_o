@@ -37,6 +37,10 @@ function outboundFingerprint(groupId, body) {
   return `${String(groupId || "").trim()}\n${String(body || "").trim()}`;
 }
 
+function generatedOutboundKey(externalMessageId) {
+  return `generated-outbound:${String(externalMessageId || "").trim()}`;
+}
+
 function trackedBody(message) {
   const body = String(message && message.body || "").trim();
   if (body) {
@@ -425,39 +429,58 @@ function createMessageHandler({ clientId, postWebhook, outboundRegistry, log }) 
   };
 }
 
-function reconciliationPayloads({
+async function reconciliationPayloads({
   clientId,
   groupId,
   groupName,
   afterTimestamp,
   messages,
+  outboundRegistry,
+  generatedMessageStore,
 }) {
   const cutoffValue = Number(afterTimestamp);
   const cutoff = Number.isFinite(cutoffValue) ? Math.max(0, Math.floor(cutoffValue)) : 0;
   const seen = new Set();
-  return (Array.isArray(messages) ? messages : [])
+  const candidates = (Array.isArray(messages) ? messages : [])
     .filter((message) => {
       const id = messageId(message);
       const timestamp = Number(message && message.timestamp);
-      if (!message || message.fromMe || !id || seen.has(id) || !Number.isFinite(timestamp) || timestamp <= cutoff) {
+      if (!message || !id || seen.has(id) || !Number.isFinite(timestamp) || timestamp <= cutoff) {
         return false;
       }
       seen.add(id);
       return true;
-    })
-    .map((message) => ({
+    });
+  const payloads = [];
+  for (const message of candidates) {
+    const body = trackedBody(message);
+    const externalMessageId = messageId(message) || null;
+    const fromMe = Boolean(message.fromMe);
+    const recentGenerated = fromMe
+      && outboundRegistry instanceof RecentOutboundRegistry
+      && outboundRegistry.matches(groupId, body, externalMessageId);
+    const durableGenerated = fromMe
+      && !recentGenerated
+      && generatedMessageStore
+      && typeof generatedMessageStore.has === "function"
+      && await generatedMessageStore.has(generatedOutboundKey(externalMessageId));
+    const payload = {
       clientId,
       groupId,
       groupName: String(groupName || "").trim().slice(0, 256),
       from: serializedId(message.author) || serializedId(message.from),
       fromName: String(message._data && message._data.notifyName || "").trim(),
-      messageId: messageId(message) || null,
+      messageId: externalMessageId,
       timestamp: Math.floor(Number(message.timestamp)),
-      fromMe: false,
-      systemGenerated: false,
-      message: trackedBody(message),
-    }))
-    .filter((payload) => payload.message && payload.messageId);
+      fromMe,
+      systemGenerated: Boolean(recentGenerated || durableGenerated),
+      message: body,
+    };
+    if (payload.message && payload.messageId) {
+      payloads.push(payload);
+    }
+  }
+  return payloads;
 }
 
 module.exports = {
@@ -468,6 +491,7 @@ module.exports = {
   createMessageHandler,
   deriveGroupId,
   groupMetadata,
+  generatedOutboundKey,
   messageId,
   outboundFingerprint,
   reconciliationPayloads,

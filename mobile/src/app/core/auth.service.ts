@@ -6,8 +6,11 @@ import { Browser } from '@capacitor/browser';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { mobileEnvironment, webRedirectUri } from './mobile-environment';
 import type { AuthStatus, AuthUser, StoredTokens, TokenEndpointResponse } from './auth.models';
+import { MobileAuthDiagnosticsService, type MobileAuthDiagnosticValue } from './mobile-auth-diagnostics.service';
 import { MobileAuthStorageService } from './mobile-auth-storage.service';
 import { MobilePushService } from './mobile-push.service';
+
+export type MobileLogoutSource = 'home_actions' | 'header_menu' | 'profile' | 'unknown';
 
 class TokenEndpointHttpError extends Error {
   constructor(readonly statusCode: number) {
@@ -42,14 +45,18 @@ export class AuthService {
     }
 
     this.initialized = true;
+    this.diagnostics().initialize();
+    void this.recordAuthDiagnostic('auth.init_started');
     await this.registerNativeDeepLinks().catch(() => undefined);
 
     const stored = await this.storage.readTokens().catch(async () => {
+      await this.recordAuthDiagnostic('auth.storage_read_failed');
       await this.storage.clearTokens().catch(() => undefined);
       this.error.set('Сессия была повреждена и очищена. Войдите заново.');
       return null;
     });
     if (!stored) {
+      void this.recordAuthDiagnostic('auth.no_stored_session');
       this.clearState('anonymous');
       return;
     }
@@ -58,20 +65,24 @@ export class AuthService {
       this.tokens.set(stored);
       this.syncUser(stored.accessToken);
     } catch {
-      await this.clearSession('anonymous').catch(() => this.clearState('anonymous'));
+      await this.recordAuthDiagnostic('auth.stored_session_invalid');
+      await this.clearSession('anonymous', 'stored_session_invalid').catch(() => this.clearState('anonymous'));
       this.error.set('Сессия была повреждена и очищена. Войдите заново.');
       return;
     }
 
     if (this.isTokenFresh(stored, 45)) {
       this.status.set('authenticated');
+      void this.recordAuthDiagnostic('auth.session_restored', this.tokenDiagnosticDetails(stored));
       this.scheduleRefresh();
+      void this.flushDiagnostics(stored.accessToken);
       return;
     }
 
+    void this.recordAuthDiagnostic('auth.init_refresh_required', this.tokenDiagnosticDetails(stored));
     const refreshed = await this.refreshTokens();
     if (!refreshed) {
-      await this.clearSession('anonymous');
+      await this.clearSession('anonymous', 'init_refresh_unavailable');
     }
   }
 
@@ -108,6 +119,8 @@ export class AuthService {
     const redirectUri = this.isNative ? mobileEnvironment.keycloak.nativeRedirectUri : webRedirectUri();
     const state = this.randomUrlSafeString(32);
     const codeVerifier = this.randomUrlSafeString(64);
+
+    void this.recordAuthDiagnostic('auth.login_started', { target: targetUrl });
     const codeChallenge = await this.codeChallenge(codeVerifier);
 
     await this.storage.writePendingLogin({
@@ -116,6 +129,7 @@ export class AuthService {
       targetUrl,
       redirectUri
     });
+    void this.recordAuthDiagnostic('auth.pending_login_saved');
 
     const authUrl = new URL(`${this.issuerUrl()}/protocol/openid-connect/auth`, window.location.origin);
     authUrl.searchParams.set('client_id', mobileEnvironment.keycloak.clientId);
@@ -140,7 +154,13 @@ export class AuthService {
     try {
       const url = new URL(callbackUrl);
       const error = url.searchParams.get('error');
+      void this.recordAuthDiagnostic('auth.callback_received', {
+        hasCode: url.searchParams.has('code'),
+        hasState: url.searchParams.has('state'),
+        hasError: Boolean(error)
+      });
       if (error) {
+        void this.recordAuthDiagnostic('auth.callback_oidc_error', { oidcError: error });
         await this.storage.clearPendingLogin();
         this.error.set(url.searchParams.get('error_description') ?? error);
         this.status.set('error');
@@ -153,6 +173,12 @@ export class AuthService {
       const pending = await this.storage.readPendingLogin();
 
       if (!code || !state || !pending || state !== pending.state) {
+        void this.recordAuthDiagnostic('auth.callback_rejected', {
+          hasCode: Boolean(code),
+          hasState: Boolean(state),
+          hasPendingLogin: Boolean(pending),
+          stateMatched: Boolean(state && pending && state === pending.state)
+        });
         await this.storage.clearPendingLogin();
         this.error.set('Не удалось подтвердить ответ Keycloak.');
         this.status.set('error');
@@ -160,6 +186,7 @@ export class AuthService {
         return;
       }
 
+      void this.recordAuthDiagnostic('auth.code_exchange_started');
       const response = await this.requestToken({
         grant_type: 'authorization_code',
         client_id: mobileEnvironment.keycloak.clientId,
@@ -169,13 +196,19 @@ export class AuthService {
       });
 
       await this.acceptTokens(response);
+      await this.recordAuthDiagnostic('auth.login_succeeded');
+      const acceptedAccessToken = this.tokens()?.accessToken;
+      if (acceptedAccessToken) {
+        void this.flushDiagnostics(acceptedAccessToken);
+      }
       await this.storage.clearPendingLogin();
       await Browser.close().catch(() => undefined);
       await this.router.navigateByUrl(pending.targetUrl || '/tabs/home', { replaceUrl: true });
     } catch (error: unknown) {
+      void this.recordAuthDiagnostic('auth.login_failed', this.errorDiagnosticDetails(error));
       await Browser.close().catch(() => undefined);
       await this.storage.clearPendingLogin().catch(() => undefined);
-      await this.clearSession('error').catch(() => this.clearState('error'));
+      await this.clearSession('error', 'login_callback_failed').catch(() => this.clearState('error'));
       this.error.set(this.errorMessage(error));
       await this.router.navigateByUrl('/login', { replaceUrl: true });
     }
@@ -206,6 +239,10 @@ export class AuthService {
   async refreshTokens(): Promise<boolean> {
     const tokens = this.tokens();
     if (!tokens?.refreshToken || this.isRefreshExpired(tokens)) {
+      void this.recordAuthDiagnostic('auth.refresh_unavailable', {
+        hasRefreshToken: Boolean(tokens?.refreshToken),
+        refreshExpired: Boolean(tokens && this.isRefreshExpired(tokens))
+      });
       return false;
     }
 
@@ -215,6 +252,7 @@ export class AuthService {
 
     const refreshGeneration = this.sessionGeneration;
     this.status.set('refreshing');
+    void this.recordAuthDiagnostic('auth.refresh_started', this.tokenDiagnosticDetails(tokens));
     this.refreshPromise = this.requestToken({
       grant_type: 'refresh_token',
       client_id: mobileEnvironment.keycloak.clientId,
@@ -225,6 +263,11 @@ export class AuthService {
           return false;
         }
         await this.acceptTokens(response, tokens.refreshToken);
+        await this.recordAuthDiagnostic('auth.refresh_succeeded');
+        const refreshedAccessToken = this.tokens()?.accessToken;
+        if (refreshedAccessToken) {
+          void this.flushDiagnostics(refreshedAccessToken);
+        }
         return true;
       })
       .catch(async (error: unknown) => {
@@ -232,12 +275,14 @@ export class AuthService {
           return false;
         }
         if (!this.isTerminalRefreshError(error)) {
+          void this.recordAuthDiagnostic('auth.refresh_transient_failure', this.errorDiagnosticDetails(error));
           this.status.set('authenticated');
           this.error.set('Не удалось обновить сессию. Проверьте соединение, приложение повторит попытку автоматически.');
           this.scheduleRefresh();
           return true;
         }
-        await this.clearSession('anonymous');
+        await this.recordAuthDiagnostic('auth.refresh_terminal_failure', this.errorDiagnosticDetails(error));
+        await this.clearSession('anonymous', 'refresh_terminal_failure');
         this.error.set(this.errorMessage(error));
         return false;
       })
@@ -249,6 +294,18 @@ export class AuthService {
   }
 
   async logout(): Promise<void> {
+    return this.logoutFrom('unknown');
+  }
+
+  async logoutFrom(source: MobileLogoutSource): Promise<void> {
+    const accessToken = this.tokens()?.accessToken;
+    await this.recordAuthDiagnostic('auth.logout_requested', {
+      source,
+      account: this.user()?.preferredUsername ?? 'unknown'
+    });
+    if (accessToken) {
+      void this.flushDiagnostics(accessToken);
+    }
     const idToken = this.tokens()?.idToken;
     this.sessionGeneration += 1;
     if (this.refreshTimerId) {
@@ -257,6 +314,7 @@ export class AuthService {
     }
     await this.revokeCurrentPushTokenBestEffort();
     await this.clearSession('anonymous');
+    void this.recordAuthDiagnostic('auth.logout_local_session_cleared', { source });
     await this.storage.clearPendingLogin().catch(() => undefined);
 
     const logoutUrl = new URL(`${this.issuerUrl()}/protocol/openid-connect/logout`, window.location.origin);
@@ -284,6 +342,7 @@ export class AuthService {
   }
 
   async handleUnauthorized(tryRefresh = true): Promise<void> {
+    void this.recordAuthDiagnostic('auth.unauthorized_handled', { tryRefresh });
     if (tryRefresh) {
       const refreshed = await this.refreshTokens();
       if (refreshed) {
@@ -291,7 +350,7 @@ export class AuthService {
       }
     }
 
-    await this.clearSession('anonymous');
+    await this.clearSession('anonymous', 'api_unauthorized');
     await this.router.navigateByUrl('/login', { replaceUrl: true });
   }
 
@@ -314,6 +373,18 @@ export class AuthService {
       }
     });
 
+    await Browser.addListener('browserFinished', () => {
+      void this.storage.readPendingLogin()
+        .then((pending) => this.recordAuthDiagnostic('auth.browser_closed', {
+          pendingLogin: Boolean(pending),
+          authenticated: this.isAuthenticated()
+        }))
+        .catch(() => this.recordAuthDiagnostic('auth.browser_closed', {
+          pendingLogin: 'unreadable',
+          authenticated: this.isAuthenticated()
+        }));
+    });
+
     const launchUrl = await CapacitorApp.getLaunchUrl().catch(() => undefined);
     if (launchUrl?.url?.startsWith(mobileEnvironment.keycloak.nativeRedirectUri)) {
       await this.handleNativeAuthCallback(launchUrl.url);
@@ -324,6 +395,7 @@ export class AuthService {
 
   private async handleNativeAuthCallback(url: string): Promise<void> {
     if (this.handledNativeAuthUrls.has(url)) {
+      void this.recordAuthDiagnostic('auth.callback_duplicate_ignored');
       return;
     }
 
@@ -344,6 +416,10 @@ export class AuthService {
 
     this.lastResumeCheckAt = now;
     const tokens = this.tokens();
+    await this.recordAuthDiagnostic('auth.resume_check', {
+      hasTokens: Boolean(tokens),
+      ...this.tokenDiagnosticDetails(tokens)
+    });
     if (!tokens) {
       return;
     }
@@ -351,6 +427,7 @@ export class AuthService {
     if (this.isTokenFresh(tokens, 45)) {
       this.status.set('authenticated');
       this.scheduleRefresh();
+      void this.flushDiagnostics(tokens.accessToken);
       return;
     }
 
@@ -434,18 +511,27 @@ export class AuthService {
   }
 
   private async openNativeAuthUrl(url: string): Promise<void> {
+    const flow = url.includes('/logout') ? 'logout' : 'login';
+    void this.recordAuthDiagnostic('auth.browser_opening', { flow });
     try {
       await Browser.open({
         url,
         presentationStyle: 'fullscreen',
         toolbarColor: '#f6f8fc'
       });
+      void this.recordAuthDiagnostic('auth.browser_opened', { flow, method: 'custom_tab' });
       return;
     } catch {
+      void this.recordAuthDiagnostic('auth.browser_open_failed', { flow, method: 'custom_tab' });
       // Fall back to the default browser when Custom Tabs are unavailable.
     }
 
     const result = await AppLauncher.openUrl({ url });
+    void this.recordAuthDiagnostic('auth.browser_opened', {
+      flow,
+      method: 'app_launcher',
+      completed: result.completed
+    });
     if (!result.completed) {
       throw new Error('Не удалось открыть страницу входа.');
     }
@@ -591,7 +677,12 @@ export class AuthService {
     }
   }
 
-  private async clearSession(status: AuthStatus): Promise<void> {
+  private async clearSession(status: AuthStatus, reason = 'unspecified'): Promise<void> {
+    await this.recordAuthDiagnostic('auth.session_clear_started', {
+      reason,
+      targetStatus: status,
+      ...this.tokenDiagnosticDetails(this.tokens())
+    });
     this.sessionGeneration += 1;
     if (this.refreshTimerId) {
       clearTimeout(this.refreshTimerId);
@@ -600,6 +691,58 @@ export class AuthService {
 
     this.clearState(status);
     await this.storage.clearTokens();
+    void this.recordAuthDiagnostic('auth.session_cleared', { reason, targetStatus: status });
+  }
+
+  private diagnostics(): MobileAuthDiagnosticsService {
+    return this.injector.get(MobileAuthDiagnosticsService);
+  }
+
+  private recordAuthDiagnostic(
+    type: string,
+    details: Record<string, MobileAuthDiagnosticValue> = {}
+  ): Promise<void> {
+    try {
+      return this.diagnostics().record(type, {
+        authStatus: this.status(),
+        ...details
+      });
+    } catch {
+      return Promise.resolve();
+    }
+  }
+
+  private flushDiagnostics(accessToken: string): Promise<void> {
+    try {
+      return this.diagnostics().flush(accessToken);
+    } catch {
+      return Promise.resolve();
+    }
+  }
+
+  private tokenDiagnosticDetails(tokens: StoredTokens | null): Record<string, MobileAuthDiagnosticValue> {
+    if (!tokens) {
+      return {
+        hasAccessToken: false,
+        hasRefreshToken: false
+      };
+    }
+    return {
+      hasAccessToken: true,
+      hasRefreshToken: Boolean(tokens.refreshToken),
+      accessExpiresInSeconds: Math.round((tokens.expiresAt - Date.now()) / 1000),
+      refreshExpiresInSeconds: tokens.refreshExpiresAt
+        ? Math.round((tokens.refreshExpiresAt - Date.now()) / 1000)
+        : 'unknown'
+    };
+  }
+
+  private errorDiagnosticDetails(error: unknown): Record<string, MobileAuthDiagnosticValue> {
+    return {
+      errorClass: error instanceof Error ? error.constructor.name : typeof error,
+      httpStatus: error instanceof TokenEndpointHttpError ? error.statusCode : 'none',
+      terminal: this.isTerminalRefreshError(error)
+    };
   }
 
   private errorMessage(error: unknown): string {

@@ -3512,7 +3512,7 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   logout(): void {
-    void this.auth.logout();
+    void this.auth.logoutFrom('home_actions');
   }
 
   private async loadManualPaymentSettings(forceRefresh = false, requestId = this.reloadEpoch): Promise<void> {

@@ -60,6 +60,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -96,6 +97,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final OrderRepository orderRepository;
     private final ContractorCompletionRewardService contractorCompletionRewardService;
     private final ContractorPaymentBusinessClock contractorPaymentBusinessClock;
+    private final BadReviewTaskTransactionRunner transactionRunner;
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -192,13 +194,24 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public BadReviewTask completeTask(Long taskId) {
         if (taskStatus(taskId) != BadReviewTaskStatus.NEW) {
-            return requireTask(taskId);
+            return transactionRunner.required(() -> requireTask(taskId));
         }
-        Long orderId = prepareTaskPayableChange(
+
+        // Provider observation opens its own transaction. It must happen before
+        // the task transaction acquires the canonical Order lock; otherwise the
+        // observation waits on the lock held by this same request until MySQL's
+        // lock timeout expires.
+        Long orderId = observeTaskPayableChange(taskId);
+        return transactionRunner.required(() -> completeTaskLocked(taskId, orderId));
+    }
+
+    private BadReviewTask completeTaskLocked(Long taskId, Long expectedOrderId) {
+        Long orderId = prepareTaskPayableChangeLocked(
                 taskId,
+                expectedOrderId,
                 "Выполненная дополнительная задача изменила сумму счета"
         );
         BadReviewTask task = requireTask(taskId);
@@ -506,24 +519,42 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public BadReviewTask cancelTask(Long taskId) {
         BadReviewTaskStatus snapshotStatus = taskStatus(taskId);
         if (snapshotStatus == BadReviewTaskStatus.CANCELED) {
-            return requireTask(taskId);
+            return transactionRunner.required(() -> requireTask(taskId));
         }
-        Long preparedOrderId = snapshotStatus == BadReviewTaskStatus.DONE
-                ? prepareTaskPayableChange(
+        Long observedOrderId = snapshotStatus == BadReviewTaskStatus.DONE
+                ? observeTaskPayableChange(taskId)
+                : null;
+        return transactionRunner.required(() -> cancelTaskLocked(taskId, snapshotStatus, observedOrderId));
+    }
+
+    private BadReviewTask cancelTaskLocked(
+            Long taskId,
+            BadReviewTaskStatus expectedStatus,
+            Long observedOrderId
+    ) {
+        BadReviewTask task = requireTask(taskId);
+        if (task.getStatus() == BadReviewTaskStatus.CANCELED) {
+            return task;
+        }
+        if (task.getStatus() != expectedStatus) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Статус дополнительной задачи изменился. Обновите страницу и повторите действие"
+            );
+        }
+        Long preparedOrderId = task.getStatus() == BadReviewTaskStatus.DONE
+                ? prepareTaskPayableChangeLocked(
                         taskId,
+                        observedOrderId,
                         "Отмена выполненной дополнительной задачи изменила сумму счета"
                 )
                 : null;
-        BadReviewTask task = requireTask(taskId);
         if (isPaid(task)) {
             throw new IllegalStateException("После оплаты заказа отмена плохих задач не пересчитывает чек и начисления");
-        }
-        if (task.getStatus() == BadReviewTaskStatus.CANCELED) {
-            return task;
         }
 
         boolean wasNew = task.getStatus() == BadReviewTaskStatus.NEW;
@@ -563,17 +594,29 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         return savedTask;
     }
 
-    private Long prepareTaskPayableChange(Long taskId, String reason) {
+    private Long observeTaskPayableChange(Long taskId) {
         validateTaskIdAndAccess(taskId);
         Long orderId = badReviewTaskRepository.findOrderIdById(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
 
         PaymentLinkService paymentLinkService = paymentLinkServiceProvider.getIfAvailable();
         if (paymentLinkService != null) {
-            // Performs the provider observation without retaining local locks,
-            // then the checks below lock the authoritative rows.
             paymentLinkService.reconcileActiveLinkForOrder(orderId);
         }
+        return orderId;
+    }
+
+    private Long prepareTaskPayableChangeLocked(Long taskId, Long expectedOrderId, String reason) {
+        validateTaskIdAndAccess(taskId);
+        Long orderId = badReviewTaskRepository.findOrderIdById(taskId)
+                .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
+        if (!Objects.equals(orderId, expectedOrderId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Заказ дополнительной задачи изменился. Обновите страницу и повторите действие"
+            );
+        }
+
         CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
         if (commonBillingService != null) {
             // lockedInvoice() acquires every member Order in sorted order before
@@ -582,6 +625,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         }
         orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
+        PaymentLinkService paymentLinkService = paymentLinkServiceProvider.getIfAvailable();
         if (paymentLinkService != null) {
             paymentLinkService.retireOpenLinksBeforePayableChange(orderId, reason);
         }

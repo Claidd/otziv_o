@@ -1,13 +1,17 @@
-import { Injectable, signal } from '@angular/core';
+import { Inject, Injectable, InjectionToken, signal } from '@angular/core';
 import Keycloak, { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { apiErrorMessage } from '../shared/api-error-message';
 import { appEnvironment } from './app-environment';
 
 export type AuthStatus = 'initializing' | 'anonymous' | 'authenticated' | 'refreshing' | 'expired' | 'error';
 
+export const KEYCLOAK_CLIENT = new InjectionToken<Keycloak>('KEYCLOAK_CLIENT', {
+  providedIn: 'root',
+  factory: () => new Keycloak(appEnvironment.keycloak)
+});
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly keycloak = new Keycloak(appEnvironment.keycloak);
   private initialized = false;
   private refreshTimerId: ReturnType<typeof setInterval> | undefined;
   private refreshPromise: Promise<boolean> | null = null;
@@ -20,6 +24,8 @@ export class AuthService {
   readonly profile = signal<KeycloakProfile | null>(null);
   readonly tokenParsed = signal<KeycloakTokenParsed | undefined>(undefined);
   readonly expiresAt = signal<Date | null>(null);
+
+  constructor(@Inject(KEYCLOAK_CLIENT) private readonly keycloak: Keycloak) {}
 
   async init(): Promise<void> {
     if (this.initialized) {

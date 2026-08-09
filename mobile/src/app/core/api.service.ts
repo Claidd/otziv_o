@@ -1377,6 +1377,14 @@ export interface ManagerControlClientReplyPayload {
   message: string;
 }
 
+export interface ManagerControlClientMessageReconciliation {
+  requestedChats: number;
+  receivedMessages: number;
+  openBefore: number;
+  openAfter: number;
+  closedItems: number;
+}
+
 export interface ManagerControlStagePayload {
   stage: 'MORNING_DONE' | 'FINAL_CHECK';
   comment?: string | null;
@@ -3591,6 +3599,13 @@ export class ApiService {
   syncManagerControlDetails(managerId: number): Observable<ManagerControlManagerDetail> {
     return this.http.post<ManagerControlManagerDetail>(
       this.apiUrl(`/api/admin/manager-control/managers/${managerId}/today/sync`),
+      {}
+    );
+  }
+
+  reconcileManagerControlClientMessages(managerId: number): Observable<ManagerControlClientMessageReconciliation> {
+    return this.http.post<ManagerControlClientMessageReconciliation>(
+      this.apiUrl(`/api/admin/manager-control/managers/${managerId}/today/reconcile-client-messages`),
       {}
     );
   }
