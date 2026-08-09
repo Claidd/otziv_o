@@ -13,6 +13,7 @@ import com.hunt.otziv.whatsapp.dto.WhatsAppChatMessageCursor;
 import com.hunt.otziv.whatsapp.dto.WhatsAppReconciledMessage;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -82,6 +83,10 @@ class ClientChatMessageReconciliationServiceTest {
         ArgumentCaptor<List<WhatsAppChatMessageCursor>> cursors = ArgumentCaptor.forClass(List.class);
         verify(whatsAppService).reconcileGroupMessages(eq("whatsapp_vika"), cursors.capture());
         assertEquals("120363000000000000@g.us", cursors.getValue().getFirst().groupId());
+        assertEquals(
+                open.getLastClientMessageAt().minusSeconds(1).atZone(ZoneId.systemDefault()).toEpochSecond(),
+                cursors.getValue().getFirst().afterTimestamp()
+        );
     }
 
     @Test

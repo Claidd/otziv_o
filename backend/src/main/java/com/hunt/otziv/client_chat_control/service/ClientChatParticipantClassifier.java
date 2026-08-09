@@ -135,18 +135,33 @@ public class ClientChatParticipantClassifier {
     }
 
     private Optional<User> phoneUser(String senderExternalId) {
-        String senderPhone = digits(senderExternalId);
+        String senderPhone = normalizedPhone(senderExternalId);
         if (senderPhone.length() < 7) {
             return Optional.empty();
         }
-        return uniqueUser(userRepository.findAllActiveUsersWithPhoneNumbers().stream()
+        List<User> managementMatches = matchingPhoneUsers(
+                userRepository.findAllActiveManagerControlStaff(),
+                senderPhone
+        );
+        Optional<User> managementUser = uniqueUser(managementMatches);
+        if (managementUser.isPresent() || managementMatches.size() > 1) {
+            return managementUser;
+        }
+        return uniqueUser(matchingPhoneUsers(
+                userRepository.findAllActiveUsersWithPhoneNumbers(),
+                senderPhone
+        ));
+    }
+
+    private List<User> matchingPhoneUsers(List<User> users, String senderPhone) {
+        return (users == null ? List.<User>of() : users).stream()
                 .filter(Objects::nonNull)
                 .filter(user -> {
-                    String phone = digits(user.getPhoneNumber());
+                    String phone = normalizedPhone(user.getPhoneNumber());
                     return phone.length() >= 7
                             && (phone.endsWith(senderPhone) || senderPhone.endsWith(phone));
                 })
-                .toList());
+                .toList();
     }
 
     private boolean isKnownGlobalControlStaffName(String senderName) {
@@ -368,5 +383,13 @@ public class ClientChatParticipantClassifier {
 
     private static String digits(String value) {
         return value == null ? "" : value.replaceAll("\\D+", "");
+    }
+
+    private static String normalizedPhone(String value) {
+        String phone = digits(value);
+        if (phone.length() == 11 && phone.startsWith("8")) {
+            return "7" + phone.substring(1);
+        }
+        return phone;
     }
 }

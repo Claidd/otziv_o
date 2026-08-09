@@ -8,6 +8,7 @@ const { Client, LocalAuth } = require("whatsapp-web.js");
 const {
   DeliveredMessageCache,
   FileDeliveryIdempotencyStore,
+  ParticipantPhoneResolver,
   RecentOutboundRegistry,
   createMessageHandler,
   generatedOutboundKey,
@@ -60,6 +61,14 @@ const WHATSAPP_OUTBOUND_DURABLE_TTL_MS = parsePositiveInt(
   process.env.WHATSAPP_OUTBOUND_DURABLE_TTL_MS,
   2592000000
 );
+const WHATSAPP_LID_PHONE_CACHE_TTL_MS = parsePositiveInt(
+  process.env.WHATSAPP_LID_PHONE_CACHE_TTL_MS,
+  604800000
+);
+const WHATSAPP_LID_PHONE_LOOKUP_TIMEOUT_MS = parsePositiveInt(
+  process.env.WHATSAPP_LID_PHONE_LOOKUP_TIMEOUT_MS,
+  5000
+);
 const WHATSAPP_HTTP_BODY_LIMIT = boundedBodyBytes(process.env.WHATSAPP_HTTP_BODY_LIMIT);
 const WHATSAPP_HTTP_MAX_CONCURRENCY = parsePositiveInt(process.env.WHATSAPP_HTTP_MAX_CONCURRENCY, 16);
 const WHATSAPP_MAX_MESSAGE_CHARS = Math.min(
@@ -95,6 +104,20 @@ const deliveredMessageCache = new DeliveredMessageCache(
   () => Date.now(),
   deliveryIdempotencyStore
 );
+const participantPhoneResolver = new ParticipantPhoneResolver({
+  ttlMs: WHATSAPP_LID_PHONE_CACHE_TTL_MS,
+  log,
+  lookup: (participantIds) => {
+    if (!client || typeof client.getContactLidAndPhone !== "function") {
+      return [];
+    }
+    return withTimeout(
+      () => client.getContactLidAndPhone(participantIds),
+      WHATSAPP_LID_PHONE_LOOKUP_TIMEOUT_MS,
+      "WhatsApp participant LID lookup"
+    );
+  },
+});
 
 const app = express();
 
@@ -514,6 +537,7 @@ function scheduleRestart() {
 const handleIncomingMessage = createMessageHandler({
   clientId: CLIENT_ID,
   outboundRegistry,
+  participantResolver: participantPhoneResolver,
   postWebhook: postBackendWebhook,
   log,
 });
@@ -1001,6 +1025,8 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
         messages: direct.messages,
         outboundRegistry,
         generatedMessageStore: deliveryIdempotencyStore,
+        participantResolver: participantPhoneResolver,
+        log,
       });
     } catch (primaryError) {
       try {
@@ -1032,6 +1058,8 @@ app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
           messages: raw.messages,
           outboundRegistry,
           generatedMessageStore: deliveryIdempotencyStore,
+          participantResolver: participantPhoneResolver,
+          log,
         });
       } catch (fallbackError) {
         log("warn", "WhatsApp message reconciliation skipped for group", {

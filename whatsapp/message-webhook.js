@@ -113,6 +113,105 @@ class RecentOutboundRegistry {
   }
 }
 
+class ParticipantPhoneResolver {
+  constructor({ lookup, ttlMs = 7 * 24 * 60 * 60 * 1000, maxEntries = 10_000, now = () => Date.now(), log } = {}) {
+    this.lookup = lookup;
+    this.ttlMs = Math.max(60_000, Number(ttlMs) || 7 * 24 * 60 * 60 * 1000);
+    this.maxEntries = Math.max(1, Math.min(Number(maxEntries) || 10_000, 50_000));
+    this.now = now;
+    this.log = log;
+    this.cache = new Map();
+    this.inFlight = new Map();
+  }
+
+  async resolve(externalId) {
+    const id = serializedId(externalId);
+    if (!id.endsWith("@lid") || typeof this.lookup !== "function") {
+      return id;
+    }
+    this.cleanup();
+    const cached = this.cache.get(id);
+    if (cached) {
+      this.cache.delete(id);
+      this.cache.set(id, cached);
+      return cached.value;
+    }
+    const pending = this.inFlight.get(id);
+    if (pending) {
+      return pending;
+    }
+    const resolution = this.lookupPhone(id)
+      .finally(() => this.inFlight.delete(id));
+    this.inFlight.set(id, resolution);
+    return resolution;
+  }
+
+  async lookupPhone(lid) {
+    try {
+      const mappings = await this.lookup([lid]);
+      const mapping = (Array.isArray(mappings) ? mappings : []).find((candidate) =>
+        serializedId(candidate && candidate.lid) === lid
+      );
+      const phone = serializedId(mapping && (mapping.pn || mapping.phone));
+      if (phone && !phone.endsWith("@lid")) {
+        this.remember(lid, phone);
+        return phone;
+      }
+    } catch (error) {
+      if (typeof this.log === "function") {
+        this.log("warn", "WhatsApp participant LID lookup failed", {
+          participantId: maskedParticipantId(lid),
+          error: String(error && error.message || error || "unknown"),
+        });
+      }
+    }
+    this.remember(lid, lid, Math.min(this.ttlMs, 5 * 60 * 1000));
+    return lid;
+  }
+
+  remember(lid, phone, ttlMs = this.ttlMs) {
+    this.cache.delete(lid);
+    this.cache.set(lid, { value: phone, expiresAt: this.now() + ttlMs });
+    while (this.cache.size > this.maxEntries) {
+      this.cache.delete(this.cache.keys().next().value);
+    }
+  }
+
+  cleanup() {
+    const cutoff = this.now();
+    for (const [lid, cached] of this.cache) {
+      if (!cached || cached.expiresAt <= cutoff) {
+        this.cache.delete(lid);
+      }
+    }
+  }
+}
+
+function maskedParticipantId(value) {
+  const id = serializedId(value);
+  const domain = id.includes("@") ? `@${id.split("@").pop()}` : "";
+  const digits = id.replace(/\D+/g, "");
+  return `${digits.length > 4 ? `***${digits.slice(-4)}` : "***"}${domain}`;
+}
+
+async function resolvedParticipantId(resolver, externalId, log) {
+  const fallback = serializedId(externalId);
+  if (!resolver || typeof resolver.resolve !== "function") {
+    return fallback;
+  }
+  try {
+    return serializedId(await resolver.resolve(fallback)) || fallback;
+  } catch (error) {
+    if (typeof log === "function") {
+      log("warn", "WhatsApp participant resolution failed", {
+        participantId: maskedParticipantId(fallback),
+        error: String(error && error.message || error || "unknown"),
+      });
+    }
+    return fallback;
+  }
+}
+
 class MemoryDeliveryIdempotencyStore {
   constructor(now = () => Date.now()) {
     this.now = now;
@@ -378,7 +477,7 @@ async function groupMetadata(message, groupId, log) {
   }
 }
 
-function createMessageHandler({ clientId, postWebhook, outboundRegistry, log }) {
+function createMessageHandler({ clientId, postWebhook, outboundRegistry, participantResolver, log }) {
   if (typeof postWebhook !== "function") {
     throw new Error("postWebhook is required");
   }
@@ -397,14 +496,18 @@ function createMessageHandler({ clientId, postWebhook, outboundRegistry, log }) 
     const externalMessageId = messageId(message) || null;
     const groupId = deriveGroupId(message);
     if (groupId) {
-      const metadata = await groupMetadata(message, groupId, log);
+      const rawParticipantId = serializedId(message.author) || from;
+      const [metadata, participantId] = await Promise.all([
+        groupMetadata(message, groupId, log),
+        resolvedParticipantId(participantResolver, rawParticipantId, log),
+      ]);
       const systemGenerated = Boolean(message.fromMe)
         && registry.matches(metadata.groupId, body, externalMessageId);
       const payload = {
         clientId,
         groupId: metadata.groupId,
         groupName: metadata.groupName,
-        from: serializedId(message.author) || from,
+        from: participantId,
         fromName: String(message._data && message._data.notifyName || "").trim(),
         messageId: externalMessageId,
         timestamp: message.timestamp || null,
@@ -437,6 +540,8 @@ async function reconciliationPayloads({
   messages,
   outboundRegistry,
   generatedMessageStore,
+  participantResolver,
+  log,
 }) {
   const cutoffValue = Number(afterTimestamp);
   const cutoff = Number.isFinite(cutoffValue) ? Math.max(0, Math.floor(cutoffValue)) : 0;
@@ -468,7 +573,11 @@ async function reconciliationPayloads({
       clientId,
       groupId,
       groupName: String(groupName || "").trim().slice(0, 256),
-      from: serializedId(message.author) || serializedId(message.from),
+      from: await resolvedParticipantId(
+        participantResolver,
+        serializedId(message.author) || serializedId(message.from),
+        log
+      ),
       fromName: String(message._data && message._data.notifyName || "").trim(),
       messageId: externalMessageId,
       timestamp: Math.floor(Number(message.timestamp)),
@@ -487,6 +596,7 @@ module.exports = {
   DeliveredMessageCache,
   FileDeliveryIdempotencyStore,
   MemoryDeliveryIdempotencyStore,
+  ParticipantPhoneResolver,
   RecentOutboundRegistry,
   createMessageHandler,
   deriveGroupId,

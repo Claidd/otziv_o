@@ -9,6 +9,7 @@ const {
   DeliveredMessageCache,
   FileDeliveryIdempotencyStore,
   MemoryDeliveryIdempotencyStore,
+  ParticipantPhoneResolver,
   RecentOutboundRegistry,
   createMessageHandler,
   deriveGroupId,
@@ -20,6 +21,42 @@ const {
 test("derives group id without loading chat metadata", () => {
   assert.equal(deriveGroupId({ from: "12001@g.us" }), "12001@g.us");
   assert.equal(deriveGroupId({ from: "100@c.us", to: "12002@g.us" }), "12002@g.us");
+});
+
+test("resolves WhatsApp participant LID to a phone id and caches the mapping", async () => {
+  let lookups = 0;
+  const resolver = new ParticipantPhoneResolver({
+    lookup: async (ids) => {
+      lookups += 1;
+      return [{ lid: ids[0], pn: "79991112233@c.us" }];
+    },
+  });
+
+  assert.equal(await resolver.resolve("240161736638694@lid"), "79991112233@c.us");
+  assert.equal(await resolver.resolve("240161736638694@lid"), "79991112233@c.us");
+  assert.equal(await resolver.resolve("70000000000@c.us"), "70000000000@c.us");
+  assert.equal(lookups, 1);
+});
+
+test("sends the resolved participant phone to the backend for group classification", async () => {
+  const calls = [];
+  const participantResolver = new ParticipantPhoneResolver({
+    lookup: async (ids) => [{ lid: ids[0], pn: "79991112233@c.us" }],
+  });
+  const handler = createMessageHandler({
+    clientId: "whatsapp_vika",
+    participantResolver,
+    postWebhook: async (path, payload) => calls.push(payload),
+  });
+
+  await handler({
+    from: "12001@g.us",
+    author: "240161736638694@lid",
+    body: "Сообщение владельца",
+    id: { _serialized: "owner-message-1" },
+  });
+
+  assert.equal(calls[0].from, "79991112233@c.us");
 });
 
 test("delivers group webhook when getChat throws", async () => {
@@ -241,4 +278,25 @@ test("reconciliation preserves generated-message identity after the recent regis
 
   assert.equal(payloads.length, 1);
   assert.equal(payloads[0].systemGenerated, true);
+});
+
+test("reconciliation resolves participant LID before redelivering an existing message", async () => {
+  const participantResolver = new ParticipantPhoneResolver({
+    lookup: async (ids) => [{ lid: ids[0], pn: "79991112233@c.us" }],
+  });
+  const payloads = await reconciliationPayloads({
+    clientId: "whatsapp_vika",
+    groupId: "120363000000000000@g.us",
+    groupName: "Клиент",
+    afterTimestamp: 100,
+    participantResolver,
+    messages: [{
+      id: { _serialized: "owner-message-1" },
+      timestamp: 101,
+      author: "240161736638694@lid",
+      body: "Сообщение владельца",
+    }],
+  });
+
+  assert.equal(payloads[0].from, "79991112233@c.us");
 });

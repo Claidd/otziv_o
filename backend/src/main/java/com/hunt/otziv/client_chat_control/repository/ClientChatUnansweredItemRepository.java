@@ -1,5 +1,6 @@
 package com.hunt.otziv.client_chat_control.repository;
 
+import com.hunt.otziv.client_chat_control.model.ClientChatMessage;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.model.ClientChatResolutionType;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
@@ -18,6 +19,8 @@ import org.springframework.data.jpa.repository.Modifying;
 
 @Repository
 public interface ClientChatUnansweredItemRepository extends JpaRepository<ClientChatUnansweredItem, Long> {
+
+    List<ClientChatUnansweredItem> findByLastClientMessage(ClientChatMessage lastClientMessage);
 
     Optional<ClientChatUnansweredItem> findFirstByPlatformAndChatIdAndStatusOrderByLastClientMessageAtDesc(
             ClientChatPlatform platform,

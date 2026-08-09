@@ -76,13 +76,16 @@ public class ClientChatMessageTrackerService {
         String externalMessageId = hasText(command.externalMessageId())
                 ? limit(command.externalMessageId(), 255)
                 : fallbackExternalMessageId(command, messageText, messageAt);
-        if (hasText(externalMessageId)
-                && messageRepository.findByPlatformAndChatIdAndExternalMessageId(
-                        command.platform(),
-                        limit(command.chatId(), 160),
-                        externalMessageId
-                ).isPresent()) {
-            return;
+        if (hasText(externalMessageId)) {
+            var existingMessage = messageRepository.findByPlatformAndChatIdAndExternalMessageId(
+                    command.platform(),
+                    limit(command.chatId(), 160),
+                    externalMessageId
+            );
+            if (existingMessage.isPresent()) {
+                reconcileExistingMessage(existingMessage.get(), command, senderRoleOverride);
+                return;
+            }
         }
 
         ClientChatCompanyResolutionService.Resolution resolution = companyResolutionService.resolve(
@@ -138,6 +141,11 @@ public class ClientChatMessageTrackerService {
             return;
         }
         if (senderRole == ClientChatSenderRole.STAFF) {
+            if (direction == ClientChatDirection.INCOMING && isOwnerOrAdmin(actorUser)) {
+                log.debug("Owner/admin chat message ignored for manager unanswered control: platform={}, chatId={}, messageId={}",
+                        command.platform(), command.chatId(), savedMessage.getId());
+                return;
+            }
             closeOpenItems(
                     command.platform(),
                     command.chatId(),
@@ -171,8 +179,89 @@ public class ClientChatMessageTrackerService {
         openOrRefresh(savedMessage, company, manager);
     }
 
+    private void reconcileExistingMessage(
+            ClientChatMessage message,
+            ClientChatMessageCommand command,
+            ClientChatSenderRole senderRoleOverride
+    ) {
+        if (message == null || command == null || command.platform() == null) {
+            return;
+        }
+        if (message.getSenderRole() == ClientChatSenderRole.STAFF
+                || message.getSenderRole() == ClientChatSenderRole.BOT) {
+            return;
+        }
+        ClientChatDirection direction = command.direction() == null
+                ? ClientChatDirection.INCOMING
+                : command.direction();
+        ClientChatSenderRole classifiedRole = senderRoleOverride == null
+                ? participantClassifier.classify(
+                        command.platform(),
+                        direction,
+                        command.chatId(),
+                        command.senderExternalId(),
+                        command.senderName(),
+                        message.getCompany()
+                )
+                : senderRoleOverride;
+        ClientChatSenderRole correctedRole = normalizeSenderRole(command, classifiedRole);
+        if (correctedRole != ClientChatSenderRole.STAFF && correctedRole != ClientChatSenderRole.BOT) {
+            return;
+        }
+
+        message.setDirection(direction);
+        message.setSenderRole(correctedRole);
+        if (hasText(command.senderExternalId())) {
+            message.setSenderExternalId(limit(command.senderExternalId(), 160));
+        }
+        if (hasText(command.senderName())) {
+            message.setSenderName(limit(command.senderName(), 255));
+        }
+        User actorUser = correctedRole == ClientChatSenderRole.STAFF
+                ? participantClassifier.resolveStaffUser(
+                        command.platform(),
+                        command.chatId(),
+                        command.senderExternalId(),
+                        command.senderName(),
+                        message.getCompany()
+                ).orElse(null)
+                : null;
+        message.setActorUser(actorUser);
+        messageRepository.save(message);
+
+        String reasonCode = correctedRole == ClientChatSenderRole.STAFF
+                ? "STAFF_AUTHOR_RECLASSIFIED"
+                : "SYSTEM_AUTHOR_RECLASSIFIED";
+        String closeReason = correctedRole == ClientChatSenderRole.STAFF
+                ? "Сообщение отправлено сотрудником"
+                : "Системное сообщение";
+        unansweredRepository.findByLastClientMessage(message).forEach(item -> close(
+                item,
+                ClientChatUnansweredStatus.MISCLASSIFIED,
+                closeReason,
+                ClientChatResolutionType.MISCLASSIFIED,
+                message,
+                reasonCode,
+                "Автоматически исправлено после уточнения автора WhatsApp",
+                null,
+                false,
+                ClientChatReplyQuality.NOT_APPLICABLE,
+                "Сообщение исключено из клиентских"
+        ));
+    }
+
     private ClientChatSenderRole normalizeSenderRole(ClientChatMessageCommand command, ClientChatSenderRole senderRole) {
         return senderRole == null ? ClientChatSenderRole.UNKNOWN : senderRole;
+    }
+
+    private boolean isOwnerOrAdmin(User user) {
+        return user != null
+                && user.getRoles() != null
+                && user.getRoles().stream()
+                .filter(java.util.Objects::nonNull)
+                .map(role -> safe(role.getName()))
+                .anyMatch(role -> "ROLE_OWNER".equalsIgnoreCase(role)
+                        || "ROLE_ADMIN".equalsIgnoreCase(role));
     }
 
     @Transactional(readOnly = true)

@@ -73,6 +73,41 @@ class ClientChatParticipantClassifierTest {
     }
 
     @Test
+    void whatsappCanonicalCountryCodeMatchesRussianTrunkPrefixStoredForOwner() {
+        User owner = user("Владелец", "owner", "8 (999) 111-22-33");
+        when(userRepository.findAllActiveManagerControlStaff()).thenReturn(List.of(owner));
+
+        ClientChatSenderRole role = classifier.classify(
+                ClientChatPlatform.WHATSAPP,
+                ClientChatDirection.INCOMING,
+                "79991112233@c.us",
+                "Другое имя WhatsApp",
+                companyWithManager(user("Менеджер", "manager", ""))
+        );
+
+        assertEquals(ClientChatSenderRole.STAFF, role);
+    }
+
+    @Test
+    void managementPhoneWinsWhenAnotherActiveAccountUsesTheSameNumber() {
+        User admin = user("Администратор", "admin", "8 (999) 111-22-33");
+        User duplicateAccount = user("Другой аккаунт", "duplicate", "+7 999 111-22-33");
+        when(userRepository.findAllActiveManagerControlStaff()).thenReturn(List.of(admin));
+        lenient().when(userRepository.findAllActiveUsersWithPhoneNumbers())
+                .thenReturn(List.of(admin, duplicateAccount));
+
+        Optional<User> actual = classifier.resolveStaffUser(
+                ClientChatPlatform.WHATSAPP,
+                "12001@g.us",
+                "79991112233@c.us",
+                "Другое имя WhatsApp",
+                companyWithManager(user("Менеджер", "manager", ""))
+        );
+
+        assertSame(admin, actual.orElseThrow());
+    }
+
+    @Test
     void resolvesActualWhatsappUserByPhone() {
         User managerUser = user("Вика Ц.", "vika", "+7 999 111-22-33");
         when(userRepository.findAllActiveUsersWithPhoneNumbers()).thenReturn(List.of(managerUser));

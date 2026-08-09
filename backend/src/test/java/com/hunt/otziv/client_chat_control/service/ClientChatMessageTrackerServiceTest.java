@@ -14,10 +14,12 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -100,6 +103,43 @@ class ClientChatMessageTrackerServiceTest {
     }
 
     @Test
+    void incomingOwnerMessageIsIgnoredAndDoesNotCloseManagersOpenClientCard() {
+        Role ownerRole = new Role();
+        ownerRole.setName("ROLE_OWNER");
+        User owner = User.builder().id(9L).active(true).roles(Set.of(ownerRole)).build();
+        when(participantClassifier.resolveStaffUser(
+                eq(ClientChatPlatform.WHATSAPP),
+                eq("12001@g.us"),
+                eq("79991112233@c.us"),
+                eq("Владелец"),
+                any(Company.class)
+        )).thenReturn(Optional.of(owner));
+        ClientChatMessageCommand ownerMessage = new ClientChatMessageCommand(
+                ClientChatPlatform.WHATSAPP,
+                ClientChatDirection.INCOMING,
+                "12001@g.us",
+                "Компания",
+                "owner-message-new",
+                "79991112233@c.us",
+                "Владелец",
+                "Спасибо",
+                LocalDateTime.now()
+        );
+
+        service.track(ownerMessage, ClientChatSenderRole.STAFF);
+
+        ArgumentCaptor<ClientChatMessage> saved = ArgumentCaptor.forClass(ClientChatMessage.class);
+        verify(messageRepository).save(saved.capture());
+        assertEquals(ClientChatSenderRole.STAFF, saved.getValue().getSenderRole());
+        assertSame(owner, saved.getValue().getActorUser());
+        verify(unansweredRepository, never()).findByPlatformAndChatIdAndStatus(
+                ClientChatPlatform.WHATSAPP,
+                "12001@g.us",
+                ClientChatUnansweredStatus.OPEN
+        );
+    }
+
+    @Test
     void storesActualStaffUserInsteadOfAssumingCompanyManager() {
         User actualAuthor = User.builder().id(88L).active(true).build();
         when(participantClassifier.resolveStaffUser(
@@ -115,6 +155,70 @@ class ClientChatMessageTrackerServiceTest {
         ArgumentCaptor<ClientChatMessage> captor = ArgumentCaptor.forClass(ClientChatMessage.class);
         verify(messageRepository).save(captor.capture());
         assertSame(actualAuthor, captor.getValue().getActorUser());
+    }
+
+    @Test
+    void reconciliationReclassifiesExistingLidMessageWhenPhoneBelongsToStaff() {
+        Company company = new Company();
+        company.setTitle("Компания");
+        ClientChatMessage existing = new ClientChatMessage();
+        existing.setId(500L);
+        existing.setPlatform(ClientChatPlatform.WHATSAPP);
+        existing.setDirection(ClientChatDirection.INCOMING);
+        existing.setSenderRole(ClientChatSenderRole.CLIENT);
+        existing.setChatId("12001@g.us");
+        existing.setExternalMessageId("owner-message-1");
+        existing.setSenderExternalId("240161736638694@lid");
+        existing.setCompany(company);
+        existing.setMessageText("Сообщение владельца");
+        existing.setMessageAt(LocalDateTime.now().minusMinutes(10));
+        ClientChatUnansweredItem falseCard = openItem("Сообщение владельца");
+        falseCard.setStatus(ClientChatUnansweredStatus.ANSWERED);
+        falseCard.setLastClientMessage(existing);
+        User owner = User.builder().id(9L).active(true).build();
+        ClientChatMessageCommand reconciled = new ClientChatMessageCommand(
+                ClientChatPlatform.WHATSAPP,
+                ClientChatDirection.INCOMING,
+                "12001@g.us",
+                "Компания",
+                "owner-message-1",
+                "79991112233@c.us",
+                "Владелец",
+                "Сообщение владельца",
+                existing.getMessageAt()
+        );
+        when(messageRepository.findByPlatformAndChatIdAndExternalMessageId(
+                ClientChatPlatform.WHATSAPP,
+                "12001@g.us",
+                "owner-message-1"
+        )).thenReturn(Optional.of(existing));
+        when(participantClassifier.classify(
+                ClientChatPlatform.WHATSAPP,
+                ClientChatDirection.INCOMING,
+                "12001@g.us",
+                "79991112233@c.us",
+                "Владелец",
+                company
+        )).thenReturn(ClientChatSenderRole.STAFF);
+        when(participantClassifier.resolveStaffUser(
+                ClientChatPlatform.WHATSAPP,
+                "12001@g.us",
+                "79991112233@c.us",
+                "Владелец",
+                company
+        )).thenReturn(Optional.of(owner));
+        when(unansweredRepository.findByLastClientMessage(existing)).thenReturn(List.of(falseCard));
+
+        service.track(reconciled);
+
+        assertEquals(ClientChatSenderRole.STAFF, existing.getSenderRole());
+        assertEquals("79991112233@c.us", existing.getSenderExternalId());
+        assertSame(owner, existing.getActorUser());
+        assertEquals(ClientChatUnansweredStatus.MISCLASSIFIED, falseCard.getStatus());
+        assertEquals("STAFF_AUTHOR_RECLASSIFIED", falseCard.getResolutionReasonCode());
+        assertFalse(falseCard.isAuditRequired());
+        verify(messageRepository).save(existing);
+        verify(unansweredRepository).save(falseCard);
     }
 
     @Test

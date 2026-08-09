@@ -54,7 +54,7 @@ public class ClientChatMessageReconciliationService {
         List<WhatsAppChatMessageCursor> cursors = earliestOpenMessageByChat.entrySet().stream()
                 .map(entry -> new WhatsAppChatMessageCursor(
                         entry.getKey(),
-                        entry.getValue().atZone(ZoneId.systemDefault()).toEpochSecond()
+                        entry.getValue().minusSeconds(1).atZone(ZoneId.systemDefault()).toEpochSecond()
                 ))
                 .toList();
         List<WhatsAppReconciledMessage> messages = whatsAppService
