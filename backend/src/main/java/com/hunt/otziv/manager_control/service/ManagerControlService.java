@@ -1355,6 +1355,22 @@ public class ManagerControlService {
             if (CommonInvoiceStatus.COLLECTING.name().equals(status)) {
                 int ready = details.summary().readyOrders();
                 int total = details.summary().totalOrders();
+                if (total == 0) {
+                    CommonInvoiceDetailsResponse disabled = commonBillingService.disableEmptyInvoice(invoiceId);
+                    String disabledStatus = disabled == null || disabled.summary() == null
+                            ? ""
+                            : safe(disabled.summary().status());
+                    if (!CommonInvoiceStatus.DISABLED.name().equals(disabledStatus)) {
+                        throw new ResponseStatusException(
+                                HttpStatus.CONFLICT,
+                                "Пустой общий счет не перешел в безопасное отключенное состояние"
+                        );
+                    }
+                    return new CommonInvoiceRepairOutcome(
+                            "Пустой технический счет отключен: заказов и платежных признаков нет",
+                            "Отключен пустой технический хвост общего счета"
+                    );
+                }
                 return new CommonInvoiceRepairOutcome(
                         "Счет исправен и остается в сборе: " + Math.max(0, total - ready)
                                 + " из " + total + " заказов еще в работе. Карточка убрана из замечаний.",

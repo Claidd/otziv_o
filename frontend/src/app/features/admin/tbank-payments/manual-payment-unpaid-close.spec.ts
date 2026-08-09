@@ -11,9 +11,10 @@ describe('manual payment unpaid close policy', () => {
     paymentMethod: 'MANUAL_MOBILE_BANK'
   };
 
-  it('allows only a pending manual instruction without paid evidence', () => {
+  it('allows a pending or expired manual instruction without paid evidence', () => {
     expect(canCloseManualPaymentAsUnpaid(waitingManual)).toBe(true);
     expect(canCloseManualPaymentAsUnpaid({ ...waitingManual, status: 'MANUAL_REPORTED' })).toBe(true);
+    expect(canCloseManualPaymentAsUnpaid({ ...waitingManual, status: 'EXPIRED' })).toBe(true);
     expect(canCloseManualPaymentAsUnpaid({ ...waitingManual, status: 'CONFIRMED' })).toBe(false);
     expect(canCloseManualPaymentAsUnpaid({ ...waitingManual, confirmedAmountKopecks: 100000 })).toBe(false);
     expect(canCloseManualPaymentAsUnpaid({ ...waitingManual, tbankPaymentId: '123' })).toBe(false);

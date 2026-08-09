@@ -6317,6 +6317,48 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void disableEmptyInvoiceRetiresPaymentFreeCollectingShell() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L)).thenReturn(List.of());
+
+        CommonInvoiceDetailsResponse response = service.disableEmptyInvoice(10L);
+
+        assertEquals(CommonInvoiceStatus.DISABLED, invoice.getStatus());
+        assertEquals("empty: в общем счете нет заказов", invoice.getLastError());
+        assertEquals(CommonInvoiceStatus.DISABLED.name(), response.summary().status());
+        verify(invoiceRepository).save(invoice);
+    }
+
+    @Test
+    void disableEmptyInvoiceRejectsAnyPaymentRegistryEvidence() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        CommonInvoicePaymentRef paymentRef = new CommonInvoicePaymentRef();
+        paymentRef.setId(91L);
+        paymentRef.setInvoice(invoice);
+        paymentRef.setStatus("ARCHIVED");
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of());
+        when(paymentRefRepository.findByInvoiceIdForUpdate(10L)).thenReturn(List.of(paymentRef));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.disableEmptyInvoice(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertEquals(CommonInvoiceStatus.COLLECTING, invoice.getStatus());
+        verify(invoiceRepository, never()).save(invoice);
+    }
+
+    @Test
     void retryAndResolveAttentionRejectFinalPaymentCancelFailure() throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);

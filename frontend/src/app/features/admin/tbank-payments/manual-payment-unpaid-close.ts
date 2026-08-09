@@ -12,7 +12,7 @@ export type ManualPaymentUnpaidCloseCandidate = {
 };
 
 const MANUAL_PAYMENT_METHODS = new Set(['MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK']);
-const CLOSEABLE_STATUSES = new Set(['WAITING_MANUAL_PAYMENT', 'MANUAL_REPORTED']);
+const CLOSEABLE_STATUSES = new Set(['WAITING_MANUAL_PAYMENT', 'MANUAL_REPORTED', 'EXPIRED']);
 
 export function canCloseManualPaymentAsUnpaid(link: ManualPaymentUnpaidCloseCandidate): boolean {
   return MANUAL_PAYMENT_METHODS.has(link.paymentMethod ?? '')

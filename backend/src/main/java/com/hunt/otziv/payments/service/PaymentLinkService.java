@@ -4870,10 +4870,11 @@ public class PaymentLinkService {
 
     private void validateManualUnpaidClosable(PaymentLink link) {
         if (link.getStatus() != PaymentLinkStatus.WAITING_MANUAL_PAYMENT
-                && link.getStatus() != PaymentLinkStatus.MANUAL_REPORTED) {
+                && link.getStatus() != PaymentLinkStatus.MANUAL_REPORTED
+                && link.getStatus() != PaymentLinkStatus.EXPIRED) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "С результатом «перевод не поступил» можно закрыть только ожидающую ручную инструкцию"
+                    "С результатом «перевод не поступил» можно закрыть только ожидающую или истекшую ручную инструкцию"
             );
         }
         boolean hasPaidEvidence = link.getPaidAt() != null

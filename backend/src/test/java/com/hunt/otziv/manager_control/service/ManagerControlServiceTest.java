@@ -779,6 +779,51 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void repairEmptyCollectingInvoiceDisablesTechnicalTail() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMMON_INVOICE");
+        concrete.setEntityId(196L);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(196L);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        var collecting = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse.class
+        );
+        var collectingSummary = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse.class
+        );
+        var disabled = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse.class
+        );
+        var disabledSummary = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse.class
+        );
+
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(commonInvoiceRepository.findByIdWithAccount(196L)).thenReturn(Optional.of(invoice));
+        when(commonBillingService.invoice(196L)).thenReturn(collecting);
+        when(collecting.summary()).thenReturn(collectingSummary);
+        when(collecting.orders()).thenReturn(List.of());
+        when(collectingSummary.status()).thenReturn(CommonInvoiceStatus.COLLECTING.name());
+        when(collectingSummary.totalOrders()).thenReturn(0);
+        when(commonBillingService.disableEmptyInvoice(196L)).thenReturn(disabled);
+        when(disabled.summary()).thenReturn(disabledSummary);
+        when(disabledSummary.status()).thenReturn(CommonInvoiceStatus.DISABLED.name());
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals("RESOLVED", response.itemStatus());
+        assertTrue(concrete.getComment().contains("Пустой технический счет отключен"));
+        verify(commonBillingService).disableEmptyInvoice(196L);
+        verify(commonBillingService, never()).sendInvoice(anyLong(), eq(true));
+    }
+
+    @Test
     void repairWhatsappInvoiceTailDelegatesToLockedBillingOperationWithoutSavingDetachedInvoice() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);

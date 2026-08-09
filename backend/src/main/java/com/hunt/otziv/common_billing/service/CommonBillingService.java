@@ -1774,6 +1774,60 @@ public class CommonBillingService {
         return repaired;
     }
 
+    /**
+     * Retires an empty collecting shell only when it has no positions and no
+     * payment history whatsoever. This recovers an invoice left behind after
+     * all auto-created next orders were safely deleted.
+     */
+    @Transactional
+    public CommonInvoiceDetailsResponse disableEmptyInvoice(Long invoiceId) {
+        CommonInvoice invoice = lockedInvoice(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        if (!items.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Общий счет уже содержит заказы; обновите карточку контроля"
+            );
+        }
+        if (invoice.getStatus() != CommonInvoiceStatus.COLLECTING
+                && invoice.getStatus() != CommonInvoiceStatus.READY) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автозакрытие доступно только для пустого счета в сборе"
+            );
+        }
+        boolean hasPaymentEvidence = invoice.getAmountKopecks() != 0
+                || invoice.getPaidKopecks() != 0
+                || invoice.getSentAt() != null
+                || invoice.getPaidAt() != null
+                || invoice.getClosedAt() != null
+                || invoice.getClientReportedAt() != null
+                || invoice.getManualConfirmedAt() != null
+                || !normalize(invoice.getManualPaidBy()).isBlank()
+                || !normalize(invoice.getManualPaymentComment()).isBlank()
+                || !normalize(invoice.getManualPaymentReceiptUrl()).isBlank()
+                || !attentionError(invoice).isBlank()
+                || !normalize(invoice.getPaymentSuccessNotificationError()).isBlank()
+                || hasCurrentCommonPaymentRoute(invoice)
+                || hasFrozenCommonPaymentRoute(invoice);
+        if (hasPaymentEvidence || !paymentRefRepository.findByInvoiceIdForUpdate(invoiceId).isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Пустой счет содержит платежные признаки и требует ручной сверки"
+            );
+        }
+
+        invoice.setStatus(CommonInvoiceStatus.DISABLED);
+        invoice.setAmountKopecks(0);
+        invoice.setPaidKopecks(0);
+        invoice.setNextReminderAt(null);
+        invoice.setLastError("empty: в общем счете нет заказов");
+        invoiceRepository.save(invoice);
+        return invoiceDetails(invoice, List.of());
+    }
+
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CommonInvoiceDetailsResponse reportPaidByManualCardTransfer(
             Long invoiceId,

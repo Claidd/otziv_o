@@ -1829,6 +1829,45 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void closeManualAsUnpaidAllowsExpiredInstructionAfterStatementVerification() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(1512L, "ООО Истекшая инструкция", BigDecimal.valueOf(1000));
+        PaymentLink link = new PaymentLink();
+        link.setId(15120L);
+        link.setOrder(order);
+        link.setToken("expired-manual-unpaid-token");
+        link.setAmountKopecks(100000L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.EXPIRED);
+        link.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        link.setReceiptStatus(PaymentReceiptStatus.PENDING);
+        link.setLastError("Платежная ссылка пересоздана из-за изменения суммы или маршрута оплаты");
+        link.setExpiresAt(LocalDateTime.now().plusDays(30));
+
+        when(paymentLinkRepository.findByIdWithOrder(15120L)).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(1512L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByIdForUpdate(15120L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.save(link)).thenReturn(link);
+
+        AdminPaymentLinkResponse response = service.closeManualAsUnpaid(
+                15120L,
+                true,
+                true,
+                "Выписка получателя проверена за весь период действия инструкции",
+                "owner@example.ru",
+                authentication
+        );
+
+        assertEquals(PaymentLinkStatus.CANCELED, link.getStatus());
+        assertEquals("CANCELED", response.status());
+        assertTrue(link.getLastError().startsWith("manual_payment_absent_verified:"));
+        assertNull(link.getPaidAt());
+        assertNull(link.getManualConfirmedAt());
+        verify(paymentLinkRepository).save(link);
+        verify(contractorPaymentShadowService).reconcilePaymentLinkId(15120L);
+    }
+
+    @Test
     void closeManualAsUnpaidReconcilesContractorRouteOnlyAfterCommit() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(1511L, "ООО Отложенное освобождение", BigDecimal.valueOf(1000));
