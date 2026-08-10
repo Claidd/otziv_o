@@ -137,6 +137,48 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
     @Query("SELECT COALESCE(MAX(z.id), 0) FROM Zp z")
     long findCurrentMaxId();
 
+    /**
+     * Legacy order rewards created before contractor accounting did not carry
+     * an explicit contractor role. The permanent profession link is the
+     * reliable owner snapshot for those rows, even if the order was later
+     * transferred to another specialist or manager.
+     */
+    @Query(value = """
+        SELECT z.zp_id
+        FROM zp z
+        INNER JOIN workers w
+                ON w.worker_id = z.zp_profession
+               AND w.user_id = z.zp_user
+        WHERE z.zp_user = :userId
+          AND z.zp_contractor_role IS NULL
+          AND z.zp_order IS NOT NULL
+          AND z.zp_order > 0
+          AND z.zp_date >= :startDate
+          AND z.zp_date < :endDate
+        ORDER BY z.zp_id
+    """, nativeQuery = true)
+    List<Long> findLegacySpecialistRewardIdsInPeriod(@Param("userId") Long userId,
+                                                      @Param("startDate") LocalDate startDate,
+                                                      @Param("endDate") LocalDate endDate);
+
+    @Query(value = """
+        SELECT z.zp_id
+        FROM zp z
+        INNER JOIN managers m
+                ON m.manager_id = z.zp_profession
+               AND m.user_id = z.zp_user
+        WHERE z.zp_user = :userId
+          AND z.zp_contractor_role IS NULL
+          AND z.zp_order IS NOT NULL
+          AND z.zp_order > 0
+          AND z.zp_date >= :startDate
+          AND z.zp_date < :endDate
+        ORDER BY z.zp_id
+    """, nativeQuery = true)
+    List<Long> findLegacyManagerRewardIdsInPeriod(@Param("userId") Long userId,
+                                                   @Param("startDate") LocalDate startDate,
+                                                   @Param("endDate") LocalDate endDate);
+
     @Query("SELECT z FROM Zp z WHERE z.userId = :userId AND z.created >= :startDate AND z.created < :endDate")
     List<Zp> getAllWorkerZpInPeriod(@Param("userId") Long userId,
                                     @Param("startDate") LocalDate startDate,

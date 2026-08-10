@@ -73,6 +73,8 @@ class ContractorPaymentProfileServiceTest {
     private BusinessAuditService businessAuditService;
     @Mock
     private ContractorPaymentTargetAccessPolicy targetAccessPolicy;
+    @Mock
+    private ContractorRewardInitialMonthSyncCoordinator initialMonthSyncCoordinator;
 
     @InjectMocks
     private ContractorPaymentProfileService service;
@@ -302,6 +304,7 @@ class ContractorPaymentProfileServiceTest {
                 any(),
                 any()
         );
+        verify(initialMonthSyncCoordinator).request(7L);
         InOrder lockOrder = inOrder(userRepository, profileRepository);
         lockOrder.verify(userRepository).lockContractorActiveFlag(31L);
         lockOrder.verify(userRepository).lockContractorRoleIds(31L, "ROLE_WORKER");

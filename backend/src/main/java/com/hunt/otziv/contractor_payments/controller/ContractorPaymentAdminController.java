@@ -10,7 +10,9 @@ import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileServic
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,7 +40,16 @@ public class ContractorPaymentAdminController {
             @PathVariable Long userId,
             @Valid @RequestBody ContractorPaymentProfileRequest request
     ) {
-        return profileService.update(userId, request);
+        profileService.update(userId, request);
+        // The initial month import runs in an after-commit transaction. Read
+        // once more so the response contains its totals and current @Version.
+        return profileService.getForUser(userId).stream()
+                .filter(profile -> profile.role() == request.role())
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Платёжный профиль не найден после сохранения"
+                ));
     }
 
     @GetMapping("/{profileId}/opening-balance-history")

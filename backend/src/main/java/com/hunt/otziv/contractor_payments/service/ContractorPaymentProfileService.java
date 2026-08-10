@@ -75,6 +75,7 @@ public class ContractorPaymentProfileService {
     private final ContractorPaymentAccountingPhaseService accountingPhaseService;
     private final BusinessAuditService businessAuditService;
     private final ContractorPaymentTargetAccessPolicy targetAccessPolicy;
+    private final ContractorRewardInitialMonthSyncCoordinator initialMonthSyncCoordinator;
 
     @Value("${otziv.contractor-payments.business-zone:Asia/Irkutsk}")
     private String businessZoneId;
@@ -243,6 +244,11 @@ public class ContractorPaymentProfileService {
                     "userId=" + userId + ", role=" + saved.getRole()
                             + ", changedFields=" + String.join(",", changedFields)
             );
+        }
+        if (saved.isEnabled()) {
+            // The import acquires ZP locks before the profile lock. Schedule it
+            // after this profile transaction commits to preserve that order.
+            initialMonthSyncCoordinator.request(saved.getId());
         }
         return toResponse(saved);
     }

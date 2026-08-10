@@ -3,9 +3,11 @@ package com.hunt.otziv.contractor_payments.repository;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Collection;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -69,4 +71,16 @@ public interface ContractorPaymentProfileRepository extends JpaRepository<Contra
     """)
     Optional<ContractorPaymentProfile> findByUserIdAndRoleForUpdate(@Param("userId") Long userId,
                                                                     @Param("role") ContractorRole role);
+
+    @Query("""
+        SELECT p.id
+        FROM ContractorPaymentProfile p
+        WHERE p.enabled = true
+          AND p.trackingStartedAt > :monthStart
+        ORDER BY p.id
+    """)
+    List<Long> findEnabledIdsRequiringCurrentMonthSync(
+            @Param("monthStart") LocalDateTime monthStart,
+            Pageable pageable
+    );
 }
