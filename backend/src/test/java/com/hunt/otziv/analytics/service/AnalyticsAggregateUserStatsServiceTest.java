@@ -74,6 +74,7 @@ class AnalyticsAggregateUserStatsServiceTest {
         stubMonthlyRows(monthlyRows);
         stubDailyRows(dailyRows);
         when(zpService.sumByUserAndCreated(10L, DATE)).thenReturn(new BigDecimal("40.00"));
+        when(zpService.countByUserAndCreated(10L, DATE)).thenReturn(1L);
         when(zpService.sumByUserAndCreated(10L, DATE.minusDays(1))).thenReturn(new BigDecimal("100.00"));
 
         Optional<UserStatDTO> result = service.buildUserStats(DATE, user);
@@ -85,23 +86,45 @@ class AnalyticsAggregateUserStatsServiceTest {
         assertEquals(77L, stats.getImageId());
         assertEquals(new BigDecimal("1.25"), stats.getCoefficient());
         assertEquals(40, stats.getSum1Day());
-        assertEquals(125, stats.getSum1Week());
-        assertEquals(175, stats.getSum1Month());
-        assertEquals(875, stats.getSum1Year());
-        assertEquals(4, stats.getSumOrders1Month());
+        assertEquals(165, stats.getSum1Week());
+        assertEquals(215, stats.getSum1Month());
+        assertEquals(915, stats.getSum1Year());
+        assertEquals(5, stats.getSumOrders1Month());
         assertEquals(2, stats.getSumOrders2Month());
         assertEquals(-60, stats.getPercent1Day());
-        assertEquals(-13, stats.getPercent1Month());
+        assertEquals(7, stats.getPercent1Month());
 
         JsonNode dailyMap = objectMapper.readTree(stats.getZpPayMap());
         assertEquals(31, dailyMap.size());
         assertEquals(100, dailyMap.get("8").asInt());
-        assertEquals(0, dailyMap.get("9").asInt());
+        assertEquals(40, dailyMap.get("9").asInt());
 
         JsonNode monthlyMap = objectMapper.readTree(stats.getZpPayMapMonth());
         assertEquals(100, monthlyMap.get("2025").get("5").asInt());
         assertTrue(monthlyMap.get("2025").get("2") == null);
-        assertEquals(175, monthlyMap.get("2026").get("5").asInt());
+        assertEquals(215, monthlyMap.get("2026").get("5").asInt());
+    }
+
+    @Test
+    void replacesStaleSelectedDayAggregateWithLiveSalaryAndCount() throws Exception {
+        User user = user(10L, "Worker One", "1.25", 77L);
+        stubMonthlyRows(List.of());
+        stubDailyRows(List.of(
+                daily(user, DATE.minusDays(1), "100.00", 2),
+                daily(user, DATE, "10.00", 1)
+        ));
+        when(zpService.sumByUserAndCreated(10L, DATE)).thenReturn(new BigDecimal("40.00"));
+        when(zpService.countByUserAndCreated(10L, DATE)).thenReturn(3L);
+        when(zpService.sumByUserAndCreated(10L, DATE.minusDays(1))).thenReturn(new BigDecimal("100.00"));
+
+        UserStatDTO stats = service.buildUserStats(DATE, user).orElseThrow();
+
+        assertEquals(140, stats.getSum1Month());
+        assertEquals(5, stats.getSumOrders1Month());
+        JsonNode dailyMap = objectMapper.readTree(stats.getZpPayMap());
+        assertEquals(40, dailyMap.get("9").asInt());
+        JsonNode monthlyMap = objectMapper.readTree(stats.getZpPayMapMonth());
+        assertEquals(140, monthlyMap.get("2026").get("5").asInt());
     }
 
     private void stubDailyRows(List<AnalyticsDailyUser> rows) {

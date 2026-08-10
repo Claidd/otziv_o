@@ -38,8 +38,9 @@ public interface ZpService {
 
     BigDecimal sumByUserAndCreated(Long userId, LocalDate created);
 
+    long countByUserAndCreated(Long userId, LocalDate created);
+
     Map<String, Quadruple<String, Long, Long, Long>> getAllZpToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
     Map<String, Pair<String, Long>> getAllZpToMonthToTelegram(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 }
-

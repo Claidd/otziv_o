@@ -232,6 +232,10 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
     BigDecimal sumByUserAndCreated(@Param("userId") Long userId,
                                    @Param("created") LocalDate created);
 
+    @Query("SELECT COUNT(z) FROM Zp z WHERE z.userId = :userId AND z.created = :created")
+    long countByUserAndCreated(@Param("userId") Long userId,
+                               @Param("created") LocalDate created);
+
 
 //    @Query("SELECT z.fio, SUM(z.sum) as totalSum FROM Zp z WHERE z.created BETWEEN :startDate AND :endDate GROUP BY z.fio ORDER BY totalSum DESC")
 //    List<Object[]> findAllToDateToMap(LocalDate startDate, LocalDate endDate);

@@ -82,6 +82,14 @@ public class ZpServiceImpl implements ZpService{
         return sum == null ? BigDecimal.ZERO : sum;
     }
 
+    @Override
+    public long countByUserAndCreated(Long userId, LocalDate created) {
+        if (userId == null || created == null) {
+            return 0L;
+        }
+        return zpRepository.countByUserAndCreated(userId, created);
+    }
+
     /** Берем все ЗП ЗА МЕСЯЦ всех юзеров на сайте для телеграмма**/
     @Override
     public Map<String, Pair<String, Long>> getAllZpToMonthToTelegram(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
