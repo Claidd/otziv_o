@@ -5651,17 +5651,20 @@ public class PaymentLinkService {
         if (requisites.contractorRoute() && !requisites.available()) {
             return "";
         }
+        String bankName = requisites.contractorRoute() ? requisites.bankName() : "";
         String comment = requisites.comment();
         if (manualPaymentType(link) == ManualPaymentType.EXTERNAL_LINK) {
             return manualPaymentInstruction(
                     "Ссылка на оплату: " + requisites.paymentUrl(),
                     requisites.recipientName(),
+                    bankName,
                     comment
             );
         }
         return manualPaymentInstruction(
                 mobileBankPaymentLine(requisites.phone()),
                 requisites.recipientName(),
+                bankName,
                 comment
         );
     }
@@ -5679,19 +5682,26 @@ public class PaymentLinkService {
         return digits.length() >= 13 && digits.length() <= 19;
     }
 
-    private String manualPaymentInstruction(String paymentLine, String recipient, String comment) {
+    private String manualPaymentInstruction(
+            String paymentLine,
+            String recipient,
+            String bankName,
+            String comment
+    ) {
+        String cleanBankName = normalize(bankName);
         String cleanComment = normalize(comment);
-        if (cleanComment.isBlank()) {
-            return String.join("\n",
-                    paymentLine,
-                    "Получатель: " + recipient
-            );
+        StringBuilder instruction = new StringBuilder()
+                .append(paymentLine)
+                .append('\n')
+                .append("Получатель: ")
+                .append(recipient);
+        if (!cleanBankName.isBlank()) {
+            instruction.append('\n').append("Банк: ").append(cleanBankName);
         }
-        return String.join("\n",
-                paymentLine,
-                "Получатель: " + recipient,
-                "Комментарий: " + cleanComment
-        );
+        if (!cleanComment.isBlank()) {
+            instruction.append('\n').append("Комментарий: ").append(cleanComment);
+        }
+        return instruction.toString();
     }
 
     private String paymentAfterword(PaymentLink link) {

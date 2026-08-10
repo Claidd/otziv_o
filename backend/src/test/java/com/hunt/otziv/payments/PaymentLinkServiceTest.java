@@ -638,6 +638,7 @@ class PaymentLinkServiceTest {
         assertEquals("contractor-frozen-token", response.token());
         assertTrue(response.instructionText().contains("+79990001122"));
         assertTrue(response.instructionText().contains("Зафиксированный получатель"));
+        assertTrue(response.instructionText().contains("Банк: Зафиксированный банк"));
         assertTrue(response.instructionText().contains("Зафиксированный комментарий"));
         assertEquals(712L, existing.getContractorAllocationId());
         assertNull(existing.getManualPhone());
@@ -949,6 +950,7 @@ class PaymentLinkServiceTest {
         assertEquals("MANUAL_MOBILE_BANK", response.paymentMethod());
         assertTrue(response.instructionText().contains("Оплата по мобильному банку: +79990000000"));
         assertTrue(response.instructionText().contains("Получатель: Иван И."));
+        assertFalse(response.instructionText().contains("Банк:"));
         assertTrue(response.instructionText().contains("Комментарий: Оплата заказа №12"));
         assertFalse(response.copyText().contains("https://example.ru/pay/"));
         assertTrue(response.copyText().contains("После оплаты отправьте чек в этот чат."));
@@ -1053,6 +1055,7 @@ class PaymentLinkServiceTest {
         assertEquals("MANUAL_EXTERNAL_LINK", response.paymentMethod());
         assertTrue(response.instructionText().contains("Ссылка на оплату: https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR"));
         assertTrue(response.instructionText().contains("Получатель: Сивохин И.И."));
+        assertFalse(response.instructionText().contains("Банк:"));
         assertFalse(response.instructionText().contains("Получатель: Оплатить через Альфа-Банк"));
         assertNull(link.getManualComment());
         assertFalse(response.instructionText().contains("Комментарий:"));
