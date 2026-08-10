@@ -38,6 +38,19 @@ test('all logout buttons report an exact source before clearing the session', ()
   assert.match(logout, /void this\.flushDiagnostics\(accessToken\)/);
 });
 
+test('header-menu logout requires an explicit destructive confirmation', () => {
+  assert.match(header, /inject\(MobileConfirmService\)/);
+  assert.match(header, /title: 'Выйти из приложения\?'/);
+  assert.match(header, /confirmText: 'Выйти'/);
+  assert.match(header, /cancelText: 'Остаться'/);
+  assert.match(header, /danger: true/);
+
+  const start = header.indexOf('async logout(): Promise<void>');
+  const logout = header.slice(start, header.indexOf('\n  }', start) + 4);
+  assert.ok(logout.indexOf('await this.confirm.confirm') < logout.indexOf("await this.auth.logoutFrom('header_menu')"));
+  assert.match(logout, /if \(!confirmed\) \{\s*return;/);
+});
+
 test('app transitions, network changes and every auth-clearing branch are classified', () => {
   assert.match(diagnostics, /'app\.foreground'/);
   assert.match(diagnostics, /'app\.background'/);

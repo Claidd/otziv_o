@@ -11,6 +11,7 @@ import {
 } from '../core/mobile-permissions';
 import { MobileThemeMode, MobileThemeService } from './mobile-theme.service';
 import { ManagerReportReviewAccessService } from '../core/manager-report-review-access.service';
+import { MobileConfirmService } from './mobile-confirm.service';
 
 interface MobileHeaderLink {
   label: string;
@@ -341,6 +342,7 @@ export class MobileHeaderComponent {
   @Input() title = '';
 
   readonly auth = inject(AuthService);
+  readonly confirm = inject(MobileConfirmService);
   readonly theme = inject(MobileThemeService);
   readonly reportReview = inject(ManagerReportReviewAccessService);
   readonly menuOpen = signal(false);
@@ -386,8 +388,18 @@ export class MobileHeaderComponent {
     this.menuOpen.set(false);
   }
 
-  logout(): void {
+  async logout(): Promise<void> {
     this.closeMenu();
-    void this.auth.logoutFrom('header_menu');
+    const confirmed = await this.confirm.confirm({
+      title: 'Выйти из приложения?',
+      message: 'Сессия будет завершена, и для продолжения потребуется войти снова. Закрывать приложение после работы не нужно.',
+      confirmText: 'Выйти',
+      cancelText: 'Остаться',
+      danger: true
+    });
+    if (!confirmed) {
+      return;
+    }
+    await this.auth.logoutFrom('header_menu');
   }
 }
