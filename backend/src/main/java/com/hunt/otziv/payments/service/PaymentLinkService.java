@@ -1,7 +1,7 @@
 package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
@@ -15,10 +15,10 @@ import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingSe
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService.FrozenPaymentLinkAction;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
-import com.hunt.otziv.manager.services.ManagerAccessService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.services.service.OrderTransactionService;
+import com.hunt.otziv.p_products.service.OrderTransactionService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
@@ -73,7 +73,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.hunt.otziv.logs.LogMasking.maskPaymentId;
+import static com.hunt.otziv.logs.util.LogMasking.maskPaymentId;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;

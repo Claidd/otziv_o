@@ -9,13 +9,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.b_bots.dto.BotDTO;
-import com.hunt.otziv.b_bots.services.BotBrowserAccessService;
-import com.hunt.otziv.b_bots.services.BotCrudAccessService;
-import com.hunt.otziv.b_bots.services.BotService;
-import com.hunt.otziv.b_bots.services.StatusBotService;
+import com.hunt.otziv.b_bots.service.BotBrowserAccessService;
+import com.hunt.otziv.b_bots.service.BotCrudAccessService;
+import com.hunt.otziv.b_bots.service.BotService;
+import com.hunt.otziv.b_bots.service.StatusBotService;
 import com.hunt.otziv.b_bots.utils.BotValidation;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import java.security.Principal;
 import java.util.Optional;
 import java.util.Set;

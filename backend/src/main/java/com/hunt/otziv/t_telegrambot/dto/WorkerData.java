@@ -1,6 +1,6 @@
 package com.hunt.otziv.t_telegrambot.dto;
 
-import com.hunt.otziv.admin.dto.presonal.UserData;
+import com.hunt.otziv.admin.dto.personal.UserData;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

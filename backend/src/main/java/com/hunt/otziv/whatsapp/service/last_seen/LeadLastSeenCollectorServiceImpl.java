@@ -2,7 +2,7 @@ package com.hunt.otziv.whatsapp.service.last_seen;
 
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.l_lead.service.LeadService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.LastSeenStatDto;
 import com.hunt.otziv.whatsapp.dto.StatDto;

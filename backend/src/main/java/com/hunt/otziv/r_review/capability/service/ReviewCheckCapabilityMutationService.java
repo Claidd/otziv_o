@@ -2,7 +2,7 @@ package com.hunt.otziv.r_review.capability.service;
 
 import com.hunt.otziv.r_review.capability.repository.ReviewCheckCapabilityRepository;
 import com.hunt.otziv.r_review.capability.repository.ReviewCheckCapabilityResourceRepository;
-import com.hunt.otziv.manager.services.ManagerAccessService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.repository.OrderDetailsRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.r_review.capability.repository.ReviewCheckCapabilityResourceRepository.ArchivedResourceBinding;

@@ -1,7 +1,7 @@
 package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
@@ -10,9 +10,9 @@ import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerServic
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.Telephone;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
-import com.hunt.otziv.text_generator.alltext.service.clas.OfferTextService;
-import com.hunt.otziv.text_generator.alltext.service.clas.RandomTextService;
+import com.hunt.otziv.l_lead.service.LeadService;
+import com.hunt.otziv.text_generator.alltext.service.OfferTextService;
+import com.hunt.otziv.text_generator.alltext.service.RandomTextService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
 import com.hunt.otziv.whatsapp.dto.WhatsAppReplyDTO;
 import com.hunt.otziv.whatsapp.service.service.ReplyService;

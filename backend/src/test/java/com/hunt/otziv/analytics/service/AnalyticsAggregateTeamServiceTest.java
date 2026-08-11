@@ -1,7 +1,7 @@
 package com.hunt.otziv.analytics.service;
 
-import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
-import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
+import com.hunt.otziv.admin.dto.personal.ManagersListDTO;
+import com.hunt.otziv.admin.dto.personal.OperatorsListDTO;
 import com.hunt.otziv.analytics.model.AnalyticsDailyUser;
 import com.hunt.otziv.analytics.model.AnalyticsMonthlyUser;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService.AggregateTeam;

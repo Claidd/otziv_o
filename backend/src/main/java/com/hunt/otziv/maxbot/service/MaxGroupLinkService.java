@@ -3,7 +3,7 @@ package com.hunt.otziv.maxbot.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
-import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
+import com.hunt.otziv.c_companies.service.SharedChatLinkSyncService;
 import com.hunt.otziv.webhook.security.OneTimeGroupLinkTokenStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

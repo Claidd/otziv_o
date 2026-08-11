@@ -1,14 +1,14 @@
 package com.hunt.otziv.r_review.bot.service;
 
 import com.hunt.otziv.b_bots.model.Bot;
-import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.b_bots.service.BotService;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
-import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.c_companies.service.FilialService;
 import com.hunt.otziv.config.email.service.EmailService;
-import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;

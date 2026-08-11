@@ -3,7 +3,7 @@ package com.hunt.otziv.manager.controller;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.manager.dto.api.ManagerBoardResponse;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
-import com.hunt.otziv.manager.services.ManagerBoardService;
+import com.hunt.otziv.manager.service.ManagerBoardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;

@@ -1,6 +1,6 @@
 package com.hunt.otziv.p_products.worker_access.service;
 
-import com.hunt.otziv.manager.services.ManagerAccessService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerAssignmentMutationGuardRepository;
 import java.util.Locale;

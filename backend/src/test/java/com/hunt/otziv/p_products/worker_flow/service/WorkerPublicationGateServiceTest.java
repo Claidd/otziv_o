@@ -1,13 +1,13 @@
 package com.hunt.otziv.p_products.worker_flow.service;
 
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
-import com.hunt.otziv.p_products.services.service.OrderService;
-import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
+import com.hunt.otziv.p_products.service.OrderService;
+import com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
-import com.hunt.otziv.u_users.services.service.UserService;
-import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.u_users.service.UserService;
+import com.hunt.otziv.u_users.service.WorkerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

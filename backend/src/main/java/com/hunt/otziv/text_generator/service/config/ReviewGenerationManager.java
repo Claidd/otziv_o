@@ -1,7 +1,7 @@
 package com.hunt.otziv.text_generator.service.config;
 
 import com.hunt.otziv.text_generator.dto.PromptDTO;
-import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
+import com.hunt.otziv.text_generator.service.gpt.ReviewGeneratorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;

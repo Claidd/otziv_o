@@ -1,7 +1,7 @@
 package com.hunt.otziv.s3.cleanup.service;
 
-import com.hunt.otziv.scheduler.SchedulerLeaseService;
-import com.hunt.otziv.scheduler.SchedulerLeaseService.Lease;
+import com.hunt.otziv.scheduler.service.SchedulerLeaseService;
+import com.hunt.otziv.scheduler.service.SchedulerLeaseService.Lease;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

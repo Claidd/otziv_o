@@ -1,7 +1,7 @@
 package com.hunt.otziv.admin.controller;
 
 import com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO;
-import com.hunt.otziv.r_review.services.ReviewCityService;
+import com.hunt.otziv.r_review.service.ReviewCityService;
 import java.io.ByteArrayInputStream;
 import java.util.List;
 import java.util.stream.IntStream;

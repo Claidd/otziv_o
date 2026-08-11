@@ -2,11 +2,11 @@ package com.hunt.otziv.l_lead.controller;
 
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
-import com.hunt.otziv.u_users.services.service.ManagerService;
-import com.hunt.otziv.u_users.services.service.MarketologService;
-import com.hunt.otziv.u_users.services.service.OperatorService;
+import com.hunt.otziv.u_users.service.ManagerService;
+import com.hunt.otziv.u_users.service.MarketologService;
+import com.hunt.otziv.u_users.service.OperatorService;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.l_lead.service.LeadService;
 import jakarta.validation.Valid;
 
 import lombok.extern.slf4j.Slf4j;

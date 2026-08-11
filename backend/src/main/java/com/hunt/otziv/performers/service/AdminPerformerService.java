@@ -19,7 +19,7 @@ import com.hunt.otziv.u_users.dto.UpdateKeycloakUserRequest;
 import com.hunt.otziv.u_users.keycloak.client.KeycloakAdminClient;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
-import com.hunt.otziv.u_users.services.UserAuthEpochService;
+import com.hunt.otziv.u_users.service.UserAuthEpochService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

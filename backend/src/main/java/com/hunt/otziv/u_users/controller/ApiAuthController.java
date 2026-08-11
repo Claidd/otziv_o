@@ -4,7 +4,7 @@ import com.hunt.otziv.u_users.dto.CreatedKeycloakUserResponse;
 import com.hunt.otziv.u_users.dto.LegacyUserMigrationRequest;
 import com.hunt.otziv.u_users.dto.RegisterClientRequest;
 import com.hunt.otziv.u_users.security.LegacyMigrationRequestGuard;
-import com.hunt.otziv.u_users.services.KeycloakUserProvisioningService;
+import com.hunt.otziv.u_users.service.KeycloakUserProvisioningService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

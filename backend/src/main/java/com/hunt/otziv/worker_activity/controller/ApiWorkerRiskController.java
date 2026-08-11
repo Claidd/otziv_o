@@ -8,7 +8,7 @@ import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskEvaluationService;
 import com.hunt.otziv.gamification.model.GamificationScoreLedger;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;

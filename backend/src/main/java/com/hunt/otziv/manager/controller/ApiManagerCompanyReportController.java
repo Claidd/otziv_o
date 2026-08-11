@@ -2,10 +2,10 @@ package com.hunt.otziv.manager.controller;
 
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.manager.dto.api.CompanyDeepReportStateResponse;
-import com.hunt.otziv.manager.services.ManagerAccessService;
-import com.hunt.otziv.manager.services.ManagerPermissionService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
+import com.hunt.otziv.manager.service.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
-import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.p_products.service.OrderService;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
 import com.hunt.otziv.reputationai.application.service.DeepCompanyResearchJobService;
 import com.hunt.otziv.reputationai.config.DeepResearchProfile;

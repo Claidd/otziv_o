@@ -16,7 +16,7 @@ import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.webhook.security.WebhookClientIpResolver;
 import com.hunt.otziv.u_users.repository.UserRepository;
-import com.hunt.otziv.u_users.services.UserServiceImpl;
+import com.hunt.otziv.u_users.service.UserServiceImpl;
 import jakarta.servlet.Filter;
 import java.time.Instant;
 import java.util.List;

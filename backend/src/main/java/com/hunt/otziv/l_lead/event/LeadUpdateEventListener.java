@@ -2,9 +2,9 @@ package com.hunt.otziv.l_lead.event;
 
 import com.hunt.otziv.l_lead.dto.LeadUpdatedEvent;
 import com.hunt.otziv.l_lead.model.Lead;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
-import com.hunt.otziv.l_lead.services.serv.LeadTransferService;
-import com.hunt.otziv.l_lead.services.serv.VpsSyncService;
+import com.hunt.otziv.l_lead.service.LeadService;
+import com.hunt.otziv.l_lead.service.LeadTransferService;
+import com.hunt.otziv.l_lead.service.VpsSyncService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

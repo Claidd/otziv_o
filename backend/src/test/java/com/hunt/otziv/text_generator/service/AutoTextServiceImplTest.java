@@ -1,18 +1,18 @@
 package com.hunt.otziv.text_generator.service;
 
 import com.hunt.otziv.c_categories.model.SubCategory;
-import com.hunt.otziv.c_categories.services.CategoryService;
-import com.hunt.otziv.c_categories.services.SubCategoryService;
-import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.c_categories.service.CategoryService;
+import com.hunt.otziv.c_categories.service.SubCategoryService;
+import com.hunt.otziv.c_companies.service.FilialService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
-import com.hunt.otziv.r_review.services.ReviewService;
-import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.r_review.service.ReviewService;
+import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.text_generator.config.PromptFactory;
 import com.hunt.otziv.text_generator.dto.PromptDTO;
 import com.hunt.otziv.text_generator.service.config.ReviewGenerationManager;
 import com.hunt.otziv.text_generator.service.parser.WebsiteParserService;
-import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
+import com.hunt.otziv.text_generator.service.gpt.ReviewGeneratorService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

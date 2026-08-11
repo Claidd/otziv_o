@@ -1,20 +1,20 @@
 package com.hunt.otziv.r_review.controller;
 
-import com.hunt.otziv.manager.services.ManagerAccessService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService;
-import com.hunt.otziv.p_products.services.service.OrderDetailsService;
-import com.hunt.otziv.p_products.services.service.OrderService;
-import com.hunt.otziv.p_products.services.service.ProductService;
+import com.hunt.otziv.p_products.service.OrderDetailsService;
+import com.hunt.otziv.p_products.service.OrderService;
+import com.hunt.otziv.p_products.service.ProductService;
 import com.hunt.otziv.r_review.capability.service.ReviewCheckMutationLockService;
 import com.hunt.otziv.r_review.capability.service.ReviewCheckPublicMutationPolicy;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
-import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.r_review.service.ReviewService;
 
 import java.time.LocalDate;
 import java.util.List;

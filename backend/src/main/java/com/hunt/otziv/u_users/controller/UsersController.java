@@ -4,8 +4,8 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.u_users.dto.*;
 import com.hunt.otziv.u_users.model.Operator;
-import com.hunt.otziv.u_users.services.RoleService;
-import com.hunt.otziv.u_users.services.service.*;
+import com.hunt.otziv.u_users.service.RoleService;
+import com.hunt.otziv.u_users.service.*;
 import com.hunt.otziv.u_users.utils.UserValidation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

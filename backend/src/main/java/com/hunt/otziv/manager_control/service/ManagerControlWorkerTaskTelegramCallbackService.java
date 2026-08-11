@@ -1,7 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
@@ -14,11 +14,11 @@ import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
-import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
+import com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.UserRepository;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;

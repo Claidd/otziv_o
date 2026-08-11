@@ -5,7 +5,7 @@ import com.hunt.otziv.text_generator.alltext.model.OfferText;
 import com.hunt.otziv.text_generator.alltext.model.RandomText;
 import com.hunt.otziv.text_generator.alltext.repository.OfferTextRepository;
 import com.hunt.otziv.text_generator.alltext.repository.RandomTextRepository;
-import com.hunt.otziv.text_generator.alltext.service.clas.RandomTextService;
+import com.hunt.otziv.text_generator.alltext.service.RandomTextService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

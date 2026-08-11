@@ -11,7 +11,7 @@ import com.hunt.otziv.gamification.dto.GamificationRewardSettings;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import java.security.Principal;
 import java.util.List;
 import java.util.Optional;

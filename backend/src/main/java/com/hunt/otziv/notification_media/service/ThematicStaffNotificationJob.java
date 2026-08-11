@@ -5,7 +5,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
-import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.u_users.service.WorkerService;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import java.time.LocalDate;

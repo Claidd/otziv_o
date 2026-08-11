@@ -12,7 +12,7 @@ import com.hunt.otziv.u_users.dto.CreateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.CreatedKeycloakUserResponse;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
-import com.hunt.otziv.u_users.services.KeycloakUserProvisioningService;
+import com.hunt.otziv.u_users.service.KeycloakUserProvisioningService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;

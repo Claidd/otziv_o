@@ -1,0 +1,1014 @@
+package com.hunt.otziv.p_products.service;
+
+
+
+
+import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.b_bots.service.BotService;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
+import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.service.FilialService;
+import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.service.BotAssignmentService;
+import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
+import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.t_telegrambot.service.TelegramService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class BotAssignmentServiceImpl implements BotAssignmentService {
+
+    private final BotService botService;
+    private final FilialService filialService;
+    private final CompanyRepository companyRepository;
+    private final ReviewRepository reviewRepository;
+    private final TelegramService telegramService;
+    private final ReviewBotCooldownService botCooldownService;
+    private final ReviewAccountWalkScheduleService accountWalkScheduleService;
+    private final ReviewBotAssignmentGuardService assignmentGuardService;
+    private final BusinessAuditService businessAuditService;
+
+    private static final Long STUB_BOT_ID = 1L;
+    private static final Set<Long> OWN_CITY_NEW_ACCOUNT_CITY_IDS = Set.of(320L, 326L);
+    private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
+            "Впишите Имя Фамилию",
+            "Впиши Имя Фамилию",
+            "Впишите Фамилию Имя"
+    );
+
+    @Override
+    @Transactional
+    public List<Review> assignBotsToNewReviews(OrderDTO orderDTO, OrderDetails orderDetails) {
+        List<Review> reviewList = new ArrayList<>();
+
+        // 1. Получаем филиал
+        Filial defaultFilial = orderDetails.getOrder().getFilial();
+        if (defaultFilial == null) {
+            throw new IllegalArgumentException("Филиал не может быть null");
+        }
+        lockCompanyForBotAssignment(defaultFilial);
+
+        // New orders prefer accounts that still need walking. Readiness is
+        // calculated separately for every selected account.
+        boolean vigul = false;
+        int neededForOrder = orderDTO.getAmount();
+
+        log.info("Назначение ботов для новых отзывов: vigul={}, требуется {} ботов", vigul, neededForOrder);
+
+        Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(defaultFilial);
+        usedBotIdsInCompany.addAll(getReservedBotIdsByUnpublishedReviews(null));
+        Set<Long> usedBotIdsInThisOrder = new HashSet<>(usedBotIdsInCompany);
+
+        if (hasPerReviewFilials(orderDTO)) {
+            for (int i = 0; i < neededForOrder; i++) {
+                Filial reviewFilial = reviewFilialAt(orderDTO, i, defaultFilial);
+                List<Bot> availableBots = getAvailableBotsByRules(reviewFilial, vigul, 1, usedBotIdsInThisOrder);
+                Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, i, reviewFilial);
+
+                Review review = createReviewWithBot(orderDTO, orderDetails, reviewFilial, assignedBot);
+                reviewList.add(review);
+            }
+
+            return reviewList;
+        }
+
+        // 3. Получаем доступных ботов по правилам
+        List<Bot> availableBots = getAvailableBotsByRules(defaultFilial, vigul, neededForOrder, usedBotIdsInCompany);
+
+        // 4. Создаем отзывы с УНИКАЛЬНЫМИ ботами
+        for (int i = 0; i < neededForOrder; i++) {
+            Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, i, defaultFilial);
+
+            // Создаем отзыв
+            Review review = createReviewWithBot(orderDTO, orderDetails, defaultFilial, assignedBot);
+            reviewList.add(review);
+        }
+
+        return reviewList;
+    }
+
+    private boolean hasPerReviewFilials(OrderDTO orderDTO) {
+        return orderDTO != null
+                && orderDTO.getReviewFilialIds() != null
+                && !orderDTO.getReviewFilialIds().isEmpty();
+    }
+
+    private Filial reviewFilialAt(OrderDTO orderDTO, int index, Filial defaultFilial) {
+        List<Long> filialIds = orderDTO.getReviewFilialIds();
+        if (filialIds == null || index >= filialIds.size() || filialIds.get(index) == null) {
+            return defaultFilial;
+        }
+
+        Filial filial = filialService.getFilial(filialIds.get(index));
+        if (filial == null || !sameCompany(defaultFilial, filial)) {
+            log.warn(
+                    "Филиал {} для отзыва {} не подходит компании заказа, используется филиал заказа {}",
+                    filialIds.get(index),
+                    index + 1,
+                    defaultFilial.getId()
+            );
+            return defaultFilial;
+        }
+
+        return filial;
+    }
+
+    private boolean sameCompany(Filial left, Filial right) {
+        Long leftCompanyId = left != null && left.getCompany() != null ? left.getCompany().getId() : null;
+        Long rightCompanyId = right != null && right.getCompany() != null ? right.getCompany().getId() : null;
+        return leftCompanyId != null && Objects.equals(leftCompanyId, rightCompanyId);
+    }
+
+    @Override
+    @Transactional
+    public boolean assignBotsToExistingReviews(List<Review> reviews, Filial filial) {
+        return assignBotsToExistingReviews(reviews, filial, false);
+    }
+
+    @Override
+    @Transactional
+    public boolean assignBotsToExistingReviews(List<Review> reviews, Filial filial, boolean forceWalkDelayIfUnwalked) {
+        try {
+            log.info("=== НАЧАЛО ПЕРЕНАЗНАЧЕНИЯ БОТОВ ДЛЯ СУЩЕСТВУЮЩИХ ОТЗЫВОВ ===");
+            log.info("Филиал ID: {}, город: {}", filial.getId(), filial.getCity().getTitle());
+            lockCompanyForBotAssignment(filial);
+
+            // 1. Фильтруем отзывы с null ботом
+            List<Review> reviewsWithoutBots = reviews.stream()
+                    .filter(review -> review.getBot() == null)
+                    .collect(Collectors.toList());
+
+            if (reviewsWithoutBots.isEmpty()) {
+                log.warn("Нет отзывов с null ботом для переназначения");
+                return false;
+            }
+
+            log.info("Найдено {} отзывов с null ботом", reviewsWithoutBots.size());
+
+            // 2. Определяем vigul (берем из первого отзыва)
+            boolean vigul = reviewsWithoutBots.stream()
+                    .findFirst()
+                    .map(Review::isVigul)
+                    .orElse(false);
+
+            int neededBots = reviewsWithoutBots.size();
+            log.info("Требуется назначить {} ботов, vigul = {}", neededBots, vigul);
+
+            Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(filial);
+            usedBotIdsInCompany.addAll(getReservedBotIdsByUnpublishedReviews(null));
+
+            // 3. Получаем доступных ботов по правилам
+            List<Bot> availableBots = getAvailableBotsByRules(filial, vigul, neededBots, usedBotIdsInCompany);
+
+            if (availableBots.isEmpty()) {
+                log.warn("Обычных доступных ботов нет, будет выполнен поиск резервных аккаунтов");
+            }
+
+            // 4. Назначаем ботов отзывам
+            Set<Long> usedBotIdsInThisOrder = new HashSet<>(usedBotIdsInCompany);
+            int assignedCount = 0;
+            int reviewIndex = 0;
+
+            for (Review review : reviewsWithoutBots) {
+                Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, reviewIndex, filial);
+
+                // Назначаем бота отзыву
+                review.setBot(assignedBot);
+
+                // Обновляем isVigul на основе counter бота
+                updateReviewVigulBasedOnBotCounter(review, assignedBot);
+                if (assignedBot != null && !STUB_BOT_ID.equals(assignedBot.getId())) {
+                    accountWalkScheduleService.synchronizeAfterAccountChange(review);
+                }
+
+                if (assignedBot != null && !STUB_BOT_ID.equals(assignedBot.getId())) {
+                    assignedCount++;
+                }
+                reviewIndex++;
+            }
+
+            // 5. Сохраняем обновленные отзывы
+            reviewRepository.saveAll(reviewsWithoutBots);
+
+            // 6. Проверяем, есть ли боты-заглушки
+            long stubBotCount = reviewsWithoutBots.stream()
+                    .filter(review -> review.getBot() != null &&
+                            STUB_BOT_ID.equals(review.getBot().getId()))
+                    .count();
+
+            if (stubBotCount > 0) {
+                log.error("ВНИМАНИЕ! После переназначения использовано {} ботов-заглушек из {} отзывов",
+                        stubBotCount, reviewsWithoutBots.size());
+                sendStubBotAlert(stubBotCount, reviewsWithoutBots.size());
+            }
+
+            log.info("=== УСПЕШНОЕ ПЕРЕНАЗНАЧЕНИЕ БОТОВ ===");
+            log.info("Переназначено {} реальных ботов из {} отзывов", assignedCount, reviewsWithoutBots.size());
+
+            return assignedCount > 0;
+
+        } catch (Exception e) {
+            log.error("Ошибка при переназначении ботов для существующих отзывов", e);
+            throw new RuntimeException("Ошибка при переназначении ботов", e);
+        }
+    }
+
+    @Override
+    @Transactional
+    public Bot assignBotForReviewChange(Review review, Collection<Long> excludedBotIds) {
+        return assignBotForReviewChange(
+                review,
+                excludedBotIds,
+                ReviewBotAssignmentMode.forReviewChange(review)
+        );
+    }
+
+    @Override
+    @Transactional
+    public Bot assignBotForReviewChange(
+            Review review,
+            Collection<Long> excludedBotIds,
+            ReviewBotAssignmentMode mode
+    ) {
+        if (review == null) {
+            throw new IllegalArgumentException("Отзыв не может быть null");
+        }
+
+        Filial filial = review.getFilial();
+        if (filial == null) {
+            throw new IllegalArgumentException("Филиал отзыва не может быть null");
+        }
+        lockCompanyForBotAssignment(filial);
+
+        Set<Long> usedBotIdsForThisChange = new HashSet<>(getUsedBotIdsInCompany(filial));
+        usedBotIdsForThisChange.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
+        if (review.getBot() != null && review.getBot().getId() != null) {
+            usedBotIdsForThisChange.add(review.getBot().getId());
+        }
+        if (excludedBotIds != null) {
+            usedBotIdsForThisChange.addAll(excludedBotIds.stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet()));
+        }
+
+        List<Bot> availableBots = getAvailableBotsByRules(
+                filial,
+                review.isVigul(),
+                1,
+                usedBotIdsForThisChange,
+                review.getId(),
+                mode
+        );
+        Bot assignedBot = findAndAssignUniqueBot(
+                availableBots,
+                usedBotIdsForThisChange,
+                0,
+                filial,
+                mode
+        );
+
+        log.info("Бот ID {} ({}) выбран по общим правилам для замены в отзыве ID {}",
+                assignedBot != null ? assignedBot.getId() : null,
+                assignedBot != null ? assignedBot.getFio() : null,
+                review.getId());
+
+        return assignedBot;
+    }
+
+    @Override
+    public List<Bot> getAvailableBotsByRules(Filial filial, boolean vigul, int neededForOrder) {
+        return getAvailableBotsByRules(filial, vigul, neededForOrder, getUsedBotIdsInCompany(filial));
+    }
+
+    private List<Bot> getAvailableBotsByRules(Filial filial,
+                                              boolean vigul,
+                                              int neededForOrder,
+                                              Set<Long> blockedBotIds) {
+        return getAvailableBotsByRules(filial, vigul, neededForOrder, blockedBotIds, null);
+    }
+
+    private List<Bot> getAvailableBotsByRules(Filial filial,
+                                              boolean vigul,
+                                              int neededForOrder,
+                                              Set<Long> blockedBotIds,
+                                              Long excludedReviewId) {
+        return getAvailableBotsByRules(
+                filial,
+                vigul,
+                neededForOrder,
+                blockedBotIds,
+                excludedReviewId,
+                ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
+        );
+    }
+
+    private List<Bot> getAvailableBotsByRules(Filial filial,
+                                              boolean vigul,
+                                              int neededForOrder,
+                                              Set<Long> blockedBotIds,
+                                              Long excludedReviewId,
+                                              ReviewBotAssignmentMode mode) {
+        log.info("Получение доступных ботов для филиала ID {}, vigul={}, требуется={}",
+                filial.getId(), vigul, neededForOrder);
+
+        // 1. Получаем всех ботов для города
+        List<Bot> allCityBots = botService.getFindAllByFilialCityId(filial.getCity().getId());
+        log.info("Всего ботов в городе {}: {}", filial.getCity().getTitle(), allCityBots.size());
+
+        // 2. Получаем ID ботов, которые нельзя использовать для текущего назначения
+        Set<Long> excludedBotIds = new HashSet<>();
+        if (blockedBotIds != null) {
+            excludedBotIds.addAll(blockedBotIds);
+        }
+        excludedBotIds.addAll(getReservedBotIdsByUnpublishedReviews(excludedReviewId));
+        log.info("Ботов исключено для филиала {}: {}", filial.getId(), excludedBotIds.size());
+
+        // 3. Получаем ID ботов, занятых в активных отзывах других филиалов
+        Set<Long> usedBotIdsGlobally = getUsedBotIdsGlobally(filial);
+        log.info("Ботов занятых в активных отзывах других филиалов того же города: {}",
+                usedBotIdsGlobally.size());
+
+        // 4. Фильтруем ботов по основным условиям
+        List<Bot> idealBots = allCityBots.stream()
+                .filter(Objects::nonNull)
+                .filter(bot -> bot.getId() != null)
+                .filter(Bot::isActive)
+                .filter(botCooldownService::isAvailableForAssignment)
+                .filter(bot -> !excludedBotIds.contains(bot.getId()))
+                .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
+                .filter(bot -> {
+                    if (bot.getStatus() == null) return false;
+                    String statusTitle = bot.getStatus().getBotStatusTitle();
+                    return statusTitle != null && "Новый".equals(statusTitle.trim());
+                })
+                .collect(Collectors.toList());
+
+        log.info("Идеальных ботов (не в этой компании, не заняты в других): {}", idealBots.size());
+
+        // 5. Применяем фильтры vigul к идеальным ботам
+        List<Bot> filteredIdealBots = applyAssignmentFilters(idealBots, vigul, neededForOrder, mode);
+        log.info("Идеальных ботов после фильтра vigul: {}", filteredIdealBots.size());
+
+        List<Bot> availableBots = new ArrayList<>(filteredIdealBots);
+
+        // 6. Если идеальных ботов недостаточно, ищем запасных
+        if (availableBots.size() < neededForOrder) {
+            List<Bot> fallbackBots = allCityBots.stream()
+                    .filter(Objects::nonNull)
+                    .filter(bot -> bot.getId() != null)
+                    .filter(Bot::isActive)
+                    .filter(botCooldownService::isAvailableForAssignment)
+                    .filter(bot -> !excludedBotIds.contains(bot.getId()))
+                    .filter(bot -> {
+                        if (bot.getStatus() == null) return false;
+                        String statusTitle = bot.getStatus().getBotStatusTitle();
+                        return statusTitle != null && "Новый".equals(statusTitle.trim());
+                    })
+                    .filter(bot -> !availableBots.contains(bot))
+                    .collect(Collectors.toList());
+
+            log.info("Запасных ботов (не в этой компании, но могут быть заняты в других): {}",
+                    fallbackBots.size());
+
+            int remainingNeeded = neededForOrder - availableBots.size();
+            List<Bot> filteredFallbackBots = applyAssignmentFilters(fallbackBots, vigul, remainingNeeded, mode);
+            log.info("Запасных ботов после фильтра vigul: {}", filteredFallbackBots.size());
+
+            int toAdd = Math.min(remainingNeeded, filteredFallbackBots.size());
+            availableBots.addAll(filteredFallbackBots.subList(0, toAdd));
+        }
+
+        log.info("Всего доступных ботов для назначения: {}/{}", availableBots.size(), neededForOrder);
+
+        // Статистика выбора ботов
+        logBotSelectionStatistics(availableBots, neededForOrder, vigul);
+
+        return availableBots;
+    }
+
+    @Override
+    @Transactional
+    public void checkAndNotifyAboutStubBots(List<Review> reviews) {
+        checkAndNotifyAboutStubBots(reviews, false);
+    }
+
+    @Override
+    @Transactional
+    public void checkAndNotifyAboutStubBots(List<Review> reviews, boolean forceWalkDelayIfUnwalked) {
+        if (reviews == null || reviews.isEmpty()) {
+            return;
+        }
+
+        log.info("Проверка наличия ботов-заглушек...");
+        int replacedStubBots = replaceStubBotsFromReservePool(reviews, forceWalkDelayIfUnwalked);
+        if (replacedStubBots > 0) {
+            log.warn("Заменено {} ботов-заглушек резервными аккаунтами из общего пула", replacedStubBots);
+        }
+
+        long stubBotCount = reviews.stream()
+                .filter(review -> review.getBot() != null && STUB_BOT_ID.equals(review.getBot().getId()))
+                .count();
+
+        log.info("Найдено ботов-заглушек: {}", stubBotCount);
+
+        if (stubBotCount > 0) {
+            log.error("ВНИМАНИЕ! В заказе использовано {} ботов-заглушек из {} отзывов!",
+                    stubBotCount, reviews.size());
+            sendStubBotAlert(stubBotCount, reviews.size());
+        } else {
+            log.info("Ботов-заглушек не обнаружено");
+        }
+    }
+
+    private int replaceStubBotsFromReservePool(List<Review> reviews, boolean forceWalkDelayIfUnwalked) {
+        Set<Long> usedBotIds = reviews.stream()
+                .map(Review::getBot)
+                .filter(Objects::nonNull)
+                .map(Bot::getId)
+                .filter(Objects::nonNull)
+                .filter(botId -> !STUB_BOT_ID.equals(botId))
+                .collect(Collectors.toCollection(HashSet::new));
+
+        List<Review> changedReviews = new ArrayList<>();
+        int reviewIndex = 0;
+        for (Review review : reviews) {
+            if (!hasStubBot(review)) {
+                continue;
+            }
+            reviewIndex++;
+
+            if (review.isPublish()) {
+                log.warn("Отзыв ID {} уже опубликован с ботом-заглушкой, автоматическая замена пропущена",
+                        review.getId());
+                continue;
+            }
+
+            Filial filial = resolveFilial(review);
+            if (filial == null || filial.getCity() == null || filial.getCity().getId() == null) {
+                log.warn("Не удалось заменить бота-заглушку для отзыва ID {}: город филиала не найден",
+                        review.getId());
+                continue;
+            }
+
+            usedBotIds.addAll(getUsedBotIdsInCompany(filial));
+            usedBotIds.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
+            Bot reserveBot = claimReserveBot(filial, usedBotIds, reviewIndex);
+            if (reserveBot == null || STUB_BOT_ID.equals(reserveBot.getId())) {
+                continue;
+            }
+
+            review.setBot(reserveBot);
+            updateReviewVigulBasedOnBotCounter(review, reserveBot);
+            accountWalkScheduleService.synchronizeAfterAccountChange(review);
+            changedReviews.add(review);
+        }
+
+        if (!changedReviews.isEmpty()) {
+            reviewRepository.saveAll(changedReviews);
+        }
+
+        return changedReviews.size();
+    }
+
+    private boolean hasStubBot(Review review) {
+        return review != null
+                && review.getBot() != null
+                && STUB_BOT_ID.equals(review.getBot().getId());
+    }
+
+    private Filial resolveFilial(Review review) {
+        if (review == null) {
+            return null;
+        }
+        if (review.getFilial() != null) {
+            return review.getFilial();
+        }
+        if (review.getOrderDetails() != null
+                && review.getOrderDetails().getOrder() != null) {
+            return review.getOrderDetails().getOrder().getFilial();
+        }
+        return null;
+    }
+
+    @Override
+    public void updateReviewVigulBasedOnBotCounter(Review review, Bot bot) {
+        if (review == null || bot == null) {
+            return;
+        }
+
+        // Проверяем, не является ли бот заглушкой
+        if (STUB_BOT_ID.equals(bot.getId())) {
+            log.debug("Бот ID {} является заглушкой, пропускаем обновление isVigul", bot.getId());
+            return;
+        }
+
+        boolean shouldBeVigul = accountWalkScheduleService.isWalkedAccount(bot);
+        if (review.isVigul() != shouldBeVigul) {
+            review.setVigul(shouldBeVigul);
+            log.info("Обновлен отзыв ID {}: isVigul изменен на {} (бот ID {} имеет counter={})",
+                    review.getId(), shouldBeVigul, bot.getId(), bot.getCounter());
+        }
+    }
+
+    @Override
+    @Transactional
+    public int promoteReviewsWithWalkedAccounts(Collection<Review> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return 0;
+        }
+
+        List<Review> promoted = new ArrayList<>();
+        for (Review review : reviews) {
+            if (review == null || review.isPublish() || review.isVigul()) {
+                continue;
+            }
+            if (!accountWalkScheduleService.isWalkedAccount(review.getBot())) {
+                continue;
+            }
+
+            accountWalkScheduleService.synchronizeAfterAccountChange(review);
+            promoted.add(review);
+            businessAuditService.recordSafely(
+                    "review_walk_readiness_promoted",
+                    "review",
+                    review.getId(),
+                    review.getOrderDetails() != null && review.getOrderDetails().getOrder() != null
+                            ? review.getOrderDetails().getOrder().getId()
+                            : null,
+                    review.getId(),
+                    false,
+                    true,
+                    "assigned account reached configured walk threshold"
+            );
+        }
+
+        if (!promoted.isEmpty()) {
+            reviewRepository.saveAll(promoted);
+            log.info("Отмечено готовыми к публикации отзывов: {}", promoted.size());
+        }
+        return promoted.size();
+    }
+
+    @Override
+    @Transactional
+    public int promoteAllUnpublishedReviewsWithWalkedAccounts() {
+        return promoteReviewsWithWalkedAccounts(
+                reviewRepository.findAllForWalkReadinessReconciliation()
+        );
+    }
+
+    @Override
+    @Transactional
+    public int promoteUnpublishedReviewsForBot(Bot bot) {
+        if (bot == null || bot.getId() == null) {
+            return 0;
+        }
+        return promoteReviewsWithWalkedAccounts(reviewRepository.findByBotAndPublishFalse(bot));
+    }
+
+    // ============ ПРИВАТНЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ============
+
+    private Bot findAndAssignUniqueBot(List<Bot> availableBots, Set<Long> usedBotIdsInThisOrder, int reviewIndex, Filial filial) {
+        return findAndAssignUniqueBot(
+                availableBots,
+                usedBotIdsInThisOrder,
+                reviewIndex,
+                filial,
+                ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
+        );
+    }
+
+    private Bot findAndAssignUniqueBot(
+            List<Bot> availableBots,
+            Set<Long> usedBotIdsInThisOrder,
+            int reviewIndex,
+            Filial filial,
+            ReviewBotAssignmentMode mode
+    ) {
+        Bot assignedBot = null;
+
+        // Ищем первого доступного бота, который еще не использован в этом заказе
+        for (int j = 0; j < availableBots.size(); j++) {
+            Bot candidateBot = availableBots.get(j);
+            if (!usedBotIdsInThisOrder.contains(candidateBot.getId())) {
+                Bot lockedCandidate = lockEligibleCandidate(candidateBot, filial);
+                availableBots.remove(j);
+                if (lockedCandidate == null) {
+                    j--;
+                    continue;
+                }
+                assignedBot = lockedCandidate;
+                usedBotIdsInThisOrder.add(assignedBot.getId());
+                log.info("Назначен бот ID {} ({}) для отзыва {} (осталось доступных ботов: {})",
+                        assignedBot.getId(), assignedBot.getFio(), reviewIndex + 1, availableBots.size());
+                break;
+            }
+        }
+
+        if (assignedBot == null) {
+            assignedBot = mode == null || mode == ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
+                    ? claimReserveBot(filial, usedBotIdsInThisOrder, reviewIndex)
+                    : claimFreshWalkAccount(filial, usedBotIdsInThisOrder, reviewIndex);
+            if (assignedBot != null) {
+                Bot lockedClaimedBot = lockEligibleCandidate(assignedBot, filial);
+                if (lockedClaimedBot == null) {
+                    throw new IllegalStateException(
+                            "Назначение аккаунта из общего пула остановлено повторной проверкой"
+                    );
+                }
+                assignedBot = lockedClaimedBot;
+            }
+            if (assignedBot != null && !eligibleForMode(assignedBot, mode)) {
+                log.warn("Резервный бот ID {} не подходит режиму {}, используется заглушка",
+                        assignedBot.getId(), mode);
+                assignedBot = null;
+            }
+        }
+
+        if (assignedBot == null) {
+            assignedBot = getStubBot();
+            log.warn("Нет доступных и резервных ботов! Назначена заглушка для отзыва {}", reviewIndex + 1);
+        }
+
+        return assignedBot;
+    }
+
+    private Bot lockEligibleCandidate(Bot candidate, Filial filial) {
+        Long companyId = companyId(filial);
+        return assignmentGuardService.lockIfEligible(
+                        candidate,
+                        assignmentGuardService.scope(companyId, null)
+                )
+                .orElse(null);
+    }
+
+    private Bot claimFreshWalkAccount(
+            Filial filial,
+            Set<Long> excludedBotIds,
+            int reviewIndex
+    ) {
+        if (filial == null || filial.getCity() == null || filial.getCity().getId() == null) {
+            log.warn("Новый аккаунт не назначен для отзыва {}: у филиала нет города", reviewIndex + 1);
+            return null;
+        }
+
+        City city = filial.getCity();
+        Optional<Bot> claimed = OWN_CITY_NEW_ACCOUNT_CITY_IDS.contains(city.getId())
+                ? botService.claimNewAccountFromOwnCity(city, excludedBotIds)
+                : botService.claimNewAccountForCity(city, excludedBotIds);
+        if (claimed.isEmpty()) {
+            return null;
+        }
+
+        Bot bot = claimed.get();
+        excludedBotIds.add(bot.getId());
+        log.warn("Назначен новый аккаунт ID {} ({}) для отзыва {} и города {}",
+                bot.getId(), bot.getFio(), reviewIndex + 1, city.getTitle());
+        return bot;
+    }
+
+    private Bot claimReserveBot(Filial filial, Set<Long> usedBotIdsInThisOrder, int reviewIndex) {
+        if (filial == null || filial.getCity() == null) {
+            log.warn("Резервный бот не назначен для отзыва {}: у филиала нет города", reviewIndex + 1);
+            return null;
+        }
+
+        Optional<Bot> reserveBot = botService.claimReserveBotForCity(filial.getCity(), usedBotIdsInThisOrder);
+        if (reserveBot.isEmpty()) {
+            return null;
+        }
+
+        Bot bot = reserveBot.get();
+        usedBotIdsInThisOrder.add(bot.getId());
+        log.warn("Назначен резервный бот ID {} ({}) для отзыва {} и закреплен за городом {}",
+                bot.getId(), bot.getFio(), reviewIndex + 1, filial.getCity().getTitle());
+        return bot;
+    }
+
+    private Review createReviewWithBot(OrderDTO orderDTO, OrderDetails orderDetails,
+                                       Filial filial, Bot bot) {
+        // Здесь нужно создать отзыв. В зависимости от вашей структуры,
+        // может потребоваться дополнительные сервисы (CategoryService, SubCategoryService)
+        // Для простоты оставим заглушку, которую вы заполните в соответствии с вашей логикой
+
+        return Review.builder()
+                .bot(bot)
+                .filial(filial)
+                .publish(false)
+                .text("текст отзыва")
+                .answer("")
+                .worker(orderDetails.getOrder().getWorker())
+                .product(orderDetails.getProduct())
+                .price(orderDetails.getProduct().getPrice())
+                .vigul(accountWalkScheduleService.isWalkedAccount(bot))
+                .orderDetails(orderDetails)
+                .category(orderDetails.getOrder().getCompany().getCategoryCompany())
+                .subCategory(orderDetails.getOrder().getCompany().getSubCategory())
+                .build();
+    }
+
+    private Set<Long> getUsedBotIdsInCompany(Filial filial) {
+        Long companyId = companyId(filial);
+        Set<Long> usedBotIds = assignmentGuardService.blockedBotIds(
+                assignmentGuardService.scope(companyId, null)
+        );
+        log.debug("Найдено недоступных аккаунтов для компании {}: {}", companyId, usedBotIds.size());
+        return new HashSet<>(usedBotIds);
+    }
+
+    private Long companyId(Filial filial) {
+        if (filial == null || filial.getCompany() == null || filial.getCompany().getId() == null) {
+            throw new IllegalStateException("Невозможно назначить аккаунт: у филиала не указана компания");
+        }
+        return filial.getCompany().getId();
+    }
+
+    private Set<Long> getReservedBotIdsByUnpublishedReviews(Long excludedReviewId) {
+        try {
+            Set<Long> botIds = reviewRepository.findReservedBotIdsByUnpublishedReviews(excludedReviewId);
+            if (botIds == null) {
+                return new HashSet<>();
+            }
+
+            return botIds.stream()
+                    .filter(Objects::nonNull)
+                    .filter(botId -> !STUB_BOT_ID.equals(botId))
+                    .collect(Collectors.toCollection(HashSet::new));
+        } catch (Exception e) {
+            log.error("Ошибка при получении занятых ботов по неопубликованным отзывам", e);
+            throw new IllegalStateException("Не удалось проверить занятые аккаунты", e);
+        }
+    }
+
+    private Set<Long> getUsedBotIdsGlobally(Filial currentFilial) {
+        Set<Long> usedBotIds = new HashSet<>();
+
+        try {
+            City currentCity = currentFilial.getCity();
+            if (currentCity == null || currentCity.getId() == null) {
+                log.warn("У филиала ID {} не указан город", currentFilial.getId());
+                return usedBotIds;
+            }
+
+            // Находим все филиалы того же города
+            List<Filial> filialsInSameCity = filialService.findByCityId(currentCity.getId());
+            if (filialsInSameCity == null || filialsInSameCity.isEmpty()) {
+                return usedBotIds;
+            }
+
+            // Собираем ID всех филиалов того же города (кроме текущего)
+            List<Long> otherFilialIdsInCity = filialsInSameCity.stream()
+                    .filter(filial -> filial != null && filial.getId() != null)
+                    .filter(filial -> !filial.getId().equals(currentFilial.getId()))
+                    .map(Filial::getId)
+                    .collect(Collectors.toList());
+
+            if (otherFilialIdsInCity.isEmpty()) {
+                return usedBotIds;
+            }
+
+            Set<Long> activeBotIdsInSameCity = reviewRepository
+                    .findActiveBotIdsByUnpublishedReviewsInFilials(otherFilialIdsInCity, null);
+
+            if (activeBotIdsInSameCity != null) {
+                activeBotIdsInSameCity.stream()
+                        .filter(Objects::nonNull)
+                        .filter(botId -> !STUB_BOT_ID.equals(botId))
+                        .forEach(usedBotIds::add);
+            }
+
+            log.debug("Найдено активных отзывов с ботами в других филиалах того же города: {}",
+                    activeBotIdsInSameCity != null ? activeBotIdsInSameCity.size() : 0);
+
+        } catch (Exception e) {
+            log.error("Ошибка при получении глобально использованных ботов", e);
+        }
+
+        return usedBotIds;
+    }
+
+    private List<Bot> applyVigulFilters(List<Bot> baseBots, boolean vigul, int neededForOrder) {
+        if (!vigul) {
+            log.info("Фильтрация для vigul=false, требуется {} ботов", neededForOrder);
+
+            // 1. Приоритет: боты с именем "Впиши Имя Фамилию"
+            List<Bot> priority1 = baseBots.stream()
+                    .filter(this::isTemplateBotName)
+                    .collect(Collectors.toList());
+
+            log.info("Приоритет 1 - Боты с шаблонным именем {}: {}", TEMPLATE_BOT_NAMES, priority1.size());
+
+            if (priority1.size() >= neededForOrder) {
+                log.info("Ботов с именем достаточно, используем только их");
+                return priority1;
+            }
+
+            // 2. Если не хватает, добавляем уже выгулянные аккаунты.
+            List<Bot> result = new ArrayList<>(priority1);
+            List<Bot> priority2 = baseBots.stream()
+                    .filter(bot -> !priority1.contains(bot))
+                    .filter(accountWalkScheduleService::isWalkedAccount)
+                    .collect(Collectors.toList());
+
+            result.addAll(priority2);
+            log.info("Приоритет 2 - выгулянные аккаунты: {}", priority2.size());
+            log.info("Всего после приоритета 2: {}", result.size());
+
+            if (result.size() >= neededForOrder) {
+                log.info("Шаблонных и выгулянных аккаунтов достаточно");
+                return result;
+            }
+
+            // 3. Если все еще не хватает, добавляем невыгулянные аккаунты.
+            List<Bot> priority3 = baseBots.stream()
+                    .filter(bot -> !priority1.contains(bot) && !priority2.contains(bot))
+                    .filter(bot -> !accountWalkScheduleService.isWalkedAccount(bot))
+                    .collect(Collectors.toList());
+
+            result.addAll(priority3);
+            log.info("Приоритет 3 - невыгулянные аккаунты: {}", priority3.size());
+            log.info("Всего после приоритета 3: {}", result.size());
+
+            if (result.size() >= neededForOrder) {
+                log.info("Ботов достаточно после добавления невыгулянных аккаунтов");
+                return result;
+            }
+
+            // 4. Если все еще не хватает, добавляем всех остальных ботов
+            List<Bot> priority4 = baseBots.stream()
+                    .filter(bot -> !result.contains(bot))
+                    .collect(Collectors.toList());
+
+            result.addAll(priority4);
+            log.info("Приоритет 4 - Все остальные боты: {}", priority4.size());
+            log.info("Всего доступных ботов: {}", result.size());
+
+            return result;
+
+        } else {
+            log.info("Фильтрация для vigul=true, требуется {} ботов", neededForOrder);
+
+            // 1. Приоритет: уже выгулянные аккаунты.
+            List<Bot> priority1 = baseBots.stream()
+                    .filter(accountWalkScheduleService::isWalkedAccount)
+                    .collect(Collectors.toList());
+
+            log.info("Приоритет 1 - выгулянные аккаунты: {}", priority1.size());
+
+            if (priority1.size() >= neededForOrder) {
+                return priority1;
+            }
+
+            // 2. Если не хватает, добавляем невыгулянные аккаунты.
+            List<Bot> result = new ArrayList<>(priority1);
+            List<Bot> priority2 = baseBots.stream()
+                    .filter(bot -> !priority1.contains(bot))
+                    .filter(bot -> !accountWalkScheduleService.isWalkedAccount(bot))
+                    .collect(Collectors.toList());
+
+            result.addAll(priority2);
+            log.info("Приоритет 2 - невыгулянные аккаунты: {}", priority2.size());
+            log.info("Всего после приоритета 2: {}", result.size());
+
+            if (result.size() >= neededForOrder) {
+                return result;
+            }
+
+            // 3. Если все еще не хватает, добавляем всех остальных
+            List<Bot> priority3 = baseBots.stream()
+                    .filter(bot -> !result.contains(bot))
+                    .collect(Collectors.toList());
+
+            result.addAll(priority3);
+            log.info("Приоритет 3 - Все остальные боты: {}", priority3.size());
+            log.info("Всего доступных ботов: {}", result.size());
+
+            return result;
+        }
+    }
+
+    private List<Bot> applyAssignmentFilters(
+            List<Bot> baseBots,
+            boolean vigul,
+            int neededForOrder,
+            ReviewBotAssignmentMode mode
+    ) {
+        if (mode == null || mode == ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT) {
+            return applyVigulFilters(baseBots, vigul, neededForOrder);
+        }
+
+        if (mode == ReviewBotAssignmentMode.NAGUL_ONLY) {
+            return baseBots.stream()
+                    .filter(accountWalkScheduleService::isEligibleForNagul)
+                    .collect(Collectors.toList());
+        }
+
+        List<Bot> walked = baseBots.stream()
+                .filter(accountWalkScheduleService::isWalkedAccount)
+                .collect(Collectors.toList());
+        List<Bot> result = new ArrayList<>(walked);
+        baseBots.stream()
+                .filter(bot -> !walked.contains(bot))
+                .filter(accountWalkScheduleService::isEligibleForNagul)
+                .forEach(result::add);
+        return result;
+    }
+
+    private boolean eligibleForMode(Bot bot, ReviewBotAssignmentMode mode) {
+        if (mode == null || mode == ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT) {
+            return true;
+        }
+        if (mode == ReviewBotAssignmentMode.NAGUL_ONLY) {
+            return accountWalkScheduleService.isEligibleForNagul(bot);
+        }
+        return accountWalkScheduleService.isWalkedAccount(bot)
+                || accountWalkScheduleService.isEligibleForNagul(bot);
+    }
+
+    private Bot getStubBot() {
+        try {
+            // Используем метод из BotService
+            return botService.findBotById(STUB_BOT_ID);
+        } catch (Exception e) {
+            log.error("Ошибка при получении бота-заглушки", e);
+            return createFallbackStubBot();
+        }
+    }
+
+    private Bot createFallbackStubBot() {
+        Bot stubBot = new Bot();
+        stubBot.setId(STUB_BOT_ID);
+        stubBot.setFio("Нет доступных аккаунтов");
+        stubBot.setLogin("stub_account");
+        stubBot.setPassword("");
+        stubBot.setCounter(0);
+        stubBot.setActive(false);
+        return stubBot;
+    }
+
+    private void sendStubBotAlert(long stubCount, int totalReviews) {
+        try {
+            String alertMessage = String.format(
+                    "⚠️ ВНИМАНИЕ! Недостаточно ботов!\n" +
+                            "В заказе использовано ботов-заглушек: %d из %d\n" +
+                            "Требуется пополнить базу ботов!",
+                    stubCount, totalReviews
+            );
+
+            log.error(alertMessage);
+
+            telegramService.sendAlertToAdmins(alertMessage);
+
+        } catch (Exception e) {
+            log.error("Ошибка при отправке оповещения о ботах-заглушках", e);
+        }
+    }
+
+    private void logBotSelectionStatistics(List<Bot> selectedBots, int neededForOrder, boolean vigul) {
+        Map<String, Long> stats = selectedBots.stream()
+                .collect(Collectors.groupingBy(bot -> {
+                    if (isTemplateBotName(bot)) {
+                        return "Шаблонное имя";
+                    }
+                    return accountWalkScheduleService.isWalkedAccount(bot)
+                            ? "Выгулянный аккаунт"
+                            : "Невыгулянный аккаунт";
+                }, Collectors.counting()));
+
+        log.info("=== СТАТИСТИКА ВЫБОРА БОТОВ (vigul={}) ===", vigul);
+        log.info("Требуется ботов: {}", neededForOrder);
+        log.info("Выбрано ботов: {}", selectedBots.size());
+        stats.forEach((category, count) ->
+                log.info("  {}: {} ботов", category, count));
+        log.info("================================");
+    }
+
+    private boolean isTemplateBotName(Bot bot) {
+        return bot != null && bot.getFio() != null && TEMPLATE_BOT_NAMES.contains(bot.getFio().trim());
+    }
+
+    private void lockCompanyForBotAssignment(Filial filial) {
+        Long companyId = filial != null && filial.getCompany() != null ? filial.getCompany().getId() : null;
+        if (companyId == null) {
+            return;
+        }
+
+        companyRepository.findByIdForBotAssignmentLock(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Компания для подбора аккаунта не найдена: " + companyId));
+    }
+}

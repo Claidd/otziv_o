@@ -2,10 +2,10 @@ package com.hunt.otziv.analytics.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
-import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.admin.service.PersonalService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsComparisonService.AnalyticsUserStatsComparison;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -2,7 +2,7 @@ package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.l_lead.event.LeadEventPublisher;
 import com.hunt.otziv.l_lead.model.Lead;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.l_lead.service.LeadService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +14,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
-import static com.hunt.otziv.logs.LogMasking.maskPhone;
+import static com.hunt.otziv.logs.util.LogMasking.maskPhone;
 
 @Service
 @Slf4j

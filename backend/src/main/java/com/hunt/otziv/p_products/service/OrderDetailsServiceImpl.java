@@ -1,0 +1,210 @@
+package com.hunt.otziv.p_products.service;
+
+import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.dto.FilialDTO;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
+import com.hunt.otziv.p_products.dto.ProductDTO;
+import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.repository.OrderDetailsRepository;
+import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.service.OrderDetailsService;
+import com.hunt.otziv.p_products.service.OrderService;
+import com.hunt.otziv.r_review.dto.ReviewDTO;
+import com.hunt.otziv.r_review.model.Review;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class OrderDetailsServiceImpl implements OrderDetailsService {
+
+    private final OrderDetailsRepository orderDetailsRepository;
+    private final OrderRepository orderRepository;
+    @Override
+    public OrderDetails save(OrderDetails orderDetails) { // Сохранить детали заказ в БД
+        return orderDetailsRepository.save(orderDetails);
+    } // Сохранить детали заказ в БД
+
+    @Transactional(readOnly = true)
+    public OrderDetails getOrderDetailById(UUID orderDetailId){ // Взять детали по Id
+        return orderDetailsRepository.findByIdForReviewCheck(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Детали заказа '%s' не найдены", orderDetailId)));
+    } // Взять детали по Id
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderDetails getOrderDetailForReviewCheckById(UUID orderDetailId) {
+        return orderDetailsRepository.findByIdForReviewCheck(orderDetailId)
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Детали заказа '%s' не найдены", orderDetailId)));
+    }
+
+    @Override
+    public void deleteOrderDetailsById(UUID orderDetailId) {
+        orderDetailsRepository.deleteById(orderDetailId);
+    }
+
+    @Override
+    public void deleteOrderDetails(OrderDetails orderDetails) {
+        orderDetailsRepository.delete(orderDetails);
+    }
+
+    @Override
+    public void saveOrder(Order order) {
+        orderRepository.save(order);
+    }
+
+    @Override
+    public List<OrderDetails> findByOrderId(Long orderId) {
+        return orderDetailsRepository.findAllByOrderIdForOrderDto(orderId);
+    }
+
+    @Transactional
+    public void deleteAllByOrderId(Long orderId) {
+        log.debug("Удаление всех деталей заказа ID: {}", orderId);
+        int deletedCount = orderDetailsRepository.deleteByOrderId(orderId);
+        log.info("Удалено {} деталей заказа ID: {}", deletedCount, orderId);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderDetailsDTO getOrderDetailDTOById(UUID orderDetailId){
+        return convertToDetailsDTO(orderDetailsRepository.findByIdForReviewCheck(orderDetailId).orElseThrow(() -> new UsernameNotFoundException(String.format("Детали заказа '%s' не найдены", orderDetailId))));
+    } // Взять детали дто по Id
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderDetailsDTO> getOrderDetailDTOsByOrderIdForReviewCheck(Long orderId) {
+        if (orderId == null) {
+            return List.of();
+        }
+        return orderDetailsRepository.findAllByOrderIdForReviewCheck(orderId).stream()
+                .map(this::convertToDetailsDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderDetails> getOrderDetailsForReviewCheckByOrderId(Long orderId) {
+        if (orderId == null) {
+            return List.of();
+        }
+        return orderDetailsRepository.findAllByOrderIdForReviewCheck(orderId);
+    }
+
+    private OrderDetailsDTO convertToDetailsDTO(OrderDetails orderDetails){ // перевод деталей в дто
+        return OrderDetailsDTO.builder()
+                .id(orderDetails.getId())
+                .amount(orderDetails.getAmount())
+                .price(orderDetails.getPrice())
+                .publishedDate(orderDetails.getPublishedDate())
+                .product(convertToProductDTO(orderDetails.getProduct()))
+                .order(convertToOrderDTO(orderDetails.getOrder(), orderDetails.getId()))
+                .reviews(convertToReviewsDTOList(orderDetails.getReviews(), orderDetails.getId()))
+                .comment(orderDetails.getComment())
+                .workerFio(resolveWorkerFio(orderDetails.getReviews()))
+                .companyComments(orderDetails.getOrder().getCompany().getCommentsCompany())
+                .titleCompany(orderDetails.getOrder().getCompany().getTitle())
+                .orderComments(orderDetails.getOrder().getZametka())
+                .idCompanies(orderDetails.getOrder().getCompany().getId())
+                .build();
+    } // перевод деталей в дто
+    private ProductDTO convertToProductDTO(Product product){ // перевод продукта в дто
+        return ProductDTO.builder()
+                .id(product.getId())
+                .title(product.getTitle())
+                .price(product.getPrice())
+                .build();
+    } // перевод продукта в дто
+    private OrderDTO convertToOrderDTO(Order order, UUID orderDetailsId){ // перевод заказа в дто
+        return OrderDTO.builder()
+                .id(order.getId())
+                .company(convertToCompanyDTO(order.getCompany()))
+                .amount(order.getAmount())
+                .counter(order.getCounter())
+                .orderDetailsId(orderDetailsId)
+                .filial(convertToFilialDTO(order.getFilial()))
+                .build();
+    } // перевод заказа в дто
+
+    private CompanyDTO convertToCompanyDTO(Company company){ // перевод компании в дто
+        return CompanyDTO.builder()
+                .id(company.getId())
+                .title(company.getTitle())
+                .urlChat(company.getUrlChat())
+                .build();
+    } // перевод компании в дто
+    private FilialDTO convertToFilialDTO(Filial filial){ // перевод компании в дто
+        return FilialDTO.builder()
+                .id(filial.getId())
+                .title(filial.getTitle())
+                .build();
+    } // перевод компании в дто
+    private List<ReviewDTO> convertToReviewsDTOList(List<Review> reviews, UUID orderDetailsId){ // перевод отзыва в дто
+        if (reviews == null || reviews.isEmpty()) {
+            return List.of();
+        }
+        return reviews.stream().map(review -> convertToReviewsDTO(review, orderDetailsId)).collect(Collectors.toList());
+    } // перевод отзыва в дто
+
+    private String resolveWorkerFio(List<Review> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return "";
+        }
+        return reviews.stream()
+                .filter(Objects::nonNull)
+                .map(Review::getWorker)
+                .filter(Objects::nonNull)
+                .map(worker -> worker.getUser())
+                .filter(Objects::nonNull)
+                .map(user -> user.getFio())
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse("");
+    }
+    private ReviewDTO convertToReviewsDTO(Review review, UUID orderDetailsId) {
+        if (review == null) {
+            return ReviewDTO.builder()
+                    .id(null)
+                    .botName("Отзыв не найден")
+                    .build();
+        }
+
+        String botName = "Аккаунт не назначен";
+        String botLogin = null;
+        Long botId = null;
+
+        if (review.getBot() != null) {
+            botId = review.getBot().getId();
+            botName = review.getBot().getFio() != null ? review.getBot().getFio() : "Без имени";
+            botLogin = review.getBot().getLogin();
+        }
+
+        return ReviewDTO.builder()
+                .id(review.getId())
+                .text(review.getText() != null ? review.getText() : "нет текста")
+                .answer(review.getAnswer() != null ? review.getAnswer() : "нет замечаний")
+                .orderDetailsId(orderDetailsId)
+                .publish(review.isPublish())
+                .publishedDate(review.getPublishedDate())
+                .botName(botName)
+                .botLogin(botLogin)
+                .botId(botId)
+                .product(review.getProduct())
+                .url(review.getUrl() != null ? review.getUrl() : "")
+                .build();
+    }// перевод отзыва в дто
+
+
+}

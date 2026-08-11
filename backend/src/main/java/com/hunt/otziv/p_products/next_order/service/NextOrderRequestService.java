@@ -2,8 +2,8 @@ package com.hunt.otziv.p_products.next_order.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.c_companies.services.CompanyService;
-import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.common_billing.service.CommonBillingNextOrderFailureMarker;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestedEvent;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestSummary;

@@ -1,7 +1,7 @@
 package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.model.WorkerActivityEvent;
 import com.hunt.otziv.worker_activity.repository.WorkerActivityEventRepository;

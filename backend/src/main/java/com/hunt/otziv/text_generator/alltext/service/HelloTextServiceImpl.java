@@ -2,7 +2,7 @@ package com.hunt.otziv.text_generator.alltext.service;
 
 import com.hunt.otziv.text_generator.alltext.model.HelloText;
 import com.hunt.otziv.text_generator.alltext.repository.HelloTextRepository;
-import com.hunt.otziv.text_generator.alltext.service.clas.HelloTextService;
+import com.hunt.otziv.text_generator.alltext.service.HelloTextService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

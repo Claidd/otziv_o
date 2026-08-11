@@ -3,7 +3,7 @@ package com.hunt.otziv.u_users.controller;
 import com.hunt.otziv.u_users.dto.LegacyUserMigrationRequest;
 import com.hunt.otziv.u_users.dto.RegisterClientRequest;
 import com.hunt.otziv.u_users.security.LegacyMigrationRequestGuard;
-import com.hunt.otziv.u_users.services.KeycloakUserProvisioningService;
+import com.hunt.otziv.u_users.service.KeycloakUserProvisioningService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;

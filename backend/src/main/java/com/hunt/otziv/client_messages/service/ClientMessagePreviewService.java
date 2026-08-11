@@ -1,6 +1,6 @@
 package com.hunt.otziv.client_messages.service;
 
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.dto.ClientMessagePreview;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;

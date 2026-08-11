@@ -1,7 +1,7 @@
 package com.hunt.otziv.p_products.payment.service;
 
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
-import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
@@ -17,7 +17,7 @@ import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.services.service.OrderStatusService;
+import com.hunt.otziv.p_products.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.service.OrderCompanyStatusService;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentLinkService;

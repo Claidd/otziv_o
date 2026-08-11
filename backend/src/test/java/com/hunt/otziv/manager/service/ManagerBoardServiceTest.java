@@ -1,0 +1,389 @@
+package com.hunt.otziv.manager.service;
+
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
+import com.hunt.otziv.c_companies.dto.CompanyListDTO;
+import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
+import com.hunt.otziv.l_lead.service.PromoTextService;
+import com.hunt.otziv.manager.dto.api.ManagerBoardResponse;
+import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
+import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
+import com.hunt.otziv.p_products.dto.OrderDTOList;
+import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.service.OrderService;
+import com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService;
+import com.hunt.otziv.u_users.service.ManagerService;
+import com.hunt.otziv.u_users.service.UserService;
+import com.hunt.otziv.u_users.service.WorkerService;
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.security.Principal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class ManagerBoardServiceTest {
+
+    @Mock
+    private CompanyService companyService;
+
+    @Mock
+    private OrderService orderService;
+
+    @Mock
+    private OrderRepository orderRepository;
+
+    @Mock
+    private PromoTextService promoTextService;
+
+    @Mock
+    private UserService userService;
+
+    @Mock
+    private ManagerService managerService;
+
+    @Mock
+    private WorkerService workerService;
+
+    @Mock
+    private BadReviewTaskService badReviewTaskService;
+
+    @Mock
+    private ReviewRecoveryTaskService reviewRecoveryTaskService;
+
+    @Mock
+    private UserMetricSnapshotService metricSnapshotService;
+
+    @Mock
+    private CommonBillingService commonBillingService;
+
+    @Mock
+    private ClientMessageOrderStatusService clientMessageOrderStatusService;
+
+    @Mock
+    private StaffDailyProgressService staffDailyProgressService;
+
+    @Spy
+    private ManagerPermissionService managerPermissionService = new ManagerPermissionService();
+
+    @Mock
+    private ManagerAccessService managerAccessService;
+
+    @InjectMocks
+    private ManagerBoardService service;
+
+    @BeforeEach
+    void setUpCommonBillingDefaults() {
+        lenient().when(commonBillingService.countLinkedManagerBoardOrders(nullable(Set.class))).thenReturn(Map.of());
+        lenient().when(commonBillingService.countManagerBoardCards(nullable(Set.class))).thenReturn(Map.of());
+        lenient().when(commonBillingService.managerBoardCards(any(), any(), nullable(Long.class), nullable(Set.class), any()))
+                .thenReturn(List.of());
+        lenient().when(commonBillingService.managerBoardPage(
+                        any(), any(), nullable(Long.class), nullable(Set.class), any(), anyInt(), anyInt()
+                ))
+                .thenReturn(new CommonBillingService.ManagerBoardPage(List.of(), 0L, 0));
+        lenient().when(commonBillingService.managerBoardMetrics(nullable(Set.class)))
+                .thenReturn(new CommonBillingService.ManagerBoardMetrics(Map.of(), Map.of()));
+        lenient().when(commonBillingService.linkedBoardOrderIds(any())).thenReturn(Set.of());
+        lenient().when(commonBillingService.countLinkedBoardOrdersMatching(any(), any(), nullable(Long.class), nullable(Set.class)))
+                .thenReturn(0);
+    }
+
+    @Test
+    void getBoardNormalizesOrderRequestAndKeepsCompanyPageEmpty() {
+        Principal principal = () -> "admin";
+        Authentication admin = authentication("ROLE_ADMIN");
+        OrderDTOList order = OrderDTOList.builder()
+                .id(7L)
+                .companyId(3L)
+                .status("Новый")
+                .build();
+        Worker worker = Worker.builder().id(17L).build();
+        DailyWorkProgressResponse dailyProgress = org.mockito.Mockito.mock(DailyWorkProgressResponse.class);
+
+        when(orderService.getAllOrderDTOAndKeywordAndStatus("needle", "Новый", 0, 50, "asc"))
+                .thenReturn(new PageImpl<>(List.of(order), PageRequest.of(0, 50), 1));
+        when(companyService.countCompaniesByStatus())
+                .thenReturn(Map.of("Новая", 2, "В работе", 3));
+        when(orderService.countOrdersByStatus())
+                .thenReturn(Map.of("Новый", 4, "Оплачено", 1));
+        when(commonBillingService.managerBoardMetrics(null))
+                .thenReturn(new CommonBillingService.ManagerBoardMetrics(
+                        Map.of("Требует внимания", 1),
+                        Map.of()
+                ));
+        when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
+                .thenReturn(Map.of());
+        when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_ORDERS))
+                .thenReturn(List.of("promo"));
+        when(staffDailyProgressService.progressEnabled()).thenReturn(true);
+        when(workerService.getAllWorkers()).thenReturn(List.of(worker));
+        when(staffDailyProgressService.aggregateWorkerProgressSnapshot(eq(List.of(worker)), any(LocalDate.class)))
+                .thenReturn(dailyProgress);
+
+        ManagerBoardResponse response = service.getBoard(
+                "ORDERS",
+                " Новый ",
+                " needle ",
+                -5,
+                500,
+                "ASC",
+                null,
+                principal,
+                admin
+        );
+
+        assertEquals("orders", response.section());
+        assertEquals("Новый", response.status());
+        assertEquals(List.of(), response.companies().content());
+        assertEquals(0, response.companies().number());
+        assertEquals(50, response.companies().size());
+        assertEquals(List.of(order), response.orders().content());
+        assertEquals(1, response.orders().totalElements());
+        assertEquals(List.of("promo"), response.promoTexts());
+        assertSame(dailyProgress, response.dailyProgress());
+        assertEquals(21, response.metrics().size());
+        assertEquals(1, response.metrics().stream()
+                .filter(metric -> "orders".equals(metric.section()) && "Требует внимания".equals(metric.status()))
+                .findFirst()
+                .orElseThrow()
+                .value());
+        assertEquals("Все", response.metrics().stream()
+                .filter(metric -> "orders".equals(metric.section()) && "Все".equals(metric.status()))
+                .findFirst()
+                .orElseThrow()
+                .label());
+        verify(badReviewTaskService).enrichOrderList(List.of(order));
+        verify(clientMessageOrderStatusService).enrichOrderList(List.of(order));
+        verify(staffDailyProgressService).aggregateWorkerProgressSnapshot(eq(List.of(worker)), any(LocalDate.class));
+        verify(staffDailyProgressService, never()).aggregateWorkerProgress(any(), any(LocalDate.class));
+        verify(commonBillingService).managerBoardMetrics(null);
+        verify(commonBillingService, never()).countLinkedManagerBoardOrders(nullable(Set.class));
+        verify(commonBillingService, never()).countManagerBoardCards(nullable(Set.class));
+    }
+
+    @Test
+    void getBoardCachesHeavyMetricCountsButKeepsUserDeltasLive() {
+        Principal principal = () -> "admin-cache";
+        Authentication admin = authentication("ROLE_ADMIN");
+        when(companyService.getAllCompaniesDTOList("", 0, 20, "desc"))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+        when(companyService.countCompaniesByStatus()).thenReturn(Map.of("Новая", 1));
+        when(orderService.countOrdersByStatus()).thenReturn(Map.of("Новый", 2));
+        when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
+                .thenReturn(Map.of());
+        when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_COMPANIES))
+                .thenReturn(List.of());
+
+        service.getBoard("companies", "Все", "", 0, 20, "desc", null, principal, admin);
+        service.getBoard("companies", "Все", "", 0, 20, "desc", null, principal, admin);
+
+        verify(companyService, times(1)).countCompaniesByStatus();
+        verify(orderService, times(1)).countOrdersByStatus();
+        verify(reviewRecoveryTaskService, times(1)).countCompletedBatchesToAdmin();
+        verify(metricSnapshotService, times(2))
+                .deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList());
+    }
+
+    @Test
+    void getBoardCapsCommonInvoiceCardsToPageSize() {
+        Principal principal = () -> "admin";
+        Authentication admin = authentication("ROLE_ADMIN");
+        OrderDTOList ordinary = OrderDTOList.builder()
+                .id(7L)
+                .status("Новый")
+                .build();
+        OrderDTOList firstCommon = OrderDTOList.builder()
+                .id(-101L)
+                .status("Выставлен счет")
+                .build();
+        OrderDTOList secondCommon = OrderDTOList.builder()
+                .id(-102L)
+                .status("Выставлен счет")
+                .build();
+        OrderDTOList thirdCommon = OrderDTOList.builder()
+                .id(-103L)
+                .status("Выставлен счет")
+                .build();
+
+        when(orderService.getAllOrderDTOAndKeyword("needle", 0, 2, "desc"))
+                .thenReturn(new PageImpl<>(List.of(ordinary), PageRequest.of(0, 2), 2));
+        when(commonBillingService.managerBoardPage("Все", "needle", null, null, "desc", 0, 2))
+                .thenReturn(new CommonBillingService.ManagerBoardPage(
+                        List.of(firstCommon, secondCommon),
+                        3L,
+                        0
+                ));
+        when(companyService.countCompaniesByStatus())
+                .thenReturn(Map.of());
+        when(orderService.countOrdersByStatus())
+                .thenReturn(Map.of());
+        when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
+                .thenReturn(Map.of());
+        when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_ORDERS))
+                .thenReturn(List.of());
+
+        ManagerBoardResponse response = service.getBoard(
+                "orders",
+                null,
+                " needle ",
+                0,
+                2,
+                "desc",
+                null,
+                principal,
+                admin
+        );
+
+        assertEquals(2, response.orders().content().size());
+        assertEquals(List.of(firstCommon, secondCommon), response.orders().content());
+        assertEquals(5, response.orders().totalElements());
+        verify(badReviewTaskService).enrichOrderList(List.of(firstCommon, secondCommon));
+        verify(clientMessageOrderStatusService).enrichOrderList(List.of(firstCommon, secondCommon));
+        verify(commonBillingService).managerBoardPage("Все", "needle", null, null, "desc", 0, 2);
+        verify(commonBillingService, never())
+                .countLinkedBoardOrdersMatching(any(), any(), nullable(Long.class), nullable(Set.class));
+    }
+
+    @Test
+    void getBoardFallsBackToCompaniesSectionForUnknownSection() {
+        Principal principal = () -> "admin";
+        Authentication admin = authentication("ROLE_ADMIN");
+        CompanyListDTO company = CompanyListDTO.builder()
+                .id(11L)
+                .title("Company")
+                .build();
+
+        when(companyService.getAllCompaniesDTOList("query", 1, 10, "desc"))
+                .thenReturn(new PageImpl<>(List.of(company), PageRequest.of(1, 10), 12));
+        when(companyService.countCompaniesByStatus())
+                .thenReturn(Map.of("Новая", 1));
+        when(orderService.countOrdersByStatus())
+                .thenReturn(Map.of("Новый", 2));
+        when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
+                .thenReturn(Map.of());
+        when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_COMPANIES))
+                .thenReturn(List.of());
+
+        ManagerBoardResponse response = service.getBoard(
+                "missing",
+                null,
+                " query ",
+                1,
+                10,
+                "sideways",
+                null,
+                principal,
+                admin
+        );
+
+        assertEquals("companies", response.section());
+        assertEquals("Все", response.status());
+        assertEquals(List.of(company), response.companies().content());
+        assertEquals(11, response.companies().totalElements());
+        assertEquals(List.of(), response.orders().content());
+        verify(badReviewTaskService).enrichOrderList(List.of());
+        verify(clientMessageOrderStatusService).enrichOrderList(List.of());
+    }
+
+    @Test
+    void getOverdueOrdersReturnsStatusSummaryForAdmin() {
+        Principal principal = () -> "admin";
+        Authentication admin = authentication("ROLE_ADMIN");
+        LocalDate today = LocalDate.now();
+        LocalDate cutoff = today.minusDays(5);
+        LocalDate oldChanged = today.minusDays(7);
+
+        when(orderRepository.summarizeOverdueOrders(eq(cutoff), anySet()))
+                .thenReturn(List.of(
+                        new Object[]{"На проверке", 3L, oldChanged},
+                        new Object[]{"Коррекция", 1L, cutoff}
+                ));
+
+        ManagerOverdueOrdersResponse response = service.getOverdueOrders(principal, admin);
+
+        assertEquals(4, response.thresholdDays());
+        assertEquals(4, response.total());
+        assertEquals(2, response.statuses().size());
+        assertEquals("На проверке", response.statuses().get(0).status());
+        assertEquals(3, response.statuses().get(0).count());
+        assertEquals(7, response.statuses().get(0).maxDays());
+        verify(orderRepository).summarizeOverdueOrders(
+                eq(cutoff),
+                argThat(statuses -> statuses.containsAll(Set.of("Оплачено", "Архив", "Публикация")))
+        );
+    }
+
+    @Test
+    void ownerAllManagersModeCanOpenSelectedManagerBoardFromManagerControl() {
+        Principal principal = () -> "owner-all";
+        Authentication owner = authentication("ROLE_OWNER");
+        Manager selectedManager = Manager.builder().id(42L).build();
+
+        when(managerAccessService.canAccessManager(42L, owner)).thenReturn(true);
+        when(managerService.getManagerById(42L)).thenReturn(selectedManager);
+
+        assertSame(selectedManager, service.resolveManagerFilter(42L, principal, owner));
+        verify(managerAccessService).canAccessManager(42L, owner);
+    }
+
+    @Test
+    void scopedOwnerStillCannotOpenUnassignedManagerBoard() {
+        Principal principal = () -> "owner-scoped";
+        Authentication owner = authentication("ROLE_OWNER");
+        when(managerAccessService.canAccessManager(42L, owner)).thenReturn(false);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.resolveManagerFilter(42L, principal, owner)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(managerService, never()).getManagerById(42L);
+    }
+
+    private Authentication authentication(String authority) {
+        return new UsernamePasswordAuthenticationToken(
+                "user",
+                "password",
+                List.of(new SimpleGrantedAuthority(authority))
+        );
+    }
+}

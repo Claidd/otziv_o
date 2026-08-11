@@ -5,7 +5,7 @@ import com.hunt.otziv.mobile_push.dto.MobilePushTokenRevokeRequest;
 import com.hunt.otziv.mobile_push.model.MobilePushToken;
 import com.hunt.otziv.mobile_push.repository.MobilePushTokenRepository;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

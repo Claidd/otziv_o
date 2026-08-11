@@ -19,7 +19,7 @@ import com.hunt.otziv.gamification.repository.GamificationTokenLedgerRepository;
 import com.hunt.otziv.s3.service.S3UploadService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.List;

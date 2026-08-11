@@ -1,0 +1,1014 @@
+package com.hunt.otziv.bad_reviews.service;
+
+import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.b_bots.service.BotService;
+import com.hunt.otziv.bad_reviews.model.BadReviewTask;
+import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
+import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
+import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
+import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentBusinessClock;
+import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
+import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
+import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Supplier;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
+import org.hibernate.LazyInitializationException;
+import org.mockito.InjectMocks;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import org.mockito.InOrder;
+
+@ExtendWith(MockitoExtension.class)
+class BadReviewTaskServiceImplTest {
+
+    @Mock
+    private BadReviewTaskRepository badReviewTaskRepository;
+
+    @Mock
+    private ReviewRepository reviewRepository;
+
+    @Mock
+    private BotService botService;
+
+    @Mock
+    private PersonalReminderService personalReminderService;
+
+    @Mock
+    private AppSettingService appSettingService;
+
+    @Mock
+    private OrderStatusNotificationService orderStatusNotificationService;
+
+    @Mock
+    private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+
+    @Mock
+    private ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+
+    @Mock
+    private CommonBillingService commonBillingService;
+
+    @Mock
+    private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+
+    @Mock
+    private ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
+
+    @Mock
+    private GamificationEventService gamificationEventService;
+
+    @Mock
+    private BusinessAuditService businessAuditService;
+
+    @Mock
+    private ReviewBotCooldownService botCooldownService;
+
+    @Mock
+    private ReviewBotAssignmentGuardService assignmentGuardService;
+
+    @Mock
+    private ReviewAccountWalkScheduleService accountWalkScheduleService;
+
+    @Mock
+    private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+
+    @Mock
+    private OrderRepository orderRepository;
+
+    @Mock
+    private ContractorCompletionRewardService contractorCompletionRewardService;
+
+    @Mock
+    private ContractorPaymentBusinessClock contractorPaymentBusinessClock;
+
+    @Mock
+    private BadReviewTaskTransactionRunner transactionRunner;
+
+    @Mock
+    private PaymentLinkService paymentLinkService;
+
+    @InjectMocks
+    private BadReviewTaskServiceImpl service;
+
+    @BeforeEach
+    void setUpProviders() {
+        ReflectionTestUtils.setField(service, "paymentLinkServiceProvider", paymentLinkServiceProvider);
+        ReflectionTestUtils.setField(service, "commonBillingServiceProvider", commonBillingServiceProvider);
+        lenient().when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
+        lenient().when(botService.getActiveBotsOutsideCityWithCounterAtLeast(any(), eq(5))).thenReturn(List.of());
+        lenient().when(assignmentGuardService.scopeForBadTask(
+                        nullable(Long.class), nullable(Long.class)))
+                .thenAnswer(invocation -> new ReviewBotAssignmentGuardService.AssignmentScope(
+                        invocation.getArgument(0), null, invocation.getArgument(1), null));
+        lenient().when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of());
+        lenient().when(assignmentGuardService.lockIfEligible(any(), any()))
+                .thenAnswer(invocation -> Optional.of(invocation.getArgument(0)));
+        lenient().when(contractorPaymentBusinessClock.today()).thenReturn(LocalDate.of(2026, 8, 7));
+        lenient().when(transactionRunner.required(any())).thenAnswer(invocation -> {
+            Supplier<?> work = invocation.getArgument(0);
+            return work.get();
+        });
+    }
+
+    @Test
+    void createTasksForUnpaidOrderCopiesReviewBotSnapshot() {
+        Order order = order(12L);
+        Bot bot = Bot.builder()
+                .id(7L)
+                .fio("Аккаунт П.")
+                .login("real-login")
+                .password("real-password")
+                .build();
+        Review review = Review.builder()
+                .id(88L)
+                .publish(true)
+                .text("хороший опубликованный текст")
+                .bot(bot)
+                .price(BigDecimal.valueOf(250))
+                .build();
+
+        when(reviewRepository.getAllByOrderId(12L)).thenReturn(List.of(review));
+        when(badReviewTaskRepository.existsByOrderIdAndSourceReviewIdAndStatusIn(eq(12L), eq(88L), any()))
+                .thenReturn(false);
+
+        assertEquals(1, service.createTasksForUnpaidOrder(order));
+        verify(badReviewTaskRepository).save(argThat(task ->
+                task.getBot() == bot
+                        && "real-login".equals(task.getBotLoginSnapshot())
+                        && "real-password".equals(task.getBotPasswordSnapshot())
+                        && "Аккаунт П.".equals(task.getBotFioSnapshot())
+                        && "хороший опубликованный текст".equals(task.getTaskText())
+                        && LocalDate.of(2026, 8, 7).equals(task.getScheduledDate())
+        ));
+    }
+
+    @Test
+    void createTasksForUnpaidOrderUsesPerReviewPriceFromOrderDetailsTotal() {
+        Order order = order(15L);
+        Product product = new Product();
+        product.setPrice(null);
+        OrderDetails details = OrderDetails.builder()
+                .amount(4)
+                .price(BigDecimal.valueOf(1000))
+                .product(product)
+                .build();
+        Review review = Review.builder()
+                .id(90L)
+                .publish(true)
+                .text("опубликованный текст")
+                .orderDetails(details)
+                .build();
+
+        when(reviewRepository.getAllByOrderId(15L)).thenReturn(List.of(review));
+        when(badReviewTaskRepository.existsByOrderIdAndSourceReviewIdAndStatusIn(eq(15L), eq(90L), any()))
+                .thenReturn(false);
+
+        assertEquals(1, service.createTasksForUnpaidOrder(order));
+
+        verify(badReviewTaskRepository).save(argThat(task ->
+                BigDecimal.valueOf(250).compareTo(task.getPrice()) == 0
+        ));
+    }
+
+    @Test
+    void createTasksForUnpaidOrderAssignsCurrentOrderWorkerWhenReviewHasOldWorker() {
+        Worker oldWorker = worker(101L, "old-worker");
+        Worker newWorker = worker(202L, "new-worker");
+        Order order = order(16L);
+        order.setWorker(newWorker);
+        Review review = Review.builder()
+                .id(91L)
+                .publish(true)
+                .text("опубликованный текст")
+                .worker(oldWorker)
+                .build();
+
+        when(reviewRepository.getAllByOrderId(16L)).thenReturn(List.of(review));
+        when(badReviewTaskRepository.existsByOrderIdAndSourceReviewIdAndStatusIn(eq(16L), eq(91L), any()))
+                .thenReturn(false);
+
+        assertEquals(1, service.createTasksForUnpaidOrder(order));
+
+        verify(badReviewTaskRepository).save(argThat(task -> task.getWorker() == newWorker));
+    }
+
+    @Test
+    void updateTaskChangesOnlyActiveTaskTextAndDate() {
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .status(BadReviewTaskStatus.NEW)
+                .taskText("старый текст")
+                .scheduledDate(LocalDate.of(2026, 5, 20))
+                .build();
+
+        when(badReviewTaskRepository.findById(42L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        BadReviewTask updated = service.updateTask(42L, "новый плохой текст", LocalDate.of(2026, 5, 27));
+
+        assertEquals("новый плохой текст", updated.getTaskText());
+        assertEquals(LocalDate.of(2026, 5, 27), updated.getScheduledDate());
+        verify(badReviewTaskRepository).save(task);
+    }
+
+    @Test
+    void changeTaskBotSyncsSourceReviewBot() {
+        City city = City.builder().id(3L).title("Иркутск").build();
+        Filial filial = Filial.builder().id(4L).city(city).build();
+        Bot oldBot = Bot.builder()
+                .id(7L)
+                .fio("Старый П.")
+                .login("old-login")
+                .password("old-password")
+                .active(true)
+                .build();
+        Bot nextBot = Bot.builder()
+                .id(8L)
+                .fio("Новый П.")
+                .login("next-login")
+                .password("next-password")
+                .active(true)
+                .counter(5)
+                .build();
+        Review review = Review.builder()
+                .id(88L)
+                .bot(oldBot)
+                .filial(filial)
+                .build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(oldBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findById(42L)).thenReturn(Optional.of(task));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(oldBot, nextBot));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        BadReviewTask updated = service.changeTaskBot(42L);
+
+        assertEquals(nextBot, updated.getBot());
+        assertEquals(nextBot, review.getBot());
+        assertEquals("next-login", updated.getBotLoginSnapshot());
+        assertEquals("next-password", updated.getBotPasswordSnapshot());
+        assertEquals("Новый П.", updated.getBotFioSnapshot());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
+        verify(reviewRepository).save(review);
+        verify(badReviewTaskRepository).save(task);
+    }
+
+    @Test
+    void deactivateAndChangeTaskBotRejectsBotThatIsNotAttachedBeforeSideEffects() {
+        Bot currentBot = Bot.builder().id(7L).active(true).build();
+        Review review = Review.builder().id(88L).bot(currentBot).build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(currentBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findByIdForMutation(42L)).thenReturn(Optional.of(task));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.deactivateAndChangeTaskBot(42L, 99L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Указанный аккаунт больше не привязан к этой карточке. Обновите данные и повторите действие",
+                exception.getReason()
+        );
+        assertSame(currentBot, task.getBot());
+        assertEquals(true, currentBot.isActive());
+        verify(botService, never()).findBotById(any());
+        verify(botService, never()).save(any());
+        verify(badReviewTaskRepository, never()).save(any());
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void deactivateAndChangeTaskBotRejectsNegativeBotIdBeforeSideEffects() {
+        Bot currentBot = Bot.builder().id(7L).active(true).build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .bot(currentBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+        when(badReviewTaskRepository.findByIdForMutation(42L)).thenReturn(Optional.of(task));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.deactivateAndChangeTaskBot(42L, -1L)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertTrue(currentBot.isActive());
+        assertSame(currentBot, task.getBot());
+        verify(botService, never()).save(any());
+        verify(badReviewTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void deactivateAndChangeTaskBotDeactivatesAndReplacesMatchingAttachedBot() {
+        City city = City.builder().id(3L).title("Иркутск").build();
+        Filial filial = Filial.builder().id(4L).city(city).build();
+        Bot currentBot = Bot.builder()
+                .id(7L)
+                .active(true)
+                .login("old-login")
+                .build();
+        Bot nextBot = Bot.builder()
+                .id(8L)
+                .active(true)
+                .counter(5)
+                .login("next-login")
+                .build();
+        Review review = Review.builder().id(88L).bot(currentBot).filial(filial).build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(currentBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findByIdForMutation(42L)).thenReturn(Optional.of(task));
+        when(botService.findBotById(7L)).thenReturn(currentBot);
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(currentBot, nextBot));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        BadReviewTask updated = service.deactivateAndChangeTaskBot(42L, 7L);
+
+        assertFalse(currentBot.isActive());
+        assertSame(nextBot, updated.getBot());
+        assertSame(nextBot, review.getBot());
+        verify(botService).save(currentBot);
+        verify(badReviewTaskRepository).save(task);
+    }
+
+    @Test
+    void changeTaskBotPrefersCrossCityCounterFiveWhenCityHasOnlyLowCounter() {
+        City city = City.builder().id(3L).title("Иркутск").build();
+        City otherCity = City.builder().id(5L).title("Ангарск").build();
+        Filial filial = Filial.builder().id(4L).city(city).build();
+        Bot oldBot = Bot.builder()
+                .id(7L)
+                .fio("Старый П.")
+                .login("old-login")
+                .password("old-password")
+                .active(false)
+                .build();
+        Bot cityLowCounterBot = Bot.builder()
+                .id(8L)
+                .fio("Городской новый")
+                .login("city-low")
+                .password("city-low-password")
+                .active(true)
+                .counter(4)
+                .build();
+        Bot crossCityBot = Bot.builder()
+                .id(9L)
+                .fio("Внешний готовый")
+                .login("cross-city")
+                .password("cross-city-password")
+                .active(true)
+                .counter(5)
+                .botCity(otherCity)
+                .build();
+        Review review = Review.builder()
+                .id(88L)
+                .bot(oldBot)
+                .filial(filial)
+                .build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(oldBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findById(42L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.findBotIdsByStatus(BadReviewTaskStatus.NEW, 42L)).thenReturn(Set.of());
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of());
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(oldBot, cityLowCounterBot));
+        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 5)).thenReturn(List.of(crossCityBot));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        BadReviewTask updated = service.changeTaskBot(42L);
+
+        assertEquals(crossCityBot, updated.getBot());
+        assertEquals(crossCityBot, review.getBot());
+        assertEquals("cross-city", updated.getBotLoginSnapshot());
+        assertEquals("cross-city-password", updated.getBotPasswordSnapshot());
+        assertEquals("Внешний готовый", updated.getBotFioSnapshot());
+        assertEquals(true, updated.isCrossCityBot());
+        verify(botCooldownService).markReservedUntilTaskCompletion(crossCityBot, "bad review task 42");
+        verify(reviewRepository).save(review);
+        verify(badReviewTaskRepository).save(task);
+    }
+
+    @Test
+    void changeTaskBotSkipsCrossCityBotReservedByUnpublishedReview() {
+        City city = City.builder().id(3L).title("Иркутск").build();
+        City otherCity = City.builder().id(5L).title("Ангарск").build();
+        Filial filial = Filial.builder().id(4L).city(city).build();
+        Bot oldBot = Bot.builder()
+                .id(7L)
+                .fio("Старый П.")
+                .login("old-login")
+                .password("old-password")
+                .active(false)
+                .build();
+        Bot cityLowCounterBot = Bot.builder()
+                .id(8L)
+                .fio("Городской новый")
+                .login("city-low")
+                .password("city-low-password")
+                .active(true)
+                .counter(4)
+                .build();
+        Bot reservedCrossCityBot = Bot.builder()
+                .id(9L)
+                .fio("Внешний занятый")
+                .login("reserved-cross-city")
+                .password("reserved-password")
+                .active(true)
+                .counter(8)
+                .botCity(otherCity)
+                .build();
+        Bot availableCrossCityBot = Bot.builder()
+                .id(10L)
+                .fio("Внешний свободный")
+                .login("available-cross-city")
+                .password("available-password")
+                .active(true)
+                .counter(5)
+                .botCity(otherCity)
+                .build();
+        Review review = Review.builder()
+                .id(88L)
+                .bot(oldBot)
+                .filial(filial)
+                .build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(oldBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findById(42L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.findBotIdsByStatus(BadReviewTaskStatus.NEW, 42L)).thenReturn(Set.of());
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of(9L));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(oldBot, cityLowCounterBot));
+        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 5))
+                .thenReturn(List.of(reservedCrossCityBot, availableCrossCityBot));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        BadReviewTask updated = service.changeTaskBot(42L);
+
+        assertEquals(availableCrossCityBot, updated.getBot());
+        assertEquals(true, updated.isCrossCityBot());
+        verify(botCooldownService).markReservedUntilTaskCompletion(availableCrossCityBot, "bad review task 42");
+        verify(botCooldownService, never()).markReservedUntilTaskCompletion(reservedCrossCityBot, "bad review task 42");
+    }
+
+    @Test
+    void changeTaskBotUsesCityCounterFiveBeforeCrossCityFallback() {
+        City city = City.builder().id(3L).title("Иркутск").build();
+        Filial filial = Filial.builder().id(4L).city(city).build();
+        Bot oldBot = Bot.builder()
+                .id(7L)
+                .fio("Старый П.")
+                .login("old-login")
+                .password("old-password")
+                .active(false)
+                .build();
+        Bot cityReadyBot = Bot.builder()
+                .id(8L)
+                .fio("Городской готовый")
+                .login("city-ready")
+                .password("city-ready-password")
+                .active(true)
+                .counter(5)
+                .build();
+        Review review = Review.builder()
+                .id(88L)
+                .bot(oldBot)
+                .filial(filial)
+                .build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(oldBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findById(42L)).thenReturn(Optional.of(task));
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of());
+        when(badReviewTaskRepository.findBotIdsByStatus(BadReviewTaskStatus.NEW, 42L)).thenReturn(Set.of());
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(oldBot, cityReadyBot));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        BadReviewTask updated = service.changeTaskBot(42L);
+
+        assertEquals(cityReadyBot, updated.getBot());
+        assertEquals(false, updated.isCrossCityBot());
+        verify(botService, never()).getActiveBotsOutsideCityWithCounterAtLeast(3L, 5);
+        verify(botCooldownService, never()).markReservedUntilTaskCompletion(any(), any());
+    }
+
+    @Test
+    void completeTaskCreatesPaymentReminderAndFinalBanReminderWhenAllBadTasksDone() {
+        Order order = order(10L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(40L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(10L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 2L, BigDecimal.valueOf(600)}
+        ));
+
+        BadReviewTask completed = service.completeTask(40L);
+
+        assertEquals(BadReviewTaskStatus.DONE, completed.getStatus());
+        verify(personalReminderService).deleteSystemReminderBySource(
+                order.getManager().getUser(),
+                PersonalReminderService.SOURCE_BAD_REVIEW_TASK,
+                40L
+        );
+        verify(personalReminderService).createSystemReminderDueNow(
+                order.getManager().getUser(),
+                "Плохой отзыв выполнен: Компания 10",
+                "Компания: Компания 10\nЗаказ #10\nЧат: https://chat.example/10\nПлохой отзыв #40 выполнен, можно отправить клиенту счет.\nК оплате: 1600 руб.",
+                PersonalReminderService.SOURCE_BAD_REVIEW_TASK,
+                40L,
+                10L
+        );
+        verify(personalReminderService).createSystemReminderDueNow(
+                order.getManager().getUser(),
+                "Плохие отзывы завершены: Компания 10",
+                "Компания: Компания 10\nЗаказ #10\nЧат: https://chat.example/10\nВсе плохие отзывы выполнены. Если клиент не оплатит, можно перевести заказ в Бан.\nК оплате: 1600 руб.",
+                PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY,
+                10L,
+                10L
+        );
+    }
+
+    @Test
+    void completeTaskDoesNotCreateFinalBanReminderWhilePendingBadTasksRemain() {
+        Order order = order(11L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(41L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(11L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.NEW, 1L, BigDecimal.valueOf(300)},
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
+        ));
+
+        service.completeTask(41L);
+
+        verify(personalReminderService, never()).createSystemReminderDueNow(
+                eq(order.getManager().getUser()),
+                startsWith("Плохие отзывы завершены"),
+                any(),
+                eq(PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    void completeTaskSendsClientInvoiceWithDoneBadReviewSumWhenImmediateEnabled() {
+        Order order = order(14L);
+        order.getManager().setClientId("client-14");
+        order.getManager().setPayText("Оплатите по ссылке Альфа.");
+        order.getCompany().setGroupId("group-14");
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        BadReviewTask task = BadReviewTask.builder()
+                .id(44L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(14L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 2L, BigDecimal.valueOf(600)}
+        ));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
+                eq(order),
+                eq("client-14"),
+                eq("group-14"),
+                eq("Компания 14\n\nОплатите по ссылке Альфа.\n\nК оплате: 1600 руб."),
+                eq("счет после плохого отзыва")
+        )).thenReturn(true);
+
+        service.completeTask(44L);
+
+        verify(orderStatusNotificationService).sendInformationalMessageToClientChat(
+                order,
+                "client-14",
+                "group-14",
+                "Компания 14\n\nОплатите по ссылке Альфа.\n\nК оплате: 1600 руб.",
+                "счет после плохого отзыва"
+        );
+        verify(paymentInvoiceRetryScheduler).scheduleBadReviewAutoBan(order);
+    }
+
+    @Test
+    void completeTaskReleasesCrossCityBotForTwoDayCooldown() {
+        Order order = order(20L);
+        Bot crossCityBot = Bot.builder()
+                .id(9L)
+                .login("cross-city")
+                .password("cross-city-password")
+                .active(true)
+                .counter(5)
+                .build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(50L)
+                .order(order)
+                .bot(crossCityBot)
+                .crossCityBot(true)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(20L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
+        ));
+
+        service.completeTask(50L);
+
+        verify(botCooldownService).markReleasedFrom(
+                crossCityBot,
+                LocalDate.of(2026, 8, 7),
+                "bad review cross-city task finished"
+        );
+    }
+
+    @Test
+    void completeTaskRefreshesCommonInvoiceInsteadOfSendingSingleBadReviewInvoice() {
+        Order order = order(18L);
+        order.getManager().setClientId("client-18");
+        order.getManager().setPayText("Оплатите по ссылке Альфа.");
+        order.getCompany().setGroupId("group-18");
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        BadReviewTask task = BadReviewTask.builder()
+                .id(48L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(18L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
+        ));
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.refreshLinkedOrderAmount(18L)).thenReturn(true);
+
+        service.completeTask(48L);
+
+        verify(commonBillingService).refreshLinkedOrderAmount(18L);
+        verify(orderStatusNotificationService, never()).sendInformationalMessageToClientChat(any(), any(), any(), any(), any());
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewAutoBan(order);
+    }
+
+    @Test
+    void completeTaskSchedulesBadReviewInvoiceRetryWhenClientMessageFails() {
+        Order order = order(17L);
+        order.getManager().setClientId("client-17");
+        order.getManager().setPayText("Оплатите по ссылке Альфа.");
+        order.getCompany().setGroupId("group-17");
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        BadReviewTask task = BadReviewTask.builder()
+                .id(47L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(17L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
+        ));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
+                eq(order),
+                eq("client-17"),
+                eq("group-17"),
+                eq("Компания 17\n\nОплатите по ссылке Альфа.\n\nК оплате: 1300 руб."),
+                eq("счет после плохого отзыва")
+        )).thenReturn(false);
+
+        service.completeTask(47L);
+
+        verify(paymentInvoiceRetryScheduler).scheduleBadReviewInvoiceRetry(order);
+    }
+
+    @Test
+    void cancelDoneTaskRemovesTaskReminderAndOrderReadyReminderWhenNoDoneTasksRemain() {
+        Order order = order(12L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(12L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
+        ));
+
+        BadReviewTask canceled = service.cancelTask(42L);
+
+        assertEquals(BadReviewTaskStatus.CANCELED, canceled.getStatus());
+        verify(personalReminderService).deleteSystemReminderBySource(
+                order.getManager().getUser(),
+                PersonalReminderService.SOURCE_BAD_REVIEW_TASK,
+                42L
+        );
+        verify(personalReminderService).deleteSystemReminderBySource(
+                order.getManager().getUser(),
+                PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY,
+                12L
+        );
+        verify(personalReminderService, never()).createSystemReminderDueNow(
+                eq(order.getManager().getUser()),
+                startsWith("Плохие отзывы завершены"),
+                any(),
+                eq(PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    void deletePendingTasksForOrderDeletesOnlyNewTasks() {
+        Order order = order(21L);
+
+        when(badReviewTaskRepository.deleteAllByOrderIdAndStatus(21L, BadReviewTaskStatus.NEW)).thenReturn(3);
+
+        assertEquals(3, service.deletePendingTasksForOrder(order));
+        verify(badReviewTaskRepository).deleteAllByOrderIdAndStatus(21L, BadReviewTaskStatus.NEW);
+    }
+
+    @Test
+    void cancelDoneTaskRefreshesOrderReadyReminderWhenOtherDoneTasksRemain() {
+        Order order = order(13L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(43L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(13L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)},
+                new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
+        ));
+
+        BadReviewTask canceled = service.cancelTask(43L);
+
+        assertEquals(BadReviewTaskStatus.CANCELED, canceled.getStatus());
+        verify(personalReminderService).deleteSystemReminderBySource(
+                order.getManager().getUser(),
+                PersonalReminderService.SOURCE_BAD_REVIEW_TASK,
+                43L
+        );
+        verify(personalReminderService).createSystemReminderDueNow(
+                order.getManager().getUser(),
+                "Плохие отзывы завершены: Компания 13",
+                "Компания: Компания 13\nЗаказ #13\nЧат: https://chat.example/13\nВсе плохие отзывы выполнены. Если клиент не оплатит, можно перевести заказ в Бан.\nК оплате: 1300 руб.",
+                PersonalReminderService.SOURCE_BAD_REVIEW_ORDER_READY,
+                13L,
+                13L
+        );
+    }
+
+    @Test
+    void cancelDoneTaskDoesNotSendUpdatedClientInvoiceAutomatically() {
+        Order order = order(16L);
+        order.getManager().setClientId("client-16");
+        order.getManager().setPayText("Оплатите по ссылке Альфа.");
+        order.getCompany().setGroupId("group-16");
+        order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
+        BadReviewTask task = BadReviewTask.builder()
+                .id(46L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(16L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)},
+                new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
+        ));
+
+        service.cancelTask(46L);
+
+        verify(orderStatusNotificationService, never()).sendInformationalMessageToClientChat(any(), any(), any(), any(), any());
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
+    }
+
+    @Test
+    void cancelDoneTaskDoesNotTouchLazyFilialProxyForClientInvoice() {
+        Order order = order(19L);
+        order.getManager().setClientId("client-19");
+        order.getCompany().setGroupId("group-19");
+        order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
+        order.setFilial(new Filial() {
+            @Override
+            public String getTitle() {
+                throw new LazyInitializationException("Could not initialize proxy [com.hunt.otziv.c_companies.model.Filial#1385] - no session");
+            }
+        });
+        BadReviewTask task = BadReviewTask.builder()
+                .id(49L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(19L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)},
+                new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
+        ));
+
+        BadReviewTask canceled = service.cancelTask(49L);
+
+        assertEquals(BadReviewTaskStatus.CANCELED, canceled.getStatus());
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
+        verify(orderStatusNotificationService, never()).sendInformationalMessageToClientChat(any(), any(), any(), any(), any());
+    }
+
+    private Order order(Long id) {
+        User user = new User();
+        user.setId(5L);
+        Manager manager = new Manager();
+        manager.setId(50L);
+        manager.setUser(user);
+        Company company = new Company();
+        company.setId(70L);
+        company.setTitle("Компания " + id);
+        company.setUrlChat("https://chat.example/" + id);
+
+        Order order = new Order();
+        order.setId(id);
+        order.setManager(manager);
+        order.setCompany(company);
+        order.setSum(BigDecimal.valueOf(1000));
+        return order;
+    }
+
+    @Test
+    void completeTaskObservesPaymentBeforeStartingLockedMutation() {
+        Order order = order(22L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(52L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(paymentLinkServiceProvider.getIfAvailable()).thenReturn(paymentLinkService);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        service.completeTask(52L);
+
+        InOrder orderOfCalls = inOrder(paymentLinkService, transactionRunner);
+        orderOfCalls.verify(paymentLinkService).reconcileActiveLinkForOrder(22L);
+        orderOfCalls.verify(transactionRunner).required(any());
+        orderOfCalls.verify(paymentLinkService)
+                .retireOpenLinksBeforePayableChange(22L, "Выполненная дополнительная задача изменила сумму счета");
+    }
+
+    @Test
+    void cancelDoneTaskObservesPaymentBeforeStartingLockedMutation() {
+        Order order = order(23L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(53L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(paymentLinkServiceProvider.getIfAvailable()).thenReturn(paymentLinkService);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        service.cancelTask(53L);
+
+        InOrder orderOfCalls = inOrder(paymentLinkService, transactionRunner);
+        orderOfCalls.verify(paymentLinkService).reconcileActiveLinkForOrder(23L);
+        orderOfCalls.verify(transactionRunner).required(any());
+        orderOfCalls.verify(paymentLinkService)
+                .retireOpenLinksBeforePayableChange(23L, "Отмена выполненной дополнительной задачи изменила сумму счета");
+    }
+
+    private void stubPayableMutation(BadReviewTask task) {
+        Long taskId = task.getId();
+        Order order = task.getOrder();
+        Long orderId = order.getId();
+        when(badReviewTaskRepository.findStatusById(taskId)).thenReturn(Optional.of(task.getStatus()));
+        when(badReviewTaskRepository.findOrderIdById(taskId)).thenReturn(Optional.of(orderId));
+        when(orderRepository.findByIdForCounterUpdate(orderId)).thenReturn(Optional.of(order));
+        when(badReviewTaskRepository.findByIdForMutation(taskId)).thenReturn(Optional.of(task));
+    }
+
+    private Worker worker(Long id, String username) {
+        User user = new User();
+        user.setId(id + 1000);
+        user.setUsername(username);
+        Worker worker = new Worker();
+        worker.setId(id);
+        worker.setUser(user);
+        return worker;
+    }
+}

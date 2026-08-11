@@ -7,7 +7,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.services.service.OrderStatusService;
+import com.hunt.otziv.p_products.service.OrderStatusService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;

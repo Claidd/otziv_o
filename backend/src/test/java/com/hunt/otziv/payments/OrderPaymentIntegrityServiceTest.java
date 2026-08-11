@@ -9,7 +9,7 @@ import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepo
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.services.service.OrderStatusService;
+import com.hunt.otziv.p_products.service.OrderStatusService;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;

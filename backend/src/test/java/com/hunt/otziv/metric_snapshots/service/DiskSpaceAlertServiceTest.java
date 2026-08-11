@@ -12,7 +12,7 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;

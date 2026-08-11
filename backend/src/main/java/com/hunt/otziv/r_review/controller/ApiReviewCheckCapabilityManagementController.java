@@ -2,9 +2,9 @@ package com.hunt.otziv.r_review.controller;
 
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService;
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService.ArchivedReviewCheck;
-import com.hunt.otziv.manager.services.ManagerAccessService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.model.OrderDetails;
-import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.p_products.service.OrderDetailsService;
 import com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityMutationService;
 import com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityService;
 import com.hunt.otziv.r_review.capability.service.ReviewCheckCapabilityService.CapabilityMetadata;

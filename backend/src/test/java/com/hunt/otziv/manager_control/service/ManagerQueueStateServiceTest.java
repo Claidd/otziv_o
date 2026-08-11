@@ -21,7 +21,7 @@ import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.manager_control.repository.ManagerQueueStateEventRepository;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;

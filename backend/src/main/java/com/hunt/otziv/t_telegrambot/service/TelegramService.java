@@ -2,7 +2,7 @@ package com.hunt.otziv.t_telegrambot.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.admin.service.PersonalService;
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
@@ -15,7 +15,7 @@ import com.hunt.otziv.performers.service.PerformerTelegramLinkService;
 import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
 import com.hunt.otziv.workload_shadow.service.WorkloadTransferTelegramCallbackService;
 import java.io.ByteArrayInputStream;

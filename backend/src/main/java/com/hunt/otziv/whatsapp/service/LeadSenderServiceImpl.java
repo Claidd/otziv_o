@@ -1,7 +1,7 @@
 package com.hunt.otziv.whatsapp.service;
 
 
-import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.l_lead.service.LeadService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.service.service.AdminNotifierService;
 import com.hunt.otziv.whatsapp.service.service.LeadProcessorService;

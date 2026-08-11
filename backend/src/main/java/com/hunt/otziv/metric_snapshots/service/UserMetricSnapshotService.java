@@ -4,7 +4,7 @@ import com.hunt.otziv.metric_snapshots.dto.MetricSnapshotSeenRequest;
 import com.hunt.otziv.metric_snapshots.model.UserMetricSnapshot;
 import com.hunt.otziv.metric_snapshots.repository.UserMetricSnapshotRepository;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

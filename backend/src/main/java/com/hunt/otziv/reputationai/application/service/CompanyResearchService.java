@@ -6,7 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
 import com.hunt.otziv.reputationai.domain.CompanyResearchAnswer;

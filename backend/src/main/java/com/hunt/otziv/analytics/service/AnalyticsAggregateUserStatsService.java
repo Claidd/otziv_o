@@ -7,7 +7,7 @@ import com.hunt.otziv.analytics.model.AnalyticsDailyUser;
 import com.hunt.otziv.analytics.model.AnalyticsUserMetricAggregate;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.z_zp.services.ZpService;
+import com.hunt.otziv.z_zp.service.ZpService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

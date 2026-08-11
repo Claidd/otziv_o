@@ -3,7 +3,7 @@ package com.hunt.otziv.worker_activity.service;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.worker_activity.dto.WorkerCredentialPreparationResponse;
 import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparation;
 import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;

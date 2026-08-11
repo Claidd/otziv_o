@@ -4,7 +4,7 @@ import com.hunt.otziv.performers.dto.RegisterPerformerRequest;
 import com.hunt.otziv.performers.dto.RegisterPerformerResponse;
 import com.hunt.otziv.performers.service.PerformerRegistrationService;
 import com.hunt.otziv.c_cities.dto.CityDTO;
-import com.hunt.otziv.c_cities.services.CityService;
+import com.hunt.otziv.c_cities.service.CityService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import java.util.List;

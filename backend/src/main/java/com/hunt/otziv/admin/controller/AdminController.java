@@ -2,11 +2,11 @@ package com.hunt.otziv.admin.controller;
 
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
-import com.hunt.otziv.admin.dto.presonal.*;
-import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.admin.dto.personal.*;
+import com.hunt.otziv.admin.service.PersonalService;
 import com.hunt.otziv.u_users.model.*;
-import com.hunt.otziv.u_users.services.service.ManagerService;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.ManagerService;
+import com.hunt.otziv.u_users.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;

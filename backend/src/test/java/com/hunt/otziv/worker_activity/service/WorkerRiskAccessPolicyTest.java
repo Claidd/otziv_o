@@ -3,7 +3,7 @@ package com.hunt.otziv.worker_activity.service;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;

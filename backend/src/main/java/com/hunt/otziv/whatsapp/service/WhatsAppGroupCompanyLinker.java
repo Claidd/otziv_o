@@ -2,7 +2,7 @@ package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
-import com.hunt.otziv.c_companies.services.CompanyChatBindingPolicy;
+import com.hunt.otziv.c_companies.service.CompanyChatBindingPolicy;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

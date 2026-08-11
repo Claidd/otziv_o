@@ -2,8 +2,8 @@ package com.hunt.otziv.p_products.status.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
-import com.hunt.otziv.c_companies.services.CompanyService;
-import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;

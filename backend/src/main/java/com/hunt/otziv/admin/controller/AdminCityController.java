@@ -3,7 +3,7 @@ package com.hunt.otziv.admin.controller;
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.r_review.dto.CityWithUnpublishedReviewsDTO;
-import com.hunt.otziv.r_review.services.ReviewCityService;
+import com.hunt.otziv.r_review.service.ReviewCityService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

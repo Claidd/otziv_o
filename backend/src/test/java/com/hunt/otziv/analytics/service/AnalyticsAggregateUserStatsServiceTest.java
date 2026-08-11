@@ -9,7 +9,7 @@ import com.hunt.otziv.analytics.repository.AnalyticsDailyUserRepository;
 import com.hunt.otziv.analytics.repository.AnalyticsMonthlyUserRepository;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.z_zp.services.ZpService;
+import com.hunt.otziv.z_zp.service.ZpService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

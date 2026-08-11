@@ -5,7 +5,7 @@ import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryServic
 import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskEventType;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;

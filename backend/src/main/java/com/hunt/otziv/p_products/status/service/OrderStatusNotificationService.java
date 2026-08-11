@@ -4,7 +4,7 @@ import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceServi
 import com.hunt.otziv.maxbot.service.MaxBotClient;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.services.service.OrderStatusService;
+import com.hunt.otziv.p_products.service.OrderStatusService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;

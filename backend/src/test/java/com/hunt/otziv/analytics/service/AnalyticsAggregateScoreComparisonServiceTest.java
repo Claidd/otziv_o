@@ -1,7 +1,7 @@
 package com.hunt.otziv.analytics.service;
 
-import com.hunt.otziv.admin.dto.presonal.UserData;
-import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.admin.dto.personal.UserData;
+import com.hunt.otziv.admin.service.PersonalService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateScoreComparisonService.AnalyticsScoreComparison;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

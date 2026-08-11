@@ -1,0 +1,35 @@
+package com.hunt.otziv.z_zp.service;
+
+import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.z_zp.dto.CheckDTO;
+import com.hunt.otziv.z_zp.dto.PaymentCheckStatView;
+import com.hunt.otziv.z_zp.model.PaymentCheck;
+import org.springframework.data.util.Pair;
+
+import java.math.BigDecimal;
+import java.security.Principal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+public interface PaymentCheckService {
+
+    boolean save(Order order);
+    boolean save(Order order, BigDecimal sum);
+    List<CheckDTO> getAllCheckDTO();
+    List<PaymentCheck> findAll();
+
+    List<PaymentCheck> findAllToDate(LocalDate localDate);
+    List<PaymentCheckStatView> findStatRowsToDate(LocalDate localDate);
+
+    List<PaymentCheck> findAllToDateByOwner(LocalDate localDate, Set<Manager> managerList);
+    List<PaymentCheckStatView> findStatRowsToDateByOwner(LocalDate localDate, Set<Manager> managerList);
+
+    List<PaymentCheck> findAllByOwner(Set<Manager> managerList);
+
+    List<PaymentCheck> getAllWorkerPaymentToDate(Long id, LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+
+    Map<String, Pair<Long, Long>>  getAllPaymentToMonth(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
+}

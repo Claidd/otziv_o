@@ -2,7 +2,7 @@ package com.hunt.otziv.u_users.config;
 
 import com.hunt.otziv.config.jwt.service.JwtAuthFilter;
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestrictionFilter;
-import com.hunt.otziv.u_users.services.UserServiceImpl;
+import com.hunt.otziv.u_users.service.UserServiceImpl;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;

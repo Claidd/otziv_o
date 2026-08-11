@@ -4,8 +4,8 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
-import com.hunt.otziv.c_categories.services.CategoryService;
-import com.hunt.otziv.c_categories.services.SubCategoryService;
+import com.hunt.otziv.c_categories.service.CategoryService;
+import com.hunt.otziv.c_categories.service.SubCategoryService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;

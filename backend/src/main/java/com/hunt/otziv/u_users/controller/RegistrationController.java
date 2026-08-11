@@ -5,7 +5,7 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
 
 
-import com.hunt.otziv.u_users.services.UserServiceImpl;
+import com.hunt.otziv.u_users.service.UserServiceImpl;
 import com.hunt.otziv.u_users.utils.UserValidation;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;

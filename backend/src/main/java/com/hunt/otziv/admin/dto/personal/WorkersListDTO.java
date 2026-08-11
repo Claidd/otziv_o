@@ -1,0 +1,41 @@
+package com.hunt.otziv.admin.dto.personal;
+
+
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.p_products.worker_access.dto.WorkerNetworkViolationStatsResponse;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class WorkersListDTO {
+    private Long id;
+    private Long userId;
+    private String fio;
+    private String login;
+    private Long imageId;
+    private int sum1Month;
+    private int order1Month;
+    private int review1Month;
+    private int newOrder;
+    private int inCorrect;
+    private int intVigul;
+    private int publish;
+    private boolean acceptsCompanyTransfers;
+    private long averageDailyActiveWorkSeconds;
+    private DailyWorkProgressResponse dailyProgress;
+    private DailyWorkProgressResponse monthlyProgress;
+    private WorkerNetworkViolationStatsResponse dailyNetworkViolations;
+    private WorkerNetworkViolationStatsResponse monthlyNetworkViolations;
+//    private BigDecimal coefficient;
+//    private BigDecimal sum1Day;
+//    private BigDecimal sum1Week;
+//    private BigDecimal sum1Month;
+}

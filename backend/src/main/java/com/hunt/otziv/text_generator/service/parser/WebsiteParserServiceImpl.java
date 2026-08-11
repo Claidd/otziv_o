@@ -1,7 +1,7 @@
 package com.hunt.otziv.text_generator.service.parser;
 
 import com.hunt.otziv.security.OutboundUrlGuard;
-import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
+import com.hunt.otziv.text_generator.service.gpt.ReviewGeneratorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;

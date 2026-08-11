@@ -2,8 +2,8 @@ package com.hunt.otziv.admin.controller;
 
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.ManagerService;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.ManagerService;
+import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppClientStatusDto;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;

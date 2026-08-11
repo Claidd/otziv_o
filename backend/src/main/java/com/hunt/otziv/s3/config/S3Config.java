@@ -1,6 +1,6 @@
 package com.hunt.otziv.s3.config;
 
-import com.hunt.otziv.s3.buckupBD.config.S3Properties;
+import com.hunt.otziv.s3.backup.config.S3Properties;
 import java.net.URI;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

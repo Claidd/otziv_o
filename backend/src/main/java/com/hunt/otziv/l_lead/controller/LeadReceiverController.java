@@ -4,7 +4,7 @@ import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.l_lead.mapper.LeadMapper;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.repository.TelephoneRepository;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.l_lead.service.LeadService;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.MarketologRepository;
 import com.hunt.otziv.u_users.repository.OperatorRepository;

@@ -15,7 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.hunt.otziv.manager.services.ManagerAccessService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderDetailsRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;

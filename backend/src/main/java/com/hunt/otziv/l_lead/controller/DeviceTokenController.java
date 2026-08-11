@@ -1,7 +1,7 @@
 package com.hunt.otziv.l_lead.controller;
 
-import com.hunt.otziv.l_lead.services.serv.DeviceTokenService;
-import com.hunt.otziv.l_lead.services.LeadAccessService;
+import com.hunt.otziv.l_lead.service.DeviceTokenService;
+import com.hunt.otziv.l_lead.service.LeadAccessService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;

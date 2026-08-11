@@ -1,8 +1,8 @@
 package com.hunt.otziv.l_lead.controller;
 
 import com.hunt.otziv.l_lead.model.Lead;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
-import com.hunt.otziv.l_lead.services.serv.LeadTransferService;
+import com.hunt.otziv.l_lead.service.LeadService;
+import com.hunt.otziv.l_lead.service.LeadTransferService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

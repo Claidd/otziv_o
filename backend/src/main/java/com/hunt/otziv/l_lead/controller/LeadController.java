@@ -5,8 +5,8 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.LeadStatus;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
-import com.hunt.otziv.l_lead.services.serv.PromoTextService;
+import com.hunt.otziv.l_lead.service.LeadService;
+import com.hunt.otziv.l_lead.service.PromoTextService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Controller;

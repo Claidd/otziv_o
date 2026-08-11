@@ -7,16 +7,16 @@ import com.hunt.otziv.l_lead.event.LeadEventPublisher;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
-import com.hunt.otziv.l_lead.services.serv.LeadStatusService;
-import com.hunt.otziv.l_lead.services.serv.TelephoneService;
-import com.hunt.otziv.l_lead.services.serv.VpsSyncService;
-import com.hunt.otziv.text_generator.alltext.service.clas.HelloTextService;
-import com.hunt.otziv.text_generator.alltext.service.clas.RandomTextService;
+import com.hunt.otziv.l_lead.service.LeadStatusService;
+import com.hunt.otziv.l_lead.service.TelephoneService;
+import com.hunt.otziv.l_lead.service.VpsSyncService;
+import com.hunt.otziv.text_generator.alltext.service.HelloTextService;
+import com.hunt.otziv.text_generator.alltext.service.RandomTextService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.StatDto;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
-import com.hunt.otziv.whatsapp.service.fichi.MessageHumanizer;
+import com.hunt.otziv.whatsapp.util.MessageHumanizer;
 import com.hunt.otziv.whatsapp.service.service.AdminNotifierService;
 import com.hunt.otziv.whatsapp.service.service.LeadProcessorService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
@@ -44,8 +44,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
-import static com.hunt.otziv.logs.LogMasking.maskPhone;
-import static com.hunt.otziv.logs.LogMasking.textLength;
+import static com.hunt.otziv.logs.util.LogMasking.maskPhone;
+import static com.hunt.otziv.logs.util.LogMasking.textLength;
 
 
 @Service

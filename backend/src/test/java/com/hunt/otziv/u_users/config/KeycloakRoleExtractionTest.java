@@ -2,7 +2,7 @@ package com.hunt.otziv.u_users.config;
 
 import com.hunt.otziv.config.jwt.service.JwtAuthFilter;
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestrictionFilter;
-import com.hunt.otziv.u_users.services.UserServiceImpl;
+import com.hunt.otziv.u_users.service.UserServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;

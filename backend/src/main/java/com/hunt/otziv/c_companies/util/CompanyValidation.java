@@ -1,7 +1,7 @@
 package com.hunt.otziv.c_companies.util;
 
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
-import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.c_companies.service.FilialService;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.Errors;
 import org.springframework.validation.Validator;

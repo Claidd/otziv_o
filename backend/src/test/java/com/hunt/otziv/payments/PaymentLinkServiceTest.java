@@ -1,7 +1,7 @@
 package com.hunt.otziv.payments;
 
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
@@ -9,11 +9,11 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentRequisitesSnapshot;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
-import com.hunt.otziv.manager.services.ManagerAccessService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.services.service.OrderTransactionService;
+import com.hunt.otziv.p_products.service.OrderTransactionService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;

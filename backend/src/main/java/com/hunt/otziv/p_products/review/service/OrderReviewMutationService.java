@@ -1,18 +1,18 @@
 package com.hunt.otziv.p_products.review.service;
 
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.p_products.services.service.OrderDetailsService;
-import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.p_products.service.OrderDetailsService;
+import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
 import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
-import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.r_review.service.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

@@ -1,7 +1,7 @@
 package com.hunt.otziv.common_billing.service;
 
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
@@ -36,7 +36,7 @@ import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardServ
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService.FrozenCommonRouteAction;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
-import com.hunt.otziv.manager.services.ManagerPermissionService;
+import com.hunt.otziv.manager.service.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.deletion.service.OrderDeletionService;
 import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
@@ -50,8 +50,8 @@ import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepositor
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService;
-import com.hunt.otziv.p_products.services.service.OrderStatusService;
-import com.hunt.otziv.p_products.services.service.OrderTransactionService;
+import com.hunt.otziv.p_products.service.OrderStatusService;
+import com.hunt.otziv.p_products.service.OrderTransactionService;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.TbankCancelResponse;
@@ -73,11 +73,11 @@ import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.payments.service.ManualCardPaymentReviewNotificationService;
-import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
+import com.hunt.otziv.review_recovery.service.ReviewRecoveryGateService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.security.cert.CertPathBuilderException;

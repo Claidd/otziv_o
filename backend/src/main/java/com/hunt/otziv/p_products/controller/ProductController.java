@@ -2,9 +2,9 @@ package com.hunt.otziv.p_products.controller;
 
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
-import com.hunt.otziv.c_categories.services.ProductCategoryService;
+import com.hunt.otziv.c_categories.service.ProductCategoryService;
 import com.hunt.otziv.p_products.dto.ProductDTO;
-import com.hunt.otziv.p_products.services.service.ProductService;
+import com.hunt.otziv.p_products.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;

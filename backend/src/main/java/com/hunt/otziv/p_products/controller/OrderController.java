@@ -2,18 +2,18 @@ package com.hunt.otziv.p_products.controller;
 
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
-import com.hunt.otziv.l_lead.services.serv.PromoTextService;
-import com.hunt.otziv.manager.services.ManagerAccessService;
+import com.hunt.otziv.l_lead.service.PromoTextService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
-import com.hunt.otziv.p_products.services.service.OrderCreationService;
-import com.hunt.otziv.p_products.services.service.OrderDetailsService;
-import com.hunt.otziv.p_products.services.service.OrderService;
-import com.hunt.otziv.p_products.services.service.ProductService;
-import com.hunt.otziv.r_review.services.AmountService;
-import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.p_products.service.OrderCreationService;
+import com.hunt.otziv.p_products.service.OrderDetailsService;
+import com.hunt.otziv.p_products.service.OrderService;
+import com.hunt.otziv.p_products.service.ProductService;
+import com.hunt.otziv.r_review.service.AmountService;
+import com.hunt.otziv.r_review.service.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

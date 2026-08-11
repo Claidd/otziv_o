@@ -1,6 +1,6 @@
 package com.hunt.otziv.analytics.service;
 
-import com.hunt.otziv.admin.dto.presonal.UserData;
+import com.hunt.otziv.admin.dto.personal.UserData;
 import com.hunt.otziv.analytics.model.AnalyticsUserMetricAggregate;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.User;

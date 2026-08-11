@@ -22,7 +22,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.performers.service.PerformerProductRewardZpService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
-import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
+import com.hunt.otziv.review_recovery.service.ReviewRecoveryGateService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;

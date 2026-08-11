@@ -12,7 +12,7 @@ import com.hunt.otziv.whatsapp.dto.WhatsAppReconciledMessagesResponse;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
 import com.hunt.otziv.whatsapp.exception.WhatsAppConfigurationException;
-import com.hunt.otziv.whatsapp.service.fichi.LastSeenParser;
+import com.hunt.otziv.whatsapp.util.LastSeenParser;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;

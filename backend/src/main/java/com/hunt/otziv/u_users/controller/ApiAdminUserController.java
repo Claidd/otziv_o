@@ -8,7 +8,7 @@ import com.hunt.otziv.u_users.dto.CreatedKeycloakUserResponse;
 import com.hunt.otziv.u_users.dto.UpdateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.UpdateUserAssignmentsRequest;
 import com.hunt.otziv.u_users.dto.UserAssignmentsResponse;
-import com.hunt.otziv.u_users.services.KeycloakUserProvisioningService;
+import com.hunt.otziv.u_users.service.KeycloakUserProvisioningService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

@@ -24,10 +24,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
-import static com.hunt.otziv.logs.LogMasking.hasText;
-import static com.hunt.otziv.logs.LogMasking.maskEmail;
-import static com.hunt.otziv.logs.LogMasking.maskPhone;
-import static com.hunt.otziv.logs.LogMasking.maskPhones;
+import static com.hunt.otziv.logs.util.LogMasking.hasText;
+import static com.hunt.otziv.logs.util.LogMasking.maskEmail;
+import static com.hunt.otziv.logs.util.LogMasking.maskPhone;
+import static com.hunt.otziv.logs.util.LogMasking.maskPhones;
 
 // README-инструкция (для команды)
 /**

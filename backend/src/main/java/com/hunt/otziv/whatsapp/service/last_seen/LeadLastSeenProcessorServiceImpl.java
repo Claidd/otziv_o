@@ -2,7 +2,7 @@ package com.hunt.otziv.whatsapp.service.last_seen;
 
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
-import com.hunt.otziv.l_lead.services.serv.VpsSyncService;
+import com.hunt.otziv.l_lead.service.VpsSyncService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.hunt.otziv.logs.LogMasking.maskPhone;
+import static com.hunt.otziv.logs.util.LogMasking.maskPhone;
 
 
 @Service

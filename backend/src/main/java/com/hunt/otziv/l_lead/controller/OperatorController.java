@@ -4,10 +4,10 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.LeadStatus;
-import com.hunt.otziv.l_lead.services.serv.DeviceTokenService;
-import com.hunt.otziv.l_lead.services.LeadAccessService;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
-import com.hunt.otziv.l_lead.services.serv.PromoTextService;
+import com.hunt.otziv.l_lead.service.DeviceTokenService;
+import com.hunt.otziv.l_lead.service.LeadAccessService;
+import com.hunt.otziv.l_lead.service.LeadService;
+import com.hunt.otziv.l_lead.service.PromoTextService;
 import com.hunt.otziv.l_lead.dto.TelephoneIDAndTimeDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +25,7 @@ import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.Map;
 
-import static com.hunt.otziv.logs.LogMasking.maskToken;
+import static com.hunt.otziv.logs.util.LogMasking.maskToken;
 
 @Controller
 @LegacyMvc

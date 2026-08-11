@@ -1,0 +1,249 @@
+package com.hunt.otziv.c_companies.service;
+
+import com.hunt.otziv.c_companies.dto.SharedChatLinkSyncResponse;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyStatus;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class SharedChatLinkSyncServiceTest {
+
+    private final CompanyRepository companyRepository = mock(CompanyRepository.class);
+    private final SharedChatLinkSyncService service = new SharedChatLinkSyncService(companyRepository);
+
+    @Test
+    void copiesKnownChatIdsToCompaniesWithSameChatLink() {
+        Company whatsAppSource = company(1L, "Source WA", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv?mode=gi_t");
+        whatsAppSource.setGroupId("120363123@g.us");
+        Company whatsAppTarget = company(2L, "Target WA", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv/");
+
+        Company telegramSource = company(3L, "Source TG", "https://t.me/shared_owner");
+        telegramSource.setTelegramGroupChatId(-100123L);
+        Company telegramTarget = company(4L, "Target TG", "https://telegram.me/@shared_owner");
+
+        Company maxSource = company(5L, "Source MAX", "https://max.ru/join/SharedToken123");
+        maxSource.setMaxGroupChatId(-700L);
+        Company maxTarget = company(6L, "Target MAX", "web.max.ru/join/SharedToken123/");
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(
+                whatsAppSource,
+                whatsAppTarget,
+                telegramSource,
+                telegramTarget,
+                maxSource,
+                maxTarget
+        ));
+
+        SharedChatLinkSyncResponse response = service.syncSharedChatIds();
+
+        assertEquals("120363123@g.us", whatsAppTarget.getGroupId());
+        assertEquals(-100123L, telegramTarget.getTelegramGroupChatId());
+        assertEquals(-700L, maxTarget.getMaxGroupChatId());
+        assertEquals(6, response.scannedCompanies());
+        assertEquals(3, response.sharedChatGroups());
+        assertEquals(3, response.updatedCompanies());
+        assertEquals(1, response.whatsappLinked());
+        assertEquals(1, response.telegramLinked());
+        assertEquals(1, response.maxLinked());
+        assertEquals(0, response.conflictGroups());
+        verify(companyRepository).saveAll(any());
+    }
+
+    @Test
+    void copiesWhatsAppGroupIdBetweenCompaniesWithSameInviteAndDifferentQueryParams() {
+        Company armana = company(958L, "Armana", "https://chat.whatsapp.com/JZ4J8FeiIAkFhDjlgzBU8d?s=cl&p=i&mlu=2");
+        Company tochnoKuhni = company(2831L, "Точно Кухни", "https://chat.whatsapp.com/JZ4J8FeiIAkFhDjlgzBU8d?mode=hqrt2/");
+        tochnoKuhni.setGroupId("120363164752269032@g.us");
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(armana, tochnoKuhni));
+
+        SharedChatLinkSyncResponse response = service.syncSharedChatIds();
+
+        assertEquals("120363164752269032@g.us", armana.getGroupId());
+        assertEquals(1, response.updatedCompanies());
+        assertEquals(1, response.whatsappLinked());
+        assertEquals(0, response.conflictGroups());
+        verify(companyRepository).saveAll(any());
+    }
+
+    @Test
+    void keepsWhatsAppInviteCodesCaseSensitive() {
+        Company source = company(1L, "Source", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
+        source.setGroupId("120363123@g.us");
+        Company differentCode = company(2L, "Other", "https://chat.whatsapp.com/abcdefghijklmnopqrstuv");
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(source, differentCode));
+
+        SharedChatLinkSyncResponse response = service.syncSharedChatIds();
+
+        assertNull(differentCode.getGroupId());
+        assertEquals(0, response.sharedChatGroups());
+        assertEquals(0, response.updatedCompanies());
+        verify(companyRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void doesNotCopyChatIdToStoppedOrBannedCompany() {
+        Company source = company(1L, "Source", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
+        source.setGroupId("120363123@g.us");
+        Company stopped = company(2L, "Stopped", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
+        stopped.setStatus(CompanyStatus.builder().title("На стопе").build());
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(source, stopped));
+
+        SharedChatLinkSyncResponse response = service.syncSharedChatIds();
+
+        assertNull(stopped.getGroupId());
+        assertEquals(1, response.scannedCompanies());
+        assertEquals(0, response.updatedCompanies());
+        verify(companyRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void ignoresTelegramBotStartGroupLinkAsCompanyChatLink() {
+        Company source = company(1L, "22 философа", "https://t.me/twenty_two_philosophers");
+        source.setTelegramGroupChatId(-10022L);
+        Company botInvite = company(285L, "GsbMoto", "https://t.me/O_Company_Bot?startgroup=c285_abcd");
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(source, botInvite));
+
+        SharedChatLinkSyncResponse response = service.syncSharedChatIds();
+
+        assertNull(botInvite.getTelegramGroupChatId());
+        assertEquals(2, response.scannedCompanies());
+        assertEquals(0, response.sharedChatGroups());
+        assertEquals(0, response.updatedCompanies());
+        assertEquals(0, response.telegramLinked());
+        verify(companyRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void copiesOnlyChatIdMatchingMessengerInCurrentChatLink() {
+        Company source = company(1L, "Source", "https://t.me/shared_owner");
+        source.setGroupId("120363123@g.us");
+        Company target = company(2L, "Target", "https://telegram.me/@shared_owner");
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(source, target));
+
+        SharedChatLinkSyncResponse response = service.syncSharedChatIds();
+
+        assertNull(target.getGroupId());
+        assertEquals(0, response.updatedCompanies());
+        assertEquals(0, response.whatsappLinked());
+        assertEquals(0, response.telegramLinked());
+        assertEquals(0, response.maxLinked());
+        verify(companyRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void skipsPlatformWhenSharedLinkHasConflictingIds() {
+        Company first = company(1L, "First", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
+        first.setGroupId("120363111@g.us");
+        Company second = company(2L, "Second", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
+        second.setGroupId("120363222@g.us");
+        Company third = company(3L, "Third", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(first, second, third));
+
+        SharedChatLinkSyncResponse response = service.syncSharedChatIds();
+
+        assertNull(third.getGroupId());
+        assertEquals(0, response.updatedCompanies());
+        assertEquals(0, response.whatsappLinked());
+        assertEquals(1, response.conflictGroups());
+        verify(companyRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void targetedSyncCopiesMaxChatIdFromCompanyWithSameCurrentLink() {
+        Company dimanche = company(1726L, "Dimanche", "https://max.ru/join/g6qnHbI7eKLuk3svPxPLQqpy_fHciCx3RTxtXSZIpyI");
+        dimanche.setMaxGroupChatId(-75881151718007L);
+        Company lisiteya = company(2043L, "Лиситея", "https://max.ru/join/g6qnHbI7eKLuk3svPxPLQqpy_fHciCx3RTxtXSZIpyI");
+        lisiteya.setMaxLinkUserId(203090551L);
+
+        when(companyRepository.findById(2043L)).thenReturn(Optional.of(lisiteya));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(dimanche, lisiteya));
+
+        SharedChatLinkSyncResponse response = service.syncCompanyChatId(2043L);
+
+        assertEquals(-75881151718007L, lisiteya.getMaxGroupChatId());
+        assertNull(lisiteya.getMaxLinkUserId());
+        assertEquals(1, response.updatedCompanies());
+        assertEquals(1, response.maxLinked());
+        verify(companyRepository).saveAll(any());
+    }
+
+    @Test
+    void targetedSyncOverwritesStaleMaxChatIdForCurrentLink() {
+        Company currentLinkSource = company(10L, "Source", "https://max.ru/join/NewChatToken123");
+        currentLinkSource.setMaxGroupChatId(-100500L);
+        Company staleTarget = company(11L, "Target", "https://max.ru/join/NewChatToken123");
+        staleTarget.setMaxGroupChatId(-777L);
+
+        when(companyRepository.findById(11L)).thenReturn(Optional.of(staleTarget));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(currentLinkSource, staleTarget));
+
+        SharedChatLinkSyncResponse response = service.syncCompanyChatId(11L);
+
+        assertEquals(-100500L, staleTarget.getMaxGroupChatId());
+        assertEquals(1, response.updatedCompanies());
+        assertEquals(1, response.maxLinked());
+        verify(companyRepository).saveAll(any());
+    }
+
+    @Test
+    void targetedSyncWritesMaxChatIdFromWebMaxUrl() {
+        Company target = company(11L, "Target", "https://web.max.ru/-72727178175095?utm=test");
+        target.setMaxGroupChatId(-777L);
+
+        when(companyRepository.findById(11L)).thenReturn(Optional.of(target));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(target));
+
+        SharedChatLinkSyncResponse response = service.syncCompanyChatId(11L);
+
+        assertEquals(-72727178175095L, target.getMaxGroupChatId());
+        assertEquals(1, response.updatedCompanies());
+        assertEquals(1, response.maxLinked());
+        verify(companyRepository).saveAll(any());
+    }
+
+    @Test
+    void targetedSyncUsesAuthoritativeChatIdFromBotAddedEvent() {
+        Company linkedByEvent = company(11L, "Linked", "https://max.ru/join/NewChatToken123");
+        linkedByEvent.setMaxGroupChatId(-100500L);
+        Company sharedTarget = company(12L, "Shared", "https://max.ru/join/NewChatToken123");
+
+        when(companyRepository.findById(11L)).thenReturn(Optional.of(linkedByEvent));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(linkedByEvent, sharedTarget));
+
+        SharedChatLinkSyncResponse response = service.syncCompanyChatId(11L, "-100500");
+
+        assertEquals(-100500L, linkedByEvent.getMaxGroupChatId());
+        assertEquals(-100500L, sharedTarget.getMaxGroupChatId());
+        assertEquals(1, response.updatedCompanies());
+        assertEquals(1, response.maxLinked());
+        verify(companyRepository).saveAll(any());
+    }
+
+    private Company company(Long id, String title, String urlChat) {
+        Company company = new Company();
+        company.setId(id);
+        company.setTitle(title);
+        company.setUrlChat(urlChat);
+        return company;
+    }
+}

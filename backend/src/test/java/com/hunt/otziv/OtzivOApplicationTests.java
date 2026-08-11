@@ -9,7 +9,7 @@ import com.hunt.otziv.manager.dto.api.PageResponse;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerAssignmentMutationGuardRepository;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerNetworkViolationRepository;
-import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.r_review.service.ReviewService;
 import com.hunt.otziv.workload_shadow.notification.dto.WorkloadShadowDeliveryOutcome;
 import com.hunt.otziv.workload_shadow.repository.WorkloadLiveReadinessRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowEventRepository;
@@ -73,7 +73,7 @@ class OtzivOApplicationTests {
 	private ReviewService reviewService;
 
 	@Autowired
-	private com.hunt.otziv.r_review.services.ReviewCityService reviewCityService;
+	private com.hunt.otziv.r_review.service.ReviewCityService reviewCityService;
 
 	@Autowired
 	private Flyway flyway;

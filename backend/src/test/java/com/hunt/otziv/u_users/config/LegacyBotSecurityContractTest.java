@@ -7,7 +7,7 @@ import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewAccessPol
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCheckInService;
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestrictionFilter;
 import com.hunt.otziv.u_users.repository.UserRepository;
-import com.hunt.otziv.u_users.services.UserServiceImpl;
+import com.hunt.otziv.u_users.service.UserServiceImpl;
 import jakarta.servlet.Filter;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;

@@ -2,7 +2,7 @@ package com.hunt.otziv.r_review.edit.service;
 
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
-import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.p_products.service.OrderDetailsService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;

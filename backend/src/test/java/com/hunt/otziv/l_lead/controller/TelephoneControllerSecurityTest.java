@@ -1,8 +1,8 @@
 package com.hunt.otziv.l_lead.controller;
 
 import com.hunt.otziv.l_lead.dto.TelephoneDTO;
-import com.hunt.otziv.l_lead.services.LeadAccessService;
-import com.hunt.otziv.l_lead.services.serv.TelephoneService;
+import com.hunt.otziv.l_lead.service.LeadAccessService;
+import com.hunt.otziv.l_lead.service.TelephoneService;
 import com.hunt.otziv.u_users.model.Operator;
 import java.util.List;
 import java.util.Set;

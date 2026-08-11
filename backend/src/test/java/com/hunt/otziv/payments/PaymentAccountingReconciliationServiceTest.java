@@ -8,7 +8,7 @@ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentAccountingReconciliationService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;

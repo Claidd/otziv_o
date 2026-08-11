@@ -9,7 +9,7 @@ import com.hunt.otziv.gamification.dto.GamificationWalletResponse;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;

@@ -2,7 +2,7 @@ package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
-import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
+import com.hunt.otziv.c_companies.service.SharedChatLinkSyncService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.repository.ManagerRepository;

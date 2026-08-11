@@ -1,6 +1,6 @@
 package com.hunt.otziv.client_messages.service;
 
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.client_messages.dto.ClientMessageMaintenanceApplyResponse;
 import com.hunt.otziv.client_messages.dto.ClientMessageMaintenancePreviewResponse;
 import com.hunt.otziv.config.settings.service.AppSettingService;

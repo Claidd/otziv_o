@@ -1,6 +1,6 @@
 package com.hunt.otziv.p_products.status.service;
 
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.config.settings.service.AppSettingService;

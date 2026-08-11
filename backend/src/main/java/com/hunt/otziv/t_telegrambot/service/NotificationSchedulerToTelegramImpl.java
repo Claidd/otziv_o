@@ -1,12 +1,12 @@
 package com.hunt.otziv.t_telegrambot.service;
 
-import com.hunt.otziv.admin.dto.presonal.UserData;
-import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.admin.dto.personal.UserData;
+import com.hunt.otziv.admin.service.PersonalService;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
 import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

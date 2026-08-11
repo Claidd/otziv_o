@@ -1,10 +1,10 @@
 package com.hunt.otziv.p_products.editing.service;
 
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.c_companies.service.FilialService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -13,14 +13,14 @@ import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockServic
 import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
-import com.hunt.otziv.r_review.services.ReviewService;
-import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
+import com.hunt.otziv.r_review.service.ReviewService;
+import com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
-import com.hunt.otziv.u_users.services.service.ManagerService;
-import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.u_users.service.ManagerService;
+import com.hunt.otziv.u_users.service.WorkerService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;

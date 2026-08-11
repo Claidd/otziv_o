@@ -14,7 +14,7 @@ import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

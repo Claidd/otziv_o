@@ -2,8 +2,8 @@ package com.hunt.otziv.z_zp.controller;
 
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
-import com.hunt.otziv.z_zp.services.PaymentCheckService;
-import com.hunt.otziv.z_zp.services.ZpService;
+import com.hunt.otziv.z_zp.service.PaymentCheckService;
+import com.hunt.otziv.z_zp.service.ZpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Controller;

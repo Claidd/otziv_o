@@ -1,9 +1,9 @@
 package com.hunt.otziv.analytics.service;
 
-import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
-import com.hunt.otziv.admin.dto.presonal.MarketologsListDTO;
-import com.hunt.otziv.admin.dto.presonal.OperatorsListDTO;
-import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
+import com.hunt.otziv.admin.dto.personal.ManagersListDTO;
+import com.hunt.otziv.admin.dto.personal.MarketologsListDTO;
+import com.hunt.otziv.admin.dto.personal.OperatorsListDTO;
+import com.hunt.otziv.admin.dto.personal.WorkersListDTO;
 import com.hunt.otziv.analytics.model.AnalyticsUserMetricAggregate;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.Manager;

@@ -3,7 +3,7 @@ package com.hunt.otziv.l_lead.controller.export;
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.l_lead.mapper.LeadMapper;
 import com.hunt.otziv.l_lead.model.Lead;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
+import com.hunt.otziv.l_lead.service.LeadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;

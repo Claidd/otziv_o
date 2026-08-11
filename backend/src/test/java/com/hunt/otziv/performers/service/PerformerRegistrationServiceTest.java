@@ -10,7 +10,7 @@ import com.hunt.otziv.u_users.dto.CreateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.CreatedKeycloakUserResponse;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
-import com.hunt.otziv.u_users.services.KeycloakUserProvisioningService;
+import com.hunt.otziv.u_users.service.KeycloakUserProvisioningService;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

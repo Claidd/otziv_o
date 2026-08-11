@@ -8,8 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.hunt.otziv.scheduler.SchedulerLeaseService;
-import com.hunt.otziv.scheduler.SchedulerLeaseService.Lease;
+import com.hunt.otziv.scheduler.service.SchedulerLeaseService;
+import com.hunt.otziv.scheduler.service.SchedulerLeaseService.Lease;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;

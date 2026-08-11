@@ -3,12 +3,12 @@ package com.hunt.otziv.p_products.controller;
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.b_bots.dto.BotDTO;
-import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.b_bots.service.BotService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
-import com.hunt.otziv.l_lead.services.serv.PromoTextService;
-import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.l_lead.service.PromoTextService;
+import com.hunt.otziv.p_products.service.OrderService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationGateService;
-import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.r_review.service.ReviewService;
 import com.hunt.otziv.u_users.model.Worker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

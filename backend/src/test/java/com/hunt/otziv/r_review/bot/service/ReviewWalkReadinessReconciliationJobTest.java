@@ -1,6 +1,6 @@
 package com.hunt.otziv.r_review.bot.service;
 
-import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.p_products.service.BotAssignmentService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;

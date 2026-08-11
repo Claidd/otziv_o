@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
 import com.hunt.otziv.reputationai.infrastructure.search.dto.SearchResult;
 import com.hunt.otziv.reputationai.infrastructure.search.service.SearchProviderRouter;

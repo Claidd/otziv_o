@@ -6,7 +6,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.model.WorkerActivityEvent;
 import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparation;

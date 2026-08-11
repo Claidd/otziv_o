@@ -2,7 +2,7 @@ package com.hunt.otziv.schema;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.hunt.otziv.scheduler.SchedulerLeaseService;
+import com.hunt.otziv.scheduler.service.SchedulerLeaseService;
 import java.time.Duration;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;

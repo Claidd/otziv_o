@@ -2,15 +2,15 @@ package com.hunt.otziv.p_products.status.service;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
-import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.b_bots.service.BotService;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
-import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
-import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.r_review.service.ReviewService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;

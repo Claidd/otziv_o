@@ -2,12 +2,12 @@ package com.hunt.otziv.p_products.controller;
 
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
-import com.hunt.otziv.c_companies.services.CompanyService;
-import com.hunt.otziv.l_lead.services.serv.PromoTextService;
-import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.l_lead.service.PromoTextService;
+import com.hunt.otziv.p_products.service.OrderService;
 import com.hunt.otziv.u_users.model.Manager;
-import com.hunt.otziv.u_users.services.service.ManagerService;
-import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.service.ManagerService;
+import com.hunt.otziv.u_users.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;

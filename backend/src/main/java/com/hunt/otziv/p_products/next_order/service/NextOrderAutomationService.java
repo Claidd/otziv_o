@@ -6,7 +6,7 @@ import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepositor
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
-import com.hunt.otziv.p_products.services.service.OrderCreationService;
+import com.hunt.otziv.p_products.service.OrderCreationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

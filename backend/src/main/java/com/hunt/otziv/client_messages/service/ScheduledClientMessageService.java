@@ -1,6 +1,6 @@
 package com.hunt.otziv.client_messages.service;
 
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.client_messages.dto.ArchiveCompanyMessageCandidate;
@@ -31,10 +31,10 @@ import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
-import com.hunt.otziv.review_recovery.services.ReviewRecoveryHoldService;
-import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
-import com.hunt.otziv.scheduler.SchedulerLeaseService;
-import com.hunt.otziv.scheduler.SchedulerLeaseService.Lease;
+import com.hunt.otziv.review_recovery.service.ReviewRecoveryHoldService;
+import com.hunt.otziv.review_recovery.service.ReviewRecoveryTaskService;
+import com.hunt.otziv.scheduler.service.SchedulerLeaseService;
+import com.hunt.otziv.scheduler.service.SchedulerLeaseService.Lease;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
 import java.math.BigDecimal;
