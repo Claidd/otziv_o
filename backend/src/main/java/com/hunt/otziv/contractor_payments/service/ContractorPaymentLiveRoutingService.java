@@ -547,12 +547,11 @@ public class ContractorPaymentLiveRoutingService {
         ContractorAllocationStatus target = link.getStatus() == PaymentLinkStatus.EXPIRED
                 ? ContractorAllocationStatus.EXPIRED
                 : ContractorAllocationStatus.CANCELED;
+        LocalDateTime observedAt = LocalDateTime.now();
         accountingService.recordRelease(
                 allocation,
                 target,
-                link.getStatus() == PaymentLinkStatus.EXPIRED && link.getExpiresAt() != null
-                        ? link.getExpiresAt()
-                        : link.getUpdatedAt(),
+                ContractorPaymentEventTimePolicy.paymentLinkClosedAt(link, observedAt),
                 "Платежная ссылка закрыта до выбора нового маршрута",
                 "LIVE_LINK:CLOSED:" + link.getStatus()
         );

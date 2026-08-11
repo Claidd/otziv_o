@@ -26,6 +26,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
+import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocationEvent;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
@@ -56,6 +57,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -802,18 +804,56 @@ class ContractorPaymentLiveRoutingServiceTest {
         when(allocationRepository.findByIdForUpdate(91L)).thenReturn(Optional.of(allocation));
         PaymentLink link = paymentLink(45L, order(38L, null, null), 100_000L);
         link.setStatus(PaymentLinkStatus.EXPIRED);
-        link.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+        LocalDateTime expiredAt = LocalDateTime.now().minusMinutes(1);
+        link.setExpiresAt(expiredAt);
 
         assertTrue(service.releaseClosedPaymentLink(link));
 
         assertEquals(ContractorAllocationStatus.EXPIRED, allocation.getStatus());
         assertEquals(40_000L, allocation.getConfirmedKopecks());
-        assertTrue(allocation.getReleasedAt() != null);
+        assertEquals(expiredAt, allocation.getReleasedAt());
         verify(runtimeSwitch, never()).liveRoutingEnabled();
         InOrder locks = inOrder(allocationRepository, profileRepository);
         locks.verify(allocationRepository).findRecipientProfileIdById(91L);
         locks.verify(profileRepository).findByIdForUpdate(90L);
         locks.verify(allocationRepository).findByIdForUpdate(91L);
+    }
+
+    @Test
+    void forcedEarlyLiveExpiryNeverUsesFutureDeadline() {
+        ContractorPaymentProfile recipient = profile(91L, user(191L), ContractorRole.SPECIALIST);
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(92L);
+        allocation.setMode(ContractorAllocationMode.LIVE);
+        allocation.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        allocation.setSourceId(46L);
+        allocation.setAmountKopecks(100_000L);
+        allocation.setStatus(ContractorAllocationStatus.RESERVED);
+        allocation.setRecipientProfile(recipient);
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE,
+                ContractorAllocationSourceType.PAYMENT_LINK,
+                46L
+        )).thenReturn(Optional.of(allocation));
+        when(allocationRepository.findRecipientProfileIdById(92L)).thenReturn(Optional.of(91L));
+        when(profileRepository.findByIdForUpdate(91L)).thenReturn(Optional.of(recipient));
+        when(allocationRepository.findByIdForUpdate(92L)).thenReturn(Optional.of(allocation));
+        PaymentLink link = paymentLink(46L, order(39L, null, null), 100_000L);
+        link.setStatus(PaymentLinkStatus.EXPIRED);
+        link.setExpiresAt(LocalDateTime.now().plusMonths(3));
+        link.setUpdatedAt(LocalDateTime.now().minusMinutes(5));
+        LocalDateTime beforeRelease = LocalDateTime.now();
+
+        assertTrue(service.releaseClosedPaymentLink(link));
+
+        LocalDateTime afterRelease = LocalDateTime.now();
+        assertTrue(!allocation.getReleasedAt().isBefore(beforeRelease));
+        assertTrue(!allocation.getReleasedAt().isAfter(afterRelease));
+        assertTrue(allocation.getReleasedAt().isBefore(link.getExpiresAt()));
+        ArgumentCaptor<ContractorPaymentAllocationEvent> event =
+                ArgumentCaptor.forClass(ContractorPaymentAllocationEvent.class);
+        verify(eventRepository).save(event.capture());
+        assertEquals(allocation.getReleasedAt(), event.getValue().getEffectiveAt());
     }
 
     @ParameterizedTest

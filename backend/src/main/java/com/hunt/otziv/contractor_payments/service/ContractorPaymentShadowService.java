@@ -1232,13 +1232,18 @@ public class ContractorPaymentShadowService {
         }
         if (linkStatus == PaymentLinkStatus.EXPIRED) {
             release(allocation, ContractorAllocationStatus.EXPIRED,
-                    "Срок счета истек", firstNonNull(link.getExpiresAt(), now), "LINK:EXPIRED");
+                    "Срок счета истек",
+                    ContractorPaymentEventTimePolicy.paymentLinkClosedAt(link, now),
+                    "LINK:EXPIRED");
         } else if (linkStatus == PaymentLinkStatus.CANCELED) {
             release(allocation, ContractorAllocationStatus.CANCELED,
-                    "Платеж отменен", firstNonNull(link.getUpdatedAt(), now), "LINK:CANCELED");
+                    "Платеж отменен",
+                    ContractorPaymentEventTimePolicy.paymentLinkClosedAt(link, now),
+                    "LINK:CANCELED");
         } else if (linkStatus == PaymentLinkStatus.REJECTED || linkStatus == PaymentLinkStatus.FAILED) {
             release(allocation, ContractorAllocationStatus.CANCELED,
-                    "Перевод не подтвержден", firstNonNull(link.getUpdatedAt(), now),
+                    "Перевод не подтвержден",
+                    ContractorPaymentEventTimePolicy.paymentLinkClosedAt(link, now),
                     "LINK:CLOSED:" + linkStatus);
         }
     }

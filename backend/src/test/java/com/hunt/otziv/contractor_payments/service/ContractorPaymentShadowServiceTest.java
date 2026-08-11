@@ -989,6 +989,65 @@ class ContractorPaymentShadowServiceTest {
     }
 
     @Test
+    void forcedEarlyExpiryUsesObservationTimeInsteadOfFutureDeadline() {
+        LocalDateTime observedAt = LocalDateTime.of(2026, 8, 7, 12, 0);
+        PaymentLink link = paymentLink(84L, order(85L, null, null), 40_000L);
+        link.setStatus(PaymentLinkStatus.EXPIRED);
+        link.setExpiresAt(observedAt.plusMonths(3));
+        link.setUpdatedAt(observedAt.minusMinutes(5));
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(86L);
+        allocation.setMode(ContractorAllocationMode.SHADOW);
+        allocation.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        allocation.setSourceId(84L);
+        allocation.setAmountKopecks(40_000L);
+        allocation.setStatus(ContractorAllocationStatus.RESERVED);
+        when(allocationRepository.findPaymentLinksForReconciliation(
+                eq(ContractorAllocationMode.SHADOW), anyCollection(), anyCollection(), any(), any(), any()
+        )).thenReturn(List.of(allocation));
+        registerReconciliation(allocation);
+
+        service.reconcilePaymentLinks();
+
+        assertEquals(ContractorAllocationStatus.EXPIRED, allocation.getStatus());
+        assertEquals(observedAt, allocation.getReleasedAt());
+        ArgumentCaptor<ContractorPaymentAllocationEvent> event =
+                ArgumentCaptor.forClass(ContractorPaymentAllocationEvent.class);
+        verify(eventRepository).save(event.capture());
+        assertEquals(ContractorAllocationEventType.EXPIRED, event.getValue().getEventType());
+        assertEquals(observedAt, event.getValue().getEffectiveAt());
+    }
+
+    @Test
+    void naturalExpiryKeepsOriginalPastDeadline() {
+        LocalDateTime observedAt = LocalDateTime.of(2026, 8, 7, 12, 0);
+        LocalDateTime expiredAt = observedAt.minusMinutes(1);
+        PaymentLink link = paymentLink(87L, order(88L, null, null), 40_000L);
+        link.setStatus(PaymentLinkStatus.EXPIRED);
+        link.setExpiresAt(expiredAt);
+        link.setUpdatedAt(observedAt);
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(89L);
+        allocation.setMode(ContractorAllocationMode.SHADOW);
+        allocation.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        allocation.setSourceId(87L);
+        allocation.setAmountKopecks(40_000L);
+        allocation.setStatus(ContractorAllocationStatus.RESERVED);
+        when(allocationRepository.findPaymentLinksForReconciliation(
+                eq(ContractorAllocationMode.SHADOW), anyCollection(), anyCollection(), any(), any(), any()
+        )).thenReturn(List.of(allocation));
+        registerReconciliation(allocation);
+
+        service.reconcilePaymentLinks();
+
+        assertEquals(expiredAt, allocation.getReleasedAt());
+        ArgumentCaptor<ContractorPaymentAllocationEvent> event =
+                ArgumentCaptor.forClass(ContractorPaymentAllocationEvent.class);
+        verify(eventRepository).save(event.capture());
+        assertEquals(expiredAt, event.getValue().getEffectiveAt());
+    }
+
+    @Test
     void amountMismatchUsesFactualConfirmedAmountAndPaidTimestamp() {
         LocalDateTime paidAt = LocalDateTime.of(2026, 8, 7, 15, 30);
         PaymentLink link = paymentLink(91L, order(92L, null, null), 100_000L);

@@ -3090,9 +3090,14 @@ FROM flyway_schema_history
 WHERE version IN (
   '1.10.217', '1.10.218', '1.10.219', '1.10.220', '1.10.221', '1.10.222',
   '1.10.223', '1.10.224', '1.10.225', '1.10.226', '1.10.227', '1.10.228',
-  '1.10.229', '1.10.230'
+  '1.10.229', '1.10.230', '1.10.231', '1.10.232'
 )
   AND success = 1;
+
+SELECT CONCAT('FUTURE_EXPIRY_EVENTS=', COUNT(*))
+FROM contractor_payment_allocation_events
+WHERE event_type = 'EXPIRED'
+  AND effective_at > observed_at;
 
 SELECT CONCAT('REQUIRED_TABLES=', COUNT(*))
 FROM information_schema.tables
@@ -3359,7 +3364,8 @@ WHERE table_schema = DATABASE()
             Where-Object { $_ -match "^[A-Z_]+=[0-9]+$" }
     )
     foreach ($expectedFact in @(
-        "MIGRATIONS=14",
+        "MIGRATIONS=16",
+        "FUTURE_EXPIRY_EVENTS=0",
         "REQUIRED_TABLES=6",
         "SAFE_SETTINGS=5",
         "ACCOUNTING_SHADOW=1",
@@ -3407,7 +3413,7 @@ WHERE table_schema = DATABASE()
         }
     }
 
-    Write-Host "Contractor payment SHADOW safety smoke OK: V217-V230 schema is complete, company payment-routing defaults and source snapshots are present, generation joins are collation-safe, accounting/routing remain LEGACY/SHADOW, completion cutover is unset, and both deployment masters are false."
+    Write-Host "Contractor payment SHADOW safety smoke OK: V217-V232 schema is complete, expiry events stay on the observed business timeline, company payment-routing defaults and source snapshots are present, generation joins are collation-safe, accounting/routing remain LEGACY/SHADOW, completion cutover is unset, and both deployment masters are false."
 }
 
 function Invoke-WorkloadShadowSmoke {
