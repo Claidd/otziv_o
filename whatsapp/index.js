@@ -28,14 +28,38 @@ const {
 } = require("./internal-auth");
 const { chromiumLaunchArgs } = require("./chromium-launch");
 const { fetchRecentMessagesFromRawChat } = require("./raw-chat-reconciliation");
+const { createLastSeenLookup } = require("./last-seen");
+const {
+  installRemoteBrowserLifecycle,
+  configuredRemoteBrowserUrl,
+  requirePeoplesBrowserProfile,
+  resolveRemoteBrowserUrl,
+} = require("./remote-browser");
 
 const CLIENT_ID = process.env.CLIENT_ID || "whatsapp_default";
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
 const SERVER_URL = trimTrailingSlash(process.env.SERVER_URL || "http://app:8080");
+const OUTREACH_WEBHOOK_ENABLED = parseBoolean(process.env.OUTREACH_WEBHOOK_ENABLED);
+const OUTREACH_SERVER_URL = trimTrailingSlash(process.env.OUTREACH_SERVER_URL || "");
 const AUTH_PATH = process.env.AUTH_PATH || "/auth";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
+const OUTREACH_WEBHOOK_SECRET = process.env.OUTREACH_WEBHOOK_SECRET || "";
 const GATEWAY_SHARED_SECRET = process.env.WHATSAPP_GATEWAY_SHARED_SECRET || "";
 const GATEWAY_AUTH_REQUIRED = parseBoolean(process.env.WHATSAPP_GATEWAY_AUTH_REQUIRED);
+const GROUP_WEBHOOK_ENABLED = process.env.WHATSAPP_GROUP_WEBHOOK_ENABLED === undefined
+  ? true
+  : parseBoolean(process.env.WHATSAPP_GROUP_WEBHOOK_ENABLED);
+const REMOTE_BROWSER_REQUIRED = parseBoolean(process.env.WHATSAPP_REMOTE_BROWSER_REQUIRED);
+const WHATSAPP_BROWSER_URL = configuredRemoteBrowserUrl(
+  process.env.WHATSAPP_BROWSER_URL, REMOTE_BROWSER_REQUIRED
+);
+const REMOTE_BROWSER_ENABLED = Boolean(WHATSAPP_BROWSER_URL);
+
+const BROWSER_PROFILE_ID = REMOTE_BROWSER_REQUIRED
+  ? requirePeoplesBrowserProfile(WHATSAPP_BROWSER_URL, process.env.WHATSAPP_BROWSER_PROFILE_ID) : null;
+if (OUTREACH_WEBHOOK_ENABLED && (!OUTREACH_SERVER_URL || !OUTREACH_WEBHOOK_SECRET)) {
+  throw new Error("OUTREACH_SERVER_URL and OUTREACH_WEBHOOK_SECRET are required when personal outreach webhook delivery is enabled");
+}
 const WHATSAPP_QR_LOG_ENABLED = parseBoolean(process.env.WHATSAPP_QR_LOG_ENABLED);
 const CHROMIUM_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium";
 const WHATSAPP_PROXY_ENABLED = parseBoolean(process.env.WHATSAPP_PROXY_ENABLED);
@@ -43,6 +67,9 @@ const WHATSAPP_PROXY_HOST = String(process.env.WHATSAPP_PROXY_HOST || "").trim()
 const WHATSAPP_PROXY_PORT = String(process.env.WHATSAPP_PROXY_PORT || "8888").trim();
 const WHATSAPP_PROXY_TYPE = String(process.env.WHATSAPP_PROXY_TYPE || "http").trim().toLowerCase();
 const WHATSAPP_GROUPS_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_GROUPS_TIMEOUT_MS, 10000);
+if (REMOTE_BROWSER_ENABLED && WHATSAPP_PROXY_ENABLED) {
+  throw new Error("WHATSAPP proxy settings belong to the peoples browser profile in remote mode");
+}
 const WHATSAPP_GROUPS_RESPONSE_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_GROUPS_RESPONSE_TIMEOUT_MS, 25000);
 const WHATSAPP_GROUPS_CACHE_TTL_MS = parsePositiveInt(process.env.WHATSAPP_GROUPS_CACHE_TTL_MS, 600000);
 const WHATSAPP_GROUP_INVITE_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_GROUP_INVITE_TIMEOUT_MS, 2000);
@@ -99,6 +126,16 @@ const outboundRegistry = new RecentOutboundRegistry(WHATSAPP_OUTBOUND_MARK_TTL_M
 const deliveryIdempotencyStore = new FileDeliveryIdempotencyStore(
   process.env.WHATSAPP_DELIVERY_IDEMPOTENCY_PATH || path.join(AUTH_PATH, "delivery-idempotency.json")
 );
+const WHATSAPP_LAST_SEEN_ENABLED = parseBoolean(process.env.WHATSAPP_LAST_SEEN_ENABLED);
+const WHATSAPP_LAST_SEEN_NAVIGATION_TIMEOUT_MS = parsePositiveInt(
+  process.env.WHATSAPP_LAST_SEEN_NAVIGATION_TIMEOUT_MS,
+  60000
+);
+const WHATSAPP_LAST_SEEN_HEADER_TIMEOUT_MS = parsePositiveInt(
+  process.env.WHATSAPP_LAST_SEEN_HEADER_TIMEOUT_MS,
+  20000
+);
+const WHATSAPP_LAST_SEEN_SETTLE_MS = parsePositiveInt(process.env.WHATSAPP_LAST_SEEN_SETTLE_MS, 8000);
 const deliveredMessageCache = new DeliveredMessageCache(
   WHATSAPP_MESSAGE_DEDUP_TTL_MS,
   () => Date.now(),
@@ -289,6 +326,9 @@ function statusPayload() {
   return {
     status: "ok",
     clientId: CLIENT_ID,
+    browserProfileId: BROWSER_PROFILE_ID,
+    browserMode: REMOTE_BROWSER_ENABLED ? "peoples-profile" : "local",
+    groupWebhookEnabled: GROUP_WEBHOOK_ENABLED,
     ready,
     authenticated,
     state: lastState,
@@ -318,6 +358,9 @@ function statusPayload() {
 function minimalStatusPayload() {
   return {
     status: ready && authenticated ? "ok" : "not_ready",
+    clientId: CLIENT_ID,
+    browserProfileId: BROWSER_PROFILE_ID,
+    browserMode: REMOTE_BROWSER_ENABLED ? "peoples-profile" : "local",
     ready,
     authenticated,
     state: lastState,
@@ -343,11 +386,28 @@ function asyncRoute(handler) {
   };
 }
 
-function createClient() {
+async function createClient() {
+  if (REMOTE_BROWSER_ENABLED) {
+    const browserURL = await resolveRemoteBrowserUrl(WHATSAPP_BROWSER_URL);
+    const instance = new Client({
+      // Authentication lives in the persistent peoples profile. Disabling the
+      // library UA override preserves the fingerprint already applied by peoples.
+      userAgent: false,
+      webVersionCache: {
+        type: "none",
+      },
+      puppeteer: {
+        browserURL,
+        defaultViewport: null,
+        timeout: WHATSAPP_PUPPETEER_TIMEOUT_MS,
+        protocolTimeout: WHATSAPP_PUPPETEER_TIMEOUT_MS,
+      },
+    });
+    return installRemoteBrowserLifecycle(instance);
+  }
+
   removeStaleChromiumLocks(AUTH_PATH);
-
   const launchArgs = chromiumLaunchArgs(proxyServerArg());
-
   return new Client({
     authStrategy: new LocalAuth({
       clientId: CLIENT_ID,
@@ -456,10 +516,13 @@ async function startClient() {
   lastQrAt = null;
   clientStartedAt = new Date().toISOString();
   lastState = "starting";
-  client = createClient();
+  client = await createClient();
   wireClientEvents(client);
   log("info", "Initializing WhatsApp client", {
     authPath: AUTH_PATH,
+    browserProfileId: BROWSER_PROFILE_ID,
+    browserMode: REMOTE_BROWSER_ENABLED ? "peoples-profile" : "local",
+    groupWebhookEnabled: GROUP_WEBHOOK_ENABLED,
     proxyEnabled: WHATSAPP_PROXY_ENABLED,
     proxyConfigured: Boolean(proxyServerArg()),
     proxyHost: WHATSAPP_PROXY_ENABLED && WHATSAPP_PROXY_HOST ? WHATSAPP_PROXY_HOST : undefined,
@@ -538,17 +601,34 @@ const handleIncomingMessage = createMessageHandler({
   clientId: CLIENT_ID,
   outboundRegistry,
   participantResolver: participantPhoneResolver,
-  postWebhook: postBackendWebhook,
+  groupWebhookEnabled: GROUP_WEBHOOK_ENABLED,
+  postWebhook: (webhookPath, payload) => webhookPath === "/webhook/outreach-reply"
+    ? postOutreachWebhook(webhookPath, payload)
+    : postBackendWebhook(webhookPath, payload),
   log,
 });
 
 async function postBackendWebhook(path, payload) {
+  if (!GROUP_WEBHOOK_ENABLED) {
+    return { disabled: true };
+  }
+  return postSignedWebhook(SERVER_URL, WEBHOOK_SECRET, path, payload);
+}
+
+async function postOutreachWebhook(path, payload) {
+  if (!OUTREACH_WEBHOOK_ENABLED) {
+    return { disabled: true };
+  }
+  return postSignedWebhook(OUTREACH_SERVER_URL, OUTREACH_WEBHOOK_SECRET, path, payload);
+}
+
+async function postSignedWebhook(serverUrl, webhookSecret, path, payload) {
   const body = JSON.stringify(payload);
   const headers = { "Content-Type": "application/json" };
-  if (WEBHOOK_SECRET) {
-    headers["X-WhatsApp-Webhook-Secret"] = WEBHOOK_SECRET;
+  if (webhookSecret) {
+    headers["X-WhatsApp-Webhook-Secret"] = webhookSecret;
     headers["X-WhatsApp-Webhook-Signature"] = `sha256=${crypto
-      .createHmac("sha256", WEBHOOK_SECRET)
+      .createHmac("sha256", webhookSecret)
       .update(body, "utf8")
       .digest("hex")}`;
   }
@@ -559,7 +639,7 @@ async function postBackendWebhook(path, payload) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), WHATSAPP_WEBHOOK_TIMEOUT_MS);
       try {
-        const response = await fetch(`${SERVER_URL}${path}`, {
+        const response = await fetch(`${serverUrl}${path}`, {
           method: "POST",
           headers,
           body,
@@ -608,6 +688,14 @@ async function postBackendWebhook(path, payload) {
     throw lastError || new Error(`Backend webhook ${path} failed`);
   });
 }
+
+const lookupLastSeen = createLastSeenLookup({
+  clientProvider: () => client,
+  navigationTimeoutMs: WHATSAPP_LAST_SEEN_NAVIGATION_TIMEOUT_MS,
+  headerTimeoutMs: WHATSAPP_LAST_SEEN_HEADER_TIMEOUT_MS,
+  settleMs: WHATSAPP_LAST_SEEN_SETTLE_MS,
+  log,
+});
 
 async function inviteInfo(groupChat) {
   const groupId = groupChat.id && groupChat.id._serialized ? groupChat.id._serialized : null;
@@ -845,6 +933,15 @@ app.use(createInternalAuthMiddleware({
   secret: GATEWAY_SHARED_SECRET,
   required: GATEWAY_AUTH_REQUIRED,
 }));
+
+app.get("/internal/ready", (req, res) => {
+  if (!ready || !authenticated) {
+    res.status(503).json(minimalStatusPayload());
+    return;
+  }
+  res.json(minimalStatusPayload());
+});
+
 app.use(express.json({ limit: WHATSAPP_HTTP_BODY_LIMIT, strict: true }));
 app.use(createConcurrencyMiddleware(WHATSAPP_HTTP_MAX_CONCURRENCY));
 
@@ -1154,21 +1251,6 @@ app.post("/groups/resolve-invite", asyncRoute(async (req, res) => {
   }
 }));
 
-app.get("/is-active-user", asyncRoute(async (req, res) => {
-  if (!requireReady(res)) {
-    return;
-  }
-
-  const phone = normalizePhone(req.query.phone);
-  if (!phone) {
-    res.status(400).json({ status: "error", code: "missing_phone" });
-    return;
-  }
-
-  const registered = await client.isRegisteredUser(phone);
-  res.json({ status: "ok", registered, stage: "registered-check" });
-}));
-
 app.get("/lastseen/:phone", asyncRoute(async (req, res) => {
   if (!requireReady(res)) {
     return;
@@ -1180,12 +1262,27 @@ app.get("/lastseen/:phone", asyncRoute(async (req, res) => {
     return;
   }
 
+  if (!WHATSAPP_LAST_SEEN_ENABLED) {
+    res.status(503).json({ status: "error", code: "last_seen_disabled" });
+    return;
+  }
+
   const registered = await client.isRegisteredUser(phone);
+  if (!registered) {
+    res.json({
+      status: "ok",
+      registered: false,
+      lastSeen: null,
+      rawLastSeen: null,
+      stage: "not-registered",
+    });
+    return;
+  }
+  const lastSeen = await lookupLastSeen(phone);
   res.json({
     status: "ok",
-    registered,
-    lastSeen: null,
-    stage: "registered-check",
+    registered: true,
+    ...lastSeen,
   });
 }));
 

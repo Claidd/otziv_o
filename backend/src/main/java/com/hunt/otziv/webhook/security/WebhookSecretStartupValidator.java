@@ -79,4 +79,5 @@ public class WebhookSecretStartupValidator implements SmartInitializingSingleton
     private static boolean isStrongSecret(String value) {
         return OneTimeGroupLinkTokenStore.isStrongSecret(value);
     }
+
 }

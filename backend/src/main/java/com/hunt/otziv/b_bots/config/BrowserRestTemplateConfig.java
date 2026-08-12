@@ -15,14 +15,17 @@ public class BrowserRestTemplateConfig {
 
     @Bean
     @Qualifier("browserRestTemplate")
-    public RestTemplate browserRestTemplate() {
+    public RestTemplate browserRestTemplate(MultiBrowserProperties properties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(5));
         requestFactory.setReadTimeout(Duration.ofSeconds(30));
 
         RestTemplate restTemplate = new RestTemplate(requestFactory);
-        // Нам нужен именно JSON-конвертер
         restTemplate.setMessageConverters(List.of(new JacksonJsonHttpMessageConverter()));
+        restTemplate.getInterceptors().add((request, body, execution) -> {
+            request.getHeaders().set("X-API-Key", properties.requireApiKey());
+            return execution.execute(request, body);
+        });
         return restTemplate;
     }
 }

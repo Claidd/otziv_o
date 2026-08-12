@@ -25,6 +25,14 @@
   }
 
   <main class="browser-frame-wrap">
+    @if (vncPassword(); as password) {
+      <div class="vnc-password" aria-live="polite">
+        <span>Пароль VNC</span>
+        <code>{{ password }}</code>
+        <button type="button" (click)="copyVncPassword()">Копировать</button>
+      </div>
+    }
+
     @if (!frameLoaded() && !error()) {
       <div class="browser-loading">Открываю VNC...</div>
     }

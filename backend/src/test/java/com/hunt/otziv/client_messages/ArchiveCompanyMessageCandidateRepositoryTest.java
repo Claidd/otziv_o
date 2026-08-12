@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,8 +55,44 @@ class ArchiveCompanyMessageCandidateRepositoryTest {
         assertTrue(sql.contains("WITH eligible_companies AS"));
         assertTrue(sql.contains("FROM archive_orders archived"));
         assertTrue(sql.contains("ORDER BY archived.archived_at DESC, archived.order_id DESC"));
+        assertTrue(sql.contains("FROM scheduled_client_message_state state"));
+        assertTrue(sql.contains("state.target_key = CONCAT"));
         assertFalse(sql.contains("GROUP_CONCAT"));
         assertFalse(sql.contains("FROM archive_orders ao"));
+    }
+
+    @Test
+    void pageQueryContinuesAfterStatusTimestampAndCompanyId() {
+        when(jdbc.query(
+                anyString(),
+                any(MapSqlParameterSource.class),
+                org.mockito.ArgumentMatchers.<RowMapper<ArchiveCompanyMessageCandidate>>any()
+        )).thenReturn(List.of());
+        LocalDateTime cursorTime = LocalDateTime.of(2024, 8, 10, 0, 0);
+
+        repository().findUnsynchronizedCandidatesAfter(
+                LocalDateTime.of(2026, 5, 12, 10, 0),
+                200,
+                "На стопе",
+                List.of("Оплачено", "Архив", "Бан"),
+                List.of("PENDING", "FAILED"),
+                cursorTime,
+                900L
+        );
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
+        org.mockito.Mockito.verify(jdbc).query(
+                sqlCaptor.capture(),
+                paramsCaptor.capture(),
+                org.mockito.ArgumentMatchers.<RowMapper<ArchiveCompanyMessageCandidate>>any()
+        );
+
+        String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains("c.company_status_changed_at > :afterStatusChangedAt"));
+        assertTrue(sql.contains("c.company_id > :afterCompanyId"));
+        assertEquals(java.sql.Timestamp.valueOf(cursorTime), paramsCaptor.getValue().getValue("afterStatusChangedAt"));
+        assertEquals(900L, paramsCaptor.getValue().getValue("afterCompanyId"));
     }
 
     @Test

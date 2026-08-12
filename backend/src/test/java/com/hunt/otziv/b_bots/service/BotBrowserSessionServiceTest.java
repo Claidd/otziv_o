@@ -65,12 +65,15 @@ class BotBrowserSessionServiceTest {
     private RestTemplate browserRestTemplate;
 
     private BotBrowserSessionService service;
+    private MultiBrowserProperties properties;
     private Authentication authentication;
 
     @BeforeEach
     void setUp() {
-        MultiBrowserProperties properties = new MultiBrowserProperties();
+        properties = new MultiBrowserProperties();
         properties.setBaseUrl("https://browser.internal");
+        properties.setConnectionMode(MultiBrowserProperties.ConnectionMode.PROXY);
+        properties.setProxyUrl("socks5://proxy.internal:1080");
         properties.setHeartbeatIntervalSeconds(20);
         properties.setHeartbeatTimeoutSeconds(75);
         properties.setSessionMaxSeconds(1800);
@@ -94,6 +97,7 @@ class BotBrowserSessionServiceTest {
         when(browserRestTemplate.postForEntity(any(URI.class), any(HttpEntity.class), eq(Map.class)))
                 .thenReturn(ResponseEntity.ok(Map.of(
                         "vncUrl", "https://vnc.example.test/session/secret-token",
+                        "vncPassword", "aB3_xY9-",
                         "userAgent", "test-agent",
                         "platform", "Android",
                         "screenResolution", "1920x1080"
@@ -102,6 +106,7 @@ class BotBrowserSessionServiceTest {
         BrowserOpenResponse response = service.open(7L, authentication);
 
         assertThat(response.vncUrl()).isEqualTo("https://vnc.example.test/session/secret-token");
+        assertThat(response.vncPassword()).isEqualTo("aB3_xY9-");
         assertThat(response.sessionId()).isNotBlank();
         assertThat(response.heartbeatIntervalSeconds()).isEqualTo(20);
         assertThat(response.expiresAt()).isEqualTo(NOW.plusSeconds(1800));
@@ -115,6 +120,38 @@ class BotBrowserSessionServiceTest {
                 .extracting(field -> field.getName().toLowerCase())
                 .noneMatch(name -> name.contains("vnc") || name.contains("url"));
         verify(accessService, times(2)).requireAccess(7L, authentication);
+        ArgumentCaptor<HttpEntity> request = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(browserRestTemplate).postForEntity(any(URI.class), request.capture(), eq(Map.class));
+        Map<?, ?> requestBody = (Map<?, ?>) request.getValue().getBody();
+        assertThat(requestBody.get("connectionMode")).isEqualTo("PROXY");
+        assertThat(requestBody.get("proxyUrl")).isEqualTo("socks5://proxy.internal:1080");
+    }
+
+    @Test
+    void directModeExplicitlyClearsAStaleProxyBeforeConnect() {
+        properties.setConnectionMode(MultiBrowserProperties.ConnectionMode.DIRECT);
+        properties.setProxyUrl("socks5://stale-proxy.invalid:1080");
+        when(accessService.requireAccess(7L, authentication))
+                .thenReturn(new AuthorizedBot(7L, "direct-user", "ФИО"));
+        captureSavedSession();
+        when(repository.markOpen(anyString(), eq(0L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(1);
+        when(browserRestTemplate.postForEntity(any(URI.class), any(HttpEntity.class), eq(Map.class)))
+                .thenReturn(ResponseEntity.ok(Map.of(
+                        "vncUrl", "https://vnc.example.test/direct",
+                        "vncPassword", "aB3_xY9-",
+                        "userAgent", "test-agent",
+                        "platform", "Android",
+                        "screenResolution", "1920x1080"
+                )));
+
+        service.open(7L, authentication);
+
+        ArgumentCaptor<HttpEntity> request = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(browserRestTemplate).postForEntity(any(URI.class), request.capture(), eq(Map.class));
+        Map<?, ?> requestBody = (Map<?, ?>) request.getValue().getBody();
+        assertThat(requestBody.get("connectionMode")).isEqualTo("DIRECT");
+        assertThat(requestBody.get("proxyUrl")).isEqualTo("");
     }
 
     @Test
@@ -144,7 +181,8 @@ class BotBrowserSessionServiceTest {
         )).thenReturn(1);
         when(browserRestTemplate.postForEntity(any(URI.class), any(HttpEntity.class), eq(Map.class)))
                 .thenReturn(ResponseEntity.ok(Map.of(
-                        "vncUrl", "https://vnc.example.test/legacy-session"
+                        "vncUrl", "https://vnc.example.test/legacy-session",
+                        "vncPassword", "aB3_xY9-"
                 )));
 
         service.open(7L, authentication, false);
@@ -272,7 +310,8 @@ class BotBrowserSessionServiceTest {
         AtomicReference<BotBrowserSession> stored = captureSavedSession();
         when(browserRestTemplate.postForEntity(any(URI.class), any(HttpEntity.class), eq(Map.class)))
                 .thenReturn(ResponseEntity.ok(Map.of(
-                        "vncUrl", "https://vnc.example.test/session"
+                        "vncUrl", "https://vnc.example.test/session",
+                        "vncPassword", "aB3_xY9-"
                 )));
         when(repository.markOpen(anyString(), eq(0L), any(), any())).thenReturn(0);
         when(repository.findById(anyString()))

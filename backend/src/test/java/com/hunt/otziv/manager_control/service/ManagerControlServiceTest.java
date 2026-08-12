@@ -674,8 +674,40 @@ class ManagerControlServiceTest {
                 101L,
                 ManagerDailyControlActionType.ACTION_TAKEN,
                 "Ответ клиенту проверен вручную",
-                1L,
-                false
+                1L
+        );
+    }
+
+    @Test
+    void deferredClientChatUnansweredCardStaysOpenWithoutReplyEvidence() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setStatus(ManagerDailyControlItemStatus.DEFERRED);
+        parent.setActionType(ManagerDailyControlActionType.DEFERRED);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "CLIENT_CHAT_UNANSWERED");
+        concrete.setEntityId(102L);
+        stubSuccessfulConcreteAction(concrete, parent);
+
+        ManagerControlConcreteItemResponse response = service.actionConcreteItem(
+                concrete.getId(),
+                new ManagerControlItemActionRequest("DEFERRED", "Ответ был в личных сообщениях", null),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.OPEN, concrete.getStatus());
+        assertEquals(ManagerDailyControlActionType.DEFERRED, concrete.getActionType());
+        assertNull(concrete.getResolvedAt());
+        assertNull(concrete.getFollowUpAt());
+        assertEquals(0L, concrete.getDeferredEpisodeCount());
+        assertEquals(ManagerDailyControlItemStatus.OPEN, parent.getStatus());
+        assertNull(parent.getActionType());
+        assertEquals("OPEN", response.itemStatus());
+        verify(clientChatMessageTrackerService).markFromManagerControl(
+                102L,
+                ManagerDailyControlActionType.DEFERRED,
+                "Ответ был в личных сообщениях",
+                1L
         );
     }
 
@@ -1674,6 +1706,73 @@ class ManagerControlServiceTest {
         assertNull(resolved.getActionType());
         assertNull(resolved.getResolvedAt());
         verify(dailyControlConcreteItemRepository).save(resolved);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void concreteSynchronizationReopensDeferredUnansweredCardWhileMessageIsStillActive() throws Exception {
+        ManagerDailyControl control = new ManagerDailyControl();
+        control.setId(76L);
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setId(608L);
+        parent.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        parent.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+        parent.setComment("Все конкретные карточки внутри пункта обработаны");
+
+        ManagerDailyControlConcreteItem deferred = concrete(control, parent, "CLIENT_CHAT_UNANSWERED");
+        deferred.setStatus(ManagerDailyControlItemStatus.DEFERRED);
+        deferred.setActionType(ManagerDailyControlActionType.DEFERRED);
+        deferred.setComment("Ответ был в личных сообщениях");
+        deferred.setFollowUpAt(LocalDateTime.now().plusDays(1));
+
+        ManagerControlConcreteItemResponse active = new ManagerControlConcreteItemResponse(
+                null,
+                deferred.getEntityType(),
+                deferred.getEntityId(),
+                deferred.getTitle(),
+                deferred.getSubtitle(),
+                "Без ответа",
+                0L,
+                "А мы начали работать с вами?",
+                "/admin/manager-control/3",
+                null,
+                null,
+                null,
+                null,
+                "OPEN",
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+        when(dailyControlConcreteItemRepository.findByParentItemForUpdate(parent))
+                .thenReturn(List.of(deferred));
+        when(dailyControlConcreteItemRepository.findByParentItem(parent))
+                .thenReturn(List.of(deferred));
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dailyControlItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "syncConcreteExamples",
+                ManagerDailyControlItem.class,
+                List.class
+        );
+        method.setAccessible(true);
+        List<ManagerControlConcreteItemResponse> synced =
+                (List<ManagerControlConcreteItemResponse>) method.invoke(service, parent, List.of(active));
+
+        assertEquals(1, synced.size());
+        assertEquals(ManagerDailyControlItemStatus.OPEN, deferred.getStatus());
+        assertNull(deferred.getActionType());
+        assertNull(deferred.getFollowUpAt());
+        assertEquals("Ответ был в личных сообщениях", deferred.getComment());
+        assertEquals(ManagerDailyControlItemStatus.OPEN, parent.getStatus());
+        assertNull(parent.getActionType());
+        assertNull(parent.getComment());
+        assertEquals("OPEN", synced.getFirst().itemStatus());
+        verify(dailyControlConcreteItemRepository).save(deferred);
+        verify(dailyControlItemRepository).save(parent);
     }
 
     @Test

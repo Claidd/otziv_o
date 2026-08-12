@@ -5,6 +5,7 @@ import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.client_messages.dto.ArchiveCompanyMessageCandidate;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ClientMessageTargetType;
@@ -39,8 +40,11 @@ import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
@@ -57,6 +61,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -297,6 +303,76 @@ class ScheduledClientMessageServiceTest {
         LocalDateTime result = service.archiveReorderAttemptAt(baseAt, "archive-company:20:2026-02-20T10:00");
 
         assertEquals(baseAt, result);
+    }
+
+    @Test
+    void archiveReconciliationCoversEveryCandidateBeyondThePageLimit() {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 12, 1, 30);
+        LocalDateTime firstStatusChangedAt = LocalDateTime.of(2024, 1, 1, 0, 0);
+        List<ArchiveCompanyMessageCandidate> firstPage = IntStream.rangeClosed(1, 200)
+                .mapToObj(index -> new ArchiveCompanyMessageCandidate(
+                        (long) index,
+                        null,
+                        firstStatusChangedAt.plusMinutes(index - 1L)
+                ))
+                .toList();
+        ArchiveCompanyMessageCandidate finalCandidate = new ArchiveCompanyMessageCandidate(
+                201L,
+                null,
+                firstStatusChangedAt.plusMinutes(200)
+        );
+        List<Integer> batchSizes = new ArrayList<>();
+
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS,
+                ScheduledClientMessageService.DEFAULT_ARCHIVE_REORDER_MONTHS
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_ARCHIVE_REORDER_MONTHS);
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_CANDIDATE_LIMIT,
+                ScheduledClientMessageService.DEFAULT_CANDIDATE_LIMIT
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_CANDIDATE_LIMIT);
+        when(appSettingService.getString(anyString(), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+        when(archiveCandidateRepository.findUnsynchronizedCandidatesAfter(
+                any(LocalDateTime.class),
+                eq(200),
+                eq(ScheduledClientMessageService.DEFAULT_ARCHIVE_COMPANY_STATUS),
+                any(Collection.class),
+                any(Collection.class),
+                nullable(LocalDateTime.class),
+                nullable(Long.class)
+        )).thenReturn(firstPage, List.of(finalCandidate));
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(stateBatchRepository.upsertAll(any(Collection.class))).thenAnswer(invocation -> {
+            Collection<?> seeds = invocation.getArgument(0);
+            batchSizes.add(seeds.size());
+            return seeds.size();
+        });
+
+        Integer candidateCount = ReflectionTestUtils.invokeMethod(service, "ensureArchiveCompanyStates", now);
+
+        assertEquals(201, candidateCount);
+        assertEquals(List.of(200, 1), batchSizes);
+        verify(archiveCandidateRepository).findUnsynchronizedCandidatesAfter(
+                eq(now.minusMonths(ScheduledClientMessageService.DEFAULT_ARCHIVE_REORDER_MONTHS)),
+                eq(200),
+                eq(ScheduledClientMessageService.DEFAULT_ARCHIVE_COMPANY_STATUS),
+                any(Collection.class),
+                any(Collection.class),
+                isNull(),
+                isNull()
+        );
+        verify(archiveCandidateRepository).findUnsynchronizedCandidatesAfter(
+                eq(now.minusMonths(ScheduledClientMessageService.DEFAULT_ARCHIVE_REORDER_MONTHS)),
+                eq(200),
+                eq(ScheduledClientMessageService.DEFAULT_ARCHIVE_COMPANY_STATUS),
+                any(Collection.class),
+                any(Collection.class),
+                eq(firstPage.getLast().statusChangedAt()),
+                eq(firstPage.getLast().companyId())
+        );
+        verify(stateBatchRepository, times(2)).upsertAll(any(Collection.class));
     }
 
     @Test

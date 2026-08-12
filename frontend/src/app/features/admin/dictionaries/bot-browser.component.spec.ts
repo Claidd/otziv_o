@@ -56,7 +56,8 @@ describe('BotBrowserComponent', () => {
       })),
       openBotBrowser: vi.fn(() => of({
         sessionId: '7c121c71-7bc4-4a25-a33c-78c7fe63e5c9',
-        vncUrl: 'data:text/html,<script>alert(document.cookie)</script>'
+        vncUrl: 'data:text/html,<script>alert(document.cookie)</script>',
+        vncPassword: 'aB3_xY9-'
       })),
       heartbeatBotBrowser: vi.fn(() => of(undefined)),
       closeBotBrowser: vi.fn(() => of(undefined))
@@ -100,7 +101,8 @@ describe('BotBrowserComponent', () => {
       })),
       openBotBrowser: vi.fn(() => of({
         sessionId: '7c121c71-7bc4-4a25-a33c-78c7fe63e5c9',
-        vncUrl: `${window.location.origin}/session`
+        vncUrl: `${window.location.origin}/session`,
+        vncPassword: 'aB3_xY9-'
       })),
       heartbeatBotBrowser: vi.fn(() => of(undefined)),
       closeBotBrowser: vi.fn()
@@ -150,7 +152,8 @@ describe('BotBrowserComponent', () => {
       })),
       openBotBrowser: vi.fn((botId: number) => of({
         sessionId: `session-${botId}`,
-        vncUrl: `${window.location.origin}/session/${botId}`
+        vncUrl: `${window.location.origin}/session/${botId}`,
+        vncPassword: 'aB3_xY9-'
       })),
       heartbeatBotBrowser: vi.fn(() => of(undefined)),
       closeBotBrowser: vi.fn()
@@ -191,7 +194,8 @@ describe('BotBrowserComponent', () => {
       })),
       openBotBrowser: vi.fn(() => of({
         sessionId: '7c121c71-7bc4-4a25-a33c-78c7fe63e5c9',
-        vncUrl: `${window.location.origin}/session`
+        vncUrl: `${window.location.origin}/session`,
+        vncPassword: 'aB3_xY9-'
       })),
       heartbeatBotBrowser: vi.fn(() => of(undefined)),
       closeBotBrowser: vi.fn(() => of(undefined))

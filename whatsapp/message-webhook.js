@@ -477,7 +477,7 @@ async function groupMetadata(message, groupId, log) {
   }
 }
 
-function createMessageHandler({ clientId, postWebhook, outboundRegistry, participantResolver, log }) {
+function createMessageHandler({ clientId, postWebhook, outboundRegistry, participantResolver, groupWebhookEnabled = true, log }) {
   if (typeof postWebhook !== "function") {
     throw new Error("postWebhook is required");
   }
@@ -496,6 +496,9 @@ function createMessageHandler({ clientId, postWebhook, outboundRegistry, partici
     const externalMessageId = messageId(message) || null;
     const groupId = deriveGroupId(message);
     if (groupId) {
+      if (!groupWebhookEnabled) {
+        return { ignored: true, group: true, reason: "group_webhook_disabled" };
+      }
       const rawParticipantId = serializedId(message.author) || from;
       const [metadata, participantId] = await Promise.all([
         groupMetadata(message, groupId, log),
@@ -522,7 +525,7 @@ function createMessageHandler({ clientId, postWebhook, outboundRegistry, partici
     if (message.fromMe) {
       return { ignored: true };
     }
-    await postWebhook("/webhook/whatsapp-reply", {
+    await postWebhook("/webhook/outreach-reply", {
       clientId,
       from,
       messageId: externalMessageId,

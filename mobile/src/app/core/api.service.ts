@@ -2676,6 +2676,7 @@ export interface BotImportResponse {
 export interface BotBrowserOpenResponse {
   sessionId?: string;
   vncUrl: string;
+  vncPassword: string;
   heartbeatIntervalSeconds?: number;
   expiresAt?: string;
   botId?: number;

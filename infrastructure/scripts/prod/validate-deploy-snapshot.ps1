@@ -68,12 +68,26 @@ Invoke-SnapshotCheck -Name 'secret scan' -WorkingDirectory $root `
     -FilePath (Join-Path $securityRoot 'run-secret-scan.ps1') -Parameters @{ Mode = 'dir' }
 
 $composeFiles = @('compose.yaml', 'docker-compose.yaml', 'compose.prod-local.yaml', 'docker-compose.build.yaml')
-foreach ($composeFile in $composeFiles) {
-    Invoke-SnapshotCheck -Name "Compose model $composeFile" -WorkingDirectory $root `
-        -FilePath 'docker' -Arguments @('compose', '--env-file', '.env.example', '-f', $composeFile, 'config', '--quiet')
+$previousMultibrowserApiKey = [Environment]::GetEnvironmentVariable('MULTIBROWSER_API_KEY', 'Process')
+try {
+    # Compose must validate required-variable wiring without depending on or exposing
+    # the operator's real production credential. This value never leaves validation.
+    [Environment]::SetEnvironmentVariable(
+        'MULTIBROWSER_API_KEY',
+        'snapshot-compose-model-validation-placeholder',
+        'Process'
+    )
+    foreach ($composeFile in $composeFiles) {
+        Invoke-SnapshotCheck -Name "Compose model $composeFile" -WorkingDirectory $root `
+            -FilePath 'docker' -Arguments @('compose', '--env-file', '.env.example', '-f', $composeFile, 'config', '--quiet')
+    }
+} finally {
+    [Environment]::SetEnvironmentVariable('MULTIBROWSER_API_KEY', $previousMultibrowserApiKey, 'Process')
 }
 
-$hasBackendChanges = @($changedFiles | Where-Object { $_ -like 'backend/*' }).Count -gt 0
+$hasBackendChanges = @($changedFiles | Where-Object {
+    $_ -like 'backend/*' -or $_ -like 'outreach-module/*' -or $_ -eq 'pom.xml'
+}).Count -gt 0
 $hasFrontendChanges = @($changedFiles | Where-Object { $_ -like 'frontend/*' }).Count -gt 0
 $hasMobileChanges = @($changedFiles | Where-Object { $_ -like 'mobile/*' }).Count -gt 0
 $hasWhatsAppChanges = @($changedFiles | Where-Object { $_ -like 'whatsapp/*' }).Count -gt 0
@@ -125,23 +139,23 @@ if ($hasBackendChanges) {
         Write-Warning 'Fast backend validation active: skipping backend full Maven verify and running package with tests skipped.'
         if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
             Invoke-SnapshotCheck -Name 'backend package without tests' -WorkingDirectory (Join-Path $root 'backend') `
-                -FilePath '.\mvnw.cmd' -Arguments @('-B', '-ntp', '-DskipTests', 'package')
+                -FilePath '.\mvnw.cmd' -Arguments @('-f', '../pom.xml', '-B', '-ntp', '-DskipTests', 'package')
         } else {
             Invoke-SnapshotCheck -Name 'backend package without tests' -WorkingDirectory (Join-Path $root 'backend') `
-                -FilePath 'bash' -Arguments @('./mvnw', '-B', '-ntp', '-DskipTests', 'package')
+                -FilePath 'bash' -Arguments @('./mvnw', '-f', '../pom.xml', '-B', '-ntp', '-DskipTests', 'package')
         }
     } elseif ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
         if ($FastBackendValidation -and $hasFlywayMigrationChanges) {
             Write-Warning 'Fast backend validation requested, but Flyway migrations changed; running backend full Maven verify.'
         }
         Invoke-SnapshotCheck -Name 'backend full test suite' -WorkingDirectory (Join-Path $root 'backend') `
-            -FilePath '.\mvnw.cmd' -Arguments @('-B', '-ntp', 'verify')
+            -FilePath '.\mvnw.cmd' -Arguments @('-f', '../pom.xml', '-B', '-ntp', 'verify')
     } else {
         if ($FastBackendValidation -and $hasFlywayMigrationChanges) {
             Write-Warning 'Fast backend validation requested, but Flyway migrations changed; running backend full Maven verify.'
         }
         Invoke-SnapshotCheck -Name 'backend full test suite' -WorkingDirectory (Join-Path $root 'backend') `
-            -FilePath 'bash' -Arguments @('./mvnw', '-B', '-ntp', 'verify')
+            -FilePath 'bash' -Arguments @('./mvnw', '-f', '../pom.xml', '-B', '-ntp', 'verify')
     }
 }
 

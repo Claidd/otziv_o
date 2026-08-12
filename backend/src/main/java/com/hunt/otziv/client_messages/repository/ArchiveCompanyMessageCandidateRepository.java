@@ -3,6 +3,7 @@ package com.hunt.otziv.client_messages.repository;
 import com.hunt.otziv.client_messages.dto.ArchiveCompanyCandidateDiagnostics;
 import com.hunt.otziv.client_messages.dto.ArchiveCompanyMessageCandidate;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -24,12 +25,38 @@ public class ArchiveCompanyMessageCandidateRepository {
             Collection<String> inactiveOrderStatuses,
             Collection<String> openNextOrderStatuses
     ) {
+        return findUnsynchronizedCandidatesAfter(
+                cutoff,
+                limit,
+                archiveCompanyStatus,
+                inactiveOrderStatuses,
+                openNextOrderStatuses,
+                null,
+                null
+        );
+    }
+
+    public List<ArchiveCompanyMessageCandidate> findUnsynchronizedCandidatesAfter(
+            LocalDateTime cutoff,
+            int limit,
+            String archiveCompanyStatus,
+            Collection<String> inactiveOrderStatuses,
+            Collection<String> openNextOrderStatuses,
+            LocalDateTime afterStatusChangedAt,
+            Long afterCompanyId
+    ) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("cutoff", Timestamp.valueOf(cutoff))
                 .addValue("limit", Math.max(1, limit))
                 .addValue("archiveCompanyStatus", archiveCompanyStatus)
                 .addValue("inactiveStatuses", inactiveOrderStatuses)
-                .addValue("openNextOrderStatuses", openNextOrderStatuses);
+                .addValue("openNextOrderStatuses", openNextOrderStatuses)
+                .addValue(
+                        "afterStatusChangedAt",
+                        afterStatusChangedAt == null ? null : Timestamp.valueOf(afterStatusChangedAt),
+                        Types.TIMESTAMP
+                )
+                .addValue("afterCompanyId", afterCompanyId, Types.BIGINT);
 
         return jdbc.query("""
                 WITH eligible_companies AS (
@@ -57,6 +84,30 @@ public class ArchiveCompanyMessageCandidateRepository {
                           FROM next_order_requests request
                           WHERE request.company_id = c.company_id
                             AND request.request_status IN (:openNextOrderStatuses)
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM scheduled_client_message_state state
+                          WHERE state.scenario = 'ARCHIVE_REORDER_OFFER'
+                            AND state.company_id = c.company_id
+                            AND state.target_key = CONCAT(
+                                'archive-company:',
+                                c.company_id,
+                                ':',
+                                DATE_FORMAT(c.company_status_changed_at, '%Y-%m-%dT%H:%i'),
+                                CASE
+                                    WHEN SECOND(c.company_status_changed_at) = 0 THEN ''
+                                    ELSE DATE_FORMAT(c.company_status_changed_at, ':%s')
+                                END
+                            )
+                      )
+                      AND (
+                          :afterStatusChangedAt IS NULL
+                          OR c.company_status_changed_at > :afterStatusChangedAt
+                          OR (
+                              c.company_status_changed_at = :afterStatusChangedAt
+                              AND c.company_id > :afterCompanyId
+                          )
                       )
                     ORDER BY c.company_status_changed_at ASC, c.company_id ASC
                     LIMIT :limit

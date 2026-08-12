@@ -79,6 +79,12 @@ export function isExplicitlyRepairableCommonInvoiceReason(reason: string | null 
   return normalized.includes('нажмите «починить»') || normalized.includes('нажмите "починить"');
 }
 
+export function shouldHideClientChatUnansweredAfterAction(
+  example: Pick<ManagerControlConcreteItem, 'itemStatus'>
+): boolean {
+  return example.itemStatus === 'RESOLVED';
+}
+
 @Component({
   selector: 'app-manager-control',
   imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, NgTemplateOutlet],
@@ -2588,9 +2594,7 @@ export class ManagerControlComponent implements OnInit {
 
   private shouldHideConcreteItemAfterAction(example: ManagerControlConcreteItem): boolean {
     if (this.isUnansweredClientMessage(example)) {
-      return (!!example.itemStatus && example.itemStatus !== 'OPEN')
-        || example.actionType === 'ACTION_TAKEN'
-        || example.actionType === 'ACKNOWLEDGED';
+      return shouldHideClientChatUnansweredAfterAction(example);
     }
     if (this.isClientChatAudit(example)) {
       return example.itemStatus === 'RESOLVED';
@@ -2632,6 +2636,14 @@ export class ManagerControlComponent implements OnInit {
     actionType: ManagerControlActionType,
     options: { manualWorkerNotification?: boolean } = {}
   ): void {
+    if (this.isUnansweredClientMessage(example) && actionType === 'ACKNOWLEDGED') {
+      this.toast.success('DeepSeek подтвердил', 'Сообщение действительно не требует ответа');
+      return;
+    }
+    if (this.isUnansweredClientMessage(example) && actionType === 'DEFERRED') {
+      this.toast.info('Карточка остаётся открытой', 'Она исчезнет только после подтвержденного ответа клиенту');
+      return;
+    }
     if (example.type === 'COMMON_INVOICE' && example.itemStatus === 'RESOLVED') {
       this.toast.success('Карточка закрыта', 'Общий счёт больше не требует внимания');
       return;

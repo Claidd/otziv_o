@@ -75,6 +75,39 @@ public interface LeadsRepository extends CrudRepository<Lead, Long> {
 
 
     Optional<Lead> findByTelephoneLead(String telephoneLead);
+
+    @Query("""
+        SELECT l FROM Lead l
+        LEFT JOIN FETCH l.telephone t
+        WHERE t.id = :telephoneId
+          AND l.lidStatus = :status
+          AND l.createDate <= :date
+        ORDER BY l.createDate ASC, l.id ASC
+    """)
+    List<Lead> findOutreachBatch(
+            @Param("telephoneId") Long telephoneId,
+            @Param("status") String status,
+            @Param("date") LocalDate date,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT l FROM Lead l
+        LEFT JOIN FETCH l.telephone t
+        WHERE t.id = :telephoneId
+          AND l.lidStatus = :status
+          AND l.createDate <= :date
+        ORDER BY l.createDate ASC, l.id ASC
+    """)
+    List<Lead> findNextOutreachLead(
+            @Param("telephoneId") Long telephoneId,
+            @Param("status") String status,
+            @Param("date") LocalDate date,
+            Pageable pageable
+    );
+
+    @Query("SELECT l FROM Lead l LEFT JOIN FETCH l.telephone WHERE l.telephoneLead = :telephoneLead")
+    Optional<Lead> findOutreachByTelephoneLead(@Param("telephoneLead") String telephoneLead);
     boolean existsByTelephoneLeadIn(Collection<String> telephoneLeads);
     Optional<Lead> findFirstByTelephoneLeadInAndIdNot(Collection<String> telephoneLeads, Long id);
 

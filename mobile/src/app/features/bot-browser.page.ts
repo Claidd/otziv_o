@@ -44,6 +44,14 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
           }
 
           <section class="browser-frame-wrap">
+            @if (vncPassword(); as password) {
+              <div class="vnc-password" aria-live="polite">
+                <span>Пароль VNC</span>
+                <code>{{ password }}</code>
+                <button type="button" (click)="copyVncPassword()">Копировать</button>
+              </div>
+            }
+
             @if (!frameLoaded() && !error()) {
               <div class="browser-loading">{{ status() }}</div>
             }
@@ -70,6 +78,7 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
     .bot-browser-top{display:grid;grid-template-columns:2.35rem minmax(0,1fr)2.35rem 2.35rem;align-items:center;gap:.5rem;border:1px solid rgba(148,163,184,.18);border-radius:1rem;padding:.52rem;background:#111827}
     .bot-browser-top a,.bot-browser-top button{display:grid;place-items:center;width:2.35rem;height:2.35rem;border:0;border-radius:.78rem;color:#e5e7eb;background:rgba(255,255,255,.08);text-decoration:none}
     .bot-browser-top button.danger{background:rgba(239,68,68,.18);color:#fecdd3}.bot-browser-top div{min-width:0}.bot-browser-top p,.bot-browser-top h1,.bot-browser-top small{overflow:hidden;margin:0;text-overflow:ellipsis;white-space:nowrap}.bot-browser-top p{color:#9ca3af;font-size:.68rem;font-weight:900;text-transform:uppercase}.bot-browser-top h1{font-size:.95rem}.bot-browser-top small{color:#cbd5e1;font-size:.72rem;font-weight:800}
+    .vnc-password{position:absolute;top:.8rem;right:.8rem;z-index:3;display:flex;align-items:center;gap:.45rem;border:1px solid rgba(148,163,184,.35);border-radius:.7rem;padding:.42rem .5rem;background:rgba(17,24,39,.94);font-size:.72rem}.vnc-password span{color:#cbd5e1;font-weight:900}.vnc-password code{color:#fde68a;font-size:.82rem;font-weight:900;letter-spacing:.08em}.vnc-password button{min-height:1.9rem;border:0;border-radius:.45rem;padding:0 .5rem;color:#fff;background:#2563eb;font-size:.7rem;font-weight:900}
     .browser-frame-wrap{position:relative;min-height:0;overflow:auto;border:1px solid rgba(148,163,184,.18);border-radius:1rem;background:#111}.browser-frame-wrap iframe{display:block;width:100%;height:100%;min-height:100%;border:0}.browser-loading,.browser-message{position:absolute;z-index:2;border-radius:.8rem;padding:.65rem .85rem;color:#e5e7eb;background:rgba(17,24,39,.88);font-size:.82rem;font-weight:900}.browser-loading{top:.8rem;left:.8rem}.browser-message{position:static;display:grid;gap:.35rem;place-items:center;text-align:center}.browser-message.error{color:#fecdd3}.browser-message p{margin:0;color:#cbd5e1}.browser-message button{min-height:2.2rem;border:0;border-radius:999px;padding:0 1rem;color:#fff;background:var(--otziv-primary);font-weight:900}
   `]
 })
@@ -91,6 +100,7 @@ export class BotBrowserPage implements OnInit, OnDestroy {
   readonly status = signal('Запуск браузера...');
   readonly error = signal<string | null>(null);
   readonly vncUrl = signal<string | null>(null);
+  readonly vncPassword = signal<string | null>(null);
   readonly frameLoaded = signal(false);
   readonly sessionOpen = signal(false);
   readonly safeVncUrl = computed(() => {
@@ -157,6 +167,20 @@ export class BotBrowserPage implements OnInit, OnDestroy {
     this.status.set('Браузер запущен');
   }
 
+  async copyVncPassword(): Promise<void> {
+    const password = this.vncPassword();
+    if (!password || !navigator.clipboard) {
+      this.status.set('Не удалось скопировать пароль');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(password);
+      this.status.set('Пароль VNC скопирован');
+    } catch {
+      this.status.set('Не удалось скопировать пароль');
+    }
+  }
+
   closeSession(silent = false): void {
     if (!this.sessionOpen() || this.closing) {
       return;
@@ -172,6 +196,7 @@ export class BotBrowserPage implements OnInit, OnDestroy {
     this.sessionId = null;
     this.stopHeartbeat();
     this.vncUrl.set(null);
+    this.vncPassword.set(null);
     this.frameLoaded.set(false);
     if (!silent) {
       this.status.set('Отключение...');
@@ -205,6 +230,7 @@ export class BotBrowserPage implements OnInit, OnDestroy {
     }
     this.frameLoaded.set(false);
     this.vncUrl.set(null);
+    this.vncPassword.set(null);
     this.openSession();
     this.loadMetadata();
   }
@@ -260,7 +286,8 @@ export class BotBrowserPage implements OnInit, OnDestroy {
         const vncUrl = prepareBotBrowserVncUrl(response.vncUrl, {
           allowedOrigins: mobileEnvironment.botBrowserVncAllowedOrigins
         });
-        if (!vncUrl) {
+        const vncPassword = this.validVncPassword(response.vncPassword);
+        if (!vncUrl || !vncPassword) {
           this.status.set('Ошибка запуска');
           this.error.set('Сервис браузера вернул небезопасный адрес подключения.');
           this.vncUrl.set(null);
@@ -270,6 +297,7 @@ export class BotBrowserPage implements OnInit, OnDestroy {
 
         this.status.set('Подключаю VNC...');
         this.vncUrl.set(vncUrl);
+        this.vncPassword.set(vncPassword);
       },
       error: (error) => {
         if (this.openInFlightGeneration === generation) {
@@ -330,6 +358,7 @@ export class BotBrowserPage implements OnInit, OnDestroy {
           this.sessionBotId = 0;
           this.sessionId = null;
           this.vncUrl.set(null);
+          this.vncPassword.set(null);
           this.status.set('Сессия завершена');
           this.error.set('Доступ к браузерной сессии завершен. Откройте ее заново.');
         }
@@ -357,6 +386,7 @@ export class BotBrowserPage implements OnInit, OnDestroy {
     this.botId.set(botId);
     this.bot.set(null);
     this.vncUrl.set(null);
+    this.vncPassword.set(null);
     this.frameLoaded.set(false);
     this.error.set(null);
     if (!botId) {
@@ -404,5 +434,12 @@ export class BotBrowserPage implements OnInit, OnDestroy {
 
   private isActiveSession(botId: number, sessionId: string): boolean {
     return this.sessionOpen() && botId === this.sessionBotId && sessionId === this.sessionId;
+  }
+
+  private validVncPassword(rawValue: unknown): string | null {
+    if (typeof rawValue !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(rawValue)) {
+      return null;
+    }
+    return rawValue;
   }
 }

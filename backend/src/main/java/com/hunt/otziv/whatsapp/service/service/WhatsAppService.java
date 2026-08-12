@@ -1,6 +1,5 @@
 package com.hunt.otziv.whatsapp.service.service;
 
-import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
 import com.hunt.otziv.whatsapp.dto.WhatsAppClientStatusDto;
 import com.hunt.otziv.whatsapp.dto.WhatsAppChatMessageCursor;
@@ -22,5 +21,4 @@ public interface WhatsAppService {
             List<WhatsAppChatMessageCursor> chats
     );
     WhatsAppClientStatusDto getClientStatus(String clientId);
-    Optional<WhatsAppUserStatusDto> getUserStatusWithLastSeen(String id, String phone);
 }

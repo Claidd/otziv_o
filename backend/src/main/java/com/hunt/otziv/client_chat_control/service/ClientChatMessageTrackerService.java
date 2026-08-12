@@ -54,6 +54,7 @@ public class ClientChatMessageTrackerService {
     private final ClientChatIdentityService identityService;
     private final ClientChatResolutionPolicy resolutionPolicy;
     private final ClientChatReplyQualityService replyQualityService;
+    private final ClientChatNoResponseAiReviewService noResponseAiReviewService;
 
     @Transactional
     public void track(ClientChatMessageCommand command) {
@@ -315,7 +316,7 @@ public class ClientChatMessageTrackerService {
 
     @Transactional
     public void markFromManagerControl(Long unansweredItemId, ManagerDailyControlActionType actionType, String comment) {
-        markFromManagerControl(unansweredItemId, actionType, comment, null, false);
+        markFromManagerControl(unansweredItemId, actionType, comment, null);
     }
 
     @Transactional
@@ -323,8 +324,7 @@ public class ClientChatMessageTrackerService {
             Long unansweredItemId,
             ManagerDailyControlActionType actionType,
             String comment,
-            Long resolvedByUserId,
-            boolean administrativeOverride
+            Long resolvedByUserId
     ) {
         if (unansweredItemId == null) {
             return;
@@ -335,7 +335,7 @@ public class ClientChatMessageTrackerService {
             }
             if (actionType == ManagerDailyControlActionType.DEFERRED) {
                 item.setResolutionType(ClientChatResolutionType.DEFERRED);
-                item.setResolutionReasonCode("FOLLOW_UP_SCHEDULED");
+                item.setResolutionReasonCode("FOLLOW_UP_RECORDED");
                 item.setResolutionComment(limit(comment, 1000));
                 item.setResolvedByUserId(resolvedByUserId);
                 unansweredRepository.save(item);
@@ -343,19 +343,18 @@ public class ClientChatMessageTrackerService {
             }
             assertResolutionRateAllowed(item, resolvedByUserId);
             if (actionType == ManagerDailyControlActionType.ACKNOWLEDGED) {
-                markNoResponseNeeded(item, comment, resolvedByUserId, administrativeOverride);
+                markNoResponseNeeded(item, comment, resolvedByUserId);
                 return;
             }
             if (actionType == ManagerDailyControlActionType.RESOLVED) {
                 markActionCompletedWithEvidence(
                         item,
                         comment,
-                        resolvedByUserId,
-                        administrativeOverride
+                        resolvedByUserId
                 );
                 return;
             }
-            markAnsweredWithEvidence(item, comment, resolvedByUserId, administrativeOverride);
+            markAnsweredWithEvidence(item, comment, resolvedByUserId);
         });
     }
 
@@ -769,72 +768,85 @@ public class ClientChatMessageTrackerService {
     private void markNoResponseNeeded(
             ClientChatUnansweredItem item,
             String comment,
-            Long resolvedByUserId,
-            boolean administrativeOverride
+            Long resolvedByUserId
     ) {
         ClientChatResolutionPolicy.Assessment assessment = resolutionPolicy.assess(item.getLastMessageText());
-        boolean overrideUsed = !assessment.safeNoResponse() && administrativeOverride;
-        if (!assessment.safeNoResponse() && !overrideUsed) {
+        ClientChatNoResponseAiReviewService.Review aiReview =
+                noResponseAiReviewService.review(item.getLastMessageText());
+        if (!aiReview.checked()) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "DeepSeek временно не смог проверить сообщение. Карточка остаётся открытой"
+            );
+        }
+        if (!aiReview.confirmed()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Сообщение похоже на вопрос, проблему или поручение. Ответьте клиенту или отложите карточку"
+                    "DeepSeek не подтвердил, что ответ не требуется: " + aiReview.reason()
+                            + ". Карточка остаётся открытой"
             );
         }
-        if (overrideUsed && !hasMeaningfulOverrideComment(comment)) {
+        if (hardNoResponseRejection(assessment)) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Для административного закрытия укажите конкретную причину"
+                    HttpStatus.CONFLICT,
+                    "Сообщение похоже на вопрос, проблему или поручение. Даже после проверки DeepSeek карточка останется открытой до подтвержденного ответа"
             );
         }
+        String aiAudit = "DeepSeek подтвердил, что ответ не требуется ("
+                + aiReview.confidence() + "%): " + aiReview.reason();
+        String auditComment = hasText(comment)
+                ? limit(comment + "\n" + aiAudit, 1000)
+                : limit(aiAudit, 1000);
         close(
                 item,
                 ClientChatUnansweredStatus.NO_RESPONSE_NEEDED,
-                "Сообщение клиента не требует ответа",
-                overrideUsed ? ClientChatResolutionType.ADMIN_OVERRIDE : ClientChatResolutionType.NO_RESPONSE_NEEDED,
+                "DeepSeek подтвердил: сообщение клиента не требует ответа",
+                ClientChatResolutionType.NO_RESPONSE_NEEDED,
                 null,
-                assessment.reasonCode(),
-                comment,
+                "DEEPSEEK_NO_RESPONSE_CONFIRMED",
+                auditComment,
                 resolvedByUserId,
-                overrideUsed,
+                false,
                 ClientChatReplyQuality.NOT_APPLICABLE,
-                "Ответ не требуется по правилу " + assessment.reasonCode()
+                limit(aiAudit + "; правило: " + assessment.reasonCode(), 500)
         );
+    }
+
+    private boolean hardNoResponseRejection(ClientChatResolutionPolicy.Assessment assessment) {
+        if (assessment == null || assessment.reasonCode() == null) {
+            return true;
+        }
+        return switch (assessment.reasonCode()) {
+            case "QUESTION", "PROBLEM_OR_COMPLAINT", "ACTION_REQUEST",
+                    "ATTACHMENT_REQUIRES_REVIEW", "EMPTY" -> true;
+            default -> false;
+        };
     }
 
     private void markAnsweredWithEvidence(
             ClientChatUnansweredItem item,
             String comment,
-            Long resolvedByUserId,
-            boolean administrativeOverride
+            Long resolvedByUserId
     ) {
         ClientChatMessage evidence = staffReplyEvidence(item);
-        boolean overrideUsed = evidence == null && administrativeOverride;
-        if (evidence == null && !overrideUsed) {
+        if (evidence == null) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Исходящий ответ после сообщения клиента не найден. Ответьте из карточки или откройте чат и дождитесь синхронизации"
             );
         }
-        if (overrideUsed && !hasMeaningfulOverrideComment(comment)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Для административного закрытия без найденного ответа укажите причину"
-            );
-        }
         ClientChatReplyQualityService.Result quality =
-                quality(item.getLastMessageText(), evidence == null ? null : evidence.getMessageText());
+                quality(item.getLastMessageText(), evidence.getMessageText());
         close(
                 item,
                 ClientChatUnansweredStatus.ANSWERED,
-                evidence == null ? "Ответ подтверждён администратором" : "Ответ сотрудника найден",
-                overrideUsed ? ClientChatResolutionType.ADMIN_OVERRIDE : ClientChatResolutionType.ANSWERED,
+                "Ответ сотрудника найден",
+                ClientChatResolutionType.ANSWERED,
                 evidence,
-                overrideUsed
-                        ? "ADMIN_OVERRIDE_WITHOUT_MESSAGE"
-                        : evidence == null ? "LEGACY_MANUAL_CONFIRMATION" : "OUTGOING_STAFF_MESSAGE",
+                "OUTGOING_STAFF_MESSAGE",
                 comment,
                 resolvedByUserId,
-                overrideUsed,
+                false,
                 quality.quality(),
                 quality.reason()
         );
@@ -843,8 +855,7 @@ public class ClientChatMessageTrackerService {
     private void markActionCompletedWithEvidence(
             ClientChatUnansweredItem item,
             String comment,
-            Long resolvedByUserId,
-            boolean administrativeOverride
+            Long resolvedByUserId
     ) {
         ClientChatMessage evidence = staffReplyEvidence(item);
         if (evidence != null) {
@@ -865,30 +876,9 @@ public class ClientChatMessageTrackerService {
             );
             return;
         }
-        if (!administrativeOverride) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Исходящий ответ после сообщения клиента не найден. Ответьте клиенту, нажмите «Проверить ответ» или отложите карточку"
-            );
-        }
-        if (!hasMeaningfulOverrideComment(comment)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Для административного закрытия без найденного ответа укажите конкретную причину"
-            );
-        }
-        close(
-                item,
-                ClientChatUnansweredStatus.ACTION_COMPLETED,
-                "Действие подтверждено администратором без ответа в чате",
-                ClientChatResolutionType.ACTION_COMPLETED,
-                null,
-                "ACTION_COMPLETED_WITHOUT_REPLY_EVIDENCE",
-                comment,
-                resolvedByUserId,
-                true,
-                ClientChatReplyQuality.SUSPICIOUS,
-                "Исходящий ответ после сообщения клиента не найден"
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Исходящий ответ после сообщения клиента не найден. Ответьте клиенту или нажмите «Проверить ответ»; карточка останется открытой"
         );
     }
 

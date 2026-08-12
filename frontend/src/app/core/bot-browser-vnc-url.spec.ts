@@ -43,4 +43,16 @@ describe('prepareBotBrowserVncUrl', () => {
       allowedOrigins: ['https://vnc.example.test']
     })).toBeNull();
   });
+
+  it('allows different loopback ports when the page is also local', () => {
+    expect(prepareBotBrowserVncUrl('http://127.0.0.1:49152/vnc.html', {
+      pageOrigin: 'http://localhost:4200'
+    })).not.toBeNull();
+  });
+
+  it('does not allow a loopback capability from a production page', () => {
+    expect(prepareBotBrowserVncUrl('http://127.0.0.1:49152/vnc.html', {
+      pageOrigin: 'https://app.example.test'
+    })).toBeNull();
+  });
 });

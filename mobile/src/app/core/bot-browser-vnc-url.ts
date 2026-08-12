@@ -39,7 +39,10 @@ export function prepareBotBrowserVncUrl(
 
     const pageOrigin = policy.pageOrigin ?? currentPageOrigin();
     const allowedOrigins = normalizedAllowedOrigins([pageOrigin, ...(policy.allowedOrigins ?? [])]);
-    if (!allowedOrigins.has(url.origin)) {
+    if (
+      !allowedOrigins.has(url.origin)
+      && !isLoopbackDevelopmentPair(url, pageOrigin)
+    ) {
       return null;
     }
 
@@ -56,6 +59,21 @@ export function prepareBotBrowserVncUrl(
 function isSecureVncProtocol(url: URL): boolean {
   return url.protocol === 'https:'
     || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname.toLowerCase()));
+}
+
+function isLoopbackDevelopmentPair(target: URL, pageOrigin?: string): boolean {
+  if (!pageOrigin || !isLoopbackUrl(target)) {
+    return false;
+  }
+  try {
+    return isLoopbackUrl(new URL(pageOrigin));
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackUrl(url: URL): boolean {
+  return isSecureVncProtocol(url) && LOOPBACK_HOSTS.has(url.hostname.toLowerCase());
 }
 
 function normalizedAllowedOrigins(values: readonly (string | undefined)[]): Set<string> {

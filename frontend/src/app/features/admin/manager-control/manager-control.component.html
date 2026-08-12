@@ -1381,20 +1381,20 @@
                                 class="review-action secondary-action"
                                 (click)="markUnansweredNoResponseNeeded(example)"
                                 [disabled]="isConcreteUpdating(example.controlEntityId)"
-                                title="Закрыть без ответа клиенту"
+                                title="DeepSeek проверит сообщение; без его подтверждения карточка останется открытой"
                               >
                                 <span class="material-icons-sharp">visibility_off</span>
-                                Не требует ответа
+                                Проверить: ответ не нужен
                               </button>
                               <button
                                 type="button"
                                 class="review-action secondary-action"
                                 (click)="deferUnansweredMessage(example)"
                                 [disabled]="isConcreteUpdating(example.controlEntityId)"
-                                title="Оставить сообщение в работе и назначить повторную проверку"
+                                title="Зафиксировать комментарий; карточка останется открытой до подтвержденного ответа"
                               >
                                 <span class="material-icons-sharp">schedule</span>
-                                В работу
+                                Оставить открытой
                               </button>
                               <button
                                 type="button"
@@ -1484,16 +1484,18 @@
                               ></textarea>
                             }
                             <div class="detail-example-actions">
-                              <button
-                                type="button"
-                                class="action-defer"
-                                title="Отложено"
-                                aria-label="Отложить карточку"
-                                (click)="markConcreteItem(example, 'DEFERRED')"
-                                [disabled]="isConcreteActionDisabled(example, 'DEFERRED')"
-                              >
-                                <span class="material-icons-sharp">schedule</span>
-                              </button>
+                              @if (!isUnansweredClientMessage(example)) {
+                                <button
+                                  type="button"
+                                  class="action-defer"
+                                  title="Отложено"
+                                  aria-label="Отложить карточку"
+                                  (click)="markConcreteItem(example, 'DEFERRED')"
+                                  [disabled]="isConcreteActionDisabled(example, 'DEFERRED')"
+                                >
+                                  <span class="material-icons-sharp">schedule</span>
+                                </button>
+                              }
                               @if (canAdminQuickResolveRisk(example)) {
                                 <button
                                   type="button"

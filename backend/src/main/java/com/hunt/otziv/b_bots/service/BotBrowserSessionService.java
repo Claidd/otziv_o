@@ -136,6 +136,7 @@ public class BotBrowserSessionService {
             accessService.requireAccess(botId, authentication);
 
             String vncUrl = requireHttpVncUrl(upstream.get("vncUrl"));
+            String vncPassword = requireVncPassword(upstream.get("vncPassword"));
             LocalDateTime openedAt = now();
             int updated = repository.markOpen(
                     session.getSessionId(),
@@ -156,6 +157,7 @@ public class BotBrowserSessionService {
             return new BrowserOpenResponse(
                     session.getSessionId(),
                     vncUrl,
+                    vncPassword,
                     heartbeatIntervalSeconds(),
                     session.getAbsoluteExpiresAt().toInstant(ZoneOffset.UTC),
                     botId,
@@ -305,7 +307,8 @@ public class BotBrowserSessionService {
     private Map<?, ?> connect(String externalKey) {
         Map<String, Object> body = new HashMap<>();
         body.put("externalKey", externalKey);
-        body.put("proxyUrl", "");
+        body.put("connectionMode", properties.connectionModeForConnect());
+        body.put("proxyUrl", properties.proxyUrlForConnect());
         body.put("detectionLevel", "ENHANCED");
         body.put("forceNewFingerprint", false);
 
@@ -494,6 +497,17 @@ public class BotBrowserSessionService {
             }
         }
         return false;
+    }
+
+    private String requireVncPassword(Object rawValue) {
+        if (!(rawValue instanceof String value)) {
+            throw upstreamFailure();
+        }
+        String password = value.trim();
+        if (password.isEmpty() || password.length() > 128 || containsControlCharacter(password)) {
+            throw upstreamFailure();
+        }
+        return password;
     }
 
     private String safeMetadata(Object rawValue, int maxLength) {

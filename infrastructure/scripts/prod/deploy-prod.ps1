@@ -711,6 +711,8 @@ $deployBundlePaths = @(
     "whatsapp\raw-chat-reconciliation.js",
     "whatsapp\group-invite.js",
     "whatsapp\groups-cache.js",
+    "whatsapp\last-seen.js",
+    "whatsapp\remote-browser.js",
     "infrastructure\nginx",
     "infrastructure\keycloak",
     "infrastructure\prometheus",
@@ -2531,7 +2533,7 @@ if ! compose run --rm --no-deps --interactive=false -T --entrypoint node whatsap
   echo "WhatsApp Chromium sandbox preflight failed; existing gateway containers were not stopped." >&2
   exit 1
 fi
-compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases /app/sent-hashes </dev/null
+compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases </dev/null
 compose up -d --no-deps mysql keycloak-postgres loki tempo
 wait_service_healthy mysql 600
 wait_service_healthy keycloak-postgres 600

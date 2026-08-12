@@ -420,7 +420,7 @@ if ! compose run --rm --no-deps --interactive=false -T --entrypoint /usr/bin/chr
   exit 1
 fi
 compose down --remove-orphans || true
-compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases /app/sent-hashes </dev/null
+compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app -R 10001:10001 /app/logs /app/backup /app/mobile-releases </dev/null
 compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint sh whatsapp_lika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
 compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
 compose up -d --remove-orphans

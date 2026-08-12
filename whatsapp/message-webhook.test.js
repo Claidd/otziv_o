@@ -85,6 +85,29 @@ test("delivers group webhook when getChat throws", async () => {
   assert.equal(logs[0].extra.stage, "get_chat");
 });
 
+test("outreach controller ignores groups before loading chat metadata", async () => {
+  let webhookCalls = 0;
+  let metadataCalls = 0;
+  const handler = createMessageHandler({
+    clientId: "outreach_client",
+    groupWebhookEnabled: false,
+    postWebhook: async () => { webhookCalls += 1; },
+  });
+
+  const result = await handler({
+    from: "12001@g.us",
+    body: "Сообщение группы",
+    getChat: async () => {
+      metadataCalls += 1;
+      throw new Error("must not load metadata");
+    },
+  });
+
+  assert.deepEqual(result, { ignored: true, group: true, reason: "group_webhook_disabled" });
+  assert.equal(metadataCalls, 0);
+  assert.equal(webhookCalls, 0);
+});
+
 test("marks gateway generated group messages without marking manual messages", async () => {
   const calls = [];
   const registry = new RecentOutboundRegistry();
@@ -100,6 +123,24 @@ test("marks gateway generated group messages without marking manual messages", a
 
   assert.equal(calls[0].systemGenerated, true);
   assert.equal(calls[1].systemGenerated, false);
+});
+
+test("routes personal replies to the isolated outreach webhook", async () => {
+  const calls = [];
+  const handler = createMessageHandler({
+    clientId: "outreach_client",
+    postWebhook: async (path, payload) => calls.push({ path, payload }),
+  });
+
+  await handler({
+    from: "79990001122@c.us",
+    body: "Да, расскажите подробнее",
+    id: { _serialized: "personal-1" },
+  });
+
+  assert.equal(calls[0].path, "/webhook/outreach-reply");
+  assert.equal(calls[0].payload.clientId, "outreach_client");
+  assert.equal(calls[0].payload.messageId, "personal-1");
 });
 
 test("deduplicates concurrent and repeated deliveries by message id", async () => {

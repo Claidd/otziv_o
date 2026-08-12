@@ -935,32 +935,64 @@ public class ScheduledClientMessageService {
     private int ensureArchiveCompanyStates(LocalDateTime nowStorage) {
         int archiveReorderMonths = archiveReorderMonths();
         LocalDateTime cutoff = nowStorage.minusMonths(archiveReorderMonths);
-        List<ArchiveCompanyMessageCandidate> candidates = archiveCandidateRepository.findCandidates(
-                cutoff,
-                candidateLimit(),
-                archiveCompanyStatus(),
-                listSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES, DEFAULT_ARCHIVE_INACTIVE_ORDER_STATUSES),
-                listSetting(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES, DEFAULT_OPEN_NEXT_ORDER_REQUEST_STATUSES)
+        int pageSize = candidateLimit();
+        String companyStatus = archiveCompanyStatus();
+        List<String> inactiveOrderStatuses = listSetting(
+                AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES,
+                DEFAULT_ARCHIVE_INACTIVE_ORDER_STATUSES
         );
-        List<StateSeed> seeds = new ArrayList<>(candidates.size());
-        for (ArchiveCompanyMessageCandidate candidate : candidates) {
-            String targetKey = archiveCompanyTargetKey(candidate.companyId(), candidate.statusChangedAt());
-            seeds.add(new StateSeed(
-                    ClientMessageScenario.ARCHIVE_REORDER_OFFER,
-                    ClientMessageTargetType.ARCHIVE_COMPANY,
-                    targetKey,
-                    candidate.companyId(),
-                    null,
-                    candidate.archiveOrderId(),
-                    archiveReorderAttemptAt(candidate.statusChangedAt().plusMonths(archiveReorderMonths), targetKey)
-            ));
+        List<String> openNextOrderStatuses = listSetting(
+                AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES,
+                DEFAULT_OPEN_NEXT_ORDER_REQUEST_STATUSES
+        );
+        LocalDateTime afterStatusChangedAt = null;
+        Long afterCompanyId = null;
+        int affected = 0;
+        int candidateCount = 0;
+
+        while (true) {
+            List<ArchiveCompanyMessageCandidate> candidates = archiveCandidateRepository.findUnsynchronizedCandidatesAfter(
+                    cutoff,
+                    pageSize,
+                    companyStatus,
+                    inactiveOrderStatuses,
+                    openNextOrderStatuses,
+                    afterStatusChangedAt,
+                    afterCompanyId
+            );
+            if (candidates.isEmpty()) {
+                break;
+            }
+
+            List<StateSeed> seeds = new ArrayList<>(candidates.size());
+            for (ArchiveCompanyMessageCandidate candidate : candidates) {
+                String targetKey = archiveCompanyTargetKey(candidate.companyId(), candidate.statusChangedAt());
+                seeds.add(new StateSeed(
+                        ClientMessageScenario.ARCHIVE_REORDER_OFFER,
+                        ClientMessageTargetType.ARCHIVE_COMPANY,
+                        targetKey,
+                        candidate.companyId(),
+                        null,
+                        candidate.archiveOrderId(),
+                        archiveReorderAttemptAt(candidate.statusChangedAt().plusMonths(archiveReorderMonths), targetKey)
+                ));
+            }
+            affected += stateBatchRepository.upsertAll(seeds);
+            candidateCount += candidates.size();
+
+            ArchiveCompanyMessageCandidate lastCandidate = candidates.getLast();
+            afterStatusChangedAt = lastCandidate.statusChangedAt();
+            afterCompanyId = lastCandidate.companyId();
+            if (candidates.size() < pageSize) {
+                break;
+            }
         }
-        int affected = stateBatchRepository.upsertAll(seeds);
-        if (affected > 0) {
+
+        if (candidateCount > 0) {
             log.info("Client messages reconciled archive states affectedRows={} candidates={}",
-                    affected, candidates.size());
+                    affected, candidateCount);
         }
-        return candidates.size();
+        return candidateCount;
     }
 
     private boolean ensureState(

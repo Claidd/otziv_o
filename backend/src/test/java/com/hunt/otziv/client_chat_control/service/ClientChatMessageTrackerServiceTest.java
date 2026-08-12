@@ -51,6 +51,7 @@ class ClientChatMessageTrackerServiceTest {
     @Mock private AppSettingService appSettingService;
     @Mock private GamificationEventService gamificationEventService;
     @Mock private ClientChatIdentityService identityService;
+    @Mock private ClientChatNoResponseAiReviewService noResponseAiReviewService;
 
     private ClientChatMessageTrackerService service;
 
@@ -66,7 +67,8 @@ class ClientChatMessageTrackerServiceTest {
                 gamificationEventService,
                 identityService,
                 new ClientChatResolutionPolicy(),
-                new ClientChatReplyQualityService()
+                new ClientChatReplyQualityService(),
+                noResponseAiReviewService
         );
         lenient().when(appSettingService.getBoolean("manager-control.unanswered-client-messages.enabled", true)).thenReturn(true);
         lenient().when(appSettingService.getBoolean(
@@ -294,8 +296,7 @@ class ClientChatMessageTrackerServiceTest {
                         54L,
                         ManagerDailyControlActionType.RESOLVED,
                         "Я ответила",
-                        10L,
-                        false
+                        10L
                 )
         );
 
@@ -303,6 +304,25 @@ class ClientChatMessageTrackerServiceTest {
         assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
         assertFalse(open.isAuditRequired());
         verify(unansweredRepository, never()).save(open);
+    }
+
+    @Test
+    void deferredMessageRecordsCommentButRemainsOpen() {
+        ClientChatUnansweredItem open = openItem("А мы начали работать с вами?");
+        when(unansweredRepository.findById(62L)).thenReturn(Optional.of(open));
+
+        service.markFromManagerControl(
+                62L,
+                ManagerDailyControlActionType.DEFERRED,
+                "Ответ был в личных сообщениях",
+                10L
+        );
+
+        assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+        assertEquals("FOLLOW_UP_RECORDED", open.getResolutionReasonCode());
+        assertEquals("Ответ был в личных сообщениях", open.getResolutionComment());
+        assertEquals(10L, open.getResolvedByUserId());
+        verify(unansweredRepository).save(open);
     }
 
     @Test
@@ -326,8 +346,7 @@ class ClientChatMessageTrackerServiceTest {
                 59L,
                 ManagerDailyControlActionType.RESOLVED,
                 "Ответ проверен",
-                10L,
-                false
+                10L
         );
 
         assertEquals(ClientChatUnansweredStatus.ANSWERED, open.getStatus());
@@ -337,80 +356,122 @@ class ClientChatMessageTrackerServiceTest {
     }
 
     @Test
-    void administrativeActionWithoutReplyEvidenceAlwaysRequiresAudit() {
+    void ownerCommentCannotCloseCardWithoutReplyEvidence() {
         ClientChatUnansweredItem open = openItem("Клиент просит выполнить действие");
         when(unansweredRepository.findById(60L)).thenReturn(Optional.of(open));
 
-        service.markFromManagerControl(
-                60L,
-                ManagerDailyControlActionType.RESOLVED,
-                "Проверено владельцем: ответ клиенту не требовался",
-                10L,
-                true
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markFromManagerControl(
+                        60L,
+                        ManagerDailyControlActionType.RESOLVED,
+                        "Проверено владельцем: ответ клиенту не требовался",
+                        10L
+                )
         );
 
-        assertEquals(ClientChatUnansweredStatus.ACTION_COMPLETED, open.getStatus());
-        assertTrue(open.isManualOverride());
-        assertTrue(open.isAuditRequired());
-        assertEquals("ACTION_COMPLETED_WITHOUT_REPLY_EVIDENCE", open.getResolutionReasonCode());
-        assertEquals(
-                com.hunt.otziv.client_chat_control.model.ClientChatReplyQuality.SUSPICIOUS,
-                open.getReplyQuality()
-        );
-        verify(unansweredRepository).save(open);
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, error.getStatusCode());
+        assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+        assertFalse(open.isManualOverride());
+        assertFalse(open.isAuditRequired());
+        verify(unansweredRepository, never()).save(open);
     }
 
     @Test
     void questionCannotBeMarkedAsNoResponseNeeded() {
         ClientChatUnansweredItem open = openItem("Когда опубликуете отзывы?");
         when(unansweredRepository.findById(55L)).thenReturn(Optional.of(open));
+        when(noResponseAiReviewService.review("Когда опубликуете отзывы?")).thenReturn(
+                aiReview(true, "Ошибочно распознано как подтверждение")
+        );
 
-        assertThrows(
+        ResponseStatusException error = assertThrows(
                 ResponseStatusException.class,
                 () -> service.markFromManagerControl(
                         55L,
                         com.hunt.otziv.manager_control.model.ManagerDailyControlActionType.ACKNOWLEDGED,
                         "Сообщение клиента не требует ответа",
-                        10L,
-                        false
+                        10L
                 )
         );
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, error.getStatusCode());
         assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+        verify(noResponseAiReviewService).review("Когда опубликуете отзывы?");
+        verify(unansweredRepository, never()).save(open);
     }
 
     @Test
     void acknowledgementCanBeMarkedAsNoResponseNeeded() {
         ClientChatUnansweredItem open = openItem("Спасибо большое");
         when(unansweredRepository.findById(56L)).thenReturn(Optional.of(open));
+        when(noResponseAiReviewService.review("Спасибо большое")).thenReturn(
+                aiReview(true, "Самостоятельная благодарность без вопроса")
+        );
 
         service.markFromManagerControl(
                 56L,
                 com.hunt.otziv.manager_control.model.ManagerDailyControlActionType.ACKNOWLEDGED,
                 "Подтверждение клиента",
-                10L,
-                false
+                10L
         );
 
         assertEquals(ClientChatUnansweredStatus.NO_RESPONSE_NEEDED, open.getStatus());
+        assertEquals("DEEPSEEK_NO_RESPONSE_CONFIRMED", open.getResolutionReasonCode());
+        assertTrue(open.getResolutionComment().contains("DeepSeek подтвердил"));
+        assertFalse(open.isManualOverride());
+        verify(unansweredRepository).save(open);
     }
 
     @Test
-    void administrativeNoResponseOverrideRejectsGenericMobileComment() {
-        ClientChatUnansweredItem open = openItem("Когда опубликуете отзывы?");
-        when(unansweredRepository.findById(61L)).thenReturn(Optional.of(open));
+    void deepSeekRejectionKeepsAmbiguousMessageOpen() {
+        ClientChatUnansweredItem open = openItem("До завтра");
+        when(unansweredRepository.findById(63L)).thenReturn(Optional.of(open));
+        when(noResponseAiReviewService.review("До завтра")).thenReturn(
+                aiReview(false, "Неясно, ожидает ли клиент продолжения")
+        );
 
         ResponseStatusException error = assertThrows(
                 ResponseStatusException.class,
                 () -> service.markFromManagerControl(
-                        61L,
+                        63L,
                         ManagerDailyControlActionType.ACKNOWLEDGED,
-                        "Сообщение клиента не требует ответа.",
-                        10L,
-                        true
+                        "Не требует ответа",
+                        10L
                 )
         );
 
-        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, error.getStatusCode());
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("DeepSeek не подтвердил"));
+        assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+        verify(unansweredRepository, never()).save(open);
+    }
+
+    @Test
+    void unavailableDeepSeekKeepsMessageOpen() {
+        ClientChatUnansweredItem open = openItem("Спасибо");
+        when(unansweredRepository.findById(64L)).thenReturn(Optional.of(open));
+        when(noResponseAiReviewService.review("Спасибо")).thenReturn(
+                new ClientChatNoResponseAiReviewService.Review(
+                        false,
+                        false,
+                        "UNAVAILABLE",
+                        0,
+                        "DeepSeek временно недоступен",
+                        "deepseek"
+                )
+        );
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markFromManagerControl(
+                        64L,
+                        ManagerDailyControlActionType.ACKNOWLEDGED,
+                        "Благодарность клиента",
+                        10L
+                )
+        );
+
+        assertEquals(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, error.getStatusCode());
         assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
         verify(unansweredRepository, never()).save(open);
     }
@@ -508,5 +569,16 @@ class ClientChatMessageTrackerServiceTest {
         item.setLastMessageText(text);
         item.setLastClientMessageAt(LocalDateTime.now().minusMinutes(5));
         return item;
+    }
+
+    private static ClientChatNoResponseAiReviewService.Review aiReview(boolean confirmed, String reason) {
+        return new ClientChatNoResponseAiReviewService.Review(
+                true,
+                confirmed,
+                confirmed ? "NO_RESPONSE_NEEDED" : "RESPONSE_REQUIRED",
+                98,
+                reason,
+                "deepseek"
+        );
     }
 }

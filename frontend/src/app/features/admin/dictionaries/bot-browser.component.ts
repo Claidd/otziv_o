@@ -36,6 +36,7 @@ export class BotBrowserComponent implements OnDestroy {
   readonly status = signal('Запуск браузера...');
   readonly error = signal<string | null>(null);
   readonly vncUrl = signal<string | null>(null);
+  readonly vncPassword = signal<string | null>(null);
   readonly frameLoaded = signal(false);
   readonly safeVncUrl = computed(() => {
     const url = this.vncUrl();
@@ -85,6 +86,20 @@ export class BotBrowserComponent implements OnDestroy {
     this.status.set('Браузер запущен');
   }
 
+  async copyVncPassword(): Promise<void> {
+    const password = this.vncPassword();
+    if (!password || !navigator.clipboard) {
+      this.status.set('Не удалось скопировать пароль');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(password);
+      this.status.set('Пароль VNC скопирован');
+    } catch {
+      this.status.set('Не удалось скопировать пароль');
+    }
+  }
+
   closeSession(silent = false): void {
     if (!this.sessionOpen || this.closing) {
       return;
@@ -100,6 +115,7 @@ export class BotBrowserComponent implements OnDestroy {
     this.sessionId = null;
     this.stopHeartbeat();
     this.vncUrl.set(null);
+    this.vncPassword.set(null);
     this.frameLoaded.set(false);
     if (!silent) {
       this.status.set('Отключение...');
@@ -133,6 +149,7 @@ export class BotBrowserComponent implements OnDestroy {
     }
     this.frameLoaded.set(false);
     this.vncUrl.set(null);
+    this.vncPassword.set(null);
     this.loadMetadata();
     this.openSession();
   }
@@ -189,7 +206,8 @@ export class BotBrowserComponent implements OnDestroy {
         const vncUrl = prepareBotBrowserVncUrl(response.vncUrl, {
           allowedOrigins: appEnvironment.botBrowserVncAllowedOrigins
         });
-        if (!vncUrl) {
+        const vncPassword = this.validVncPassword(response.vncPassword);
+        if (!vncUrl || !vncPassword) {
           this.status.set('Ошибка запуска');
           this.error.set('Сервис браузера вернул небезопасный адрес подключения');
           this.vncUrl.set(null);
@@ -199,6 +217,7 @@ export class BotBrowserComponent implements OnDestroy {
 
         this.status.set('Подключаю VNC...');
         this.vncUrl.set(vncUrl);
+        this.vncPassword.set(vncPassword);
       },
       error: (err) => {
         if (this.openInFlightGeneration === generation) {
@@ -252,6 +271,7 @@ export class BotBrowserComponent implements OnDestroy {
           this.sessionBotId = 0;
           this.sessionId = null;
           this.vncUrl.set(null);
+          this.vncPassword.set(null);
           this.status.set('Сессия завершена');
           this.error.set('Доступ к браузерной сессии завершен. Откройте ее заново.');
         }
@@ -279,6 +299,7 @@ export class BotBrowserComponent implements OnDestroy {
     this.botId = botId;
     this.bot.set(null);
     this.vncUrl.set(null);
+    this.vncPassword.set(null);
     this.frameLoaded.set(false);
     this.error.set(null);
     if (!botId) {
@@ -326,5 +347,12 @@ export class BotBrowserComponent implements OnDestroy {
 
   private isActiveSession(botId: number, sessionId: string): boolean {
     return this.sessionOpen && botId === this.sessionBotId && sessionId === this.sessionId;
+  }
+
+  private validVncPassword(rawValue: unknown): string | null {
+    if (typeof rawValue !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(rawValue)) {
+      return null;
+    }
+    return rawValue;
   }
 }

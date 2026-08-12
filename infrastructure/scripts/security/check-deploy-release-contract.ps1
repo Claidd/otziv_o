@@ -133,6 +133,8 @@ Assert-Match $snapshotValidator 'check-flyway-contract\.ps1''[\s\S]{0,100}BaseRe
 Assert-Match $snapshotValidator '''backend full test suite''[\s\S]{0,300}''verify''' 'Changed backend snapshots must pass the full Maven suite.'
 Assert-Match $snapshotValidator '''frontend unit tests''[\s\S]{0,200}''--watch=false''' 'Changed frontend snapshots must pass unit tests.'
 Assert-Match $snapshotValidator '''mobile unit tests''[\s\S]{0,200}''test:unit''' 'Changed mobile snapshots must pass unit tests.'
+Assert-Match $snapshotValidator 'previousMultibrowserApiKey[\s\S]{0,500}snapshot-compose-model-validation-placeholder' 'Compose snapshot validation must use a non-secret MultiBrowser credential placeholder.'
+Assert-Match $snapshotValidator 'finally\s*\{[\s\S]{0,300}SetEnvironmentVariable\(''MULTIBROWSER_API_KEY'',\s*\$previousMultibrowserApiKey' 'Compose snapshot validation must restore the operator MultiBrowser environment after model checks.'
 
 $workerPushCount = [regex]::Matches($deploy, 'Invoke-External[^\r\n]+@\("push", \$externalReviewWorkerImage\)').Count
 if ($workerPushCount -ne 1) {

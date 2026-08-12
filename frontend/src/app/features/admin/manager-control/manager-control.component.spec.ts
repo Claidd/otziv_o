@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { isExplicitlyRepairableCommonInvoiceReason } from './manager-control.component';
+import {
+  isExplicitlyRepairableCommonInvoiceReason,
+  shouldHideClientChatUnansweredAfterAction
+} from './manager-control.component';
 
 describe('isExplicitlyRepairableCommonInvoiceReason', () => {
   it('keeps repair available for a TLS failure declared safe by the backend', () => {
@@ -16,5 +19,18 @@ describe('isExplicitlyRepairableCommonInvoiceReason', () => {
     'Допубликационные позиции блокируют сбор.'
   ])('hides repair for a manual reconciliation reason: %s', (reason) => {
     expect(isExplicitlyRepairableCommonInvoiceReason(reason)).toBe(false);
+  });
+});
+
+describe('shouldHideClientChatUnansweredAfterAction', () => {
+  it.each(['OPEN', 'DEFERRED', 'ACTION_TAKEN', 'ACKNOWLEDGED'] as const)(
+    'keeps an unanswered card visible while its control status is %s',
+    (itemStatus) => {
+      expect(shouldHideClientChatUnansweredAfterAction({ itemStatus })).toBe(false);
+    }
+  );
+
+  it('hides an unanswered card only after the backend confirms resolution', () => {
+    expect(shouldHideClientChatUnansweredAfterAction({ itemStatus: 'RESOLVED' })).toBe(true);
   });
 });

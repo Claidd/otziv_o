@@ -5,6 +5,7 @@ import java.time.Instant;
 public record BrowserOpenResponse(
         String sessionId,
         String vncUrl,
+        String vncPassword,
         int heartbeatIntervalSeconds,
         Instant expiresAt,
         Long botId,
@@ -18,6 +19,6 @@ public record BrowserOpenResponse(
             int heartbeatIntervalSeconds,
             Instant expiresAt
     ) {
-        this(sessionId, vncUrl, heartbeatIntervalSeconds, expiresAt, null, null, null, null);
+        this(sessionId, vncUrl, null, heartbeatIntervalSeconds, expiresAt, null, null, null, null);
     }
 }

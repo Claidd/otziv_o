@@ -3,7 +3,6 @@ networks:
 
 volumes:
   mysql_data:
-  sent_hashes:
   keycloak_pg_data:
   loki_data:
   tempo_data:
@@ -51,8 +50,8 @@ services:
 
   app:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
       args:
         BUILD_NO_CACHE: 1
     restart: always
@@ -132,7 +131,6 @@ services:
         required: false
     volumes:
       - ./data/app-logs:/app/logs
-      - ./docker/sent-hashes:/app/sent-hashes
     networks:
       internal_net:
 

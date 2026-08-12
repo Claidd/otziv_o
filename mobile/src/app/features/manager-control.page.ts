@@ -564,9 +564,15 @@ import {
                             Проверено
                           </button>
                         }
-                        <button type="button" class="muted" (click)="defer(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
+                        <button
+                          type="button"
+                          class="muted"
+                          (click)="defer(card)"
+                          [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId"
+                          [title]="isUnanswered(card) ? 'Карточка останется открытой до подтвержденного ответа' : 'Отложить карточку'"
+                        >
                           <span class="material-icons-sharp">schedule</span>
-                          Отложить
+                          {{ isUnanswered(card) ? 'Оставить открытой' : 'Отложить' }}
                         </button>
                       </div>
 
@@ -582,9 +588,15 @@ import {
                             <span class="material-icons-sharp">send</span>
                             Отправить
                           </button>
-                          <button type="button" class="muted wide" (click)="markNoAnswerNeeded(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
+                          <button
+                            type="button"
+                            class="muted wide"
+                            (click)="markNoAnswerNeeded(card)"
+                            [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId"
+                            title="DeepSeek проверит сообщение; без подтверждения карточка останется открытой"
+                          >
                             <span class="material-icons-sharp">visibility_off</span>
-                            Не требует ответа
+                            Проверить: ответ не нужен
                           </button>
                           <button type="button" class="muted wide" (click)="verifyReply(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
                             <span class="material-icons-sharp">sync</span>
@@ -1578,17 +1590,25 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   async defer(card: ManagerControlConcreteItem): Promise<void> {
     const comment = this.commentText(card).trim();
     if (!comment) {
-      this.notice.set('Для отложить нужен комментарий.');
+      this.notice.set(this.isUnanswered(card)
+        ? 'Чтобы оставить карточку открытой, укажите комментарий.'
+        : 'Для отложить нужен комментарий.');
       return;
     }
-    await this.actionCard(card, { actionType: 'DEFERRED', comment }, 'Карточка отложена.');
+    await this.actionCard(
+      card,
+      { actionType: 'DEFERRED', comment },
+      this.isUnanswered(card)
+        ? 'Комментарий сохранён. Карточка останется открытой до подтвержденного ответа.'
+        : 'Карточка отложена.'
+    );
   }
 
   async markNoAnswerNeeded(card: ManagerControlConcreteItem): Promise<void> {
     await this.actionCard(card, {
       actionType: 'ACKNOWLEDGED',
       comment: this.commentText(card) || 'Сообщение клиента не требует ответа.'
-    }, 'Сообщение отмечено как не требующее ответа.');
+    }, 'DeepSeek подтвердил: сообщение не требует ответа.');
   }
 
   async verifyReply(card: ManagerControlConcreteItem): Promise<void> {

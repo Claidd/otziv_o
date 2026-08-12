@@ -61,6 +61,9 @@
             cursor: pointer;
         }
         button:hover { background: #dc2626; }
+        #vncPasswordWrap { margin-right: 10px; color: #cbd5e1; }
+        #vncPassword { margin: 0 6px; color: #fde68a; font-weight: 800; letter-spacing: 0.08em; }
+        #copyPasswordBtn { background: #2563eb; }
     </style>
 </head>
 
@@ -70,6 +73,10 @@
         <span th:text="'Бот: ' + ${bot.fio}"></span>
     </div>
     <div>
+        <span id="vncPasswordWrap" hidden>
+            Пароль VNC: <code id="vncPassword"></code>
+            <button id="copyPasswordBtn" type="button">Копировать</button>
+        </span>
         <span id="status">Запуск браузера…</span>
         <button id="closeBtn">Закрыть сессию</button>
     </div>
@@ -88,11 +95,15 @@
         const statusEl = document.getElementById('status');
         const iframe   = document.getElementById('browser-frame');
         const closeBtn = document.getElementById('closeBtn');
+        const vncPasswordWrap = document.getElementById('vncPasswordWrap');
+        const vncPasswordEl = document.getElementById('vncPassword');
+        const copyPasswordBtn = document.getElementById('copyPasswordBtn');
         const loading  = document.getElementById('loading');
 
         const controlCharacter = /[\u0000-\u001f\u007f-\u009f]/;
         const encodedControl = /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i;
         const maxVncUrlLength = 4096;
+        const loopbackHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
 
         let closing = false;
         let sessionOpen = false;
@@ -115,6 +126,14 @@
                     || !url.hostname
                     || url.username
                     || url.password) {
+                    return null;
+                }
+                const pageUrl = new URL(window.location.origin);
+                const targetLoopback = loopbackHosts.has(url.hostname.toLowerCase());
+                const pageLoopback = loopbackHosts.has(pageUrl.hostname.toLowerCase());
+                const localPair = targetLoopback && pageLoopback;
+                if ((protocol === 'http:' && !targetLoopback)
+                    || (url.origin !== pageUrl.origin && !localPair)) {
                     return null;
                 }
                 url.searchParams.set('autoconnect', '1');
@@ -142,6 +161,11 @@
             heartbeatInFlight = false;
         }
 
+        function clearVncPassword() {
+            vncPasswordEl.textContent = '';
+            vncPasswordWrap.hidden = true;
+        }
+
         function startHeartbeat(intervalSeconds) {
             stopHeartbeat();
             const delay = Math.max(5, Number(intervalSeconds) || 20) * 1000;
@@ -160,6 +184,7 @@
                     stopHeartbeat();
                     sessionOpen = false;
                     sessionId = null;
+                    clearVncPassword();
                     iframe.onload = null;
                     iframe.removeAttribute('src');
                     iframe.style.visibility = 'hidden';
@@ -195,11 +220,15 @@
                     : null;
 
                 const vncUrl = prepareVncUrl(data.vncUrl);
-                if (!vncUrl) {
+                const vncPassword = typeof data.vncPassword === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(data.vncPassword)
+                    ? data.vncPassword : null;
+                if (!vncUrl || !vncPassword) {
                     statusEl.textContent = 'Сервис браузера вернул небезопасный адрес';
                     closeSessionOnce('invalid-url');
                     return;
                 }
+                vncPasswordEl.textContent = vncPassword;
+                vncPasswordWrap.hidden = false;
                 if (sessionId) {
                     startHeartbeat(data.heartbeatIntervalSeconds);
                 }
@@ -227,6 +256,7 @@
             const closingSessionId = sessionId;
             sessionId = null;
             stopHeartbeat();
+            clearVncPassword();
 
             const url = sessionUrl('close', closingSessionId);
 
@@ -253,6 +283,20 @@
                 closing = false;
             });
         }
+
+        copyPasswordBtn.addEventListener('click', async () => {
+            const password = vncPasswordEl.textContent;
+            if (!password || !navigator.clipboard) {
+                statusEl.textContent = 'Не удалось скопировать пароль';
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(password);
+                statusEl.textContent = 'Пароль VNC скопирован';
+            } catch (error) {
+                statusEl.textContent = 'Не удалось скопировать пароль';
+            }
+        });
 
         closeBtn.addEventListener('click', () => {
             closeBtn.disabled = true;

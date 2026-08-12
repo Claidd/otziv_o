@@ -131,7 +131,12 @@ whatsapp:
     dailyLimit: 50
     minDelay: 5
     maxDelay: 30
-  lastseen:
-    minDelay: 10
-    maxDelay: 180
   clients:
+
+# Temporary anti-corruption layer for the standalone outreach application.
+# It exposes no endpoint unless explicitly enabled and protected with a dedicated token.
+outreach-bridge:
+  enabled: ${OUTREACH_BRIDGE_ENABLED:false}
+  shared-secret: ${OUTREACH_BRIDGE_SHARED_SECRET:}
+  zone: ${OUTREACH_BRIDGE_ZONE:Asia/Irkutsk}
+  admin-chat-ids: ${OUTREACH_BRIDGE_ADMIN_CHAT_IDS:794146111,828987226}

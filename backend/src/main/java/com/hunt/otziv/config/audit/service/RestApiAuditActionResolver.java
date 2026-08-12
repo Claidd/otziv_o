@@ -530,12 +530,8 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/companies/getSubcategories", "подгрузка подкатегорий компании для категории {categoryId}");
         put(actions, "GET", "/sendEmail", "отправка тестового email");
         put(actions, "GET", "/images/{id}", "загрузка изображения {id}");
-        put(actions, "POST", "/webhook/whatsapp-reply", "получение ответа WhatsApp");
         put(actions, "POST", "/webhook/whatsapp-group-reply", "получение группового ответа WhatsApp");
         put(actions, "GET", "/webhook/health", "проверка webhook health");
-        put(actions, "POST", "/admin/dispatch/start", "ручной запуск рассылки");
-        put(actions, "GET", "/admin/dispatch/start", "тестовый запуск рассылки");
-        put(actions, "GET", "/admin/dispatch/startLastSeen", "ручной запуск last-seen рассылки");
         put(actions, "POST", "/telephone/device-token", "создание токена телефона {telephoneId}");
         put(actions, "GET", "/logs", "просмотр логов системы");
         put(actions, "GET", "/logs/tail", "загрузка новых строк лога");

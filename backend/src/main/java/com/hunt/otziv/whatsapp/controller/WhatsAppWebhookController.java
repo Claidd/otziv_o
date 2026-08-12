@@ -3,9 +3,8 @@ package com.hunt.otziv.whatsapp.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.webhook.security.WebhookSignatureVerifier;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
-import com.hunt.otziv.whatsapp.dto.WhatsAppReplyDTO;
 import com.hunt.otziv.whatsapp.service.WhatsAppGroupWebhookDeduplicator;
-import com.hunt.otziv.whatsapp.service.service.ReplyService;
+import com.hunt.otziv.whatsapp.service.service.GroupReplyService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class WhatsAppWebhookController {
 
-    private final ReplyService replyService;
+    private final GroupReplyService groupReplyService;
     private final ObjectMapper objectMapper;
     private final WebhookSignatureVerifier signatureVerifier;
     private final WhatsAppGroupWebhookDeduplicator groupWebhookDeduplicator;
@@ -30,32 +29,6 @@ public class WhatsAppWebhookController {
 
     @Value("${whatsapp.webhook.hmac-required:false}")
     private boolean hmacRequired;
-
-    @PostMapping("/whatsapp-reply")
-    public ResponseEntity<Void> handleReply(
-            HttpServletRequest request,
-            @RequestHeader(value = "X-WhatsApp-Webhook-Secret", required = false) String providedSecret,
-            @RequestHeader(value = "X-WhatsApp-Webhook-Signature", required = false) String signature,
-            @RequestBody String requestBody
-    ) {
-        if (!hasText(webhookSecret)) {
-            log.error("WhatsApp personal webhook rejected: webhook secret is not configured");
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
-        }
-        if (!isWebhookAllowed(providedSecret, signature, requestBody)) {
-            log.warn("WhatsApp personal webhook rejected from {}", request.getRemoteAddr());
-            return ResponseEntity.status(401).build();
-        }
-
-        WhatsAppReplyDTO reply = parseBody(requestBody, WhatsAppReplyDTO.class, "personal");
-        if (reply == null) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        log.info("WhatsApp personal webhook accepted from {}", request.getRemoteAddr());
-        replyService.processIncomingReply(reply);
-        return ResponseEntity.ok().build();
-    }
 
     @PostMapping("/whatsapp-group-reply")
     public ResponseEntity<Void> handleGroupReply(
@@ -68,7 +41,7 @@ public class WhatsAppWebhookController {
             log.error("WhatsApp group webhook rejected: webhook secret is not configured");
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         }
-        if (!isWebhookAllowed(providedSecret, signature, requestBody)) {
+        if (!isWebhookAllowed(webhookSecret, providedSecret, signature, requestBody)) {
             log.warn("WhatsApp group webhook rejected from {}", request.getRemoteAddr());
             return ResponseEntity.status(401).build();
         }
@@ -85,7 +58,7 @@ public class WhatsAppWebhookController {
             return ResponseEntity.ok().build();
         }
         try {
-            replyService.processGroupReply(groupReply);
+            groupReplyService.processGroupReply(groupReply);
             groupWebhookDeduplicator.complete(groupReply);
         } catch (RuntimeException | Error e) {
             groupWebhookDeduplicator.release(groupReply);
@@ -99,9 +72,9 @@ public class WhatsAppWebhookController {
         return ResponseEntity.ok("Webhook работает");
     }
 
-    private boolean isWebhookAllowed(String providedSecret, String signature, String requestBody) {
-        return signatureVerifier.verifyHeaderSecret(webhookSecret, providedSecret)
-                && signatureVerifier.verifyOptionalHmacSha256(requestBody, webhookSecret, signature, hmacRequired);
+    private boolean isWebhookAllowed(String expectedSecret, String providedSecret, String signature, String requestBody) {
+        return signatureVerifier.verifyHeaderSecret(expectedSecret, providedSecret)
+                && signatureVerifier.verifyOptionalHmacSha256(requestBody, expectedSecret, signature, hmacRequired);
     }
 
     private <T> T parseBody(String requestBody, Class<T> bodyType, String webhookType) {
@@ -120,5 +93,4 @@ public class WhatsAppWebhookController {
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
     }
-
 }

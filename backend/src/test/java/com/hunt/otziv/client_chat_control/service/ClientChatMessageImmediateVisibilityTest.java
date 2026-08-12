@@ -32,6 +32,7 @@ class ClientChatMessageImmediateVisibilityTest {
     @Mock private AppSettingService appSettingService;
     @Mock private GamificationEventService gamificationEventService;
     @Mock private ClientChatIdentityService identityService;
+    @Mock private ClientChatNoResponseAiReviewService noResponseAiReviewService;
 
     private ClientChatMessageTrackerService service;
 
@@ -47,7 +48,8 @@ class ClientChatMessageImmediateVisibilityTest {
                 gamificationEventService,
                 identityService,
                 new ClientChatResolutionPolicy(),
-                new ClientChatReplyQualityService()
+                new ClientChatReplyQualityService(),
+                noResponseAiReviewService
         );
     }
 

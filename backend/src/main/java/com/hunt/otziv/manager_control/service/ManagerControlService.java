@@ -687,6 +687,11 @@ public class ManagerControlService {
         boolean specialistActionConcrete = isSpecialistActionConcrete(concreteItem);
         boolean clientChatUnansweredConcrete = ENTITY_CLIENT_CHAT_UNANSWERED.equals(concreteItem.getEntityType());
         boolean clientChatAuditConcrete = ENTITY_CLIENT_CHAT_AUDIT.equals(concreteItem.getEntityType());
+        boolean keepClientChatUnansweredOpen = clientChatUnansweredConcrete
+                && actionType == ManagerDailyControlActionType.DEFERRED;
+        if (keepClientChatUnansweredOpen) {
+            status = ManagerDailyControlItemStatus.OPEN;
+        }
         if (manualWorkerNotification && specialistActionConcrete && safe(comment).isBlank()) {
             comment = manualWorkerNotificationComment(concreteItem);
         }
@@ -771,8 +776,7 @@ public class ManagerControlService {
                     concreteItem.getEntityId(),
                     actionType,
                     comment,
-                    actorUserId(principal),
-                    canOverrideWorkerExplanation(authentication)
+                    actorUserId(principal)
             );
             if (actionType == ManagerDailyControlActionType.ACTION_TAKEN
                     || actionType == ManagerDailyControlActionType.ACKNOWLEDGED
@@ -782,7 +786,10 @@ public class ManagerControlService {
                 concreteItem.setFollowUpAt(null);
                 status = ManagerDailyControlItemStatus.RESOLVED;
             } else if (actionType == ManagerDailyControlActionType.DEFERRED) {
-                concreteItem.setFollowUpAt(nextDayFollowUpAt(now));
+                concreteItem.setStatus(ManagerDailyControlItemStatus.OPEN);
+                concreteItem.setResolvedAt(null);
+                concreteItem.setFollowUpAt(null);
+                status = ManagerDailyControlItemStatus.OPEN;
             }
         } else if (specialistActionConcrete
                 && status != ManagerDailyControlItemStatus.RESOLVED
@@ -3202,6 +3209,16 @@ public class ManagerControlService {
                 .collect(Collectors.toMap(ManagerDailyControlConcreteItem::getEntityKey, Function.identity(), (left, right) -> left));
         Set<String> freshKeys = freshByKey.keySet();
         resolveStaleConcreteItems(parentItem, storedByKey, freshKeys);
+        boolean reopenedUnanswered = false;
+        for (ManagerDailyControlConcreteItem stored : storedExamples) {
+            if (freshKeys.contains(stored.getEntityKey()) && reopenActiveClientChatUnanswered(stored)) {
+                dailyControlConcreteItemRepository.save(stored);
+                reopenedUnanswered = true;
+            }
+        }
+        if (reopenedUnanswered) {
+            reopenParentItemIfConcreteOpen(parentItem);
+        }
         List<ManagerControlConcreteItemResponse> visibleStored = storedExamples.stream()
                 .filter(item -> item.getStatus() != ManagerDailyControlItemStatus.RESOLVED)
                 .filter(item -> !isClosedClientChatUnansweredConcrete(item))
@@ -3261,6 +3278,7 @@ public class ManagerControlService {
             return List.of();
         }
         List<ManagerControlConcreteItemResponse> synced = new ArrayList<>();
+        boolean reopenedUnanswered = false;
         for (Map.Entry<String, ManagerControlConcreteItemResponse> entry : uniqueExamples.entrySet()) {
             String key = entry.getKey();
             ManagerControlConcreteItemResponse example = entry.getValue();
@@ -3275,6 +3293,10 @@ public class ManagerControlService {
                 created = true;
             }
             boolean changed = applyConcreteItemSnapshot(concreteItem, example);
+            if (reopenActiveClientChatUnanswered(concreteItem)) {
+                changed = true;
+                reopenedUnanswered = true;
+            }
             if (reopenQueuedChatBindingRepair(concreteItem)) {
                 changed = true;
             }
@@ -3312,7 +3334,24 @@ public class ManagerControlService {
                     example.specialistName()
             ));
         }
+        if (reopenedUnanswered) {
+            reopenParentItemIfConcreteOpen(parentItem);
+        }
         return synced;
+    }
+
+    private boolean reopenActiveClientChatUnanswered(ManagerDailyControlConcreteItem item) {
+        if (item == null
+                || !ENTITY_CLIENT_CHAT_UNANSWERED.equals(item.getEntityType())
+                || item.getStatus() == ManagerDailyControlItemStatus.OPEN) {
+            return false;
+        }
+        item.setStatus(ManagerDailyControlItemStatus.OPEN);
+        item.setActionType(null);
+        item.setResolvedAt(null);
+        item.setAutomaticResolution(false);
+        item.setFollowUpAt(null);
+        return true;
     }
 
     private void resolveStaleConcreteItems(
@@ -3729,6 +3768,7 @@ public class ManagerControlService {
 
     private boolean isConcreteSnoozed(ManagerDailyControlConcreteItem item) {
         return item != null
+                && !ENTITY_CLIENT_CHAT_UNANSWERED.equals(item.getEntityType())
                 && item.getFollowUpAt() != null
                 && item.getFollowUpAt().isAfter(LocalDateTime.now())
                 && item.getStatus() != ManagerDailyControlItemStatus.OPEN;
@@ -3799,6 +3839,7 @@ public class ManagerControlService {
         }
         boolean allHandled = concreteItems.stream().noneMatch(item -> item.getStatus() == ManagerDailyControlItemStatus.OPEN);
         if (!allHandled) {
+            reopenParentItemIfConcreteOpen(parentItem);
             return;
         }
         boolean allResolved = concreteItems.stream()

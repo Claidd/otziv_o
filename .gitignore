@@ -41,6 +41,7 @@ backend/.idea
 !compose.yaml
 !compose.prod.yaml
 !compose.prod-local.yaml
+!compose.multibrowser-local.yaml
 !infrastructure/loki/*.yaml
 !infrastructure/tempo/*.yaml
 !infrastructure/grafana/provisioning/datasources/*.yaml
