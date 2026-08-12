@@ -4,8 +4,8 @@ services:
   app:
     image: ${APP_IMAGE:-claid38/otziv-app:latest}
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
 
   nginx:
     image: ${WEB_IMAGE:-claid38/otziv-web:latest}

@@ -1,9 +1,16 @@
 export type PaymentNavigationPurpose = 'manual' | 'payment' | 'sbp';
 
 const PAYMENT_PROVIDER_HOSTS = new Set(['securepay.tinkoff.ru', 'securepay.tbank.ru', 'pay.tbank.ru']);
-const NSPK_QR_HOST = 'qr.nspk.ru';
 const SBP_WEB_HOSTS = new Set(['qr.nspk.ru', 'www.tbank.ru', 'payzonaecom.com']);
-const NSPK_BANK_PROTOCOL = /^bank(?:b2b)?[0-9]{12}:$/i;
+const SBP_CUSTOM_PATH = String.raw`(?:[/?#][A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*)?`;
+const NSPK_BANK_TARGET = new RegExp(
+  String.raw`^bank(?:b2b)?[0-9]{12}:\/\/qr\.nspk\.ru${SBP_CUSTOM_PATH}$`,
+  'i'
+);
+const LEGACY_BANKAPP_TARGET = new RegExp(
+  String.raw`^bankapp:\/\/pay${SBP_CUSTOM_PATH}$`,
+  'i'
+);
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/;
 const ENCODED_CONTROL = /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i;
 const MAX_LENGTH: Record<PaymentNavigationPurpose, number> = {
@@ -37,6 +44,14 @@ export function safePaymentNavigationTarget(
     return null;
   }
 
+  // Chrome only started exposing hostname for non-special URL schemes in
+  // version 130. Validate provider-defined SBP deep links directly so older
+  // Android Chrome versions do not reject a legitimate bankNNN:// target.
+  if (purpose === 'sbp'
+    && (NSPK_BANK_TARGET.test(target) || LEGACY_BANKAPP_TARGET.test(target))) {
+    return target;
+  }
+
   try {
     const url = new URL(target);
     const protocol = url.protocol.toLowerCase();
@@ -53,15 +68,7 @@ export function safePaymentNavigationTarget(
       }
       return SBP_WEB_HOSTS.has(hostname) ? target : null;
     }
-    if (purpose !== 'sbp' || !url.hostname || url.username || url.password) {
-      return null;
-    }
-    if (protocol === 'bankapp:') {
-      return url.hostname.toLowerCase() === 'pay' ? target : null;
-    }
-    return NSPK_BANK_PROTOCOL.test(protocol) && url.hostname.toLowerCase() === NSPK_QR_HOST
-      ? target
-      : null;
+    return null;
   } catch {
     return null;
   }

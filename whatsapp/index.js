@@ -45,11 +45,11 @@ const AUTH_PATH = process.env.AUTH_PATH || "/auth";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
 const OUTREACH_WEBHOOK_SECRET = process.env.OUTREACH_WEBHOOK_SECRET || "";
 const GATEWAY_SHARED_SECRET = process.env.WHATSAPP_GATEWAY_SHARED_SECRET || "";
-const GATEWAY_AUTH_REQUIRED = parseBoolean(process.env.WHATSAPP_GATEWAY_AUTH_REQUIRED);
+const REMOTE_BROWSER_REQUIRED = parseBoolean(process.env.WHATSAPP_REMOTE_BROWSER_REQUIRED);
+const GATEWAY_AUTH_REQUIRED = parseBoolean(process.env.WHATSAPP_GATEWAY_AUTH_REQUIRED) || REMOTE_BROWSER_REQUIRED;
 const GROUP_WEBHOOK_ENABLED = process.env.WHATSAPP_GROUP_WEBHOOK_ENABLED === undefined
   ? true
   : parseBoolean(process.env.WHATSAPP_GROUP_WEBHOOK_ENABLED);
-const REMOTE_BROWSER_REQUIRED = parseBoolean(process.env.WHATSAPP_REMOTE_BROWSER_REQUIRED);
 const WHATSAPP_BROWSER_URL = configuredRemoteBrowserUrl(
   process.env.WHATSAPP_BROWSER_URL, REMOTE_BROWSER_REQUIRED
 );
@@ -361,6 +361,11 @@ function minimalStatusPayload() {
     clientId: CLIENT_ID,
     browserProfileId: BROWSER_PROFILE_ID,
     browserMode: REMOTE_BROWSER_ENABLED ? "peoples-profile" : "local",
+    remoteBrowserRequired: REMOTE_BROWSER_REQUIRED,
+    gatewayAuthRequired: GATEWAY_AUTH_REQUIRED,
+    lastSeenEnabled: WHATSAPP_LAST_SEEN_ENABLED,
+    outreachWebhookEnabled: OUTREACH_WEBHOOK_ENABLED,
+    groupWebhookEnabled: GROUP_WEBHOOK_ENABLED,
     ready,
     authenticated,
     state: lastState,
@@ -932,6 +937,7 @@ app.get("/ready", (req, res) => {
 app.use(createInternalAuthMiddleware({
   secret: GATEWAY_SHARED_SECRET,
   required: GATEWAY_AUTH_REQUIRED,
+  minimumSecretLength: REMOTE_BROWSER_REQUIRED ? 32 : 1,
 }));
 
 app.get("/internal/ready", (req, res) => {

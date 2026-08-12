@@ -98,6 +98,7 @@ public class BotBrowserSessionService {
             Authentication authentication,
             boolean heartbeatSupported
     ) {
+        requireFeatureEnabled();
         AuthorizedBot bot = accessService.requireAccess(botId, authentication);
         CallerIdentity opener = callerIdentity(authentication);
         LocalDateTime now = now();
@@ -188,6 +189,7 @@ public class BotBrowserSessionService {
     }
 
     public void heartbeat(long botId, String rawSessionId, Authentication authentication) {
+        requireFeatureEnabled();
         String sessionId = canonicalSessionId(rawSessionId);
         CallerIdentity opener = callerIdentity(authentication);
 
@@ -225,6 +227,7 @@ public class BotBrowserSessionService {
     }
 
     public void close(long botId, String rawSessionId, Authentication authentication) {
+        requireFeatureEnabled();
         String sessionId = canonicalSessionId(rawSessionId);
         CallerIdentity opener = callerIdentity(authentication);
         Optional<BotBrowserSession> found = repository.findById(sessionId);
@@ -254,6 +257,7 @@ public class BotBrowserSessionService {
      * fresh-access guarded stop for an untracked legacy profile.
      */
     public void closeLegacy(long botId, Authentication authentication) {
+        requireFeatureEnabled();
         AuthorizedBot bot = accessService.requireAccess(botId, authentication);
         CallerIdentity opener = callerIdentity(authentication);
         Optional<BotBrowserSession> active = repository
@@ -283,6 +287,9 @@ public class BotBrowserSessionService {
             initialDelayString = "${multibrowser.session-sweep-initial-delay-ms:45000}"
     )
     public void sweepExpiredSessions() {
+        if (!properties.isEnabled()) {
+            return;
+        }
         LocalDateTime now = now();
         LocalDateTime openingCutoff = now.minusSeconds(openingTimeoutSeconds());
         // Longer than the provider HTTP timeout, so a second node does not
@@ -408,7 +415,7 @@ public class BotBrowserSessionService {
     }
 
     private URI upstreamUri(String... pathSegments) {
-        return UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+        return UriComponentsBuilder.fromUriString(properties.requireBaseUrl())
                 .pathSegment(pathSegments)
                 .build()
                 .encode()
@@ -519,6 +526,15 @@ public class BotBrowserSessionService {
             return null;
         }
         return clean;
+    }
+
+    private void requireFeatureEnabled() {
+        if (!properties.isEnabled()) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Браузерный сервис временно отключен"
+            );
+        }
     }
 
     private int heartbeatIntervalSeconds() {

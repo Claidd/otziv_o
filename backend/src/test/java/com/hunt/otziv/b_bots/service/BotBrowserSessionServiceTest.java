@@ -71,6 +71,7 @@ class BotBrowserSessionServiceTest {
     @BeforeEach
     void setUp() {
         properties = new MultiBrowserProperties();
+        properties.setEnabled(true);
         properties.setBaseUrl("https://browser.internal");
         properties.setConnectionMode(MultiBrowserProperties.ConnectionMode.PROXY);
         properties.setProxyUrl("socks5://proxy.internal:1080");

@@ -20,7 +20,11 @@ describe('payment navigation policy', () => {
     'bankapp://evil.example/payment-sbp-bank',
     'https://example.test/pay\r\nLocation:https://evil.test',
     'https://example.test/pay%0d%0aLocation:https://evil.test',
-    'unknownbank://qr.nspk.ru/AS100000000111'
+    'unknownbank://qr.nspk.ru/AS100000000111',
+    'bank100000000111://qr.nspk.ru.evil.test/AS100000000111',
+    'bank100000000111://qr.nspk.ru@evil.test/AS100000000111',
+    'bank100000000111://qr.nspk.ru:443/AS100000000111',
+    'bank100000000111://qr.nspk.ru\\evil.test/AS100000000111'
   ])('rejects %s without invoking navigation', (value) => {
     const navigate = vi.fn();
 
@@ -37,6 +41,28 @@ describe('payment navigation policy', () => {
     'bankapp://pay/payment-sbp-bank'
   ])('allows supported SBP target %s', (value) => {
     expect(safePaymentNavigationTarget(value, 'sbp')).toBe(value);
+  });
+
+  it('accepts an NSPK bank deep link without using the legacy browser URL parser', () => {
+    const originalUrl = globalThis.URL;
+    const incompatibleUrl = vi.fn(() => {
+      throw new TypeError('Chrome 114 cannot expose a custom-scheme hostname');
+    });
+    Object.defineProperty(globalThis, 'URL', {
+      configurable: true,
+      value: incompatibleUrl
+    });
+
+    try {
+      const target = 'bank100000000111://qr.nspk.ru/AS100000000111';
+      expect(safePaymentNavigationTarget(target, 'sbp')).toBe(target);
+      expect(incompatibleUrl).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(globalThis, 'URL', {
+        configurable: true,
+        value: originalUrl
+      });
+    }
   });
 
   it('keeps a valid public payment URL byte-for-byte unchanged', () => {

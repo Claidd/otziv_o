@@ -40,6 +40,15 @@ test("gateway auth fails startup when required without a secret", () => {
   );
 });
 
+test("gateway auth rejects a short secret when a minimum is required", () => {
+  assert.throws(
+    () => createInternalAuthMiddleware({
+      secret: "too-short", required: true, minimumSecretLength: 32,
+    }),
+    /at least 32 characters/u
+  );
+});
+
 test("gateway auth uses a constant-time digest comparison and never reflects token", () => {
   const secret = "test-only-c2fa4199"; // gitleaks:allow -- synthetic test credential
   const middleware = createInternalAuthMiddleware({ secret });
@@ -97,6 +106,16 @@ test("WhatsApp Web cache never writes into the read-only application filesystem"
 
   assert.match(source, /webVersionCache:\s*\{[\s\S]{0,300}type:\s*"none"/u);
   assert.doesNotMatch(source, /webVersionCache:\s*\{[\s\S]{0,300}type:\s*"local"/u);
+});
+
+test("peoples profile readiness exposes and enforces outreach capabilities", () => {
+  const source = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
+
+  assert.match(source, /GATEWAY_AUTH_REQUIRED\s*=.*\|\|\s*REMOTE_BROWSER_REQUIRED/u);
+  assert.match(source, /minimumSecretLength:\s*REMOTE_BROWSER_REQUIRED\s*\?\s*32\s*:\s*1/u);
+  for (const field of ["remoteBrowserRequired", "gatewayAuthRequired", "lastSeenEnabled", "outreachWebhookEnabled", "groupWebhookEnabled"]) {
+    assert.match(source, new RegExp(`\\b${field}:`, "u"));
+  }
 });
 
 function requestWithHeader(value) {

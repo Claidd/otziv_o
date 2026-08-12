@@ -3940,7 +3940,7 @@ function Invoke-OfflineAppBuild {
     Write-Host "Building backend jar locally for offline app image..."
     Push-Location $backendDir
     try {
-        Invoke-External -FilePath (Join-Path $backendDir "mvnw.cmd") -Arguments @("-f", "../pom.xml", "-B", "-ntp", "clean", "package", "-DskipTests")
+        Invoke-External -FilePath (Join-Path $backendDir "mvnw.cmd") -Arguments @("-B", "-ntp", "clean", "package", "-DskipTests")
     } finally {
         Pop-Location
     }

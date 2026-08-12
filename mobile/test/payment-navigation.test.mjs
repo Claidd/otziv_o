@@ -24,7 +24,11 @@ for (const value of [
   'bankapp://evil.example/payment-sbp-bank',
   'https://example.test/pay\r\nLocation:https://evil.test',
   'https://example.test/pay%0d%0aLocation:https://evil.test',
-  'unknownbank://qr.nspk.ru/AS100000000111'
+  'unknownbank://qr.nspk.ru/AS100000000111',
+  'bank100000000111://qr.nspk.ru.evil.test/AS100000000111',
+  'bank100000000111://qr.nspk.ru@evil.test/AS100000000111',
+  'bank100000000111://qr.nspk.ru:443/AS100000000111',
+  'bank100000000111://qr.nspk.ru\\evil.test/AS100000000111'
 ]) {
   test(`rejects unsafe payment target without navigation: ${value}`, () => {
     const navigated = [];

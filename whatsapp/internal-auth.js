@@ -24,12 +24,22 @@ function constantTimeMatches(provided, expected) {
   return crypto.timingSafeEqual(providedDigest, expectedDigest);
 }
 
-function createInternalAuthMiddleware({ secret = "", required = false } = {}) {
-  const configured = String(secret).trim().length > 0;
+function createInternalAuthMiddleware({
+  secret = "",
+  required = false,
+  minimumSecretLength = 1,
+} = {}) {
+  const normalizedSecret = String(secret).trim();
+  const configured = normalizedSecret.length > 0;
   const enforced = parseBoolean(required) || required === true || configured;
+  const parsedMinimum = Number.parseInt(String(minimumSecretLength), 10);
+  const minimum = Number.isSafeInteger(parsedMinimum) ? Math.max(1, parsedMinimum) : 1;
 
   if (enforced && !configured) {
     throw new Error("WhatsApp gateway authentication is required but no shared secret is configured");
+  }
+  if (enforced && normalizedSecret.length < minimum) {
+    throw new Error(`WhatsApp gateway shared secret must contain at least ${minimum} characters`);
   }
 
   return (req, res, next) => {
@@ -39,7 +49,7 @@ function createInternalAuthMiddleware({ secret = "", required = false } = {}) {
     }
 
     const provided = req.get(INTERNAL_AUTH_HEADER) || "";
-    if (!constantTimeMatches(provided, secret)) {
+    if (!constantTimeMatches(provided, normalizedSecret)) {
       res.set("Cache-Control", "no-store");
       res.status(401).json({ status: "error", code: "unauthorized" });
       return;
