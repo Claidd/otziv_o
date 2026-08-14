@@ -171,6 +171,7 @@ export interface ContractorPaymentQueueHealth {
   rewardRepair: ContractorPaymentQueueHealthItem;
   shadowBackfill: ContractorPaymentQueueHealthItem;
   completionRewardRepair: ContractorPaymentQueueHealthItem;
+  deferredActiveRecoveryBaseGaps: number;
   observedAt: string;
 }
 
@@ -203,6 +204,45 @@ export interface ContractorPaymentSystemRoutingRequest {
   confirmation: string;
   reason: string;
   expectedRevision: number;
+}
+
+export interface ContractorLegacyRewardManualGroup {
+  orderId: number;
+  groupHash: string;
+  evidenceCategory: string;
+  status: 'PENDING' | 'APPLIED';
+  rowCount: number;
+  completedOn?: string | null;
+  evidenceReference?: string | null;
+}
+
+export interface ContractorLegacyRewardReconciliation {
+  runId?: number | null;
+  startDate?: string | null;
+  status: string;
+  snapshotHash?: string | null;
+  autoOrderCount: number;
+  autoRowCount: number;
+  autoRemainingRows: number;
+  manualOrderCount: number;
+  manualRowCount: number;
+  manualRemainingOrders: number;
+  createdAt?: string | null;
+  expiresAt?: string | null;
+  manualGroups: ContractorLegacyRewardManualGroup[];
+}
+
+export interface ContractorLegacyRewardReconciliationApplyRequest {
+  snapshotHash: string;
+  reason: string;
+  confirmation: string;
+}
+
+export interface ContractorLegacyRewardManualResolutionRequest
+  extends ContractorLegacyRewardReconciliationApplyRequest {
+  groupHash: string;
+  completedOn: string;
+  evidenceReference: string;
 }
 
 export type ContractorDirectSettlementType = 'PAYMENT' | 'REVERSAL';
@@ -264,6 +304,40 @@ export class ContractorPaymentsApi {
   ): Observable<ContractorPaymentSystemStatus> {
     return this.http.post<ContractorPaymentSystemStatus>(
       `${appEnvironment.apiBaseUrl}/api/admin/contractor-payments/system/routing`,
+      request
+    );
+  }
+
+  getLegacyRewardReconciliation(): Observable<ContractorLegacyRewardReconciliation> {
+    return this.http.get<ContractorLegacyRewardReconciliation>(
+      `${appEnvironment.apiBaseUrl}/api/admin/contractor-payments/system/legacy-reconciliation`
+    );
+  }
+
+  prepareLegacyRewardReconciliation(): Observable<ContractorLegacyRewardReconciliation> {
+    return this.http.post<ContractorLegacyRewardReconciliation>(
+      `${appEnvironment.apiBaseUrl}/api/admin/contractor-payments/system/legacy-reconciliation/prepare`,
+      {}
+    );
+  }
+
+  applyLegacyRewardReconciliation(
+    runId: number,
+    request: ContractorLegacyRewardReconciliationApplyRequest
+  ): Observable<ContractorLegacyRewardReconciliation> {
+    return this.http.post<ContractorLegacyRewardReconciliation>(
+      `${appEnvironment.apiBaseUrl}/api/admin/contractor-payments/system/legacy-reconciliation/${runId}/apply`,
+      request
+    );
+  }
+
+  resolveLegacyRewardManualGroup(
+    runId: number,
+    orderId: number,
+    request: ContractorLegacyRewardManualResolutionRequest
+  ): Observable<ContractorLegacyRewardReconciliation> {
+    return this.http.post<ContractorLegacyRewardReconciliation>(
+      `${appEnvironment.apiBaseUrl}/api/admin/contractor-payments/system/legacy-reconciliation/${runId}/orders/${orderId}/resolve`,
       request
     );
   }

@@ -146,6 +146,43 @@ public class CommonInvoiceArchiveRepository {
                 """, Map.of("invoiceId", invoiceId), String.class);
     }
 
+    /** Unrestored ancestors followed by the requested invoice. Parents must be
+     * inserted first because live common_invoices has a self foreign key. */
+    public List<Long> unrestoredSupersessionChain(Long invoiceId) {
+        return jdbc.queryForList("""
+                WITH RECURSIVE invoice_chain AS (
+                    SELECT invoice_id, supersedes_invoice_id, restored_at, 0 AS depth
+                    FROM archive_common_invoices
+                    WHERE invoice_id = :invoiceId
+                    UNION ALL
+                    SELECT parent.invoice_id,
+                           parent.supersedes_invoice_id,
+                           parent.restored_at,
+                           child.depth + 1
+                    FROM archive_common_invoices parent
+                    JOIN invoice_chain child
+                      ON child.supersedes_invoice_id = parent.invoice_id
+                )
+                SELECT invoice_id
+                FROM invoice_chain
+                WHERE restored_at IS NULL
+                ORDER BY depth DESC
+                """, Map.of("invoiceId", invoiceId), Long.class);
+    }
+
+    public boolean isOrderAlreadyRestored(Long orderId) {
+        Long restored = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM archive_orders archived_order
+                    JOIN orders live_order ON live_order.order_id = archived_order.order_id
+                    WHERE archived_order.order_id = :orderId
+                      AND archived_order.restored_at IS NOT NULL
+                )
+                """, Map.of("orderId", orderId), Long.class);
+        return restored != null && restored > 0;
+    }
+
     /**
      * Serializes physical restores for one invoice and rechecks the archived payment registry
      * immediately before any child orders are restored. Legacy archives may contain CURRENT or

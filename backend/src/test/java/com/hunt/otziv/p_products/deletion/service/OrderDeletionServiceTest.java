@@ -141,7 +141,7 @@ class OrderDeletionServiceTest {
                 orderRepository
         );
         inOrder.verify(orderRepository).findByIdForCounterUpdate(10L);
-        inOrder.verify(commonInvoiceOrderRepository).findMembershipByOrderIdForRead(10L);
+        inOrder.verify(commonInvoiceOrderRepository).existsByOrder_Id(10L);
         inOrder.verify(orderDetailsService).findByOrderId(10L);
         inOrder.verify(paymentLinkArchiveService).archiveForDeletedOrder(10L);
         inOrder.verify(badReviewTaskService).deleteAllByOrderId(10L);
@@ -279,8 +279,7 @@ class OrderDeletionServiceTest {
 
         authenticateWithRole("ROLE_ADMIN");
         when(orderRepository.findByIdForCounterUpdate(18L)).thenReturn(Optional.of(order));
-        when(commonInvoiceOrderRepository.findMembershipByOrderIdForRead(18L))
-                .thenReturn(Optional.of(new CommonInvoiceOrder()));
+        when(commonInvoiceOrderRepository.existsByOrder_Id(18L)).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -291,7 +290,7 @@ class OrderDeletionServiceTest {
         assertTrue(exception.getReason().contains("только вместе"));
         InOrder lockOrder = inOrder(orderRepository, commonInvoiceOrderRepository);
         lockOrder.verify(orderRepository).findByIdForCounterUpdate(18L);
-        lockOrder.verify(commonInvoiceOrderRepository).findMembershipByOrderIdForRead(18L);
+        lockOrder.verify(commonInvoiceOrderRepository).existsByOrder_Id(18L);
         verify(orderDetailsService, never()).findByOrderId(18L);
         verify(paymentLinkArchiveService, never()).archiveForDeletedOrder(18L);
         verify(badReviewTaskService, never()).deleteAllByOrderId(18L);

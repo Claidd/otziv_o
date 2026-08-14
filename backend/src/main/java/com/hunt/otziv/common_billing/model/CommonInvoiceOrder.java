@@ -12,7 +12,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,10 +19,7 @@ import lombok.Setter;
 @Entity
 @Getter
 @Setter
-@Table(
-        name = "common_invoice_orders",
-        uniqueConstraints = @UniqueConstraint(name = "uk_common_invoice_order", columnNames = "order_id")
-)
+@Table(name = "common_invoice_orders")
 public class CommonInvoiceOrder {
 
     @Id
@@ -34,6 +30,9 @@ public class CommonInvoiceOrder {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "invoice_id", nullable = false)
     private CommonInvoice invoice;
+
+    @Column(name = "active_membership", nullable = false)
+    private boolean activeMembership = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)

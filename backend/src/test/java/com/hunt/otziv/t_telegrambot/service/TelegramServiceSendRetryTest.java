@@ -1,6 +1,7 @@
 package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -18,8 +19,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class TelegramServiceSendRetryTest {
+
+    @Test
+    void copyTextCompatibleResponseRejectsMalformedSuccessWithoutMessageId() {
+        TelegramService.CopyTextCompatibleSendMessage message =
+                new TelegramService.CopyTextCompatibleSendMessage();
+
+        assertThrows(
+                TelegramApiRequestException.class,
+                () -> message.deserializeResponse("{\"ok\":true,\"result\":{}}")
+        );
+    }
 
     @Test
     void sendMessageRetriesTransientNetworkFailure() {
@@ -41,6 +54,41 @@ class TelegramServiceSendRetryTest {
         assertFalse(sent);
         assertEquals(3, service.attempts);
         assertEquals(2, service.sleeps);
+    }
+
+    @Test
+    void copyTextButtonSerializesNativePayloadAndAcceptsEchoedUnknownField() throws Exception {
+        CapturingCopyTelegramService service = new CapturingCopyTelegramService();
+
+        boolean sent = service.sendMessageWithCopyTextButton(
+                -100123L,
+                "Оплата по номеру карты: 2202208238396676",
+                "Скопировать номер карты",
+                "2202208238396676"
+        );
+
+        assertTrue(sent);
+        String json = new ObjectMapper().writeValueAsString(service.message);
+        assertTrue(json.contains("\"copy_text\":{\"text\":\"2202208238396676\"}"));
+        assertEquals(91, service.returnedMessageId);
+    }
+
+    @Test
+    void copyTextButtonPreservesMigrationErrorAndRetriesNewChat() {
+        CapturingMigrationService migrationService = new CapturingMigrationService();
+        MigratedCopyTelegramService service = new MigratedCopyTelegramService(migrationService);
+
+        boolean sent = service.sendMessageWithCopyTextButton(
+                -5209142005L,
+                "Оплата",
+                "Скопировать номер телефона",
+                "+79991234567"
+        );
+
+        assertTrue(sent);
+        assertEquals(2, service.attempts);
+        assertEquals("-5209142005", service.chatIds[0]);
+        assertEquals("-1003538237871", service.chatIds[1]);
     }
 
     @Test
@@ -160,6 +208,47 @@ class TelegramServiceSendRetryTest {
         @Override
         void sleepBeforeRetry(long delayMillis) {
             sleeps++;
+        }
+    }
+
+    private static final class CapturingCopyTelegramService extends TelegramService {
+        private SendMessage message;
+        private int returnedMessageId;
+
+        private CapturingCopyTelegramService() {
+            super(new DefaultBotOptions(), "123456:abcdefghijklmnopqrstuvwxyz", "test_bot", true, "",
+                    null, null, null, null, null, null, null, null, null, null, null);
+        }
+
+        @Override
+        Message executeTelegramMessage(SendMessage message) throws TelegramApiException {
+            this.message = message;
+            String response = "{\"ok\":true,\"result\":{\"message_id\":91,\"reply_markup\":"
+                    + "{\"inline_keyboard\":[[{\"text\":\"copy\",\"copy_text\":{\"text\":\"2202208238396676\"}}]]}}}";
+            Message result = message.deserializeResponse(response);
+            returnedMessageId = result.getMessageId();
+            return result;
+        }
+    }
+
+    private static final class MigratedCopyTelegramService extends TelegramService {
+        private int attempts;
+        private final String[] chatIds = new String[2];
+
+        private MigratedCopyTelegramService(TelegramChatMigrationService migrationService) {
+            super(new DefaultBotOptions(), "123456:abcdefghijklmnopqrstuvwxyz", "test_bot", true, "",
+                    null, null, null, null, null, null, null, null, null, migrationService, null);
+        }
+
+        @Override
+        Message executeTelegramMessage(SendMessage message) throws TelegramApiException {
+            chatIds[attempts] = message.getChatId();
+            attempts++;
+            String response = attempts == 1
+                    ? "{\"ok\":false,\"error_code\":400,\"description\":\"Bad Request: group chat was upgraded\","
+                    + "\"parameters\":{\"migrate_to_chat_id\":-1003538237871}}"
+                    : "{\"ok\":true,\"result\":{\"message_id\":92}}";
+            return message.deserializeResponse(response);
         }
     }
 

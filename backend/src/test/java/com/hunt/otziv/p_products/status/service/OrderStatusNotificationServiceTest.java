@@ -68,7 +68,8 @@ class OrderStatusNotificationServiceTest {
                 "client",
                 "group",
                 "message",
-                "На проверке"
+                "На проверке",
+                "2202208238396676"
         );
 
         assertTrue(result);
@@ -113,6 +114,33 @@ class OrderStatusNotificationServiceTest {
     }
 
     @Test
+    void telegramPaymentUsesCopyButtonFromFrozenTransferNumber() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        order.getCompany().setUrlChat("https://t.me/shared_owner");
+        order.getCompany().setTelegramGroupChatId(-100L);
+        OrderStatus success = status("Выставлен счет");
+
+        when(telegramService.sendMessageWithCopyTextButton(
+                -100L, "Оплата по карте 2202208238396676",
+                "Скопировать номер карты", "2202208238396676"
+        )).thenReturn(true);
+        when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(success);
+
+        boolean result = service.sendMessageToGroup(
+                "Опубликовано", order, "client", "group",
+                "Оплата по карте 2202208238396676", "Выставлен счет", "2202208238396676"
+        );
+
+        assertTrue(result);
+        verify(telegramService).sendMessageWithCopyTextButton(
+                -100L, "Оплата по карте 2202208238396676",
+                "Скопировать номер карты", "2202208238396676"
+        );
+        verify(telegramService, never()).sendMessage(-100L, "Оплата по карте 2202208238396676");
+    }
+
+    @Test
     void sendMessageToGroupUsesMaxWhenChatLinkPointsToMax() {
         OrderStatusNotificationService service = service();
         Order order = orderWithManager(10L, "Компания", 123L);
@@ -130,7 +158,8 @@ class OrderStatusNotificationServiceTest {
                 "client",
                 "group",
                 "message",
-                "Выставлен счет"
+                "Выставлен счет",
+                "2202208238396676"
         );
 
         assertTrue(result);

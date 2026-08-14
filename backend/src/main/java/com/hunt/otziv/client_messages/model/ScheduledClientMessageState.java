@@ -86,6 +86,21 @@ public class ScheduledClientMessageState {
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
 
+    @Column(name = "delivery_token", length = 64)
+    private String deliveryToken;
+
+    @Column(name = "delivery_status", length = 32)
+    private String deliveryStatus;
+
+    @Column(name = "delivery_message", columnDefinition = "TEXT")
+    private String deliveryMessage;
+
+    @Column(name = "delivery_task_id")
+    private Long deliveryTaskId;
+
+    @Column(name = "delivery_prepared_at")
+    private LocalDateTime deliveryPreparedAt;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

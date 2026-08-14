@@ -118,7 +118,8 @@ describe('commonInvoicePaymentEvidenceSnapshot', () => {
       tbankPaymentId: 'invoice-payment',
       tbankPaymentAmountKopecks: 475_000,
       tbankTerminalLabel: 'Основной терминал',
-      tbankTerminalKey: 'terminal-key'
+      tbankTerminalKey: 'terminal-key',
+      contractorPaymentRoute: false
     },
     orders: [],
     orderCards: [],

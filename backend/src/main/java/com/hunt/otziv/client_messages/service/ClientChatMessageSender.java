@@ -3,6 +3,7 @@ package com.hunt.otziv.client_messages.service;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.maxbot.service.MaxBotClient;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
@@ -23,6 +24,16 @@ public class ClientChatMessageSender {
     private final MaxBotClient maxBotClient;
 
     public ClientMessageSendResult send(Company company, String clientId, String groupId, String message) {
+        return send(company, clientId, groupId, message, null);
+    }
+
+    public ClientMessageSendResult send(
+            Company company,
+            String clientId,
+            String groupId,
+            String message,
+            TelegramTransferCopyButton telegramCopyButton
+    ) {
         if (company == null) {
             return ClientMessageSendResult.failed("company_missing", "Компания не найдена");
         }
@@ -47,7 +58,7 @@ public class ClientChatMessageSender {
                     ? sendToWhatsApp(clientId, groupId, message)
                     : missingActiveChannel("whatsapp_group_missing", "Для WhatsApp-группы не задан groupId");
             case TELEGRAM -> company.getTelegramGroupChatId() != null
-                    ? sendToTelegram(company.getTelegramGroupChatId(), message)
+                    ? sendToTelegram(company.getTelegramGroupChatId(), message, telegramCopyButton)
                     : missingActiveChannel("telegram_group_missing", "Для Telegram-группы не задан chatId");
             case MAX -> company.getMaxGroupChatId() != null
                     ? sendToMax(company.getMaxGroupChatId(), message)
@@ -109,8 +120,23 @@ public class ClientChatMessageSender {
     }
 
     private ClientMessageSendResult sendToTelegram(Long telegramChatId, String message) {
+        return sendToTelegram(telegramChatId, message, null);
+    }
+
+    private ClientMessageSendResult sendToTelegram(
+            Long telegramChatId,
+            String message,
+            TelegramTransferCopyButton copyButton
+    ) {
         try {
-            boolean sent = telegramService.sendMessage(telegramChatId, message);
+            boolean sent = copyButton == null
+                    ? telegramService.sendMessage(telegramChatId, message)
+                    : telegramService.sendMessageWithCopyTextButton(
+                            telegramChatId,
+                            message,
+                            copyButton.text(),
+                            copyButton.copyText()
+                    );
             if (sent) {
                 return ClientMessageSendResult.sent("Telegram");
             }

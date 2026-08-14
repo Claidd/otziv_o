@@ -1158,7 +1158,9 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   orderActions(order: OrderCardItem): StatusAction[] {
-    return managerOrderActions(order, false, this.canForceBan());
+    const privileged = this.canForceBan();
+    const showPublicationExitActions = privileged && order.status === 'Публикация';
+    return managerOrderActions(order, showPublicationExitActions, privileged);
   }
 
   private canForceBan(): boolean {

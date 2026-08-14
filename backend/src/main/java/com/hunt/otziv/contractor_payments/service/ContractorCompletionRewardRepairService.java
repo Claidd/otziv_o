@@ -34,7 +34,7 @@ public class ContractorCompletionRewardRepairService {
     private final ContractorPaymentRuntimeSwitch runtimeSwitch;
     private final OrderRepository orderRepository;
     private final BadReviewTaskRepository badReviewTaskRepository;
-    private final ContractorCompletionRewardService completionRewardService;
+    private final ContractorCompletionRepairTransactionService repairTransactionService;
     private final ContractorCompletionRewardRepairStateRepository repairStateRepository;
     private final ContractorPaymentBusinessClock businessClock;
 
@@ -76,8 +76,7 @@ public class ContractorCompletionRewardRepairService {
                 // The scheduled method itself is not transactional, so every
                 // call gets an independent REQUIRED transaction and one bad
                 // historical row cannot roll back the remainder of the batch.
-                completionRewardService.ensureOrderCompletionAccrual(orderId);
-                repairStateRepository.deleteById(orderId);
+                repairTransactionService.repairOrder(orderId);
             } catch (RuntimeException exception) {
                 try {
                     deferFailedOrder(orderId, exception);
@@ -119,8 +118,7 @@ public class ContractorCompletionRewardRepairService {
                 continue;
             }
             try {
-                completionRewardService.adjustCanceledBadReviewTaskAccrual(orderId.get(), taskId);
-                repairStateRepository.deleteById(orderId.get());
+                repairTransactionService.repairCanceledTask(orderId.get(), taskId);
             } catch (RuntimeException exception) {
                 try {
                     deferFailedOrder(orderId.get(), exception);

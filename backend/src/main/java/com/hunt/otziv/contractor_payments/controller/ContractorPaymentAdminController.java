@@ -10,7 +10,10 @@ import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileServic
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,25 +34,26 @@ public class ContractorPaymentAdminController {
     private final ContractorDirectSettlementService directSettlementService;
 
     @GetMapping
-    public List<ContractorPaymentProfileResponse> getProfiles(@PathVariable Long userId) {
-        return profileService.getForUser(userId);
+    public ResponseEntity<List<ContractorPaymentProfileResponse>> getProfiles(@PathVariable Long userId) {
+        return noStore(profileService.getForUser(userId));
     }
 
     @PutMapping
-    public ContractorPaymentProfileResponse updateProfile(
+    public ResponseEntity<ContractorPaymentProfileResponse> updateProfile(
             @PathVariable Long userId,
             @Valid @RequestBody ContractorPaymentProfileRequest request
     ) {
         profileService.update(userId, request);
         // The initial month import runs in an after-commit transaction. Read
         // once more so the response contains its totals and current @Version.
-        return profileService.getForUser(userId).stream()
+        ContractorPaymentProfileResponse response = profileService.getForUser(userId).stream()
                 .filter(profile -> profile.role() == request.role())
                 .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Платёжный профиль не найден после сохранения"
                 ));
+        return noStore(response);
     }
 
     @GetMapping("/{profileId}/opening-balance-history")
@@ -85,5 +89,12 @@ public class ContractorPaymentAdminController {
             @Valid @RequestBody ContractorDirectSettlementRequest request
     ) {
         return directSettlementService.createReversal(userId, profileId, originalSettlementId, request);
+    }
+
+    private <T> ResponseEntity<T> noStore(T body) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(body);
     }
 }

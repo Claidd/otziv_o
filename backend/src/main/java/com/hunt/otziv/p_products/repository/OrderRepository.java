@@ -268,12 +268,26 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         JOIN o.status s
         WHERE s.title IN :completionStatuses
+          AND o.amount > 0
+          AND (
+              SELECT COUNT(review.id)
+              FROM Review review
+              WHERE review.orderDetails.order = o
+                AND review.publish = true
+          ) = o.amount
           AND (
               SELECT COUNT(DISTINCT marker.logicalSource)
               FROM ContractorCompletionRewardMarker marker
               WHERE marker.orderId = o.id
                 AND marker.logicalSource IN :requiredMarkers
           ) < :requiredMarkerCount
+          AND NOT EXISTS (
+              SELECT recovery.id
+              FROM ReviewRecoveryTask recovery
+              WHERE recovery.order = o
+                AND recovery.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus.PLANNED
+                AND recovery.batch.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus.OPEN
+          )
           AND NOT EXISTS (
               SELECT repair.orderId
               FROM ContractorCompletionRewardRepairState repair
@@ -288,6 +302,38 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
             @Param("requiredMarkerCount") long requiredMarkerCount,
             @Param("dueAt") java.time.LocalDateTime dueAt,
             Pageable pageable
+    );
+
+    @Query("""
+        SELECT COUNT(o.id)
+        FROM Order o
+        JOIN o.status s
+        WHERE s.title IN :completionStatuses
+          AND o.amount > 0
+          AND (
+              SELECT COUNT(review.id)
+              FROM Review review
+              WHERE review.orderDetails.order = o
+                AND review.publish = true
+          ) = o.amount
+          AND (
+              SELECT COUNT(DISTINCT marker.logicalSource)
+              FROM ContractorCompletionRewardMarker marker
+              WHERE marker.orderId = o.id
+                AND marker.logicalSource IN :requiredMarkers
+          ) < :requiredMarkerCount
+          AND EXISTS (
+              SELECT recovery.id
+              FROM ReviewRecoveryTask recovery
+              WHERE recovery.order = o
+                AND recovery.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus.PLANNED
+                AND recovery.batch.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus.OPEN
+          )
+    """)
+    long countCompletionRewardDeferredByActiveRecovery(
+            @Param("completionStatuses") Collection<String> completionStatuses,
+            @Param("requiredMarkers") Collection<String> requiredMarkers,
+            @Param("requiredMarkerCount") long requiredMarkerCount
     );
 
     @Query("""
@@ -1201,6 +1247,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
               SELECT item.id
               FROM CommonInvoiceOrder item
               WHERE item.order = o
+                AND item.activeMembership = TRUE
           )
         ORDER BY o.id ASC
     """)
@@ -1318,6 +1365,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
               FROM CommonInvoiceOrder item
               JOIN item.invoice invoice
               WHERE item.order = o
+                AND item.activeMembership = TRUE
                 AND invoice.status IN :commonInvoiceStatuses
           )
           AND NOT EXISTS (
@@ -1353,6 +1401,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1361,7 +1410,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
-                      OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                      OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                   )
               )
@@ -1392,6 +1441,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1400,7 +1450,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
-                      OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                      OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                   )
               )
@@ -1431,6 +1481,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1439,7 +1490,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
-                        OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                     )
               )
@@ -1471,6 +1522,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                         OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                         OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1479,7 +1531,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
-                        OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                     )
               )
@@ -1519,6 +1571,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                       FROM CommonInvoiceOrder item
                       JOIN item.invoice invoice
                       WHERE item.order = o
+                        AND item.activeMembership = TRUE
                         AND invoice.status IN :commonInvoiceStatuses
                   )
                   AND NOT EXISTS (
@@ -1560,6 +1613,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                 OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                                 OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                                 OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                                OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1568,7 +1622,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                              OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                           )
                       )
@@ -1599,6 +1653,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                 OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                                 OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                                 OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                                OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1607,7 +1662,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                              OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                           )
                       )
@@ -1638,6 +1693,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                 OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                                 OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                                 OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                                OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1646,7 +1702,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                                OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                             )
                       )
@@ -1678,6 +1734,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                 OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                                 OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                                 OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                                OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1686,7 +1743,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                                OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                             )
                       )
@@ -1707,6 +1764,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                       FROM CommonInvoiceOrder item
                       JOIN item.invoice invoice
                       WHERE item.order = o
+                        AND item.activeMembership = TRUE
                         AND invoice.status IN :commonInvoiceStatuses
                   )
                   AND NOT EXISTS (
@@ -1748,6 +1806,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                 OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                                 OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                                 OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                                OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1756,7 +1815,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                              OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                           )
                       )
@@ -1787,6 +1846,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                 OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                                 OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                                 OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                                OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1795,7 +1855,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                              OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                           )
                       )
@@ -1826,6 +1886,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                 OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                                 OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                                 OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                                OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1834,7 +1895,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                                OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                             )
                       )
@@ -1866,6 +1927,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                 OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
                                 OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
                                 OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                                OR LOWER(state.lastErrorCode) LIKE '%rate_limited%'
                         OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
                         OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
@@ -1874,7 +1936,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                                OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
                         OR state.status = :doneStatus
                             )
                       )

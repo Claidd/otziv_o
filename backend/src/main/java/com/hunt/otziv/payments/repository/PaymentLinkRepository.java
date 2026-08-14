@@ -284,6 +284,12 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             String lastError
     );
 
+    Optional<PaymentLink> findFirstByOrder_IdAndStatusAndLastErrorStartingWithOrderByPaidAtDesc(
+            Long orderId,
+            PaymentLinkStatus status,
+            String lastErrorPrefix
+    );
+
     Optional<PaymentLink> findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(
             Long orderId,
             PaymentLinkStatus status

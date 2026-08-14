@@ -106,6 +106,12 @@ public class WorkloadShadowSettingsService {
             throw badRequest("Настройки режима наблюдения не переданы");
         }
         validate(request);
+        if (repository.countActiveLiveMode() > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сначала остановите боевой контур, затем изменяйте алгоритм SHADOW"
+            );
+        }
         WorkloadShadowSettingsResponse before = current();
         if (request.revision() != null
                 && request.revision().longValue() != before.revision()) {

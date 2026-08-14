@@ -5,6 +5,8 @@ import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.p_products.model.Order;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +21,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -100,6 +107,44 @@ class PaymentInvoiceRetrySchedulerTest {
         assertEquals("manual_card_payment_confirmed", activeReminder.getLastErrorCode());
         assertEquals("Оплата подтверждена", pausedAutoBan.getLastErrorMessage());
         verify(stateRepository).saveAll(List.of(activeReminder, pausedAutoBan));
+    }
+
+    @Test
+    void disabledAutoBanScenarioDoesNotPreventDurableStateCreation() {
+        PaymentInvoiceRetryScheduler scheduler = new PaymentInvoiceRetryScheduler(
+                stateRepository,
+                appSettingService,
+                slotPlanner
+        );
+        Company company = new Company();
+        company.setId(70L);
+        Order order = new Order();
+        order.setId(25047L);
+        order.setCompany(company);
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.BAD_REVIEW_AUTO_BAN,
+                "bad-review-auto-ban:order:25047"
+        )).thenReturn(Optional.empty());
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_DELAY_DAYS,
+                ScheduledClientMessageService.DEFAULT_BAD_REVIEW_AUTO_BAN_DELAY_DAYS
+        )).thenReturn(2);
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
+                ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
+        )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        scheduler.scheduleBadReviewAutoBan(order);
+
+        verify(stateRepository).save(org.mockito.ArgumentMatchers.argThat(state ->
+                state.getScenario() == ClientMessageScenario.BAD_REVIEW_AUTO_BAN
+                        && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                        && state.getNextAttemptAt() != null
+        ));
+        verify(appSettingService, never()).getBoolean(
+                eq(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED), anyBoolean());
     }
 
     private ScheduledClientMessageState state(

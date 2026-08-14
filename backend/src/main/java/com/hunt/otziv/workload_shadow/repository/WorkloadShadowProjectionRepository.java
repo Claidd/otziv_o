@@ -1419,6 +1419,7 @@ public interface WorkloadShadowProjectionRepository
     @Query(value = """
             INSERT INTO workload_shadow_worker_daily (
                 progress_date, worker_id, worker_user_id, manager_id,
+                settings_revision,
                 completed_units, active_units, late_excluded_units, eligible_units,
                 progress_percent, rating, planned_units, incoming_units, urgent_units,
                 external_blocked_units, client_deferred_units, manager_deferred_units,
@@ -1431,6 +1432,7 @@ public interface WorkloadShadowProjectionRepository
                    snapshot.worker_id,
                    snapshot.worker_user_id,
                    snapshot.manager_id,
+                   snapshot.settings_revision,
                    snapshot.completed_units,
                    snapshot.active_units,
                    snapshot.late_excluded_units,
@@ -1465,6 +1467,7 @@ public interface WorkloadShadowProjectionRepository
                     worker_id BIGINT PATH '$.workerId',
                     worker_user_id BIGINT PATH '$.workerUserId' NULL ON EMPTY,
                     manager_id BIGINT PATH '$.managerId',
+                    settings_revision BIGINT PATH '$.settingsRevision',
                     completed_units BIGINT PATH '$.completedUnits',
                     active_units BIGINT PATH '$.activeUnits',
                     late_excluded_units BIGINT PATH '$.lateExcludedUnits',
@@ -1484,6 +1487,7 @@ public interface WorkloadShadowProjectionRepository
             ON DUPLICATE KEY UPDATE
                 worker_user_id = VALUES(worker_user_id),
                 manager_id = VALUES(manager_id),
+                settings_revision = VALUES(settings_revision),
                 completed_units = VALUES(completed_units),
                 active_units = VALUES(active_units),
                 late_excluded_units = VALUES(late_excluded_units),

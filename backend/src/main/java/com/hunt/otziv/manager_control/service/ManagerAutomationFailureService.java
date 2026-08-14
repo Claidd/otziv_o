@@ -157,6 +157,7 @@ public class ManagerAutomationFailureService {
         String errorMessage = safe(state.getLastErrorMessage());
         boolean paymentInstructionFailure = "payment_instruction_failed".equalsIgnoreCase(errorCode);
         boolean existingPaymentConflict = paymentInstructionFailure && isExistingPaymentConflict(errorMessage);
+        boolean telegramGroupMissing = isTelegramGroupMissing(company);
         List<String> reasonParts = new ArrayList<>();
         if (existingPaymentConflict) {
             reasonParts.add("Почему в замечаниях: действующая платежная ссылка уже существует, но автоматика "
@@ -166,17 +167,26 @@ public class ManagerAutomationFailureService {
         } else {
             reasonParts.add("Почему в замечаниях: задача клиентской автоматизации завершилась ошибкой");
         }
-        if (!errorCode.isBlank()) {
-            reasonParts.add(errorCode);
-        }
-        if (!errorMessage.isBlank() && !errorMessage.equalsIgnoreCase(errorCode)) {
-            reasonParts.add(errorMessage);
+        if (telegramGroupMissing) {
+            reasonParts.add("telegram_group_missing");
+            reasonParts.add("Для Telegram-группы не задан chatId");
+        } else {
+            if (!errorCode.isBlank()) {
+                reasonParts.add(errorCode);
+            }
+            if (!errorMessage.isBlank() && !errorMessage.equalsIgnoreCase(errorCode)) {
+                reasonParts.add(errorMessage);
+            }
         }
         reasonParts.add("неудачных попыток подряд: " + state.getConsecutiveFailures());
         if (state.getNextAttemptAt() != null) {
             reasonParts.add("следующая попытка: " + state.getNextAttemptAt());
         }
-        if (existingPaymentConflict) {
+        if (telegramGroupMissing) {
+            reasonParts.add("Нажмите «Привязать Telegram»: если бот еще не добавлен, выберите группу по ссылке; "
+                    + "если бот уже в группе, отправьте в ней одноразовую команду. "
+                    + "После подтверждения задача повторится автоматически");
+        } else if (existingPaymentConflict) {
             reasonParts.add("Нажмите «Починить»: система проверит состояние существующего платежа в T-Bank "
                     + "и, если он по-прежнему ожидает оплату, повторно отправит клиенту эту же ссылку; "
                     + "второй платеж не создается");
@@ -268,6 +278,26 @@ public class ManagerAutomationFailureService {
         };
     }
 
+
+    private boolean isTelegramGroupMissing(Company company) {
+        if (company == null || company.getTelegramGroupChatId() != null) {
+            return false;
+        }
+        String chat = safe(company.getUrlChat()).toLowerCase(java.util.Locale.ROOT);
+        if (chat.isBlank() || chat.contains("startgroup=")) {
+            return false;
+        }
+        return chat.startsWith("t.me/")
+                || chat.startsWith("https://t.me/")
+                || chat.startsWith("http://t.me/")
+                || chat.startsWith("telegram.me/")
+                || chat.startsWith("https://telegram.me/")
+                || chat.startsWith("http://telegram.me/")
+                || chat.startsWith("telegram.dog/")
+                || chat.startsWith("https://telegram.dog/")
+                || chat.startsWith("http://telegram.dog/")
+                || chat.startsWith("tg://resolve?");
+    }
     private String safe(String value) {
         return value == null ? "" : value.trim();
     }

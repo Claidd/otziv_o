@@ -159,6 +159,31 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
     }
 
     @Test
+    void terminalSuccessorArchivesTogetherWithItsImmutableUnpaidPredecessor() {
+        insertPaidOrder(901L);
+        jdbc.update("""
+                INSERT INTO common_invoices (invoice_id, status, closed_at, supersedes_invoice_id)
+                VALUES (1001, 'UNPAID', '2025-01-01 00:00:00', NULL),
+                       (1002, 'PAID', '2025-02-01 00:00:00', 1001)
+                """);
+        jdbc.update("""
+                INSERT INTO common_invoice_orders (
+                    invoice_order_id, invoice_id, order_id, active_membership
+                ) VALUES (1101, 1001, 901, FALSE),
+                         (1102, 1002, 901, TRUE)
+                """);
+
+        assertThat(repository.countEligibleOrders(CUTOFF_DATE)).isEqualTo(1);
+        transaction.executeWithoutResult(status -> {
+            repository.prepareCandidateOrders(CUTOFF_DATE, 10);
+            assertThat(repository.countPreparedCandidateCommonInvoices()).isEqualTo(2);
+            assertThat(repository.lockPreparedCandidateOrders()).isEqualTo(1);
+            assertThat(repository.lockPreparedCandidateCommonInvoices()).isEqualTo(2);
+            assertThat(repository.hasPreparedCandidateEligibilityDrift(CUTOFF_DATE)).isFalse();
+        });
+    }
+
+    @Test
     void reviewArchiveCopyUsesOrderFilialOnlyWhenTheReviewDoesNotPointElsewhere() {
         jdbc.update("""
                 INSERT INTO filial (filial_id, filial_title)
@@ -356,7 +381,10 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                     invoice_id BIGINT NOT NULL,
                     status VARCHAR(32) NOT NULL,
                     closed_at DATETIME(6) NULL,
-                    PRIMARY KEY (invoice_id)
+                    supersedes_invoice_id BIGINT NULL,
+                    PRIMARY KEY (invoice_id),
+                    CONSTRAINT fk_test_common_invoice_supersedes
+                      FOREIGN KEY (supersedes_invoice_id) REFERENCES common_invoices (invoice_id)
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""
@@ -364,6 +392,7 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                     invoice_order_id BIGINT NOT NULL,
                     invoice_id BIGINT NOT NULL,
                     order_id BIGINT NOT NULL,
+                    active_membership BOOLEAN NOT NULL DEFAULT TRUE,
                     PRIMARY KEY (invoice_order_id)
                 ) ENGINE=InnoDB
                 """);

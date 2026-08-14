@@ -22,7 +22,7 @@
         <article class="manual-card">
           <div class="method-title">
             <div>
-              <h2>{{ externalManualPayment() ? 'Оплата по ссылке банка' : 'Оплата по номеру телефона' }}</h2>
+              <h2>{{ manualPaymentTitle() }}</h2>
               <p>Платеж проверяется менеджером вручную.</p>
             </div>
             <span>{{ statusLabel() }}</span>
@@ -50,10 +50,10 @@
               </button>
             } @else {
               @if (!item?.manualPhone) {
-              <p class="pay-error" role="alert">Телефон получателя не настроен. Не переводите деньги и обратитесь к менеджеру.</p>
+              <p class="pay-error" role="alert">Реквизиты для перевода не настроены. Не переводите деньги и обратитесь к менеджеру.</p>
               }
-              <button type="button" (click)="copyManualValue(item?.manualPhone)" title="Скопировать телефон">
-                <small>Телефон</small>
+              <button type="button" (click)="copyManualValue(item?.manualPhone)" title="Скопировать реквизиты для перевода">
+                <small>{{ manualTransferDestinationLabel() }}</small>
                 <strong>{{ item?.manualPhone || 'не указан' }}</strong>
                 <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
               </button>

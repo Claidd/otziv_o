@@ -379,6 +379,48 @@ public class ContractorPaymentLiveRoutingService {
                 : FrozenCommonRouteAction.KEEP;
     }
 
+    /**
+     * Locks and validates the exact LIVE allocation behind an operator's
+     * statement confirmation. Unlike the public visibility predicate this also
+     * permits released sources: a late transfer must still be attributed to A,
+     * never to a newer source B.
+     */
+    @Transactional
+    public ContractorPaymentAllocation validatedCommonConfirmationSource(
+            Long invoiceId,
+            Long allocationId
+    ) {
+        CommonInvoice invoice = commonInvoiceRepository.findByIdForUpdate(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        ContractorPaymentAllocation allocation = lockAllocationProfileFirst(allocationId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Назначение получателя общего счета не найдено"
+                ));
+        boolean contractorRecipient = allocation.getRecipientType() == ContractorRecipientType.SPECIALIST
+                || allocation.getRecipientType() == ContractorRecipientType.MANAGER;
+        long remainingKopecks = Math.max(0L, invoice.getAmountKopecks() - invoice.getPaidKopecks());
+        if (!Objects.equals(invoice.getContractorAllocationId(), allocationId)
+                || invoice.getPaymentRouteManualSource() != ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE
+                || invoice.getPaymentRouteManualType() != ManualPaymentType.MOBILE_BANK
+                || invoice.getPaymentRouteAmountKopecks() == null
+                || invoice.getPaymentRouteAmountKopecks() != allocation.getAmountKopecks()
+                || allocation.getMode() != ContractorAllocationMode.LIVE
+                || allocation.getSourceType() != ContractorAllocationSourceType.COMMON_INVOICE
+                || !Objects.equals(allocation.getSourceId(), invoiceId)
+                || !Objects.equals(allocation.getCommonInvoiceId(), invoiceId)
+                || allocation.getRecipientProfile() == null
+                || !contractorRecipient
+                || !commonInvoiceGenerationStillMatches(invoice, allocation, remainingKopecks)
+                || allocation.getStatus() == ContractorAllocationStatus.RETURN_AMOUNT_PENDING) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Зафиксированный источник получателя изменился и требует отдельной сверки"
+            );
+        }
+        return allocation;
+    }
+
     /** Same lifecycle decision for an already published standalone link. */
     @Transactional
     public FrozenPaymentLinkAction frozenPaymentLinkAction(Long paymentLinkId, Long allocationId) {
@@ -584,17 +626,23 @@ public class ContractorPaymentLiveRoutingService {
         }
         accountingPhaseService.lockAndPromoteForLiveRoute();
 
-        boolean companyAllowsRouting = link.getShadowRouteGeneration() != null
-                ? link.isShadowRouteCompanyRoutingAllowed()
-                : companyRoutingAllowed(order);
-        ContractorPaymentRouteDecision decision = companyAllowsRouting
-                ? selectRoutableProfile(
-                        order.getWorker(),
-                        effectiveManager(order),
-                        amount,
-                        null
-                )
-                : ownerRequiredByCompany();
+        boolean sourceSnapshotReady = paymentLinkSourceSnapshotReady(link, order, amount);
+        ContractorPaymentRouteDecision decision;
+        if (!sourceSnapshotReady) {
+            // LIVE requisites are read back only through this immutable
+            // generation. Reserving a recipient without it would consume
+            // capacity while exposing no usable requisites to the client.
+            decision = ownerRequiredBySourceSnapshot();
+        } else if (!link.isShadowRouteCompanyRoutingAllowed()) {
+            decision = ownerRequiredByCompany();
+        } else {
+            decision = selectRoutableProfile(
+                    order.getWorker(),
+                    effectiveManager(order),
+                    amount,
+                    null
+            );
+        }
 
         ContractorPaymentAllocation allocation = base(
                 ContractorAllocationSourceType.PAYMENT_LINK,
@@ -608,6 +656,14 @@ public class ContractorPaymentLiveRoutingService {
         Manager manager = effectiveManager(order);
         allocation.setCurrentManagerId(manager == null ? null : manager.getId());
         return save(allocation, decision);
+    }
+
+    private boolean paymentLinkSourceSnapshotReady(PaymentLink link, Order order, long amount) {
+        return link.getShadowRouteGeneration() != null
+                && !link.getShadowRouteGeneration().isBlank()
+                && link.getShadowRoutePreparedAt() != null
+                && Objects.equals(link.getShadowRouteOrderId(), order.getId())
+                && Objects.equals(link.getShadowRouteAmountKopecks(), amount);
     }
 
     @Transactional
@@ -764,7 +820,9 @@ public class ContractorPaymentLiveRoutingService {
                     ? ContractorRecipientType.SPECIALIST
                     : ContractorRecipientType.MANAGER);
             allocation.setRecipientNameSnapshot(recipient.getRecipientName());
-            allocation.setPaymentPhoneSnapshot(recipient.getPaymentPhone());
+            allocation.setPaymentPhoneSnapshot(
+                    ContractorPaymentTransferNumber.normalize(recipient.getPaymentPhone())
+            );
             allocation.setBankNameSnapshot(recipient.getBankName());
             allocation.setPaymentCommentSnapshot(recipient.getPaymentComment());
             allocation.setAvailableBeforeKopecks(profileService.available(
@@ -914,7 +972,7 @@ public class ContractorPaymentLiveRoutingService {
             return ContractorRoutingDecisionReason.PROFILE_IDENTITY_MISMATCH;
         }
         if (normalize(profile.getRecipientName()).isBlank()
-                || normalize(profile.getPaymentPhone()).isBlank()
+                || !ContractorPaymentTransferNumber.isValid(profile.getPaymentPhone())
                 || normalize(profile.getBankName()).isBlank()) {
             return ContractorRoutingDecisionReason.RECIPIENT_DETAILS_INCOMPLETE;
         }
@@ -982,6 +1040,14 @@ public class ContractorPaymentLiveRoutingService {
     private ContractorPaymentRouteDecision ownerRequiredByCompany() {
         return ContractorPaymentRouteDecision.owner(
                 ContractorRoutingDecisionReason.COMPANY_REQUIRES_OWNER_PAYMENT,
+                null,
+                null
+        );
+    }
+
+    private ContractorPaymentRouteDecision ownerRequiredBySourceSnapshot() {
+        return ContractorPaymentRouteDecision.owner(
+                ContractorRoutingDecisionReason.SOURCE_SNAPSHOT_NOT_READY,
                 null,
                 null
         );

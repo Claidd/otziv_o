@@ -27,11 +27,30 @@ public class OrderPaymentMessageBuilder {
     private final BadReviewTaskService badReviewTaskService;
 
     public String publishedOrderPaymentMessage(Order order) {
+        return publishedOrderPaymentMessageWithTransfer(order).message();
+    }
+
+    public PreparedPaymentMessage publishedOrderPaymentMessageWithTransfer(Order order) {
         if (usesTbankPaymentInstructionSource()) {
-            return paymentLinkCopyText(order);
+            ManagerPaymentLinkResponse link = paymentLink(order);
+            return new PreparedPaymentMessage(link.copyText(), link.telegramCopyTransferNumber());
         }
         String heading = orderHeading(order);
         String paymentText = paymentInstruction(order) + " К оплате: " + money(payableSum(order)) + " руб.";
+        return new PreparedPaymentMessage(
+                heading.isBlank() ? paymentText : heading + "\n\n" + paymentText,
+                null
+        );
+    }
+
+    /** Read-only preview that shares the factual amount and recipient renderer. */
+    public String publishedOrderPaymentMessagePreview(Order order) {
+        if (!usesTbankPaymentInstructionSource()) {
+            return publishedOrderPaymentMessage(order);
+        }
+        String heading = orderHeading(order);
+        String paymentText = "К оплате: " + money(payableSum(order))
+                + " руб.\n\n[T-Bank ссылка будет создана при отправке]";
         return heading.isBlank() ? paymentText : heading + "\n\n" + paymentText;
     }
 
@@ -44,9 +63,12 @@ public class OrderPaymentMessageBuilder {
     }
 
     private String paymentLinkCopyText(Order order) {
+        return paymentLink(order).copyText();
+    }
+
+    private ManagerPaymentLinkResponse paymentLink(Order order) {
         try {
-            ManagerPaymentLinkResponse link = paymentLinkServiceProvider.getObject().createForOrder(order.getId());
-            return link.copyText();
+            return paymentLinkServiceProvider.getObject().createForOrder(order.getId());
         } catch (Exception e) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -95,14 +117,30 @@ public class OrderPaymentMessageBuilder {
     }
 
     private BigDecimal payableSum(Order order) {
-        if (order == null) {
-            return BigDecimal.ZERO;
+        if (order == null || order.getId() == null || order.getSum() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Не удалось достоверно определить сумму заказа для платежного сообщения"
+            );
         }
         try {
-            return badReviewTaskService.getPayableSum(order);
+            BigDecimal payable = badReviewTaskService.getPayableSum(order);
+            if (payable == null || payable.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalStateException("Некорректная итоговая сумма заказа");
+            }
+            return payable;
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (RuntimeException e) {
-            return order.getSum() == null ? BigDecimal.ZERO : order.getSum();
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Не удалось учесть выполненные дополнительные задачи в сумме заказа #" + order.getId(),
+                    e
+            );
         }
+    }
+
+    public record PreparedPaymentMessage(String message, String telegramCopyTransferNumber) {
     }
 
     private boolean hasRecoveryProduct(Order order) {
@@ -118,7 +156,10 @@ public class OrderPaymentMessageBuilder {
     }
 
     private String money(BigDecimal amount) {
-        BigDecimal value = amount == null ? BigDecimal.ZERO : amount.stripTrailingZeros();
+        if (amount == null) {
+            throw new IllegalStateException("Сумма платежного сообщения не определена");
+        }
+        BigDecimal value = amount.stripTrailingZeros();
         return value.scale() < 0 ? value.setScale(0).toPlainString() : value.toPlainString();
     }
 }

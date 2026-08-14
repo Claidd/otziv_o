@@ -3,6 +3,7 @@ package com.hunt.otziv.workload_shadow.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -37,6 +38,7 @@ class WorkloadLiveActivationGateTest {
     @Mock private WorkloadLiveReadinessRepository repository;
     @Mock private WorkloadShadowHealthService healthService;
     @Mock private WorkloadShadowSettingsService shadowSettingsService;
+    @Mock private WorkloadLiveRuntimeSafetyService runtimeSafetyService;
 
     private WorkloadLiveActivationGate gate;
     private WorkloadShadowSettingsResponse shadow;
@@ -46,7 +48,8 @@ class WorkloadLiveActivationGateTest {
         gate = new WorkloadLiveActivationGate(
                 repository,
                 healthService,
-                shadowSettingsService
+                shadowSettingsService,
+                runtimeSafetyService
         );
         shadow = mock(WorkloadShadowSettingsResponse.class);
         when(shadowSettingsService.current()).thenReturn(shadow);
@@ -56,6 +59,11 @@ class WorkloadLiveActivationGateTest {
         lenient().when(shadow.notificationGroupChatId())
                 .thenReturn(-5_181_415_104L);
         when(shadow.schedulerIntervalMinutes()).thenReturn(10);
+        when(shadow.revision()).thenReturn(1L);
+        lenient().when(runtimeSafetyService.evaluate()).thenReturn(
+                new WorkloadLiveRuntimeSafetyService.Decision(
+                        true, "SAFE", "safe", 1L, 1L, LocalDateTime.now(ZONE)
+                ));
     }
 
     @Test
@@ -66,12 +74,12 @@ class WorkloadLiveActivationGateTest {
                 List.of(7L)
         );
         when(healthService.snapshot()).thenReturn(healthy());
-        when(repository.countFinalizedDates(today.minusDays(20), today))
+        when(repository.countFinalizedDates(today.minusDays(20), today, 1L))
                 .thenReturn(14L);
-        when(repository.countFailedRunsSince(any())).thenReturn(0L);
-        when(repository.maximumSuccessfulRunGapMinutes(any(), any()))
+        when(repository.countFailedRunsSince(any(), anyLong())).thenReturn(0L);
+        when(repository.maximumSuccessfulRunGapMinutes(any(), any(), anyLong()))
                 .thenReturn(15L);
-        when(repository.lastSuccessfulRunAt())
+        when(repository.lastSuccessfulRunAt(anyLong()))
                 .thenReturn(Optional.of(LocalDateTime.now(ZONE).minusMinutes(1)));
         ManagerCapacityProjection capacity = capacity(7L, 3L);
         when(repository.managerCapacity()).thenReturn(List.of(capacity));
@@ -82,7 +90,7 @@ class WorkloadLiveActivationGateTest {
 
         assertThat(result.ready()).isTrue();
         assertThat(result.targetMode()).isEqualTo("CANARY");
-        assertThat(result.checks()).hasSize(10).allMatch(check -> check.passed());
+        assertThat(result.checks()).hasSize(11).allMatch(check -> check.passed());
     }
 
     @Test
@@ -93,12 +101,12 @@ class WorkloadLiveActivationGateTest {
                 List.of(7L, 8L)
         );
         when(healthService.snapshot()).thenReturn(unhealthy());
-        when(repository.countFinalizedDates(today.minusDays(20), today))
+        when(repository.countFinalizedDates(today.minusDays(20), today, 1L))
                 .thenReturn(3L);
-        when(repository.countFailedRunsSince(any())).thenReturn(2L);
-        when(repository.maximumSuccessfulRunGapMinutes(any(), any()))
+        when(repository.countFailedRunsSince(any(), anyLong())).thenReturn(2L);
+        when(repository.maximumSuccessfulRunGapMinutes(any(), any(), anyLong()))
                 .thenReturn(180L);
-        when(repository.lastSuccessfulRunAt()).thenReturn(Optional.empty());
+        when(repository.lastSuccessfulRunAt(anyLong())).thenReturn(Optional.empty());
         ManagerCapacityProjection capacity = capacity(7L, 1L);
         when(repository.managerCapacity()).thenReturn(List.of(capacity));
         when(repository.countGraphErrorCases(false, List.of(7L, 8L)))
@@ -137,12 +145,12 @@ class WorkloadLiveActivationGateTest {
         );
         when(shadow.groupNotificationsEnabled()).thenReturn(false);
         when(healthService.snapshot()).thenReturn(healthy());
-        when(repository.countFinalizedDates(today.minusDays(20), today))
+        when(repository.countFinalizedDates(today.minusDays(20), today, 1L))
                 .thenReturn(14L);
-        when(repository.countFailedRunsSince(any())).thenReturn(0L);
-        when(repository.maximumSuccessfulRunGapMinutes(any(), any()))
+        when(repository.countFailedRunsSince(any(), anyLong())).thenReturn(0L);
+        when(repository.maximumSuccessfulRunGapMinutes(any(), any(), anyLong()))
                 .thenReturn(61L);
-        when(repository.lastSuccessfulRunAt())
+        when(repository.lastSuccessfulRunAt(anyLong()))
                 .thenReturn(Optional.of(LocalDateTime.now(ZONE).minusMinutes(1)));
         ManagerCapacityProjection managerCapacity = capacity(7L, 3L);
         when(repository.managerCapacity()).thenReturn(List.of(managerCapacity));
@@ -169,12 +177,12 @@ class WorkloadLiveActivationGateTest {
                 List.of()
         );
         when(healthService.snapshot()).thenReturn(healthy());
-        when(repository.countFinalizedDates(today.minusDays(20), today))
+        when(repository.countFinalizedDates(today.minusDays(20), today, 1L))
                 .thenReturn(14L);
-        when(repository.countFailedRunsSince(any())).thenReturn(0L);
-        when(repository.maximumSuccessfulRunGapMinutes(any(), any()))
+        when(repository.countFailedRunsSince(any(), anyLong())).thenReturn(0L);
+        when(repository.maximumSuccessfulRunGapMinutes(any(), any(), anyLong()))
                 .thenReturn(15L);
-        when(repository.lastSuccessfulRunAt())
+        when(repository.lastSuccessfulRunAt(anyLong()))
                 .thenReturn(Optional.of(LocalDateTime.now(ZONE).minusMinutes(1)));
         when(repository.managerCapacity()).thenReturn(List.of());
 

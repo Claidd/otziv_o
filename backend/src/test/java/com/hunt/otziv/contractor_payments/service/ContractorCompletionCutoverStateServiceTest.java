@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.contractor_payments.model.ContractorCompletionCutoverState;
@@ -33,7 +32,7 @@ class ContractorCompletionCutoverStateServiceTest {
 
     @Test
     void firstValidActivationPersistsSingletonBoundary() {
-        LocalDate start = LocalDate.of(2026, 8, 1);
+        LocalDate start = LocalDate.of(2026, 8, 7);
         LocalDateTime now = LocalDateTime.of(2026, 8, 7, 12, 0);
         ContractorCompletionCutoverState persisted = state(start);
         when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 7));
@@ -50,7 +49,6 @@ class ContractorCompletionCutoverStateServiceTest {
     void laterSettingCannotMovePersistedBoundary() {
         LocalDate locked = LocalDate.of(2026, 8, 1);
         LocalDate changed = LocalDate.of(2026, 9, 1);
-        when(businessClock.today()).thenReturn(LocalDate.of(2026, 10, 1));
         when(repository.findById(ContractorCompletionCutoverState.SINGLETON_ID))
                 .thenReturn(Optional.of(state(locked)));
 
@@ -60,10 +58,22 @@ class ContractorCompletionCutoverStateServiceTest {
     }
 
     @Test
-    void midMonthBoundaryIsRejectedBeforePersistentStateIsRead() {
-        assertThat(service.lockOrVerify(LocalDate.of(2026, 8, 7))).isEmpty();
+    void persistedBoundaryRemainsValidAfterBusinessMonthRollover() {
+        LocalDate locked = LocalDate.of(2026, 8, 1);
+        when(repository.findById(ContractorCompletionCutoverState.SINGLETON_ID))
+                .thenReturn(Optional.of(state(locked)));
 
-        verifyNoInteractions(repository);
+        assertThat(service.lockOrVerify(locked)).contains(locked);
+
+        verify(repository, never()).insertSingletonIfAbsent(any(), any());
+    }
+
+    @Test
+    void pastBoundaryIsRejectedBeforePersistentStateIsRead() {
+        when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 7));
+        assertThat(service.lockOrVerify(LocalDate.of(2026, 8, 6))).isEmpty();
+
+        verify(repository, never()).insertSingletonIfAbsent(any(), any());
     }
 
     @Test
@@ -72,7 +82,16 @@ class ContractorCompletionCutoverStateServiceTest {
 
         assertThat(service.lockOrVerify(LocalDate.of(2026, 9, 1))).isEmpty();
 
-        verifyNoInteractions(repository);
+        verify(repository, never()).insertSingletonIfAbsent(any(), any());
+    }
+
+    @Test
+    void earlierMonthBoundaryIsRejectedBeforePersistentStateIsRead() {
+        when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 7));
+
+        assertThat(service.lockOrVerify(LocalDate.of(2026, 7, 1))).isEmpty();
+
+        verify(repository, never()).insertSingletonIfAbsent(any(), any());
     }
 
     private ContractorCompletionCutoverState state(LocalDate start) {

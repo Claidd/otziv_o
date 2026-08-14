@@ -56,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -495,6 +496,10 @@ class OrderStatusTransitionServiceTest {
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Бан");
         verify(badReviewTaskService).deleteOrderReadyReminder(order);
         verify(orderRepository).save(order);
+        verify(contractorPaymentShadowService).releaseForFinanciallyClosedOrder(
+                35L,
+                "Заказ переведен в статус \"Бан\""
+        );
     }
 
     @Test
@@ -514,6 +519,23 @@ class OrderStatusTransitionServiceTest {
                 org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyString()
         );
+        verify(orderBotLifecycleService).detachBots(order);
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void publicationCanBeArchivedThroughTheStandardSafeLifecycle() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(44L, "Публикация");
+        OrderStatus archive = status("Архив");
+
+        when(orderRepository.findByIdForMutation(44L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Архив")).thenReturn(archive);
+
+        assertTrue(service.changeStatusForOrder(44L, "Архив"));
+
+        assertSame(archive, order.getStatus());
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Архив");
         verify(orderBotLifecycleService).detachBots(order);
         verify(orderRepository).save(order);
     }
@@ -802,21 +824,29 @@ class OrderStatusTransitionServiceTest {
 
         enableImmediateMessages();
         when(orderRepository.findByIdForMutation(6L)).thenReturn(Optional.of(order));
-        when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order))
-                .thenReturn("Компания. Филиал\n\nОплата К оплате: 1500 руб.");
+        when(orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order))
+                .thenReturn(new OrderPaymentMessageBuilder.PreparedPaymentMessage(
+                        "Компания. Филиал\n\nОплата К оплате: 1500 руб.",
+                        "2202208238396676"
+                ));
         when(orderStatusNotificationService.sendMessageToGroup(
                 eq("Опубликовано"),
                 same(order),
                 eq("client"),
                 eq("group"),
                 contains("К оплате: 1500"),
-                eq("Выставлен счет")
+                eq("Выставлен счет"),
+                eq("2202208238396676")
         )).thenReturn(true);
 
         assertTrue(service.changeStatusForOrder(6L, "Опубликовано"));
 
         verify(orderBotLifecycleService).assignBotsIfNeeded(order);
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Опубликовано");
+        verify(orderStatusNotificationService).sendMessageToGroup(
+                eq("Опубликовано"), same(order), eq("client"), eq("group"),
+                contains("К оплате: 1500"), eq("Выставлен счет"), eq("2202208238396676")
+        );
         verify(orderRepository, never()).save(order);
         verify(paymentInvoiceRetryScheduler, never()).scheduleRetry(order);
     }
@@ -835,7 +865,7 @@ class OrderStatusTransitionServiceTest {
         verify(orderBotLifecycleService).assignBotsIfNeeded(order);
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Опубликовано");
         verify(commonBillingService).completePublishedOrderIntoCommonInvoice(order);
-        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessage(order);
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageWithTransfer(order);
         verifyNoInteractions(orderStatusNotificationService);
         verify(paymentInvoiceRetryScheduler, never()).scheduleRetry(order);
         verify(mobilePushBusinessNotificationService).notifyManagerOrderPublished(order);
@@ -867,15 +897,18 @@ class OrderStatusTransitionServiceTest {
 
         enableImmediateMessages();
         when(orderRepository.findByIdForMutation(61L)).thenReturn(Optional.of(order));
-        when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order))
-                .thenReturn("Компания. Филиал\n\nОплата К оплате: 1500 руб.");
+        when(orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order))
+                .thenReturn(new OrderPaymentMessageBuilder.PreparedPaymentMessage(
+                        "Компания. Филиал\n\nОплата К оплате: 1500 руб.", null
+                ));
         when(orderStatusNotificationService.sendMessageToGroup(
                 eq("Опубликовано"),
                 same(order),
                 eq("client"),
                 eq("group"),
                 contains("К оплате: 1500"),
-                eq("Выставлен счет")
+                eq("Выставлен счет"),
+                isNull()
         )).thenReturn(false);
 
         assertTrue(service.changeStatusForOrder(61L, "Опубликовано"));

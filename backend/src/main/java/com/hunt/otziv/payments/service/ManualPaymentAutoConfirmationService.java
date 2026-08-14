@@ -5,6 +5,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
+import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.PaymentReceiptStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import java.time.LocalDateTime;
@@ -71,6 +72,15 @@ public class ManualPaymentAutoConfirmationService {
         boolean hasBankPaymentInProgress = links.stream()
                 .anyMatch(link -> requiresPrivilegedBankRouteReconciliation(link, hasOrdinaryManualPayment));
 
+        boolean hasFrozenLiveContractorSource = links.stream().anyMatch(this::isFrozenLiveContractorSource);
+
+        if (hasFrozenLiveContractorSource) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Поступление по реквизитам специалиста или менеджера подтверждается только сверкой конкретного счета."
+            );
+        }
+
         if (hasBankPaymentInProgress) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -134,13 +144,23 @@ public class ManualPaymentAutoConfirmationService {
             return;
         }
 
-        paymentLinkRepository
+        PaymentLink source = paymentLinkRepository
                 .findFirstByOrder_IdAndPaymentMethodInAndStatusInOrderByCreatedAtDesc(
                         order.getId(),
                         MANUAL_PAYMENT_METHODS,
                         CONFIRMABLE_STATUSES
                 )
-                .ifPresent(this::confirm);
+                .orElse(null);
+        if (source == null) {
+            return;
+        }
+        if (isFrozenLiveContractorSource(source)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Поступление по реквизитам специалиста или менеджера подтверждается только сверкой конкретного счета."
+            );
+        }
+        confirm(source);
     }
 
     @Transactional
@@ -212,6 +232,18 @@ public class ManualPaymentAutoConfirmationService {
         manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
         paymentSuccessNotificationDeliveryService.deliverAfterCommit(link.getId());
         reconcileContractorRouteAfterCommit(link.getId());
+    }
+
+    /**
+     * A shadow-only decision or an owner fallback has no immutable LIVE
+     * contractor source on the client instruction and must retain the legacy
+     * paid-status behavior. The durable LIVE binding is exactly the pair that
+     * PaymentLinkService freezes when contractor requisites are published.
+     */
+    private boolean isFrozenLiveContractorSource(PaymentLink link) {
+        return link != null
+                && link.getContractorAllocationId() != null
+                && link.getManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE;
     }
 
     private void reconcileContractorRouteAfterCommit(Long paymentLinkId) {

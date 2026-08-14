@@ -20,11 +20,13 @@ public class WorkloadTransferOfferService {
     private static final int DELIVERY_BATCH_SIZE = 25;
     private static final int DELIVERY_LEASE_MINUTES = 5;
     private static final int DELIVERY_DEADLINE_MINUTES = 30;
+    private static final int KEYBOARD_ACTIVATION_TIMEOUT_MINUTES = 2;
 
     private final WorkloadTransferOfferRepository offerRepository;
     private final WorkloadTransferWorkflowRepository workflowRepository;
     private final WorkloadLiveSettingsService liveSettingsService;
     private final WorkloadShadowSettingsService shadowSettingsService;
+    private final com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository liveControlRepository;
 
     @Transactional
     public OfferStageResult stageNextOffers() {
@@ -32,7 +34,14 @@ public class WorkloadTransferOfferService {
         if (!liveSettingsService.applicationAllowed(settings)) {
             return new OfferStageResult(false, 0, 0, "Боевой контур выключен");
         }
+        if (!liveControlMatches(settings)) {
+            return new OfferStageResult(false, 0, 0, "Боевой контур изменился");
+        }
         LocalDateTime now = now();
+        offerRepository.failInactiveKeyboardOffers(
+                now.minusMinutes(KEYBOARD_ACTIVATION_TIMEOUT_MINUTES),
+                now
+        );
         /*
          * The expiry statement updates offer, workflow and candidate in one
          * guarded MySQL transition, so its JDBC affected-row count is a physical
@@ -64,6 +73,9 @@ public class WorkloadTransferOfferService {
     public ClaimedOffers claimDueOffers() {
         WorkloadLiveSettingsResponse settings = liveSettingsService.current();
         if (!liveSettingsService.applicationAllowed(settings)) {
+            return new ClaimedOffers(null, List.of(), 0);
+        }
+        if (!liveControlMatches(settings)) {
             return new ClaimedOffers(null, List.of(), 0);
         }
         LocalDateTime now = now();
@@ -139,6 +151,20 @@ public class WorkloadTransferOfferService {
     }
 
     @Transactional
+    public void markKeyboardActivated(long offerId, int messageId) {
+        LocalDateTime activatedAt = now();
+        if (offerRepository.markKeyboardActivated(
+                offerId,
+                messageId,
+                activatedAt
+        ) != 1) {
+            throw new IllegalStateException(
+                    "Не удалось зафиксировать активные Telegram-кнопки"
+            );
+        }
+    }
+
+    @Transactional
     public void markDeliveryFailure(
             long offerId,
             String processingToken,
@@ -159,6 +185,23 @@ public class WorkloadTransferOfferService {
         );
         offerRepository.releaseDeliveryFailedWorkflows(now);
         workflowRepository.markExhaustedWorkflows(now);
+    }
+
+
+    @Transactional
+    public void markKeyboardActivationFailure(long offerId, int messageId) {
+        LocalDateTime failedAt = now();
+        if (offerRepository.markKeyboardActivationFailure(
+                offerId,
+                messageId,
+                failedAt
+        ) != 1) {
+            throw new IllegalStateException(
+                    "Не удалось закрыть предложение без активных Telegram-кнопок"
+            );
+        }
+        offerRepository.releaseDeliveryFailedWorkflows(failedAt);
+        workflowRepository.markExhaustedWorkflows(failedAt);
     }
 
     private int stageCandidateOffers(
@@ -215,6 +258,19 @@ public class WorkloadTransferOfferService {
     private LocalDateTime now() {
         var shadow = shadowSettingsService.current();
         return LocalDateTime.now(shadowSettingsService.zone(shadow));
+    }
+
+    private boolean liveControlMatches(WorkloadLiveSettingsResponse settings) {
+        var control = liveControlRepository.lockState().orElse(null);
+        if (control == null || control.getSettingsRevision() == null) {
+            return false;
+        }
+        String mode = control.getMode() == null ? "" : control.getMode();
+        boolean activeMode = WorkloadLiveSettingsService.MODE_CANARY.equals(mode)
+                || WorkloadLiveSettingsService.MODE_LIVE.equals(mode);
+        return activeMode
+                && control.getSettingsRevision() == settings.revision()
+                && "true".equalsIgnoreCase(control.getApplyEnabled());
     }
 
     private boolean insideOfferWindow(

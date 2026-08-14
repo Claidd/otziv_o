@@ -15,6 +15,7 @@ import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingSe
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService.FrozenPaymentLinkAction;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentTransferNumber;
 import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -108,6 +109,8 @@ public class PaymentLinkService {
     private static final String MANUAL_CARD_PAYMENT_PENDING_PREFIX = "manual_card_payment_pending:";
     private static final String MANUAL_CARD_PAYMENT_COMPLETED_PREFIX = "manual_card_payment_completed:";
     private static final String MANUAL_UNPAID_CLOSED_AUDIT_PREFIX = "manual_payment_absent_verified";
+    private static final String CONTRACTOR_SOURCE_CONFIRMATION_AUDIT_PREFIX =
+            "contractor_source_confirmation";
     private static final String PREPAID_WAITING_ORDER_COMPLETION = "prepaid_waiting_order_completion";
     private static final Set<PaymentLinkStatus> REUSABLE_STATUSES = Set.of(
             PaymentLinkStatus.CREATED,
@@ -251,7 +254,7 @@ public class PaymentLinkService {
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public ManagerPaymentLinkResponse createForOrder(Long orderId) {
         requirePaymentLinksEnabled();
-        return createForOrder(orderId, null, false);
+        return prepareForOrder(orderId, null, false).response();
     }
 
     /**
@@ -264,10 +267,53 @@ public class PaymentLinkService {
             Long orderId,
             Authentication authentication
     ) {
-        return createForOrder(orderId, authentication, true);
+        return prepareForOrder(orderId, authentication, true).response();
     }
 
-    private ManagerPaymentLinkResponse createForOrder(
+    @Transactional(noRollbackFor = ResponseStatusException.class)
+    public PaymentInstructionPreparation prepareForOrderAuthorized(
+            Long orderId,
+            Authentication authentication
+    ) {
+        return prepareForOrder(orderId, authentication, true);
+    }
+
+    /** Releases only the exact pristine source created for a definitely-unsent external message. */
+    @Transactional
+    public boolean cancelFreshUnsentPreparationAuthorized(
+            String token,
+            Long orderId,
+            Authentication authentication
+    ) {
+        if (token == null || token.isBlank() || orderId == null || orderId <= 0) {
+            return false;
+        }
+        Order order = orderRepository.findByIdForCounterUpdate(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        managerAccessService.requireOrderAccess(order.getId(), authentication);
+        PaymentLink link = paymentLinkRepository.findByTokenForUpdate(token).orElse(null);
+        if (link == null || link.getOrder() == null || !orderId.equals(link.getOrder().getId())) {
+            return false;
+        }
+        boolean pristine = (link.getStatus() == PaymentLinkStatus.CREATED
+                || link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT)
+                && link.getConfirmedAmountKopecks() == null
+                && link.getTbankPaymentId() == null
+                && link.getManualReportedAt() == null
+                && link.getPaidAt() == null;
+        if (!pristine) {
+            return false;
+        }
+        link.setStatus(PaymentLinkStatus.CANCELED);
+        link.setLastError("Внешнее сообщение достоверно не отправлено");
+        paymentLinkRepository.save(link);
+        if (link.getContractorAllocationId() != null) {
+            contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
+        }
+        return true;
+    }
+
+    private PaymentInstructionPreparation prepareForOrder(
             Long orderId,
             Authentication authentication,
             boolean requireAuthorization
@@ -348,7 +394,7 @@ public class PaymentLinkService {
                 contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
             } else if (isFrozenContractorRoute(link)) {
                 if (canReuseContractorLink(link, amountKopecks)) {
-                    return toManagerResponseWithShadowRoute(link);
+                    return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
                 }
                 if (canRetireStaleLink(link)) {
                     retireStaleReusableLink(link);
@@ -373,11 +419,11 @@ public class PaymentLinkService {
             // produce a false "old requisites" conflict or risk a duplicate
             // provider payment.
             if (canReuseStartedBankLink(link, amountKopecks)) {
-                return toManagerResponseWithShadowRoute(link);
+                return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
             }
             PaymentLink candidate = preparedCandidate(order, manager, profile, amountKopecks, now, link.getId());
             if (canReuseLink(link, candidate)) {
-                return toManagerResponseWithShadowRoute(link);
+                return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
             }
 
             if (canRetireStaleLink(link)) {
@@ -427,7 +473,7 @@ public class PaymentLinkService {
                     preparedCandidate(order, manager, profile, amountKopecks, now, null)
             );
         }
-        return toManagerResponseWithShadowRoute(link);
+        return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), true);
     }
 
     private void synchronizeClosedContractorRoutes(List<PaymentLink> links) {
@@ -2771,6 +2817,181 @@ public class PaymentLinkService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public AdminPaymentLinkResponse confirmContractorPaymentSource(
+            Long linkId,
+            long confirmedTotalKopecks,
+            LocalDateTime effectiveAt,
+            String reason,
+            String confirmedBy
+    ) {
+        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
+        PaymentLink snapshot = paymentLinkRepository.findByIdWithOrder(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        Long orderId = snapshot.getOrder() == null ? null : snapshot.getOrder().getId();
+        SourceConfirmationResult result = transactionExecutor.required(() ->
+                confirmContractorPaymentSourceLocked(
+                        linkId,
+                        orderId,
+                        confirmedTotalKopecks,
+                        effectiveAt,
+                        reason,
+                        confirmedBy
+                )
+        );
+        // Each competing source is reconciled by its own immutable id. This
+        // prevents a late transfer for A from ever confirming active source B.
+        result.sourceIds().forEach(this::reconcileContractorPaymentRouteAfterCommit);
+        return paymentLinkRepository.findByIdWithOrder(linkId)
+                .map(this::toAdminResponse)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+    }
+
+    private SourceConfirmationResult confirmContractorPaymentSourceLocked(
+            Long linkId,
+            Long orderId,
+            long confirmedTotalKopecks,
+            LocalDateTime effectiveAt,
+            String reason,
+            String confirmedBy
+    ) {
+        if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден");
+        }
+        List<PaymentLink> links = paymentLinkRepository.findByOrderIdForUpdate(orderId);
+        PaymentLink source = links.stream()
+                .filter(link -> Objects.equals(link.getId(), linkId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        validateContractorSourceConfirmation(source, confirmedTotalKopecks, effectiveAt, reason);
+
+        long previousTotal = source.getConfirmedAmountKopecks() == null
+                ? 0L
+                : Math.max(0L, source.getConfirmedAmountKopecks());
+        if (confirmedTotalKopecks < previousTotal) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Подтвержденная сумма не может уменьшаться; возврат отражается отдельной операцией"
+            );
+        }
+        if (confirmedTotalKopecks == previousTotal) {
+            return new SourceConfirmationResult(List.of(source.getId()));
+        }
+
+        List<Long> reconciledSourceIds = new java.util.ArrayList<>();
+        for (PaymentLink competing : links) {
+            if (Objects.equals(competing.getId(), source.getId()) || isClosedWithoutPaymentSource(competing)) {
+                continue;
+            }
+            if (hasStartedBankPayment(competing)
+                    || competing.getStatus() == PaymentLinkStatus.MANUAL_REPORTED
+                    || PAID_STATUSES.contains(competing.getStatus())
+                    || competing.getStatus() == PaymentLinkStatus.NEEDS_RECONCILIATION) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "У заказа есть другая ссылка с платежным действием; сначала выполните её сверку"
+                );
+            }
+            if (canRetireStaleLink(competing)) {
+                competing.setStatus(PaymentLinkStatus.CANCELED);
+                competing.setLastError(limit(
+                        "Закрыта при подтверждении перевода по источнику " + source.getId(),
+                        512
+                ));
+                paymentLinkRepository.save(competing);
+                contractorPaymentLiveRoutingService.releaseClosedPaymentLink(competing);
+                reconciledSourceIds.add(competing.getId());
+                continue;
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Другая платежная ссылка заказа имеет неоднозначное состояние"
+            );
+        }
+
+        LocalDateTime observedAt = effectiveAt == null ? LocalDateTime.now() : effectiveAt;
+        source.setConfirmedAmountKopecks(confirmedTotalKopecks);
+        source.setPaidAt(observedAt);
+        source.setManualConfirmedAt(observedAt);
+        source.setManualConfirmedBy(limit(confirmedBy, 160));
+        source.setReceiptStatus(PaymentReceiptStatus.PENDING);
+        source.setStatus(confirmedTotalKopecks == source.getAmountKopecks()
+                && currentAmountKopecks(source) == source.getAmountKopecks()
+                ? PaymentLinkStatus.CONFIRMED
+                : PaymentLinkStatus.AMOUNT_MISMATCH);
+        source.setLastError(limit(
+                CONTRACTOR_SOURCE_CONFIRMATION_AUDIT_PREFIX
+                        + "; total=" + confirmedTotalKopecks
+                        + "; confirmed_by=" + limit(confirmedBy, 120)
+                        + "; reason=" + normalize(reason),
+                512
+        ));
+        paymentLinkRepository.save(source);
+        reconciledSourceIds.add(source.getId());
+
+        if (source.getStatus() == PaymentLinkStatus.CONFIRMED && canApplyOrderPaymentNow(source.getOrder())) {
+            try {
+                boolean updated = handlePaymentStatusWithoutPrematureRepeat(source.getOrder());
+                if (updated) {
+                    cancelBadReviewAutoBanAfterCommit(source.getOrder(), "Перевод подтвержден по конкретному счету");
+                }
+                syncCommonInvoiceOrderPayment(source, "Перевод подтвержден по конкретному счету");
+            } catch (Exception exception) {
+                throw new ResponseStatusException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Перевод сохранен не был: не удалось применить полную оплату заказа",
+                        exception
+                );
+            }
+        } else if (source.getStatus() == PaymentLinkStatus.CONFIRMED) {
+            String sourceAudit = normalize(source.getLastError());
+            source.setLastError(limit(
+                    PREPAID_WAITING_ORDER_COMPLETION
+                            + (sourceAudit.startsWith(CONTRACTOR_SOURCE_CONFIRMATION_AUDIT_PREFIX)
+                                ? "; " + sourceAudit
+                                : ""),
+                    512
+            ));
+            paymentLinkRepository.save(source);
+        }
+        return new SourceConfirmationResult(List.copyOf(reconciledSourceIds));
+    }
+
+    private void validateContractorSourceConfirmation(
+            PaymentLink source,
+            long confirmedTotalKopecks,
+            LocalDateTime effectiveAt,
+            String reason
+    ) {
+        if (!isFrozenContractorRoute(source)
+                || source.getManualSource() != ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE
+                || source.getPaymentMethod() != PaymentMethod.MANUAL_MOBILE_BANK) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Операция доступна только для зафиксированного платежного профиля специалиста или менеджера"
+            );
+        }
+        if (confirmedTotalKopecks <= 0 || confirmedTotalKopecks > source.getAmountKopecks()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвержденная сумма должна быть в пределах счета");
+        }
+        if (effectiveAt != null && effectiveAt.isAfter(LocalDateTime.now().plusMinutes(1))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Время поступления не может быть в будущем");
+        }
+        if (normalize(reason).isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите основание сверки");
+        }
+        if (REFUND_OR_REVERSAL_BANK_STATUSES.contains(source.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "По источнику уже отражен возврат");
+        }
+    }
+
+    private boolean isClosedWithoutPaymentSource(PaymentLink link) {
+        return link != null && (link.getStatus() == PaymentLinkStatus.CANCELED
+                || link.getStatus() == PaymentLinkStatus.EXPIRED
+                || link.getStatus() == PaymentLinkStatus.FAILED
+                || link.getStatus() == PaymentLinkStatus.REJECTED);
+    }
+
     /**
      * Retires only the selected manual payment instruction after an operator
      * has checked the recipient statement and explicitly asserted that the
@@ -2881,6 +3102,12 @@ public class PaymentLinkService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ платежной ссылки изменился");
         }
         ensureManualPayment(link);
+        if (link.getManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Поступление по профилю получателя подтверждается только сверкой конкретного счета"
+            );
+        }
         validateManualConfirmable(link);
         validateAmountCurrentForManualConfirm(link);
 
@@ -4371,7 +4598,7 @@ public class PaymentLinkService {
             return false;
         }
         Optional<PaymentLink> optionalLink = paymentLinkRepository
-                .findFirstByOrder_IdAndStatusAndLastErrorOrderByPaidAtDesc(
+                .findFirstByOrder_IdAndStatusAndLastErrorStartingWithOrderByPaidAtDesc(
                         order.getId(),
                         PaymentLinkStatus.CONFIRMED,
                         PREPAID_WAITING_ORDER_COMPLETION
@@ -4388,7 +4615,9 @@ public class PaymentLinkService {
 
         try {
             boolean updated = handlePaymentStatusWithoutPrematureRepeat(order);
-            link.setLastError(null);
+            String linkAudit = normalize(link.getLastError());
+            int sourceAuditIndex = linkAudit.indexOf(CONTRACTOR_SOURCE_CONFIRMATION_AUDIT_PREFIX);
+            link.setLastError(sourceAuditIndex >= 0 ? linkAudit.substring(sourceAuditIndex) : null);
             paymentLinkRepository.save(link);
             if (updated) {
                 cancelBadReviewAutoBanAfterCommit(order, "Предоплата применена после завершения заказа");
@@ -4983,8 +5212,21 @@ public class PaymentLinkService {
                 paymentMethodName(link),
                 link.getExpiresAt(),
                 paymentInstructionText(link, url, requisites),
-                paymentCopyText(link, url, requisites)
+                paymentCopyText(link, url, requisites),
+                telegramCopyTransferNumber(link, requisites)
         );
+    }
+
+    private String telegramCopyTransferNumber(PaymentLink link, ManualRouteReadView requisites) {
+        if (!isManualPayment(link)
+                || manualPaymentType(link) != ManualPaymentType.MOBILE_BANK
+                || requisites == null
+                || !requisites.available()) {
+            return null;
+        }
+        return ContractorPaymentTransferNumber.isValid(requisites.phone())
+                ? ContractorPaymentTransferNumber.normalize(requisites.phone())
+                : null;
     }
 
     private AdminPaymentLinkResponse toAdminResponse(PaymentLink link) {
@@ -5628,6 +5870,12 @@ public class PaymentLinkService {
         return isManualPayment(link) ? text : removeReceiptRequest(text);
     }
 
+    public record PaymentInstructionPreparation(
+            ManagerPaymentLinkResponse response,
+            boolean createdFresh
+    ) {
+    }
+
     public record PaymentLinkReconcileResult(
             Long linkId,
             PaymentLinkStatus statusBefore,
@@ -5678,8 +5926,8 @@ public class PaymentLinkService {
     }
 
     private boolean looksLikeCardNumber(String value) {
-        String digits = normalize(value).replaceAll("\\D", "");
-        return digits.length() >= 13 && digits.length() <= 19;
+        String normalized = ContractorPaymentTransferNumber.normalize(value);
+        return normalized.matches("[0-9]{16,19}");
     }
 
     private String manualPaymentInstruction(
@@ -5936,6 +6184,9 @@ public class PaymentLinkService {
     }
 
     private record OrderManualCardRoute(Long linkId, long amountKopecks) {
+    }
+
+    private record SourceConfirmationResult(List<Long> sourceIds) {
     }
 
     private record ManualCardPaymentContext(ManualCardPaymentMode mode, String reason) {

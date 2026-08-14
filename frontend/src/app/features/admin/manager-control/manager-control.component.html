@@ -1324,11 +1324,16 @@
                                 class="review-action repair-action"
                                 (click)="repairConcreteItem(example)"
                                 [disabled]="isConcreteUpdating(example.controlEntityId)"
-                                title="Повторно запустить задачу и проверить, исчезла ли ошибка"
+                                [title]="isTelegramBindingFailure(example)
+                                  ? 'Привязать нужную Telegram-группу без повторной ошибочной отправки'
+                                  : 'Повторно запустить задачу и проверить, исчезла ли ошибка'"
                               >
-                                <span class="material-icons-sharp">build</span>
-                                Починить
+                                <span class="material-icons-sharp">{{ isTelegramBindingFailure(example) ? 'link' : 'build' }}</span>
+                                {{ isTelegramBindingFailure(example) ? 'Привязать Telegram' : 'Починить' }}
                               </button>
+                              @if (isTelegramBindingFailure(example)) {
+                                <small>бот не добавлен — ссылка; бот уже в группе — одноразовая команда</small>
+                              }
                             </div>
                           }
 

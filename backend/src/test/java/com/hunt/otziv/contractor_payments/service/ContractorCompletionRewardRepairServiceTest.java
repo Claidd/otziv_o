@@ -32,7 +32,7 @@ class ContractorCompletionRewardRepairServiceTest {
     @Mock private ContractorPaymentRuntimeSwitch runtimeSwitch;
     @Mock private OrderRepository orderRepository;
     @Mock private BadReviewTaskRepository badReviewTaskRepository;
-    @Mock private ContractorCompletionRewardService completionRewardService;
+    @Mock private ContractorCompletionRepairTransactionService repairTransactionService;
     @Mock private ContractorCompletionRewardRepairStateRepository repairStateRepository;
     @Mock private ContractorPaymentBusinessClock businessClock;
 
@@ -45,7 +45,7 @@ class ContractorCompletionRewardRepairServiceTest {
                 runtimeSwitch,
                 orderRepository,
                 badReviewTaskRepository,
-                completionRewardService,
+                repairTransactionService,
                 repairStateRepository,
                 businessClock
         );
@@ -61,13 +61,12 @@ class ContractorCompletionRewardRepairServiceTest {
                 any(), any(), eq(3L), eq(now), any(Pageable.class)
         )).thenReturn(List.of(10L, 20L));
         when(repairStateRepository.findById(10L)).thenReturn(Optional.empty());
-        when(completionRewardService.ensureOrderCompletionAccrual(10L))
-                .thenThrow(new IllegalStateException("secret customer/SQL payload"));
+        org.mockito.Mockito.doThrow(new IllegalStateException("secret customer/SQL payload"))
+                .when(repairTransactionService).repairOrder(10L);
 
         service.repairCompletedUnpaidOrders();
 
-        verify(completionRewardService).ensureOrderCompletionAccrual(20L);
-        verify(repairStateRepository).deleteById(20L);
+        verify(repairTransactionService).repairOrder(20L);
         ArgumentCaptor<ContractorCompletionRewardRepairState> state =
                 ArgumentCaptor.forClass(ContractorCompletionRewardRepairState.class);
         verify(repairStateRepository).save(state.capture());
@@ -114,8 +113,8 @@ class ContractorCompletionRewardRepairServiceTest {
         existing.setOrderId(10L);
         existing.setAttemptCount(2);
         when(repairStateRepository.findById(10L)).thenReturn(Optional.of(existing));
-        when(completionRewardService.ensureOrderCompletionAccrual(10L))
-                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "private diagnostic"));
+        org.mockito.Mockito.doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "private diagnostic"))
+                .when(repairTransactionService).repairOrder(10L);
 
         service.repairCompletedUnpaidOrders();
 
@@ -143,8 +142,7 @@ class ContractorCompletionRewardRepairServiceTest {
 
         service.repairCompletedUnpaidOrders();
 
-        verify(completionRewardService).ensureOrderCompletionAccrual(30L);
-        verify(repairStateRepository).deleteById(30L);
+        verify(repairTransactionService).repairOrder(30L);
     }
 
     @Test
@@ -165,7 +163,6 @@ class ContractorCompletionRewardRepairServiceTest {
 
         service.repairCompletedUnpaidOrders();
 
-        verify(completionRewardService).adjustCanceledBadReviewTaskAccrual(30L, 44L);
-        verify(repairStateRepository).deleteById(30L);
+        verify(repairTransactionService).repairCanceledTask(30L, 44L);
     }
 }

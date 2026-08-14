@@ -47,6 +47,8 @@ class WorkloadTransferExecutionAtomicSuccessTest {
     @Mock private WorkloadLiveSettingsService liveSettingsService;
     @Mock private WorkloadShadowSettingsService shadowSettingsService;
 
+    @Mock private com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository liveControlRepository;
+    @Mock private com.hunt.otziv.workload_shadow.repository.WorkloadTransferApplyGuardRepository applyGuardRepository;
     private WorkloadTransferExecutionTransactionService service;
 
     @BeforeEach
@@ -56,13 +58,29 @@ class WorkloadTransferExecutionAtomicSuccessTest {
                 graphQueryService,
                 graphSnapshotService,
                 liveSettingsService,
-                shadowSettingsService
+                shadowSettingsService,
+                liveControlRepository,
+                applyGuardRepository
         );
         when(shadowSettingsService.current()).thenReturn(null);
         when(shadowSettingsService.zone(null))
                 .thenReturn(ZoneId.of("Asia/Irkutsk"));
-    }
 
+        var control = mock(
+                com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository.LiveControlProjection.class
+        );
+        when(control.getSettingsRevision()).thenReturn(1L);
+        when(control.getApplyEnabled()).thenReturn("true");
+        when(control.getMode()).thenReturn("LIVE");
+        when(liveControlRepository.lockState()).thenReturn(Optional.of(control));
+        var guard = mock(
+                com.hunt.otziv.workload_shadow.repository.WorkloadTransferApplyGuardRepository.ApplyGuardProjection.class
+        );
+        when(guard.getLiveSettingsRevision()).thenReturn(1L);
+        when(guard.getRecommendationCurrent()).thenReturn(1L);
+        when(applyGuardRepository.lockGuard(WORKFLOW_ID))
+                .thenReturn(Optional.of(guard));
+    }
     @Test
     void appliesEveryActiveStageAndClosesJournalsOnlyAfterExactRowCounts() {
         WorkloadLiveSettingsResponse live = liveSettings();

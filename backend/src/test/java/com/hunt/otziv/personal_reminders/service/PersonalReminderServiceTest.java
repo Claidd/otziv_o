@@ -5,6 +5,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.personal_reminders.dto.PersonalReminderResponse;
 import com.hunt.otziv.personal_reminders.model.PersonalReminder;
 import com.hunt.otziv.personal_reminders.repository.PersonalReminderRepository;
+import com.hunt.otziv.payments.service.BadReviewPaymentInstructionOrchestrator;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
@@ -19,7 +20,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +44,12 @@ class PersonalReminderServiceTest {
 
     @Mock
     private UserService userService;
+
+    @Mock
+    private BadReviewPaymentInstructionOrchestrator paymentInstructionOrchestrator;
+
+    @Mock
+    private Authentication authentication;
 
     @InjectMocks
     private PersonalReminderService service;
@@ -71,6 +82,66 @@ class PersonalReminderServiceTest {
 
         assertEquals(1, reminders.size());
         assertEquals(12L, reminders.getFirst().id());
+    }
+
+    @Test
+    void paymentCopyIsPreparedCanonicallyAtClickTime() {
+        User user = new User();
+        user.setId(5L);
+        user.setUsername("manager");
+        PersonalReminder reminder = reminder(
+                13L,
+                "Плохой отзыв выполнен: Компания",
+                PersonalReminderService.SOURCE_BAD_REVIEW_TASK,
+                99L
+        );
+        reminder.setSourceOrderId(10L);
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(user));
+        when(reminderRepository.findByIdAndUserId(13L, 5L)).thenReturn(Optional.of(reminder));
+        when(paymentInstructionOrchestrator.prepareCopyTextAuthorized(10L, authentication)).thenReturn("canonical");
+
+        assertEquals("canonical", service.preparePaymentCopyText(principal("manager"), authentication, 13L));
+    }
+
+    @Test
+    void userCreatedTitleAndTextCannotForgePaymentInstruction() {
+        User user = new User();
+        user.setId(5L);
+        user.setUsername("manager");
+        PersonalReminder forged = reminder(14L, "Плохой отзыв выполнен: Компания", null, null);
+        forged.setText("Заказ #10");
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(user));
+        when(reminderRepository.findByIdAndUserId(14L, 5L)).thenReturn(Optional.of(forged));
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.preparePaymentCopyText(principal("manager"), authentication, 14L)
+        );
+
+        verifyNoInteractions(paymentInstructionOrchestrator);
+    }
+
+    @Test
+    void trustedSourceWithoutCanonicalOrderIdCannotPreparePaymentInstruction() {
+        User user = new User();
+        user.setId(5L);
+        user.setUsername("manager");
+        PersonalReminder incomplete = reminder(
+                15L,
+                "Плохой отзыв выполнен: Компания",
+                PersonalReminderService.SOURCE_BAD_REVIEW_TASK,
+                99L
+        );
+        incomplete.setText("Заказ #10");
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(user));
+        when(reminderRepository.findByIdAndUserId(15L, 5L)).thenReturn(Optional.of(incomplete));
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.preparePaymentCopyText(principal("manager"), authentication, 15L)
+        );
+
+        verifyNoInteractions(paymentInstructionOrchestrator);
     }
 
     private PersonalReminder reminder(Long id, String title, String sourceType, Long sourceId) {

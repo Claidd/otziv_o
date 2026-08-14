@@ -61,6 +61,8 @@ public class WorkloadTransferOfferDeliveryService {
 
         int delivered = 0;
         for (DeliveryProjection offer : deliverable) {
+            Integer deliveredMessageId = null;
+            boolean storedAsOffered = false;
             try {
                 Optional<Integer> messageId =
                         telegramService.sendMessageWithInlineKeyboardMessageId(
@@ -70,7 +72,7 @@ public class WorkloadTransferOfferDeliveryService {
                                         claimed.responseTimeoutMinutes()
                                 ),
                                 "HTML",
-                                keyboard(offer.getOfferToken())
+                                List.of()
                         );
                 if (messageId.isEmpty()) {
                     offerService.markDeliveryFailure(
@@ -81,11 +83,38 @@ public class WorkloadTransferOfferDeliveryService {
                     );
                     continue;
                 }
+                deliveredMessageId = messageId.get();
                 offerService.markDelivered(
                         offer.getOfferId(),
                         claimed.processingToken(),
-                        messageId.get(),
+                        deliveredMessageId,
                         claimed.responseTimeoutMinutes()
+                );
+                storedAsOffered = true;
+                boolean keyboardActivated = telegramService.editMessageText(
+                        offer.getTargetGroupChatId(),
+                        messageId.get(),
+                        message(offer, claimed.responseTimeoutMinutes()),
+                        "HTML",
+                        keyboard(offer.getOfferToken())
+                );
+                if (!keyboardActivated) {
+                    offerService.markKeyboardActivationFailure(
+                            offer.getOfferId(),
+                            messageId.get()
+                    );
+                    telegramService.editMessageText(
+                            offer.getTargetGroupChatId(),
+                            messageId.get(),
+                            cancelledMessage(offer),
+                            "HTML",
+                            List.of()
+                    );
+                    continue;
+                }
+                offerService.markKeyboardActivated(
+                        offer.getOfferId(),
+                        messageId.get()
                 );
                 delivered++;
             } catch (RuntimeException exception) {
@@ -94,15 +123,59 @@ public class WorkloadTransferOfferDeliveryService {
                         offer.getOfferId(),
                         exception
                 );
-                offerService.markDeliveryFailure(
-                        offer.getOfferId(),
-                        claimed.processingToken(),
-                        exception.getClass().getSimpleName(),
-                        exception.getMessage()
-                );
+                if (storedAsOffered && deliveredMessageId != null) {
+                    closeInactiveKeyboardOffer(offer, deliveredMessageId);
+                } else {
+                    offerService.markDeliveryFailure(
+                            offer.getOfferId(),
+                            claimed.processingToken(),
+                            exception.getClass().getSimpleName(),
+                            exception.getMessage()
+                    );
+                    if (deliveredMessageId != null) {
+                        removeKeyboard(offer, deliveredMessageId);
+                    }
+                }
             }
         }
         return delivered;
+    }
+
+    private void closeInactiveKeyboardOffer(
+            DeliveryProjection offer,
+            int messageId
+    ) {
+        try {
+            offerService.markKeyboardActivationFailure(
+                    offer.getOfferId(),
+                    messageId
+            );
+        } catch (RuntimeException closeException) {
+            log.error(
+                    "Failed to close inactive workload Telegram offer offerId={}",
+                    offer.getOfferId(),
+                    closeException
+            );
+        }
+        removeKeyboard(offer, messageId);
+    }
+
+    private void removeKeyboard(DeliveryProjection offer, int messageId) {
+        try {
+            telegramService.editMessageText(
+                    offer.getTargetGroupChatId(),
+                    messageId,
+                    cancelledMessage(offer),
+                    "HTML",
+                    List.of()
+            );
+        } catch (RuntimeException cleanupException) {
+            log.warn(
+                    "Failed to remove workload Telegram keyboard offerId={}",
+                    offer.getOfferId(),
+                    cleanupException
+            );
+        }
     }
 
     private String message(
@@ -139,6 +212,13 @@ public class WorkloadTransferOfferDeliveryService {
         ).trim();
     }
 
+
+    private String cancelledMessage(DeliveryProjection offer) {
+        return "<b>Предложение отменено</b>\n\nКомпания: <b>"
+                + html(offer.getCompanyTitle())
+                + "</b>\nКнопки не были активированы из-за ошибки доставки. "
+                + "Назначения не изменялись.";
+    }
     private List<List<InlineKeyboardButton>> keyboard(String token) {
         InlineKeyboardButton accept = new InlineKeyboardButton();
         accept.setText("✅ Принять");

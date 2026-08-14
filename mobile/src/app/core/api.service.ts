@@ -341,6 +341,17 @@ export interface PublicCommonInvoice {
   paidKopecks: number;
   remainingKopecks: number;
   payable: boolean;
+  paymentRouteType?: string | null;
+  manualPaymentType?: string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualBankName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  manualComment?: string | null;
+  paymentInstructionText?: string | null;
+  clientReportable: boolean;
+  clientReportedAt?: string | null;
   orders: PublicCommonInvoiceOrder[];
 }
 
@@ -4599,6 +4610,13 @@ export class ApiService {
     return this.http.post<PublicPaymentInitResponse>(
       this.apiUrl(`/api/payments/public/group/${encodeURIComponent(token)}/init`),
       { email, offerConsent, privacyConsent, receiptConsent }
+    );
+  }
+
+  reportPublicCommonInvoicePaid(token: string): Observable<PublicCommonInvoice> {
+    return this.http.post<PublicCommonInvoice>(
+      this.apiUrl(`/api/payments/public/group/${encodeURIComponent(token)}/reported-paid`),
+      {}
     );
   }
 

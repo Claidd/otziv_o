@@ -36,6 +36,9 @@ public record CommonInvoiceSummaryResponse(
         String paymentRouteType,
         String paymentRouteProfileName,
         Long paymentRouteManualTaskId,
-        LocalDateTime paymentRouteSelectedAt
+        boolean contractorPaymentRoute,
+        LocalDateTime paymentRouteSelectedAt,
+        String invoicePurpose,
+        Long supersedesInvoiceId
 ) {
 }

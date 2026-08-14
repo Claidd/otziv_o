@@ -1,9 +1,11 @@
 package com.hunt.otziv.contractor_payments.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -51,6 +53,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -229,6 +232,7 @@ class ContractorPaymentShadowServiceTest {
         Order order = order(30L, worker, manager);
         PaymentLink link = paymentLink(40L, order, 100_000L);
         ContractorPaymentProfile specialist = profile(1L, worker.getUser(), ContractorRole.SPECIALIST);
+        specialist.setPaymentPhone("2202 2082-3839 6676");
         when(profileRepository.findByUserIdAndRoleForUpdate(100L, ContractorRole.SPECIALIST))
                 .thenReturn(Optional.of(specialist));
         when(profileService.available(specialist, ContractorAllocationMode.SHADOW)).thenReturn(300_000L);
@@ -239,6 +243,7 @@ class ContractorPaymentShadowServiceTest {
         assertEquals(100L, allocation.getRecipientUserId());
         assertEquals(300_000L, allocation.getAvailableBeforeKopecks());
         assertEquals(10L, allocation.getCurrentWorkerId());
+        assertEquals("2202208238396676", allocation.getPaymentPhoneSnapshot());
         assertEquals(
                 ContractorRoutingDecisionReason.SPECIALIST_SELECTED,
                 allocation.getRoutingDecisionReason()
@@ -264,6 +269,7 @@ class ContractorPaymentShadowServiceTest {
                 ContractorRoutingDecisionReason.COMPANY_REQUIRES_OWNER_PAYMENT,
                 allocation.getRoutingDecisionReason()
         );
+        verify(entityManager).lock(order.getCompany(), LockModeType.PESSIMISTIC_WRITE);
         verify(profileRepository, never()).findIdByUserIdAndRole(anyLong(), any());
     }
 
@@ -647,11 +653,54 @@ class ContractorPaymentShadowServiceTest {
         when(allocationRepository.findLatestIdForUpdate("SHADOW", "PAYMENT_LINK", 88L))
                 .thenReturn(Optional.of(89L));
 
-        int released = service.releaseForUnpaidOrder(90L, "Не оплачено");
+        int released = service.releaseForFinanciallyClosedOrder(90L, "Не оплачено");
 
         assertEquals(1, released);
         assertEquals(ContractorAllocationStatus.RELEASED_UNPAID, allocation.getStatus());
         assertEquals("Не оплачено", allocation.getReleaseReason());
+    }
+
+    @Test
+    void bannedOrderReleasesEntireUnconfirmedReservation() {
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(892L);
+        allocation.setMode(ContractorAllocationMode.SHADOW);
+        allocation.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        allocation.setSourceId(882L);
+        allocation.setOrderId(902L);
+        allocation.setAmountKopecks(275_000L);
+        allocation.setConfirmedKopecks(0L);
+        allocation.setStatus(ContractorAllocationStatus.RESERVED);
+        Order currentOrder = order(902L, null, null);
+        OrderStatus banned = new OrderStatus();
+        banned.setTitle("Бан");
+        currentOrder.setStatus(banned);
+        when(orderRepository.findByIdForCounterUpdate(902L)).thenReturn(Optional.of(currentOrder));
+        when(allocationRepository.findActiveByOrderId(
+                902L,
+                ContractorAllocationMode.SHADOW,
+                java.util.EnumSet.of(
+                        ContractorAllocationStatus.RESERVED,
+                        ContractorAllocationStatus.CLIENT_REPORTED,
+                        ContractorAllocationStatus.PARTIALLY_CONFIRMED,
+                        ContractorAllocationStatus.OWNER_FALLBACK
+                )
+        )).thenReturn(List.of(allocation));
+        when(paymentLinkRepository.findByIdForUpdate(882L)).thenReturn(Optional.of(new PaymentLink()));
+        when(allocationRepository.findByIdForUpdate(892L)).thenReturn(Optional.of(allocation));
+        when(allocationRepository.findLatestIdForUpdate("SHADOW", "PAYMENT_LINK", 882L))
+                .thenReturn(Optional.of(892L));
+
+        int released = service.releaseForFinanciallyClosedOrder(902L, "Бан");
+
+        assertEquals(1, released);
+        assertEquals(ContractorAllocationStatus.RELEASED_UNPAID, allocation.getStatus());
+        assertEquals("Бан", allocation.getReleaseReason());
+        ArgumentCaptor<ContractorPaymentAllocationEvent> event =
+                ArgumentCaptor.forClass(ContractorPaymentAllocationEvent.class);
+        verify(eventRepository).save(event.capture());
+        assertEquals(ContractorAllocationEventType.RELEASED, event.getValue().getEventType());
+        assertEquals(275_000L, event.getValue().getAmountKopecks());
     }
 
     @Test
@@ -662,7 +711,7 @@ class ContractorPaymentShadowServiceTest {
         restored.setStatus(inWork);
         when(orderRepository.findByIdForCounterUpdate(901L)).thenReturn(Optional.of(restored));
 
-        int released = service.releaseForUnpaidOrder(901L, "stale callback");
+        int released = service.releaseForFinanciallyClosedOrder(901L, "stale callback");
 
         assertEquals(0, released);
         verify(allocationRepository, never()).findActiveByOrderId(
@@ -796,6 +845,48 @@ class ContractorPaymentShadowServiceTest {
         order.verify(commonInvoiceRepository).findByIdForUpdate(55L);
         order.verify(allocationRepository).findByIdForUpdate(56L);
         order.verify(eventRepository).save(any());
+    }
+
+    @Test
+    void claimedCommonAllocationRepairsMissedReleaseWhenMemberOrderIsBanned() {
+        Order member = order(57L, null, null);
+        OrderStatus banned = new OrderStatus();
+        banned.setTitle("Бан");
+        member.setStatus(banned);
+        CommonInvoiceOrder item = new CommonInvoiceOrder();
+        item.setOrder(member);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(58L);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(59L);
+        allocation.setMode(ContractorAllocationMode.LIVE);
+        allocation.setSourceType(ContractorAllocationSourceType.COMMON_INVOICE);
+        allocation.setSourceId(58L);
+        allocation.setAmountKopecks(75_000L);
+        allocation.setStatus(ContractorAllocationStatus.RESERVED);
+        when(allocationRepository.findById(59L)).thenReturn(Optional.of(allocation));
+        when(commonInvoiceRepository.findByIdForUpdate(58L)).thenReturn(Optional.of(invoice));
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE,
+                ContractorAllocationSourceType.COMMON_INVOICE,
+                58L
+        )).thenReturn(Optional.of(allocation));
+        when(allocationRepository.findByIdForUpdate(59L)).thenReturn(Optional.of(allocation));
+        when(allocationRepository.findLatestIdForUpdate("LIVE", "COMMON_INVOICE", 58L))
+                .thenReturn(Optional.of(59L));
+        when(commonInvoiceOrderRepository.findOrderIdsByInvoiceId(58L)).thenReturn(List.of(57L));
+        when(orderRepository.findByIdForCounterUpdate(57L)).thenReturn(Optional.of(member));
+        when(commonInvoiceOrderRepository.findMembershipByInvoiceIdForRead(58L)).thenReturn(List.of(item));
+        when(commonInvoiceOrderRepository.findByInvoiceIdWithOrders(58L)).thenReturn(List.of(item));
+
+        service.reconcileAllocationId(59L);
+
+        assertEquals(ContractorAllocationStatus.RELEASED_UNPAID, allocation.getStatus());
+        ArgumentCaptor<ContractorPaymentAllocationEvent> event =
+                ArgumentCaptor.forClass(ContractorPaymentAllocationEvent.class);
+        verify(eventRepository).save(event.capture());
+        assertEquals("COMMON:ORDER_BANNED", event.getValue().getExternalRef());
     }
 
     @Test
@@ -989,6 +1080,92 @@ class ContractorPaymentShadowServiceTest {
     }
 
     @Test
+    void schedulerKeepsBadReviewPaymentCycleReservedAfterUnpaidTransition() {
+        LocalDateTime unpaidAt = LocalDateTime.of(2026, 8, 7, 12, 0);
+        Order order = order(811L, null, null);
+        OrderStatus unpaid = new OrderStatus();
+        unpaid.setTitle("Не оплачено");
+        order.setStatus(unpaid);
+        order.setStatusChangedAt(unpaidAt);
+        PaymentLink link = paymentLink(812L, order, 40_000L);
+        link.setStatus(PaymentLinkStatus.CREATED);
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(813L);
+        allocation.setMode(ContractorAllocationMode.SHADOW);
+        allocation.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        allocation.setSourceId(812L);
+        allocation.setAmountKopecks(40_000L);
+        allocation.setStatus(ContractorAllocationStatus.RESERVED);
+        allocation.setReservedAt(unpaidAt.plusSeconds(1));
+        when(allocationRepository.findPaymentLinksForReconciliation(
+                eq(ContractorAllocationMode.SHADOW),
+                anyCollection(),
+                anyCollection(),
+                any(),
+                any(),
+                any()
+        )).thenReturn(List.of(allocation));
+        when(allocationRepository.findByIdForUpdate(813L)).thenReturn(Optional.of(allocation));
+        when(paymentLinkRepository.findByIdWithOrder(812L)).thenReturn(Optional.of(link));
+        registerReconciliation(allocation);
+
+        service.reconcilePaymentLinks();
+
+        assertEquals(ContractorAllocationStatus.RESERVED, allocation.getStatus());
+        assertEquals(null, allocation.getReleasedAt());
+    }
+
+    @Test
+    void unpaidTransitionOnlyOwnsPaymentAttemptsReservedBeforeIt() {
+        LocalDateTime unpaidAt = LocalDateTime.of(2026, 8, 7, 12, 0);
+        Order order = order(814L, null, null);
+        OrderStatus unpaid = new OrderStatus();
+        unpaid.setTitle("Не оплачено");
+        order.setStatus(unpaid);
+        order.setStatusChangedAt(unpaidAt);
+        ContractorPaymentAllocation originalAttempt = new ContractorPaymentAllocation();
+        originalAttempt.setReservedAt(unpaidAt.minusSeconds(1));
+        ContractorPaymentAllocation badReviewAttempt = new ContractorPaymentAllocation();
+        badReviewAttempt.setReservedAt(unpaidAt.plusSeconds(1));
+
+        assertEquals(true, ReflectionTestUtils.invokeMethod(
+                service, "orderReleasesAllocation", order, originalAttempt
+        ));
+        assertEquals(false, ReflectionTestUtils.invokeMethod(
+                service, "orderReleasesAllocation", order, badReviewAttempt
+        ));
+    }
+
+    @Test
+    void commonSuccessorReleaseUsesMemberPaymentCycleAndBanIsAlwaysTerminal() {
+        LocalDateTime unpaidAt = LocalDateTime.of(2026, 8, 7, 12, 0);
+        Order unpaidOrder = order(815L, null, null);
+        unpaidOrder.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        unpaidOrder.setStatusChangedAt(unpaidAt);
+        ContractorPaymentAllocation oldAttempt = new ContractorPaymentAllocation();
+        oldAttempt.setStatus(ContractorAllocationStatus.RESERVED);
+        oldAttempt.setReservedAt(unpaidAt.minusSeconds(1));
+        ContractorPaymentAllocation successorAttempt = new ContractorPaymentAllocation();
+        successorAttempt.setStatus(ContractorAllocationStatus.RESERVED);
+        successorAttempt.setReservedAt(unpaidAt.plusSeconds(1));
+
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(
+                service, "releaseIfCommonInvoiceContainsUnpaidOrder",
+                oldAttempt, List.of(unpaidOrder), unpaidAt.plusMinutes(1)
+        ));
+        assertFalse((Boolean) ReflectionTestUtils.invokeMethod(
+                service, "releaseIfCommonInvoiceContainsUnpaidOrder",
+                successorAttempt, List.of(unpaidOrder), unpaidAt.plusMinutes(1)
+        ));
+
+        unpaidOrder.setStatus(OrderStatus.builder().title("Бан").build());
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(
+                service, "releaseIfCommonInvoiceContainsUnpaidOrder",
+                successorAttempt, List.of(unpaidOrder), unpaidAt.plusMinutes(2)
+        ));
+    }
+
+    @Test
     void forcedEarlyExpiryUsesObservationTimeInsteadOfFutureDeadline() {
         LocalDateTime observedAt = LocalDateTime.of(2026, 8, 7, 12, 0);
         PaymentLink link = paymentLink(84L, order(85L, null, null), 40_000L);
@@ -1054,6 +1231,10 @@ class ContractorPaymentShadowServiceTest {
         link.setStatus(PaymentLinkStatus.AMOUNT_MISMATCH);
         link.setConfirmedAmountKopecks(60_000L);
         link.setPaidAt(paidAt);
+        link.setLastError(
+                "prepaid_waiting_order_completion; contractor_source_confirmation; "
+                        + "total=60000; confirmed_by=owner; reason=Проверена выписка"
+        );
         ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
         allocation.setId(93L);
         allocation.setMode(ContractorAllocationMode.SHADOW);
@@ -1078,6 +1259,11 @@ class ContractorPaymentShadowServiceTest {
         assertEquals(60_000L, allocation.getConfirmedKopecks());
         assertEquals(ContractorAllocationStatus.PARTIALLY_CONFIRMED, allocation.getStatus());
         assertEquals(paidAt, allocation.getConfirmedAt());
+        ArgumentCaptor<ContractorPaymentAllocationEvent> event =
+                ArgumentCaptor.forClass(ContractorPaymentAllocationEvent.class);
+        verify(eventRepository).save(event.capture());
+        assertTrue(event.getValue().getReason().contains("contractor_source_confirmation"));
+        assertTrue(event.getValue().getReason().contains("Проверена выписка"));
     }
 
     @Test
@@ -1407,7 +1593,7 @@ class ContractorPaymentShadowServiceTest {
     @Test
     void unpaidReleaseCallbacksAlwaysStartIndependentTransactions() throws Exception {
         Transactional orderRelease = ContractorPaymentShadowService.class
-                .getMethod("releaseForUnpaidOrder", Long.class, String.class)
+                .getMethod("releaseForFinanciallyClosedOrder", Long.class, String.class)
                 .getAnnotation(Transactional.class);
         Transactional commonInvoiceRelease = ContractorPaymentShadowService.class
                 .getMethod("releaseForUnpaidCommonInvoice", Long.class, String.class)
@@ -1475,6 +1661,7 @@ class ContractorPaymentShadowServiceTest {
         order.setWorker(worker);
         order.setManager(manager);
         Company company = new Company();
+        company.setId(id + 100_000L);
         company.setContractorPaymentRoutingEnabled(true);
         order.setCompany(company);
         return order;

@@ -38,6 +38,7 @@ import {
   canEditContractorProfileRouting,
   contractorProfileRoutingPresentation
 } from './contractor-profile-routing';
+import { validateContractorTransferIdentifierForSave } from './contractor-transfer-identifier';
 
 type UserStatusFilter = 'all' | 'active' | 'inactive' | 'linked' | 'unlinked';
 
@@ -61,6 +62,7 @@ type ContractorPaymentProfileDraft = ContractorPaymentProfile & {
   openingBalanceRubles: string;
   initialOpeningBalanceKopecks: number;
   openingBalanceReason: string;
+  savedEnabled: boolean;
   savedLiveEnabled: boolean;
 };
 
@@ -124,6 +126,7 @@ export class UsersAdminComponent implements OnDestroy {
   readonly contractorProfilesLoading = signal(false);
   readonly contractorProfileSavingId = signal<number | null>(null);
   readonly contractorProfilesError = signal<string | null>(null);
+  readonly contractorTransferIdentifierTouched = signal<Record<number, boolean>>({});
   readonly contractorOpeningHistory = signal<Record<number, ContractorPaymentProfileAdjustment[]>>({});
   readonly contractorOpeningHistoryLoadingId = signal<number | null>(null);
   readonly contractorOpeningHistoryError = signal<string | null>(null);
@@ -345,6 +348,7 @@ export class UsersAdminComponent implements OnDestroy {
     this.loadAssignments(user.id);
     this.contractorProfiles.set([]);
     this.contractorProfilesError.set(null);
+    this.contractorTransferIdentifierTouched.set({});
     this.contractorOpeningHistory.set({});
     this.contractorOpeningHistoryError.set(null);
     this.contractorOpeningHistoryLoadingId.set(null);
@@ -380,6 +384,7 @@ export class UsersAdminComponent implements OnDestroy {
           openingBalanceRubles: (profile.openingBalanceKopecks / 100).toFixed(2),
           initialOpeningBalanceKopecks: profile.openingBalanceKopecks,
           openingBalanceReason: '',
+          savedEnabled: profile.enabled,
           savedLiveEnabled: profile.liveEnabled
         })));
         this.contractorProfilesLoading.set(false);
@@ -419,6 +424,12 @@ export class UsersAdminComponent implements OnDestroy {
     if (!user || !this.canManageContractorProfiles() || this.contractorProfileSavingId() !== null) {
       return;
     }
+    this.markContractorTransferIdentifierTouched(profile.id);
+    const transferIdentifier = this.contractorTransferIdentifierValidation(profile);
+    if (!transferIdentifier.valid) {
+      this.contractorProfilesError.set(transferIdentifier.error);
+      return;
+    }
     const openingBalance = Number(profile.openingBalanceRubles.replace(',', '.'));
     if (!Number.isFinite(openingBalance) || openingBalance < 0) {
       this.contractorProfilesError.set('Переходящий остаток должен быть равен нулю или быть положительным числом.');
@@ -437,7 +448,7 @@ export class UsersAdminComponent implements OnDestroy {
       enabled: profile.enabled,
       liveEnabled: profile.liveEnabled,
       recipientName: profile.recipientName?.trim() || undefined,
-      paymentPhone: profile.paymentPhone?.trim() || undefined,
+      paymentPhone: transferIdentifier.normalizedValue || undefined,
       bankName: profile.bankName?.trim() || undefined,
       paymentComment: profile.paymentComment?.trim() || undefined,
       openingBalanceKopecks,
@@ -455,6 +466,7 @@ export class UsersAdminComponent implements OnDestroy {
               openingBalanceRubles: (saved.openingBalanceKopecks / 100).toFixed(2),
               initialOpeningBalanceKopecks: saved.openingBalanceKopecks,
               openingBalanceReason: '',
+              savedEnabled: saved.enabled,
               savedLiveEnabled: saved.liveEnabled
             }
           : item));
@@ -480,6 +492,29 @@ export class UsersAdminComponent implements OnDestroy {
 
   contractorRoleLabel(role: ContractorPaymentProfile['role']): string {
     return role === 'SPECIALIST' ? 'Специалист' : 'Менеджер';
+  }
+
+  contractorTransferIdentifierValidation(profile: ContractorPaymentProfileDraft) {
+    return validateContractorTransferIdentifierForSave(
+      profile.paymentPhone,
+      profile.enabled && !this.contractorProfileEligibilityBeingReduced(profile)
+    );
+  }
+
+  contractorProfileEligibilityBeingReduced(profile: ContractorPaymentProfileDraft): boolean {
+    const liveRoutingBeingDisabled = profile.savedLiveEnabled
+      && !profile.liveEnabled
+      && (!profile.enabled || profile.savedEnabled);
+    return liveRoutingBeingDisabled || (profile.savedEnabled && !profile.enabled);
+  }
+
+  contractorTransferIdentifierErrorVisible(profile: ContractorPaymentProfileDraft): boolean {
+    return Boolean(this.contractorTransferIdentifierTouched()[profile.id])
+      && !this.contractorTransferIdentifierValidation(profile).valid;
+  }
+
+  markContractorTransferIdentifierTouched(profileId: number): void {
+    this.contractorTransferIdentifierTouched.update((touched) => ({ ...touched, [profileId]: true }));
   }
 
   contractorProfileRoutingState(profile: ContractorPaymentProfileDraft) {

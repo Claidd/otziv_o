@@ -1,6 +1,7 @@
 package com.hunt.otziv.contractor_payments.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.inOrder;
@@ -234,6 +235,59 @@ class ContractorRewardLedgerServiceTest {
         // The repair behaves as if order workers/work were already changed:
         // neither mutable source is consulted at all.
         org.mockito.Mockito.verifyNoInteractions(attributionService, orderRepository);
+    }
+
+    @Test
+    void unknownFinalSourceCannotCreateDebtThroughDirectShortcut() {
+        ContractorPaymentProfile profile = profile(61L, user(501L));
+        Zp reward = reward(73L, 110L, new BigDecimal("25.00"));
+        reward.setUserId(501L);
+        reward.setProfessionId(601L);
+        reward.setAttributionFinal(true);
+        reward.setSource("UNKNOWN_REWARD_SOURCE");
+        when(zpRepository.findContractorRewardsNeedingGlobalRepair(any(LocalDateTime.class), any(Pageable.class)))
+                .thenReturn(List.of(reward));
+        when(zpRepository.findByIdForContractorLedgerUpdate(73L)).thenReturn(Optional.of(reward));
+        assertThatThrownBy(() -> service.synchronize(profile))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("source-role pair is incompatible");
+
+        org.mockito.Mockito.verify(ledgerRepository, org.mockito.Mockito.never())
+                .save(any(ContractorRewardLedgerEntry.class));
+        org.mockito.Mockito.verify(markerRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(
+                profileRepository,
+                attributionService,
+                orderRepository,
+                userRepository
+        );
+    }
+
+    @Test
+    void roleIncompatibleFinalSourceCannotCreateManagerDebt() {
+        ContractorPaymentProfile profile = profile(62L, user(502L));
+        Zp reward = reward(74L, 111L, new BigDecimal("30.00"));
+        reward.setUserId(502L);
+        reward.setProfessionId(602L);
+        reward.setContractorRole(ContractorRole.MANAGER);
+        reward.setAttributionFinal(true);
+        reward.setSource(ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST);
+        when(zpRepository.findContractorRewardsNeedingGlobalRepair(any(LocalDateTime.class), any(Pageable.class)))
+                .thenReturn(List.of(reward));
+        when(zpRepository.findByIdForContractorLedgerUpdate(74L)).thenReturn(Optional.of(reward));
+        assertThatThrownBy(() -> service.synchronize(profile))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("source-role pair is incompatible");
+
+        org.mockito.Mockito.verify(ledgerRepository, org.mockito.Mockito.never())
+                .save(any(ContractorRewardLedgerEntry.class));
+        org.mockito.Mockito.verify(markerRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(
+                profileRepository,
+                attributionService,
+                orderRepository,
+                userRepository
+        );
     }
 
     @Test

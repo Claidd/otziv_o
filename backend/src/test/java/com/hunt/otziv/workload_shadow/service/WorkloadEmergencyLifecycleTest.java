@@ -54,6 +54,8 @@ class WorkloadEmergencyLifecycleTest {
     @Mock private WorkloadEmergencyAssignmentTransactionService transactionService;
     @Mock private WorkloadLiveSettingsService liveSettingsService;
     @Mock private WorkloadShadowSettingsService shadowSettingsService;
+    @Mock private WorkloadLiveDailyQuotaLockService quotaLockService;
+    @Mock private com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository liveControlRepository;
 
     private WorkloadShadowSettingsResponse shadow;
 
@@ -182,10 +184,21 @@ class WorkloadEmergencyLifecycleTest {
                 any()
         )).thenReturn(1);
 
+        when(workflowRepository.reservedByManagerSince(any())).thenReturn(List.of());
+        var control = mock(
+                com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository.LiveControlProjection.class
+        );
+        when(control.getSettingsRevision()).thenReturn(1L);
+        when(control.getApplyEnabled()).thenReturn("true");
+        when(control.getMode()).thenReturn("LIVE");
+        when(liveControlRepository.lockState()).thenReturn(Optional.of(control));
         WorkloadEmergencyAssignmentTransactionService service =
                 new WorkloadEmergencyAssignmentTransactionService(
                         repository,
                         executionRepository,
+                        workflowRepository,
+                        quotaLockService,
+                        liveControlRepository,
                         liveSettingsService,
                         shadowSettingsService
                 );

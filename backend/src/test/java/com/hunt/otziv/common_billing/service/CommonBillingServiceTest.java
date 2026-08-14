@@ -5,6 +5,7 @@ import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
@@ -61,6 +62,7 @@ import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.dto.PaymentRouteSelection;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
+import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
@@ -83,6 +85,7 @@ import java.math.BigDecimal;
 import java.security.cert.CertPathBuilderException;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -373,6 +376,10 @@ class CommonBillingServiceTest {
         CommonInvoice secondInvoice = invoice(secondAccount);
         secondInvoice.setId(20L);
         secondInvoice.setToken("second-token");
+        CommonInvoice secondPredecessor = invoice(secondAccount);
+        secondPredecessor.setId(19L);
+        secondInvoice.setInvoicePurpose("BAD_REVIEW_SUCCESSOR");
+        secondInvoice.setSupersedesInvoice(secondPredecessor);
         CommonInvoiceOrder firstItem = item(firstInvoice, order(101L));
         CommonInvoiceOrder secondItem = item(secondInvoice, order(202L));
         firstItem.setPaid(true);
@@ -392,6 +399,8 @@ class CommonBillingServiceTest {
                 .map(CommonBillingAccountResponse::currentInvoice)
                 .map(CommonInvoiceSummaryResponse::id)
                 .toList());
+        assertEquals("BAD_REVIEW_SUCCESSOR", responses.get(1).currentInvoice().invoicePurpose());
+        assertEquals(19L, responses.get(1).currentInvoice().supersedesInvoiceId());
         verify(invoiceRepository, times(1)).findLatestCurrentForAccounts(eq(List.of(1L, 2L)), any());
         verify(invoiceOrderRepository, times(1)).findByInvoiceIdsWithOrders(List.of(10L, 20L));
         verify(invoiceRepository, never()).findCurrentForAccount(any(), any(), any(Pageable.class));
@@ -511,6 +520,7 @@ class CommonBillingServiceTest {
     void markOrderPaidRejectsBankInitReservedWhileWaitingForOrderLock() throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
         Order order = order(101L);
         CommonInvoiceOrder item = item(invoice, order);
         PaymentLink reservedLink = new PaymentLink();
@@ -721,6 +731,172 @@ class CommonBillingServiceTest {
         verify(nextOrderRequestService, never()).openForPaidOrder(any());
         verify(paymentLinkRepository, never())
                 .findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(anyLong(), any());
+    }
+
+    @Test
+    void invoiceReadKeepsInactivePredecessorAmountImmutable() {
+        CommonBillingAccount account = account();
+        CommonInvoice predecessor = invoice(account);
+        predecessor.setStatus(CommonInvoiceStatus.UNPAID);
+        predecessor.setAmountKopecks(100_000L);
+        Order order = order(101L);
+        CommonInvoiceOrder historicalItem = item(predecessor, order);
+        historicalItem.setActiveMembership(false);
+        historicalItem.setUnpaid(true);
+        historicalItem.setAmountKopecks(100_000L);
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(predecessor));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(historicalItem));
+        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+
+        CommonInvoiceDetailsResponse response = service.invoice(10L);
+
+        assertEquals(100_000L, historicalItem.getAmountKopecks());
+        assertEquals(100_000L, predecessor.getAmountKopecks());
+        assertEquals(100_000L, response.summary().amountKopecks());
+        verify(badReviewTaskService, never()).getPayableSum(order);
+        verify(invoiceOrderRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void genericMarkPaidRejectsFrozenLiveContractorCommonSource() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setContractorAllocationId(701L);
+        invoice.setPaymentRouteType("MANUAL_MOBILE_BANK");
+        invoice.setPaymentRouteManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        CommonInvoiceOrder invoiceItem = item(invoice, order(101L));
+        stubLockedInvoice(invoice, invoiceItem, invoiceItem.getOrder());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markPaid(
+                        10L,
+                        new ManualPaymentConfirmationRequest("Выписка", ""),
+                        () -> "manager"
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertFalse(invoiceItem.isPaid());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void genericPerOrderPaidRejectsFrozenLiveContractorCommonSource() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setContractorAllocationId(702L);
+        invoice.setPaymentRouteType("MANUAL_MOBILE_BANK");
+        invoice.setPaymentRouteManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        CommonInvoiceOrder invoiceItem = item(invoice, order(101L));
+        stubLockedInvoice(invoice, invoiceItem, invoiceItem.getOrder());
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.markOrderPaid(
+                        10L,
+                        101L,
+                        new ManualPaymentConfirmationRequest("Выписка", ""),
+                        () -> "manager"
+                )
+        );
+
+        verify(invoiceOrderRepository, never()).save(invoiceItem);
+    }
+
+    @Test
+    void exactLatePredecessorConfirmationRetiresProvablyUnstartedSuccessor() {
+        CommonBillingAccount account = account();
+        CommonInvoice predecessor = invoice(account);
+        predecessor.setStatus(CommonInvoiceStatus.UNPAID);
+        predecessor.setContractorAllocationId(703L);
+        predecessor.setPaymentRouteType("MANUAL_MOBILE_BANK");
+        predecessor.setPaymentRouteManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        predecessor.setAmountKopecks(100_000L);
+        Order order = order(101L);
+        CommonInvoiceOrder predecessorItem = item(predecessor, order);
+        predecessorItem.setActiveMembership(false);
+
+        CommonInvoice successor = invoice(account);
+        successor.setId(11L);
+        successor.setInvoicePurpose("BAD_REVIEW_SUCCESSOR");
+        successor.setSupersedesInvoice(predecessor);
+        successor.setStatus(CommonInvoiceStatus.READY);
+        successor.setAmountKopecks(100_000L);
+        CommonInvoiceOrder successorItem = item(successor, order);
+        successorItem.setActiveMembership(true);
+
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(703L);
+        allocation.setAmountKopecks(100_000L);
+        stubLockedInvoice(predecessor, predecessorItem, order);
+        when(invoiceRepository.findSuccessorsForUpdate(10L)).thenReturn(List.of(successor));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(predecessorItem));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(11L)).thenReturn(List.of(successorItem));
+        when(invoiceRepository.existsBySupersedesInvoice_Id(11L)).thenReturn(false);
+        when(invoiceOrderRepository.deleteByInvoiceId(11L)).thenReturn(1);
+        when(contractorPaymentLiveRoutingService.validatedCommonConfirmationSource(10L, 703L))
+                .thenReturn(allocation);
+        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+
+        service.confirmContractorPaymentSource(
+                10L,
+                100_000L,
+                LocalDateTime.of(2026, 8, 13, 12, 0),
+                "Поступление найдено в выписке получателя",
+                () -> "admin"
+        );
+
+        assertEquals(CommonInvoiceStatus.PAID, predecessor.getStatus());
+        assertEquals(LocalDateTime.of(2026, 8, 13, 12, 0), predecessor.getPaidAt());
+        assertTrue(predecessorItem.isActiveMembership());
+        verify(invoiceRepository).deleteById(11L);
+        verify(contractorPaymentShadowService, never()).reconcileCommonInvoiceId(11L);
+    }
+
+    @Test
+    void exactLatePredecessorConfirmationFailsWhenSuccessorWasStarted() throws Exception {
+        CommonInvoice predecessor = invoice(account());
+        predecessor.setStatus(CommonInvoiceStatus.UNPAID);
+        predecessor.setContractorAllocationId(704L);
+        predecessor.setPaymentRouteType("MANUAL_MOBILE_BANK");
+        predecessor.setPaymentRouteManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        predecessor.setAmountKopecks(100_000L);
+        Order order = order(101L);
+        CommonInvoiceOrder predecessorItem = item(predecessor, order);
+        predecessorItem.setActiveMembership(false);
+        CommonInvoice successor = invoice(predecessor.getAccount());
+        successor.setId(12L);
+        successor.setInvoicePurpose("BAD_REVIEW_SUCCESSOR");
+        successor.setSupersedesInvoice(predecessor);
+        successor.setSentAt(LocalDateTime.now().minusMinutes(1));
+        CommonInvoiceOrder successorItem = item(successor, order);
+
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(704L);
+        allocation.setAmountKopecks(100_000L);
+        stubLockedInvoice(predecessor, predecessorItem, order);
+        when(invoiceRepository.findSuccessorsForUpdate(10L)).thenReturn(List.of(successor));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(12L)).thenReturn(List.of(successorItem));
+        when(contractorPaymentLiveRoutingService.validatedCommonConfirmationSource(10L, 704L))
+                .thenReturn(allocation);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.confirmContractorPaymentSource(
+                        10L,
+                        100_000L,
+                        null,
+                        "Поступление найдено",
+                        () -> "admin"
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(CommonInvoiceStatus.UNPAID, predecessor.getStatus());
+        verify(invoiceRepository, never()).deleteById(12L);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
     }
 
     @Test
@@ -1426,6 +1602,32 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void managerTextCommonInvoiceSendRetainsCustomInstructionWithoutCopyButton() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setPaymentRouteType(TbankRuntimeSettingsService.PAYMENT_SOURCE_MANAGER_TEXT);
+        invoice.setPaymentRouteInstructionText("Оплатите единый счет по реквизитам менеджера.");
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.now().minusMinutes(1));
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        when(messageSender.send(any(), any(), any(), any()))
+                .thenReturn(ClientMessageSendResult.sent("Telegram"));
+
+        service.sendInvoice(10L, true);
+
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(messageSender).send(any(), any(), any(), text.capture());
+        assertTrue(text.getValue().contains("Оплатите единый счет по реквизитам менеджера."));
+        verify(messageSender, never()).send(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void newContractorCommonRouteKeepsLegacyPiiBlankAndRendersEncryptedSnapshot() {
         CommonInvoice invoice = invoice(account());
         invoice.setStatus(CommonInvoiceStatus.READY);
@@ -1468,6 +1670,48 @@ class CommonBillingServiceTest {
         assertEquals("Получатель snapshot", response.manualRecipientName());
         assertEquals("Snapshot банк", response.manualBankName());
         assertEquals("Snapshot комментарий", response.manualComment());
+    }
+
+    @Test
+    void contractorCommonInvoiceSendUsesFrozenSnapshotInTextAndTelegramCopyButton() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setContractorAllocationId(4_990L);
+        invoice.setPaymentRouteType(PaymentMethod.MANUAL_MOBILE_BANK.name());
+        invoice.setPaymentRouteManualType(ManualPaymentType.MOBILE_BANK);
+        invoice.setPaymentRouteManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.now().minusMinutes(1));
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
+        when(contractorPaymentLiveRoutingService.frozenCommonRouteAction(10L, 4_990L))
+                .thenReturn(FrozenCommonRouteAction.KEEP);
+        when(contractorPaymentLiveRoutingService.activeCommonInvoiceRequisites(invoice, 100_000L))
+                .thenReturn(Optional.of(requisites(
+                        4_990L,
+                        "Получатель snapshot",
+                        "2202208238396676",
+                        "Snapshot банк",
+                        "Snapshot комментарий"
+                )));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        when(messageSender.send(any(), any(), any(), any(), any()))
+                .thenReturn(ClientMessageSendResult.sent("Telegram"));
+
+        service.sendInvoice(10L, true);
+
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<TelegramTransferCopyButton> button =
+                ArgumentCaptor.forClass(TelegramTransferCopyButton.class);
+        verify(messageSender).send(any(), any(), any(), text.capture(), button.capture());
+        assertTrue(text.getValue().contains("Оплата по номеру карты: 2202208238396676"));
+        assertTrue(text.getValue().contains("Получатель: Получатель snapshot"));
+        assertEquals("Скопировать номер карты", button.getValue().text());
+        assertEquals("2202208238396676", button.getValue().copyText());
     }
 
     @Test
@@ -1806,6 +2050,44 @@ class CommonBillingServiceTest {
         deleteOrder.verify(orderDeletionService).deleteOrder(101L, principal);
         deleteOrder.verify(orderDeletionService).deleteOrder(102L, principal);
         verify(invoiceRepository).deleteById(10L);
+    }
+
+    @Test
+    void deleteUnsentSuccessorRestoresPredecessorMembershipWithoutDeletingOrder() {
+        CommonBillingAccount account = account();
+        CommonInvoice predecessor = invoice(account);
+        predecessor.setStatus(CommonInvoiceStatus.UNPAID);
+        CommonInvoice successor = invoice(account);
+        successor.setId(11L);
+        successor.setInvoicePurpose("BAD_REVIEW_SUCCESSOR");
+        successor.setSupersedesInvoice(predecessor);
+        successor.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder predecessorItem = item(predecessor, order);
+        predecessorItem.setActiveMembership(false);
+        CommonInvoiceOrder successorItem = item(successor, order);
+        successorItem.setActiveMembership(true);
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(11L)).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(11L)).thenReturn(List.of(successorItem));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(predecessorItem));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceRepository.findByIdWithAccount(11L)).thenReturn(Optional.of(successor));
+        when(invoiceRepository.findByIdWithAccountForUpdate(11L)).thenReturn(Optional.of(successor));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(predecessor));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(predecessor));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(11L)).thenReturn(List.of(successorItem));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(predecessorItem));
+        when(invoiceOrderRepository.deleteByInvoiceId(11L)).thenReturn(1);
+
+        service.deleteInvoiceWithOrders(11L, () -> "admin");
+
+        assertTrue(predecessorItem.isActiveMembership());
+        verify(invoiceRepository).deleteById(11L);
+        verify(orderDeletionService, never()).deleteOrder(any(), any());
+        verify(entityManager).flush();
     }
 
     @Test
@@ -3021,7 +3303,7 @@ class CommonBillingServiceTest {
         pristineStandaloneLink.setExpiresAt(LocalDateTime.now().plusDays(1));
 
         when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
-        when(invoiceOrderRepository.findByOrder_Id(101L)).thenReturn(Optional.empty());
+        when(invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(101L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
         when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
         when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of(pristineStandaloneLink));
@@ -3052,7 +3334,7 @@ class CommonBillingServiceTest {
         CommonInvoice[] createdInvoice = new CommonInvoice[1];
 
         when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
-        when(invoiceOrderRepository.findByOrder_Id(101L))
+        when(invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(101L))
                 .thenAnswer(ignored -> Optional.ofNullable(attachedItem[0]));
         when(invoiceOrderRepository.findMembershipByOrderIdForRead(101L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
@@ -3104,7 +3386,7 @@ class CommonBillingServiceTest {
         manualLink.setExpiresAt(LocalDateTime.now().plusDays(1));
 
         when(orderRepository.findCompanyIdByOrderId(102L)).thenReturn(Optional.of(20L));
-        when(invoiceOrderRepository.findByOrder_Id(102L)).thenReturn(Optional.empty());
+        when(invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(102L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(accountCompany));
         when(orderAggregateMutationLockService.lock(102L)).thenReturn(order);
         when(paymentLinkRepository.findByOrderIdForUpdate(102L)).thenReturn(List.of(manualLink));
@@ -3139,7 +3421,7 @@ class CommonBillingServiceTest {
         CommonInvoiceOrder[] attachedItem = new CommonInvoiceOrder[1];
 
         when(orderRepository.findCompanyIdByOrderId(103L)).thenReturn(Optional.of(20L));
-        when(invoiceOrderRepository.findByOrder_Id(103L)).thenReturn(Optional.empty());
+        when(invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(103L)).thenReturn(Optional.empty());
         when(invoiceOrderRepository.findMembershipByOrderIdForRead(103L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(accountCompany));
         when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L)).thenReturn(List.of(accountCompany));
@@ -3536,7 +3818,7 @@ class CommonBillingServiceTest {
         Order newOrder = order(101L);
 
         when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
-        when(invoiceOrderRepository.findByOrder_Id(101L)).thenReturn(Optional.empty());
+        when(invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(101L)).thenReturn(Optional.empty());
         when(invoiceOrderRepository.findMembershipByOrderIdForRead(101L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
         when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L)).thenReturn(List.of(link));
@@ -3629,8 +3911,6 @@ class CommonBillingServiceTest {
                 .thenReturn(List.of(movedItem));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(91L)).thenReturn(List.of(existingItem, movedItem));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(90L)).thenReturn(List.of());
-        when(badReviewTaskService.getPayableSum(existingOrder)).thenReturn(BigDecimal.valueOf(1000));
-        when(badReviewTaskService.getPayableSum(movedOrder)).thenReturn(BigDecimal.valueOf(250));
         when(accountCompanyRepository.findByAccount_IdOrderByCompany_TitleAsc(56L)).thenReturn(List.of(oldDisabledLink));
         when(accountCompanyRepository.findByAccount_IdOrderByCompany_TitleAsc(57L)).thenReturn(List.of(targetLink));
         when(orderRepository.findCommonBillingBackfillOrderIds(eq(3041L), any())).thenReturn(List.of());
@@ -4225,7 +4505,7 @@ class CommonBillingServiceTest {
         Order order = order(101L);
 
         when(orderRepository.findCompanyIdByOrderId(101L)).thenReturn(Optional.of(20L));
-        when(invoiceOrderRepository.findByOrder_Id(101L)).thenReturn(Optional.empty());
+        when(invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(101L)).thenReturn(Optional.empty());
         when(invoiceOrderRepository.findMembershipByOrderIdForRead(101L)).thenReturn(Optional.empty());
         when(accountCompanyRepository.findEnabledLinksForCompany(20L)).thenReturn(List.of(link));
         when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L)).thenReturn(List.of(link));
@@ -4267,6 +4547,7 @@ class CommonBillingServiceTest {
     void refreshLinkedOrderAmountMovesInvoiceToAttentionWhenAmountCannotBeCalculated() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
         Order order = order(101L);
         CommonInvoiceOrder item = item(invoice, order);
 
@@ -4278,6 +4559,115 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
         assertTrue(invoice.getLastError().startsWith("amount_calc_failed"));
         verify(invoiceOrderRepository, never()).save(item);
+    }
+
+    @Test
+    void refreshDoesNotRewriteDeliveredCommonInvoiceAmount() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.INVOICED);
+        invoice.setSentAt(LocalDateTime.of(2026, 8, 7, 10, 0));
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(item));
+
+        assertTrue(service.refreshLinkedOrderAmount(101L));
+
+        assertEquals(100_000L, item.getAmountKopecks());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith("payable_change_requires_supplement:"));
+        verify(invoiceOrderRepository, never()).save(item);
+    }
+
+    @Test
+    void unpaidCommonInvoiceAllowsTaskCompletionButRequiresSupplement() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.UNPAID);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setUnpaid(true);
+        stubLockedInvoice(invoice, item, order);
+
+        assertEquals(
+                CommonPayableChangeDisposition.SUPPLEMENT_REQUIRED,
+                service.prepareLinkedOrderPayableChange(101L)
+        );
+
+        assertEquals(CommonInvoiceStatus.UNPAID, invoice.getStatus());
+        assertEquals(100_000L, item.getAmountKopecks());
+        verify(invoiceRepository, never()).save(invoice);
+    }
+
+    @Test
+    void unsafeUnpaidMembershipFailsClosedWithoutStandaloneCycle() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.UNPAID);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setUnpaid(false);
+        stubLockedInvoice(invoice, item, order);
+
+        assertTrue(service.createBadReviewSupplementSuccessor(101L, 77L));
+
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals(CommonInvoiceStatus.UNPAID.name(), invoice.getPreviousStatus());
+        assertTrue(invoice.getLastError().startsWith("bad_review_supplement_required:"));
+        assertTrue(invoice.getLastError().contains("task=77"));
+        assertEquals(100_000L, item.getAmountKopecks());
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void unpaidCommonCycleCreatesOneCollectingSuccessorAndKeepsPredecessorImmutable() {
+        CommonBillingAccount account = account();
+        CommonInvoice predecessor = invoice(account);
+        predecessor.setStatus(CommonInvoiceStatus.UNPAID);
+        predecessor.setTitle("x".repeat(180));
+        Order order = order(101L);
+        order.setStatus(status("Не оплачено"));
+        CommonInvoiceOrder sourceItem = item(predecessor, order);
+        sourceItem.setActiveMembership(true);
+        sourceItem.setUnpaid(true);
+        stubLockedInvoice(predecessor, sourceItem, order);
+        when(invoiceRepository.findByCycleIdempotencyKeyForUpdate("BAD_REVIEW_SUCCESSOR:10"))
+                .thenReturn(Optional.empty());
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(sourceItem));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1300));
+        when(badReviewTaskService.getSummaryForOrder(101L)).thenReturn(
+                new BadReviewTaskSummary(1, 0, 1, 0, BigDecimal.valueOf(300), BigDecimal.ZERO)
+        );
+        when(invoiceRepository.save(any(CommonInvoice.class))).thenAnswer(invocation -> {
+            CommonInvoice saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(11L);
+            }
+            return saved;
+        });
+
+        assertTrue(service.createBadReviewSupplementSuccessor(101L, 77L));
+
+        assertEquals(CommonInvoiceStatus.UNPAID, predecessor.getStatus());
+        assertFalse(sourceItem.isActiveMembership());
+        ArgumentCaptor<Iterable> itemBatches = ArgumentCaptor.forClass(Iterable.class);
+        verify(invoiceOrderRepository, times(3)).saveAll(itemBatches.capture());
+        List<CommonInvoiceOrder> successorItems = new ArrayList<>();
+        itemBatches.getAllValues().get(1).forEach(value -> successorItems.add((CommonInvoiceOrder) value));
+        assertEquals(1, successorItems.size());
+        CommonInvoiceOrder successorItem = successorItems.get(0);
+        assertTrue(successorItem.isActiveMembership());
+        assertFalse(successorItem.isUnpaid());
+        assertEquals(130_000L, successorItem.getAmountKopecks());
+        CommonInvoice successor = successorItem.getInvoice();
+        assertEquals(predecessor, successor.getSupersedesInvoice());
+        assertEquals("BAD_REVIEW_SUCCESSOR", successor.getInvoicePurpose());
+        assertEquals("BAD_REVIEW_SUCCESSOR:10", successor.getCycleIdempotencyKey());
+        assertEquals(180, successor.getTitle().length());
+        assertEquals(CommonInvoiceStatus.READY, successor.getStatus());
+        assertEquals("Не оплачено", order.getStatus().getTitle());
+        verify(orderRepository, never()).save(order);
+        verify(entityManager).flush();
     }
 
     @Test
@@ -6879,6 +7269,17 @@ class CommonBillingServiceTest {
         item.setReady(true);
         item.setAmountKopecks(100_000L);
         return item;
+    }
+
+    private void stubLockedInvoice(CommonInvoice invoice, CommonInvoiceOrder item, Order order) {
+        lenient().when(invoiceOrderRepository.findByOrderIdWithInvoice(order.getId())).thenReturn(Optional.of(item));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(invoice.getId())).thenReturn(List.of(order.getId()));
+        when(orderAggregateMutationLockService.lock(order.getId())).thenReturn(order);
+        when(invoiceRepository.findByIdWithAccount(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(accountRepository.findByIdWithRelationsForUpdate(invoice.getAccount().getId()))
+                .thenReturn(Optional.of(invoice.getAccount()));
+        when(invoiceRepository.findByIdWithAccountForUpdate(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(invoice.getId())).thenReturn(List.of(item));
     }
 
     private PaymentLink confirmedStandaloneBankPayment(Long id, Order order, long amountKopecks) {

@@ -11,7 +11,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,13 +53,16 @@ public class ContractorRewardInitialMonthSyncService {
         Long userId = discovered.getUser().getId();
         ContractorRole role = discovered.getRole();
         LocalDateTime previousTrackingStartedAt = discovered.getTrackingStartedAt();
-        List<Long> sourceIds = legacySourceIds(userId, role, monthStart, monthStart.plusMonths(1));
-        List<Zp> lockedSources = sourceIds.stream()
+        List<Long> sourceIds = legacySourceIds(userId, role, monthStart, monthStart.plusMonths(1)).stream()
                 .filter(Objects::nonNull)
                 .distinct()
                 .sorted()
-                .map(zpRepository::findByIdForContractorLedgerUpdate)
-                .flatMap(java.util.Optional::stream)
+                .toList();
+        List<Zp> lockedSources = sourceIds.stream()
+                .map(sourceId -> zpRepository.findByIdForContractorLedgerUpdate(sourceId)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Legacy contractor reward source disappeared before lock: sourceId=" + sourceId
+                        )))
                 .toList();
 
         // Canonical lock order is ZP source(s) -> profile. Reward repair uses
@@ -69,12 +71,24 @@ public class ContractorRewardInitialMonthSyncService {
         if (!requiresSync(profile, coverageStart)) {
             return false;
         }
+        if (profile.getUser() == null
+                || !Objects.equals(profile.getUser().getId(), userId)
+                || profile.getRole() != role) {
+            throw new IllegalStateException(
+                    "Contractor payment profile identity changed during initial-month sync: profileId=" + profileId
+            );
+        }
 
-        List<Zp> eligibleSources = lockedSources.stream()
-                .filter(source -> belongsToPeriodAndUser(source, userId, monthStart, monthStart.plusMonths(1)))
-                .filter(source -> source.getContractorRole() == null || source.getContractorRole() == role)
-                .sorted(Comparator.comparing(Zp::getId))
-                .toList();
+        for (Zp source : lockedSources) {
+            if (!belongsToPeriodAndUser(source, userId, monthStart, monthStart.plusMonths(1))
+                    || !eligibleAfterLock(source, role)) {
+                throw new IllegalStateException(
+                        "Legacy contractor reward source changed or is not classifiable after lock: sourceId="
+                                + source.getId() + ", role=" + role
+                );
+            }
+        }
+        List<Zp> eligibleSources = lockedSources;
         long previousBoundary = profile.getTrackingStartZpId();
         long newBoundary = eligibleSources.stream()
                 .map(Zp::getId)
@@ -87,23 +101,30 @@ public class ContractorRewardInitialMonthSyncService {
                 .findFirst()
                 .orElse(previousBoundary);
 
-        List<Zp> imported = new ArrayList<>();
+        List<Zp> classified = new ArrayList<>();
         for (Zp source : eligibleSources) {
-            if (source.getContractorRole() != null) {
-                continue;
+            boolean changed = false;
+            if (source.getContractorRole() == null) {
+                source.setContractorRole(role);
+                changed = true;
             }
-            source.setContractorRole(role);
             if (source.getSource() == null || source.getSource().isBlank()) {
                 source.setSource(role == ContractorRole.SPECIALIST
                         ? ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST
                         : ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER);
+                changed = true;
             }
             // Historical rows already contain the exact recipient and amount
             // shown in the personal cabinet. Do not redistribute them using a
             // later order assignment after a workload transfer.
-            source.setAttributionFinal(true);
-            zpRepository.save(source);
-            imported.add(source);
+            if (!source.isAttributionFinal()) {
+                source.setAttributionFinal(true);
+                changed = true;
+            }
+            if (changed) {
+                zpRepository.save(source);
+                classified.add(source);
+            }
         }
 
         profile.setTrackingStartZpId(newBoundary);
@@ -120,11 +141,14 @@ public class ContractorRewardInitialMonthSyncService {
         profile.setLedgerSyncAt(businessClock.now());
         profileRepository.saveAndFlush(profile);
 
-        if (!imported.isEmpty()) {
-            ledgerService.synchronizeSources(imported);
-        }
+        // A global repair may already have written an up-to-date marker while
+        // this profile still had the MAX tracking boundary. Lowering the
+        // boundary therefore requires a forced, marker-independent rebuild
+        // for every eligible source, including rows typed by reconciliation
+        // before the first profile sync.
+        ledgerService.forceSynchronizeDirectSourcesForLockedProfile(eligibleSources, profile);
 
-        long importedKopecks = imported.stream()
+        long importedKopecks = eligibleSources.stream()
                 .map(Zp::getSum)
                 .map(this::toKopecks)
                 .reduce(0L, Math::addExact);
@@ -134,7 +158,8 @@ public class ContractorRewardInitialMonthSyncService {
         Map<String, Object> newState = new LinkedHashMap<>();
         newState.put("trackingStartedAt", coverageStart);
         newState.put("trackingStartZpId", newBoundary);
-        newState.put("importedSources", imported.size());
+        newState.put("classifiedSources", classified.size());
+        newState.put("importedSources", eligibleSources.size());
         newState.put("importedKopecks", importedKopecks);
         businessAuditService.recordRequiredInCurrentTransaction(
                 "INITIAL_CONTRACTOR_REWARD_MONTH_SYNC",
@@ -148,7 +173,7 @@ public class ContractorRewardInitialMonthSyncService {
         );
         log.info(
                 "Initial contractor reward month synchronized: profileId={}, role={}, month={}, sources={}, amountKopecks={}",
-                profile.getId(), role, monthStart, imported.size(), importedKopecks
+                profile.getId(), role, monthStart, eligibleSources.size(), importedKopecks
         );
         return true;
     }
@@ -189,6 +214,36 @@ public class ContractorRewardInitialMonthSyncService {
                 && source.getCreated() != null
                 && !source.getCreated().isBefore(from)
                 && source.getCreated().isBefore(to);
+    }
+
+    private boolean eligibleAfterLock(Zp source, ContractorRole role) {
+        if (source == null
+                || source.getId() == null
+                || !source.isActive()
+                || (source.getContractorRole() != null && source.getContractorRole() != role)
+                || !compatibleLegacySource(source.getSource(), role)) {
+            return false;
+        }
+        if (role == ContractorRole.SPECIALIST) {
+            return zpRepository.countEligibleLegacySpecialistRewardForSync(source.getId()) == 1L;
+        }
+        if (role == ContractorRole.MANAGER) {
+            return zpRepository.countEligibleLegacyManagerRewardForSync(source.getId()) == 1L;
+        }
+        return false;
+    }
+
+    private boolean compatibleLegacySource(String source, ContractorRole role) {
+        if (source == null || source.isBlank()) {
+            return role == ContractorRole.SPECIALIST || role == ContractorRole.MANAGER;
+        }
+        if (ContractorRewardSourceCodes.LEGACY_PERFORMER_PRODUCT.equals(source)) {
+            return role == ContractorRole.SPECIALIST || role == ContractorRole.MANAGER;
+        }
+        return role == ContractorRole.SPECIALIST
+                ? ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST.equals(source)
+                : role == ContractorRole.MANAGER
+                        && ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER.equals(source);
     }
 
     private long toKopecks(BigDecimal amount) {

@@ -59,6 +59,9 @@ const ORDER_LIST_STATUSES = new Set([
   'Архив'
 ]);
 
+const TELEGRAM_BINDING_POLL_INTERVAL_MS = 3000;
+const TELEGRAM_BINDING_POLL_TIMEOUT_MS = 15 * 60 * 1000;
+
 type ManagerPerformanceFactor = {
   key: string;
   label: string;
@@ -85,6 +88,67 @@ export function shouldHideClientChatUnansweredAfterAction(
   return example.itemStatus === 'RESOLVED';
 }
 
+export function isTelegramBindingAutomationIssue(
+  example: Pick<ManagerControlConcreteItem, 'type' | 'reason'>
+): boolean {
+  const reason = (example.reason ?? '').toLowerCase();
+  return example.type === 'AUTOMATION_FAILURE'
+    && (reason.includes('telegram_group_missing') || reason.includes('для telegram-группы не задан chatid'));
+}
+
+export function telegramGroupLinkCommand(inviteUrl: string): string {
+  try {
+    const url = new URL(inviteUrl);
+    const host = url.hostname.toLowerCase();
+    if (!['t.me', 'telegram.me', 'telegram.dog'].includes(host)) {
+      return '';
+    }
+    const payload = (url.searchParams.get('startgroup') ?? '').trim();
+    const botUsername = url.pathname.split('/').filter(Boolean).at(-1) ?? '';
+    if (!payload || !/^[A-Za-z0-9_]+$/.test(botUsername)) {
+      return '';
+    }
+    return `/start@${botUsername} ${payload}`;
+  } catch {
+    return '';
+  }
+}
+
+export function automationWaitingSlotDate(reason: string | null | undefined): Date | null {
+  const match = (reason ?? '').match(
+    /(?:следующий слот отправки|система отправит его автоматически):\s*(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/i
+  );
+  if (!match) {
+    return null;
+  }
+  const slot = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5])
+  );
+  return Number.isNaN(slot.getTime()) ? null : slot;
+}
+
+export function isAutomationWaitingForSlotReason(
+  reason: string | null | undefined,
+  nowMs: number
+): boolean {
+  const normalized = (reason ?? '').toLowerCase();
+  const scheduled = normalized.includes('следующий слот отправки')
+    || normalized.includes('очередь автоответчика исправна')
+    || (
+      normalized.includes('сообщение уже запланировано')
+      && normalized.includes('система отправит его автоматически')
+    );
+  if (!scheduled) {
+    return false;
+  }
+  const slot = automationWaitingSlotDate(reason);
+  return slot === null || slot.getTime() > nowMs;
+}
+
 @Component({
   selector: 'app-manager-control',
   imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, NgTemplateOutlet],
@@ -103,6 +167,7 @@ export class ManagerControlComponent implements OnInit {
   private detailRequestSeq = 0;
   private autoSyncingDetailManagerIds = new Set<number>();
   private reconcilingDetailMessageManagerIds = new Set<number>();
+  private telegramBindingPollTimers = new Map<number, number>();
 
   @Input() embedded = false;
   @Input() personalControl = false;
@@ -164,7 +229,12 @@ export class ManagerControlComponent implements OnInit {
 
   constructor() {
     const clockTimer = window.setInterval(() => this.clock.set(Date.now()), 1000);
-    this.destroyRef.onDestroy(() => window.clearInterval(clockTimer));
+    this.destroyRef.onDestroy(() => {
+      window.clearInterval(clockTimer);
+      for (const timer of this.telegramBindingPollTimers.values()) {
+        window.clearTimeout(timer);
+      }
+    });
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const rawManagerId = params.get('managerId');
       const managerId = rawManagerId ? Number(rawManagerId) : null;
@@ -1440,33 +1510,45 @@ export class ManagerControlComponent implements OnInit {
     }
     this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
     this.api.repairConcreteItem(itemId).subscribe({
-      next: (updated) => {
-        this.updatingConcreteItemIds.update((ids) => {
-          const next = new Set(ids);
-          next.delete(itemId);
-          return next;
-        });
-        const merged = this.patchDetailConcreteItem(example, updated);
-        this.toast.success('Карточка починена', merged.comment || 'Проблема устранена автоматически');
-        if (this.shouldHideConcreteItemAfterAction(merged)) {
-          this.removeConcreteItemFromDetail(merged);
-        }
-        this.load({ silent: true });
-      },
+      next: (updated) => this.completeConcreteRepair(example, updated),
       error: (err) => {
-        this.updatingConcreteItemIds.update((ids) => {
-          const next = new Set(ids);
-          next.delete(itemId);
-          return next;
-        });
+        this.setConcreteUpdating(itemId, false);
         const message = apiErrorMessage(err, 'Автоматическая починка не сработала');
         if (this.isManualChatBindingRepairMessage(message)) {
-          this.showManualChatBindingRepairToast(message);
+          this.showManualChatBindingRepairToast(message, example);
           return;
         }
         this.toast.error('Не удалось починить', message);
         this.load({ silent: true });
       }
+    });
+  }
+
+  private completeConcreteRepair(
+    example: ManagerControlConcreteItem,
+    updated: ManagerControlConcreteItem,
+    title = 'Карточка починена'
+  ): void {
+    if (example.controlEntityId) {
+      this.stopTelegramBindingPoll(example.controlEntityId);
+    }
+    const merged = this.patchDetailConcreteItem(example, updated);
+    this.toast.success(title, merged.comment || 'Проблема устранена автоматически');
+    if (this.shouldHideConcreteItemAfterAction(merged)) {
+      this.removeConcreteItemFromDetail(merged);
+    }
+    this.load({ silent: true });
+  }
+
+  private setConcreteUpdating(itemId: number, updating: boolean): void {
+    this.updatingConcreteItemIds.update((ids) => {
+      const next = new Set(ids);
+      if (updating) {
+        next.add(itemId);
+      } else {
+        next.delete(itemId);
+      }
+      return next;
     });
   }
 
@@ -1478,13 +1560,44 @@ export class ManagerControlComponent implements OnInit {
       || normalized.includes('если починка не помогла');
   }
 
-  private showManualChatBindingRepairToast(message: string): void {
+  private showManualChatBindingRepairToast(message: string, example: ManagerControlConcreteItem): void {
     const url = this.firstExternalUrl(message);
-    const title = message.toLowerCase().includes('telegram')
-      ? 'Жду привязку Telegram'
+    const telegram = message.toLowerCase().includes('telegram');
+    const title = telegram
+      ? 'Привяжите Telegram-группу'
       : message.toLowerCase().includes('max')
         ? 'Жду привязку MAX'
         : 'Жду привязку группы';
+
+    if (telegram && url) {
+      const command = telegramGroupLinkCommand(url);
+      this.toast.info(
+        title,
+        'Если бот еще не добавлен — откройте привязку и выберите группу. Если бот уже в группе — отправьте в ней одноразовую команду. После подтверждения задача повторится автоматически.',
+        [
+          {
+            label: 'Открыть привязку',
+            callback: () => {
+              this.startTelegramBindingPoll(example);
+              window.open(url, '_blank', 'noopener,noreferrer');
+            }
+          },
+          ...(command ? [{
+            label: 'Скопировать команду',
+            callback: () => {
+              this.startTelegramBindingPoll(example);
+              void copyTextToClipboard(command).then((copied) => {
+                if (copied) {
+                  this.toast.success('Команда скопирована', 'Отправьте ее в нужной Telegram-группе в течение 15 минут.');
+                }
+              });
+            }
+          }] : [])
+        ]
+      );
+      return;
+    }
+
     this.toast.info(
       title,
       message,
@@ -1503,6 +1616,53 @@ export class ManagerControlComponent implements OnInit {
     );
   }
 
+  private startTelegramBindingPoll(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    if (!itemId || this.telegramBindingPollTimers.has(itemId)) {
+      return;
+    }
+
+    const startedAt = Date.now();
+    this.setConcreteUpdating(itemId, true);
+    const poll = (): void => {
+      this.api.repairConcreteItem(itemId).subscribe({
+        next: (updated) => this.completeConcreteRepair(example, updated, 'Telegram-группа привязана'),
+        error: (err) => {
+          const message = apiErrorMessage(err, 'Не удалось проверить Telegram-привязку');
+          if (this.isManualChatBindingRepairMessage(message)
+            && Date.now() - startedAt < TELEGRAM_BINDING_POLL_TIMEOUT_MS) {
+            const timer = window.setTimeout(poll, TELEGRAM_BINDING_POLL_INTERVAL_MS);
+            this.telegramBindingPollTimers.set(itemId, timer);
+            return;
+          }
+
+          this.stopTelegramBindingPoll(itemId);
+          if (this.isManualChatBindingRepairMessage(message)) {
+            this.toast.warning(
+              'Привязка не подтверждена',
+              'Нажмите «Привязать Telegram» еще раз: одноразовая ссылка или команда действует 15 минут.'
+            );
+          } else {
+            this.toast.error('Не удалось повторить задачу', message);
+            this.load({ silent: true });
+          }
+        }
+      });
+    };
+
+    const timer = window.setTimeout(poll, TELEGRAM_BINDING_POLL_INTERVAL_MS);
+    this.telegramBindingPollTimers.set(itemId, timer);
+  }
+
+  private stopTelegramBindingPoll(itemId: number): void {
+    const timer = this.telegramBindingPollTimers.get(itemId);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      this.telegramBindingPollTimers.delete(itemId);
+    }
+    this.setConcreteUpdating(itemId, false);
+
+  }
   private firstExternalUrl(message: string): string {
     const match = (message ?? '').match(/https?:\/\/[^\s»"')]+/i);
     return match ? match[0].replace(/[.,;:!?]+$/, '') : '';
@@ -1778,6 +1938,10 @@ export class ManagerControlComponent implements OnInit {
       );
   }
 
+  isTelegramBindingFailure(example: ManagerControlConcreteItem): boolean {
+    return isTelegramBindingAutomationIssue(example);
+  }
+
   canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
     const reason = (example.reason ?? '').toLowerCase();
     if (this.isAutomationWaitingForSlot(example)) {
@@ -1820,20 +1984,11 @@ export class ManagerControlComponent implements OnInit {
   }
 
   isAutomationWaitingForSlot(example: ManagerControlConcreteItem): boolean {
-    const reason = (example.reason ?? '').toLowerCase();
-    const automationQueueReason = (
-      example.type === 'ORDER'
+    const automationQueueType = example.type === 'ORDER'
       || example.type === 'WORKER_ORDER_NEW'
-      || example.type === 'WORKER_ORDER_CORRECT'
-    ) && (
-      reason.includes('следующий слот отправки')
-      || reason.includes('очередь автоответчика исправна')
-    );
-    if (!automationQueueReason) {
-      return false;
-    }
-    const slot = this.automationWaitingSlotDate(example);
-    return slot === null || slot.getTime() > this.clock();
+      || example.type === 'WORKER_ORDER_CORRECT';
+    return automationQueueType
+      && isAutomationWaitingForSlotReason(example.reason, this.clock());
   }
 
   automationWaitingSlotText(example: ManagerControlConcreteItem): string {
@@ -1849,21 +2004,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   private automationWaitingSlotDate(example: ManagerControlConcreteItem): Date | null {
-    const reason = example.reason ?? '';
-    const match = reason.match(
-      /следующий слот отправки:\s*(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/i
-    );
-    if (!match) {
-      return null;
-    }
-    const slot = new Date(
-      Number(match[1]),
-      Number(match[2]) - 1,
-      Number(match[3]),
-      Number(match[4]),
-      Number(match[5])
-    );
-    return Number.isNaN(slot.getTime()) ? null : slot;
+    return automationWaitingSlotDate(example.reason);
   }
 
   isContactTextCopied(example: ManagerControlConcreteItem): boolean {

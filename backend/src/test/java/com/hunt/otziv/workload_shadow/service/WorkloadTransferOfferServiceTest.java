@@ -15,12 +15,15 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse;
+import com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository;
+import com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository.LiveControlProjection;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferOfferRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferWorkflowRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +39,8 @@ class WorkloadTransferOfferServiceTest {
     @Mock private WorkloadTransferOfferRepository offerRepository;
     @Mock private WorkloadTransferWorkflowRepository workflowRepository;
     @Mock private WorkloadLiveSettingsService liveSettingsService;
+    @Mock private WorkloadLiveControlRepository liveControlRepository;
+    @Mock private LiveControlProjection liveControl;
     @Mock private WorkloadShadowSettingsService shadowSettingsService;
 
     private WorkloadTransferOfferService service;
@@ -46,11 +51,16 @@ class WorkloadTransferOfferServiceTest {
                 offerRepository,
                 workflowRepository,
                 liveSettingsService,
-                shadowSettingsService
+                shadowSettingsService,
+                liveControlRepository
         );
         lenient().when(shadowSettingsService.current()).thenReturn(null);
         lenient().when(shadowSettingsService.zone(null))
                 .thenReturn(ZoneId.of("Asia/Irkutsk"));
+        lenient().when(liveControlRepository.lockState()).thenReturn(Optional.of(liveControl));
+        lenient().when(liveControl.getSettingsRevision()).thenReturn(1L);
+        lenient().when(liveControl.getMode()).thenReturn("LIVE");
+        lenient().when(liveControl.getApplyEnabled()).thenReturn("true");
     }
 
     @Test

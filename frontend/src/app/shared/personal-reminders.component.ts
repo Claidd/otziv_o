@@ -179,22 +179,27 @@ export class PersonalRemindersComponent implements OnInit {
   }
 
   async copyReminderPayment(reminder: PersonalReminder): Promise<void> {
-    const text = this.reminderPaymentText(reminder);
-    if (!text) {
-      this.toastService.error('Счет не скопирован', 'В напоминании нет текста счета');
-      return;
-    }
-
     this.copyingPaymentReminderId.set(reminder.id);
-    try {
-      if (await copyTextToClipboard(text)) {
-        this.toastService.success('Скопировано', 'Текст счета скопирован');
-      } else {
-        this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+    this.remindersService.preparePaymentInstruction(reminder.id).subscribe({
+      next: async (instruction) => {
+        try {
+          if (await copyTextToClipboard((instruction.copyText ?? '').trim())) {
+            this.toastService.success('Скопировано', 'Текст счета скопирован');
+          } else {
+            this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+          }
+        } finally {
+          this.copyingPaymentReminderId.set(null);
+        }
+      },
+      error: (err) => {
+        this.copyingPaymentReminderId.set(null);
+        this.toastService.error(
+          'Счет не подготовлен',
+          apiErrorMessage(err, 'Проверьте общий счет или платежные реквизиты')
+        );
       }
-    } finally {
-      this.copyingPaymentReminderId.set(null);
-    }
+    });
   }
 
   moveBadReviewOrderToBan(reminder: PersonalReminder): void {

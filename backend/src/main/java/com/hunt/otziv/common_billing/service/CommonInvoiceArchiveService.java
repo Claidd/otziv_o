@@ -19,7 +19,9 @@ import com.hunt.otziv.u_users.service.UserService;
 import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -116,31 +118,35 @@ public class CommonInvoiceArchiveService {
             );
         }
 
-        if (!repository.lockAndCheckPaymentRefsRestorable(invoiceId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Архивный общий счет содержит незавершенную платежную операцию и не может быть восстановлен"
-            );
+        List<Long> chainInvoiceIds = repository.unrestoredSupersessionChain(invoiceId);
+        if (chainInvoiceIds.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Цикл общего счета уже восстановлен");
         }
-
-        List<CommonInvoiceArchiveOrderItem> orders = repository.findOrders(invoiceId, "archive");
+        Map<Long, String> archivedStatuses = new LinkedHashMap<>();
+        Map<Long, CommonInvoiceArchiveOrderItem> ordersById = new LinkedHashMap<>();
+        for (Long chainInvoiceId : chainInvoiceIds) {
+            if (!repository.lockAndCheckPaymentRefsRestorable(chainInvoiceId)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Цикл общего счета содержит незавершенную платежную операцию"
+                );
+            }
+            archivedStatuses.put(chainInvoiceId, repository.archivedStatus(chainInvoiceId));
+            repository.findOrders(chainInvoiceId, "archive")
+                    .forEach(order -> ordersById.putIfAbsent(order.orderId(), order));
+        }
+        List<CommonInvoiceArchiveOrderItem> orders = new ArrayList<>(ordersById.values());
         if (orders.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "В архивном общем счете нет заказов");
         }
-        String archivedStatus = repository.archivedStatus(invoiceId);
         List<ArchiveRestoreResult> restoredOrders = new ArrayList<>();
         for (CommonInvoiceArchiveOrderItem order : orders) {
-            String targetStatus;
-            if ("BAN".equals(archivedStatus)) {
-                targetStatus = "Оплачено".equals(order.status()) ? "Оплачено" : "Бан";
-            } else if ("PAID".equals(archivedStatus)) {
-                targetStatus = "Оплачено";
-            } else {
-                targetStatus = restoreTarget(order.archiveSourceStatus());
+            if (repository.isOrderAlreadyRestored(order.orderId())) {
+                continue;
             }
             restoredOrders.add(orderArchiveRestoreService.restoreOrder(
                     order.orderId(),
-                    targetStatus,
+                    restoreArchivedOrderTarget(order),
                     actor,
                     true
             ));
@@ -150,12 +156,15 @@ public class CommonInvoiceArchiveService {
                 .map(ArchiveRestoreResult::batchId)
                 .findFirst()
                 .orElse(null);
-        repository.restoreInvoice(invoiceId, randomToken(), actor, restoreBatchId);
-        if ("ARCHIVED".equals(archivedStatus)) {
-            repository.reopenRestoredManualInvoice(invoiceId);
-        } else {
-            repository.refreshRestoredClosedRetention(invoiceId, actor);
+        for (Long chainInvoiceId : chainInvoiceIds) {
+            repository.restoreInvoice(chainInvoiceId, randomToken(), actor, restoreBatchId);
+            if ("ARCHIVED".equals(archivedStatuses.get(chainInvoiceId))) {
+                repository.reopenRestoredManualInvoice(chainInvoiceId);
+            } else {
+                repository.refreshRestoredClosedRetention(chainInvoiceId, actor);
+            }
         }
+        String archivedStatus = archivedStatuses.get(invoiceId);
         return new CommonInvoiceArchiveRestoreResult(
                 invoiceId,
                 "ARCHIVED".equals(archivedStatus) ? "COLLECTING" : archivedStatus,
@@ -163,8 +172,16 @@ public class CommonInvoiceArchiveService {
                 LocalDateTime.now(),
                 actor,
                 orders.stream().map(CommonInvoiceArchiveOrderItem::orderId).toList(),
-                "Общий счет и все его заказы восстановлены из архивных таблиц"
+                "Цепочка общего счета и ее заказы восстановлены из архива"
         );
+    }
+
+    private String restoreArchivedOrderTarget(CommonInvoiceArchiveOrderItem order) {
+        String archivedOrderStatus = order.status() == null ? "" : order.status().trim();
+        if ("Оплачено".equals(archivedOrderStatus) || "Бан".equals(archivedOrderStatus)) {
+            return archivedOrderStatus;
+        }
+        return restoreTarget(order.archiveSourceStatus());
     }
 
     private CommonInvoiceArchiveListItem visibleInvoice(

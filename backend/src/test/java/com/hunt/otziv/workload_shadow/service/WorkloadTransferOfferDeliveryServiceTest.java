@@ -60,6 +60,13 @@ class WorkloadTransferOfferDeliveryServiceTest {
                 eq("HTML"),
                 anyList()
         )).thenReturn(Optional.of(701));
+        when(telegramService.editMessageText(
+                eq(-10051L),
+                eq(701),
+                org.mockito.ArgumentMatchers.anyString(),
+                eq("HTML"),
+                anyList()
+        )).thenReturn(true);
 
         int delivered = new WorkloadTransferOfferDeliveryService(
                 offerService,
@@ -126,6 +133,13 @@ class WorkloadTransferOfferDeliveryServiceTest {
                 eq("HTML"),
                 anyList()
         )).thenReturn(Optional.of(701));
+        when(telegramService.editMessageText(
+                eq(-10051L),
+                eq(701),
+                org.mockito.ArgumentMatchers.anyString(),
+                eq("HTML"),
+                anyList()
+        )).thenReturn(true);
 
         int delivered = new WorkloadTransferOfferDeliveryService(
                 offerService,

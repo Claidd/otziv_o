@@ -5,7 +5,9 @@ import { IonContent } from '@ionic/angular/standalone';
 import { Subscription } from 'rxjs';
 import { ApiService, PublicCommonInvoice } from '../core/api.service';
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
+import { manualTransferDestinationPresentation } from '../shared/manual-transfer-destination';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
+import { configuredPaymentTarget } from '../shared/payment-navigation';
 
 @Component({
   selector: 'app-public-pay-group-page',
@@ -50,7 +52,64 @@ import { MobileExternalLinkService } from '../shared/mobile-external-link.servic
               }
             </section>
 
-            @if (invoice.payable) {
+            @if (invoice.status === 'PAID') {
+              <section class="state-card ok"><span class="material-icons-sharp">task_alt</span><strong>Общий счет оплачен.</strong></section>
+            } @else if (managerTextRoute()) {
+              <section class="manual-card">
+                <h2>Реквизиты менеджера</h2>
+                <p>{{ invoice.paymentInstructionText || 'Запросите реквизиты у менеджера.' }}</p>
+                <small>После оплаты отправьте один чек менеджеру.</small>
+              </section>
+            } @else if (manualRoute()) {
+              <section class="manual-card" aria-label="Реквизиты общего счета">
+                <h2>{{ manualRouteTitle() }}</h2>
+                @if (externalManualRoute()) {
+                  @if (manualPaymentUrl()) {
+                    <button class="primary" type="button" (click)="openManualPaymentUrl()">
+                      <span class="material-icons-sharp">open_in_new</span>
+                      {{ manualPaymentButtonLabel() }}
+                    </button>
+                    <button class="detail-line" type="button" (click)="copyPaymentValue(manualPaymentUrl())">
+                      <small>Ссылка оплаты</small><strong>{{ manualPaymentUrl() }}</strong><span class="material-icons-sharp">content_copy</span>
+                    </button>
+                  } @else {
+                    <p class="destination-error">Ссылка оплаты не настроена. Обратитесь к менеджеру.</p>
+                  }
+                } @else {
+                  @if (invoice.manualPhone?.trim()) {
+                    <button class="detail-line" type="button" (click)="copyPaymentValue(invoice.manualPhone)" [title]="manualTransferDestination().copyLabel">
+                      <small>{{ manualTransferDestinationLabel() }}</small><strong>{{ invoice.manualPhone }}</strong><span class="material-icons-sharp">content_copy</span>
+                    </button>
+                  } @else {
+                    <p class="destination-error">Реквизиты для перевода не настроены. Не переводите деньги и обратитесь к менеджеру.</p>
+                  }
+                }
+                @if (invoice.manualRecipientName?.trim()) {
+                  <button class="detail-line" type="button" (click)="copyPaymentValue(invoice.manualRecipientName)">
+                    <small>Получатель</small><strong>{{ invoice.manualRecipientName }}</strong><span class="material-icons-sharp">content_copy</span>
+                  </button>
+                }
+                @if (invoice.manualBankName?.trim()) {
+                  <button class="detail-line" type="button" (click)="copyPaymentValue(invoice.manualBankName)">
+                    <small>Банк получателя</small><strong>{{ invoice.manualBankName }}</strong><span class="material-icons-sharp">content_copy</span>
+                  </button>
+                }
+                @if (invoice.manualComment?.trim()) {
+                  <button class="detail-line" type="button" (click)="copyPaymentValue(invoice.manualComment)">
+                    <small>Комментарий</small><strong>{{ invoice.manualComment }}</strong><span class="material-icons-sharp">content_copy</span>
+                  </button>
+                }
+                <small>После оплаты отправьте один чек менеджеру.</small>
+                @if (invoice.clientReportedAt) {
+                  <p class="reported-state"><span class="material-icons-sharp">schedule</span> Вы сообщили об оплате. Ожидаем подтверждение поступления.</p>
+                } @else if (invoice.clientReportable) {
+                  <button class="primary" type="button" (click)="reportPaid()" [disabled]="!canReportPaid()">
+                    <span class="material-icons-sharp">{{ reportingPaid() ? 'hourglass_top' : 'done_all' }}</span>
+                    {{ reportingPaid() ? 'Отправляем сообщение...' : 'Я оплатил' }}
+                  </button>
+                }
+              </section>
+            } @else if (invoice.payable && tbankRoute()) {
               <form class="pay-form" (ngSubmit)="submitPayment()">
                 <label>
                   <span>E-mail для чека</span>
@@ -68,6 +127,8 @@ import { MobileExternalLinkService } from '../shared/mobile-external-link.servic
                   <a href="https://www.gosuslugi.ru/crt" target="_blank" rel="noopener noreferrer">Госуслугах</a>.
                 </p>
               </form>
+            } @else if (invoice.payable) {
+              <section class="state-card"><span class="material-icons-sharp">support_agent</span><strong>Способ оплаты ещё не подготовлен. Обратитесь к менеджеру.</strong></section>
             } @else {
               <section class="state-card"><span class="material-icons-sharp">lock</span><strong>Этот счет недоступен для оплаты.</strong></section>
             }
@@ -78,12 +139,12 @@ import { MobileExternalLinkService } from '../shared/mobile-external-link.servic
   `,
   styles: [`
     ion-content{--background:#f6f8fc}.pay-page{display:grid;gap:.75rem;max-width:42rem;margin:0 auto;padding:calc(1rem + env(safe-area-inset-top)) .85rem calc(1.2rem + env(safe-area-inset-bottom));font-family:var(--otziv-font-family)}
-    .pay-hero,.summary-card,.pay-form,.state-card,.order-list article{border:1px solid rgba(103,116,131,.16);border-radius:1rem;background:linear-gradient(155deg,var(--otziv-white),var(--otziv-tone-walk-surface));box-shadow:0 .9rem 1.8rem rgba(132,139,200,.12)}
+    .pay-hero,.summary-card,.pay-form,.manual-card,.state-card,.order-list article{border:1px solid rgba(103,116,131,.16);border-radius:1rem;background:linear-gradient(155deg,var(--otziv-white),var(--otziv-tone-walk-surface));box-shadow:0 .9rem 1.8rem rgba(132,139,200,.12)}
     .pay-hero{display:grid;gap:.45rem;padding:1rem}.brand{color:var(--otziv-dark);font:900 1.1rem/1 var(--otziv-card-title-font);text-decoration:none}.brand strong{color:var(--otziv-danger)}.pay-hero p{margin:0;color:var(--otziv-info);font-size:.7rem;font-weight:1000;text-transform:uppercase}.pay-hero h1{margin:0;color:var(--otziv-dark);font-size:1.75rem}
     .summary-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem;padding:.8rem}.summary-card div{display:grid;gap:.12rem}.summary-card small,.pay-form label>span{color:var(--otziv-info);font-size:.66rem;font-weight:1000;text-transform:uppercase}.summary-card strong,.summary-card b{overflow:hidden;color:var(--otziv-dark);font-size:.9rem;text-overflow:ellipsis}.summary-card b{color:#16735f;font-size:1.2rem}
     .order-list{display:grid;gap:.5rem}.order-list article{display:grid;grid-template-columns:minmax(0,1fr)auto;gap:.55rem;align-items:center;padding:.75rem}.order-list article.paid{opacity:.68}.order-list strong,.order-list small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.order-list small{color:var(--otziv-info);font-weight:800}.order-list b{color:#16735f}
     .pay-form{display:grid;gap:.62rem;padding:.85rem}.pay-form label{display:grid;gap:.3rem}.pay-form input{min-height:2.5rem;border:1px solid rgba(103,116,131,.18);border-radius:.75rem;padding:0 .75rem;color:var(--otziv-dark);background:var(--otziv-white);font:900 .9rem/1 var(--otziv-font-family)}.check-row{grid-template-columns:auto minmax(0,1fr);align-items:center}.check-row input{min-height:1rem}.check-row span{color:var(--otziv-dark);font-size:.75rem;text-transform:none}.check-row a{color:var(--otziv-primary)}
-    button{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-height:2.55rem;border:1px solid rgba(108,155,207,.25);border-radius:.82rem;color:var(--otziv-primary);background:var(--otziv-white);font:1000 .82rem/1 var(--otziv-font-family)}button.primary{color:#fff;background:var(--otziv-primary)}button:disabled{opacity:.55}.cert-help{margin:0;color:var(--otziv-info);font-size:.7rem;font-weight:800;line-height:1.35;text-align:center}.cert-help a{color:var(--otziv-primary);font-weight:1000}.state-card{display:grid;place-items:center;gap:.35rem;min-height:5.5rem;padding:1rem;text-align:center}.state-card.error{color:var(--otziv-danger)}.state-card.ok{color:#16735f}
+    button{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-height:2.55rem;border:1px solid rgba(108,155,207,.25);border-radius:.82rem;color:var(--otziv-primary);background:var(--otziv-white);font:1000 .82rem/1 var(--otziv-font-family)}button.primary{color:#fff;background:var(--otziv-primary)}button:disabled{opacity:.55}.cert-help{margin:0;color:var(--otziv-info);font-size:.7rem;font-weight:800;line-height:1.35;text-align:center}.cert-help a{color:var(--otziv-primary);font-weight:1000}.state-card{display:grid;place-items:center;gap:.35rem;min-height:5.5rem;padding:1rem;text-align:center}.state-card.error{color:var(--otziv-danger)}.state-card.ok{color:#16735f}.manual-card{display:grid;gap:.55rem;padding:.85rem}.manual-card h2,.manual-card p{margin:0}.manual-card>small{color:var(--otziv-info);font-weight:800}.manual-card .detail-line{display:grid;grid-template-columns:minmax(0,1fr)auto;justify-items:start;text-align:left;padding:.65rem .75rem}.detail-line small,.detail-line strong{grid-column:1}.detail-line small{color:var(--otziv-info);font-size:.66rem;text-transform:uppercase}.detail-line strong{overflow-wrap:anywhere;color:var(--otziv-dark)}.detail-line .material-icons-sharp{grid-column:2;grid-row:1/3;align-self:center}.destination-error{color:var(--otziv-danger);font-weight:900}.reported-state{display:flex;align-items:center;gap:.35rem;color:#16735f;font-weight:900}
   `]
 })
 export class PublicPayGroupPage implements OnDestroy {
@@ -97,6 +158,7 @@ export class PublicPayGroupPage implements OnDestroy {
   readonly loading = signal(true);
   readonly refreshing = signal(false);
   readonly submitting = signal(false);
+  readonly reportingPaid = signal(false);
   readonly error = signal('');
   readonly message = signal('');
   readonly email = signal('');
@@ -108,7 +170,34 @@ export class PublicPayGroupPage implements OnDestroy {
   readonly title = computed(() => this.invoice()?.title || 'Общий счет');
   readonly statusLabel = computed(() => this.statusText(this.invoice()?.status));
   readonly readyOrders = computed(() => this.invoice()?.orders.filter((order) => order.ready).length ?? 0);
-  readonly canSubmit = computed(() => Boolean(this.invoice()?.payable && this.email().includes('@') && this.offerConsent() && this.privacyConsent() && this.receiptConsent() && !this.submitting()));
+  readonly paymentRouteType = computed(() => (this.invoice()?.paymentRouteType ?? '').trim().toUpperCase());
+  readonly tbankRoute = computed(() => !this.paymentRouteType() || this.paymentRouteType() === 'TBANK_LINK');
+  readonly managerTextRoute = computed(() => this.paymentRouteType() === 'MANAGER_TEXT');
+  readonly manualRoute = computed(() => ['MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK'].includes(this.paymentRouteType()));
+  readonly externalManualRoute = computed(() => this.paymentRouteType() === 'MANUAL_EXTERNAL_LINK'
+    || this.invoice()?.manualPaymentType === 'EXTERNAL_LINK');
+  readonly manualPaymentUrl = computed(() => configuredPaymentTarget(this.invoice()?.manualPaymentUrl));
+  readonly manualPaymentButtonLabel = computed(() => this.invoice()?.manualPaymentButtonLabel?.trim() || 'Открыть ссылку оплаты');
+  readonly manualTransferDestination = computed(() => manualTransferDestinationPresentation(this.invoice()?.manualPhone));
+  readonly manualTransferDestinationLabel = computed(() => this.manualTransferDestination().fieldLabel);
+  readonly manualRouteTitle = computed(() => this.externalManualRoute()
+    ? 'Оплата по ссылке банка'
+    : this.manualTransferDestination().paymentTitle);
+  readonly canSubmit = computed(() => Boolean(
+    this.invoice()?.payable
+      && this.tbankRoute()
+      && this.email().includes('@')
+      && this.offerConsent()
+      && this.privacyConsent()
+      && this.receiptConsent()
+      && !this.submitting()
+  ));
+  readonly canReportPaid = computed(() => Boolean(
+    this.invoice()?.clientReportable
+      && this.manualRoute()
+      && !this.invoice()?.clientReportedAt
+      && !this.reportingPaid()
+  ));
 
   constructor(
     private readonly api: ApiService,
@@ -172,6 +261,76 @@ export class PublicPayGroupPage implements OnDestroy {
         }
         this.error.set(this.errorMessage(error, 'Не удалось перейти к оплате.'));
         this.submitting.set(false);
+      }
+    });
+  }
+
+  reportPaid(): void {
+    if (!this.canReportPaid()) {
+      return;
+    }
+    const routeTicket = this.captureRoute();
+    const token = this.token();
+    if (!routeTicket || !token) {
+      return;
+    }
+    this.reportingPaid.set(true);
+    this.error.set('');
+    this.message.set('');
+    this.api.reportPublicCommonInvoicePaid(token).subscribe({
+      next: (invoice) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
+        this.invoice.set(invoice);
+        this.reportingPaid.set(false);
+        this.message.set('Сообщение об оплате принято. Поступление ещё будет проверено.');
+      },
+      error: (error) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
+        this.reportingPaid.set(false);
+        this.error.set(this.errorMessage(error, 'Не удалось сообщить об оплате. Обновите счет и попробуйте снова.'));
+      }
+    });
+  }
+
+  async copyPaymentValue(value?: string | null): Promise<void> {
+    const clean = value?.trim();
+    if (!clean) {
+      return;
+    }
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(clean);
+      if (this.isActiveRoute(routeTicket)) {
+        this.message.set('Скопировано.');
+      }
+    } catch {
+      if (this.isActiveRoute(routeTicket)) {
+        this.error.set('Не удалось скопировать. Выделите реквизиты вручную.');
+      }
+    }
+  }
+
+  openManualPaymentUrl(): void {
+    const target = this.manualPaymentUrl();
+    const routeTicket = this.captureRoute();
+    if (!target || !routeTicket) {
+      this.error.set('Ссылка оплаты не настроена. Обратитесь к менеджеру.');
+      return;
+    }
+    void this.externalLink.openPayment(target, 'manual').then((opened) => {
+      if (this.isActiveRoute(routeTicket) && !opened) {
+        this.error.set('Ссылка оплаты имеет недопустимый формат. Переход отменен.');
+      }
+    }).catch(() => {
+      if (this.isActiveRoute(routeTicket)) {
+        this.error.set('Не удалось открыть ссылку оплаты.');
       }
     });
   }
@@ -269,6 +428,7 @@ export class PublicPayGroupPage implements OnDestroy {
     this.loading.set(false);
     this.refreshing.set(false);
     this.submitting.set(false);
+    this.reportingPaid.set(false);
     this.error.set('');
     this.message.set('');
     this.email.set('');

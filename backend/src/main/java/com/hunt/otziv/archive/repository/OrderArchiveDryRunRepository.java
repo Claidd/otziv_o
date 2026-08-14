@@ -108,6 +108,78 @@ public class OrderArchiveDryRunRepository {
                     SELECT 1
                     FROM common_invoice_orders cio
                     WHERE cio.invoice_id = ci.invoice_id
+                      AND cio.active_membership = TRUE
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM common_invoice_orders seed_item
+                    JOIN common_invoice_orders related_item
+                      ON related_item.order_id = seed_item.order_id
+                    JOIN common_invoices related_invoice
+                      ON related_invoice.invoice_id = related_item.invoice_id
+                    WHERE seed_item.invoice_id = ci.invoice_id
+                      AND (
+                            related_invoice.closed_at IS NULL
+                         OR DATE(related_invoice.closed_at) > :cutoffDate
+                         OR related_invoice.status NOT IN (
+                                'UNPAID', 'NEEDS_ATTENTION', 'ARCHIVED', 'BAN', 'PAID'
+                            )
+                         OR (
+                                related_invoice.status IN ('UNPAID', 'NEEDS_ATTENTION')
+                                AND EXISTS (
+                                    SELECT 1
+                                    FROM common_invoice_orders active_related_item
+                                    WHERE active_related_item.invoice_id = related_invoice.invoice_id
+                                      AND active_related_item.active_membership = TRUE
+                                )
+                            )
+                         OR EXISTS (
+                                SELECT 1
+                                FROM common_invoice_orders status_item
+                                JOIN orders status_order ON status_order.order_id = status_item.order_id
+                                JOIN order_statuses status_value
+                                  ON status_value.order_status_id = status_order.order_status
+                                WHERE status_item.invoice_id = related_invoice.invoice_id
+                                  AND (
+                                        status_value.order_status_title NOT IN ('Архив', 'Бан', 'Оплачено')
+                                     OR (related_invoice.status = 'ARCHIVED' AND status_value.order_status_title <> 'Архив')
+                                     OR (related_invoice.status = 'BAN' AND status_value.order_status_title NOT IN ('Бан', 'Оплачено'))
+                                     OR (related_invoice.status = 'PAID' AND status_value.order_status_title <> 'Оплачено')
+                                  )
+                            )
+                         OR EXISTS (
+                                SELECT 1
+                                FROM common_invoice_orders task_item
+                                JOIN bad_review_tasks task
+                                  ON task.bad_review_task_order = task_item.order_id
+                                WHERE task_item.invoice_id = related_invoice.invoice_id
+                                  AND task.bad_review_task_status = 'NEW'
+                            )
+                         OR EXISTS (
+                                SELECT 1
+                                FROM common_invoice_orders request_item
+                                JOIN next_order_requests request
+                                  ON request.source_order_id = request_item.order_id
+                                WHERE request_item.invoice_id = related_invoice.invoice_id
+                                  AND request.request_status IN ('PENDING', 'FAILED')
+                            )
+                         OR EXISTS (
+                                SELECT 1
+                                FROM common_invoice_orders payment_item
+                                JOIN payment_links pl ON pl.order_id = payment_item.order_id
+                                WHERE payment_item.invoice_id = related_invoice.invoice_id
+                                  AND """ + PAYMENT_LINK_ARCHIVE_BLOCKER_SQL + """
+                            )
+                         OR EXISTS (
+                                SELECT 1
+                                FROM common_invoice_payment_refs related_ref
+                                WHERE related_ref.invoice_id = related_invoice.invoice_id
+                                  AND UPPER(TRIM(COALESCE(related_ref.status, ''))) NOT IN (
+                                        'APPLIED', 'ARCHIVED', 'CANCELED', 'REJECTED',
+                                        'REFUNDED', 'PARTIAL_REFUNDED', 'REVERSED', 'PARTIAL_REVERSED'
+                                  )
+                            )
+                      )
               )
               AND NOT EXISTS (
                     SELECT 1
@@ -159,6 +231,26 @@ public class OrderArchiveDryRunRepository {
               )
             """;
 
+    private static final String ELIGIBLE_COMMON_COMPONENT_INVOICES_SQL = """
+            SELECT DISTINCT related_item.invoice_id
+            FROM common_invoice_orders seed_item
+            JOIN (
+                SELECT ci.invoice_id
+                """ + ELIGIBLE_COMMON_INVOICE_WHERE + """
+            ) eligible_seed ON eligible_seed.invoice_id = seed_item.invoice_id
+            JOIN common_invoice_orders related_item
+              ON related_item.order_id = seed_item.order_id
+            """;
+
+    private static final String ELIGIBLE_COMMON_COMPONENT_ORDERS_SQL = """
+            SELECT DISTINCT component_item.order_id
+            FROM common_invoice_orders component_item
+            JOIN (
+                """ + ELIGIBLE_COMMON_COMPONENT_INVOICES_SQL + """
+            ) component_invoice
+              ON component_invoice.invoice_id = component_item.invoice_id
+            """;
+
     private static final String CANDIDATE_ORDER_CTE = """
             WITH candidate_orders AS (
                 SELECT o.order_id
@@ -186,16 +278,20 @@ public class OrderArchiveDryRunRepository {
         );
         Long grouped = jdbc.queryForObject("""
                 SELECT COUNT(*)
-                FROM common_invoice_orders cio
-                JOIN (
-                    SELECT ci.invoice_id
-                    """ + ELIGIBLE_COMMON_INVOICE_WHERE + """
-                ) eligible_invoice ON eligible_invoice.invoice_id = cio.invoice_id
+                FROM (
+                    """ + ELIGIBLE_COMMON_COMPONENT_ORDERS_SQL + """
+                ) eligible_component_order
                 """, Map.of("cutoffDate", cutoffDate), Long.class);
         return (standalone == null ? 0L : standalone) + (grouped == null ? 0L : grouped);
     }
 
     public void prepareCandidateOrders(LocalDate cutoffDate, int batchLimit) {
+        jdbc.update("""
+                CREATE TEMPORARY TABLE IF NOT EXISTS archive_candidate_common_invoice_seeds (
+                    invoice_id BIGINT NOT NULL,
+                    PRIMARY KEY (invoice_id)
+                ) ENGINE = MEMORY
+                """, Map.of());
         jdbc.update("""
                 CREATE TEMPORARY TABLE IF NOT EXISTS archive_candidate_common_invoices (
                     invoice_id BIGINT NOT NULL,
@@ -208,15 +304,25 @@ public class OrderArchiveDryRunRepository {
                     PRIMARY KEY (order_id)
                 ) ENGINE = MEMORY
                 """, Map.of());
+        jdbc.update("DELETE FROM archive_candidate_common_invoice_seeds", Map.of());
         jdbc.update("DELETE FROM archive_candidate_common_invoices", Map.of());
         jdbc.update("DELETE FROM archive_candidate_orders", Map.of());
         jdbc.update("""
-                INSERT INTO archive_candidate_common_invoices (invoice_id)
+                INSERT INTO archive_candidate_common_invoice_seeds (invoice_id)
                 SELECT ci.invoice_id
                 """ + ELIGIBLE_COMMON_INVOICE_WHERE + """
                 ORDER BY ci.closed_at, ci.invoice_id
                 LIMIT :batchLimit
                 """, candidateParams(cutoffDate, batchLimit));
+        jdbc.update("""
+                INSERT IGNORE INTO archive_candidate_common_invoices (invoice_id)
+                SELECT DISTINCT related_item.invoice_id
+                FROM archive_candidate_common_invoice_seeds seed
+                JOIN common_invoice_orders seed_item
+                  ON seed_item.invoice_id = seed.invoice_id
+                JOIN common_invoice_orders related_item
+                  ON related_item.order_id = seed_item.order_id
+                """, Map.of());
         jdbc.update("""
                 INSERT IGNORE INTO archive_candidate_orders (order_id)
                 SELECT cio.order_id
@@ -411,13 +517,7 @@ public class OrderArchiveDryRunRepository {
                             SELECT o.order_id
                             """ + ELIGIBLE_ORDER_WHERE + """
                             UNION DISTINCT
-                            SELECT item.order_id
-                            FROM common_invoice_orders item
-                            JOIN (
-                                SELECT ci.invoice_id
-                                """ + ELIGIBLE_COMMON_INVOICE_WHERE + """
-                            ) eligible_invoice
-                              ON eligible_invoice.invoice_id = item.invoice_id
+                            """ + ELIGIBLE_COMMON_COMPONENT_ORDERS_SQL + """
                         ) current_eligible
                         WHERE current_eligible.order_id = candidate.order_id
                     )
@@ -434,8 +534,7 @@ public class OrderArchiveDryRunRepository {
                     WHERE NOT EXISTS (
                         SELECT 1
                         FROM (
-                            SELECT ci.invoice_id
-                            """ + ELIGIBLE_COMMON_INVOICE_WHERE + """
+                            """ + ELIGIBLE_COMMON_COMPONENT_INVOICES_SQL + """
                         ) current_eligible
                         WHERE current_eligible.invoice_id = candidate.invoice_id
                     )
@@ -1051,6 +1150,15 @@ public class OrderArchiveDryRunRepository {
                 FROM common_invoice_orders item
                 JOIN archive_candidate_common_invoices candidate
                   ON candidate.invoice_id = item.invoice_id
+                """, Map.of());
+        // The archived copy already contains the predecessor relation. Break
+        // only the live self-FK inside the fully selected chain so MySQL can
+        // delete parent and child rows in one verified batch.
+        jdbc.update("""
+                UPDATE common_invoices invoice
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = invoice.invoice_id
+                SET invoice.supersedes_invoice_id = NULL
                 """, Map.of());
         long deletedCommonInvoices = jdbc.update("""
                 DELETE invoice

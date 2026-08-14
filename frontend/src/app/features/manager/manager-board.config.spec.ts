@@ -87,7 +87,7 @@ describe('manager-board config helpers', () => {
     ]);
   });
 
-  it('builds order actions and only permits manual archive from review statuses', () => {
+  it('builds order actions and permits privileged publication exit without financial shortcuts', () => {
     expect(managerOrderActions(order({ status: 'В проверку' }), false).map((action) => action.status)).toEqual([
       'На проверке',
       'Архив'
@@ -102,7 +102,11 @@ describe('manager-board config helpers', () => {
       'Публикация'
     ]);
     expect(managerOrderActions(order({ status: 'Новый' }), true).map((action) => action.status)).not.toContain('Архив');
-    expect(managerOrderActions(order({ status: 'Публикация' }), true).map((action) => action.status)).not.toContain('Архив');
+    expect(managerOrderActions(order({ status: 'Публикация' }), true).map((action) => action.status)).toEqual([
+      'Коррекция',
+      'Архив',
+      'Опубликовано'
+    ]);
     expect(managerOrderActions(order({ status: 'Выставлен счет' }), false).map((action) => action.status)).toEqual([
       'Напоминание',
       'Не оплачено',

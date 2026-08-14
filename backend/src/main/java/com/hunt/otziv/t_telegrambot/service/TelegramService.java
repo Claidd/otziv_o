@@ -1,5 +1,7 @@
 package com.hunt.otziv.t_telegrambot.service;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.service.PersonalService;
@@ -53,6 +55,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.ApiResponse;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated;
@@ -651,6 +654,45 @@ public class TelegramService extends TelegramLongPollingBot {
         return sendSingleMessage(chatId, text, null, inlineKeyboard(buttonText, callbackData));
     }
 
+    /**
+     * Sends a Bot API native {@code copy_text} button. The Telegram Java
+     * dependency used by the project predates this field, therefore a small
+     * forward-compatible {@link ReplyKeyboard} payload is used instead of a
+     * callback button (which cannot write to the user''s clipboard).
+     */
+    public boolean sendMessageWithCopyTextButton(
+            long chatId,
+            String text,
+            String buttonText,
+            String copyText
+    ) {
+        if (!hasText(buttonText) || buttonText.length() > 64
+                || !hasText(copyText) || copyText.length() > 256) {
+            return sendMessage(chatId, text);
+        }
+        if (!sendingEnabled) {
+            log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);
+            return false;
+        }
+        if (!looksLikeTelegramBotToken(getBotToken())) {
+            log.warn("Telegram-сообщение не отправлено: TELEGRAM_BOT_TOKEN пустой или имеет неверный формат");
+            return false;
+        }
+        if (!hasText(text)) {
+            log.warn("Telegram-сообщение для {} не отправлено: текст пустой", chatId);
+            return false;
+        }
+
+        List<String> chunks = splitTelegramMessage(text);
+        ReplyKeyboard copyKeyboard = copyTextKeyboard(buttonText, copyText);
+        boolean sent = true;
+        for (int index = 0; index < chunks.size(); index++) {
+            ReplyKeyboard keyboard = index == chunks.size() - 1 ? copyKeyboard : null;
+            sent = sendSingleMessage(chatId, chunks.get(index), null, keyboard) && sent;
+        }
+        return sent;
+    }
+
     public boolean sendMessageWithInlineKeyboard(
             long chatId,
             String text,
@@ -1236,7 +1278,10 @@ public class TelegramService extends TelegramLongPollingBot {
             ReplyKeyboard replyMarkup,
             boolean protectContent
     ) {
-        SendMessage message = new SendMessage();
+        SendMessage message = replyMarkup instanceof InlineKeyboardMarkup inlineKeyboardMarkup
+                && containsCopyTextButton(inlineKeyboardMarkup)
+                ? new CopyTextCompatibleSendMessage()
+                : new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText(text);
         message.setDisableWebPagePreview(true);
@@ -1296,6 +1341,14 @@ public class TelegramService extends TelegramLongPollingBot {
             }
         }
         return Optional.empty();
+    }
+
+    private boolean containsCopyTextButton(InlineKeyboardMarkup markup) {
+        return markup != null
+                && markup.getKeyboard() != null
+                && markup.getKeyboard().stream()
+                .flatMap(List::stream)
+                .anyMatch(CopyTextInlineKeyboardButton.class::isInstance);
     }
 
     public Optional<TelegramChatMigrationResult> repairMigratedChatId(long oldChatId) {
@@ -1384,6 +1437,74 @@ public class TelegramService extends TelegramLongPollingBot {
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         markup.setKeyboard(Collections.singletonList(Collections.singletonList(button)));
         return markup;
+    }
+
+    private ReplyKeyboard copyTextKeyboard(String buttonText, String copyText) {
+        CopyTextInlineKeyboardButton button = new CopyTextInlineKeyboardButton();
+        button.setText(buttonText);
+        button.setCopyText(new CopyTextButtonPayload(copyText));
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        markup.setKeyboard(List.of(List.of(button)));
+        return markup;
+    }
+
+    static final class CopyTextInlineKeyboardButton extends InlineKeyboardButton {
+        @JsonProperty("copy_text")
+        private CopyTextButtonPayload copyText;
+
+        CopyTextButtonPayload getCopyText() {
+            return copyText;
+        }
+
+        void setCopyText(CopyTextButtonPayload copyText) {
+            this.copyText = copyText;
+        }
+    }
+
+    static final class CopyTextButtonPayload implements java.io.Serializable {
+        @JsonProperty("text")
+        private final String text;
+
+        CopyTextButtonPayload(String text) {
+            this.text = text;
+        }
+
+        String getText() {
+            return text;
+        }
+    }
+
+    /** Ignores the echoed unknown copy_text field only on successful replies. */
+    static final class CopyTextCompatibleSendMessage extends SendMessage {
+        @Override
+        public Message deserializeResponse(String answer) throws TelegramApiRequestException {
+            try {
+                JsonNode root = TELEGRAM_JSON.readTree(answer);
+                if (root.path("ok").asBoolean(false)) {
+                    int messageId = root.path("result").path("message_id").asInt(0);
+                    if (messageId <= 0) {
+                        throw new TelegramApiRequestException(
+                                "Telegram copy-text response is missing a valid message_id"
+                        );
+                    }
+                    Message message = new Message();
+                    message.setMessageId(messageId);
+                    return message;
+                }
+                ApiResponse<Message> response = TELEGRAM_JSON.readValue(
+                        answer,
+                        new TypeReference<ApiResponse<Message>>() { }
+                );
+                throw new TelegramApiRequestException(
+                        "Error executing Telegram copy-text sendMessage query",
+                        response
+                );
+            } catch (TelegramApiRequestException exception) {
+                throw exception;
+            } catch (Exception exception) {
+                throw new TelegramApiRequestException("Unable to deserialize copy-text response", exception);
+            }
+        }
     }
 
     private void answerCallback(String callbackQueryId, String text) {

@@ -11,6 +11,8 @@ import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
+import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSourceConfirmationRequest;
+import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -117,6 +119,28 @@ public class CommonBillingAdminController {
     ) {
         requireCanMutateInvoice(invoiceId);
         return commonBillingService.markPaid(invoiceId, request, principal);
+    }
+
+    /**
+     * Statement evidence bound to this immutable common-invoice contractor
+     * source. A manager must not turn a generic "paid" action into evidence
+     * for a specialist or manager recipient.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/contractor-confirmation")
+    public CommonInvoiceDetailsResponse confirmContractorPaymentSource(
+            @PathVariable Long invoiceId,
+            @Valid @RequestBody ContractorPaymentSourceConfirmationRequest request,
+            Principal principal
+    ) {
+        contractorPaymentTargetAccessPolicy.requireCanManageCommonInvoice(invoiceId);
+        return commonBillingService.confirmContractorPaymentSource(
+                invoiceId,
+                request.confirmedTotalKopecks(),
+                request.effectiveAt(),
+                request.reason(),
+                principal
+        );
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

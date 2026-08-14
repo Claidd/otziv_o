@@ -12,6 +12,7 @@ import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocation
 import com.hunt.otziv.contractor_payments.repository.ContractorRewardRepairClaimRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorShadowBackfillClaimRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorCompletionRewardRepairStateRepository;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,13 +32,16 @@ class ContractorPaymentQueueHealthServiceTest {
     private ContractorShadowBackfillClaimRepository backfillClaimRepository;
     @Mock
     private ContractorCompletionRewardRepairStateRepository completionRepairStateRepository;
+    @Mock
+    private OrderRepository orderRepository;
 
     private ContractorPaymentQueueHealthService service;
 
     @BeforeEach
     void setUp() {
         service = new ContractorPaymentQueueHealthService(
-                allocationRepository, rewardClaimRepository, backfillClaimRepository, completionRepairStateRepository
+                allocationRepository, rewardClaimRepository, backfillClaimRepository,
+                completionRepairStateRepository, orderRepository
         );
     }
 
@@ -88,6 +92,8 @@ class ContractorPaymentQueueHealthServiceTest {
         when(completionRepairStateRepository.findOldestDueRetryAt(any())).thenReturn(oldestDue);
         when(completionRepairStateRepository.findFirstByAttemptCountGreaterThanOrderByUpdatedAtDesc(0))
                 .thenReturn(Optional.of(completionRepair));
+        when(orderRepository.countCompletionRewardDeferredByActiveRecovery(any(), any(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(14L);
 
         var health = service.health();
 
@@ -107,6 +113,7 @@ class ContractorPaymentQueueHealthServiceTest {
         assertThat(health.completionRewardRepair().oldestRetryAt()).isEqualTo(oldest);
         assertThat(health.completionRewardRepair().oldestDueRetryAt()).isEqualTo(oldestDue);
         assertThat(health.completionRewardRepair().lastErrorCode()).isEqualTo("CompletionFailure");
+        assertThat(health.deferredActiveRecoveryBaseGaps()).isEqualTo(14L);
         assertThat(health.observedAt()).isNotNull();
     }
 }

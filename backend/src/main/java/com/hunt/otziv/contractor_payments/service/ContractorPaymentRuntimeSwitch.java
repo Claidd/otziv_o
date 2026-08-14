@@ -6,6 +6,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -39,7 +42,8 @@ public class ContractorPaymentRuntimeSwitch {
                 && safeFresh(AppSettingService.CONTRACTOR_PAYMENTS_LIVE_ROUTING_ENABLED)
                 && rewardAttributionConfigurationReady()
                 && safeFresh(AppSettingService.CONTRACTOR_PAYMENTS_LIVE_READINESS_CONFIRMED)
-                && safeCompletionRoutingReadiness();
+                && safeCompletionRoutingReadiness()
+                && routingConfigurationBlockers().isEmpty();
     }
 
     public boolean rewardAttributionLiveEnabled() {
@@ -94,7 +98,8 @@ public class ContractorPaymentRuntimeSwitch {
                 && attributionDatabaseEnabled
                 && attributionEnabled
                 && readinessConfirmed
-                && safeCompletionRoutingReadiness();
+                && safeCompletionRoutingReadiness()
+                && routingConfigurationBlockers().isEmpty();
         return new RuntimeStatus(
                 liveRoutingMasterEnabled,
                 routingDatabaseEnabled,
@@ -148,6 +153,42 @@ public class ContractorPaymentRuntimeSwitch {
                     exception.getClass().getSimpleName()
             );
             return false;
+        }
+    }
+
+    /** Fresh fail-closed deployment/runtime prerequisites for client-facing routes. */
+    public List<String> routingConfigurationBlockers() {
+        List<String> blockers = new ArrayList<>();
+        if (!safeFresh(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED)) {
+            blockers.add("Подготовка неизменяемого снимка маршрута выключена");
+        }
+        if (!safeFresh(AppSettingService.PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED)) {
+            blockers.add("Создание платежных ссылок выключено");
+        }
+        String instructionSource = safeStringFresh(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
+                ""
+        );
+        if (!"TBANK_LINK".equals(instructionSource.trim().toUpperCase(Locale.ROOT))) {
+            blockers.add("Клиентские сообщения не настроены на платежную ссылку");
+        }
+        if (!safeFresh(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED)
+                || !safeFresh(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED)) {
+            blockers.add("Боевая отправка клиентских сообщений выключена");
+        }
+        return List.copyOf(blockers);
+    }
+
+    private String safeStringFresh(String key, String fallback) {
+        try {
+            return Optional.ofNullable(appSettingService.getStringFresh(key, fallback)).orElse(fallback);
+        } catch (RuntimeException exception) {
+            log.error(
+                    "Contractor payment runtime string read failed: key={}, failure={}",
+                    key,
+                    exception.getClass().getSimpleName()
+            );
+            return fallback;
         }
     }
 

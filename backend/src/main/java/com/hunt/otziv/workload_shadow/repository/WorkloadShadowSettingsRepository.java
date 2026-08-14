@@ -18,6 +18,17 @@ public interface WorkloadShadowSettingsRepository extends Repository<AppSetting,
             """, nativeQuery = true)
     List<SettingProjection> findAllByPrefix(@Param("prefix") String prefix);
 
+
+    @Query(value = """
+            SELECT COUNT(*)
+            FROM app_settings mode_setting
+            JOIN app_settings apply_setting
+              ON apply_setting.setting_key = 'workload.live.apply-enabled'
+            WHERE mode_setting.setting_key = 'workload.live.mode'
+              AND UPPER(TRIM(mode_setting.setting_value)) IN ('CANARY', 'LIVE')
+              AND LOWER(TRIM(apply_setting.setting_value)) = 'true'
+            """, nativeQuery = true)
+    long countActiveLiveMode();
     @Modifying
     @Query(value = """
             UPDATE app_settings target_setting

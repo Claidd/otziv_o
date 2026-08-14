@@ -439,6 +439,16 @@ export class CommonBillingComponent implements OnDestroy {
         )
     );
   });
+  readonly canConfirmContractorSource = computed(() => {
+    this.auth.tokenParsed();
+    const invoice = this.currentInvoice();
+    return Boolean(
+      invoice
+        && invoice.contractorPaymentRoute
+        && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+        && ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID', 'UNPAID'].includes(invoice.status)
+    );
+  });
   readonly canMarkUnpaid = computed(() => {
     const invoice = this.currentInvoice();
     return Boolean(
@@ -819,6 +829,46 @@ export class CommonBillingComponent implements OnDestroy {
       'mark-paid',
       () => this.commonBillingApi.markPaid(invoice.id, evidence),
       'Общий счет закрыт оплатой'
+    );
+  }
+
+  confirmContractorPaymentSource(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || this.mutating() || !this.canConfirmContractorSource()) {
+      return;
+    }
+    if (!window.confirm(
+      'Подтвердить поступление только после проверки выписки именно того получателя, чьи реквизиты указаны в этом счете?'
+    )) {
+      return;
+    }
+    const rawAmount = window.prompt(
+      'Подтвержденная сумма именно по этому источнику накопительным итогом, ₽',
+      ''
+    );
+    if (rawAmount === null) {
+      return;
+    }
+    const confirmedTotalKopecks = Math.round(Number(rawAmount.replace(',', '.')) * 100);
+    if (!Number.isSafeInteger(confirmedTotalKopecks) || confirmedTotalKopecks <= 0) {
+      this.toastService.error('Укажите корректную положительную сумму');
+      return;
+    }
+    const reason = window.prompt('Обязательное основание сверки выписки', 'Поступление найдено в выписке получателя')?.trim() ?? '';
+    if (!reason) {
+      this.toastService.error('Укажите основание сверки');
+      return;
+    }
+    this.invoiceAction(
+      invoice.id,
+      'contractor-source-confirmation',
+      () => this.commonBillingApi.confirmContractorSource(invoice.id, {
+        recipientStatementChecked: true,
+        paymentReceived: true,
+        confirmedTotalKopecks,
+        reason
+      }),
+      'Поступление учтено по конкретному счету'
     );
   }
 

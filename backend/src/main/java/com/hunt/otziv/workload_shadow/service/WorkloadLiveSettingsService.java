@@ -44,6 +44,7 @@ public class WorkloadLiveSettingsService {
     private final WorkloadShadowSettingsService shadowSettingsService;
     private final WorkloadTransferOfferRepository offerRepository;
     private final WorkloadTransferWorkflowRepository workflowRepository;
+    private final WorkloadLiveRuntimeSafetyService runtimeSafetyService;
 
     @Transactional(readOnly = true)
     public WorkloadLiveSettingsResponse current() {
@@ -78,6 +79,13 @@ public class WorkloadLiveSettingsService {
         }
         validate(request);
         WorkloadLiveSettingsResponse before = current();
+        if (before.applyEnabled()
+                && (MODE_CANARY.equals(before.mode()) || MODE_LIVE.equals(before.mode()))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сначала остановите боевой контур, затем изменяйте его настройки"
+            );
+        }
         long expectedRevision = expectedRevision(request.revision(), before.revision());
         long nextRevision = Math.addExact(expectedRevision, 1);
         Map<String, String> requested = operationalValues(request, before, nextRevision);
@@ -139,7 +147,8 @@ public class WorkloadLiveSettingsService {
     public boolean applicationAllowed(WorkloadLiveSettingsResponse settings) {
         return settings != null
                 && settings.applyEnabled()
-                && (MODE_CANARY.equals(settings.mode()) || MODE_LIVE.equals(settings.mode()));
+                && (MODE_CANARY.equals(settings.mode()) || MODE_LIVE.equals(settings.mode()))
+                && runtimeSafetyService.evaluate().allowed();
     }
 
     public boolean managerAllowed(

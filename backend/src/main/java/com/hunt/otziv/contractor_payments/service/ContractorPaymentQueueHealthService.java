@@ -6,6 +6,7 @@ import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocation
 import com.hunt.otziv.contractor_payments.repository.ContractorRewardRepairClaimRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorShadowBackfillClaimRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorCompletionRewardRepairStateRepository;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ public class ContractorPaymentQueueHealthService {
     private final ContractorRewardRepairClaimRepository rewardClaimRepository;
     private final ContractorShadowBackfillClaimRepository backfillClaimRepository;
     private final ContractorCompletionRewardRepairStateRepository completionRepairStateRepository;
+    private final OrderRepository orderRepository;
 
     @Transactional(readOnly = true)
     public ContractorPaymentQueueHealthResponse health() {
@@ -71,6 +73,11 @@ public class ContractorPaymentQueueHealthService {
                                 .findFirstByAttemptCountGreaterThanOrderByUpdatedAtDesc(0)
                                 .map(value -> value.getLastError())
                                 .orElse(null)
+                ),
+                orderRepository.countCompletionRewardDeferredByActiveRecovery(
+                        ContractorCompletionRewardRepairService.DATED_COMPLETION_STATUSES,
+                        ContractorRewardSourceCodes.REQUIRED_ORDER_COMPLETION_MARKERS,
+                        ContractorRewardSourceCodes.REQUIRED_ORDER_COMPLETION_MARKERS.size()
                 ),
                 now
         );

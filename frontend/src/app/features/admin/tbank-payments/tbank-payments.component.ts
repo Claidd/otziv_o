@@ -845,6 +845,65 @@ export class TbankPaymentsComponent implements OnDestroy {
     });
   }
 
+  confirmContractorSource(link: AdminPaymentLinkResponse): void {
+    if (!this.canConfirmContractorSource(link) || this.mutatingId()) {
+      return;
+    }
+    if (!window.confirm(
+      `Выписка получателя проверена и перевод относится именно к счету №${link.id}?`
+    )) {
+      return;
+    }
+    const currentRubles = Math.max(0, link.confirmedAmountKopecks ?? 0) / 100;
+    const amountInput = window.prompt(
+      `Укажите общую подтвержденную сумму поступлений именно по этому счету, ₽ (не больше ${link.amount}):`,
+      currentRubles > 0 ? String(currentRubles) : String(link.amount)
+    )?.trim() ?? '';
+    const amountRubles = Number(amountInput.replace(',', '.'));
+    const confirmedTotalKopecks = Math.round(amountRubles * 100);
+    if (!Number.isFinite(amountRubles)
+      || confirmedTotalKopecks <= 0
+      || confirmedTotalKopecks > link.amountKopecks) {
+      this.toastService.error('Поступление не подтверждено', 'Проверьте сумму: она должна быть больше нуля и не превышать сумму счета.');
+      return;
+    }
+    const reason = window.prompt(
+      'Укажите основание сверки (дата выписки, назначение или другой неперсональный комментарий):',
+      ''
+    )?.trim() ?? '';
+    if (!reason) {
+      this.toastService.error('Поступление не подтверждено', 'Для аудита требуется основание сверки.');
+      return;
+    }
+
+    this.mutatingId.set(link.id);
+    this.paymentsApi.confirmAdminContractorPaymentSource(link.id, {
+      recipientStatementChecked: true,
+      paymentReceived: true,
+      confirmedTotalKopecks,
+      reason
+    }).subscribe({
+      next: (updated) => {
+        this.replaceLink(updated);
+        this.mutatingId.set(null);
+        this.toastService.success(
+          'Поступление подтверждено',
+          `Учтено по счету №${link.id}: ${(confirmedTotalKopecks / 100).toFixed(2)} ₽`
+        );
+        this.loadProfilesOnly();
+        this.loadPaymentLinks();
+        this.loadRecipientMonthlySummary();
+      },
+      error: (err) => {
+        this.mutatingId.set(null);
+        this.toastService.error(
+          'Поступление не подтверждено',
+          apiErrorDetail(err, 'Не удалось сохранить сверку по выбранному счету')
+        );
+      }
+    });
+  }
+
   closeManualAsUnpaid(link: AdminPaymentLinkResponse): void {
     if (!this.canCloseManualAsUnpaid(link) || this.mutatingId()) {
       return;
@@ -1298,7 +1357,16 @@ export class TbankPaymentsComponent implements OnDestroy {
   canConfirmManual(link: AdminPaymentLinkResponse): boolean {
     return !link.archived
       && this.isManualPayment(link)
+      && link.manualSource !== 'CONTRACTOR_PAYMENT_PROFILE'
       && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
+  }
+
+  canConfirmContractorSource(link: AdminPaymentLinkResponse): boolean {
+    return !link.archived
+      && link.manualSource === 'CONTRACTOR_PAYMENT_PROFILE'
+      && link.paymentMethod === 'MANUAL_MOBILE_BANK'
+      && ['WAITING_MANUAL_PAYMENT', 'MANUAL_REPORTED', 'EXPIRED', 'CANCELED', 'AMOUNT_MISMATCH']
+        .includes(link.status);
   }
 
   canCloseManualAsUnpaid(link: AdminPaymentLinkResponse): boolean {

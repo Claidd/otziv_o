@@ -125,7 +125,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
             ContractorPaymentAccountingAuthority accountingAuthority =
                     contractorPaymentRolloutStateService.lockAccountingAuthority();
             if (accountingAuthority == ContractorPaymentAccountingAuthority.COMPLETION) {
-                contractorCompletionRewardService.ensureOrderCompletionAccrual(order.getId());
+                contractorCompletionRewardService.ensureOrderPaymentAccrual(order.getId());
                 rewardsReady = true;
             } else {
                 rewardsReady = zpService.save(order, payableSum, payableAmount);

@@ -6,10 +6,16 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorCompletionRewardRepairStateRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorCompletionCutoverPreflightRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorRewardRepairClaimRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.z_zp.repository.ZpRepository;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -27,6 +33,11 @@ class ContractorCompletionRoutingReadinessServiceTest {
     @Mock private OrderRepository orderRepository;
     @Mock private BadReviewTaskRepository badReviewTaskRepository;
     @Mock private ContractorCompletionRewardRepairStateRepository repairStateRepository;
+    @Mock private ContractorPaymentProfileRepository profileRepository;
+    @Mock private ContractorRewardRepairClaimRepository rewardRepairClaimRepository;
+    @Mock private ZpRepository zpRepository;
+    @Mock private ContractorCompletionCutoverPreflightRepository cutoverPreflightRepository;
+    @Mock private ContractorCompletionCutoverStateService cutoverStateService;
     @Mock private ContractorPaymentBusinessClock businessClock;
 
     private ContractorCompletionRoutingReadinessService service;
@@ -38,9 +49,26 @@ class ContractorCompletionRoutingReadinessServiceTest {
                 orderRepository,
                 badReviewTaskRepository,
                 repairStateRepository,
+                profileRepository,
+                rewardRepairClaimRepository,
+                zpRepository,
+                cutoverPreflightRepository,
+                cutoverStateService,
                 businessClock
         );
         now = LocalDateTime.of(2026, 8, 7, 12, 0);
+        lenient().when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 7));
+        lenient().when(profileRepository.findEnabledIdsRequiringCurrentMonthSync(any(), any(Pageable.class)))
+                .thenReturn(List.of());
+        lenient().when(rewardRepairClaimRepository.count()).thenReturn(0L);
+        lenient().when(zpRepository.countActiveIncompatibleContractorRewardSources()).thenReturn(0L);
+        lenient().when(zpRepository.findContractorRewardsNeedingGlobalRepair(any(), any(Pageable.class)))
+                .thenReturn(List.of());
+        lenient().when(cutoverStateService.lockedStartDate()).thenReturn(java.util.Optional.of(LocalDate.of(2026, 8, 1)));
+        lenient().when(cutoverPreflightRepository.countActiveLegacyRewardCutoverConflicts(any()))
+                .thenReturn(0L);
+        lenient().when(orderRepository.countCompletionRewardDeferredByActiveRecovery(any(), any(), eq(3L)))
+                .thenReturn(0L);
     }
 
     @Test
@@ -70,6 +98,19 @@ class ContractorCompletionRoutingReadinessServiceTest {
     }
 
     @Test
+    void activeRecoveryBaseGapKeepsLiveRoutingClosedButIsNotSubmittedToRepair() {
+        when(repairStateRepository.count()).thenReturn(0L);
+        when(businessClock.now()).thenReturn(now);
+        when(orderRepository.countCompletionRewardDeferredByActiveRecovery(
+                any(), any(), eq(3L)
+        )).thenReturn(14L);
+
+        assertThat(service.readyForLiveRouting()).isFalse();
+
+        verifyNoInteractions(badReviewTaskRepository);
+    }
+
+    @Test
     void missingDoneTaskMarkerKeepsLiveRoutingClosed() {
         when(repairStateRepository.count()).thenReturn(0L);
         when(businessClock.now()).thenReturn(now);
@@ -88,6 +129,45 @@ class ContractorCompletionRoutingReadinessServiceTest {
         )).thenReturn(List.of(91L));
 
         assertThat(service.readyForLiveRouting()).isFalse();
+    }
+
+    @Test
+    void incompleteInitialMonthSyncKeepsLiveRoutingClosed() {
+        when(repairStateRepository.count()).thenReturn(0L);
+        when(businessClock.now()).thenReturn(now);
+        when(profileRepository.findEnabledIdsRequiringCurrentMonthSync(any(), any(Pageable.class)))
+                .thenReturn(List.of(17L));
+
+        assertThat(service.readyForLiveRouting()).isFalse();
+
+        verifyNoInteractions(orderRepository, badReviewTaskRepository);
+    }
+
+    @Test
+    void rewardLedgerRepairOrLegacyOverlapKeepsLiveRoutingClosed() {
+        when(repairStateRepository.count()).thenReturn(0L);
+        when(businessClock.now()).thenReturn(now);
+        when(rewardRepairClaimRepository.count()).thenReturn(1L);
+
+        assertThat(service.readyForLiveRouting()).isFalse();
+
+        when(rewardRepairClaimRepository.count()).thenReturn(0L);
+        when(cutoverPreflightRepository.countActiveLegacyRewardCutoverConflicts(any()))
+                .thenReturn(1L);
+
+        assertThat(service.readyForLiveRouting()).isFalse();
+        verifyNoInteractions(orderRepository, badReviewTaskRepository);
+    }
+
+    @Test
+    void currentSyncMarkerCannotHideIncompatibleSourceRoleFromLiveRouting() {
+        when(repairStateRepository.count()).thenReturn(0L);
+        when(businessClock.now()).thenReturn(now);
+        when(zpRepository.countActiveIncompatibleContractorRewardSources()).thenReturn(1L);
+
+        assertThat(service.readyForLiveRouting()).isFalse();
+
+        verifyNoInteractions(orderRepository, badReviewTaskRepository);
     }
 
     @Test

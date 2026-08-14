@@ -62,6 +62,8 @@ import {
 } from '../../../core/admin-dictionaries.api';
 import { AuthService } from '../../../core/auth.service';
 import {
+  ContractorLegacyRewardManualGroup,
+  ContractorLegacyRewardReconciliation,
   ContractorPaymentSystemStatus,
   ContractorPaymentsApi
 } from '../../../core/contractor-payments.api';
@@ -96,7 +98,7 @@ import {
   canActivateContractorSystem as isContractorSystemActivationAllowed,
   canChangeContractorRouting as isContractorRoutingChangeAllowed,
   contractorRoutingConfirmation,
-  contractorSystemFirstDayOfMonth,
+  contractorSystemActivationDate,
   contractorSystemModeLabel
 } from './contractor-payment-system-settings';
 
@@ -347,6 +349,12 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly contractorRoutingTargetEnabled = signal(false);
   readonly contractorSystemToday = businessDateIso();
   readonly contractorActivationConfirmation = CONTRACTOR_SYSTEM_ACTIVATION_CONFIRMATION;
+  readonly contractorLegacyReconciliation = signal<ContractorLegacyRewardReconciliation | null>(null);
+  readonly contractorLegacyReconciliationSaving = signal(false);
+  readonly contractorLegacyManualGroup = signal<ContractorLegacyRewardManualGroup | null>(null);
+  readonly contractorLegacyManualOpen = signal(false);
+  readonly contractorLegacyAutoConfirmation = 'ПРИМЕНИТЬ АВТОСВЕРКУ';
+  readonly contractorLegacyManualConfirmation = 'ПОДТВЕРДИТЬ РУЧНУЮ СВЕРКУ';
   readonly aiProviderStatus = signal<ReputationAiStatus | null>(null);
   readonly aiProviderError = signal<string | null>(null);
   readonly switchingAiProvider = signal(false);
@@ -490,7 +498,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   });
 
   readonly contractorSystemActivationForm = this.fb.nonNullable.group({
-    attributionStartDate: [contractorSystemFirstDayOfMonth(businessDateIso()), [Validators.required]],
+    attributionStartDate: [contractorSystemActivationDate(businessDateIso()), [Validators.required]],
     reason: ['', [Validators.required]],
     confirmation: ['', [Validators.required]]
   });
@@ -498,6 +506,18 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly contractorSystemRoutingForm = this.fb.nonNullable.group({
     reason: ['', [Validators.required]],
     confirmation: ['', [Validators.required]]
+  });
+
+  readonly contractorLegacyAutoForm = this.fb.nonNullable.group({
+    reason: ['', Validators.required],
+    confirmation: ['', Validators.required]
+  });
+
+  readonly contractorLegacyManualForm = this.fb.nonNullable.group({
+    completedOn: ['', Validators.required],
+    evidenceReference: ['', Validators.required],
+    reason: ['', Validators.required],
+    confirmation: ['', Validators.required]
   });
 
   readonly gamificationForm = this.fb.nonNullable.group({
@@ -862,6 +882,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   loadContractorPaymentSystemStatus(): void {
+    this.loadContractorLegacyReconciliation();
     const requestId = ++this.contractorSystemLoadEpoch;
     this.contractorSystemLoading.set(true);
     this.contractorSystemError.set(null);
@@ -886,6 +907,136 @@ export class AdminDictionariesComponent implements OnDestroy {
     });
   }
 
+  loadContractorLegacyReconciliation(): void {
+    this.contractorPaymentsApi.getLegacyRewardReconciliation().subscribe({
+      next: (snapshot) => this.contractorLegacyReconciliation.set(snapshot),
+      error: (error: unknown) => this.contractorSystemError.set(apiErrorMessage(
+        error,
+        'Не удалось загрузить снимок сверки старых начислений.'
+      ))
+    });
+  }
+
+  prepareContractorLegacyReconciliation(): void {
+    if (this.contractorLegacyReconciliationSaving() || this.contractorSystemStatus()?.systemEnabled) {
+      return;
+    }
+    this.contractorLegacyReconciliationSaving.set(true);
+    this.contractorSystemError.set(null);
+    this.contractorPaymentsApi.prepareLegacyRewardReconciliation().subscribe({
+      next: (snapshot) => {
+        this.contractorLegacyReconciliation.set(snapshot);
+        this.contractorLegacyReconciliationSaving.set(false);
+        this.contractorLegacyAutoForm.reset({ reason: '', confirmation: '' });
+        this.toastService.success('Dry-run сверки подготовлен', 'Начисления не изменялись.');
+      },
+      error: (error: unknown) => this.finishLegacyReconciliationError(
+        error,
+        'Не удалось подготовить dry-run сверки.'
+      )
+    });
+  }
+
+  applyContractorLegacyAutomatic(): void {
+    const snapshot = this.contractorLegacyReconciliation();
+    const raw = this.contractorLegacyAutoForm.getRawValue();
+    if (!this.canControlContractorSystem()
+      || !snapshot?.runId
+      || !snapshot.snapshotHash
+      || this.contractorLegacyAutoForm.invalid
+      || raw.confirmation.trim() !== this.contractorLegacyAutoConfirmation
+      || this.contractorLegacyReconciliationSaving()) {
+      this.contractorLegacyAutoForm.markAllAsTouched();
+      return;
+    }
+    this.contractorLegacyReconciliationSaving.set(true);
+    this.contractorPaymentsApi.applyLegacyRewardReconciliation(snapshot.runId, {
+      snapshotHash: snapshot.snapshotHash,
+      reason: raw.reason.trim(),
+      confirmation: raw.confirmation.trim()
+    }).subscribe({
+      next: (updated) => {
+        this.contractorLegacyReconciliation.set(updated);
+        this.contractorLegacyReconciliationSaving.set(false);
+        this.contractorLegacyAutoForm.reset({ reason: '', confirmation: '' });
+        this.toastService.success('Автоматическая сверка применена', 'Неоднозначные группы оставлены для ручной проверки.');
+      },
+      error: (error: unknown) => this.finishLegacyReconciliationError(
+        error,
+        'Автоматическая сверка не применена.'
+      )
+    });
+  }
+
+  openContractorLegacyManual(group: ContractorLegacyRewardManualGroup): void {
+    if (!this.canControlContractorSystem() || group.status !== 'PENDING') {
+      return;
+    }
+    this.contractorLegacyManualGroup.set(group);
+    this.contractorLegacyManualForm.reset({
+      completedOn: '',
+      evidenceReference: '',
+      reason: '',
+      confirmation: ''
+    });
+    this.contractorLegacyManualOpen.set(true);
+  }
+
+  closeContractorLegacyManual(): void {
+    if (!this.contractorLegacyReconciliationSaving()) {
+      this.contractorLegacyManualOpen.set(false);
+      this.contractorLegacyManualGroup.set(null);
+    }
+  }
+
+  resolveContractorLegacyManual(): void {
+    const snapshot = this.contractorLegacyReconciliation();
+    const group = this.contractorLegacyManualGroup();
+    const raw = this.contractorLegacyManualForm.getRawValue();
+    if (!this.canControlContractorSystem()
+      || !snapshot?.runId
+      || !snapshot.snapshotHash
+      || !group
+      || this.contractorLegacyManualForm.invalid
+      || raw.confirmation.trim() !== this.contractorLegacyManualConfirmation
+      || this.contractorLegacyReconciliationSaving()) {
+      this.contractorLegacyManualForm.markAllAsTouched();
+      return;
+    }
+    this.contractorLegacyReconciliationSaving.set(true);
+    this.contractorPaymentsApi.resolveLegacyRewardManualGroup(
+      snapshot.runId,
+      group.orderId,
+      {
+        snapshotHash: snapshot.snapshotHash,
+        groupHash: group.groupHash,
+        completedOn: raw.completedOn,
+        evidenceReference: raw.evidenceReference.trim(),
+        reason: raw.reason.trim(),
+        confirmation: raw.confirmation.trim()
+      }
+    ).subscribe({
+      next: (updated) => {
+        this.contractorLegacyReconciliation.set(updated);
+        this.contractorLegacyReconciliationSaving.set(false);
+        this.contractorLegacyManualOpen.set(false);
+        this.contractorLegacyManualGroup.set(null);
+        this.toastService.success('Ручная сверка подтверждена', 'Evidence и точный снимок сохранены в аудите.');
+      },
+      error: (error: unknown) => this.finishLegacyReconciliationError(
+        error,
+        'Ручная сверка не применена.'
+      )
+    });
+  }
+
+  private finishLegacyReconciliationError(error: unknown, fallback: string): void {
+    const message = apiErrorMessage(error, fallback);
+    this.contractorSystemError.set(message);
+    this.contractorLegacyReconciliationSaving.set(false);
+    this.toastService.error('Сверка старых начислений', message);
+  }
+
   requestContractorSystemActivation(event: Event): void {
     event.preventDefault();
     if (!this.canActivateContractorSystem() || this.contractorSystemSaving()) {
@@ -893,7 +1044,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     }
     this.contractorSystemError.set(null);
     this.contractorSystemActivationForm.reset({
-      attributionStartDate: contractorSystemFirstDayOfMonth(businessDateIso()),
+      attributionStartDate: contractorSystemActivationDate(businessDateIso()),
       reason: '',
       confirmation: ''
     });
@@ -4047,7 +4198,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       reviewRecoveryNoticeText: settings?.reviewRecoveryNoticeText
         ?? '{companyAndFilial}\n\nВсе отзывы по заказу №{orderId} восстановлены. Продолжаем работу.',
       archiveOfferText: settings?.archiveOfferText
-        ?? '{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.',
+        ?? '{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз?',
       unansweredAutoIgnorePhrases: settings?.unansweredAutoIgnorePhrases ?? DEFAULT_AUTO_IGNORE_PHRASES
     });
     this.autoIgnorePhraseDraft.set('');

@@ -12,6 +12,7 @@ import com.hunt.otziv.contractor_payments.dto.ContractorPaymentRoutingCommandReq
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSystemActivationRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSystemStatusResponse;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentSystemAdminService;
+import com.hunt.otziv.contractor_payments.service.ContractorLegacyRewardReconciliationService;
 import jakarta.validation.Valid;
 import jakarta.validation.Validation;
 import java.lang.reflect.Method;
@@ -195,10 +196,16 @@ class ContractorPaymentSystemAdminControllerTest {
         }
 
         @Bean
+        ContractorLegacyRewardReconciliationService contractorLegacyRewardReconciliationService() {
+            return mock(ContractorLegacyRewardReconciliationService.class);
+        }
+
+        @Bean
         ContractorPaymentSystemAdminController contractorPaymentSystemAdminController(
-                ContractorPaymentSystemAdminService service
+                ContractorPaymentSystemAdminService service,
+                ContractorLegacyRewardReconciliationService reconciliationService
         ) {
-            return new ContractorPaymentSystemAdminController(service);
+            return new ContractorPaymentSystemAdminController(service, reconciliationService);
         }
     }
 }

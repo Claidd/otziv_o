@@ -46,6 +46,26 @@ class ContractorPaymentRuntimeSwitchTest {
                 rolloutStateService
         );
         masters(false, false);
+        lenient().when(appSettingService.getBooleanFreshFailClosed(
+                AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED,
+                false
+        )).thenReturn(true);
+        lenient().when(appSettingService.getBooleanFreshFailClosed(
+                AppSettingService.PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED,
+                false
+        )).thenReturn(true);
+        lenient().when(appSettingService.getStringFresh(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
+                ""
+        )).thenReturn("TBANK_LINK");
+        lenient().when(appSettingService.getBooleanFreshFailClosed(
+                AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED,
+                false
+        )).thenReturn(true);
+        lenient().when(appSettingService.getBooleanFreshFailClosed(
+                AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED,
+                false
+        )).thenReturn(true);
     }
 
     @Test
@@ -182,6 +202,45 @@ class ContractorPaymentRuntimeSwitchTest {
         when(completionRoutingReadinessService.readyForLiveRouting()).thenReturn(true);
 
         assertThat(runtimeSwitch.liveRoutingEnabled()).isTrue();
+    }
+
+    @Test
+    void clientFacingRoutingFailsClosedWhenImmutableSnapshotOrMessageRouteIsNotReady() {
+        masters(true, true);
+        when(rolloutStateService.freshSnapshot()).thenReturn(snapshot(
+                ContractorPaymentAccountingAuthority.COMPLETION,
+                true,
+                CUTOVER
+        ));
+        when(appSettingService.getBooleanFreshFailClosed(
+                AppSettingService.CONTRACTOR_PAYMENTS_LIVE_ROUTING_ENABLED,
+                false
+        )).thenReturn(true);
+        when(appSettingService.getBooleanFreshFailClosed(
+                AppSettingService.CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_LIVE_ENABLED,
+                false
+        )).thenReturn(true);
+        when(appSettingService.getBooleanFreshFailClosed(
+                AppSettingService.CONTRACTOR_PAYMENTS_LIVE_READINESS_CONFIRMED,
+                false
+        )).thenReturn(true);
+        when(cutoverStateService.lockOrVerify(CUTOVER)).thenReturn(Optional.of(CUTOVER));
+        when(completionRoutingReadinessService.readyForLiveRouting()).thenReturn(true);
+        when(appSettingService.getBooleanFreshFailClosed(
+                AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED,
+                false
+        )).thenReturn(false);
+        when(appSettingService.getStringFresh(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
+                ""
+        )).thenReturn("MANAGER_TEXT");
+
+        assertThat(runtimeSwitch.liveRoutingEnabled()).isFalse();
+        assertThat(runtimeSwitch.routingConfigurationBlockers())
+                .contains(
+                        "Подготовка неизменяемого снимка маршрута выключена",
+                        "Клиентские сообщения не настроены на платежную ссылку"
+                );
     }
 
     @Test

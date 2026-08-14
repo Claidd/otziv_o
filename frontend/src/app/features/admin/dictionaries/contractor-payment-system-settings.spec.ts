@@ -7,14 +7,14 @@ import {
   canActivateContractorSystem,
   canChangeContractorRouting,
   contractorRoutingConfirmation,
-  contractorSystemFirstDayOfMonth,
+  contractorSystemActivationDate,
   contractorSystemModeLabel
 } from './contractor-payment-system-settings';
 
 describe('contractor payment system settings', () => {
-  it('defaults activation to the first day of the current business month', () => {
-    expect(contractorSystemFirstDayOfMonth('2026-08-07')).toBe('2026-08-01');
-    expect(contractorSystemFirstDayOfMonth('invalid')).toBe('');
+  it('defaults activation to the current business date without backdating', () => {
+    expect(contractorSystemActivationDate('2026-08-07')).toBe('2026-08-07');
+    expect(contractorSystemActivationDate('invalid')).toBe('');
   });
 
   it('uses the exact typed confirmations required by the backend contract', () => {

@@ -573,7 +573,7 @@ function withoutBanAction(actions: StatusAction[], order: OrderCardItem, canForc
   return actions.filter((action) => action.status !== 'Бан');
 }
 
-const MANUAL_ARCHIVE_SOURCE_STATUSES = new Set(['В проверку', 'На проверке', 'Коррекция']);
+const MANUAL_ARCHIVE_SOURCE_STATUSES = new Set(['В проверку', 'На проверке', 'Коррекция', 'Публикация']);
 
 function withArchivePolicy(actions: StatusAction[], order: OrderCardItem): StatusAction[] {
   if (MANUAL_ARCHIVE_SOURCE_STATUSES.has(order.status)) {
@@ -616,6 +616,13 @@ export function managerOrderActions(order: OrderCardItem, showAllActions: boolea
   }
 
   if (showAllActions) {
+    if (order.status === 'Публикация') {
+      return [
+        MANAGER_ORDER_ACTIONS[1],
+        MANAGER_ORDER_ACTIONS[3],
+        MANAGER_ORDER_ACTIONS[4]
+      ];
+    }
     return withArchivePolicy(
       withoutBanAction(MANAGER_ORDER_ACTIONS, order, canForceBan),
       order

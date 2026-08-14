@@ -394,6 +394,18 @@
                         {{ isMutating(link) ? 'Проверяю' : 'Подтвердить' }}
                       </button>
                     }
+                    @if (canConfirmContractorSource(link)) {
+                      <button
+                        type="button"
+                        class="confirm-action"
+                        (click)="confirmContractorSource(link)"
+                        [disabled]="isMutating(link)"
+                        title="Сверить выписку и подтвердить полное или частичное поступление именно по этому счету"
+                      >
+                        <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
+                        {{ isMutating(link) ? 'Сохраняю' : 'Сверить поступление' }}
+                      </button>
+                    }
                     @if (canCloseManualAsUnpaid(link)) {
                       <button
                         type="button"

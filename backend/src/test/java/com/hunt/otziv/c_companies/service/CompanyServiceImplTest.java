@@ -136,7 +136,7 @@ class CompanyServiceImplTest {
                 .filial(new LinkedHashSet<>())
                 .contacts(new LinkedHashSet<>())
                 .build();
-        when(companyRepository.findById(1293L)).thenReturn(Optional.of(company));
+        when(companyRepository.findByIdForUpdate(1293L)).thenReturn(Optional.of(company));
         when(companyInfoRepository.findByCompanyId(1293L)).thenReturn(Optional.empty());
 
         CompanyDTO dto = CompanyDTO.builder()

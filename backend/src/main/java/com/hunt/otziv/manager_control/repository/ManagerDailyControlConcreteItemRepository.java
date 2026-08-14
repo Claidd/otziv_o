@@ -19,6 +19,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ManagerDailyControlConcreteItemRepository extends CrudRepository<ManagerDailyControlConcreteItem, Long> {
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT item FROM ManagerDailyControlConcreteItem item WHERE item.id = :id")
+    java.util.Optional<ManagerDailyControlConcreteItem> findByIdForUpdate(@Param("id") Long id);
+
     List<ManagerDailyControlConcreteItem> findByParentItem(ManagerDailyControlItem parentItem);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

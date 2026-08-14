@@ -17,21 +17,27 @@ public interface WorkloadLiveReadinessRepository
             FROM workload_shadow_worker_daily
             WHERE finalized = TRUE
               AND finalization_status <> 'STALE_SNAPSHOT'
+              AND settings_revision = :settingsRevision
               AND progress_date >= :historyStart
               AND progress_date < :today
             """, nativeQuery = true)
     long countFinalizedDates(
             @Param("historyStart") LocalDate historyStart,
-            @Param("today") LocalDate today
+            @Param("today") LocalDate today,
+            @Param("settingsRevision") long settingsRevision
     );
 
     @Query(value = """
             SELECT COUNT(*)
             FROM workload_shadow_runs
             WHERE status = 'FAILED'
+              AND settings_revision = :settingsRevision
               AND started_at >= :stableSince
             """, nativeQuery = true)
-    long countFailedRunsSince(@Param("stableSince") LocalDateTime stableSince);
+    long countFailedRunsSince(
+            @Param("stableSince") LocalDateTime stableSince,
+            @Param("settingsRevision") long settingsRevision
+    );
 
     @Query(value = """
             WITH successful_runs AS (
@@ -41,6 +47,7 @@ public interface WorkloadLiveReadinessRepository
                        ) AS previous_finished_at
                 FROM workload_shadow_runs
                 WHERE status = 'SUCCEEDED'
+                  AND (:settingsRevision = 0 OR settings_revision = :settingsRevision)
                   AND finished_at IS NOT NULL
                   AND finished_at >= :stableSince
                   AND finished_at <= :checkedAt
@@ -70,15 +77,19 @@ public interface WorkloadLiveReadinessRepository
             """, nativeQuery = true)
     long maximumSuccessfulRunGapMinutes(
             @Param("stableSince") LocalDateTime stableSince,
-            @Param("checkedAt") LocalDateTime checkedAt
+            @Param("checkedAt") LocalDateTime checkedAt,
+            @Param("settingsRevision") long settingsRevision
     );
 
     @Query(value = """
             SELECT MAX(finished_at)
             FROM workload_shadow_runs
             WHERE status = 'SUCCEEDED'
+              AND settings_revision = :settingsRevision
             """, nativeQuery = true)
-    Optional<LocalDateTime> lastSuccessfulRunAt();
+    Optional<LocalDateTime> lastSuccessfulRunAt(
+            @Param("settingsRevision") long settingsRevision
+    );
 
     @Query(value = """
             SELECT current.manager_id AS managerId,

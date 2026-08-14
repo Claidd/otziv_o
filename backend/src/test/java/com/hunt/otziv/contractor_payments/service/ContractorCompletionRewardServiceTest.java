@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +15,7 @@ import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.contractor_payments.model.ContractorCompletionRewardMarker;
+import com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorCompletionRewardMarkerRepository;
 import com.hunt.otziv.p_products.model.Order;
@@ -55,6 +58,9 @@ class ContractorCompletionRewardServiceTest {
     @Mock private ContractorRewardLedgerService ledgerService;
     @Mock private PerformerProductRewardZpService productRewardService;
     @Mock private ContractorPaymentBusinessClock businessClock;
+    @Mock private ContractorPaymentRolloutStateService rolloutStateService;
+    @Mock private ContractorLegacyRewardGuard legacyRewardGuard;
+    @Mock private ContractorLegacyRewardReconciliationService legacyRewardReconciliationService;
 
     private ContractorCompletionRewardService service;
     private Order order;
@@ -73,7 +79,10 @@ class ContractorCompletionRewardServiceTest {
                 ledgerService,
                 productRewardService,
                 businessClock,
-                new ContractorOrderManagerResolver()
+                new ContractorOrderManagerResolver(),
+                rolloutStateService,
+                legacyRewardGuard,
+                legacyRewardReconciliationService
         );
         order = new Order();
         order.setId(91L);
@@ -99,9 +108,11 @@ class ContractorCompletionRewardServiceTest {
                 .publish(true)
                 .publishedDate(LocalDate.of(2026, 7, 31))
                 .build();
-        when(runtimeSwitch.rewardAttributionLiveEnabled()).thenReturn(true);
+        when(rolloutStateService.lockAccountingAuthority())
+                .thenReturn(ContractorPaymentAccountingAuthority.COMPLETION);
         when(orderRepository.findByIdForCounterUpdate(91L)).thenReturn(Optional.of(order));
-        when(orderRepository.findByIdForOrderDto(91L)).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(orderRepository.findByIdForOrderDto(91L))
+                .thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(reviewRepository.countPublishedByOrderId(91L)).thenReturn(1);
         org.mockito.Mockito.lenient().when(reviewRepository.getAllByOrderId(91L)).thenReturn(List.of(published));
         org.mockito.Mockito.lenient().when(runtimeSwitch.completionAttributionStartDate())
@@ -139,6 +150,193 @@ class ContractorCompletionRewardServiceTest {
     }
 
     @Test
+    void manualEvidenceOverridesFuturePlannedReviewDateAndCreatesNoNewBaseRows() {
+        when(legacyRewardReconciliationService.authoritativeCompletedOn(
+                91L, LocalDate.of(2026, 8, 1)
+        )).thenReturn(Optional.of(LocalDate.of(2026, 7, 31)));
+
+        assertThat(service.ensureOrderCompletionAccrual(91L)).isZero();
+
+        verify(zpRepository, never()).save(any(Zp.class));
+        verify(markerRepository, org.mockito.Mockito.times(3)).save(any());
+        verify(productRewardService, never()).accrueForCompletedOrderLocked(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void manualEvidenceSuppliesNullPublishedDateAndFreezesPreCutoffBase() {
+        when(legacyRewardReconciliationService.authoritativeCompletedOn(
+                91L, LocalDate.of(2026, 8, 1)
+        )).thenReturn(Optional.of(LocalDate.of(2026, 6, 21)));
+
+        assertThat(service.ensureOrderCompletionAccrual(91L)).isZero();
+
+        verify(zpRepository, never()).save(any(Zp.class));
+        verify(markerRepository, org.mockito.Mockito.times(3)).save(any());
+    }
+
+    @Test
+    void preCutoffUnpaidWorkAccruesBaseAndPreCutoffDoneTaskOnceWhenPaymentArrivesAfterCutover() {
+        order.getWorker().getUser().setCoefficient(new BigDecimal("0.30"));
+        BadReviewTask preCutoffTask = BadReviewTask.builder()
+                .id(701L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(new BigDecimal("500.00"))
+                .completedDate(LocalDate.of(2026, 7, 31))
+                .worker(order.getWorker())
+                .build();
+        when(badReviewTaskRepository.findAllByOrderIdAndStatus(91L, BadReviewTaskStatus.DONE))
+                .thenReturn(List.of(preCutoffTask));
+        when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 10));
+        Zp existing = new Zp();
+        existing.setActive(true);
+        when(zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
+                91L,
+                ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER,
+                ContractorRole.MANAGER,
+                28L
+        )).thenReturn(Optional.empty(), Optional.of(existing));
+        when(zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
+                91L,
+                ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST,
+                ContractorRole.SPECIALIST,
+                27L
+        )).thenReturn(Optional.empty(), Optional.of(existing));
+        when(productRewardService.accrueForPreCutoffPaymentLocked(
+                order,
+                order.getManager(),
+                LocalDate.of(2026, 8, 10)
+        )).thenReturn(1, 0);
+
+        assertThat(service.ensureOrderPaymentAccrual(91L)).isEqualTo(3);
+        assertThat(service.ensureOrderPaymentAccrual(91L)).isZero();
+
+        ArgumentCaptor<Zp> rewards = ArgumentCaptor.forClass(Zp.class);
+        verify(zpRepository, org.mockito.Mockito.times(2)).save(rewards.capture());
+        assertThat(rewards.getAllValues())
+                .extracting(
+                        Zp::getSource,
+                        Zp::getContractorRole,
+                        Zp::getProfessionId,
+                        Zp::getSum,
+                        Zp::getRewardBasis,
+                        Zp::getAmount,
+                        Zp::getCreated
+                )
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(
+                                ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER,
+                                ContractorRole.MANAGER,
+                                28L,
+                                new BigDecimal("150.00"),
+                                new BigDecimal("1500.00"),
+                                2,
+                                LocalDate.of(2026, 8, 10)
+                        ),
+                        org.assertj.core.groups.Tuple.tuple(
+                                ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST,
+                                ContractorRole.SPECIALIST,
+                                27L,
+                                new BigDecimal("450.00"),
+                                new BigDecimal("1500.00"),
+                                2,
+                                LocalDate.of(2026, 8, 10)
+                        )
+                );
+        verify(productRewardService, org.mockito.Mockito.times(2)).accrueForPreCutoffPaymentLocked(
+                order,
+                order.getManager(),
+                LocalDate.of(2026, 8, 10)
+        );
+    }
+
+    @Test
+    void postCutoffDoneTaskStaysOutsideLegacyPaymentBridgeAggregate() {
+        order.getWorker().getUser().setCoefficient(new BigDecimal("0.30"));
+        BadReviewTask postCutoffTask = BadReviewTask.builder()
+                .id(702L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(new BigDecimal("500.00"))
+                .completedDate(LocalDate.of(2026, 8, 2))
+                .worker(order.getWorker())
+                .build();
+        when(badReviewTaskRepository.findAllByOrderIdAndStatus(91L, BadReviewTaskStatus.DONE))
+                .thenReturn(List.of(postCutoffTask));
+        when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 10));
+
+        assertThat(service.ensureOrderPaymentAccrual(91L)).isEqualTo(4);
+
+        ArgumentCaptor<Zp> rewards = ArgumentCaptor.forClass(Zp.class);
+        verify(zpRepository, org.mockito.Mockito.times(4)).save(rewards.capture());
+        assertThat(rewards.getAllValues())
+                .extracting(Zp::getSource)
+                .containsExactlyInAnyOrder(
+                        ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER,
+                        ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST,
+                        ContractorRewardSourceCodes.badReviewManager(702L),
+                        ContractorRewardSourceCodes.badReviewSpecialist(702L)
+                );
+        assertThat(rewards.getAllValues())
+                .filteredOn(reward -> ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER.equals(reward.getSource())
+                        || ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST.equals(reward.getSource()))
+                .allSatisfy(reward -> {
+                    assertThat(reward.getRewardBasis()).isEqualByComparingTo("1000.00");
+                    assertThat(reward.getAmount()).isEqualTo(1);
+                });
+        assertThat(rewards.getAllValues())
+                .filteredOn(reward -> reward.getSource().startsWith("BAD_REVIEW_DONE_"))
+                .allSatisfy(reward -> assertThat(reward.getRewardBasis()).isEqualByComparingTo("500.00"));
+    }
+
+    @Test
+    void preCutoffPaymentBridgeFailsBeforeWritingWhenImmutableSpecialistAttributionIsMissing() {
+        Worker reassignedWorker = new Worker();
+        reassignedWorker.setId(99L);
+        User reassignedUser = new User();
+        reassignedUser.setId(199L);
+        reassignedUser.setFio("Новый специалист карточки");
+        reassignedUser.setCoefficient(new BigDecimal("0.90"));
+        reassignedWorker.setUser(reassignedUser);
+        order.setWorker(reassignedWorker);
+        when(attributionService.attributeCompletedBaseWork(order))
+                .thenThrow(new ResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT,
+                        "immutable attribution is missing"
+                ));
+
+        assertThrows(ResponseStatusException.class, () -> service.ensureOrderPaymentAccrual(91L));
+
+        verify(zpRepository, never()).save(any(Zp.class));
+        verify(markerRepository, never()).save(any());
+        verify(productRewardService, never()).accrueForPreCutoffPaymentLocked(any(), any(), any());
+    }
+
+    @Test
+    void paidStatusWithoutPublishedWorkCannotEnterPreCutoffPaymentBridge() {
+        OrderStatus paid = new OrderStatus();
+        paid.setTitle("Оплачено");
+        order.setStatus(paid);
+        when(reviewRepository.countPublishedByOrderId(91L)).thenReturn(0);
+
+        assertThrows(ResponseStatusException.class, () -> service.ensureOrderPaymentAccrual(91L));
+
+        verify(legacyRewardGuard, never()).requireNoUnclassifiedActiveRows(any());
+        verify(zpRepository, never()).save(any(Zp.class));
+        verify(markerRepository, never()).save(any());
+        verify(productRewardService, never()).accrueForPreCutoffPaymentLocked(any(), any(), any());
+    }
+
+    @Test
+    void orderMutexIsLockedBeforeAccountingAuthorityToMatchMutationPaths() {
+        service.ensureOrderCompletionAccrual(91L);
+
+        var ordered = inOrder(rolloutStateService, orderRepository);
+        ordered.verify(orderRepository).findByIdForCounterUpdate(91L);
+        ordered.verify(rolloutStateService).lockAccountingAuthority();
+    }
+
+    @Test
     void preCutoffOrderStillAttributesPostCutoffTaskToFrozenOrderManager() {
         BadReviewTask task = BadReviewTask.builder()
                 .id(703L)
@@ -160,6 +358,189 @@ class ContractorCompletionRewardServiceTest {
             assertThat(reward.getProfessionId()).isEqualTo(order.getManager().getId());
             assertThat(reward.getUserId()).isEqualTo(order.getManager().getUser().getId());
         });
+    }
+
+    @Test
+    void preCutoffBaseWithPostCutoffTaskAcceptsOnlyDatedLegacyAggregateAndAccruesTaskOnce() {
+        order.getWorker().getUser().setCoefficient(new BigDecimal("0.30"));
+        BadReviewTask task = BadReviewTask.builder()
+                .id(704L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(new BigDecimal("500.00"))
+                .completedDate(LocalDate.of(2026, 8, 1))
+                .worker(order.getWorker())
+                .build();
+        when(markerRepository.findByOrderIdAndLogicalSource(
+                91L,
+                ContractorRewardSourceCodes.badReviewDoneMarker(704L)
+        )).thenReturn(
+                Optional.empty(),
+                Optional.empty(),
+                Optional.of(marker(ContractorRewardSourceCodes.badReviewDoneMarker(704L)))
+        );
+
+        assertThat(service.ensureCompletedBadReviewTask(task)).isEqualTo(2);
+        assertThat(service.ensureCompletedBadReviewTask(task)).isZero();
+
+        verify(legacyRewardGuard, org.mockito.Mockito.times(2))
+                .requireOnlyDatedPreCutoffLegacyAggregate(91L, LocalDate.of(2026, 8, 1));
+        ArgumentCaptor<Zp> rewards = ArgumentCaptor.forClass(Zp.class);
+        verify(zpRepository, org.mockito.Mockito.times(2)).save(rewards.capture());
+        assertThat(rewards.getAllValues())
+                .extracting(Zp::getSource)
+                .containsExactlyInAnyOrder(
+                        ContractorRewardSourceCodes.badReviewManager(704L),
+                        ContractorRewardSourceCodes.badReviewSpecialist(704L)
+                );
+    }
+
+    @Test
+    void preCutoffBaseWithBoundaryOrUndatedLegacyRowBlocksPostCutoffTaskBeforeAnyWrite() {
+        BadReviewTask task = BadReviewTask.builder()
+                .id(705L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(new BigDecimal("500.00"))
+                .completedDate(LocalDate.of(2026, 8, 1))
+                .worker(order.getWorker())
+                .build();
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "legacy date"))
+                .when(legacyRewardGuard)
+                .requireOnlyDatedPreCutoffLegacyAggregate(91L, LocalDate.of(2026, 8, 1));
+
+        assertThrows(ResponseStatusException.class, () -> service.ensureCompletedBadReviewTask(task));
+
+        verify(markerRepository, never()).save(any());
+        verify(zpRepository, never()).save(any(Zp.class));
+        verify(ledgerService, never()).synchronizeCompletionSourcesCanonical(any());
+    }
+
+    @Test
+    void undatedPublishedBaseCannotUseDatedLegacyExceptionForPostCutoffTask() {
+        Review undated = boundaryReview();
+        undated.setPublishedDate(null);
+        when(reviewRepository.getAllByOrderId(91L)).thenReturn(List.of(undated));
+        BadReviewTask task = BadReviewTask.builder()
+                .id(706L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(new BigDecimal("500.00"))
+                .completedDate(LocalDate.of(2026, 8, 1))
+                .worker(order.getWorker())
+                .build();
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "unclassified base"))
+                .when(legacyRewardGuard).requireNoActiveLegacyAggregate(91L);
+
+        assertThrows(ResponseStatusException.class, () -> service.ensureCompletedBadReviewTask(task));
+
+        verify(legacyRewardGuard, never()).requireOnlyDatedPreCutoffLegacyAggregate(any(), any());
+        verify(markerRepository, never()).save(any());
+        verify(zpRepository, never()).save(any(Zp.class));
+    }
+
+    @Test
+    void postCutoffBaseAlwaysPassesThroughLegacyGuardBeforeWriting() {
+        Review boundaryReview = Review.builder()
+                .id(505L)
+                .publish(true)
+                .publishedDate(LocalDate.of(2026, 8, 1))
+                .build();
+        when(reviewRepository.getAllByOrderId(91L)).thenReturn(List.of(boundaryReview));
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "unclassified"))
+                .when(legacyRewardGuard).requireNoActiveLegacyAggregate(91L);
+
+        assertThrows(ResponseStatusException.class, () -> service.ensureOrderCompletionAccrual(91L));
+
+        verify(markerRepository, never()).save(any());
+        verify(zpRepository, never()).save(any(Zp.class));
+    }
+
+    @Test
+    void paymentCancellationFailsBeforeMutationForUnclassifiedHistoricalReward() {
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "unclassified"))
+                .when(legacyRewardGuard).requireCancellationClassifiable(91L);
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.migrateLegacyRewardsBeforePaymentCancellation(91L)
+        );
+
+        verify(markerRepository, never()).save(any());
+        verify(zpRepository, never()).save(any(Zp.class));
+        verify(ledgerService, never()).synchronizeCompletionSourcesCanonical(any());
+    }
+
+    @Test
+    void directPostCutoffTaskCompletionRejectsLegacyAggregateBeforeAnyWrite() {
+        when(reviewRepository.getAllByOrderId(91L)).thenReturn(List.of(boundaryReview()));
+        BadReviewTask task = BadReviewTask.builder()
+                .id(705L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(new BigDecimal("500.00"))
+                .completedDate(LocalDate.of(2026, 8, 1))
+                .worker(order.getWorker())
+                .build();
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "legacy"))
+                .when(legacyRewardGuard).requireNoActiveLegacyAggregate(91L);
+
+        assertThrows(ResponseStatusException.class, () -> service.ensureCompletedBadReviewTask(task));
+
+        verify(markerRepository, never()).save(any());
+        verify(zpRepository, never()).save(any(Zp.class));
+        verify(ledgerService, never()).synchronizeCompletionSourcesCanonical(any());
+    }
+
+    @Test
+    void cancellationDoesNotFreezePostCutoffTaskIntoPreCutoffLegacyAggregate() {
+        BadReviewTask task = BadReviewTask.builder()
+                .id(706L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(new BigDecimal("500.00"))
+                .completedDate(LocalDate.of(2026, 8, 1))
+                .worker(order.getWorker())
+                .build();
+        when(zpRepository.existsByOrderIdAndSourceAndActiveTrue(
+                91L,
+                ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER
+        )).thenReturn(true);
+        when(badReviewTaskRepository.findAllByOrderIdAndStatus(91L, BadReviewTaskStatus.DONE))
+                .thenReturn(List.of(task));
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.migrateLegacyRewardsBeforePaymentCancellation(91L)
+        );
+
+        verify(markerRepository, never()).save(any());
+        verify(zpRepository, never()).save(any(Zp.class));
+        verify(ledgerService, never()).synchronizeCompletionSourcesCanonical(any());
+    }
+
+    @Test
+    void canceledPostCutoffTaskMarkerWithoutOriginalRewardFailsClosed() {
+        ContractorCompletionRewardMarker done = marker(
+                ContractorRewardSourceCodes.badReviewDoneMarker(707L)
+        );
+        when(markerRepository.findByOrderIdAndLogicalSource(
+                91L,
+                ContractorRewardSourceCodes.badReviewDoneMarker(707L)
+        )).thenReturn(Optional.of(done));
+        when(markerRepository.findByOrderIdAndLogicalSource(
+                91L,
+                ContractorRewardSourceCodes.badReviewCancelMarker(707L)
+        )).thenReturn(Optional.empty());
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.adjustCanceledBadReviewTaskAccrual(91L, 707L)
+        );
+
+        verify(markerRepository, never()).save(any());
+        verify(zpRepository, never()).save(any(Zp.class));
+        verify(ledgerService, never()).synchronizeCompletionSourcesCanonical(any());
     }
 
     @Test
@@ -324,10 +705,8 @@ class ContractorCompletionRewardServiceTest {
     void postCutoffPartialLegacyIsQuarantinedWithoutNewRowsOrMarkers() {
         order.setDetails(List.of(detail("1000.00")));
         when(reviewRepository.getAllByOrderId(91L)).thenReturn(List.of(boundaryReview()));
-        when(zpRepository.existsByOrderIdAndSourceAndActiveTrue(
-                91L,
-                ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER
-        )).thenReturn(true);
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "legacy"))
+                .when(legacyRewardGuard).requireNoActiveLegacyAggregate(91L);
 
         assertThrows(ResponseStatusException.class, () -> service.ensureOrderCompletionAccrual(91L));
 

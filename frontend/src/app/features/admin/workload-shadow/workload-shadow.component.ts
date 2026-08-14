@@ -806,6 +806,10 @@ export class WorkloadShadowComponent implements OnDestroy {
         errors.push(apiErrorMessage(error, 'самодиагностика'));
         return of(null);
       })),
+      readiness: this.api.getLiveReadiness(this.liveSettings()?.mode === 'LIVE' ? 'LIVE' : 'CANARY').pipe(catchError((error) => {
+        errors.push(apiErrorMessage(error, 'готовность боевого контура'));
+        return of(null);
+      })),
       workflows: this.api.getLiveWorkflows(managerId).pipe(catchError((error) => {
         errors.push(apiErrorMessage(error, 'боевые цепочки'));
         return of(null);
@@ -819,12 +823,13 @@ export class WorkloadShadowComponent implements OnDestroy {
         return of(null);
       }))
     }).subscribe({
-      next: ({ summary, workers, proposals, events, health, workflows, executions, emergencyAssignments }) => {
+      next: ({ summary, workers, proposals, events, health, readiness, workflows, executions, emergencyAssignments }) => {
         if (summary) this.summary.set(summary);
         if (workers) this.workers.set(this.collectionItems(workers));
         if (proposals) this.proposals.set(this.collectionItems(proposals));
         if (events) this.events.set(this.collectionItems(events));
         if (health) this.health.set(health);
+        if (readiness) this.liveReadiness.set(readiness);
         if (workflows) this.liveWorkflows.set(workflows);
         if (executions) this.liveExecutions.set(executions);
         if (emergencyAssignments) this.emergencyAssignments.set(emergencyAssignments);
@@ -1066,6 +1071,7 @@ export class WorkloadShadowComponent implements OnDestroy {
   readinessCheckLabel(code: string | null | undefined): string {
     switch (String(code || '').toUpperCase()) {
       case 'OBSERVATION_ENABLED': return 'Сбор наблюдений';
+      case 'RUNTIME_DATA_CONSISTENCY': return 'Актуальность боевых данных';
       case 'AUDIT_GROUP_ROUTING': return 'Общая группа администраторов и владельцев';
       case 'SHADOW_HEALTH': return 'Здоровье теневого контура';
       case 'MAINTENANCE_HEALTH': return 'Самовосстановление и хранение';

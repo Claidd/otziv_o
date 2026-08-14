@@ -2726,7 +2726,8 @@ function New-KeycloakSmokeClient {
         [Parameter(Mandatory = $true)][string]$RootUrl,
         [Parameter(Mandatory = $true)][string]$Realm,
         [Parameter(Mandatory = $true)][hashtable]$AdminHeaders,
-        [Parameter(Mandatory = $true)][string]$Role
+        [Parameter(Mandatory = $true)][string]$Role,
+        [string[]]$AdditionalRoles = @()
     )
 
     $apiRoot = "$($RootUrl.TrimEnd('/'))/keycloak/admin/realms/$Realm"
@@ -2793,14 +2794,26 @@ function New-KeycloakSmokeClient {
         throw "Keycloak did not return a service account user for smoke client $clientId."
     }
 
-    $realmRole = Invoke-RestMethod -Uri "$apiRoot/roles/$([Uri]::EscapeDataString($Role))" -Headers $AdminHeaders -TimeoutSec 30
-    $roleBody = ConvertTo-Json -InputObject @(@{
-        id = $realmRole.id
-        name = $realmRole.name
-        composite = $realmRole.composite
-        clientRole = $realmRole.clientRole
-        containerId = $realmRole.containerId
-    }) -Depth 8
+    $requestedRoles = @($Role) + @($AdditionalRoles)
+    $roleMappings = @(
+        foreach ($requestedRole in $requestedRoles) {
+            if ([string]::IsNullOrWhiteSpace($requestedRole)) {
+                continue
+            }
+            $realmRole = Invoke-RestMethod `
+                -Uri "$apiRoot/roles/$([Uri]::EscapeDataString($requestedRole.Trim()))" `
+                -Headers $AdminHeaders `
+                -TimeoutSec 30
+            @{
+                id = $realmRole.id
+                name = $realmRole.name
+                composite = $realmRole.composite
+                clientRole = $realmRole.clientRole
+                containerId = $realmRole.containerId
+            }
+        }
+    )
+    $roleBody = ConvertTo-Json -InputObject $roleMappings -Depth 8
     Invoke-RestMethod -Uri "$apiRoot/users/$($serviceAccount.id)/role-mappings/realm" -Method Post -Headers $AdminHeaders -Body $roleBody -ContentType "application/json" -TimeoutSec 30 | Out-Null
 
     return [pscustomobject]@{
@@ -3094,6 +3107,11 @@ WHERE version IN (
 )
   AND success = 1;
 
+SELECT CONCAT('HARDENING_MIGRATIONS=', COUNT(*))
+FROM flyway_schema_history
+WHERE version IN ('1.10.237', '1.10.240', '1.10.241', '1.10.248', '1.10.249')
+  AND success = 1;
+
 SELECT CONCAT('FUTURE_EXPIRY_EVENTS=', COUNT(*))
 FROM contractor_payment_allocation_events
 WHERE event_type = 'EXPIRED'
@@ -3108,7 +3126,9 @@ WHERE table_schema = DATABASE()
     'contractor_payment_rollout_state',
     'contractor_completion_reward_markers',
     'contractor_completion_reward_repair_state',
-    'contractor_completion_cutover_state'
+    'contractor_completion_cutover_state',
+    'contractor_legacy_reward_reconciliation_runs',
+    'contractor_legacy_reward_reconciliation_items'
   );
 
 SELECT CONCAT('SAFE_SETTINGS=', COUNT(*))
@@ -3190,7 +3210,7 @@ FROM contractor_shadow_backfill_claims claim
 LEFT JOIN payment_links link
   ON claim.claim_key = CONCAT('PAYMENT_LINK:', link.id);
 
-SELECT CONCAT('COMPLETION_BASE_GAP_QUERY=', IF(COUNT(*) >= 0, 1, 0))
+SELECT CONCAT('COMPLETION_BASE_GAPS=', COUNT(*))
 FROM (
   SELECT orders_row.order_id
   FROM orders orders_row
@@ -3200,6 +3220,15 @@ FROM (
     'Опубликовано', 'Выставлен счет', 'Ожидает общего счета',
     'Напоминание', 'Не оплачено', 'Бан', 'Оплачено'
   )
+    AND orders_row.order_amount > 0
+    AND (
+      SELECT COUNT(review.review_id)
+      FROM reviews review
+      JOIN order_details detail
+        ON detail.order_detail_id = review.review_order_details
+      WHERE detail.order_detail_order = orders_row.order_id
+        AND review.review_publish = 1
+    ) = orders_row.order_amount
     AND (
       SELECT COUNT(DISTINCT marker.logical_source)
       FROM contractor_completion_reward_markers marker
@@ -3211,16 +3240,63 @@ FROM (
         )
     ) < 3
     AND NOT EXISTS (
+      SELECT recovery_task.review_recovery_task_id
+      FROM review_recovery_tasks recovery_task
+      JOIN review_recovery_batches recovery_batch
+        ON recovery_batch.review_recovery_batch_id = recovery_task.review_recovery_task_batch
+      WHERE recovery_task.review_recovery_task_order = orders_row.order_id
+        AND recovery_task.review_recovery_task_status = 'PLANNED'
+        AND recovery_batch.review_recovery_batch_status = 'OPEN'
+    )
+    AND NOT EXISTS (
       SELECT repair.order_id
       FROM contractor_completion_reward_repair_state repair
       WHERE repair.order_id = orders_row.order_id
         AND repair.next_attempt_at > CURRENT_TIMESTAMP(6)
     )
-  ORDER BY orders_row.order_id
-  LIMIT 1
 ) completion_base_gap;
 
-SELECT CONCAT('COMPLETION_DONE_TASK_GAP_QUERY=', IF(COUNT(*) >= 0, 1, 0))
+SELECT CONCAT('COMPLETION_DEFERRED_ACTIVE_RECOVERY_BASE_GAPS=', COUNT(*))
+FROM (
+  SELECT orders_row.order_id
+  FROM orders orders_row
+  JOIN order_statuses status_row
+    ON status_row.order_status_id = orders_row.order_status
+  WHERE status_row.order_status_title IN (
+    'Опубликовано', 'Выставлен счет', 'Ожидает общего счета',
+    'Напоминание', 'Не оплачено', 'Бан', 'Оплачено'
+  )
+    AND orders_row.order_amount > 0
+    AND (
+      SELECT COUNT(review.review_id)
+      FROM reviews review
+      JOIN order_details detail
+        ON detail.order_detail_id = review.review_order_details
+      WHERE detail.order_detail_order = orders_row.order_id
+        AND review.review_publish = 1
+    ) = orders_row.order_amount
+    AND (
+      SELECT COUNT(DISTINCT marker.logical_source)
+      FROM contractor_completion_reward_markers marker
+      WHERE marker.order_id = orders_row.order_id
+        AND marker.logical_source IN (
+          'ORDER_COMPLETION_MANAGER',
+          'ORDER_COMPLETION_SPECIALIST',
+          'PERFORMER_PRODUCT_COMPLETION'
+        )
+    ) < 3
+    AND EXISTS (
+      SELECT recovery_task.review_recovery_task_id
+      FROM review_recovery_tasks recovery_task
+      JOIN review_recovery_batches recovery_batch
+        ON recovery_batch.review_recovery_batch_id = recovery_task.review_recovery_task_batch
+      WHERE recovery_task.review_recovery_task_order = orders_row.order_id
+        AND recovery_task.review_recovery_task_status = 'PLANNED'
+        AND recovery_batch.review_recovery_batch_status = 'OPEN'
+    )
+) completion_deferred_active_recovery_base_gap;
+
+SELECT CONCAT('COMPLETION_DONE_TASK_GAPS=', COUNT(*))
 FROM (
   SELECT DISTINCT task.bad_review_task_order
   FROM bad_review_tasks task
@@ -3237,11 +3313,10 @@ FROM (
       WHERE repair.order_id = task.bad_review_task_order
         AND repair.next_attempt_at > CURRENT_TIMESTAMP(6)
     )
-  ORDER BY task.bad_review_task_order
-  LIMIT 1
+  GROUP BY task.bad_review_task_order
 ) completion_done_task_gap;
 
-SELECT CONCAT('COMPLETION_CANCEL_TASK_GAP_QUERY=', IF(COUNT(*) >= 0, 1, 0))
+SELECT CONCAT('COMPLETION_CANCEL_TASK_GAPS=', COUNT(*))
 FROM (
   SELECT task.bad_review_task_id
   FROM bad_review_tasks task
@@ -3276,8 +3351,6 @@ FROM (
       WHERE repair.order_id = task.bad_review_task_order
         AND repair.next_attempt_at > CURRENT_TIMESTAMP(6)
     )
-  ORDER BY task.bad_review_task_id
-  LIMIT 1
 ) completion_cancel_task_gap;
 
 SELECT CONCAT('ROUTING_REASON_COLUMNS=', COUNT(*))
@@ -3343,6 +3416,102 @@ WHERE table_schema = DATABASE()
       'archive_common_invoices'
     ) AND column_name = 'shadow_route_company_routing_allowed')
   );
+
+SELECT CONCAT('COMMON_SUCCESSOR_COLUMNS=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND (
+    (table_name = 'common_invoice_orders' AND column_name = 'active_membership' AND is_nullable = 'NO' AND column_default = '1')
+    OR (table_name = 'common_invoice_orders' AND column_name = 'active_order_id' AND data_type = 'bigint')
+    OR (table_name = 'common_invoices' AND column_name = 'supersedes_invoice_id' AND data_type = 'bigint' AND is_nullable = 'YES')
+    OR (table_name = 'common_invoices' AND column_name = 'invoice_purpose' AND character_maximum_length = 32 AND is_nullable = 'NO' AND column_default = 'STANDARD')
+    OR (table_name = 'common_invoices' AND column_name = 'cycle_idempotency_key' AND character_maximum_length = 160 AND is_nullable = 'YES')
+    OR (table_name = 'archive_common_invoice_orders' AND column_name = 'active_membership' AND is_nullable = 'NO' AND column_default = '1')
+    OR (table_name = 'archive_common_invoices' AND column_name = 'supersedes_invoice_id' AND data_type = 'bigint' AND is_nullable = 'YES')
+    OR (table_name = 'archive_common_invoices' AND column_name = 'invoice_purpose' AND character_maximum_length = 32 AND is_nullable = 'NO' AND column_default = 'STANDARD')
+    OR (table_name = 'archive_common_invoices' AND column_name = 'cycle_idempotency_key' AND character_maximum_length = 160 AND is_nullable = 'YES')
+  );
+
+SELECT CONCAT('COMMON_SUCCESSOR_GENERATED=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND table_name = 'common_invoice_orders'
+  AND column_name = 'active_order_id'
+  AND extra LIKE '%STORED GENERATED%'
+  AND generation_expression LIKE '%active_membership%'
+  AND generation_expression LIKE '%order_id%';
+
+SELECT CONCAT('COMMON_SUCCESSOR_INDEXES=', COUNT(*))
+FROM (
+  SELECT table_name, index_name, non_unique,
+         GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') AS columns_csv
+  FROM information_schema.statistics
+  WHERE table_schema = DATABASE()
+    AND index_name IN (
+      'uk_common_invoice_active_order', 'idx_common_invoice_order_history',
+      'uk_common_invoice_cycle_idempotency', 'idx_common_invoice_supersedes',
+      'uk_archive_common_invoice_order_cycle'
+    )
+  GROUP BY table_name, index_name, non_unique
+  HAVING
+       (table_name = 'common_invoice_orders' AND index_name = 'uk_common_invoice_active_order' AND non_unique = 0 AND columns_csv = 'active_order_id')
+    OR (table_name = 'common_invoice_orders' AND index_name = 'idx_common_invoice_order_history' AND non_unique = 1 AND columns_csv = 'order_id,active_membership,invoice_id')
+    OR (table_name = 'common_invoices' AND index_name = 'uk_common_invoice_cycle_idempotency' AND non_unique = 0 AND columns_csv = 'cycle_idempotency_key')
+    OR (table_name = 'common_invoices' AND index_name = 'idx_common_invoice_supersedes' AND non_unique = 1 AND columns_csv = 'supersedes_invoice_id')
+    OR (table_name = 'archive_common_invoice_orders' AND index_name = 'uk_archive_common_invoice_order_cycle' AND non_unique = 0 AND columns_csv = 'invoice_id,order_id')
+) required_common_indexes;
+
+SELECT CONCAT('COMMON_SUCCESSOR_LEGACY_INDEX=', COUNT(*))
+FROM information_schema.statistics
+WHERE table_schema = DATABASE()
+  AND table_name = 'common_invoice_orders'
+  AND index_name = 'uk_common_invoice_order';
+
+SELECT CONCAT('COMMON_SUCCESSOR_FK=', COUNT(*))
+FROM information_schema.key_column_usage
+WHERE constraint_schema = DATABASE()
+  AND table_name = 'common_invoices'
+  AND constraint_name = 'fk_common_invoice_supersedes'
+  AND column_name = 'supersedes_invoice_id'
+  AND referenced_table_schema = DATABASE()
+  AND referenced_table_name = 'common_invoices'
+  AND referenced_column_name = 'invoice_id';
+
+SELECT CONCAT('DELIVERY_COLUMNS=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND table_name = 'scheduled_client_message_state'
+  AND (
+    (column_name = 'delivery_token' AND data_type = 'varchar' AND character_maximum_length = 64 AND is_nullable = 'YES')
+    OR (column_name = 'delivery_status' AND data_type = 'varchar' AND character_maximum_length = 32 AND is_nullable = 'YES')
+    OR (column_name = 'delivery_message' AND data_type = 'text' AND is_nullable = 'YES')
+    OR (column_name = 'delivery_task_id' AND data_type = 'bigint' AND is_nullable = 'YES')
+    OR (column_name = 'delivery_prepared_at' AND data_type = 'datetime' AND datetime_precision = 6 AND is_nullable = 'YES')
+  );
+
+SELECT CONCAT('DELIVERY_INDEXES=', COUNT(*))
+FROM (
+  SELECT index_name, non_unique,
+         GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') AS columns_csv
+  FROM information_schema.statistics
+  WHERE table_schema = DATABASE()
+    AND table_name = 'scheduled_client_message_state'
+    AND index_name IN (
+      'uk_scheduled_message_delivery_token',
+      'idx_scheduled_message_delivery_status',
+      'idx_scheduled_message_scenario_error'
+    )
+  GROUP BY index_name, non_unique
+  HAVING
+       (index_name = 'uk_scheduled_message_delivery_token' AND non_unique = 0 AND columns_csv = 'delivery_token')
+    OR (index_name = 'idx_scheduled_message_delivery_status' AND non_unique = 1 AND columns_csv = 'delivery_status,delivery_prepared_at')
+    OR (index_name = 'idx_scheduled_message_scenario_error' AND non_unique = 1 AND columns_csv = 'scenario,state_status,last_error_code,next_attempt_at')
+) required_delivery_indexes;
+
+SELECT CONCAT('PAYMENT_OVERDUE_DAYS=', COUNT(*))
+FROM app_settings
+WHERE setting_key = 'client.messages.payment-overdue-days'
+  AND TRIM(setting_value) = '30';
 "@
     $schemaOutput = & docker @($ComposeArguments + @(
         "exec", "-T", "-e", "MYSQL_PWD=$mysqlPassword", "mysql",
@@ -3365,8 +3534,9 @@ WHERE table_schema = DATABASE()
     )
     foreach ($expectedFact in @(
         "MIGRATIONS=16",
+        "HARDENING_MIGRATIONS=5",
         "FUTURE_EXPIRY_EVENTS=0",
-        "REQUIRED_TABLES=6",
+        "REQUIRED_TABLES=8",
         "SAFE_SETTINGS=5",
         "ACCOUNTING_SHADOW=1",
         "ROLLOUT_LEGACY=1",
@@ -3380,19 +3550,33 @@ WHERE table_schema = DATABASE()
         "PAYMENT_GENERATION_JOIN=1",
         "COMMON_GENERATION_JOIN=1",
         "CLAIM_KEY_JOIN=1",
-        "COMPLETION_BASE_GAP_QUERY=1",
-        "COMPLETION_DONE_TASK_GAP_QUERY=1",
-        "COMPLETION_CANCEL_TASK_GAP_QUERY=1",
         "ROUTING_REASON_COLUMNS=3",
         "ENCRYPTED_COMMENT_COLUMNS=2",
         "PII_CHECKS=2",
         "COMPANY_ROUTING_COLUMNS=5",
-        "COMPANY_ROUTING_DEFAULTS=5"
+        "COMPANY_ROUTING_DEFAULTS=5",
+        "COMMON_SUCCESSOR_COLUMNS=9",
+        "COMMON_SUCCESSOR_GENERATED=1",
+        "COMMON_SUCCESSOR_INDEXES=5",
+        "COMMON_SUCCESSOR_LEGACY_INDEX=0",
+        "COMMON_SUCCESSOR_FK=1",
+        "DELIVERY_COLUMNS=5",
+        "DELIVERY_INDEXES=3",
+        "PAYMENT_OVERDUE_DAYS=1"
     )) {
         if ($schemaFacts -notcontains $expectedFact) {
             throw "Contractor payment schema invariant '$expectedFact' is missing. Actual: $($schemaFacts -join ', ')."
         }
     }
+
+    $completionGapFacts = @(
+        $schemaFacts |
+            Where-Object { $_ -match '^COMPLETION_(BASE|DEFERRED_ACTIVE_RECOVERY_BASE|DONE_TASK|CANCEL_TASK)_GAPS=[0-9]+$' }
+    )
+    if ($completionGapFacts.Count -ne 4) {
+        throw "Could not measure every completion repair queue. Actual: $($schemaFacts -join ', ')."
+    }
+    Write-Host "Completion repair queues measured (non-zero is expected before the first accounting activation): $($completionGapFacts -join ', ')."
 
     $masterOutput = & docker @($ComposeArguments + @(
         "exec", "-T", "app", "sh", "-lc",
@@ -3413,7 +3597,7 @@ WHERE table_schema = DATABASE()
         }
     }
 
-    Write-Host "Contractor payment SHADOW safety smoke OK: V217-V232 schema is complete, expiry events stay on the observed business timeline, company payment-routing defaults and source snapshots are present, generation joins are collation-safe, accounting/routing remain LEGACY/SHADOW, completion cutover is unset, and both deployment masters are false."
+    Write-Host "Contractor payment SHADOW safety smoke OK: V217-V232 plus V237/V240/V241/V248 are complete, common successor and durable-delivery schemas are present, payment overdue is 30 days, completion repair queues were measured, expiry events stay on the observed business timeline, company payment-routing defaults and source snapshots are present, accounting/routing remain LEGACY/SHADOW, completion cutover is unset, and both deployment masters are false."
 }
 
 function Invoke-WorkloadShadowSmoke {
@@ -3536,7 +3720,8 @@ WHERE table_schema = DATABASE()
             -RootUrl $RootUrl `
             -Realm $realm `
             -AdminHeaders $keycloakAdminHeaders `
-            -Role "ADMIN"
+            -Role "ADMIN" `
+            -AdditionalRoles @("OWNER")
         $roleToken = Get-KeycloakClientCredentialsToken `
             -RootUrl $RootUrl `
             -Realm $realm `
@@ -3632,10 +3817,32 @@ WHERE table_schema = DATABASE()
             confirmation = "ВКЛЮЧИТЬ БОЕВОЙ РЕЖИМ"
             revision = $liveSettings.revision
         } | ConvertTo-Json -Compress
+
+        # OWNER is required for the two harmless settings round-trips above.
+        # Recreate the allowlisted smoke client with ADMIN only before the
+        # negative activation check, otherwise the OWNER authority would make
+        # an HTTP 412 business-precondition response a false test failure.
+        Remove-KeycloakSmokeClient `
+            -RootUrl $RootUrl `
+            -Realm $realm `
+            -AdminHeaders $keycloakAdminHeaders `
+            -Client $client
+        $client = $null
+        $client = New-KeycloakSmokeClient `
+            -RootUrl $RootUrl `
+            -Realm $realm `
+            -AdminHeaders $keycloakAdminHeaders `
+            -Role "ADMIN"
+        $adminOnlyToken = Get-KeycloakClientCredentialsToken `
+            -RootUrl $RootUrl `
+            -Realm $realm `
+            -ClientId $client.ClientId `
+            -ClientSecret $client.ClientSecret
+        $adminOnlyHeaders = @{ Authorization = "Bearer $adminOnlyToken" }
         $activationAttempt = Invoke-SmokeWebRequest `
             -Uri "$apiRoot/api/admin/workload-shadow/live/activate" `
             -Method "Post" `
-            -Headers $headers `
+            -Headers $adminOnlyHeaders `
             -Body $activationBody `
             -ContentType "application/json"
         if ($activationAttempt.StatusCode -ne 403) {
@@ -3979,6 +4186,14 @@ $previousLegacyMigrationEnv = [Environment]::GetEnvironmentVariable(
     'OTZIV_AUTH_LEGACY_MIGRATION_ENABLED',
     [EnvironmentVariableTarget]::Process
 )
+$previousContractorLiveMasterEnv = [Environment]::GetEnvironmentVariable(
+    'OTZIV_CONTRACTOR_PAYMENTS_LIVE_ROUTING_MASTER_ENABLED',
+    [EnvironmentVariableTarget]::Process
+)
+$previousContractorRewardMasterEnv = [Environment]::GetEnvironmentVariable(
+    'OTZIV_CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_MASTER_ENABLED',
+    [EnvironmentVariableTarget]::Process
+)
 try {
 try {
     $operationLockHeld = $operationMutex.WaitOne(0)
@@ -3998,6 +4213,12 @@ if ($RestoreProdDb) {
 # The migration window is closed. Override an old local env file for this
 # process without rewriting or exposing the user's external secret file.
 $env:OTZIV_AUTH_LEGACY_MIGRATION_ENABLED = 'false'
+# A prod-like restore contains production settings. Force both irreversible
+# contractor-payment deployment masters off before the first Compose command,
+# including database restore and application startup. The previous process
+# values are restored in finally and the external env file is never rewritten.
+$env:OTZIV_CONTRACTOR_PAYMENTS_LIVE_ROUTING_MASTER_ENABLED = 'false'
+$env:OTZIV_CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_MASTER_ENABLED = 'false'
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
@@ -4281,6 +4502,16 @@ try {
         Remove-Item Env:OTZIV_AUTH_LEGACY_MIGRATION_ENABLED -ErrorAction SilentlyContinue
     } else {
         $env:OTZIV_AUTH_LEGACY_MIGRATION_ENABLED = $previousLegacyMigrationEnv
+    }
+    if ($null -eq $previousContractorLiveMasterEnv) {
+        Remove-Item Env:OTZIV_CONTRACTOR_PAYMENTS_LIVE_ROUTING_MASTER_ENABLED -ErrorAction SilentlyContinue
+    } else {
+        $env:OTZIV_CONTRACTOR_PAYMENTS_LIVE_ROUTING_MASTER_ENABLED = $previousContractorLiveMasterEnv
+    }
+    if ($null -eq $previousContractorRewardMasterEnv) {
+        Remove-Item Env:OTZIV_CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_MASTER_ENABLED -ErrorAction SilentlyContinue
+    } else {
+        $env:OTZIV_CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_MASTER_ENABLED = $previousContractorRewardMasterEnv
     }
     if ($operationLockHeld) {
         $operationMutex.ReleaseMutex()

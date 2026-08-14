@@ -1,6 +1,7 @@
 package com.hunt.otziv.workload_shadow.service;
 
 import com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse;
+import com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository.ReadyWorkflowProjection;
 import java.util.ArrayList;
@@ -24,6 +25,7 @@ public class WorkloadTransferExecutionService {
     private final WorkloadTransferExecutionFailureService failureService;
     private final WorkloadLiveSettingsService liveSettingsService;
     private final WorkloadShadowSettingsService shadowSettingsService;
+    private final WorkloadLiveControlRepository liveControlRepository;
 
     public List<WorkloadTransferExecutionTransactionService.ApplyResult>
             applyAcceptedWorkflows() {
@@ -74,6 +76,26 @@ public class WorkloadTransferExecutionService {
                     "Workflow не указан"
             );
         }
+        WorkloadLiveSettingsResponse liveSettings = liveSettingsService.current();
+        if (!liveSettingsService.applicationAllowed(liveSettings)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Боевой контур остановлен"
+            );
+        }
+        var liveControl = liveControlRepository.lockState()
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.CONFLICT,
+                                "Настройки боевого контура неполны"
+                        )
+                );
+        if (!sameLiveControl(liveSettings, liveControl)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Настройки боевого контура изменились, повторите действие"
+            );
+        }
         var settings = shadowSettingsService.current();
         int updated = repository.confirmByOwner(
                 workflowId,
@@ -85,6 +107,21 @@ public class WorkloadTransferExecutionService {
                     "Workflow уже подтверждён, отменён или изменился"
             );
         }
+    }
+
+    private boolean sameLiveControl(
+            WorkloadLiveSettingsResponse settings,
+            WorkloadLiveControlRepository.LiveControlProjection control
+    ) {
+        if (control.getSettingsRevision() == null
+                || control.getSettingsRevision() != settings.revision()) {
+            return false;
+        }
+        String mode = control.getMode() == null ? "" : control.getMode();
+        boolean activeMode = "CANARY".equals(mode) || "LIVE".equals(mode);
+        return activeMode
+                && settings.mode().equals(mode)
+                && "true".equalsIgnoreCase(control.getApplyEnabled());
     }
 
     private String rootMessage(Throwable throwable) {

@@ -19,6 +19,9 @@ public class WorkloadEmergencyAssignmentTransactionService {
 
     private final WorkloadEmergencyAssignmentRepository repository;
     private final WorkloadTransferExecutionRepository executionRepository;
+    private final com.hunt.otziv.workload_shadow.repository.WorkloadTransferWorkflowRepository workflowRepository;
+    private final WorkloadLiveDailyQuotaLockService quotaLockService;
+    private final com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository liveControlRepository;
     private final WorkloadLiveSettingsService liveSettingsService;
     private final WorkloadShadowSettingsService shadowSettingsService;
 
@@ -40,7 +43,38 @@ public class WorkloadEmergencyAssignmentTransactionService {
             return ApplyResult.skipped("Аварийное назначение выключено");
         }
         LocalDateTime now = now();
+        var liveControl = liveControlRepository.lockState().orElse(null);
+        if (liveControl == null
+                || liveControl.getSettingsRevision() == null
+                || liveControl.getSettingsRevision() != live.revision()
+                || !"true".equals(liveControl.getApplyEnabled())
+                || !live.mode().equals(liveControl.getMode())) {
+            return ApplyResult.skipped(
+                    "Боевой контур или его ревизия изменились"
+            );
+        }
         String key = UUID.randomUUID().toString();
+        quotaLockService.lock(now.toLocalDate());
+        long managerUsage = 0;
+        long globalUsage = 0;
+        for (var row : workflowRepository.reservedByManagerSince(
+                now.toLocalDate().atStartOfDay()
+        )) {
+            long reserved = row == null || row.getReservedCount() == null
+                    ? 0
+                    : row.getReservedCount();
+            globalUsage += reserved;
+            if (row != null
+                    && row.getManagerId() != null
+                    && row.getManagerId() == candidateCase.sourceManagerId()) {
+                managerUsage += reserved;
+            }
+        }
+        if (globalUsage >= live.maxTransfersGlobalDay()
+                || managerUsage >= live.maxTransfersPerManagerDay()) {
+            return ApplyResult.skipped("Дневная квота передачи исчерпана");
+        }
+
         int inserted = repository.insertPrepared(
                 key,
                 candidateCase.shadowCaseId(),

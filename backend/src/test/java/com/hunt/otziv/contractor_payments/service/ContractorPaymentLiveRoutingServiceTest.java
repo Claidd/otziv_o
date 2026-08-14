@@ -147,7 +147,7 @@ class ContractorPaymentLiveRoutingServiceTest {
         Manager manager = manager(20L, 120L);
         ContractorPaymentProfile specialist = profile(1L, worker.getUser(), ContractorRole.SPECIALIST);
         specialist.setRecipientName("Иван Исполнитель");
-        specialist.setPaymentPhone("+79991112233");
+        specialist.setPaymentPhone("2202 2082-3839 6676");
         specialist.setBankName("Банк специалиста");
         specialist.setPaymentComment("За услуги");
         when(profileRepository.findByUserIdAndRoleForUpdate(110L, ContractorRole.SPECIALIST))
@@ -163,7 +163,7 @@ class ContractorPaymentLiveRoutingServiceTest {
         assertEquals(10L, allocation.getCurrentWorkerId());
         assertEquals(20L, allocation.getCurrentManagerId());
         assertEquals("Иван Исполнитель", allocation.getRecipientNameSnapshot());
-        assertEquals("+79991112233", allocation.getPaymentPhoneSnapshot());
+        assertEquals("2202208238396676", allocation.getPaymentPhoneSnapshot());
         assertEquals("Банк специалиста", allocation.getBankNameSnapshot());
         assertEquals("За услуги", allocation.getPaymentCommentSnapshot());
         assertEquals(150_000L, allocation.getAvailableBeforeKopecks());
@@ -181,6 +181,26 @@ class ContractorPaymentLiveRoutingServiceTest {
         currentEligibilityLocks.verify(userRepository).lockContractorRoleIds(110L, "ROLE_WORKER");
         currentEligibilityLocks.verify(userRepository).lockContractorRoleIds(120L, "ROLE_MANAGER");
         currentEligibilityLocks.verify(profileRepository).findAllByIdForUpdate(List.of(1L));
+    }
+
+    @Test
+    void ordinaryLiveRouteFallsBackToOwnerWhenImmutableSourceSnapshotIsMissing() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(501L, 601L);
+        Manager manager = manager(502L, 602L);
+        PaymentLink link = paymentLink(503L, order(504L, worker, manager), 100_000L);
+        link.setShadowRouteGeneration(null);
+        link.setShadowRoutePreparedAt(null);
+
+        ContractorPaymentAllocation allocation = service.reserveForPaymentLink(link);
+
+        assertEquals(ContractorRecipientType.OWNER, allocation.getRecipientType());
+        assertEquals(ContractorAllocationStatus.OWNER_FALLBACK, allocation.getStatus());
+        assertEquals(
+                ContractorRoutingDecisionReason.SOURCE_SNAPSHOT_NOT_READY,
+                allocation.getRoutingDecisionReason()
+        );
+        verify(profileRepository, never()).findAllByIdForUpdate(any());
     }
 
     @Test
@@ -254,6 +274,32 @@ class ContractorPaymentLiveRoutingServiceTest {
         assertEquals(ContractorRoutingDecisionReason.MANAGER_SELECTED, allocation.getRoutingDecisionReason());
         assertEquals(
                 ContractorRoutingDecisionReason.LIVE_PROFILE_DISABLED,
+                allocation.getSpecialistRejectionReason()
+        );
+        verify(profileService, never()).available(specialist, ContractorAllocationMode.LIVE);
+    }
+
+    @Test
+    void malformedSpecialistTransferNumberFallsThroughToManager() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(14L, 114L);
+        Manager manager = manager(24L, 124L);
+        ContractorPaymentProfile specialist = profile(16L, worker.getUser(), ContractorRole.SPECIALIST);
+        specialist.setPaymentPhone("2202 2082 3839 667X");
+        ContractorPaymentProfile managerProfile = profile(17L, manager.getUser(), ContractorRole.MANAGER);
+        when(profileRepository.findByUserIdAndRoleForUpdate(114L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(specialist));
+        when(profileRepository.findByUserIdAndRoleForUpdate(124L, ContractorRole.MANAGER))
+                .thenReturn(Optional.of(managerProfile));
+        when(profileService.available(managerProfile, ContractorAllocationMode.LIVE)).thenReturn(100_000L);
+
+        ContractorPaymentAllocation allocation = service.reserveForPaymentLink(
+                paymentLink(144L, order(134L, worker, manager), 100_000L)
+        );
+
+        assertEquals(ContractorRecipientType.MANAGER, allocation.getRecipientType());
+        assertEquals(
+                ContractorRoutingDecisionReason.RECIPIENT_DETAILS_INCOMPLETE,
                 allocation.getSpecialistRejectionReason()
         );
         verify(profileService, never()).available(specialist, ContractorAllocationMode.LIVE);
@@ -933,6 +979,29 @@ class ContractorPaymentLiveRoutingServiceTest {
         locks.verify(allocationRepository).findByIdForUpdate(95L);
     }
 
+    @Test
+    void exactCommonConfirmationRequiresTheImmutableGenerationAndAmountSnapshot() {
+        ContractorPaymentProfile recipient = profile(151L, user(251L), ContractorRole.SPECIALIST);
+        ContractorPaymentAllocation allocation = reportAllocation(
+                195L, 160L, recipient, ContractorRecipientType.SPECIALIST,
+                ContractorAllocationStatus.RESERVED
+        );
+        CommonInvoice invoice = reportableInvoice(160L, 195L, "exact-source-token");
+        when(commonInvoiceRepository.findByIdForUpdate(160L)).thenReturn(Optional.of(invoice));
+        when(allocationRepository.findRecipientProfileIdById(195L)).thenReturn(Optional.of(151L));
+        when(profileRepository.findByIdForUpdate(151L)).thenReturn(Optional.of(recipient));
+        when(allocationRepository.findByIdForUpdate(195L)).thenReturn(Optional.of(allocation));
+
+        assertSame(allocation, service.validatedCommonConfirmationSource(160L, 195L));
+
+        invoice.setShadowRouteGeneration("different-generation");
+        ResponseStatusException mismatch = assertThrows(
+                ResponseStatusException.class,
+                () -> service.validatedCommonConfirmationSource(160L, 195L)
+        );
+        assertEquals(HttpStatus.CONFLICT, mismatch.getStatusCode());
+    }
+
     @ParameterizedTest
     @EnumSource(value = ContractorAllocationStatus.class, names = {
             "RELEASED_UNPAID", "EXPIRED", "CANCELED", "PARTIALLY_CONFIRMED", "CONFIRMED", "RETURNED"
@@ -1322,6 +1391,13 @@ class ContractorPaymentLiveRoutingServiceTest {
         link.setId(id);
         link.setOrder(order);
         link.setAmountKopecks(amountKopecks);
+        link.setShadowRouteGeneration("generation-" + id);
+        link.setShadowRouteOrderId(order == null ? null : order.getId());
+        link.setShadowRouteAmountKopecks(amountKopecks);
+        link.setShadowRouteCompanyRoutingAllowed(order != null
+                && order.getCompany() != null
+                && order.getCompany().isContractorPaymentRoutingEnabled());
+        link.setShadowRoutePreparedAt(LocalDateTime.of(2026, 8, 7, 10, 0));
         return link;
     }
 

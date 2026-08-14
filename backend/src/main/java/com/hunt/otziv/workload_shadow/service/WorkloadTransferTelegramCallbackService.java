@@ -24,6 +24,7 @@ public class WorkloadTransferTelegramCallbackService {
     private final WorkloadLiveSettingsService liveSettingsService;
     private final WorkloadShadowSettingsService shadowSettingsService;
     private final TelegramService telegramService;
+    private final com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository liveControlRepository;
 
     @Transactional
     public Optional<String> handle(CallbackQuery callbackQuery) {
@@ -40,6 +41,9 @@ public class WorkloadTransferTelegramCallbackService {
         var liveSettings = liveSettingsService.current();
         if (!liveSettingsService.applicationAllowed(liveSettings)) {
             return Optional.of("Боевой контур остановлен. Назначения не изменены");
+        }
+        if (!liveControlMatches(liveSettings)) {
+            return Optional.of("Боевой контур изменился. Назначения не изменены");
         }
 
         CallbackProjection offer = repository.findCallbackOffer(parsed.offerToken())
@@ -113,6 +117,22 @@ public class WorkloadTransferTelegramCallbackService {
                         : "Отказ принят. Предложение перейдёт следующему кандидату"
         );
     }
+
+    private boolean liveControlMatches(
+            com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse settings
+    ) {
+        var control = liveControlRepository.lockState().orElse(null);
+        if (control == null || control.getSettingsRevision() == null) {
+            return false;
+        }
+        String mode = control.getMode() == null ? "" : control.getMode();
+        boolean activeMode = WorkloadLiveSettingsService.MODE_CANARY.equals(mode)
+                || WorkloadLiveSettingsService.MODE_LIVE.equals(mode);
+        return activeMode
+                && control.getSettingsRevision() == settings.revision()
+                && "true".equalsIgnoreCase(control.getApplyEnabled());
+    }
+
 
     private ParsedCallback parse(String data) {
         if (data == null) {

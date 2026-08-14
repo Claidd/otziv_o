@@ -183,6 +183,28 @@ class ContractorPaymentMigrationContractTest {
                 .doesNotContain("DEFAULT FALSE");
     }
 
+    @Test
+    void completionRepairCleanupDeletesOnlyDemonstrablyFinishedOrOrphanedClaims() throws IOException {
+        String migration = migration(
+                "/db/migration/V1_10_237__contractor_completion_repair_state_cleanup.sql"
+        );
+
+        assertThat(migration)
+                .contains("LEFT JOIN orders source_order")
+                .contains("source_order.order_id IS NULL")
+                .contains("COUNT(DISTINCT marker.logical_source)")
+                .contains("'ORDER_COMPLETION_MANAGER'")
+                .contains("'ORDER_COMPLETION_SPECIALIST'")
+                .contains("'PERFORMER_PRODUCT_COMPLETION'")
+                .contains("task.bad_review_task_status = 'DONE'")
+                .contains("task.bad_review_task_status = 'CANCELED'")
+                .contains("CONCAT('BAD_REVIEW_DONE:', task.bad_review_task_id)")
+                .contains("CONCAT('BAD_REVIEW_CANCEL:', task.bad_review_task_id)")
+                .doesNotContain("TRUNCATE")
+                .doesNotContain("DELETE FROM contractor_completion_reward_markers")
+                .doesNotContain("DELETE FROM zp");
+    }
+
     private String migration(String resource) throws IOException {
         try (var stream = getClass().getResourceAsStream(resource)) {
             if (stream == null) {

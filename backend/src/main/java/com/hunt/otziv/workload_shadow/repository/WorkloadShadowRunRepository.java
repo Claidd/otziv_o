@@ -17,13 +17,39 @@ public interface WorkloadShadowRunRepository
                 trigger_type,
                 status,
                 started_at,
-                instance_id
+                instance_id,
+                settings_revision
             )
             VALUES (
                 :triggerType,
                 'RUNNING',
                 :startedAt,
-                :instanceId
+                :instanceId,
+                :settingsRevision
+            )
+            """, nativeQuery = true)
+    int startRun(
+            @Param("triggerType") String triggerType,
+            @Param("startedAt") LocalDateTime startedAt,
+            @Param("instanceId") String instanceId,
+            @Param("settingsRevision") long settingsRevision
+    );
+
+    @Modifying
+    @Query(value = """
+            INSERT INTO workload_shadow_runs (
+                trigger_type,
+                status,
+                started_at,
+                instance_id,
+                settings_revision
+            )
+            VALUES (
+                :triggerType,
+                'RUNNING',
+                :startedAt,
+                :instanceId,
+                0
             )
             """, nativeQuery = true)
     int startRun(

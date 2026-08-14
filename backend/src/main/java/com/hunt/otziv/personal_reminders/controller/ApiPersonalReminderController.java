@@ -2,10 +2,12 @@ package com.hunt.otziv.personal_reminders.controller;
 
 import com.hunt.otziv.personal_reminders.dto.PersonalReminderRequest;
 import com.hunt.otziv.personal_reminders.dto.PersonalReminderResponse;
+import com.hunt.otziv.personal_reminders.dto.PersonalReminderPaymentInstructionResponse;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -54,6 +56,17 @@ public class ApiPersonalReminderController {
             @PathVariable Long reminderId
     ) {
         return reminderService.complete(principal, reminderId);
+    }
+
+    @PostMapping("/{reminderId}/payment-instruction")
+    public PersonalReminderPaymentInstructionResponse preparePaymentInstruction(
+            Principal principal,
+            Authentication authentication,
+            @PathVariable Long reminderId
+    ) {
+        return new PersonalReminderPaymentInstructionResponse(
+                reminderService.preparePaymentCopyText(principal, authentication, reminderId)
+        );
     }
 
     @DeleteMapping("/{reminderId}")

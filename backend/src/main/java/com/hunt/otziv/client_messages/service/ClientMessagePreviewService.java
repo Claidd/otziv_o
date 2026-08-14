@@ -7,6 +7,7 @@ import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder;
+import com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.u_users.model.Manager;
 import java.math.BigDecimal;
@@ -24,12 +25,13 @@ public class ClientMessagePreviewService {
     private static final String DEFAULT_CLIENT_TEXT_REMINDER_TEXT = "{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, пришлите текст или пожелания для отзывов по заказу №{orderId}, чтобы мы могли продолжить работу.";
     private static final String DEFAULT_PAYMENT_REMINDER_TEXT = "{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.";
     private static final String DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT = "{companyAndFilial}\n\nВсе отзывы по заказу №{orderId} восстановлены. Продолжаем работу.";
-    private static final String DEFAULT_ARCHIVE_OFFER_TEXT = "{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.";
+    private static final String DEFAULT_ARCHIVE_OFFER_TEXT = "{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз?";
     private static final int PREVIEW_LIMIT = 700;
 
     private final AppSettingService appSettingService;
     private final OrderReviewCheckMessageBuilder reviewCheckMessageBuilder;
     private final BadReviewTaskService badReviewTaskService;
+    private final OrderPaymentMessageBuilder orderPaymentMessageBuilder;
 
     public ClientMessagePreview preview(ScheduledClientMessageState state, Order order, Company company) {
         Company resolvedCompany = order != null && order.getCompany() != null ? order.getCompany() : company;
@@ -88,7 +90,7 @@ public class ClientMessagePreviewService {
                     expectedChannel,
                     channelDetails(resolvedCompany, manager(order, resolvedCompany)),
                     paymentSource,
-                    limit(paymentReminderText(order), PREVIEW_LIMIT)
+                    limit(orderPaymentMessageBuilder.publishedOrderPaymentMessagePreview(order), PREVIEW_LIMIT)
             );
             case BAD_REVIEW_AUTO_BAN -> new ClientMessagePreview(
                     "system",
@@ -272,13 +274,20 @@ public class ClientMessagePreviewService {
     }
 
     private BigDecimal payableSum(Order order) {
-        if (order == null) {
-            return BigDecimal.ZERO;
+        if (order == null || order.getId() == null || order.getSum() == null) {
+            throw new IllegalStateException("Не удалось достоверно определить сумму платежного сообщения");
         }
         try {
-            return badReviewTaskService.getPayableSum(order);
+            BigDecimal payable = badReviewTaskService.getPayableSum(order);
+            if (payable == null || payable.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalStateException("Некорректная итоговая сумма заказа");
+            }
+            return payable;
         } catch (RuntimeException e) {
-            return order.getSum() == null ? BigDecimal.ZERO : order.getSum();
+            throw new IllegalStateException(
+                    "Не удалось учесть выполненные дополнительные задачи в сумме заказа #" + order.getId(),
+                    e
+            );
         }
     }
 

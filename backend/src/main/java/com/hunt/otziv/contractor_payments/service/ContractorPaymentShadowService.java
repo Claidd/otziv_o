@@ -1,5 +1,6 @@
 package com.hunt.otziv.contractor_payments.service;
 
+import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
@@ -131,6 +132,7 @@ public class ContractorPaymentShadowService {
             return null;
         }
         Order order = link.getOrder();
+        lockCompanyRoutingPolicy(order);
         Worker worker = order.getWorker();
         Manager manager;
         try {
@@ -184,6 +186,7 @@ public class ContractorPaymentShadowService {
         List<Order> safeOrders = orders == null
                 ? List.of()
                 : orders.stream().filter(Objects::nonNull).toList();
+        lockCompanyRoutingPolicies(safeOrders);
         boolean complete = !safeOrders.isEmpty() && safeOrders.stream().allMatch(order ->
                 order.getWorker() != null
                         && order.getWorker().getId() != null
@@ -562,12 +565,12 @@ public class ContractorPaymentShadowService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public int releaseForUnpaidOrder(Long orderId, String reason) {
+    public int releaseForFinanciallyClosedOrder(Long orderId, String reason) {
         if (orderId == null) {
             return 0;
         }
         Order lockedOrder = orderRepository.findByIdForCounterUpdate(orderId).orElse(null);
-        if (!orderMarkedUnpaid(lockedOrder)) {
+        if (!orderReleasesReservation(lockedOrder)) {
             // Delayed after-commit callback after a status restoration must
             // not release a newer route.
             return 0;
@@ -597,15 +600,16 @@ public class ContractorPaymentShadowService {
                 .forEach(this::lockEvidenceSource);
         LocalDateTime now = databaseNow();
         List<ContractorPaymentAllocation> lockedAllocations = lockLatestAttemptsCanonical(allocations);
-        List<ContractorPaymentAllocation> releasedAllocations = lockedAllocations.stream().filter(allocation ->
-            accountingService.recordRelease(
-                    allocation,
-                    ContractorAllocationStatus.RELEASED_UNPAID,
-                    now,
-                    reason,
-                    "ORDER_UNPAID:" + allocation.getId()
-            )
-        ).toList();
+        List<ContractorPaymentAllocation> releasedAllocations = lockedAllocations.stream()
+                .filter(allocation -> orderReleasesAllocation(lockedOrder, allocation))
+                .filter(allocation -> accountingService.recordRelease(
+                        allocation,
+                        ContractorAllocationStatus.RELEASED_UNPAID,
+                        now,
+                        reason,
+                        "ORDER_UNPAID:" + allocation.getId()
+                ))
+                .toList();
         allocationRepository.saveAll(releasedAllocations);
         return releasedAllocations.size();
     }
@@ -944,7 +948,7 @@ public class ContractorPaymentShadowService {
                         "LINK:SOURCE_MISSING"
                 );
             } else {
-                boolean releasedByOrderStatus = releaseIfOrderMarkedUnpaid(
+                boolean releasedByOrderStatus = releaseIfOrderFinanciallyClosed(
                         allocation,
                         sourcePrelude.order(),
                         now
@@ -1142,21 +1146,25 @@ public class ContractorPaymentShadowService {
         if (allocation == null || !UNPAID_RELEASABLE_STATUSES.contains(allocation.getStatus())) {
             return false;
         }
-        boolean containsUnpaid = orders != null && orders.stream()
+        Order closingOrder = orders == null ? null : orders.stream()
                 .filter(Objects::nonNull)
-                .map(Order::getStatus)
-                .filter(Objects::nonNull)
-                .map(status -> normalize(status.getTitle()))
-                .anyMatch("Не оплачено"::equalsIgnoreCase);
-        if (!containsUnpaid) {
+                .filter(order -> orderReleasesAllocation(order, allocation))
+                .sorted(Comparator.comparingInt(order ->
+                        "Бан".equalsIgnoreCase(statusTitle(order)) ? 0 : 1))
+                .findFirst()
+                .orElse(null);
+        if (closingOrder == null) {
             return false;
         }
+        boolean banned = "Бан".equalsIgnoreCase(statusTitle(closingOrder));
         accountingService.recordRelease(
                 allocation,
                 ContractorAllocationStatus.RELEASED_UNPAID,
                 observedAt,
-                "Один из заказов общего счета находится в статусе «Не оплачено»",
-                "COMMON:ORDER_UNPAID"
+                banned
+                        ? "Один из заказов общего счета находится в статусе «Бан»"
+                        : "Один из заказов общего счета находится в статусе «Не оплачено»",
+                banned ? "COMMON:ORDER_BANNED" : "COMMON:ORDER_UNPAID"
         );
         return true;
     }
@@ -1177,13 +1185,20 @@ public class ContractorPaymentShadowService {
             }
             boolean late = isReleased(allocation);
             long confirmed = confirmedAmount(link);
+            String linkAudit = normalize(link.getLastError());
+            int sourceAuditIndex = linkAudit.indexOf("contractor_source_confirmation;");
+            String sourceAudit = sourceAuditIndex >= 0
+                    ? linkAudit.substring(sourceAuditIndex)
+                    : null;
             accountingService.recordConfirmation(
                     allocation,
                     confirmed,
                     paidAt(link, now),
-                    late
-                            ? "Оплата подтверждена после освобождения тестового резерва"
-                            : "Оплата подтверждена",
+                    sourceAudit != null
+                            ? (late ? "После освобождения резерва; " : "") + sourceAudit
+                            : late
+                                ? "Оплата подтверждена после освобождения тестового резерва"
+                                : "Оплата подтверждена",
                     "LINK:CONFIRMED:" + confirmed,
                     allocation.getMode() == ContractorAllocationMode.SHADOW,
                     late
@@ -1420,7 +1435,7 @@ public class ContractorPaymentShadowService {
             return ContractorRoutingDecisionReason.PROFILE_IDENTITY_MISMATCH;
         }
         if (normalize(profile.getRecipientName()).isBlank()
-                || normalize(profile.getPaymentPhone()).isBlank()
+                || !ContractorPaymentTransferNumber.isValid(profile.getPaymentPhone())
                 || normalize(profile.getBankName()).isBlank()) {
             return ContractorRoutingDecisionReason.RECIPIENT_DETAILS_INCOMPLETE;
         }
@@ -1706,22 +1721,20 @@ public class ContractorPaymentShadowService {
                 || status == ContractorAllocationStatus.LATE_PAYMENT_AFTER_RELEASE;
     }
 
-    private boolean orderMarkedUnpaid(Order order) {
+    private boolean orderReleasesReservation(Order order) {
         String statusTitle = order == null || order.getStatus() == null
                 ? ""
                 : normalize(order.getStatus().getTitle());
-        return "Не оплачено".equalsIgnoreCase(statusTitle);
+        return "Не оплачено".equalsIgnoreCase(statusTitle)
+                || "Бан".equalsIgnoreCase(statusTitle);
     }
 
-    private boolean releaseIfOrderMarkedUnpaid(
+    private boolean releaseIfOrderFinanciallyClosed(
             ContractorPaymentAllocation allocation,
             Order order,
             LocalDateTime observedAt
     ) {
-        String statusTitle = order == null || order.getStatus() == null
-                ? ""
-                : normalize(order.getStatus().getTitle());
-        if (!"Не оплачено".equalsIgnoreCase(statusTitle)
+        if (!orderReleasesAllocation(order, allocation)
                 || !UNPAID_RELEASABLE_STATUSES.contains(allocation.getStatus())) {
             return false;
         }
@@ -1729,10 +1742,43 @@ public class ContractorPaymentShadowService {
                 allocation,
                 ContractorAllocationStatus.RELEASED_UNPAID,
                 observedAt,
-                "Заказ находится в статусе «Не оплачено»",
-                "LINK:ORDER_UNPAID"
+                "Бан".equalsIgnoreCase(statusTitle(order))
+                        ? "Заказ находится в статусе «Бан»"
+                        : "Заказ находится в статусе «Не оплачено»",
+                "Бан".equalsIgnoreCase(statusTitle(order))
+                        ? "LINK:ORDER_BANNED"
+                        : "LINK:ORDER_UNPAID"
         );
         return true;
+    }
+
+    /**
+     * «Не оплачено» closes the payment attempt which existed when the order
+     * entered that status, not every future attempt for the same order. A final
+     * bad-review invoice is legitimately created after that transition and must
+     * remain reserved. «Бан» is terminal and releases every active attempt.
+     */
+    private boolean orderReleasesAllocation(Order order, ContractorPaymentAllocation allocation) {
+        String statusTitle = statusTitle(order);
+        if ("Бан".equalsIgnoreCase(statusTitle)) {
+            return true;
+        }
+        if (!"Не оплачено".equalsIgnoreCase(statusTitle) || allocation == null) {
+            return false;
+        }
+        LocalDateTime statusChangedAt = order.getStatusChangedAt();
+        LocalDateTime reservedAt = allocation.getReservedAt() != null
+                ? allocation.getReservedAt()
+                : allocation.getCreatedAt();
+        // Old rows can predate either timestamp. Preserve the historical
+        // release behaviour for them; every newly created allocation has both.
+        return statusChangedAt == null || reservedAt == null || !reservedAt.isAfter(statusChangedAt);
+    }
+
+    private String statusTitle(Order order) {
+        return order == null || order.getStatus() == null
+                ? ""
+                : normalize(order.getStatus().getTitle());
     }
 
     private long confirmedAmount(PaymentLink link) {
@@ -1767,6 +1813,38 @@ public class ContractorPaymentShadowService {
         return order != null
                 && order.getCompany() != null
                 && order.getCompany().isContractorPaymentRoutingEnabled();
+    }
+
+    /**
+     * The company row is the linearization point for the «по ссылке/по счёту»
+     * policy. Route creation already holds its Order lock; company edits take
+     * this same row before changing the flag. Whichever lock commits first is
+     * the policy frozen into the immutable source snapshot.
+     */
+    private void lockCompanyRoutingPolicy(Order order) {
+        Company company = order == null ? null : order.getCompany();
+        if (company != null && company.getId() != null) {
+            entityManager.lock(company, LockModeType.PESSIMISTIC_WRITE);
+        }
+    }
+
+    private void lockCompanyRoutingPolicies(Collection<Order> orders) {
+        if (orders == null) {
+            return;
+        }
+        orders.stream()
+                .filter(Objects::nonNull)
+                .map(Order::getCompany)
+                .filter(Objects::nonNull)
+                .filter(company -> company.getId() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        Company::getId,
+                        company -> company,
+                        (left, right) -> left,
+                        java.util.TreeMap::new
+                ))
+                .values()
+                .forEach(company -> entityManager.lock(company, LockModeType.PESSIMISTIC_WRITE));
     }
 
     private boolean allCompaniesAllowContractorRouting(Collection<Order> orders) {
@@ -1830,7 +1908,9 @@ public class ContractorPaymentShadowService {
                 ? ContractorRecipientType.SPECIALIST
                 : ContractorRecipientType.MANAGER);
         allocation.setRecipientNameSnapshot(recipient.getRecipientName());
-        allocation.setPaymentPhoneSnapshot(recipient.getPaymentPhone());
+        allocation.setPaymentPhoneSnapshot(
+                ContractorPaymentTransferNumber.normalize(recipient.getPaymentPhone())
+        );
         allocation.setBankNameSnapshot(recipient.getBankName());
         allocation.setPaymentCommentSnapshot(recipient.getPaymentComment());
         allocation.setAvailableBeforeKopecks(profileService.available(recipient, ContractorAllocationMode.SHADOW));

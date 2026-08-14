@@ -183,6 +183,7 @@ public class CommonInvoiceBoardQueryRepository {
             LEFT JOIN filial linked_filial
               ON linked_filial.filial_id = linked_order.order_filial
             WHERE invoice.status IN (:invoiceStatuses)
+              AND item.active_membership = TRUE
               AND %s
               AND (:unrestricted = 1 OR linked_order.order_manager IN (:visibleManagerIds))
             """.formatted(VISIBILITY_SQL);

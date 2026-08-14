@@ -8,6 +8,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.personal_reminders.dto.PersonalReminderRequest;
 import com.hunt.otziv.personal_reminders.dto.PersonalReminderResponse;
+import com.hunt.otziv.payments.service.BadReviewPaymentInstructionOrchestrator;
 import com.hunt.otziv.personal_reminders.model.PersonalReminder;
 import com.hunt.otziv.personal_reminders.repository.PersonalReminderRepository;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
@@ -17,6 +18,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -51,6 +53,7 @@ public class PersonalReminderService {
     private final ReviewRecoveryBatchRepository recoveryBatchRepository;
     private final BadReviewTaskRepository badReviewTaskRepository;
     private final UserService userService;
+    private final BadReviewPaymentInstructionOrchestrator paymentInstructionOrchestrator;
 
     @Transactional(readOnly = true)
     public List<PersonalReminderResponse> list(Principal principal) {
@@ -100,6 +103,32 @@ public class PersonalReminderService {
         User user = currentUser(principal);
         PersonalReminder reminder = findOwnedReminder(reminderId, user);
         reminderRepository.delete(reminder);
+    }
+
+    public String preparePaymentCopyText(
+            Principal principal,
+            Authentication authentication,
+            Long reminderId
+    ) {
+        User user = currentUser(principal);
+        PersonalReminder reminder = findOwnedReminder(reminderId, user);
+        if (!hasTrustedBadReviewSource(reminder)) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Платежные реквизиты доступны только для напоминания по дополнительной задаче"
+            );
+        }
+        Long orderId = reminder.getSourceOrderId();
+        if (orderId == null || orderId <= 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ напоминания не найден");
+        }
+        return paymentInstructionOrchestrator.prepareCopyTextAuthorized(orderId, authentication);
+    }
+
+    private boolean hasTrustedBadReviewSource(PersonalReminder reminder) {
+        return reminder != null
+                && (SOURCE_BAD_REVIEW_TASK.equals(reminder.getSourceType())
+                || SOURCE_BAD_REVIEW_ORDER_READY.equals(reminder.getSourceType()));
     }
 
     @Transactional
@@ -375,7 +404,7 @@ public class PersonalReminderService {
                 sourceType,
                 sourceId,
                 order.getId(),
-                paymentCopyText(order),
+                "prepare-on-click",
                 reminder.getCreatedAt(),
                 reminder.getUpdatedAt()
         );

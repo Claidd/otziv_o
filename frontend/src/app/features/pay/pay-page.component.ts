@@ -13,6 +13,7 @@ import {
 import { PaymentsApi, PublicPaymentLink, PublicSbpBank, TbankPaymentPageMode } from '../../core/payments.api';
 import { LatestRouteRequest } from '../../core/latest-route-request';
 import { RouteEpoch, RouteEpochTicket } from '../../core/route-epoch';
+import { manualTransferDestinationPresentation } from '../../shared/manual-transfer-destination';
 
 @Component({
   selector: 'app-pay-page',
@@ -64,6 +65,13 @@ export class PayPageComponent {
     return Boolean(payment)
       && (payment?.paymentMethod === 'MANUAL_EXTERNAL_LINK' || payment?.manualPaymentType === 'EXTERNAL_LINK');
   });
+  readonly manualTransferDestination = computed(() => manualTransferDestinationPresentation(
+    this.payment()?.manualPhone
+  ));
+  readonly manualPaymentTitle = computed(() => this.externalManualPayment()
+    ? 'Оплата по ссылке банка'
+    : this.manualTransferDestination().paymentTitle);
+  readonly manualTransferDestinationLabel = computed(() => this.manualTransferDestination().fieldLabel);
   readonly statusLabel = computed(() => this.statusText(this.payment()?.status));
   readonly paymentPageMode = computed<TbankPaymentPageMode>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
   readonly showSbpPayment = computed(() => !this.manualPayment() && this.paymentPageMode() !== 'BANK_ONLY');

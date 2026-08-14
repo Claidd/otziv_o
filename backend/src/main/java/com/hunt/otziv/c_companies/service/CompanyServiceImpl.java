@@ -1385,7 +1385,7 @@ public class CompanyServiceImpl implements CompanyService{
     @Transactional
     public void updateCompany(CompanyDTO companyDTO, WorkerDTO newWorkerDTO, Long companyId) { // Обновление компании
         log.info("2. Вошли в обновление данных компании");
-        Company saveCompany = companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
+        Company saveCompany = companyRepository.findByIdForUpdate(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
         boolean isChanged = false;
 
         if (saveCompany.getSubCategory() == null) {

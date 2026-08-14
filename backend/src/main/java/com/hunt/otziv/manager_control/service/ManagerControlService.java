@@ -14,6 +14,7 @@ import com.hunt.otziv.client_chat_control.service.ClientChatMessageReconciliatio
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_chat_control.service.ClientChatReplySuggestionService;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
@@ -31,6 +32,7 @@ import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.common_billing.service.CommonPaymentInitFailureClassifier;
 import com.hunt.otziv.common_billing.service.CommonInvoicePublicationBlockerService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.manager.service.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlClientReplySuggestionResponse;
@@ -77,6 +79,7 @@ import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
+import com.hunt.otziv.payments.service.BadReviewPaymentInstructionOrchestrator;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
 import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
@@ -130,6 +133,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -148,6 +152,9 @@ public class ManagerControlService {
     private static final int OVERDUE_NOTIFICATION_DAYS = 4;
     private static final int WORKER_ORDER_UNCHANGED_DAYS = 2;
     private static final int COMMON_INVOICE_STALE_DAYS = 3;
+    private static final Duration CLIENT_MESSAGE_PREPARED_STALE_AFTER = Duration.ofMinutes(15);
+    private static final String CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX = "client_message_delivery_prepared:";
+    private static final String CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX = "client_message_delivery_unknown:";
     private static final int COMMON_INVOICE_PUBLICATION_BLOCKER_HOURS =
             CommonInvoicePublicationBlockerService.ATTENTION_AFTER_HOURS;
     private static final LocalTime MORNING_STAGE_START = LocalTime.of(5, 0);
@@ -256,6 +263,7 @@ public class ManagerControlService {
     private final ManagerRepository managerRepository;
     private final UserRepository userRepository;
     private final UserService userService;
+    private final ManagerAccessService managerAccessService;
     private final ManagerPermissionService managerPermissionService;
     private final PersonalReminderService personalReminderService;
     private final TelegramService telegramService;
@@ -278,6 +286,8 @@ public class ManagerControlService {
     private final CompanyRepository companyRepository;
     private final PaymentLinkRepository paymentLinkRepository;
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
+    private final BadReviewPaymentInstructionOrchestrator paymentInstructionOrchestrator;
+    private final ManagerControlTransactionRunner managerControlTransactionRunner;
     private final CommonInvoiceRepository commonInvoiceRepository;
     private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
     private final CommonInvoicePublicationBlockerService commonInvoicePublicationBlockerService;
@@ -869,45 +879,197 @@ public class ManagerControlService {
         );
     }
 
-    @Transactional
     public ManagerControlConcreteItemResponse sendClientMessage(Long concreteItemId, Principal principal, Authentication authentication) {
-        if (concreteItemId == null || concreteItemId <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
+        boolean stalePreparationReconciled = managerControlTransactionRunner.required(
+                () -> reconcileStaleClientMessagePreparation(concreteItemId, principal, authentication)
+        );
+        if (stalePreparationReconciled) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Предыдущая отправка не завершилась. Карточка переведена на ручную сверку; проверьте чат клиента"
+            );
         }
-        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findById(concreteItemId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
-        ManagerDailyControl control = concreteItem.getControl();
-        requireControlAccess(control, principal, authentication);
-        String entityType = safe(concreteItem.getEntityType());
-        if (!"ORDER".equals(entityType) && !ENTITY_WORKER_ORDER_NEW.equals(entityType)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Автоотправка клиенту доступна только для заказов");
-        }
-        Order order = orderRepository.findById(concreteItem.getEntityId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ карточки контроля не найден"));
-        String message = clientControlMessage(concreteItem, order);
-        if (message.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для карточки не удалось собрать текст клиенту");
-        }
-
+        PreparedClientMessage prepared = managerControlTransactionRunner.required(
+                () -> prepareClientMessage(concreteItemId, principal, authentication)
+        );
         long startedAt = System.currentTimeMillis();
         ClientMessageSendResult result;
         try {
             result = clientChatMessageSender.send(
-                    order.getCompany(),
-                    order.getManager() == null ? null : order.getManager().getClientId(),
-                    order.getCompany() == null ? null : order.getCompany().getGroupId(),
-                    message
+                    prepared.company(),
+                    prepared.managerClientId(),
+                    prepared.groupId(),
+                    prepared.message(),
+                    telegramCopyButton(prepared.paymentInstruction())
             );
         } catch (Exception e) {
+            finishClientMessageFailure(prepared, readableException(e), true);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Сообщение клиенту не отправлено: " + readableException(e), e);
         }
         if (!result.sent()) {
+            finishClientMessageFailure(prepared, clientMessageError(result), false);
+            if (prepared.paymentInstruction() != null) {
+                paymentInstructionOrchestrator.releaseKnownUnsent(
+                        prepared.paymentInstruction(),
+                        authentication
+                );
+            }
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Сообщение клиенту не отправлено: " + clientMessageError(result)
             );
         }
+        try {
+            return managerControlTransactionRunner.required(
+                    () -> finishClientMessageSuccess(prepared, result, startedAt, principal, authentication)
+            );
+        } catch (RuntimeException finalizeFailure) {
+            finishClientMessageFailure(
+                    prepared,
+                    "сообщение доставлено, но заказ изменился во время отправки; нужна ручная сверка: "
+                            + readableException(finalizeFailure),
+                    true
+            );
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сообщение доставлено, но заказ изменился. Проверьте чат и карточку вручную",
+                    finalizeFailure
+            );
+        }
+    }
 
+    private boolean reconcileStaleClientMessagePreparation(
+            Long concreteItemId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (concreteItemId == null || concreteItemId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
+        }
+        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findByIdForUpdate(concreteItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        requireControlAccess(concreteItem.getControl(), principal, authentication);
+        if (!safe(concreteItem.getComment()).startsWith(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX)) {
+            return false;
+        }
+
+        LocalDateTime preparedAt = concreteItem.getLastManualTouchAt();
+        LocalDateTime now = LocalDateTime.now();
+        if (preparedAt != null && preparedAt.isAfter(now.minus(CLIENT_MESSAGE_PREPARED_STALE_AFTER))) {
+            return false;
+        }
+
+        concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+        concreteItem.setLastManualTouchAt(now);
+        concreteItem.setComment(limit(
+                CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX
+                        + " подготовка отправки прервалась; исход неизвестен, проверьте чат клиента вручную",
+                1000
+        ));
+        dailyControlConcreteItemRepository.save(concreteItem);
+        return true;
+    }
+
+    private void requireCurrentOrderAccess(Long orderId, Authentication authentication) {
+        try {
+            managerAccessService.requireOrderAccess(orderId, authentication);
+        } catch (ResponseStatusException denied) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Заказ больше не доступен менеджеру этой карточки",
+                    denied
+            );
+        }
+    }
+
+    private PreparedClientMessage prepareClientMessage(
+            Long concreteItemId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (concreteItemId == null || concreteItemId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
+        }
+        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findByIdForUpdate(concreteItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        ManagerDailyControl control = concreteItem.getControl();
+        requireControlAccess(control, principal, authentication);
+        if (concreteItem.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Карточка уже закрыта");
+        }
+        if (safe(concreteItem.getComment()).startsWith("client_message_delivery_")) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Предыдущая отправка еще не завершена. Проверьте чат клиента перед повтором"
+            );
+        }
+        String entityType = safe(concreteItem.getEntityType());
+        if (!"ORDER".equals(entityType) && !ENTITY_WORKER_ORDER_NEW.equals(entityType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Автоотправка клиенту доступна только для заказов");
+        }
+        Order order = orderRepository.findByIdForCounterUpdate(concreteItem.getEntityId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ карточки контроля не найден"));
+        requireCurrentOrderAccess(order.getId(), authentication);
+        BadReviewPaymentInstructionOrchestrator.PreparedPaymentInstruction paymentInstruction =
+                isPaymentControlOrder(order)
+                        ? paymentInstructionOrchestrator.prepareAuthorized(order.getId(), authentication)
+                        : null;
+        String message = paymentInstruction != null
+                ? paymentInstruction.copyText()
+                : clientControlMessage(concreteItem, order);
+        if (message.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для карточки не удалось собрать текст клиенту");
+        }
+        String deliveryToken = UUID.randomUUID().toString();
+        PreparedClientMessage prepared = new PreparedClientMessage(
+                concreteItem.getId(),
+                order.getId(),
+                order.getManager() == null ? null : order.getManager().getId(),
+                orderStatusTitle(order),
+                order.getCompany(),
+                order.getManager() == null ? null : order.getManager().getClientId(),
+                order.getCompany() == null ? null : order.getCompany().getGroupId(),
+                message,
+                paymentInstruction,
+                deliveryToken,
+                concreteItem.getStatus(),
+                concreteItem.getActionType(),
+                concreteItem.getComment(),
+                concreteItem.getLastManualTouchAt(),
+                concreteItem.getFollowUpAt(),
+                concreteItem.getResolvedAt(),
+                concreteItem.isAutomaticResolution()
+        );
+        concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+        concreteItem.setLastManualTouchAt(LocalDateTime.now());
+        concreteItem.setComment(limit(CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX + deliveryToken, 1000));
+        dailyControlConcreteItemRepository.save(concreteItem);
+        return prepared;
+    }
+
+    private ManagerControlConcreteItemResponse finishClientMessageSuccess(
+            PreparedClientMessage prepared,
+            ClientMessageSendResult result,
+            long startedAt,
+            Principal principal,
+            Authentication authentication
+    ) {
+        ManagerDailyControlConcreteItem concreteItem = lockedPreparedClientMessage(prepared);
+        ManagerDailyControl control = concreteItem.getControl();
+        requireControlAccess(control, principal, authentication);
+        Order order = orderRepository.findByIdForCounterUpdate(prepared.orderId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ карточки контроля не найден"));
+        requireCurrentOrderAccess(order.getId(), authentication);
+        Long currentManagerId = order.getManager() == null ? null : order.getManager().getId();
+        if (!Objects.equals(prepared.orderManagerId(), currentManagerId)
+                || !Objects.equals(prepared.orderStatus(), orderStatusTitle(order))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Менеджер или статус заказа изменился во время отправки"
+            );
+        }
         LocalDateTime now = LocalDateTime.now();
         recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.RESOLVED, false);
         concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
@@ -941,7 +1103,84 @@ public class ManagerControlService {
                         + statusNote
         );
 
-        return concreteItemResponse(savedConcreteItem, message);
+        return concreteItemResponse(savedConcreteItem, prepared.message());
+    }
+
+    private void finishClientMessageFailure(
+            PreparedClientMessage prepared,
+            String error,
+            boolean deliveryOutcomeUnknown
+    ) {
+        try {
+            managerControlTransactionRunner.required(() -> {
+                ManagerDailyControlConcreteItem item = lockedPreparedClientMessage(prepared);
+                if (deliveryOutcomeUnknown) {
+                    item.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+                    item.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+                    item.setComment(limit(
+                            CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX + " исход отправки не подтвержден; "
+                                    + "проверьте чат клиента перед повтором: " + safe(error),
+                            1000
+                    ));
+                } else {
+                    item.setStatus(prepared.previousStatus());
+                    item.setActionType(prepared.previousActionType());
+                    item.setComment(prepared.previousComment());
+                    item.setLastManualTouchAt(prepared.previousLastManualTouchAt());
+                    item.setFollowUpAt(prepared.previousFollowUpAt());
+                    item.setResolvedAt(prepared.previousResolvedAt());
+                    item.setAutomaticResolution(prepared.previousAutomaticResolution());
+                }
+                dailyControlConcreteItemRepository.save(item);
+                return null;
+            });
+        } catch (RuntimeException finalizeFailure) {
+            log.error("Не удалось зафиксировать результат отправки карточки {}", prepared.concreteItemId(), finalizeFailure);
+        }
+    }
+
+    private ManagerDailyControlConcreteItem lockedPreparedClientMessage(PreparedClientMessage prepared) {
+        ManagerDailyControlConcreteItem item = dailyControlConcreteItemRepository.findByIdForUpdate(prepared.concreteItemId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        String expected = CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX + prepared.deliveryToken();
+        if (!expected.equals(safe(item.getComment()))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Состояние отправки карточки изменилось. Проверьте чат клиента"
+            );
+        }
+        return item;
+    }
+
+    private record PreparedClientMessage(
+            Long concreteItemId,
+            Long orderId,
+            Long orderManagerId,
+            String orderStatus,
+            Company company,
+            String managerClientId,
+            String groupId,
+            String message,
+            BadReviewPaymentInstructionOrchestrator.PreparedPaymentInstruction paymentInstruction,
+            String deliveryToken,
+            ManagerDailyControlItemStatus previousStatus,
+            ManagerDailyControlActionType previousActionType,
+            String previousComment,
+            LocalDateTime previousLastManualTouchAt,
+            LocalDateTime previousFollowUpAt,
+            LocalDateTime previousResolvedAt,
+            boolean previousAutomaticResolution
+    ) {
+    }
+
+    private TelegramTransferCopyButton telegramCopyButton(
+            BadReviewPaymentInstructionOrchestrator.PreparedPaymentInstruction paymentInstruction
+    ) {
+        return paymentInstruction == null
+                ? null
+                : TelegramTransferCopyButton.fromFrozenTransferNumber(
+                        paymentInstruction.telegramCopyTransferNumber()
+                ).orElse(null);
     }
 
     @Transactional
@@ -1270,8 +1509,11 @@ public class ManagerControlService {
             );
         }
 
+        ManagerAutomationFailureService.AutomationFailureIssue issue = currentIssue.get();
+        ensureAutomationChatReady(issue);
+
         ScheduledClientMessageService.ManualRetryResult retry =
-                scheduledClientMessageService.retryNow(currentIssue.get().stateId());
+                scheduledClientMessageService.retryNow(issue.stateId());
         Optional<ManagerAutomationFailureService.AutomationFailureIssue> remaining =
                 managerAutomationFailureService.findIssue(
                         manager,
@@ -1297,6 +1539,52 @@ public class ManagerControlService {
                 principal,
                 "Повторно запущена и восстановлена клиентская автоматизация"
         );
+    }
+
+    private void ensureAutomationChatReady(
+            ManagerAutomationFailureService.AutomationFailureIssue issue
+    ) {
+        if (issue == null || issue.stateId() == null) {
+            return;
+        }
+
+        ScheduledClientMessageState state = scheduledClientMessageStateRepository
+                .findById(issue.stateId())
+                .orElse(null);
+        Company company = automationFailureCompany(state);
+        if (company == null
+                || !isTelegramChat(safe(company.getUrlChat()).toLowerCase(Locale.ROOT))
+                || company.getTelegramGroupChatId() != null) {
+            return;
+        }
+
+        company = companyRepository.findById(company.getId()).orElse(company);
+        if (company.getTelegramGroupChatId() != null) {
+            return;
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                manualChatBindingRepairInstruction(company)
+        );
+    }
+
+    private Company automationFailureCompany(ScheduledClientMessageState state) {
+        if (state == null) {
+            return null;
+        }
+        if (state.getCompanyId() != null) {
+            Company company = companyRepository.findById(state.getCompanyId()).orElse(null);
+            if (company != null) {
+                return company;
+            }
+        }
+        if (state.getOrderId() == null) {
+            return null;
+        }
+        return orderRepository.findByIdForOrderDto(state.getOrderId())
+                .map(Order::getCompany)
+                .orElse(null);
     }
 
     private ManagerControlConcreteItemResponse repairCommonInvoiceConcreteItem(
@@ -1810,6 +2098,12 @@ public class ManagerControlService {
             ).stream().filter(value -> !safe(value).isBlank()).collect(Collectors.joining("\n\n"));
         }
         return paymentContactText(order, status);
+    }
+
+    private boolean isPaymentControlOrder(Order order) {
+        return MANUAL_CONTACT_ORDER_STATUSES.contains(orderStatusTitle(order))
+                && !"Новый".equals(orderStatusTitle(order))
+                && !"На проверке".equals(orderStatusTitle(order));
     }
 
     private String paymentContactText(Order order, String status) {
@@ -3921,6 +4215,7 @@ public class ManagerControlService {
         clientMessageOrderStatusService.enrichOrderList(orders);
         return orders.stream()
                 .filter(order -> order.getId() == null || !snoozedOrderIds.contains(order.getId()))
+                .filter(order -> !hasHealthyActiveClientMessageQueue(order))
                 .map(order -> orderExample(order, today, orderManagerReason(order, today), manager))
                 .limit(limit)
                 .toList();
@@ -4063,12 +4358,10 @@ public class ManagerControlService {
             String label = safe(clientMessageStatus.label());
             String errorCode = safe(clientMessageStatus.errorCode()).toLowerCase(Locale.ROOT);
             String error = safe(clientMessageStatus.errorMessage());
-            if ("rate_limited".equals(errorCode)) {
-                String nextAttempt = clientMessageStatus.nextAttemptAt() == null
-                        ? "в ближайший разрешённый слот"
-                        : clientMessageStatus.nextAttemptAt().toString();
-                return "Сообщение уже запланировано. Система отправит его автоматически: "
-                        + nextAttempt + ".";
+            if ("rate_limited".equals(errorCode) && hasHealthyActiveClientMessageQueue(order)) {
+                String nextAttempt = clientMessageStatus.nextAttemptAt().toString();
+                return "Очередь автоответчика исправна. Следующий слот отправки: "
+                        + nextAttempt + ". Ручное действие до этого времени не требуется.";
             }
             if (!error.isBlank()) {
                 return clientMessageControlErrorReason(error);
@@ -4106,6 +4399,7 @@ public class ManagerControlService {
         var status = order.getClientMessageStatus();
         if (!"scheduled".equalsIgnoreCase(safe(status.state()))
                 || status.nextAttemptAt() == null
+                || !status.nextAttemptAt().isAfter(LocalDateTime.now())
                 || status.consecutiveFailures() > 0) {
             return false;
         }
@@ -4300,7 +4594,7 @@ public class ManagerControlService {
             return "Telegram-группа пока не привязана: " + problem
                     + ". Откройте ссылку добавления бота"
                     + (invite.isBlank() ? "" : ": " + invite)
-                    + ". В Telegram выберите нужную группу и добавьте бота администратором. Если ссылка компании ведет не в эту группу или не открывается, замените ссылку вручную. После успешного добавления бота нажмите «Починить» еще раз.";
+                    + ". В Telegram выберите нужную группу и добавьте бота администратором. Если бот уже добавлен, скопируйте из уведомления команду привязки и отправьте ее в этой группе. Если ссылка компании ведет не в эту группу или не открывается, замените ссылку вручную. После привязки система сама перепроверит и повторит задачу.";
         }
         if (isMaxChat(chat)) {
             String invite = safe(maxGroupLinkService.buildInviteUrl(company));

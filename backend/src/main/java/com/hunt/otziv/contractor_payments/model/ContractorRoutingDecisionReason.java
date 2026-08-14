@@ -30,5 +30,6 @@ public enum ContractorRoutingDecisionReason {
     LIMIT_DAILY_COUNT_EXCEEDED,
 
     NO_ELIGIBLE_RECIPIENT,
+    SOURCE_SNAPSHOT_NOT_READY,
     LEGACY_UNCLASSIFIED
 }

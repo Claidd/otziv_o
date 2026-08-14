@@ -38,6 +38,7 @@ class WorkloadLiveSettingsActivationTest {
     @Mock private WorkloadShadowSettingsService shadowSettingsService;
     @Mock private WorkloadTransferOfferRepository offerRepository;
     @Mock private WorkloadTransferWorkflowRepository workflowRepository;
+    @Mock private WorkloadLiveRuntimeSafetyService runtimeSafetyService;
 
     private WorkloadLiveSettingsService service;
 
@@ -51,7 +52,8 @@ class WorkloadLiveSettingsActivationTest {
                 activationGate,
                 shadowSettingsService,
                 offerRepository,
-                workflowRepository
+                workflowRepository,
+                runtimeSafetyService
         );
     }
 

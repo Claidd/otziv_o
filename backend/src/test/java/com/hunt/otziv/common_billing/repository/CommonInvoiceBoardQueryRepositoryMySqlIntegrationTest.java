@@ -101,6 +101,22 @@ class CommonInvoiceBoardQueryRepositoryMySqlIntegrationTest {
     }
 
     @Test
+    void linkedOrderMetricsIgnoreInactivePredecessorMembership() {
+        insertInvoice(8, 1, "UNPAID", 8);
+        jdbc.update("""
+                INSERT INTO common_invoice_orders (
+                    invoice_order_id, invoice_id, active_membership, order_id,
+                    ready, publication_blocker_since
+                ) VALUES (9, 8, FALSE, 101, TRUE, NULL)
+                """);
+
+        CommonInvoiceBoardQueryRepository.BoardMetrics metrics =
+                repository.metrics(Set.of(7L), BLOCKER_CUTOFF);
+
+        assertThat(metrics.linkedOrderCounts().get("Опубликовано")).isEqualTo(2);
+    }
+
+    @Test
     void nullVisibilityIsUnrestrictedWhileEmptyVisibilityReturnsNothing() {
         CommonInvoiceBoardQueryRepository.PageSelection unrestricted = repository.findPage(
                 "Все", "", null, null, false, 0, 20, BLOCKER_CUTOFF
@@ -173,10 +189,15 @@ class CommonInvoiceBoardQueryRepositoryMySqlIntegrationTest {
                 CREATE TABLE common_invoice_orders (
                     invoice_order_id BIGINT PRIMARY KEY,
                     invoice_id BIGINT NOT NULL,
+                    active_membership BOOLEAN NOT NULL DEFAULT TRUE,
                     order_id BIGINT NOT NULL,
+                    active_order_id BIGINT
+                      GENERATED ALWAYS AS (
+                        CASE WHEN active_membership THEN order_id ELSE NULL END
+                      ) STORED,
                     ready BOOLEAN NOT NULL,
                     publication_blocker_since DATETIME(6) NULL,
-                    UNIQUE KEY uk_board_order (order_id),
+                    UNIQUE KEY uk_board_active_order (active_order_id),
                     INDEX idx_board_invoice (invoice_id, ready)
                 ) ENGINE=InnoDB
                 """);

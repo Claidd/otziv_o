@@ -16,6 +16,7 @@ import com.hunt.otziv.contractor_payments.service.ContractorPaymentRolloutStateS
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentBusinessClock;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardAttributionService;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
+import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorCompletionRewardMarkerRepository;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -152,6 +153,48 @@ class PerformerProductRewardZpServiceTest {
 
         verify(zpRepository, never()).save(any(Zp.class));
         verify(ledgerService, never()).synchronizeSourcesSafely(any());
+    }
+
+    @Test
+    void preCutoffPaymentBridgeUsesPublishedWorkerAndCreatesProductRewardExactlyOnce() {
+        when(runtimeSwitch.rewardAttributionLiveEnabled()).thenReturn(true);
+        Worker currentCardWorker = worker(99L, 199L, "Новый специалист карточки");
+        order.setWorker(currentCardWorker);
+        Manager frozenManager = new Manager();
+        frozenManager.setId(28L);
+        User managerUser = new User();
+        managerUser.setId(18L);
+        managerUser.setFio("Зафиксированный менеджер");
+        frozenManager.setUser(managerUser);
+        Zp existing = new Zp();
+        existing.setActive(true);
+        when(zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
+                91L,
+                PerformerProductRewardZpService.SOURCE,
+                ContractorRole.SPECIALIST,
+                27L
+        )).thenReturn(Optional.empty(), Optional.of(existing));
+
+        assertThat(service.accrueForPreCutoffPaymentLocked(
+                order,
+                frozenManager,
+                LocalDate.of(2026, 8, 10)
+        )).isEqualTo(1);
+        assertThat(service.accrueForPreCutoffPaymentLocked(
+                order,
+                frozenManager,
+                LocalDate.of(2026, 8, 10)
+        )).isZero();
+
+        ArgumentCaptor<Zp> reward = ArgumentCaptor.forClass(Zp.class);
+        verify(zpRepository).save(reward.capture());
+        assertThat(reward.getValue().getSource()).isEqualTo(PerformerProductRewardZpService.SOURCE);
+        assertThat(reward.getValue().getContractorRole()).isEqualTo(ContractorRole.SPECIALIST);
+        assertThat(reward.getValue().getProfessionId()).isEqualTo(27L);
+        assertThat(reward.getValue().getUserId()).isEqualTo(17L);
+        assertThat(reward.getValue().getSum()).isEqualByComparingTo("100.00");
+        assertThat(reward.getValue().getCreated()).isEqualTo(LocalDate.of(2026, 8, 10));
+        assertThat(reward.getValue().isAttributionFinal()).isTrue();
     }
 
     @Test

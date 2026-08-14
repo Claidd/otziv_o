@@ -164,6 +164,14 @@ export interface CloseManualPaymentUnpaidRequest {
   note: string;
 }
 
+export interface ContractorPaymentSourceConfirmationRequest {
+  recipientStatementChecked: true;
+  paymentReceived: true;
+  confirmedTotalKopecks: number;
+  effectiveAt?: string | null;
+  reason: string;
+}
+
 export type PaymentLinkListSource = 'LIVE' | 'ARCHIVE';
 
 export interface AdminPaymentLinkSummaryResponse {
@@ -533,6 +541,16 @@ export class PaymentsApi {
     return this.http.post<AdminPaymentLinkResponse>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-links/${linkId}/confirm`,
       {}
+    );
+  }
+
+  confirmAdminContractorPaymentSource(
+    linkId: number,
+    request: ContractorPaymentSourceConfirmationRequest
+  ): Observable<AdminPaymentLinkResponse> {
+    return this.http.post<AdminPaymentLinkResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-links/${linkId}/contractor-confirmation`,
+      request
     );
   }
 

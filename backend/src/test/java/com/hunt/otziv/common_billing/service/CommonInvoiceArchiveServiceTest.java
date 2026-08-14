@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +59,7 @@ class CommonInvoiceArchiveServiceTest {
                 managerService
         );
         when(managerPermissionService.hasRole(authentication, "ADMIN")).thenReturn(true);
+        when(repository.unrestoredSupersessionChain(40L)).thenReturn(List.of(40L));
     }
 
     @Test
@@ -152,6 +154,29 @@ class CommonInvoiceArchiveServiceTest {
         verify(repository, never()).restoreInvoice(eq(40L), anyString(), eq("alex"), eq(null));
         verify(orderArchiveRestoreService, never())
                 .restoreOrder(eq(301L), eq("Оплачено"), eq("alex"), eq(true));
+    }
+
+    @Test
+    void restoresArchivedPredecessorBeforeSuccessorAndRestoresSharedOrderOnce() {
+        when(repository.findOne(eq(com.hunt.otziv.archive.dto.ArchiveAccessScope.all()), eq(40L)))
+                .thenReturn(Optional.of(archiveInvoice("PAID")));
+        when(repository.unrestoredSupersessionChain(40L)).thenReturn(List.of(39L, 40L));
+        when(repository.lockAndCheckPaymentRefsRestorable(39L)).thenReturn(true);
+        when(repository.lockAndCheckPaymentRefsRestorable(40L)).thenReturn(true);
+        when(repository.archivedStatus(39L)).thenReturn("UNPAID");
+        when(repository.archivedStatus(40L)).thenReturn("PAID");
+        CommonInvoiceArchiveOrderItem shared = archiveOrder(301L, "Оплачено", "", true);
+        when(repository.findOrders(39L, "archive")).thenReturn(List.of(shared));
+        when(repository.findOrders(40L, "archive")).thenReturn(List.of(shared));
+        when(orderArchiveRestoreService.restoreOrder(301L, "Оплачено", "alex", true))
+                .thenReturn(restoreResult(901L, 301L, "Оплачено"));
+
+        service.restore(40L, true, () -> "alex", authentication);
+
+        var order = inOrder(repository);
+        order.verify(repository).restoreInvoice(eq(39L), anyString(), eq("alex"), eq(901L));
+        order.verify(repository).restoreInvoice(eq(40L), anyString(), eq("alex"), eq(901L));
+        verify(orderArchiveRestoreService).restoreOrder(301L, "Оплачено", "alex", true);
     }
 
     private CommonInvoiceArchiveListItem archiveInvoice(String status) {

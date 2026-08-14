@@ -31,6 +31,11 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     @Query("SELECT c FROM Company c WHERE c.id = :companyId")
     Optional<Company> findByIdForBotAssignmentLock(@Param("companyId") Long companyId);
 
+    /** Serializes company payment-policy edits with immutable route snapshots. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM Company c WHERE c.id = :companyId")
+    Optional<Company> findByIdForUpdate(@Param("companyId") Long companyId);
+
     @Query("""
         SELECT DISTINCT c
         FROM Company c

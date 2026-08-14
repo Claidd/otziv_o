@@ -5,6 +5,7 @@ import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
@@ -110,6 +111,7 @@ import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -379,8 +381,12 @@ public class CommonBillingService {
             PAYMENT_INIT_MANUALLY_CHECKED_REASON + "_by=";
     private static final String INVOICE_MEMBERSHIP_CHANGED = "common_invoice_membership_changed";
     private static final String STANDALONE_PAYMENT_ROUTE_CONFLICT = "standalone_payment_route_conflict";
+    private static final String BAD_REVIEW_SUPPLEMENT_REQUIRED = "bad_review_supplement_required:";
+    private static final String PAYABLE_CHANGE_REQUIRES_SUPPLEMENT = "payable_change_requires_supplement:";
     private static final String COMMON_INVOICE_ROUTE_ATTACHED_PREFIX = "common_invoice_route_attached; ";
     private static final String MANUAL_PAYMENT_ABSENT_VERIFIED_PREFIX = "manual_payment_absent_verified";
+    private static final String CONTRACTOR_COMMON_SOURCE_CONFIRMATION_AUDIT_PREFIX =
+            "contractor_common_source_confirmation;";
     private static final Set<PaymentLinkStatus> SAFELY_CLOSED_STANDALONE_PAYMENT_STATUSES = Set.of(
             PaymentLinkStatus.REJECTED,
             PaymentLinkStatus.CANCELED,
@@ -810,7 +816,7 @@ public class CommonBillingService {
         if (companyId == null) {
             return false;
         }
-        if (invoiceOrderRepository.findByOrder_Id(order.getId()).isPresent()) {
+        if (invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(order.getId()).isPresent()) {
             return true;
         }
         Optional<CommonBillingAccount> account = enabledAccountForCompany(companyId);
@@ -875,13 +881,33 @@ public class CommonBillingService {
                 || invoice.getStatus() == CommonInvoiceStatus.DISABLED) {
             return true;
         }
+        if (invoice.getStatus() != CommonInvoiceStatus.COLLECTING
+                || invoice.getSentAt() != null
+                || invoice.getClientReportedAt() != null
+                || hasFrozenCommonPaymentRoute(invoice)) {
+            CommonInvoiceStatus previous = invoice.getStatus();
+            invoice.setPreviousStatus(previous == null ? null : previous.name());
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setLastError(limit(
+                    PAYABLE_CHANGE_REQUIRES_SUPPLEMENT
+                            + " source_invoice=" + invoice.getId()
+                            + ";order=" + orderId
+                            + ";previous=" + (previous == null ? "unknown" : previous.name()),
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            return true;
+        }
         Long payable = payableKopecksOrMarkAttention(invoice, item.getOrder());
         if (payable == null) {
             return true;
         }
         item.setAmountKopecks(payable);
         invoiceOrderRepository.save(item);
-        recalculateInvoice(invoice, invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId()));
+        List<CommonInvoiceOrder> currentItems = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        recalculateInvoice(invoice, currentItems);
+        promoteBadReviewSuccessorIfReady(invoice, currentItems);
         return true;
     }
 
@@ -1170,6 +1196,16 @@ public class CommonBillingService {
                             + "Переведите его в \"Не оплачено\" или выполните ручную сверку."
             );
         }
+        if (isBadReviewSuccessor(invoice)) {
+            deleteUnsentBadReviewSuccessor(invoice, items);
+            return;
+        }
+        if (invoiceRepository.existsBySupersedesInvoice_Id(invoiceId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Счет имеет дополнительный цикл. Сначала удалите последний неотправленный цикл"
+            );
+        }
 
         List<Long> orderIds = items.stream()
                 .map(CommonInvoiceOrder::getOrder)
@@ -1223,6 +1259,7 @@ public class CommonBillingService {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
         CommonInvoice invoice = paymentPrelude.invoice();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        ensureGenericConfirmationDoesNotUseContractorSource(invoice);
         ensureCommonInvoiceNotNeedsAttention(invoice);
         ensureCommonInvoiceCanChangePositions(invoice);
         CommonInvoiceOrder item = invoiceOrderRepository.findByOrderIdWithInvoice(orderId)
@@ -1407,13 +1444,13 @@ public class CommonBillingService {
      * through the later task and amount updates.
      */
     @Transactional
-    public boolean prepareLinkedOrderPayableChange(Long orderId) {
+    public CommonPayableChangeDisposition prepareLinkedOrderPayableChange(Long orderId) {
         if (orderId == null || orderId <= 0) {
-            return false;
+            return CommonPayableChangeDisposition.NOT_LINKED;
         }
         CommonInvoiceOrder snapshot = invoiceOrderRepository.findByOrderIdWithInvoice(orderId).orElse(null);
         if (snapshot == null || snapshot.getInvoice() == null || snapshot.getInvoice().getId() == null) {
-            return false;
+            return CommonPayableChangeDisposition.NOT_LINKED;
         }
         CommonInvoice invoice = lockedInvoice(snapshot.getInvoice().getId())
                 .orElseThrow(() -> new ResponseStatusException(
@@ -1431,6 +1468,21 @@ public class CommonBillingService {
                     "Состав общего счета изменился. Обновите данные и повторите действие"
             );
         }
+        boolean unpaidCycle = !item.isPaid()
+                && item.isUnpaid()
+                && (invoice.getStatus() == CommonInvoiceStatus.UNPAID
+                || (invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
+                && attentionError(invoice).startsWith(BAD_REVIEW_SUPPLEMENT_REQUIRED)));
+        boolean frozenSuccessorCycle = !item.isPaid()
+                && "BAD_REVIEW_SUCCESSOR".equals(invoice.getInvoicePurpose())
+                && (invoice.getStatus() != CommonInvoiceStatus.COLLECTING
+                || invoice.getSentAt() != null
+                || invoice.getClientReportedAt() != null);
+        if (unpaidCycle || frozenSuccessorCycle) {
+            // The delivered common cycle is immutable. Completion is allowed,
+            // but a standalone order link is forbidden.
+            return CommonPayableChangeDisposition.SUPPLEMENT_REQUIRED;
+        }
         if (item.isPaid()
                 || invoice.getStatus() != CommonInvoiceStatus.COLLECTING
                 || invoice.getSentAt() != null
@@ -1442,7 +1494,164 @@ public class CommonBillingService {
             );
         }
         ensureCommonPaymentRouteAllowsCompositionChange(invoice);
+        return CommonPayableChangeDisposition.REFRESH_CURRENT_INVOICE;
+    }
+
+    /** Creates the immutable predecessor's idempotent live successor. */
+    @Transactional
+    public boolean createBadReviewSupplementSuccessor(Long orderId, Long taskId) {
+        if (orderId == null || orderId <= 0 || taskId == null || taskId <= 0) {
+            return false;
+        }
+        CommonInvoiceOrder snapshot = invoiceOrderRepository.findByOrderIdWithInvoice(orderId).orElse(null);
+        if (snapshot == null || snapshot.getInvoice() == null || snapshot.getInvoice().getId() == null) {
+            return false;
+        }
+        CommonInvoice invoice = lockedInvoice(snapshot.getInvoice().getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Связанный общий счет изменился. Обновите данные и повторите действие"
+                ));
+        // One successor belongs to one frozen predecessor generation. Every
+        // task that arrives while that successor is still COLLECTING refreshes
+        // the same cycle instead of creating another invoice.
+        String idempotencyKey = "BAD_REVIEW_SUCCESSOR:" + invoice.getId();
+        if (invoiceRepository.findByCycleIdempotencyKeyForUpdate(idempotencyKey).isPresent()) {
+            return true;
+        }
+        CommonInvoiceOrder triggeringItem = invoiceOrderRepository.findByOrderIdWithInvoice(orderId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Заказ больше не входит в ожидаемый общий счет"
+                ));
+        if (!Objects.equals(invoice.getId(), triggeringItem.getInvoice().getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Состав общего счета изменился. Обновите данные и повторите действие"
+            );
+        }
+        boolean acceptedState = invoice.getStatus() == CommonInvoiceStatus.UNPAID
+                || (invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
+                && attentionError(invoice).startsWith(BAD_REVIEW_SUPPLEMENT_REQUIRED));
+        if (!acceptedState || triggeringItem.isPaid() || !triggeringItem.isUnpaid()) {
+            markBadReviewSupplementAttention(invoice, orderId, taskId, "unsafe_source_state");
+            return true;
+        }
+        List<CommonInvoiceOrder> sourceItems = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        List<CommonInvoiceOrder> unpaidItems = sourceItems.stream()
+                .filter(CommonInvoiceOrder::isActiveMembership)
+                .filter(item -> !item.isPaid())
+                .toList();
+        if (unpaidItems.isEmpty() || unpaidItems.stream().anyMatch(item -> !item.isUnpaid())) {
+            markBadReviewSupplementAttention(invoice, orderId, taskId, "unsafe_membership");
+            return true;
+        }
+        Map<Long, Long> payableByOrder = new LinkedHashMap<>();
+        for (CommonInvoiceOrder sourceItem : unpaidItems) {
+            Order sourceOrder = sourceItem.getOrder();
+            Long sourceOrderId = sourceOrder == null ? null : sourceOrder.getId();
+            Long payable = sourceOrderId == null ? null : payableKopecksOrMarkAttention(invoice, sourceOrder);
+            if (payable == null || payable <= 0 || hasBadReviewSuccessorPaymentEvidence(sourceItem)) {
+                markBadReviewSupplementAttention(invoice, orderId, taskId, "unsafe_amount_or_payment_evidence");
+                return true;
+            }
+            payableByOrder.put(sourceOrderId, payable);
+        }
+
+        CommonInvoice successor = createInvoice(invoice.getAccount());
+        successor.setSupersedesInvoice(invoice);
+        successor.setInvoicePurpose("BAD_REVIEW_SUCCESSOR");
+        successor.setCycleIdempotencyKey(idempotencyKey);
+        successor.setTitle(limit(invoice.getTitle() + " - дополнительный счет", 180));
+        invoiceRepository.save(successor);
+
+        LocalDateTime linkedAt = LocalDateTime.now();
+        List<CommonInvoiceOrder> successorItems = new ArrayList<>();
+        sourceItems.stream()
+                .filter(CommonInvoiceOrder::isActiveMembership)
+                .forEach(sourceItem -> sourceItem.setActiveMembership(false));
+        for (CommonInvoiceOrder sourceItem : unpaidItems) {
+            CommonInvoiceOrder successorItem = new CommonInvoiceOrder();
+            successorItem.setInvoice(successor);
+            successorItem.setActiveMembership(true);
+            successorItem.setOrder(sourceItem.getOrder());
+            successorItem.setAmountKopecks(payableByOrder.get(sourceItem.getOrder().getId()));
+            successorItem.setOriginalOrderStatusTitle(sourceItem.getOriginalOrderStatusTitle());
+            successorItem.setArchiveSourceOrderStatusTitle(sourceItem.getArchiveSourceOrderStatusTitle());
+            successorItem.setReady(false);
+            successorItem.setPaid(false);
+            successorItem.setUnpaid(false);
+            successorItem.setInvoiceLinkedAt(linkedAt);
+            successorItems.add(successorItem);
+        }
+        invoiceOrderRepository.saveAll(sourceItems);
+        // CommonInvoiceOrder uses IDENTITY. Flush the inactive predecessor
+        // before persisting active successor rows, otherwise MySQL can still
+        // reject the successor on uk_common_invoice_active_order.
+        entityManager.flush();
+        invoiceOrderRepository.saveAll(successorItems);
+        recalculateInvoice(successor, successorItems);
+        promoteBadReviewSuccessorIfReady(successor, successorItems);
         return true;
+    }
+
+    private void promoteBadReviewSuccessorIfReady(
+            CommonInvoice invoice,
+            List<CommonInvoiceOrder> items
+    ) {
+        if (invoice == null
+                || !"BAD_REVIEW_SUCCESSOR".equals(invoice.getInvoicePurpose())
+                || invoice.getStatus() != CommonInvoiceStatus.COLLECTING
+                || items == null
+                || items.isEmpty()) {
+            return;
+        }
+        boolean stable = items.stream().allMatch(item -> {
+            Order order = item.getOrder();
+            if (order == null || order.getId() == null || hasActiveRecovery(item)) {
+                return false;
+            }
+            BadReviewTaskSummary summary = badReviewTaskService.getSummaryForOrder(order.getId());
+            return summary != null && summary.pending() == 0;
+        });
+        if (!stable) {
+            return;
+        }
+        items.forEach(item -> item.setReady(true));
+        invoiceOrderRepository.saveAll(items);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setLastError(null);
+        invoiceRepository.save(invoice);
+        // A successor is a new financial presentation. Keep it READY for the
+        // canonical common-invoice send action; task completion must not send
+        // an independently assembled message, bypass normal approval or move
+        // the source order out of "Не оплачено" before actual payment.
+        if (appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)
+                && immediateClientMessagesEnabled()) {
+            sendInvoiceAfterCommit(invoice.getId(), false);
+        }
+    }
+
+    private void markBadReviewSupplementAttention(
+            CommonInvoice invoice,
+            Long orderId,
+            Long taskId,
+            String reason
+    ) {
+        if (invoice.getStatus() == CommonInvoiceStatus.UNPAID) {
+            invoice.setPreviousStatus(CommonInvoiceStatus.UNPAID.name());
+        }
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setNextReminderAt(null);
+        invoice.setLastError(limit(
+                BAD_REVIEW_SUPPLEMENT_REQUIRED
+                        + " source_invoice=" + invoice.getId()
+                        + ";order=" + orderId
+                        + ";task=" + taskId
+                        + ";reason=" + reason,
+                512
+        ));
+        invoiceRepository.save(invoice);
     }
 
     @Transactional
@@ -1640,6 +1849,7 @@ public class CommonBillingService {
         LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
         CommonInvoice invoice = paymentPrelude.invoice();
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        ensureGenericConfirmationDoesNotUseContractorSource(invoice);
         ensureCommonInvoiceNotNeedsAttention(invoice);
         if (invoice.getStatus() == CommonInvoiceStatus.PAID
                 || invoice.getStatus() == CommonInvoiceStatus.DISABLED
@@ -1739,6 +1949,95 @@ public class CommonBillingService {
         }
         resolvePreparedPaymentInitAfterManualCheck(invoice);
         resolveAttentionByCurrentItems(invoice, items);
+        return invoiceAfterOrderPrelude(invoiceId);
+    }
+
+    /**
+     * Confirms bank-statement evidence against the immutable common-invoice
+     * source selected for one contractor recipient. This endpoint deliberately
+     * accepts a cumulative total, so retries and partial transfers are
+     * idempotent and never get attributed to a newer successor source.
+     */
+    @Transactional
+    public CommonInvoiceDetailsResponse confirmContractorPaymentSource(
+            Long invoiceId,
+            long confirmedTotalKopecks,
+            LocalDateTime effectiveAt,
+            String reason,
+            Principal principal
+    ) {
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        validateContractorCommonSourceConfirmation(
+                invoice,
+                confirmedTotalKopecks,
+                effectiveAt,
+                reason
+        );
+        ContractorPaymentAllocation sourceAllocation = contractorPaymentLiveRoutingService
+                .validatedCommonConfirmationSource(invoiceId, invoice.getContractorAllocationId());
+        if (confirmedTotalKopecks > sourceAllocation.getAmountKopecks()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвержденная сумма превышает сумму источника");
+        }
+        retireUnstartedSuccessorForLateSourceOrThrow(invoice);
+
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        if (items.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "В общем счете нет позиций для сверки");
+        }
+        long sourcePaidBaselineKopecks = Math.max(0L, sourceAllocation.getSourcePaidBaselineKopecks());
+        long previousSourceTotal = Math.max(
+                0L,
+                invoice.getPaidKopecks() - sourcePaidBaselineKopecks
+        );
+        if (confirmedTotalKopecks < previousSourceTotal) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Подтвержденная сумма не может уменьшаться; возврат отражается отдельной операцией"
+            );
+        }
+        if (confirmedTotalKopecks == previousSourceTotal && hasExactContractorSourceEvidence(invoice)) {
+            return invoiceAfterOrderPrelude(invoiceId);
+        }
+
+        long invoiceConfirmedTotal;
+        try {
+            invoiceConfirmedTotal = Math.addExact(sourcePaidBaselineKopecks, confirmedTotalKopecks);
+        } catch (ArithmeticException overflow) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвержденная сумма некорректна");
+        }
+        if (invoiceConfirmedTotal > invoice.getAmountKopecks()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвержденная сумма превышает сумму счета");
+        }
+
+        LocalDateTime observedAt = effectiveAt == null ? LocalDateTime.now() : effectiveAt;
+        String actor = principal == null ? "" : normalize(principal.getName());
+        String auditReason = CONTRACTOR_COMMON_SOURCE_CONFIRMATION_AUDIT_PREFIX
+                + " source_total=" + confirmedTotalKopecks
+                + "; оператор=" + limit(actor, 120)
+                + "; основание=" + normalize(reason);
+        mergeInvoicePaymentMethod(invoice, PAYMENT_METHOD_MANUAL);
+        invoice.setManualPaidBy(actor);
+        invoice.setManualPaymentComment(limit(auditReason, 1000));
+        invoice.setManualConfirmedAt(observedAt);
+        invoice.setPaidAt(observedAt);
+        invoice.setPaidKopecks(invoiceConfirmedTotal);
+
+        if (invoiceConfirmedTotal < invoice.getAmountKopecks()) {
+            invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
+            invoice.setNextReminderAt(LocalDateTime.now().plusDays(REMINDER_INTERVAL_DAYS));
+            invoice.setLastError(null);
+            invoiceRepository.save(invoice);
+            scheduleContractorShadowReconcile(invoiceId);
+            return invoiceAfterOrderPrelude(invoiceId);
+        }
+
+        ManualPaymentConfirmationRequest evidence = new ManualPaymentConfirmationRequest(auditReason, "");
+        applyManualPaymentEvidence(invoice, items, evidence, principal);
+        invoice.setManualPaymentComment(limit(auditReason, 1000));
+        invoiceRepository.save(invoice);
+        closePaidInvoice(invoice, items);
         return invoiceAfterOrderPrelude(invoiceId);
     }
 
@@ -4279,6 +4578,22 @@ public class CommonBillingService {
                 || !normalize(item.getManualPaymentReceiptUrl()).isBlank());
     }
 
+    /**
+     * An UNPAID marker is the expected source state for a bad-review successor,
+     * not evidence that money moved. Only durable settlement/evidence fields
+     * make cloning that position unsafe.
+     */
+    private boolean hasBadReviewSuccessorPaymentEvidence(CommonInvoiceOrder item) {
+        return item != null
+                && (item.isPaid()
+                || item.getPaidAt() != null
+                || item.getSourcePaymentLinkId() != null
+                || !normalize(item.getPaymentMethod()).isBlank()
+                || !normalize(item.getManualPaidBy()).isBlank()
+                || !normalize(item.getManualPaymentComment()).isBlank()
+                || !normalize(item.getManualPaymentReceiptUrl()).isBlank());
+    }
+
     private boolean hasCurrentCommonPaymentRoute(CommonInvoice invoice) {
         return invoice != null
                 && (!normalize(invoice.getPaymentUrl()).isBlank()
@@ -4305,6 +4620,157 @@ public class CommonBillingService {
                 "Заказ #" + (orderId == null ? "?" : orderId) + ": " + reason
                         + ". Нужна ручная сверка платежных источников."
         );
+    }
+
+    private void deleteUnsentBadReviewSuccessor(
+            CommonInvoice successor,
+            List<CommonInvoiceOrder> successorItems
+    ) {
+        Long successorId = successor.getId();
+        Long predecessorId = successor.getSupersedesInvoice() == null
+                ? null
+                : successor.getSupersedesInvoice().getId();
+        if (predecessorId == null || invoiceRepository.existsBySupersedesInvoice_Id(successorId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Можно удалить только последний неотправленный дополнительный цикл"
+            );
+        }
+        lockedInvoice(predecessorId).orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Предыдущий цикл общего счета не найден"
+        ));
+        Set<Long> successorOrderIds = successorItems.stream()
+                .map(CommonInvoiceOrder::getOrder)
+                .filter(Objects::nonNull)
+                .map(Order::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        List<CommonInvoiceOrder> predecessorItems = invoiceOrderRepository
+                .findByInvoiceIdWithOrders(predecessorId)
+                .stream()
+                .filter(item -> item.getOrder() != null
+                        && successorOrderIds.contains(item.getOrder().getId()))
+                .toList();
+        if (predecessorItems.size() != successorOrderIds.size()
+                || predecessorItems.stream().anyMatch(CommonInvoiceOrder::isActiveMembership)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Состав цикла изменился. Обновите данные и повторите действие"
+            );
+        }
+        int detachedLinks = invoiceOrderRepository.deleteByInvoiceId(successorId);
+        if (detachedLinks != successorItems.size()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Состав цикла изменился");
+        }
+        predecessorItems.forEach(item -> item.setActiveMembership(true));
+        invoiceOrderRepository.saveAll(predecessorItems);
+        entityManager.flush();
+        paymentRefRepository.deleteByInvoiceId(successorId);
+        invoiceRepository.deleteById(successorId);
+        log.info("Удален неотправленный дополнительный цикл {}. Активное членство вернуто в цикл {}", successorId, predecessorId);
+    }
+
+    private void ensureGenericConfirmationDoesNotUseContractorSource(CommonInvoice invoice) {
+        if (isFrozenLiveContractorSource(invoice)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Поступление по реквизитам специалиста или менеджера подтверждается только сверкой конкретного счета"
+            );
+        }
+    }
+
+    private boolean isFrozenLiveContractorSource(CommonInvoice invoice) {
+        return invoice != null
+                && invoice.getContractorAllocationId() != null
+                && invoice.getPaymentRouteManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE
+                && "MANUAL_MOBILE_BANK".equalsIgnoreCase(normalize(invoice.getPaymentRouteType()));
+    }
+
+    private boolean hasExactContractorSourceEvidence(CommonInvoice invoice) {
+        return isFrozenLiveContractorSource(invoice)
+                && invoice.getManualConfirmedAt() != null
+                && normalize(invoice.getManualPaymentComment())
+                .startsWith(CONTRACTOR_COMMON_SOURCE_CONFIRMATION_AUDIT_PREFIX);
+    }
+
+    private void validateContractorCommonSourceConfirmation(
+            CommonInvoice invoice,
+            long confirmedTotalKopecks,
+            LocalDateTime effectiveAt,
+            String reason
+    ) {
+        if (!isFrozenLiveContractorSource(invoice)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Операция доступна только для зафиксированного платежного профиля специалиста или менеджера"
+            );
+        }
+        if (confirmedTotalKopecks <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвержденная сумма должна быть положительной");
+        }
+        if (effectiveAt != null && effectiveAt.isAfter(LocalDateTime.now().plusMinutes(1))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Время поступления не может быть в будущем");
+        }
+        if (normalize(reason).isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите основание сверки");
+        }
+        if (invoice.getStatus() == CommonInvoiceStatus.PAID
+                || invoice.getStatus() == CommonInvoiceStatus.BAN
+                || invoice.getStatus() == CommonInvoiceStatus.DISABLED
+                || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Общий счет уже закрыт и требует отдельной сверки");
+        }
+    }
+
+    /**
+     * A late transfer for predecessor A may retire only a provably unstarted
+     * successor B. Once B was sent, reported, routed or otherwise gained
+     * payment evidence, choosing a recipient automatically is unsafe.
+     */
+    private void retireUnstartedSuccessorForLateSourceOrThrow(CommonInvoice source) {
+        if (source == null || source.getId() == null) {
+            return;
+        }
+        List<CommonInvoice> successors = invoiceRepository.findSuccessorsForUpdate(source.getId());
+        if (successors == null || successors.isEmpty()) {
+            return;
+        }
+        if (successors.size() != 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Цепочка дополнительных счетов неоднозначна; нужна ручная сверка"
+            );
+        }
+        CommonInvoice successor = successors.get(0);
+        List<CommonInvoiceOrder> successorItems = invoiceOrderRepository
+                .findByInvoiceIdWithOrders(successor.getId());
+        if (successorWasStarted(successor, successorItems)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Следующий счет уже был выдан клиенту или содержит платежные признаки; сначала выполните его ручную сверку"
+            );
+        }
+        deleteUnsentBadReviewSuccessor(successor, successorItems);
+    }
+
+    private boolean successorWasStarted(CommonInvoice successor, List<CommonInvoiceOrder> items) {
+        if (successor == null) {
+            return true;
+        }
+        String operation = normalize(successor.getLastError());
+        boolean invoiceEvidence = successor.getSentAt() != null
+                || successor.getClientReportedAt() != null
+                || successor.getManualConfirmedAt() != null
+                || successor.getPaidAt() != null
+                || successor.getPaidKopecks() > 0
+                || successor.getContractorAllocationId() != null
+                || MESSAGE_SEND_IN_PROGRESS.equals(operation)
+                || PAYMENT_INIT_IN_PROGRESS.equals(operation)
+                || hasFrozenCommonPaymentRoute(successor)
+                || hasCurrentCommonPaymentRoute(successor)
+                || paymentRefRepository.existsByInvoice_Id(successor.getId());
+        return invoiceEvidence || (items != null && items.stream().anyMatch(this::hasBadReviewSuccessorPaymentEvidence));
     }
 
     private boolean isSafelyClosedStandaloneRoute(PaymentLink link) {
@@ -4765,7 +5231,7 @@ public class CommonBillingService {
                     || !Objects.equals(companyId, lockedOrder.getCompany().getId())
                     || lockedOrder.isComplete()
                     || !BACKFILL_STATUSES.contains(statusTitle(lockedOrder))
-                    || invoiceOrderRepository.findByOrder_Id(orderId).isPresent()) {
+                    || invoiceOrderRepository.findByOrder_IdAndActiveMembershipTrue(orderId).isPresent()) {
                 throw invoiceMembershipChanged("заказ " + orderId + " перестал подходить для автопривязки");
             }
             CommonInvoiceOrder item = attachOrderWithoutInvoiceRefresh(targetInvoice, lockedOrder);
@@ -5150,6 +5616,7 @@ public class CommonBillingService {
         Set<Long> duplicateAccountIds = invoices.stream()
                 .filter(invoice -> invoice.getAccount() != null && invoice.getAccount().getId() != null)
                 .filter(invoice -> ATTACHABLE_INVOICE_STATUSES.contains(invoice.getStatus()))
+                .filter(this::isStandardInvoice)
                 .collect(Collectors.groupingBy(
                         invoice -> invoice.getAccount().getId(),
                         Collectors.counting()
@@ -5230,6 +5697,7 @@ public class CommonBillingService {
         Map<Long, Long> countsByAccount = invoices.stream()
                 .filter(invoice -> invoice.getAccount() != null && invoice.getAccount().getId() != null)
                 .filter(invoice -> ATTACHABLE_INVOICE_STATUSES.contains(invoice.getStatus()))
+                .filter(this::isStandardInvoice)
                 .collect(Collectors.groupingBy(invoice -> invoice.getAccount().getId(), Collectors.counting()));
         return countsByAccount.values().stream().anyMatch(count -> count > 1);
     }
@@ -5380,11 +5848,11 @@ public class CommonBillingService {
             if (reminder && manual) {
                 invoice.setStatus(CommonInvoiceStatus.REMINDER);
                 invoice.setLastReminderAt(LocalDateTime.now());
-                markInvoiceOrdersReminder(invoice.getId());
+                markInvoiceOrdersReminder(invoice);
             } else if (!reminder && manual && shouldManualMarkInvoiceToPay(invoice)) {
                 invoice.setStatus(CommonInvoiceStatus.INVOICED);
                 invoice.setSentAt(LocalDateTime.now());
-                markInvoiceOrdersToPay(invoice.getId());
+                markInvoiceOrdersToPay(invoice);
             } else if (!reminder) {
                 resetToReadyOnlyBeforeFirstSend(invoice);
             }
@@ -5407,6 +5875,7 @@ public class CommonBillingService {
                 manager == null ? null : manager.getClientId(),
                 chatCompany == null ? null : chatCompany.getGroupId(),
                 invoiceMessage(invoice, items, reminder),
+                telegramCopyTransferNumber(invoice),
                 reminder,
                 manual
         );
@@ -5414,12 +5883,23 @@ public class CommonBillingService {
 
     private ClientMessageSendResult sendPreparedPaymentMessage(PreparedCommonInvoiceMessage prepared) {
         try {
-            return messageSender.send(
-                    prepared.chatCompany(),
-                    prepared.managerClientId(),
-                    prepared.groupId(),
-                    prepared.message()
-            );
+            TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
+                    .fromFrozenTransferNumber(prepared.telegramCopyTransferNumber())
+                    .orElse(null);
+            return copyButton == null
+                    ? messageSender.send(
+                            prepared.chatCompany(),
+                            prepared.managerClientId(),
+                            prepared.groupId(),
+                            prepared.message()
+                    )
+                    : messageSender.send(
+                            prepared.chatCompany(),
+                            prepared.managerClientId(),
+                            prepared.groupId(),
+                            prepared.message(),
+                            copyButton
+                    );
         } catch (RuntimeException e) {
             return ClientMessageSendResult.failed("send_exception", readableException(e));
         }
@@ -5437,13 +5917,13 @@ public class CommonBillingService {
                         ? CommonInvoiceStatus.PARTIALLY_PAID
                         : CommonInvoiceStatus.REMINDER);
                 invoice.setLastReminderAt(LocalDateTime.now());
-                markInvoiceOrdersReminder(invoice.getId());
+                markInvoiceOrdersReminder(invoice);
             } else {
                 invoice.setStatus(invoice.getPaidKopecks() > 0
                         ? CommonInvoiceStatus.PARTIALLY_PAID
                         : CommonInvoiceStatus.INVOICED);
                 invoice.setSentAt(LocalDateTime.now());
-                markInvoiceOrdersToPay(invoice.getId());
+                markInvoiceOrdersToPay(invoice);
             }
             invoice.setNextReminderAt(LocalDateTime.now().plusDays(REMINDER_INTERVAL_DAYS));
             invoice.setLastError(null);
@@ -5457,13 +5937,13 @@ public class CommonBillingService {
                         ? CommonInvoiceStatus.PARTIALLY_PAID
                         : CommonInvoiceStatus.REMINDER);
                 invoice.setLastReminderAt(LocalDateTime.now());
-                markInvoiceOrdersReminder(invoice.getId());
+                markInvoiceOrdersReminder(invoice);
             }
             invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
         } else if (prepared.manual()) {
             invoice.setStatus(CommonInvoiceStatus.INVOICED);
             invoice.setSentAt(LocalDateTime.now());
-            markInvoiceOrdersToPay(invoice.getId());
+            markInvoiceOrdersToPay(invoice);
         } else {
             resetToReadyOnlyBeforeFirstSend(invoice);
         }
@@ -5813,6 +6293,10 @@ public class CommonBillingService {
                 || isManuallyConfirmableMigrationPaymentRegistryAttention(invoice);
     }
 
+    private boolean isStandardInvoice(CommonInvoice invoice) {
+        return invoice != null && "STANDARD".equals(invoice.getInvoicePurpose());
+    }
+
     private boolean isMigrationPaymentRegistryAttention(CommonInvoice invoice) {
         return attentionError(invoice).startsWith(MIGRATION_PAYMENT_REGISTRY_ATTENTION);
     }
@@ -6150,6 +6634,12 @@ public class CommonBillingService {
     }
 
     private void closePaidInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items, Set<Long> alreadyClosedOrderIds) {
+        if (isFrozenLiveContractorSource(invoice) && !hasExactContractorSourceEvidence(invoice)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Поступление по реквизитам специалиста или менеджера подтверждается только сверкой конкретного счета"
+            );
+        }
         observabilityMetrics.observeTransactionCompletion(COMMON_INVOICE_CLOSE);
         if (normalize(invoice.getPaymentMethod()).isBlank()) {
             invoice.setPaymentMethod(PAYMENT_METHOD_TBANK);
@@ -6181,7 +6671,9 @@ public class CommonBillingService {
         }
         invoiceOrderRepository.saveAll(items);
         invoice.setPaidKopecks(invoice.getAmountKopecks());
-        invoice.setPaidAt(LocalDateTime.now());
+        if (invoice.getPaidAt() == null) {
+            invoice.setPaidAt(LocalDateTime.now());
+        }
         invoice.setNextReminderAt(null);
         if (!closeFailures.isEmpty()) {
             invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
@@ -6458,11 +6950,17 @@ public class CommonBillingService {
                 && invoice.getAmountKopecks() > 0
                 && invoice.getPaidKopecks() >= invoice.getAmountKopecks();
         long recordedPaid = invoice.getPaidKopecks();
+        boolean preserveExactContractorPayment = hasExactContractorSourceEvidence(invoice);
         long amount = items.stream().mapToLong(CommonInvoiceOrder::getAmountKopecks).sum();
         long paid = items.stream().filter(CommonInvoiceOrder::isPaid).mapToLong(CommonInvoiceOrder::getAmountKopecks).sum()
                 + confirmedCommonInvoicePrepaymentKopecks(invoice);
         invoice.setAmountKopecks(amount);
-        invoice.setPaidKopecks(Math.min(amount, preserveRecordedAttentionPayment ? Math.max(recordedPaid, paid) : paid));
+        invoice.setPaidKopecks(Math.min(
+                amount,
+                (preserveRecordedAttentionPayment || preserveExactContractorPayment)
+                        ? Math.max(recordedPaid, paid)
+                        : paid
+        ));
         boolean preserveMigrationPaymentEvidence = isMigrationPaymentRegistryAttention(invoice);
         if (!preserveMigrationPaymentEvidence
                 && invoice.getStatus() != CommonInvoiceStatus.PAID
@@ -6496,6 +6994,13 @@ public class CommonBillingService {
         // Standalone confirmations are synchronized separately and only while
         // a LockedInvoicePaymentPrelude owns Order and PaymentLink locks.
         if (isMigrationPaymentRegistryAttention(invoice)) {
+            return;
+        }
+        // Superseded rows remain available as an immutable financial snapshot,
+        // but no longer own the current order membership.
+        if (items != null
+                && !items.isEmpty()
+                && items.stream().noneMatch(CommonInvoiceOrder::isActiveMembership)) {
             return;
         }
         boolean changed = false;
@@ -6834,7 +7339,7 @@ public class CommonBillingService {
             CommonBillingAccount account,
             List<CommonBillingAccountCompany> companyLinks
     ) {
-        CommonInvoiceSummaryResponse current = invoiceRepository.findCurrentForAccount(
+        CommonInvoiceSummaryResponse current = invoiceRepository.findCurrentPresentationForAccount(
                         account.getId(),
                         CURRENT_INVOICE_STATUSES,
                         PageRequest.of(0, 1)
@@ -6982,7 +7487,10 @@ public class CommonBillingService {
                 normalize(invoice.getPaymentRouteType()),
                 normalize(invoice.getPaymentRouteProfileName()),
                 invoice.getPaymentRouteManualTaskId(),
-                invoice.getPaymentRouteSelectedAt()
+                isFrozenLiveContractorSource(invoice),
+                invoice.getPaymentRouteSelectedAt(),
+                normalize(invoice.getInvoicePurpose()),
+                invoice.getSupersedesInvoice() == null ? null : invoice.getSupersedesInvoice().getId()
         );
     }
 
@@ -7353,6 +7861,9 @@ public class CommonBillingService {
     }
 
     private boolean itemVisibleInOrderMetrics(CommonInvoiceOrder item, Set<Long> visibleManagerIds) {
+        if (item == null || !item.isActiveMembership()) {
+            return false;
+        }
         if (visibleManagerIds == null) {
             return true;
         }
@@ -7570,8 +8081,8 @@ public class CommonBillingService {
         builder.append(reminder ? "Напоминаем об оплате общего счета." : "Все заказы из общего счета выполнены.");
         builder.append("\n\nЗаказов: ").append(items.size());
         builder.append("\nК оплате: ").append(money(amountRubles(remainingKopecks(invoice)))).append(" руб.");
-        if (isManagerTextCommonRoute(invoice)) {
-            builder.append("\n\n").append(normalize(invoice.getPaymentRouteInstructionText()));
+        if (isManagerTextCommonRoute(invoice) || isManualMobileBankCommonRoute(invoice)) {
+            builder.append("\n\n").append(commonPaymentInstructionText(invoice));
             builder.append("\nСтраница общего счета: ").append(publicInvoiceUrl(invoice));
         } else {
             builder.append("\nСсылка на оплату: ").append(publicInvoiceUrl(invoice));
@@ -7587,6 +8098,56 @@ public class CommonBillingService {
             builder.append("\n- еще ").append(items.size() - 12).append(" заказов");
         }
         return builder.toString();
+    }
+
+    private String commonPaymentInstructionText(CommonInvoice invoice) {
+        if (invoice != null
+                && invoice.getContractorAllocationId() != null
+                && invoice.getPaymentRouteManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE) {
+            return contractorPaymentLiveRoutingService.activeCommonInvoiceRequisites(
+                    invoice,
+                    remainingKopecks(invoice)
+            ).map(snapshot -> commonContractorPaymentInstruction(snapshot)).orElse("");
+        }
+        return normalize(invoice == null ? null : invoice.getPaymentRouteInstructionText());
+    }
+
+    private String commonContractorPaymentInstruction(ContractorPaymentRequisitesSnapshot snapshot) {
+        if (snapshot == null) {
+            return "";
+        }
+        String transfer = normalize(snapshot.paymentPhone());
+        String label = transfer.matches("[0-9]{16,19}")
+                ? "Оплата по номеру карты: "
+                : "Оплата по мобильному банку: ";
+        StringBuilder instruction = new StringBuilder(label).append(transfer)
+                .append("\nПолучатель: ").append(normalize(snapshot.recipientName()));
+        if (!normalize(snapshot.bankName()).isBlank()) {
+            instruction.append("\nБанк: ").append(normalize(snapshot.bankName()));
+        }
+        if (!normalize(snapshot.paymentComment()).isBlank()) {
+            instruction.append("\nКомментарий: ").append(normalize(snapshot.paymentComment()));
+        }
+        return instruction.toString();
+    }
+
+    private String telegramCopyTransferNumber(CommonInvoice invoice) {
+        if (invoice == null || !isManualMobileBankCommonRoute(invoice)) {
+            return null;
+        }
+        String value;
+        if (invoice.getContractorAllocationId() != null
+                && invoice.getPaymentRouteManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE) {
+            value = contractorPaymentLiveRoutingService.activeCommonInvoiceRequisites(
+                    invoice,
+                    remainingKopecks(invoice)
+            ).map(ContractorPaymentRequisitesSnapshot::paymentPhone).orElse(null);
+        } else {
+            value = invoice.getPaymentRouteManualPhone();
+        }
+        return com.hunt.otziv.contractor_payments.service.ContractorPaymentTransferNumber.isValid(value)
+                ? com.hunt.otziv.contractor_payments.service.ContractorPaymentTransferNumber.normalize(value)
+                : null;
     }
 
     private void ensureCommonPaymentRouteSelected(CommonInvoice invoice, long remainingKopecks) {
@@ -7943,6 +8504,15 @@ public class CommonBillingService {
         );
     }
 
+    private boolean isManualMobileBankCommonRoute(CommonInvoice invoice) {
+        if (invoice == null || invoice.getPaymentRouteManualType() != ManualPaymentType.MOBILE_BANK) {
+            return false;
+        }
+        return PaymentMethod.MANUAL_MOBILE_BANK.name().equals(
+                normalize(invoice.getPaymentRouteType()).toUpperCase(Locale.ROOT)
+        ) || isManagerTextCommonRoute(invoice);
+    }
+
     private boolean isTbankCommonRoute(CommonInvoice invoice) {
         return TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK.equals(
                 normalize(invoice == null ? null : invoice.getPaymentRouteType()).toUpperCase(Locale.ROOT)
@@ -8051,18 +8621,22 @@ public class CommonBillingService {
                 .forEach(contractorCompletionRewardService::ensureOrderCompletionAccrual);
     }
 
-    private void markInvoiceOrdersToPay(Long invoiceId) {
-        if (invoiceId == null) {
+    private void markInvoiceOrdersToPay(CommonInvoice invoice) {
+        if (invoice == null || invoice.getId() == null || isBadReviewSuccessor(invoice)) {
             return;
         }
-        markInvoiceOrdersToStatus(invoiceId, STATUS_TO_PAY);
+        markInvoiceOrdersToStatus(invoice.getId(), STATUS_TO_PAY);
     }
 
-    private void markInvoiceOrdersReminder(Long invoiceId) {
-        if (invoiceId == null) {
+    private void markInvoiceOrdersReminder(CommonInvoice invoice) {
+        if (invoice == null || invoice.getId() == null || isBadReviewSuccessor(invoice)) {
             return;
         }
-        markInvoiceOrdersToStatus(invoiceId, STATUS_REMINDER);
+        markInvoiceOrdersToStatus(invoice.getId(), STATUS_REMINDER);
+    }
+
+    private boolean isBadReviewSuccessor(CommonInvoice invoice) {
+        return invoice != null && "BAD_REVIEW_SUCCESSOR".equals(invoice.getInvoicePurpose());
     }
 
     private void markInvoiceOrdersToStatus(Long invoiceId, String status) {
@@ -9235,6 +9809,7 @@ public class CommonBillingService {
             String managerClientId,
             String groupId,
             String message,
+            String telegramCopyTransferNumber,
             boolean reminder,
             boolean manual
     ) {

@@ -27,15 +27,23 @@ public class ContractorCompletionCutoverStateService {
         if (configuredStartDate == null) {
             return Optional.empty();
         }
-        // Opening balances are imported by calendar month. A mid-month or
-        // future cutover would split one reporting month without a dated
-        // opening-balance import and can therefore double-count obligations.
-        if (configuredStartDate.getDayOfMonth() != 1
-                || configuredStartDate.isAfter(businessClock.today())) {
-            return Optional.empty();
-        }
         Optional<ContractorCompletionCutoverState> existing =
                 repository.findById(ContractorCompletionCutoverState.SINGLETON_ID);
+        if (existing.isPresent()) {
+            // A signed boundary remains valid forever. In particular, normal
+            // month rollover must not disable completion accounting.
+            return existing
+                    .map(ContractorCompletionCutoverState::getAttributionStartDate)
+                    .filter(configuredStartDate::equals);
+        }
+        // The opening import covers the month-to-date cabinet figures, while
+        // the accounting authority changes at activation. A backdated day
+        // boundary would mix already-created legacy rows with completion rows.
+        // Therefore the first irreversible latch is always today's business
+        // date; a persisted boundary remains valid forever afterwards.
+        if (!configuredStartDate.equals(businessClock.today())) {
+            return Optional.empty();
+        }
         if (existing.isEmpty()) {
             repository.insertSingletonIfAbsent(configuredStartDate, businessClock.now());
             existing = repository.findById(ContractorCompletionCutoverState.SINGLETON_ID);

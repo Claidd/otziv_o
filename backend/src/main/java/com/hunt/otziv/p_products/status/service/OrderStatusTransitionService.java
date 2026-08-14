@@ -89,7 +89,7 @@ public class OrderStatusTransitionService {
             Map.entry(STATUS_REMINDER, Set.of(STATUS_TO_PAY)),
             Map.entry(STATUS_NOT_PAID, Set.of(STATUS_TO_PUBLISH, STATUS_PUBLIC, STATUS_TO_PAY, STATUS_REMINDER, STATUS_WAITING_COMMON_INVOICE)),
             Map.entry(STATUS_PAYMENT, Set.of(STATUS_PUBLIC, STATUS_TO_PAY, STATUS_REMINDER, STATUS_NOT_PAID, STATUS_BAN, STATUS_WAITING_COMMON_INVOICE)),
-            Map.entry(STATUS_ARCHIVE, Set.of(STATUS_TO_CHECK, STATUS_IN_CHECK, STATUS_CORRECTION)),
+            Map.entry(STATUS_ARCHIVE, Set.of(STATUS_TO_CHECK, STATUS_IN_CHECK, STATUS_CORRECTION, STATUS_TO_PUBLISH)),
             Map.entry(STATUS_BAN, Set.of(STATUS_NOT_PAID, STATUS_TO_PAY, STATUS_REMINDER))
     );
     private static final Set<String> COMPLETED_ORDER_REOPEN_STATUSES = Set.of(
@@ -178,7 +178,7 @@ public class OrderStatusTransitionService {
             if (STATUS_ARCHIVE.equals(title) && !OrderManualArchivePolicy.isAllowed(order)) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
-                        "В архив можно перевести заказ только из статусов \"В проверку\", \"На проверке\" или \"Коррекция\""
+                        "В архив можно перевести заказ только из статусов \"В проверку\", \"На проверке\", \"Коррекция\" или \"Публикация\""
                 );
             }
             synchronizeAndRequireCompleteCounter(order, title);
@@ -333,23 +333,26 @@ public class OrderStatusTransitionService {
     private boolean handleNotPaidStatus(Order order) {
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_NOT_PAID));
         orderRepository.save(order);
-        scheduleContractorReservationRelease(order.getId());
+        scheduleContractorReservationRelease(
+                order.getId(),
+                "Заказ переведен в статус \"Не оплачено\""
+        );
         badReviewTaskService.createTasksForUnpaidOrder(order);
         return true;
     }
 
-    private void scheduleContractorReservationRelease(Long orderId) {
+    private void scheduleContractorReservationRelease(Long orderId, String reason) {
         if (orderId == null) {
             return;
         }
         Runnable release = () -> {
             try {
-                contractorPaymentShadowService.releaseForUnpaidOrder(
+                contractorPaymentShadowService.releaseForFinanciallyClosedOrder(
                         orderId,
-                        "Заказ переведен в статус \"Не оплачено\""
+                        reason
                 );
             } catch (RuntimeException e) {
-                log.error("Не удалось освободить тестовый резерв заказа {}", orderId, e);
+                log.error("Не удалось освободить резерв финансово закрытого заказа {}", orderId, e);
             }
         };
         if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -402,6 +405,10 @@ public class OrderStatusTransitionService {
         badReviewTaskService.deleteOrderReadyReminder(order);
         orderRepository.save(order);
         paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Заказ переведен в Бан");
+        scheduleContractorReservationRelease(
+                order.getId(),
+                "Заказ переведен в статус \"Бан\""
+        );
         return true;
     }
 
@@ -950,8 +957,8 @@ public class OrderStatusTransitionService {
                 return true;
             }
 
-            String message = preparePublishedPaymentMessage(order);
-            if (message == null) {
+            OrderPaymentMessageBuilder.PreparedPaymentMessage paymentMessage = preparePublishedPaymentMessage(order);
+            if (paymentMessage == null) {
                 mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);
                 return true;
             }
@@ -961,8 +968,9 @@ public class OrderStatusTransitionService {
                     order,
                     clientId,
                     groupId,
-                    message,
-                    STATUS_TO_PAY
+                    paymentMessage.message(),
+                    STATUS_TO_PAY,
+                    paymentMessage.telegramCopyTransferNumber()
             );
             if (!sent) {
                 paymentInvoiceRetryScheduler.scheduleRetry(order);
@@ -980,9 +988,9 @@ public class OrderStatusTransitionService {
         }
     }
 
-    private String preparePublishedPaymentMessage(Order order) {
+    private OrderPaymentMessageBuilder.PreparedPaymentMessage preparePublishedPaymentMessage(Order order) {
         try {
-            return orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
+            return orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order);
         } catch (RuntimeException e) {
             order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
             orderRepository.save(order);

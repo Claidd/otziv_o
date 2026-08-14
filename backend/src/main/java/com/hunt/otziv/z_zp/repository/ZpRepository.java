@@ -134,6 +134,55 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
     List<Zp> findContractorRewardsNeedingGlobalRepair(@Param("now") LocalDateTime now,
                                                        Pageable pageable);
 
+    /**
+     * Fail-closed validation for active contractor rewards. A current sync marker must not
+     * make an incompatible source/role pair invisible to activation or routing readiness.
+     * Task-backed sources are accepted only when their canonical suffix identifies a task
+     * that belongs to the same order as the reward row.
+     */
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM zp reward
+        WHERE reward.zp_active = 1
+          AND reward.zp_contractor_role IS NOT NULL
+          AND CASE
+              WHEN CAST(reward.zp_contractor_role AS BINARY) = CAST('MANAGER' AS BINARY) THEN
+                  CASE WHEN
+                      CAST(reward.zp_source AS BINARY) = CAST('ORDER_MANAGER_REWARD' AS BINARY)
+                      OR CAST(reward.zp_source AS BINARY) = CAST('PERFORMER_PRODUCT_REWARD' AS BINARY)
+                      OR CAST(reward.zp_source AS BINARY) = CAST('ORDER_COMPLETION_MANAGER' AS BINARY)
+                      OR CAST(reward.zp_source AS BINARY) = CAST('PERFORMER_PRODUCT_COMPLETION' AS BINARY)
+                      OR EXISTS (
+                          SELECT 1
+                          FROM bad_review_tasks source_task
+                          WHERE source_task.bad_review_task_order = reward.zp_order
+                            AND CAST(reward.zp_source AS BINARY) IN (
+                                CAST(CONCAT('BAD_REVIEW_DONE_MANAGER:', source_task.bad_review_task_id) AS BINARY),
+                                CAST(CONCAT('BAD_REVIEW_CANCEL_MANAGER:', source_task.bad_review_task_id) AS BINARY)
+                            )
+                      )
+                  THEN 0 ELSE 1 END
+              WHEN CAST(reward.zp_contractor_role AS BINARY) = CAST('SPECIALIST' AS BINARY) THEN
+                  CASE WHEN
+                      CAST(reward.zp_source AS BINARY) = CAST('ORDER_SPECIALIST_REWARD' AS BINARY)
+                      OR CAST(reward.zp_source AS BINARY) = CAST('PERFORMER_PRODUCT_REWARD' AS BINARY)
+                      OR CAST(reward.zp_source AS BINARY) = CAST('ORDER_COMPLETION_SPECIALIST' AS BINARY)
+                      OR CAST(reward.zp_source AS BINARY) = CAST('PERFORMER_PRODUCT_COMPLETION' AS BINARY)
+                      OR EXISTS (
+                          SELECT 1
+                          FROM bad_review_tasks source_task
+                          WHERE source_task.bad_review_task_order = reward.zp_order
+                            AND CAST(reward.zp_source AS BINARY) IN (
+                                CAST(CONCAT('BAD_REVIEW_DONE_SPECIALIST:', source_task.bad_review_task_id) AS BINARY),
+                                CAST(CONCAT('BAD_REVIEW_CANCEL_SPECIALIST:', source_task.bad_review_task_id) AS BINARY)
+                            )
+                      )
+                  THEN 0 ELSE 1 END
+              ELSE 1
+          END = 1
+        """, nativeQuery = true)
+    long countActiveIncompatibleContractorRewardSources();
+
     @Query("SELECT COALESCE(MAX(z.id), 0) FROM Zp z")
     long findCurrentMaxId();
 
@@ -150,9 +199,21 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
                 ON w.worker_id = z.zp_profession
                AND w.user_id = z.zp_user
         WHERE z.zp_user = :userId
-          AND z.zp_contractor_role IS NULL
+          AND (
+              z.zp_contractor_role IS NULL
+              OR CAST(z.zp_contractor_role AS BINARY) = CAST('SPECIALIST' AS BINARY)
+          )
+          AND z.zp_active = 1
           AND z.zp_order IS NOT NULL
           AND z.zp_order > 0
+          AND (
+              z.zp_source IS NULL
+              OR TRIM(z.zp_source) = ''
+              OR CAST(z.zp_source AS BINARY) IN (
+                  CAST('ORDER_SPECIALIST_REWARD' AS BINARY),
+                  CAST('PERFORMER_PRODUCT_REWARD' AS BINARY)
+              )
+          )
           AND z.zp_date >= :startDate
           AND z.zp_date < :endDate
         ORDER BY z.zp_id
@@ -162,15 +223,52 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
                                                       @Param("endDate") LocalDate endDate);
 
     @Query(value = """
+        SELECT COUNT(*)
+        FROM zp z
+        INNER JOIN workers w
+                ON w.worker_id = z.zp_profession
+               AND w.user_id = z.zp_user
+        WHERE z.zp_id = :sourceId
+          AND (
+              z.zp_contractor_role IS NULL
+              OR CAST(z.zp_contractor_role AS BINARY) = CAST('SPECIALIST' AS BINARY)
+          )
+          AND z.zp_active = 1
+          AND z.zp_order IS NOT NULL
+          AND z.zp_order > 0
+          AND (
+              z.zp_source IS NULL
+              OR TRIM(z.zp_source) = ''
+              OR CAST(z.zp_source AS BINARY) IN (
+                  CAST('ORDER_SPECIALIST_REWARD' AS BINARY),
+                  CAST('PERFORMER_PRODUCT_REWARD' AS BINARY)
+              )
+          )
+    """, nativeQuery = true)
+    long countEligibleLegacySpecialistRewardForSync(@Param("sourceId") Long sourceId);
+
+    @Query(value = """
         SELECT z.zp_id
         FROM zp z
         INNER JOIN managers m
                 ON m.manager_id = z.zp_profession
                AND m.user_id = z.zp_user
         WHERE z.zp_user = :userId
-          AND z.zp_contractor_role IS NULL
+          AND (
+              z.zp_contractor_role IS NULL
+              OR CAST(z.zp_contractor_role AS BINARY) = CAST('MANAGER' AS BINARY)
+          )
+          AND z.zp_active = 1
           AND z.zp_order IS NOT NULL
           AND z.zp_order > 0
+          AND (
+              z.zp_source IS NULL
+              OR TRIM(z.zp_source) = ''
+              OR CAST(z.zp_source AS BINARY) IN (
+                  CAST('ORDER_MANAGER_REWARD' AS BINARY),
+                  CAST('PERFORMER_PRODUCT_REWARD' AS BINARY)
+              )
+          )
           AND z.zp_date >= :startDate
           AND z.zp_date < :endDate
         ORDER BY z.zp_id
@@ -179,12 +277,37 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
                                                    @Param("startDate") LocalDate startDate,
                                                    @Param("endDate") LocalDate endDate);
 
-    @Query("SELECT z FROM Zp z WHERE z.userId = :userId AND z.created >= :startDate AND z.created < :endDate")
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM zp z
+        INNER JOIN managers m
+                ON m.manager_id = z.zp_profession
+               AND m.user_id = z.zp_user
+        WHERE z.zp_id = :sourceId
+          AND (
+              z.zp_contractor_role IS NULL
+              OR CAST(z.zp_contractor_role AS BINARY) = CAST('MANAGER' AS BINARY)
+          )
+          AND z.zp_active = 1
+          AND z.zp_order IS NOT NULL
+          AND z.zp_order > 0
+          AND (
+              z.zp_source IS NULL
+              OR TRIM(z.zp_source) = ''
+              OR CAST(z.zp_source AS BINARY) IN (
+                  CAST('ORDER_MANAGER_REWARD' AS BINARY),
+                  CAST('PERFORMER_PRODUCT_REWARD' AS BINARY)
+              )
+          )
+    """, nativeQuery = true)
+    long countEligibleLegacyManagerRewardForSync(@Param("sourceId") Long sourceId);
+
+    @Query("SELECT z FROM Zp z WHERE z.userId = :userId AND z.active = true AND z.created >= :startDate AND z.created < :endDate")
     List<Zp> getAllWorkerZpInPeriod(@Param("userId") Long userId,
                                     @Param("startDate") LocalDate startDate,
                                     @Param("endDate") LocalDate endDate);
 
-    @Query("SELECT zp FROM Zp zp WHERE zp.userId = :userId AND zp.created >= :firstDayOfMonth AND zp.created <= :lastDayOfMonth")
+    @Query("SELECT zp FROM Zp zp WHERE zp.userId = :userId AND zp.active = true AND zp.created >= :firstDayOfMonth AND zp.created <= :lastDayOfMonth")
     List<Zp> getAllWorkerZp(@Param("userId") Long userId,
                             @Param("firstDayOfMonth") LocalDate firstDayOfMonth,
                             @Param("lastDayOfMonth") LocalDate lastDayOfMonth);
@@ -193,19 +316,19 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
 //    @Query("SELECT z FROM Zp z WHERE YEAR(z.created) = YEAR(:localDate) AND MONTH(z.created) = MONTH(:localDate)")
 //    List<Zp> findAllToDate(LocalDate localDate);
 
-    @Query("SELECT z FROM Zp z WHERE z.created >= :startDate AND z.created < :endDate")
+    @Query("SELECT z FROM Zp z WHERE z.active = true AND z.created >= :startDate AND z.created < :endDate")
     List<Zp> findAllToDate(@Param("startDate") LocalDate startDate,
                            @Param("endDate") LocalDate endDate);
 
     @Query("""
         SELECT new com.hunt.otziv.z_zp.dto.ZpStatRow(z.created, z.sum, z.amount)
         FROM Zp z
-        WHERE z.created >= :startDate AND z.created < :endDate
+        WHERE z.active = true AND z.created >= :startDate AND z.created < :endDate
     """)
     List<ZpStatRow> findStatRowsToDate(@Param("startDate") LocalDate startDate,
                                        @Param("endDate") LocalDate endDate);
 
-    @Query("SELECT z FROM Zp z WHERE z.created >= :startDate AND z.created < :endDate AND z.userId IN :peopleId")
+    @Query("SELECT z FROM Zp z WHERE z.active = true AND z.created >= :startDate AND z.created < :endDate AND z.userId IN :peopleId")
     List<Zp> findAllToDateByOwner(@Param("startDate") LocalDate startDate,
                                   @Param("endDate") LocalDate endDate,
                                   @Param("peopleId") Set<Long> peopleId);
@@ -213,26 +336,26 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
     @Query("""
         SELECT new com.hunt.otziv.z_zp.dto.ZpStatRow(z.created, z.sum, z.amount)
         FROM Zp z
-        WHERE z.created >= :startDate AND z.created < :endDate AND z.userId IN :peopleId
+        WHERE z.active = true AND z.created >= :startDate AND z.created < :endDate AND z.userId IN :peopleId
     """)
     List<ZpStatRow> findStatRowsToDateByOwner(@Param("startDate") LocalDate startDate,
                                               @Param("endDate") LocalDate endDate,
                                               @Param("peopleId") Set<Long> peopleId);
 
-    @Query("SELECT z FROM Zp z WHERE z.userId IN :peopleId")
+    @Query("SELECT z FROM Zp z WHERE z.active = true AND z.userId IN :peopleId")
     List<Zp> findAllByOwner(@Param("peopleId") Set<Long> peopleId);
 
 
-    @Query("SELECT z FROM Zp z WHERE z.created >= :startDate AND z.created < :endDate AND z.userId = :userId")
+    @Query("SELECT z FROM Zp z WHERE z.active = true AND z.created >= :startDate AND z.created < :endDate AND z.userId = :userId")
     List<Zp> findAllToDateByUser(@Param("startDate") LocalDate startDate,
                                  @Param("endDate") LocalDate endDate,
                                  @Param("userId") Long userId);
 
-    @Query("SELECT SUM(z.sum) FROM Zp z WHERE z.userId = :userId AND z.created = :created")
+    @Query("SELECT SUM(z.sum) FROM Zp z WHERE z.userId = :userId AND z.active = true AND z.created = :created")
     BigDecimal sumByUserAndCreated(@Param("userId") Long userId,
                                    @Param("created") LocalDate created);
 
-    @Query("SELECT COUNT(z) FROM Zp z WHERE z.userId = :userId AND z.created = :created")
+    @Query("SELECT COUNT(z) FROM Zp z WHERE z.userId = :userId AND z.active = true AND z.created = :created")
     long countByUserAndCreated(@Param("userId") Long userId,
                                @Param("created") LocalDate created);
 
@@ -257,6 +380,7 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
                 SUM(zp_amount) AS total_amount
             FROM zp
             WHERE zp_date BETWEEN :startDate AND :endDate
+              AND zp_active = 1
             GROUP BY zp_user
         ) z ON z.zp_user = u.id
         LEFT JOIN users_roles ur ON ur.user_id = u.id

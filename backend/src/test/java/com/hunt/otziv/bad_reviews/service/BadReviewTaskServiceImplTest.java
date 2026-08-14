@@ -12,6 +12,7 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.common_billing.service.CommonPayableChangeDisposition;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentBusinessClock;
@@ -21,7 +22,6 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -86,7 +86,7 @@ class BadReviewTaskServiceImplTest {
     private AppSettingService appSettingService;
 
     @Mock
-    private OrderStatusNotificationService orderStatusNotificationService;
+    private BadReviewCompletionPostActionOrchestrator completionPostActionOrchestrator;
 
     @Mock
     private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
@@ -230,6 +230,7 @@ class BadReviewTaskServiceImplTest {
                 .publish(true)
                 .text("опубликованный текст")
                 .worker(oldWorker)
+                .price(BigDecimal.valueOf(250))
                 .build();
 
         when(reviewRepository.getAllByOrderId(16L)).thenReturn(List.of(review));
@@ -661,24 +662,10 @@ class BadReviewTaskServiceImplTest {
         ));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
-        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
-                eq(order),
-                eq("client-14"),
-                eq("group-14"),
-                eq("Компания 14\n\nОплатите по ссылке Альфа.\n\nК оплате: 1600 руб."),
-                eq("счет после плохого отзыва")
-        )).thenReturn(true);
-
         service.completeTask(44L);
 
-        verify(orderStatusNotificationService).sendInformationalMessageToClientChat(
-                order,
-                "client-14",
-                "group-14",
-                "Компания 14\n\nОплатите по ссылке Альфа.\n\nК оплате: 1600 руб.",
-                "счет после плохого отзыва"
-        );
-        verify(paymentInvoiceRetryScheduler).scheduleBadReviewAutoBan(order);
+        verify(completionPostActionOrchestrator).deliverInvoice(44L, 14L);
+        verify(paymentInvoiceRetryScheduler).scheduleBadReviewInvoiceRetry(order);
     }
 
     @Test
@@ -735,14 +722,68 @@ class BadReviewTaskServiceImplTest {
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
         ));
         when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.prepareLinkedOrderPayableChange(18L))
+                .thenReturn(CommonPayableChangeDisposition.REFRESH_CURRENT_INVOICE);
         when(commonBillingService.refreshLinkedOrderAmount(18L)).thenReturn(true);
 
         service.completeTask(48L);
 
         verify(commonBillingService).refreshLinkedOrderAmount(18L);
-        verify(orderStatusNotificationService, never()).sendInformationalMessageToClientChat(any(), any(), any(), any(), any());
+        verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
         verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
         verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewAutoBan(order);
+    }
+
+    @Test
+    void createTaskFailsClosedWhenNoReviewPriceCanBeDetermined() {
+        Order order = order(151L);
+        order.setSum(null);
+        order.setAmount(0);
+        Review review = Review.builder()
+                .id(901L)
+                .publish(true)
+                .text("опубликованный текст")
+                .build();
+        when(reviewRepository.getAllByOrderId(151L)).thenReturn(List.of(review));
+        when(badReviewTaskRepository.existsByOrderIdAndSourceReviewIdAndStatusIn(eq(151L), eq(901L), any()))
+                .thenReturn(false);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createTasksForUnpaidOrder(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(badReviewTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void completeTaskAfterUnpaidCommonInvoiceCreatesSupplementAttentionWithoutStandaloneSend() {
+        Order order = order(181L);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        BadReviewTask task = BadReviewTask.builder()
+                .id(481L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(181L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
+        ));
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.prepareLinkedOrderPayableChange(181L))
+                .thenReturn(CommonPayableChangeDisposition.SUPPLEMENT_REQUIRED);
+        when(commonBillingService.createBadReviewSupplementSuccessor(181L, 481L)).thenReturn(true);
+
+        BadReviewTask completed = service.completeTask(481L);
+
+        assertEquals(BadReviewTaskStatus.DONE, completed.getStatus());
+        verify(commonBillingService).createBadReviewSupplementSuccessor(181L, 481L);
+        verify(commonBillingService, never()).refreshLinkedOrderAmount(181L);
+        verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
     }
 
     @Test
@@ -766,17 +807,10 @@ class BadReviewTaskServiceImplTest {
         ));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
-        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
-                eq(order),
-                eq("client-17"),
-                eq("group-17"),
-                eq("Компания 17\n\nОплатите по ссылке Альфа.\n\nК оплате: 1300 руб."),
-                eq("счет после плохого отзыва")
-        )).thenReturn(false);
-
         service.completeTask(47L);
 
         verify(paymentInvoiceRetryScheduler).scheduleBadReviewInvoiceRetry(order);
+        verify(completionPostActionOrchestrator).deliverInvoice(47L, 17L);
     }
 
     @Test
@@ -886,7 +920,7 @@ class BadReviewTaskServiceImplTest {
 
         service.cancelTask(46L);
 
-        verify(orderStatusNotificationService, never()).sendInformationalMessageToClientChat(any(), any(), any(), any(), any());
+        verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
         verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
@@ -924,7 +958,21 @@ class BadReviewTaskServiceImplTest {
         verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
-        verify(orderStatusNotificationService, never()).sendInformationalMessageToClientChat(any(), any(), any(), any(), any());
+        verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
+    }
+
+    @Test
+    void payableSumFailsClosedWhenBaseOrderSumIsMissing() {
+        Order order = order(21L);
+        order.setSum(null);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.getPayableSum(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(badReviewTaskRepository, never()).summarizeByOrderId(any());
     }
 
     private Order order(Long id) {

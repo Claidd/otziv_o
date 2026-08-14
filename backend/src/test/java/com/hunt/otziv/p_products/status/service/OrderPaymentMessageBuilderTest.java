@@ -16,6 +16,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -78,6 +80,52 @@ class OrderPaymentMessageBuilderTest {
         assertTrue(message.contains("К оплате: 1500 руб."));
         assertFalse(message.contains("старый текст оплаты"));
         verify(paymentLinkService).createForOrder(10L);
+    }
+
+    @Test
+    void routedMobileBankSourcePropagatesFrozenTransferNumberStructurally() {
+        Order order = order();
+        when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, "MANAGER_TEXT"))
+                .thenReturn("TBANK_LINK");
+        when(paymentLinkServiceProvider.getObject()).thenReturn(paymentLinkService);
+        when(paymentLinkService.createForOrder(10L)).thenReturn(new ManagerPaymentLinkResponse(
+                "token", "", 10L, BigDecimal.valueOf(1500), 150000, "CREATED", "MANUAL_MOBILE_BANK",
+                LocalDateTime.now().plusDays(90),
+                "Перевод по номеру карты: 2202208238396676",
+                "Компания. Филиал\n\nК оплате: 1500 руб.\nПеревод по номеру карты: 2202208238396676",
+                "2202208238396676"
+        ));
+
+        OrderPaymentMessageBuilder.PreparedPaymentMessage prepared =
+                service().publishedOrderPaymentMessageWithTransfer(order);
+
+        assertEquals("2202208238396676", prepared.telegramCopyTransferNumber());
+        assertTrue(prepared.message().contains("2202208238396676"));
+    }
+
+    @Test
+    void payableCalculationFailureNeverFallsBackToBaseOrderSum() {
+        Order order = order();
+        when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, "MANAGER_TEXT"))
+                .thenReturn("MANAGER_TEXT");
+        when(badReviewTaskService.getPayableSum(order)).thenThrow(new IllegalStateException("summary unavailable"));
+
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service().publishedOrderPaymentMessage(order));
+    }
+
+    @Test
+    void tbankPreviewUsesFactualAmountWithoutCreatingLink() {
+        Order order = order();
+        when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, "MANAGER_TEXT"))
+                .thenReturn("TBANK_LINK");
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1800));
+
+        String preview = service().publishedOrderPaymentMessagePreview(order);
+
+        assertTrue(preview.contains("К оплате: 1800 руб."));
+        assertTrue(preview.contains("ссылка будет создана при отправке"));
+        verifyNoInteractions(paymentLinkServiceProvider, paymentLinkService);
     }
 
     private OrderPaymentMessageBuilder service() {

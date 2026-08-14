@@ -7,6 +7,7 @@ import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentReceiptStatus;
+import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
@@ -215,6 +216,77 @@ class ManualPaymentAutoConfirmationServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
+    void blocksGenericPaidStatusForFrozenLiveContractorSource() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(431L);
+        PaymentLink source = new PaymentLink();
+        source.setId(4310L);
+        source.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        source.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        source.setManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        source.setContractorAllocationId(91L);
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(431L), any(Collection.class)))
+                .thenReturn(List.of(source));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.ensureCanCloseOrderManually(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(paymentLinkRepository, never()).save(any());
+    }
+
+    @Test
+    void confirmForPaidOrderNeverAttributesLatestFrozenContractorSource() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(432L);
+        PaymentLink source = new PaymentLink();
+        source.setId(4320L);
+        source.setStatus(PaymentLinkStatus.MANUAL_REPORTED);
+        source.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        source.setManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        source.setContractorAllocationId(92L);
+
+        when(paymentLinkRepository.findFirstByOrder_IdAndPaymentMethodInAndStatusInOrderByCreatedAtDesc(
+                eq(432L), any(Collection.class), any(Collection.class)
+        )).thenReturn(Optional.of(source));
+
+        assertThrows(ResponseStatusException.class, () -> service.confirmForPaidOrder(order));
+
+        verify(paymentLinkRepository, never()).save(any());
+        verify(contractorPaymentShadowService, never()).reconcilePaymentLinkId(any());
+    }
+
+    @Test
+    void shadowOrOwnerFallbackManualRouteKeepsLegacyPaidStatusBehavior() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(433L);
+        PaymentLink ownerFallback = new PaymentLink();
+        ownerFallback.setId(4330L);
+        ownerFallback.setAmountKopecks(10_000L);
+        ownerFallback.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        ownerFallback.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        ownerFallback.setManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(433L), any(Collection.class)))
+                .thenReturn(List.of(ownerFallback));
+        when(paymentLinkRepository.findFirstByOrder_IdAndPaymentMethodInAndStatusInOrderByCreatedAtDesc(
+                eq(433L), any(Collection.class), any(Collection.class)
+        )).thenReturn(Optional.of(ownerFallback));
+
+        service.ensureCanCloseOrderManually(order);
+        service.confirmForPaidOrder(order);
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, ownerFallback.getStatus());
+        verify(paymentLinkRepository).save(ownerFallback);
     }
 
     @Test

@@ -191,6 +191,65 @@ class ContractorPaymentProfileServiceTest {
     }
 
     @Test
+    void enabledProfileAcceptsCardAndStoresCanonicalTransferNumber() {
+        User user = userWithRole(13L, "ROLE_WORKER");
+        profile.setUser(user);
+        profile.setRole(ContractorRole.SPECIALIST);
+        when(userRepository.findByIdWithAssignments(13L)).thenReturn(Optional.of(user));
+        when(profileRepository.findByUserIdAndRoleForUpdate(13L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(profile));
+        when(profileRepository.saveAndFlush(any(ContractorPaymentProfile.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(runtimeSwitch.status()).thenReturn(new ContractorPaymentRuntimeSwitch.RuntimeStatus(
+                false, false, false, false, false, false
+        ));
+        ContractorPaymentProfileRequest request = new ContractorPaymentProfileRequest(
+                ContractorRole.SPECIALIST,
+                0L,
+                true,
+                false,
+                "Получатель",
+                "2202 2082-3839 6676",
+                "Банк",
+                null,
+                0L,
+                null
+        );
+
+        ContractorPaymentProfileResponse response = service.update(13L, request);
+
+        assertThat(profile.getPaymentPhone()).isEqualTo("2202208238396676");
+        assertThat(response.paymentPhone()).isEqualTo("2202208238396676");
+    }
+
+    @Test
+    void enabledProfileRejectsValueThatIsNeitherPhoneNorCard() {
+        User user = userWithRole(14L, "ROLE_WORKER");
+        profile.setUser(user);
+        profile.setRole(ContractorRole.SPECIALIST);
+        when(userRepository.findByIdWithAssignments(14L)).thenReturn(Optional.of(user));
+        when(profileRepository.findByUserIdAndRoleForUpdate(14L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(profile));
+        ContractorPaymentProfileRequest request = new ContractorPaymentProfileRequest(
+                ContractorRole.SPECIALIST,
+                0L,
+                true,
+                false,
+                "Получатель",
+                "2202 2082 3839 667X",
+                "Банк",
+                null,
+                0L,
+                null
+        );
+
+        assertThatThrownBy(() -> service.update(14L, request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("телефоном (10–15 цифр) или картой (16–19 цифр)");
+        verify(profileRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void liveCanaryCannotBeEnabledForDisabledProfile() {
         User user = userWithRole(30L, "ROLE_WORKER");
         profile.setUser(user);

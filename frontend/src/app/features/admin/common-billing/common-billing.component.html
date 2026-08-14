@@ -195,6 +195,9 @@
           <div>
             <h3>Общий счет #{{ invoice?.id }}</h3>
             <small>{{ invoice?.title || selectedAccountName() }}</small>
+            @if (invoice?.invoicePurpose === 'BAD_REVIEW_SUCCESSOR' && invoice?.supersedesInvoiceId) {
+              <small>Дополнительный цикл к счету #{{ invoice?.supersedesInvoiceId }}</small>
+            }
           </div>
           <span [class]="statusClass(invoice?.status)">{{ statusLabel(invoice?.status) }}</span>
         </div>
@@ -347,10 +350,17 @@
               <span class="material-icons-sharp" aria-hidden="true">playlist_add_check</span>
               Одобрить все
             </button>
-            <button type="button" class="success" (click)="markInvoicePaid()" [disabled]="!!mutating() || !canMarkPaid()">
-              <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
-              Оплачен
-            </button>
+            @if (invoice?.contractorPaymentRoute) {
+              <button type="button" class="success" (click)="confirmContractorPaymentSource()" [disabled]="!!mutating() || !canConfirmContractorSource()">
+                <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
+                Сверить поступление
+              </button>
+            } @else {
+              <button type="button" class="success" (click)="markInvoicePaid()" [disabled]="!!mutating() || !canMarkPaid()">
+                <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
+                Оплачен
+              </button>
+            }
             <button type="button" class="danger" (click)="markInvoiceUnpaid()" [disabled]="!!mutating() || !canMarkUnpaid()">
               <span class="material-icons-sharp" aria-hidden="true">money_off</span>
               Не оплачен

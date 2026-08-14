@@ -19,6 +19,18 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, Long> {
 
+    Optional<CommonInvoice> findByCycleIdempotencyKey(String cycleIdempotencyKey);
+
+    boolean existsBySupersedesInvoice_Id(Long invoiceId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT invoice FROM CommonInvoice invoice WHERE invoice.supersedesInvoice.id = :invoiceId ORDER BY invoice.id DESC")
+    List<CommonInvoice> findSuccessorsForUpdate(@Param("invoiceId") Long invoiceId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT invoice FROM CommonInvoice invoice WHERE invoice.cycleIdempotencyKey = :key")
+    Optional<CommonInvoice> findByCycleIdempotencyKeyForUpdate(@Param("key") String key);
+
     @Query("""
         SELECT COUNT(item.id)
         FROM CommonInvoiceOrder item
@@ -156,9 +168,32 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         LEFT JOIN FETCH invoiceManager.user
         WHERE invoice.account.id = :accountId
           AND invoice.status IN :statuses
+          AND invoice.invoicePurpose = 'STANDARD'
         ORDER BY invoice.id DESC
     """)
     List<CommonInvoice> findCurrentForAccount(
+            @Param("accountId") Long accountId,
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
+            Pageable pageable
+    );
+
+    /** Current financial presentation for account UI; unlike the attach query,
+     * this also returns a bad-review successor. */
+    @Query("""
+        SELECT invoice
+        FROM CommonInvoice invoice
+        JOIN FETCH invoice.account account
+        LEFT JOIN FETCH account.manager manager
+        LEFT JOIN FETCH manager.user
+        LEFT JOIN FETCH account.invoiceCompany invoiceCompany
+        LEFT JOIN FETCH invoiceCompany.manager invoiceManager
+        LEFT JOIN FETCH invoiceManager.user
+        WHERE invoice.account.id = :accountId
+          AND invoice.status IN :statuses
+        ORDER BY CASE WHEN invoice.invoicePurpose = 'BAD_REVIEW_SUCCESSOR' THEN 0 ELSE 1 END,
+                 invoice.id DESC
+    """)
+    List<CommonInvoice> findCurrentPresentationForAccount(
             @Param("accountId") Long accountId,
             @Param("statuses") Collection<CommonInvoiceStatus> statuses,
             Pageable pageable
@@ -175,11 +210,32 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         LEFT JOIN FETCH invoiceManager.user
         WHERE account.id IN :accountIds
           AND invoice.status IN :statuses
-          AND invoice.id = (
-              SELECT MAX(candidate.id)
-              FROM CommonInvoice candidate
-              WHERE candidate.account.id = account.id
-                AND candidate.status IN :statuses
+          AND (
+              (
+                  invoice.invoicePurpose = 'BAD_REVIEW_SUCCESSOR'
+                  AND invoice.id = (
+                      SELECT MAX(successor.id)
+                      FROM CommonInvoice successor
+                      WHERE successor.account.id = account.id
+                        AND successor.status IN :statuses
+                        AND successor.invoicePurpose = 'BAD_REVIEW_SUCCESSOR'
+                  )
+              )
+              OR (
+                  NOT EXISTS (
+                      SELECT currentSuccessor.id
+                      FROM CommonInvoice currentSuccessor
+                      WHERE currentSuccessor.account.id = account.id
+                        AND currentSuccessor.status IN :statuses
+                        AND currentSuccessor.invoicePurpose = 'BAD_REVIEW_SUCCESSOR'
+                  )
+                  AND invoice.id = (
+                      SELECT MAX(candidate.id)
+                      FROM CommonInvoice candidate
+                      WHERE candidate.account.id = account.id
+                        AND candidate.status IN :statuses
+                  )
+              )
           )
         ORDER BY account.id ASC
     """)
@@ -275,6 +331,7 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         SELECT invoice.account.id
         FROM CommonInvoice invoice
         WHERE invoice.status IN :statuses
+          AND invoice.invoicePurpose = 'STANDARD'
         GROUP BY invoice.account.id
         HAVING COUNT(invoice.id) > 1
         ORDER BY invoice.account.id ASC

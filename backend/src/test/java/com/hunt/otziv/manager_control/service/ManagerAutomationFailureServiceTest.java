@@ -87,6 +87,45 @@ class ManagerAutomationFailureServiceTest {
     }
 
     @Test
+    void exposesMissingTelegramBindingEvenWhenLastAttemptWasRateLimited() {
+        Manager manager = Manager.builder().id(7L).build();
+        Company company = Company.builder()
+                .id(20L)
+                .title("У Карена")
+                .manager(manager)
+                .urlChat("https://t.me/+private")
+                .telegramGroupChatId(null)
+                .build();
+        LocalDateTime now = LocalDateTime.now();
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(31L)
+                .scenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER)
+                .targetType(ClientMessageTargetType.ARCHIVE_COMPANY)
+                .targetKey("archive-company:20")
+                .companyId(20L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode("rate_limited")
+                .lastErrorMessage("Следующий слот отправки")
+                .consecutiveFailures(4)
+                .lastAttemptAt(now.minusHours(2))
+                .nextAttemptAt(now.minusMinutes(1))
+                .createdAt(now.minusDays(1))
+                .updatedAt(now.minusHours(2))
+                .build();
+        when(stateRepository.findManagerControlCandidateIds(eq(7L), any(Pageable.class))).thenReturn(List.of(31L));
+        when(stateRepository.findAllById(List.of(31L))).thenReturn(List.of(state));
+        when(companyRepository.findByIdForCompanyDto(20L)).thenReturn(Optional.of(company));
+
+        List<ManagerAutomationFailureService.AutomationFailureIssue> issues = service.issues(manager, 10);
+
+        assertEquals(1, issues.size());
+        String reason = issues.getFirst().reason();
+        assertTrue(reason.contains("telegram_group_missing"));
+        assertTrue(reason.contains("Для Telegram-группы не задан chatId"));
+        assertTrue(reason.contains("Привязать Telegram"));
+    }
+
+    @Test
     void explainsThatRepairReusesExistingPaymentInsteadOfCreatingAnotherOne() {
         Manager manager = Manager.builder().id(7L).build();
         Company company = Company.builder().id(20L).title("Мастер на дом").manager(manager).build();

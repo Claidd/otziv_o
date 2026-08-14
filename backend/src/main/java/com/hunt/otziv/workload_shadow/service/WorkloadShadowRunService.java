@@ -33,6 +33,25 @@ public class WorkloadShadowRunService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public long start(String triggerType, String instanceId, LocalDateTime startedAt, long settingsRevision) {
+        LocalDateTime effectiveStartedAt =
+                startedAt == null ? LocalDateTime.now() : startedAt;
+        int inserted = runRepository.startRun(
+                safe(triggerType, "SCHEDULED"),
+                effectiveStartedAt,
+                trim(instanceId, 120),
+                settingsRevision
+        );
+        Long runId = inserted == 1 ? runRepository.lastInsertedRunId() : null;
+        if (runId == null || runId <= 0) {
+            throw new IllegalStateException(
+                    "Не удалось зарегистрировать запуск workload shadow"
+            );
+        }
+        return runId;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void complete(
             long runId,
             RunResult result,

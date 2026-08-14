@@ -2581,7 +2581,11 @@ wait_service_healthy grafana 300
 recreate_service_with_retry nginx
 wait_service_healthy nginx 300
 assert_running_service_image nginx "`$web_image"
-wait_service_healthy whatsapp_lika 300
+if ! wait_service_healthy whatsapp_lika 720; then
+  echo "whatsapp_lika stayed authenticated without becoming ready; restarting its container once..."
+  compose restart whatsapp_lika
+  wait_service_healthy whatsapp_lika 300
+fi
 keycloak_settings_applied=0
 for attempt in 1 2 3; do
   wait_service_healthy keycloak 300

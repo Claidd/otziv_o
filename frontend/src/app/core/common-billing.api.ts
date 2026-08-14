@@ -43,7 +43,10 @@ export interface CommonInvoiceSummaryResponse {
   paymentRouteType?: string | null;
   paymentRouteProfileName?: string | null;
   paymentRouteManualTaskId?: number | null;
+  contractorPaymentRoute: boolean;
   paymentRouteSelectedAt?: string | null;
+  invoicePurpose?: string | null;
+  supersedesInvoiceId?: number | null;
 }
 
 export interface CommonBillingAccountResponse {
@@ -101,6 +104,14 @@ export interface CommonInvoiceNextCycleResponse {
 export interface ManualPaymentConfirmationRequest {
   comment: string;
   receiptUrl: string;
+}
+
+export interface ContractorCommonSourceConfirmationRequest {
+  recipientStatementChecked: true;
+  paymentReceived: true;
+  confirmedTotalKopecks: number;
+  effectiveAt?: string | null;
+  reason: string;
 }
 
 export interface CommonInvoicePaymentRefResponse {
@@ -257,6 +268,16 @@ export class CommonBillingApi {
   markPaid(invoiceId: number, request: ManualPaymentConfirmationRequest): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/paid`,
+      request
+    );
+  }
+
+  confirmContractorSource(
+    invoiceId: number,
+    request: ContractorCommonSourceConfirmationRequest
+  ): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/contractor-confirmation`,
       request
     );
   }

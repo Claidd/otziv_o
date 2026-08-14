@@ -1,6 +1,7 @@
 package com.hunt.otziv.payments.controller;
 
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
+import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSourceConfirmationRequest;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
 import com.hunt.otziv.payments.dto.CloseManualPaymentUnpaidRequest;
@@ -37,6 +38,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
 
 @RestController
 @RequiredArgsConstructor
@@ -138,6 +140,29 @@ public class AdminPaymentController {
     ) {
         contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
         return paymentLinkService.confirmManual(linkId, actor(authentication));
+    }
+
+    /**
+     * Confirms statement evidence against this exact immutable contractor
+     * payment source. Unlike the legacy full-confirm action it can safely
+     * process a partial or late transfer without attributing it to a newer
+     * active link of the same order.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/admin/payments/manual-links/{linkId}/contractor-confirmation")
+    public AdminPaymentLinkResponse confirmContractorPaymentSource(
+            @PathVariable Long linkId,
+            @Valid @RequestBody ContractorPaymentSourceConfirmationRequest request,
+            Authentication authentication
+    ) {
+        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
+        return paymentLinkService.confirmContractorPaymentSource(
+                linkId,
+                request.confirmedTotalKopecks(),
+                request.effectiveAt(),
+                request.reason(),
+                actor(authentication)
+        );
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")

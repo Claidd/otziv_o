@@ -7,6 +7,7 @@ public record ContractorPaymentQueueHealthResponse(
         QueueHealth rewardRepair,
         QueueHealth shadowBackfill,
         QueueHealth completionRewardRepair,
+        long deferredActiveRecoveryBaseGaps,
         LocalDateTime observedAt
 ) {
     public record QueueHealth(

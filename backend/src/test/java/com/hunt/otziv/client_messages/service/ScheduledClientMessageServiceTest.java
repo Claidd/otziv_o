@@ -7,6 +7,7 @@ import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.client_messages.dto.ArchiveCompanyMessageCandidate;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ClientMessageTargetType;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageAttempt;
@@ -27,6 +28,7 @@ import com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder;
 import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
@@ -44,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,6 +67,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -129,6 +133,11 @@ class ScheduledClientMessageServiceTest {
     void setUpProviders() {
         ReflectionTestUtils.setField(service, "commonBillingServiceProvider", commonBillingServiceProvider);
         ReflectionTestUtils.setField(service, "reconcileLeaseDuration", Duration.ofMinutes(10));
+        org.mockito.Mockito.lenient().when(slotPlanner.nextAllowedAt(
+                        any(LocalDateTime.class),
+                        org.mockito.ArgumentMatchers.nullable(String.class)
+                ))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -512,16 +521,33 @@ class ScheduledClientMessageServiceTest {
         order.setManager(manager);
         order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
         order.setStatusChangedAt(statusChangedAt);
+        order.setSum(BigDecimal.valueOf(1300));
 
         when(orderRepository.findByIdForMutation(15L)).thenReturn(java.util.Optional.of(order));
+        String customTemplate = "Напоминание: {paymentInstruction}";
         when(appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT,
                 ScheduledClientMessageService.DEFAULT_PAYMENT_REMINDER_TEXT
-        )).thenReturn(ScheduledClientMessageService.DEFAULT_PAYMENT_REMINDER_TEXT);
+        )).thenReturn(customTemplate);
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
+                ScheduledClientMessageService.DEFAULT_PAYMENT_INSTRUCTION_SOURCE
+        )).thenReturn("TBANK_LINK");
+        when(paymentLinkService.createForOrder(15L)).thenReturn(new ManagerPaymentLinkResponse(
+                "token", "", 15L, BigDecimal.valueOf(1300), 130000, "CREATED", "MANUAL_MOBILE_BANK",
+                LocalDateTime.now().plusDays(90),
+                "Перевод по номеру телефона: 89001234567",
+                "Напоминание: Перевод по номеру телефона: 89001234567",
+                "89001234567"
+        ));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
-        when(messageSender.send(eq(company), eq("client-15"), eq("group-15"), anyString()))
+        TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
+                .fromFrozenTransferNumber("89001234567")
+                .orElseThrow();
+        when(messageSender.send(eq(company), eq("client-15"), eq("group-15"), anyString(), eq(copyButton)))
                 .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
         when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1300));
         when(orderStatusTransitionService.changeStatusForOrder(15L, "Напоминание")).thenReturn(true);
 
         ReflectionTestUtils.invokeMethod(
@@ -536,7 +562,10 @@ class ScheduledClientMessageServiceTest {
                 now
         );
 
-        verify(messageSender).send(eq(company), eq("client-15"), eq("group-15"), anyString());
+        verify(messageSender).send(
+                eq(company), eq("client-15"), eq("group-15"),
+                org.mockito.ArgumentMatchers.contains("89001234567"), eq(copyButton)
+        );
         verify(orderStatusTransitionService).changeStatusForOrder(15L, "Напоминание");
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
         assertNull(state.getNextAttemptAt());
@@ -613,6 +642,7 @@ class ScheduledClientMessageServiceTest {
         order.setCompany(company);
         order.setManager(manager);
         order.setStatus(OrderStatus.builder().title("Оплачено").build());
+        order.setSum(BigDecimal.valueOf(1300));
         ReviewRecoveryBatch batch = ReviewRecoveryBatch.builder()
                 .id(55L)
                 .order(order)
@@ -625,6 +655,7 @@ class ScheduledClientMessageServiceTest {
                 ScheduledClientMessageService.DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT
         )).thenReturn(ScheduledClientMessageService.DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT);
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1300));
         when(messageSender.send(eq(company), eq("client-15"), eq("group-15"), anyString()))
                 .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
 
@@ -663,6 +694,7 @@ class ScheduledClientMessageServiceTest {
         order.setStatus(OrderStatus.builder().title("Новый").build());
         order.setWaitingForClient(true);
         order.setWaitingForClientChangedAt(waitingChangedAt);
+        order.setSum(BigDecimal.valueOf(1300));
 
         when(orderRepository.findByIdForMutation(16L)).thenReturn(java.util.Optional.of(order));
         when(appSettingService.getString(
@@ -674,6 +706,7 @@ class ScheduledClientMessageServiceTest {
                 ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_TEXT
         )).thenReturn(ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_TEXT);
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1300));
         when(messageSender.send(eq(company), eq("client-16"), eq("group-16"), anyString()))
                 .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
         when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -896,7 +929,9 @@ class ScheduledClientMessageServiceTest {
         order.setStatusChangedAt(changedAt);
 
         when(orderRepository.findByIdForMutation(10L)).thenReturn(java.util.Optional.of(order));
-        when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order)).thenReturn("финальный счет");
+        when(orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order)).thenReturn(
+                new OrderPaymentMessageBuilder.PreparedPaymentMessage("финальный счет", "2202208238396676")
+        );
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -906,7 +941,8 @@ class ScheduledClientMessageServiceTest {
                 any(),
                 any(),
                 any(),
-                any()
+                any(),
+                eq("2202208238396676")
         )).thenReturn("Выставлен счет");
 
         ReflectionTestUtils.invokeMethod(service, "retryPaymentInvoice", state, company, now);
@@ -918,6 +954,10 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
         assertNull(state.getNextAttemptAt());
         verify(stateRepository, org.mockito.Mockito.atLeastOnce()).save(state);
+        verify(orderStatusNotificationService).sendMessageToClientChat(
+                eq("Опубликовано"), eq(order), eq("client-10"), eq("group-10"),
+                eq("финальный счет"), eq("Выставлен счет"), eq("2202208238396676")
+        );
     }
 
     @Test
@@ -941,7 +981,7 @@ class ScheduledClientMessageServiceTest {
 
         when(orderRepository.findByIdForMutation(10L)).thenReturn(java.util.Optional.of(order));
         when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
-        when(commonBillingService.refreshLinkedOrderAmount(10L)).thenReturn(true);
+        when(commonBillingService.isOrderInActiveCommonInvoice(10L)).thenReturn(true);
 
         ReflectionTestUtils.invokeMethod(service, "retryPaymentInvoice", state, company, now);
 
@@ -952,8 +992,9 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
         assertEquals("common_billing_linked", attemptCaptor.getValue().getErrorCode());
         verify(stateRepository, org.mockito.Mockito.atLeastOnce()).save(state);
-        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessage(any());
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageWithTransfer(any());
         verify(orderStatusNotificationService, never()).sendMessageToClientChat(
+                any(),
                 any(),
                 any(),
                 any(),
@@ -984,7 +1025,7 @@ class ScheduledClientMessageServiceTest {
 
         when(orderRepository.findByIdForMutation(10L)).thenReturn(java.util.Optional.of(order));
         when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
-        when(commonBillingService.refreshLinkedOrderAmount(10L)).thenReturn(true);
+        when(commonBillingService.isOrderInActiveCommonInvoice(10L)).thenReturn(true);
 
         ReflectionTestUtils.invokeMethod(
                 service,
@@ -1060,55 +1101,9 @@ class ScheduledClientMessageServiceTest {
     }
 
     @Test
-    void retryBadReviewInvoiceSendsInvoiceAndCompletesStateWhenClientMessageSucceeds() {
-        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 12, 0);
-        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
-                .id(92L)
-                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
-                .targetType(ClientMessageTargetType.ORDER)
-                .targetKey("bad-review-invoice:order:12")
-                .companyId(22L)
-                .orderId(12L)
-                .status(ScheduledMessageStateStatus.ACTIVE)
-                .build();
-        Company company = new Company();
-        company.setId(22L);
-        company.setGroupId("group-12");
-        Manager manager = new Manager();
-        manager.setClientId("client-12");
-        Order order = new Order();
-        order.setId(12L);
-        order.setCompany(company);
-        order.setManager(manager);
-        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
-
-        when(orderRepository.findByIdForMutation(12L)).thenReturn(java.util.Optional.of(order));
-        when(badReviewTaskService.buildBadReviewInvoiceMessage(order)).thenReturn("счет после плохого");
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
-        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
-                eq(order),
-                eq("client-12"),
-                eq("group-12"),
-                eq("счет после плохого"),
-                eq("счет после плохого отзыва")
-        )).thenReturn(true);
-
-        ReflectionTestUtils.invokeMethod(service, "retryBadReviewInvoice", state, company, now);
-
-        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor = ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
-        verify(attemptRepository).save(attemptCaptor.capture());
-        assertEquals(ScheduledMessageAttemptStatus.SENT, attemptCaptor.getValue().getStatus());
-        assertEquals(ClientMessageScenario.BAD_REVIEW_INVOICE, attemptCaptor.getValue().getScenario());
-        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
-        assertNull(state.getNextAttemptAt());
-        verify(stateRepository, org.mockito.Mockito.atLeastOnce()).save(state);
-    }
-
-    @Test
     void retryBadReviewInvoiceCompletesWithoutSingleInvoiceWhenOrderIsLinkedToCommonBilling() {
-        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 12, 0);
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+        LocalDateTime lockedUntil = now.plusMinutes(5);
         ScheduledClientMessageState state = ScheduledClientMessageState.builder()
                 .id(921L)
                 .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
@@ -1117,6 +1112,8 @@ class ScheduledClientMessageServiceTest {
                 .companyId(221L)
                 .orderId(121L)
                 .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode(ClientMessageStateSafety.TRANSACTION_IN_PROGRESS)
+                .lockedUntil(lockedUntil)
                 .build();
         Company company = new Company();
         company.setId(221L);
@@ -1126,11 +1123,18 @@ class ScheduledClientMessageServiceTest {
         order.setStatus(OrderStatus.builder().title("Не оплачено").build());
 
         when(orderRepository.findByIdForMutation(121L)).thenReturn(java.util.Optional.of(order));
+        when(stateRepository.findByIdForUpdate(921L)).thenReturn(Optional.of(state));
+        when(stateRepository.findById(921L)).thenReturn(Optional.of(state));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true))
+                .thenReturn(true);
         when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
-        when(commonBillingService.refreshLinkedOrderAmount(121L)).thenReturn(true);
+        when(commonBillingService.isOrderInActiveCommonInvoice(121L)).thenReturn(true);
 
-        ReflectionTestUtils.invokeMethod(service, "retryBadReviewInvoice", state, company, now);
+        Object prepared = ReflectionTestUtils.invokeMethod(
+                service, "prepareBadReviewDelivery", 921L, now, lockedUntil, null
+        );
 
+        assertNull(prepared);
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
         assertNull(state.getNextAttemptAt());
         ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor = ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
@@ -1138,14 +1142,8 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
         assertEquals("common_billing_linked", attemptCaptor.getValue().getErrorCode());
         verify(stateRepository, org.mockito.Mockito.atLeastOnce()).save(state);
-        verify(badReviewTaskService, never()).buildBadReviewInvoiceMessage(any());
-        verify(orderStatusNotificationService, never()).sendInformationalMessageToClientChat(
-                any(),
-                any(),
-                any(),
-                any(),
-                any()
-        );
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageWithTransfer(any());
+        verify(messageSender, never()).send(any(), any(), any(), any());
         verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewAutoBan(any());
     }
 
@@ -1545,5 +1543,342 @@ class ScheduledClientMessageServiceTest {
         assertNull(state.getNextAttemptAt());
         verify(orderStatusTransitionService).changeStatusForOrder(14L, "Бан");
         verify(stateRepository, org.mockito.Mockito.atLeastOnce()).save(state);
+    }
+
+    @Test
+    void badReviewDeliveryPersistsTokenAndFinalizesAfterExternalSend() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(501L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-invoice:order:50")
+                .companyId(20L)
+                .orderId(50L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .nextAttemptAt(LocalDateTime.now().plusHours(1))
+                .build();
+        Company company = new Company();
+        company.setId(20L);
+        company.setGroupId("group-20");
+        Manager manager = new Manager();
+        manager.setClientId("client-20");
+        Order order = new Order();
+        order.setId(50L);
+        order.setCompany(company);
+        order.setManager(manager);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(stateRepository.findByScenarioAndTargetKey(
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                "bad-review-invoice:order:50"
+        )).thenReturn(Optional.of(state));
+        when(stateRepository.lockActiveState(eq(501L), any(), any(), anyString(), anyString()))
+                .thenAnswer(invocation -> {
+                    state.setLockedUntil(invocation.getArgument(2));
+                    state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_IN_PROGRESS);
+                    state.setNextAttemptAt(null);
+                    return 1;
+                });
+        when(transactionRunner.callInNewTransaction(any())).thenAnswer(invocation -> {
+            Supplier<?> work = invocation.getArgument(0);
+            return work.get();
+        });
+        org.mockito.Mockito.doAnswer(invocation -> {
+            invocation.<Runnable>getArgument(0).run();
+            return null;
+        }).when(transactionRunner).runInNewTransaction(any(Runnable.class));
+        when(stateRepository.findByIdForUpdate(501L)).thenReturn(Optional.of(state));
+        when(stateRepository.findById(501L)).thenReturn(Optional.of(state));
+        when(orderRepository.findByIdForMutation(50L)).thenReturn(Optional.of(order));
+        when(companyRepository.findByIdForCompanyDto(20L)).thenReturn(Optional.of(company));
+        when(orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order)).thenReturn(
+                new OrderPaymentMessageBuilder.PreparedPaymentMessage("К оплате: 1300 руб.", "2202208238396676")
+        );
+        TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
+                .fromFrozenTransferNumber("2202208238396676")
+                .orElseThrow();
+        when(messageSender.send(company, "client-20", "group-20", "К оплате: 1300 руб.", copyButton))
+                .thenReturn(ClientMessageSendResult.sent("whatsapp"));
+
+        service.deliverBadReviewInvoiceImmediately(7L, 50L);
+
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        assertEquals("SENT", state.getDeliveryStatus());
+        assertNotNull(state.getDeliveryToken());
+        assertEquals(7L, state.getDeliveryTaskId());
+        org.mockito.InOrder deliveryOrder = inOrder(transactionRunner, messageSender);
+        deliveryOrder.verify(transactionRunner, times(2)).callInNewTransaction(any());
+        deliveryOrder.verify(messageSender).send(
+                company, "client-20", "group-20", "К оплате: 1300 руб.", copyButton
+        );
+        deliveryOrder.verify(transactionRunner).callInNewTransaction(any());
+        deliveryOrder.verify(transactionRunner).runInNewTransaction(any(Runnable.class));
+    }
+
+    @Test
+    void disabledBadReviewScenarioPostponesDurableStateInsteadOfCompletingIt() {
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+        LocalDateTime lockedUntil = now.plusMinutes(5);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(502L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-invoice:order:51")
+                .orderId(51L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode(ClientMessageStateSafety.TRANSACTION_IN_PROGRESS)
+                .lockedUntil(lockedUntil)
+                .build();
+        when(stateRepository.findByIdForUpdate(502L)).thenReturn(Optional.of(state));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true))
+                .thenReturn(false);
+
+        Object prepared = ReflectionTestUtils.invokeMethod(
+                service, "prepareBadReviewDelivery", 502L, now, lockedUntil, null
+        );
+
+        assertNull(prepared);
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals("bad_review_invoice_disabled", state.getLastErrorCode());
+        assertNotNull(state.getNextAttemptAt());
+        assertNull(state.getLockedUntil());
+        verify(messageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void liveOffSkipsImmediateBadReviewDeliveryWithoutConsumingState() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(507L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-invoice:order:56")
+                .orderId(56L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .nextAttemptAt(LocalDateTime.now().plusHours(1))
+                .build();
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(false);
+
+        service.deliverBadReviewInvoiceImmediately(11L, 56L);
+
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertNotNull(state.getNextAttemptAt());
+        verify(stateRepository, never()).findByScenarioAndTargetKey(any(), anyString());
+        verify(messageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void settledPaymentSuppressesBadReviewInvoiceBeforeMessageRendering() {
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+        LocalDateTime lockedUntil = now.plusMinutes(5);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(503L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-invoice:order:52")
+                .orderId(52L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode(ClientMessageStateSafety.TRANSACTION_IN_PROGRESS)
+                .lockedUntil(lockedUntil)
+                .build();
+        Order order = new Order();
+        order.setId(52L);
+        when(stateRepository.findByIdForUpdate(503L)).thenReturn(Optional.of(state));
+        when(stateRepository.findById(503L)).thenReturn(Optional.of(state));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true))
+                .thenReturn(true);
+        when(orderRepository.findByIdForMutation(52L)).thenReturn(Optional.of(order));
+        when(orderPaymentIntegrityService.hasSettledPaymentEvidence(order)).thenReturn(true);
+
+        Object prepared = ReflectionTestUtils.invokeMethod(
+                service, "prepareBadReviewDelivery", 503L, now, lockedUntil, null
+        );
+
+        assertNull(prepared);
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageWithTransfer(any());
+        verify(messageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void badReviewAmountFailureKeepsDurableStateForRetry() {
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+        LocalDateTime lockedUntil = now.plusMinutes(5);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(505L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-invoice:order:54")
+                .companyId(24L)
+                .orderId(54L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode(ClientMessageStateSafety.TRANSACTION_IN_PROGRESS)
+                .lockedUntil(lockedUntil)
+                .build();
+        Company company = new Company();
+        company.setId(24L);
+        Order order = new Order();
+        order.setId(54L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        when(stateRepository.findByIdForUpdate(505L)).thenReturn(Optional.of(state));
+        when(stateRepository.findById(505L)).thenReturn(Optional.of(state));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true))
+                .thenReturn(true);
+        when(orderRepository.findByIdForMutation(54L)).thenReturn(Optional.of(order));
+        when(companyRepository.findByIdForCompanyDto(24L)).thenReturn(Optional.of(company));
+        when(orderPaymentMessageBuilder.publishedOrderPaymentMessageWithTransfer(order))
+                .thenThrow(new IllegalStateException("payable summary unavailable"));
+
+        Object prepared = ReflectionTestUtils.invokeMethod(
+                service, "prepareBadReviewDelivery", 505L, now, lockedUntil, 9L
+        );
+
+        assertNull(prepared);
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals("payment_instruction_failed", state.getLastErrorCode());
+        assertNotNull(state.getNextAttemptAt());
+        assertNull(state.getLockedUntil());
+        verify(messageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void unknownExternalOutcomeStopsAutomaticReplayWithTokenRetained() throws Exception {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 13, 12, 30);
+        Company company = new Company();
+        company.setId(25L);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(506L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-invoice:order:55")
+                .companyId(25L)
+                .orderId(55L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .deliveryToken("delivery-506")
+                .deliveryStatus("PREPARED")
+                .deliveryMessage("К оплате: 1300 руб.")
+                .deliveryTaskId(10L)
+                .deliveryPreparedAt(now.minusSeconds(1))
+                .build();
+        Class<?> preparedType = java.util.Arrays.stream(ScheduledClientMessageService.class.getDeclaredClasses())
+                .filter(type -> type.getSimpleName().equals("PreparedBadReviewDelivery"))
+                .findFirst()
+                .orElseThrow();
+        java.lang.reflect.Constructor<?> constructor = preparedType.getDeclaredConstructor(
+                Long.class, Long.class, String.class, Company.class,
+                String.class, String.class, String.class, String.class
+        );
+        constructor.setAccessible(true);
+        Object prepared = constructor.newInstance(
+                506L, 55L, "delivery-506", company,
+                "client-25", "group-25", "К оплате: 1300 руб.", null
+        );
+        when(stateRepository.findByIdForUpdate(506L)).thenReturn(Optional.of(state));
+
+        ReflectionTestUtils.invokeMethod(
+                service,
+                "finalizeBadReviewDelivery",
+                prepared,
+                ClientMessageSendResult.failed("transport_exception", "timeout"),
+                true,
+                now,
+                50L
+        );
+
+        assertEquals("UNKNOWN", state.getDeliveryStatus());
+        assertEquals("delivery-506", state.getDeliveryToken());
+        assertEquals(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN, state.getLastErrorCode());
+        assertNull(state.getNextAttemptAt());
+        assertNull(state.getLockedUntil());
+        verify(stateRepository).save(state);
+    }
+
+    @Test
+    void disabledAutoBanRemainsActiveForRetry() throws Exception {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 13, 12, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(504L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_AUTO_BAN)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-auto-ban:order:53")
+                .orderId(53L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED, true))
+                .thenReturn(false);
+        when(stateRepository.findById(504L)).thenReturn(Optional.of(state));
+
+        ReflectionTestUtils.invokeMethod(service, "processState", 504L, now);
+
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals("bad_review_auto_ban_disabled", state.getLastErrorCode());
+        assertNotNull(state.getNextAttemptAt());
+        verify(companyRepository, never()).findByIdForCompanyDto(any());
+        verify(orderStatusTransitionService, never()).changeStatusForOrder(any(), anyString());
+    }
+
+    @Test
+    void autoBanSummaryFailureKeepsStateForRetry() throws Exception {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 13, 13, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(508L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_AUTO_BAN)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-auto-ban:order:57")
+                .orderId(57L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Order order = new Order();
+        order.setId(57L);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED, true))
+                .thenReturn(true);
+        when(orderRepository.findByIdForMutation(57L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(57L))
+                .thenThrow(new IllegalStateException("summary unavailable"));
+
+        ReflectionTestUtils.invokeMethod(service, "autoBanAfterBadReviews", state, now);
+
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals("bad_review_summary_failed", state.getLastErrorCode());
+        assertNotNull(state.getNextAttemptAt());
+        verify(orderStatusTransitionService, never()).changeStatusForOrder(any(), anyString());
+    }
+
+    @Test
+    void settledPaymentCancelsAutoBanBeforeStatusMutation() throws Exception {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 13, 13, 15);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(509L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_AUTO_BAN)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-auto-ban:order:58")
+                .orderId(58L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Order order = new Order();
+        order.setId(58L);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED, true))
+                .thenReturn(true);
+        when(orderRepository.findByIdForMutation(58L)).thenReturn(Optional.of(order));
+        when(orderPaymentIntegrityService.hasSettledPaymentEvidence(order)).thenReturn(true);
+
+        ReflectionTestUtils.invokeMethod(service, "autoBanAfterBadReviews", state, now);
+
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
+                ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        assertEquals(OrderPaymentIntegrityService.SUPPRESSED_ERROR_CODE,
+                attemptCaptor.getValue().getErrorCode());
+        assertNull(state.getLastErrorCode());
+        verify(badReviewTaskService, never()).getSummaryForOrder(any());
+        verify(orderStatusTransitionService, never()).changeStatusForOrder(any(), anyString());
     }
 }

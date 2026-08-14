@@ -66,6 +66,7 @@ public class ApiWorkloadShadowController {
     }
 
     @PutMapping("/settings")
+    @PreAuthorize("hasRole('OWNER')")
     public WorkloadShadowSettingsResponse updateSettings(@RequestBody WorkloadShadowSettingsRequest request) {
         return settingsService.update(request);
     }
@@ -76,6 +77,7 @@ public class ApiWorkloadShadowController {
     }
 
     @PutMapping("/live/settings")
+    @PreAuthorize("hasRole('OWNER')")
     public WorkloadLiveSettingsResponse updateLiveSettings(
             @RequestBody WorkloadLiveSettingsRequest request
     ) {

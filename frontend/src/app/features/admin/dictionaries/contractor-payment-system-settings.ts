@@ -19,9 +19,8 @@ export function contractorSystemModeLabel(mode: ContractorPaymentSystemMode): st
   return MODE_LABELS[mode];
 }
 
-export function contractorSystemFirstDayOfMonth(todayIso: string): string {
-  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(todayIso.trim());
-  return match ? `${match[1]}-${match[2]}-01` : '';
+export function contractorSystemActivationDate(todayIso: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(todayIso.trim()) ? todayIso.trim() : '';
 }
 
 export function contractorRoutingConfirmation(enabled: boolean): string {

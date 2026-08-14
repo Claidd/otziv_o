@@ -1,6 +1,7 @@
 package com.hunt.otziv.payments.controller;
 
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
+import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSourceConfirmationRequest;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.CloseManualPaymentUnpaidRequest;
 import com.hunt.otziv.payments.dto.ConfirmManualCardPaymentRequest;
@@ -17,6 +18,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -129,7 +131,7 @@ class AdminPaymentControllerTest {
     }
 
     @Test
-    void allSevenAdministrativeLinkMutationsConcealForbiddenTargetBeforeServiceCall() {
+    void allAdministrativeLinkMutationsConcealForbiddenTargetBeforeServiceCall() {
         AdminPaymentController controller = new AdminPaymentController(
                 paymentLinkService,
                 paymentProfileService,
@@ -161,6 +163,20 @@ class AdminPaymentControllerTest {
         ).getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND, assertThrows(
                 ResponseStatusException.class,
+                () -> controller.confirmContractorPaymentSource(
+                        901L,
+                        new ContractorPaymentSourceConfirmationRequest(
+                                true,
+                                true,
+                                10_000L,
+                                LocalDateTime.now(),
+                                "Проверена выписка"
+                        ),
+                        authentication
+                )
+        ).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, assertThrows(
+                ResponseStatusException.class,
                 () -> controller.closeManualPaymentAsUnpaid(901L, null, authentication)
         ).getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND, assertThrows(
@@ -172,7 +188,7 @@ class AdminPaymentControllerTest {
                 () -> controller.markLegacyManualPaymentReceiptNotRequired(901L, authentication)
         ).getStatusCode());
 
-        verify(contractorPaymentTargetAccessPolicy, times(7)).requireCanManagePaymentLink(901L);
+        verify(contractorPaymentTargetAccessPolicy, times(8)).requireCanManagePaymentLink(901L);
         verifyNoInteractions(paymentLinkService);
     }
 

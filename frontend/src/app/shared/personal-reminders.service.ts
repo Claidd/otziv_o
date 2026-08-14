@@ -40,6 +40,10 @@ export type PersonalReminderInput = {
   timerMinutes?: number | string | null;
 };
 
+export type PersonalReminderPaymentInstruction = {
+  copyText: string;
+};
+
 type PersonalReminderRequest = {
   title: string;
   text: string;
@@ -161,6 +165,13 @@ export class PersonalRemindersService implements OnDestroy {
       tap(() => {
         this.removeReminderSilently(id);
       })
+    );
+  }
+
+  preparePaymentInstruction(id: number): Observable<PersonalReminderPaymentInstruction> {
+    return this.http.post<PersonalReminderPaymentInstruction>(
+      this.endpoint + '/' + id + '/payment-instruction',
+      {}
     );
   }
 

@@ -25,6 +25,7 @@ public class WorkloadLiveActivationGate {
     private final WorkloadLiveReadinessRepository repository;
     private final WorkloadShadowHealthService healthService;
     private final WorkloadShadowSettingsService shadowSettingsService;
+    private final WorkloadLiveRuntimeSafetyService runtimeSafetyService;
 
     public WorkloadLiveReadinessResponse readiness(
             String targetMode,
@@ -45,6 +46,18 @@ public class WorkloadLiveActivationGate {
                 1L
         ));
 
+        WorkloadLiveRuntimeSafetyService.Decision runtimeSafety =
+                runtimeSafetyService.evaluate();
+        checks.add(check(
+                "RUNTIME_DATA_CONSISTENCY",
+                runtimeSafety.allowed(),
+                runtimeSafety.allowed()
+                        ? "Текущие данные принадлежат последнему полному расчёту"
+                        : runtimeSafety.code() + ": " + runtimeSafety.message(),
+                runtimeSafety.allowed() ? 1L : 0L,
+
+                1L
+        ));
         WorkloadShadowHealthSnapshot health = healthService.snapshot();
         boolean auditRoutingSafe = shadowSettings.groupNotificationsEnabled()
                 && health.groupNotificationsEnabled()
@@ -85,7 +98,11 @@ public class WorkloadLiveActivationGate {
                 1L
         ));
 
-        long finalizedDates = repository.countFinalizedDates(historyStart, today);
+        long finalizedDates = repository.countFinalizedDates(
+                historyStart,
+                today,
+                shadowSettings.revision()
+        );
         checks.add(check(
                 "FINALIZED_HISTORY",
                 finalizedDates >= settings.minFinalizedDays(),
@@ -95,13 +112,20 @@ public class WorkloadLiveActivationGate {
         ));
 
         LocalDateTime stableSince = now.minusHours(settings.stableHours());
-        long failedRuns = repository.countFailedRunsSince(stableSince);
+        long failedRuns = repository.countFailedRunsSince(
+                stableSince,
+                shadowSettings.revision()
+        );
         long maximumStableGapMinutes = Math.max(
                 5L,
                 shadowSettings.schedulerIntervalMinutes() * 2L
         );
         long observedMaximumGapMinutes =
-                repository.maximumSuccessfulRunGapMinutes(stableSince, now);
+                repository.maximumSuccessfulRunGapMinutes(
+                        stableSince,
+                        now,
+                        shadowSettings.revision()
+                );
         boolean stableRuns = failedRuns == 0
                 && observedMaximumGapMinutes <= maximumStableGapMinutes;
         checks.add(check(
@@ -116,7 +140,9 @@ public class WorkloadLiveActivationGate {
                 maximumStableGapMinutes
         ));
 
-        LocalDateTime lastSuccess = repository.lastSuccessfulRunAt().orElse(null);
+        LocalDateTime lastSuccess = repository.lastSuccessfulRunAt(
+                shadowSettings.revision()
+        ).orElse(null);
         long ageMinutes = lastSuccess == null
                 ? Long.MAX_VALUE
                 : Math.max(0, Duration.between(lastSuccess, now).toMinutes());

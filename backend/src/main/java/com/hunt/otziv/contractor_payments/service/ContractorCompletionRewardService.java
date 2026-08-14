@@ -21,7 +21,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -51,6 +54,9 @@ public class ContractorCompletionRewardService {
     private final PerformerProductRewardZpService performerProductRewardZpService;
     private final ContractorPaymentBusinessClock businessClock;
     private final ContractorOrderManagerResolver orderManagerResolver;
+    private final ContractorPaymentRolloutStateService rolloutStateService;
+    private final ContractorLegacyRewardGuard legacyRewardGuard;
+    private final ContractorLegacyRewardReconciliationService legacyRewardReconciliationService;
 
     /**
      * Ensures every completion source for an order. This method is used by the
@@ -58,20 +64,38 @@ public class ContractorCompletionRewardService {
      */
     @Transactional
     public int ensureOrderCompletionAccrual(Long orderId) {
-        return ensureOrderCompletionAccrual(orderId, null);
+        return ensureOrderCompletionAccrual(orderId, null, false);
     }
 
     /** Used by synchronous transitions that are completing the work now. */
     @Transactional
     public int ensureOrderCompletionAccrualNow(Long orderId) {
-        return ensureOrderCompletionAccrual(orderId, businessClock.today());
+        return ensureOrderCompletionAccrual(orderId, businessClock.today(), false);
     }
 
-    private int ensureOrderCompletionAccrual(Long orderId, LocalDate forcedOccurredOn) {
-        if (!runtimeSwitch.rewardAttributionLiveEnabled() || orderId == null || orderId <= 0) {
+    /** Payment-time bridge for work completed before the one-way cutover. */
+    @Transactional
+    public int ensureOrderPaymentAccrual(Long orderId) {
+        return ensureOrderCompletionAccrual(orderId, null, true);
+    }
+
+    private int ensureOrderCompletionAccrual(
+            Long orderId,
+            LocalDate forcedOccurredOn,
+            boolean paymentTrigger
+    ) {
+        if (orderId == null || orderId <= 0) {
             return 0;
         }
         if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+            return 0;
+        }
+        // Every order mutation path already owns this row before it reads the
+        // rollout singleton. Keep that canonical order here as well so repair
+        // cannot deadlock a concurrent payment transition. The rollout lock
+        // still serializes the decision with one-way activation.
+        if (rolloutStateService.lockAccountingAuthority()
+                != com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority.COMPLETION) {
             return 0;
         }
         Order order = orderRepository.findByIdForOrderDto(orderId).orElse(null);
@@ -82,7 +106,7 @@ public class ContractorCompletionRewardService {
                 orderId,
                 BadReviewTaskStatus.DONE
         );
-        if (allCompletionMarkersPresent(orderId, completedTasks)) {
+        if (!paymentTrigger && allCompletionMarkersPresent(orderId, completedTasks)) {
             // Immutable markers are the authoritative idempotency boundary.
             // A retry must never re-read today's manager/review composition
             // after every logical source was already frozen.
@@ -90,18 +114,18 @@ public class ContractorCompletionRewardService {
             return 0;
         }
         requireActuallyCompleted(order);
+        LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
+        if (attributionStart == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не задана дата начала учета выполненных работ");
+        }
         LocalDate occurredOn = forcedOccurredOn != null
                 ? forcedOccurredOn
-                : resolveOrderCompletionDate(order);
+                : resolveOrderCompletionDate(order, attributionStart);
         if (occurredOn == null) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Дата выполнения заказа не подтверждена. Нужен датированный перенос начислений"
             );
-        }
-        LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
-        if (attributionStart == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не задана дата начала учета выполненных работ");
         }
 
         requireDatedCompletedTasks(completedTasks);
@@ -112,6 +136,24 @@ public class ContractorCompletionRewardService {
 
         int changed = 0;
         if (occurredOn.isBefore(attributionStart)) {
+            if (paymentTrigger) {
+                return ensurePreCutoffPaymentAccrual(
+                        order,
+                        completedTasks,
+                        postCutoffTasks,
+                        occurredOn,
+                        attributionStart
+                );
+            }
+            if (!postCutoffTasks.isEmpty()) {
+                if (!hasProvablyPreCutoffPublishedBase(order, attributionStart)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Дата выполнения исторического заказа подтверждена не полностью; нужна ручная сверка"
+                    );
+                }
+                legacyRewardGuard.requireOnlyDatedPreCutoffLegacyAggregate(orderId, attributionStart);
+            }
             Manager postCutoffTaskManager = null;
             if (!postCutoffTasks.isEmpty()) {
                 // The order itself belongs to the signed opening balance, but
@@ -133,11 +175,14 @@ public class ContractorCompletionRewardService {
             synchronizeCompletionSources(orderId);
             return changed;
         }
-        if (hasLegacyAggregateReward(orderId)) {
+        try {
+            legacyRewardGuard.requireNoActiveLegacyAggregate(orderId);
+        } catch (ResponseStatusException conflict) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "После даты начала учета найден неполный legacy-источник выполненной работы; "
-                            + "нужна датированная ручная корректировка"
+                    "После даты начала учета найден ранее созданный или неопознанный источник; "
+                            + "нужна датированная ручная корректировка",
+                    conflict
             );
         }
         // Resolve only after the opening-balance/legacy branches. Work that
@@ -166,8 +211,7 @@ public class ContractorCompletionRewardService {
     /** Called immediately after a task is persisted as DONE and before a new invoice is prepared. */
     @Transactional
     public int ensureCompletedBadReviewTask(BadReviewTask task) {
-        if (!runtimeSwitch.rewardAttributionLiveEnabled()
-                || task == null
+        if (task == null
                 || task.getId() == null
                 || task.getStatus() != BadReviewTaskStatus.DONE
                 || task.getOrder() == null
@@ -178,8 +222,22 @@ public class ContractorCompletionRewardService {
         if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
             return 0;
         }
+        if (rolloutStateService.lockAccountingAuthority()
+                != com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority.COMPLETION) {
+            return 0;
+        }
         Order order = orderRepository.findByIdForOrderDto(orderId).orElse(task.getOrder());
         LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
+        boolean postCutoffTask = attributionStart != null
+                && task.getCompletedDate() != null
+                && !task.getCompletedDate().isBefore(attributionStart);
+        if (postCutoffTask) {
+            if (hasProvablyPreCutoffPublishedBase(order, attributionStart)) {
+                legacyRewardGuard.requireOnlyDatedPreCutoffLegacyAggregate(orderId, attributionStart);
+            } else {
+                legacyRewardGuard.requireNoActiveLegacyAggregate(orderId);
+            }
+        }
         Manager effectiveManager = attributionStart != null
                 && task.getCompletedDate() != null
                 && !task.getCompletedDate().isBefore(attributionStart)
@@ -201,14 +259,17 @@ public class ContractorCompletionRewardService {
      */
     @Transactional
     public int adjustCanceledBadReviewTaskAccrual(Long orderId, Long taskId) {
-        if (!runtimeSwitch.rewardAttributionLiveEnabled()
-                || orderId == null
+        if (orderId == null
                 || orderId <= 0
                 || taskId == null
                 || taskId <= 0) {
             return 0;
         }
         if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+            return 0;
+        }
+        if (rolloutStateService.lockAccountingAuthority()
+                != com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority.COMPLETION) {
             return 0;
         }
         String markerSource = ContractorRewardSourceCodes.badReviewCancelMarker(taskId);
@@ -227,20 +288,24 @@ public class ContractorCompletionRewardService {
                 orderId,
                 ContractorRewardSourceCodes.badReviewDoneMarker(taskId)
         );
-        LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
-        if (originals.isEmpty()
-                && doneMarker != null
-                && attributionStart != null
-                && doneMarker.getOccurredOn().isBefore(attributionStart)) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Работа входит в начальный остаток. Сначала оформите явную корректировку остатка."
-            );
-        }
         originals.addAll(zpRepository.findByOrderIdAndSourceAndActiveTrue(
                 orderId,
                 ContractorRewardSourceCodes.badReviewSpecialist(taskId)
         ));
+        LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
+        if (originals.isEmpty() && doneMarker != null) {
+            if (attributionStart != null && doneMarker.getOccurredOn().isBefore(attributionStart)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Работа входит в начальный остаток. Сначала оформите явную корректировку остатка."
+                );
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Для выполненной дополнительной работы есть маркер без исходного начисления; "
+                            + "нужна ручная сверка"
+            );
+        }
         int changed = 0;
         LocalDate occurredOn = businessClock.today();
         for (Zp original : originals) {
@@ -262,28 +327,36 @@ public class ContractorCompletionRewardService {
      */
     @Transactional
     public int migrateLegacyRewardsBeforePaymentCancellation(Long orderId) {
-        if (!runtimeSwitch.rewardAttributionLiveEnabled() || orderId == null || orderId <= 0) {
+        if (orderId == null || orderId <= 0) {
             return 0;
         }
         if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
             return 0;
         }
+        if (rolloutStateService.lockAccountingAuthority()
+                != com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority.COMPLETION) {
+            return 0;
+        }
         Order order = orderRepository.findByIdForOrderDto(orderId).orElse(null);
-        if (order == null || !hasLegacyAggregateReward(orderId)) {
+        if (order == null) {
+            return 0;
+        }
+        legacyRewardGuard.requireCancellationClassifiable(orderId);
+        if (!hasLegacyAggregateReward(orderId)) {
             return 0;
         }
         requireActuallyCompleted(order);
-        LocalDate occurredOn = resolveOrderCompletionDate(order);
+        LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
+        if (attributionStart == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не задана дата начала учета выполненных работ");
+        }
+        LocalDate occurredOn = resolveOrderCompletionDate(order, attributionStart);
         if (occurredOn == null) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Дата выполнения исторического заказа не подтверждена. "
                             + "Перед отменой оплаты нужен датированный перенос начислений"
             );
-        }
-        LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
-        if (attributionStart == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не задана дата начала учета выполненных работ");
         }
         if (!occurredOn.isBefore(attributionStart)) {
             throw new ResponseStatusException(
@@ -292,21 +365,24 @@ public class ContractorCompletionRewardService {
                             + "нужна датированная ручная корректировка"
             );
         }
+        List<BadReviewTask> completedTasks = badReviewTaskRepository.findAllByOrderIdAndStatus(
+                orderId,
+                BadReviewTaskStatus.DONE
+        );
+        requireDatedCompletedTasks(completedTasks);
+        if (completedTasks.stream().anyMatch(task -> !task.getCompletedDate().isBefore(attributionStart))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "После даты начала учета есть выполненная дополнительная работа, "
+                            + "которая могла войти в ранее созданное начисление; нужна ручная сверка"
+            );
+        }
         // Legacy order/product sources represent an earned obligation. They
         // may already be included in the imported opening balance; replacing
         // them with new post-watermark ids would double-count the debt. Freeze
         // logical completion markers only and keep the original rows active.
         freezePreCutoffBaseSources(orderId, occurredOn);
-        for (BadReviewTask task : badReviewTaskRepository.findAllByOrderIdAndStatus(
-                orderId,
-                BadReviewTaskStatus.DONE
-        )) {
-            if (task.getCompletedDate() == null) {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "У исторической выполненной задачи не указана дата; нужна ручная сверка"
-                );
-            }
+        for (BadReviewTask task : completedTasks) {
             saveMarker(
                     orderId,
                     ContractorRewardSourceCodes.badReviewDoneMarker(task.getId()),
@@ -320,6 +396,112 @@ public class ContractorCompletionRewardService {
 
     public static boolean isCompletionBasedSource(String source) {
         return ContractorRewardSourceCodes.isCompletionBased(source);
+    }
+
+    private int ensurePreCutoffPaymentAccrual(
+            Order order,
+            List<BadReviewTask> completedTasks,
+            List<BadReviewTask> postCutoffTasks,
+            LocalDate completedOn,
+            LocalDate attributionStart
+    ) {
+        // An incomplete order cannot legitimately have an old paid-only row.
+        // Treat any such row (including null/unknown sources) as ambiguous
+        // instead of filling gaps around it and risking a double obligation.
+        legacyRewardGuard.requireNoUnclassifiedActiveRows(order.getId());
+        validateStableOrderRewardBasis(order);
+
+        Manager frozenManager = orderManagerResolver.resolve(order, false);
+        requireResolvedManager(frozenManager);
+        List<ContractorRewardAttributionService.SpecialistShare> baseShares =
+                attributionService.attributeCompletedBaseWork(order);
+        List<BadReviewTask> preCutoffTasks = completedTasks.stream()
+                .filter(task -> task.getCompletedDate().isBefore(attributionStart))
+                .toList();
+        requireValidPostCutoffCompletedTasks(preCutoffTasks);
+
+        BigDecimal legacyGross = money(order.getSum()).add(preCutoffTasks.stream()
+                .map(BadReviewTask::getPrice)
+                .map(this::money)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        LocalDate paymentDate = businessClock.today();
+        int changed = ensureReward(
+                order,
+                frozenManager.getUser(),
+                frozenManager.getId(),
+                legacyGross.multiply(coefficient(frozenManager.getUser())),
+                Math.max(0, order.getAmount()) + preCutoffTasks.size(),
+                ContractorRole.MANAGER,
+                ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER,
+                legacyGross,
+                paymentDate
+        );
+
+        Map<Long, LegacySpecialistShare> shares = new LinkedHashMap<>();
+        for (ContractorRewardAttributionService.SpecialistShare share : baseShares) {
+            mergeLegacyShare(shares, share.user(), share.workerId(), share.grossAmount(), share.workUnits());
+        }
+        for (BadReviewTask task : preCutoffTasks) {
+            Worker worker = task.getWorker();
+            mergeLegacyShare(shares, worker.getUser(), worker.getId(), task.getPrice(), 1);
+        }
+        for (LegacySpecialistShare share : shares.values()) {
+            changed += ensureReward(
+                    order,
+                    share.user(),
+                    share.workerId(),
+                    money(share.gross()).multiply(coefficient(share.user())),
+                    share.workUnits(),
+                    ContractorRole.SPECIALIST,
+                    ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST,
+                    share.gross(),
+                    paymentDate
+            );
+        }
+
+        changed += performerProductRewardZpService.accrueForPreCutoffPaymentLocked(
+                order,
+                frozenManager,
+                paymentDate
+        );
+        freezePreCutoffBaseSources(order.getId(), completedOn);
+        for (BadReviewTask task : preCutoffTasks) {
+            saveMarker(
+                    order.getId(),
+                    ContractorRewardSourceCodes.badReviewDoneMarker(task.getId()),
+                    task.getCompletedDate()
+            );
+        }
+        for (BadReviewTask task : postCutoffTasks) {
+            changed += ensureCompletedBadReviewTaskLocked(order, frozenManager, task, false);
+        }
+        saveMarker(order.getId(), ContractorRewardSourceCodes.PERFORMER_PRODUCT_COMPLETION, completedOn);
+        synchronizePaymentBridgeSources(order.getId());
+        return changed;
+    }
+
+    private void mergeLegacyShare(
+            Map<Long, LegacySpecialistShare> shares,
+            User user,
+            Long workerId,
+            BigDecimal gross,
+            int workUnits
+    ) {
+        if (user == null || user.getId() == null || workerId == null || money(gross).signum() <= 0) {
+            throw unverifiableCompletedTaskWorker();
+        }
+        LegacySpecialistShare existing = shares.get(workerId);
+        if (existing != null && !existing.user().getId().equals(user.getId())) {
+            throw unverifiableCompletedTaskWorker();
+        }
+        shares.put(workerId, existing == null
+                ? new LegacySpecialistShare(user, workerId, money(gross), Math.max(0, workUnits))
+                : new LegacySpecialistShare(
+                        existing.user(),
+                        workerId,
+                        money(existing.gross()).add(money(gross)),
+                        existing.workUnits() + Math.max(0, workUnits)
+                ));
     }
 
     private int ensureBaseOrderRewards(
@@ -691,7 +873,26 @@ public class ContractorCompletionRewardService {
         }
     }
 
-    private LocalDate resolveOrderCompletionDate(Order order) {
+    private void synchronizePaymentBridgeSources(Long orderId) {
+        List<Zp> rewards = zpRepository.findByOrderIdAndActiveTrue(orderId).stream()
+                .filter(reward -> ContractorRewardSourceCodes.isCompletionBased(reward.getSource())
+                        || ContractorRewardSourceCodes.isLegacyEarnedReward(reward.getSource()))
+                .toList();
+        if (!rewards.isEmpty()) {
+            rewardLedgerService.synchronizeCompletionSourcesCanonical(rewards);
+        }
+    }
+
+    private LocalDate resolveOrderCompletionDate(Order order, LocalDate attributionStart) {
+        Optional<LocalDate> attested = legacyRewardReconciliationService.authoritativeCompletedOn(
+                order.getId(), attributionStart
+        );
+        if (attested.isPresent()) {
+            // Exact signed evidence is an override, not merely a fallback:
+            // planned/future review dates (e.g. typed legacy order 25820)
+            // must not turn an already-paid pre-cutoff base into new debt.
+            return attested.get();
+        }
         LocalDate lastPublished = reviewRepository.getAllByOrderId(order.getId()).stream()
                 .filter(Review::isPublish)
                 .map(Review::getPublishedDate)
@@ -711,6 +912,18 @@ public class ContractorCompletionRewardService {
         return null;
     }
 
+    private boolean hasProvablyPreCutoffPublishedBase(Order order, LocalDate attributionStart) {
+        if (order == null || order.getId() == null || attributionStart == null || order.getAmount() <= 0) {
+            return false;
+        }
+        List<Review> published = reviewRepository.getAllByOrderId(order.getId()).stream()
+                .filter(Review::isPublish)
+                .toList();
+        return published.size() == order.getAmount()
+                && published.stream().allMatch(review -> review.getPublishedDate() != null
+                        && review.getPublishedDate().isBefore(attributionStart));
+    }
+
     private void requireActuallyCompleted(Order order) {
         if (order == null || order.getId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ не найден для начисления");
@@ -725,6 +938,14 @@ public class ContractorCompletionRewardService {
                     "Начисление возможно только после фактического завершения всех работ"
             );
         }
+    }
+
+    private record LegacySpecialistShare(
+            User user,
+            Long workerId,
+            BigDecimal gross,
+            int workUnits
+    ) {
     }
 
     private BigDecimal coefficient(User user) {

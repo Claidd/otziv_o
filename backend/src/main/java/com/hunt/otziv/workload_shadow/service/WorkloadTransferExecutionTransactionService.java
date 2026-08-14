@@ -27,6 +27,8 @@ public class WorkloadTransferExecutionTransactionService {
     private final WorkloadTransferGraphSnapshotService graphSnapshotService;
     private final WorkloadLiveSettingsService liveSettingsService;
     private final WorkloadShadowSettingsService shadowSettingsService;
+    private final com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository liveControlRepository;
+    private final com.hunt.otziv.workload_shadow.repository.WorkloadTransferApplyGuardRepository applyGuardRepository;
 
     @Transactional
     public ApplyResult apply(long workflowId, long expectedVersion) {
@@ -35,6 +37,17 @@ public class WorkloadTransferExecutionTransactionService {
             return ApplyResult.skipped(workflowId, "Боевой контур выключен");
         }
         LocalDateTime now = now();
+        var liveControl = liveControlRepository.lockState().orElse(null);
+        if (liveControl == null
+                || liveControl.getSettingsRevision() == null
+                || liveControl.getSettingsRevision() != liveSettings.revision()
+                || !"true".equals(liveControl.getApplyEnabled())
+                || !liveSettings.mode().equals(liveControl.getMode())) {
+            return ApplyResult.skipped(
+                    workflowId,
+                    "Боевой контур или его ревизия изменились"
+            );
+        }
         if (repository.claimWorkflow(workflowId, expectedVersion, now) != 1) {
             return ApplyResult.skipped(workflowId, "Workflow уже обработан другим запуском");
         }
@@ -42,6 +55,20 @@ public class WorkloadTransferExecutionTransactionService {
                 .orElseThrow(() -> new IllegalStateException(
                         "Захваченный workflow не найден: " + workflowId
                 ));
+        var applyGuard = applyGuardRepository.lockGuard(workflowId).orElse(null);
+        if (applyGuard == null
+                || applyGuard.getLiveSettingsRevision() == null
+                || applyGuard.getLiveSettingsRevision()
+                        .longValue() != liveControl.getSettingsRevision().longValue()
+                || applyGuard.getRecommendationCurrent() == null
+                || applyGuard.getRecommendationCurrent().longValue() != 1L) {
+            return blocked(
+                    context,
+                    "BLOCKED_RECOMMENDATION_STALE",
+                    "Исходный специалист или рекомендация больше не проходят "
+                            + "актуальные критерии"
+            );
+        }
         if (!liveSettingsService.managerAllowed(liveSettings, context.getManagerId())) {
             return blocked(
                     context,

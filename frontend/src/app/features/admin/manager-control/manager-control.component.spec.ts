@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  automationWaitingSlotDate,
+  isAutomationWaitingForSlotReason,
+  isTelegramBindingAutomationIssue,
   isExplicitlyRepairableCommonInvoiceReason,
-  shouldHideClientChatUnansweredAfterAction
+  shouldHideClientChatUnansweredAfterAction,
+  telegramGroupLinkCommand
 } from './manager-control.component';
 
 describe('isExplicitlyRepairableCommonInvoiceReason', () => {
@@ -32,5 +36,58 @@ describe('shouldHideClientChatUnansweredAfterAction', () => {
 
   it('hides an unanswered card only after the backend confirms resolution', () => {
     expect(shouldHideClientChatUnansweredAfterAction({ itemStatus: 'RESOLVED' })).toBe(true);
+  });
+});
+
+describe('Telegram automation binding', () => {
+  it('recognizes a missing Telegram chatId as a binding action', () => {
+    expect(isTelegramBindingAutomationIssue({
+      type: 'AUTOMATION_FAILURE',
+      reason: 'ARCHIVE_REORDER_OFFER · telegram_group_missing · Для Telegram-группы не задан chatId'
+    })).toBe(true);
+  });
+
+  it('does not relabel unrelated automation failures', () => {
+    expect(isTelegramBindingAutomationIssue({
+      type: 'AUTOMATION_FAILURE',
+      reason: 'rate_limited · Следующий слот отправки'
+    })).toBe(false);
+  });
+
+  it('builds a group command for a bot that is already present', () => {
+    expect(telegramGroupLinkCommand(
+      'https://t.me/O_Company_Bot?startgroup=cSignedToken_123'
+    )).toBe('/start@O_Company_Bot cSignedToken_123');
+  });
+
+  it.each(['', 'https://t.me/O_Company_Bot', 'https://example.com/O_Company_Bot?startgroup=token'])(
+    'rejects an unusable invite URL: %s',
+    (url) => expect(telegramGroupLinkCommand(url)).toBe('')
+  );
+});
+describe('scheduled automation queue', () => {
+  const beforeSlot = new Date(2026, 7, 13, 18, 0).getTime();
+  const afterSlot = new Date(2026, 7, 13, 20, 0).getTime();
+
+  it.each([
+    'Очередь автоответчика исправна. Следующий слот отправки: 2026-08-13T19:00.',
+    'Сообщение уже запланировано. Система отправит его автоматически: 2026-08-13T19:00.'
+  ])('recognizes a future scheduled attempt: %s', (reason) => {
+    expect(isAutomationWaitingForSlotReason(reason, beforeSlot)).toBe(true);
+    expect(automationWaitingSlotDate(reason)?.getHours()).toBe(19);
+  });
+
+  it('stops treating a scheduled reason as waiting after its slot', () => {
+    expect(isAutomationWaitingForSlotReason(
+      'Сообщение уже запланировано. Система отправит его автоматически: 2026-08-13T19:00.',
+      afterSlot
+    )).toBe(false);
+  });
+
+  it('does not hide a real automation failure', () => {
+    expect(isAutomationWaitingForSlotReason(
+      'Автоответчик не обработал заказ: telegram_group_missing',
+      beforeSlot
+    )).toBe(false);
   });
 });

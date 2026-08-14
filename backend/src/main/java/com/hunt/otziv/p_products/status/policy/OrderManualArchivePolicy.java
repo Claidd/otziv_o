@@ -12,7 +12,8 @@ public final class OrderManualArchivePolicy {
     public static final Set<String> ALLOWED_SOURCE_STATUSES = Set.of(
             "В проверку",
             "На проверке",
-            "Коррекция"
+            "Коррекция",
+            "Публикация"
     );
 
     private OrderManualArchivePolicy() {

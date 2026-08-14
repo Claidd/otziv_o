@@ -141,6 +141,26 @@ class OtzivOApplicationTests {
 	@Autowired
 	private WorkloadTransferExecutionTransactionService
 			workloadTransferExecutionTransactionService;
+	@Autowired
+	private com.hunt.otziv.workload_shadow.repository.WorkloadLiveRuntimeSafetyRepository
+			workloadLiveRuntimeSafetyRepository;
+
+	@Autowired
+	private com.hunt.otziv.workload_shadow.service.WorkloadLiveRuntimeSafetyService
+			workloadLiveRuntimeSafetyService;
+
+	@Autowired
+	private com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository
+			workloadLiveControlRepository;
+
+	@Autowired
+	private com.hunt.otziv.workload_shadow.repository.WorkloadTransferApplyGuardRepository
+			workloadTransferApplyGuardRepository;
+	@Autowired
+	private com.hunt.otziv.workload_shadow.service.WorkloadLiveDailyQuotaLockService
+			workloadLiveDailyQuotaLockService;
+
+
 
 	@Autowired
 	private WorkloadTransferRollbackService workloadTransferRollbackService;
@@ -165,6 +185,59 @@ class OtzivOApplicationTests {
 	@Test
 	void flywayMigrationsApplyOnMySql() {
 		assertThat(flyway.info().applied()).isNotEmpty();
+	}
+
+	@Test
+	@Transactional
+	void workloadLiveRuntimeSafetyNativeQueriesExecuteOnMySql() {
+		LocalDateTime now = LocalDateTime.of(2026, 8, 13, 12, 0);
+		assertThat(workloadShadowRunRepository.startRun(
+				"INTEGRATION",
+				now.minusMinutes(1),
+				"runtime-safety-native",
+				1L
+		)).isEqualTo(1);
+		Long runId = workloadShadowRunRepository.lastInsertedRunId();
+		assertThat(runId).isNotNull().isPositive();
+		assertThat(workloadShadowRunRepository.complete(
+				runId,
+				now,
+				60_000L,
+				0,
+				0,
+				0,
+				0,
+				0
+		)).isEqualTo(1);
+
+		var state = workloadLiveRuntimeSafetyRepository.runtimeState();
+		assertThat(state).isPresent();
+		assertThat(state.orElseThrow().getLatestSuccessfulRunId())
+				.isEqualTo(runId);
+		assertThat(state.orElseThrow().getLatestSettingsRevision())
+				.isEqualTo(1L);
+
+		var control = workloadLiveControlRepository.lockState();
+		assertThat(control).isPresent();
+		assertThat(control.orElseThrow().getSettingsRevision()).isEqualTo(1L);
+		assertThat(control.orElseThrow().getMode()).isEqualTo("SHADOW");
+		assertThat(control.orElseThrow().getApplyEnabled()).isEqualTo("false");
+
+		workloadLiveDailyQuotaLockService.lock(LocalDate.of(2026, 8, 13));
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT COUNT(*)
+			FROM workload_live_daily_quota_locks
+			WHERE decision_date = '2026-08-13'
+			""", Integer.class)).isEqualTo(1);
+		assertThat(workloadTransferApplyGuardRepository.lockGuard(-1L)).isEmpty();
+
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT COUNT(*)
+			FROM INFORMATION_SCHEMA.COLUMNS
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_NAME = 'workload_transfer_offers'
+			  AND COLUMN_NAME = 'keyboard_activated'
+			""", Integer.class)).isEqualTo(1);
 	}
 
 	@Test
@@ -1056,7 +1129,16 @@ class OtzivOApplicationTests {
 				""", now, "live-e2e-" + marker);
 			Long shadowRunId =
 					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
-			workloadShadowProjectionService.recalculate(shadowRunId, now);
+			Long shadowSettingsRevision = jdbcTemplate.queryForObject("""
+				SELECT CAST(TRIM(setting_value) AS UNSIGNED)
+				FROM app_settings
+				WHERE setting_key = 'workload.shadow.settings-revision'
+				""", Long.class);
+			assertThat(shadowSettingsRevision).isNotNull();
+			assertThat(jdbcTemplate.update(
+					"UPDATE workload_shadow_runs SET settings_revision = ? WHERE workload_shadow_run_id = ?",
+					shadowSettingsRevision, shadowRunId)).isEqualTo(1);
+			var projection = workloadShadowProjectionService.recalculate(shadowRunId, now);
 			assertThat(jdbcTemplate.queryForList("""
 				SELECT worker_id
 				FROM workload_shadow_worker_current
@@ -1137,6 +1219,21 @@ class OtzivOApplicationTests {
 					secondRecipient.workerId()
 			);
 
+			assertThat(jdbcTemplate.update("""
+				UPDATE workload_shadow_runs
+				SET status = 'SUCCEEDED', finished_at = ?
+				WHERE workload_shadow_run_id = ?
+				""", now.plusSeconds(2), shadowRunId)).isEqualTo(1);
+
+			assertThat(jdbcTemplate.update("""
+				UPDATE workload_maintenance_status
+				SET last_started_at = ?,
+				    last_succeeded_at = ?,
+				    last_failed_at = NULL,
+				    consecutive_failures = 0
+				WHERE maintenance_task = 'REPAIR'
+				""", now, now)).isEqualTo(1);
+
 			java.util.Map<String, String> liveOverrides = new java.util.LinkedHashMap<>();
 			liveOverrides.put("workload.live.mode", "CANARY");
 			liveOverrides.put("workload.live.apply-enabled", "true");
@@ -1163,6 +1260,11 @@ class OtzivOApplicationTests {
 				WHERE setting_key = 'workload.live.settings-revision'
 				""", Long.class);
 			assertThat(liveSettingsRevision).isNotNull();
+
+			var runtimeDecision = workloadLiveRuntimeSafetyService.evaluate();
+			assertThat(runtimeDecision.allowed())
+					.withFailMessage("%s: %s", runtimeDecision.code(), runtimeDecision.message())
+					.isTrue();
 
 			var workflowStage = workloadTransferWorkflowService
 					.stageEligibleRecommendations();
@@ -1289,6 +1391,7 @@ class OtzivOApplicationTests {
 					firstClaim.processingToken(),
 					91_001
 			);
+			workloadTransferOfferService.markKeyboardActivated(firstOffer.offerId(), 91_001);
 			assertThat(workloadTransferOfferRepository.decline(
 					firstOffer.offerToken(),
 					firstGroupChatId,
@@ -1318,6 +1421,7 @@ class OtzivOApplicationTests {
 					secondClaim.processingToken(),
 					91_002
 			);
+			workloadTransferOfferService.markKeyboardActivated(secondOffer.offerId(), 91_002);
 			assertThat(workloadTransferOfferRepository.accept(
 					secondOffer.offerToken(),
 					secondGroupChatId,
@@ -1508,7 +1612,7 @@ class OtzivOApplicationTests {
 					"live-gap-3-" + marker
 			);
 			assertThat(workloadLiveReadinessRepository
-					.maximumSuccessfulRunGapMinutes(stableSince, checkedAt))
+					.maximumSuccessfulRunGapMinutes(stableSince, checkedAt, 0L))
 					.isEqualTo(25L);
 		} finally {
 			for (var entry : originalLiveSettings.entrySet()) {

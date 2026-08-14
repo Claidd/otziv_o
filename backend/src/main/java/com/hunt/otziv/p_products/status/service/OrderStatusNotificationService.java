@@ -1,6 +1,7 @@
 package com.hunt.otziv.p_products.status.service;
 
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
+import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.maxbot.service.MaxBotClient;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -43,6 +44,21 @@ public class OrderStatusNotificationService {
             String successStatus
     ) {
         String appliedStatus = sendMessageToClientChat(title, order, clientId, groupId, message, successStatus);
+        return Objects.equals(appliedStatus, successStatus);
+    }
+
+    public boolean sendMessageToGroup(
+            String title,
+            Order order,
+            String clientId,
+            String groupId,
+            String message,
+            String successStatus,
+            String frozenTransferNumber
+    ) {
+        String appliedStatus = sendMessageToClientChat(
+                title, order, clientId, groupId, message, successStatus, frozenTransferNumber
+        );
         return Objects.equals(appliedStatus, successStatus);
     }
 
@@ -133,7 +149,22 @@ public class OrderStatusNotificationService {
             String message,
             String successStatus
     ) {
-        String sentChannel = sendToActiveClientChat(order, clientId, groupId, message);
+        return sendMessageToClientChat(title, order, clientId, groupId, message, successStatus, null);
+    }
+
+    public String sendMessageToClientChat(
+            String title,
+            Order order,
+            String clientId,
+            String groupId,
+            String message,
+            String successStatus,
+            String frozenTransferNumber
+    ) {
+        String sentChannel = sendToActiveClientChat(
+                order, clientId, groupId, message,
+                TelegramTransferCopyButton.fromFrozenTransferNumber(frozenTransferNumber).orElse(null)
+        );
 
         String appliedStatus;
         if (sentChannel != null) {
@@ -158,6 +189,16 @@ public class OrderStatusNotificationService {
             String groupId,
             String message
     ) {
+        return sendToActiveClientChat(order, clientId, groupId, message, null);
+    }
+
+    private String sendToActiveClientChat(
+            Order order,
+            String clientId,
+            String groupId,
+            String message,
+            TelegramTransferCopyButton telegramCopyButton
+    ) {
         log.info("📨 Отправка сообщения в клиентский чат:");
         log.info("🔹 Клиент WhatsApp: {}", clientId);
         log.info("🔹 Группа WhatsApp: {}", groupId);
@@ -165,14 +206,17 @@ public class OrderStatusNotificationService {
         Long maxChatId = maxGroupChatId(order);
         log.info("🔹 Группа Telegram: {}", telegramChatId);
         log.info("🔹 Группа MAX: {}", maxChatId);
-        log.info("🔹 Сообщение: {}", message.replaceAll("\\s+", " ").trim());
+        log.info("🔹 Сообщение подготовлено: orderId={}, length={}",
+                order == null ? null : order.getId(), message == null ? 0 : message.length());
 
         ChatPlatform activePlatform = activeChatPlatform(order);
         log.info("🔹 Активный канал по ссылке: {}", activePlatform);
 
         String sentChannel = switch (activePlatform) {
             case WHATSAPP -> hasText(groupId) ? sendToWhatsApp(order, clientId, groupId, message) : missingActiveChannel("WhatsApp", order);
-            case TELEGRAM -> telegramChatId != null ? sendToTelegram(telegramChatId, message) : missingActiveChannel("Telegram", order);
+            case TELEGRAM -> telegramChatId != null
+                    ? sendToTelegram(telegramChatId, message, telegramCopyButton)
+                    : missingActiveChannel("Telegram", order);
             case MAX -> maxChatId != null ? sendToMax(maxChatId, message) : missingActiveChannel("MAX", order);
             case UNKNOWN -> missingActiveChannel("неизвестный мессенджер", order);
         };
@@ -248,9 +292,24 @@ public class OrderStatusNotificationService {
             Long telegramChatId,
             String message
     ) {
+        return sendToTelegram(telegramChatId, message, null);
+    }
+
+    private String sendToTelegram(
+            Long telegramChatId,
+            String message,
+            TelegramTransferCopyButton copyButton
+    ) {
         boolean sent;
         try {
-            sent = telegramService.sendMessage(telegramChatId, message);
+            sent = copyButton == null
+                    ? telegramService.sendMessage(telegramChatId, message)
+                    : telegramService.sendMessageWithCopyTextButton(
+                            telegramChatId,
+                            message,
+                            copyButton.text(),
+                            copyButton.copyText()
+                    );
         } catch (Exception e) {
             log.warn("⚠️ Ошибка при отправке сообщения в Telegram-группу {}", telegramChatId, e);
             return null;

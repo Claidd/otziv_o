@@ -16,6 +16,7 @@ import com.hunt.otziv.client_messages.model.ScheduledMessageAttemptStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.common_billing.service.CommonPayableChangeDisposition;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentBusinessClock;
@@ -25,7 +26,6 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
@@ -62,6 +62,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -83,10 +85,10 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final BotService botService;
     private final PersonalReminderService personalReminderService;
     private final AppSettingService appSettingService;
-    private final OrderStatusNotificationService orderStatusNotificationService;
     private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+    private final BadReviewCompletionPostActionOrchestrator completionPostActionOrchestrator;
     private final ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
     private final GamificationEventService gamificationEventService;
     private final BusinessAuditService businessAuditService;
@@ -132,7 +134,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                     .status(BadReviewTaskStatus.NEW)
                     .originalRating(DEFAULT_ORIGINAL_RATING)
                     .targetRating(DEFAULT_TARGET_RATING)
-                    .price(resolveTaskPrice(order, review))
+                    .price(validatedTaskPrice(order, review))
                     .scheduledDate(startDate.plusDays((long) created * SCHEDULE_STEP_DAYS))
                     .build();
             badReviewTaskRepository.save(task);
@@ -209,11 +211,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     private BadReviewTask completeTaskLocked(Long taskId, Long expectedOrderId) {
-        Long orderId = prepareTaskPayableChangeLocked(
+        PreparedTaskPayableChange preparedChange = prepareTaskPayableChangeLocked(
                 taskId,
                 expectedOrderId,
                 "Выполненная дополнительная задача изменила сумму счета"
         );
+        Long orderId = preparedChange.orderId();
         BadReviewTask task = requireTask(taskId);
         if (task.getStatus() != BadReviewTaskStatus.NEW) {
             return task;
@@ -224,9 +227,17 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         releaseCrossCityBotAfterCompletion(task);
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
         contractorCompletionRewardService.ensureCompletedBadReviewTask(savedTask);
-        boolean linkedToCommonInvoice = refreshLinkedCommonInvoiceStrict(orderId);
+        boolean linkedToCommonInvoice = applyLinkedCommonInvoiceChange(
+                preparedChange,
+                savedTask.getId()
+        );
         gamificationEventService.recordBadReviewTaskDone(savedTask);
-        runCompletionSideEffects(savedTask, linkedToCommonInvoice);
+        if (!linkedToCommonInvoice) {
+            // Durable retry state is committed atomically with DONE. The
+            // immediate post-commit delivery cancels it after a successful send.
+            paymentInvoiceRetryScheduler.scheduleBadReviewInvoiceRetry(savedTask.getOrder());
+        }
+        runCompletionSideEffectsAfterCommit(savedTask, linkedToCommonInvoice);
         auditTaskCompleted(savedTask);
         log.info("Плохая задача {} выполнена, заказ {}, доплата {}",
                 savedTask.getId(),
@@ -270,6 +281,10 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Финальный счет после плохих пересчитывается");
         }
         if (linkedToCommonInvoice) {
+            paymentInvoiceRetryScheduler.cancelBadReviewInvoiceRetry(
+                    order,
+                    "Заказ обслуживается общим платежным циклом"
+            );
             log.info("Счет после плохого отзыва не отправлен отдельно: заказ {} входит в общий счет", order.getId());
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "common_billing_linked",
                     "Заказ входит в общий счет; сумма общего счета пересчитана", safeBadReviewInvoicePreview(order, summary), 0);
@@ -288,57 +303,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                     "Моментальные клиентские сообщения выключены", safeBadReviewInvoicePreview(order, summary), 0);
             return;
         }
-
-        long startedAt = System.currentTimeMillis();
-        String message = null;
-        try {
-            message = badReviewInvoiceMessage(order, summary);
-            String currentStatus = statusTitle(order);
-            boolean sent = orderStatusNotificationService.sendInformationalMessageToClientChat(
-                    order,
-                    order.getManager() == null ? null : order.getManager().getClientId(),
-                    order.getCompany() == null ? null : order.getCompany().getGroupId(),
-                    message,
-                    "счет после плохого отзыва"
-            );
-            if (sent) {
-                log.info(
-                        "Счет после плохого отзыва отправлен клиенту: orderId={}, taskId={}, amount={}",
-                        order.getId(),
-                        task.getId(),
-                        money(payableSum(order, summary))
-                );
-                recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SENT, "client-chat",
-                        null, null, message, System.currentTimeMillis() - startedAt);
-                scheduleBadReviewAutoBanIfReady(order, summary);
-            } else {
-                String reason = "Сообщение не отправлено, заказ остался в статусе \"" + currentStatus + "\"";
-                log.warn(
-                        "Счет после плохого отзыва не отправлен клиенту: orderId={}, taskId={}, statusLeft={}",
-                        order.getId(),
-                        task.getId(),
-                        currentStatus
-                );
-                recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.FAILED, null,
-                        "client_chat_send_failed", reason, message, System.currentTimeMillis() - startedAt);
-                paymentInvoiceRetryScheduler.scheduleBadReviewInvoiceRetry(order);
-            }
-        } catch (Exception e) {
-            String reason = readableException(e);
-            log.warn("Счет после плохого отзыва не отправлен: orderId={}, taskId={}, reason={}",
-                    order.getId(), task.getId(), reason, e);
-            recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.FAILED, null,
-                    "bad_review_invoice_exception", reason, message == null ? safeBadReviewInvoicePreview(order, summary) : message,
-                    System.currentTimeMillis() - startedAt);
-            paymentInvoiceRetryScheduler.scheduleBadReviewInvoiceRetry(order);
-        }
-    }
-
-    private void scheduleBadReviewAutoBanIfReady(Order order, BadReviewTaskSummary summary) {
-        if (!isBadReviewFinalInvoice(summary)) {
-            return;
-        }
-        paymentInvoiceRetryScheduler.scheduleBadReviewAutoBan(order);
+        completionPostActionOrchestrator.deliverInvoice(task.getId(), order.getId());
     }
 
     private boolean isBadReviewFinalInvoice(BadReviewTaskSummary summary) {
@@ -531,6 +496,31 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         return transactionRunner.required(() -> cancelTaskLocked(taskId, snapshotStatus, observedOrderId));
     }
 
+    private void runCompletionSideEffectsAfterCommit(BadReviewTask savedTask, boolean linkedToCommonInvoice) {
+        Long taskId = savedTask == null ? null : savedTask.getId();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    runCompletionSideEffectsById(taskId, linkedToCommonInvoice);
+                }
+            });
+            return;
+        }
+        // Unit tests and non-transactional maintenance callers retain the same
+        // observable behaviour.
+        runCompletionSideEffects(savedTask, linkedToCommonInvoice);
+    }
+
+    private void runCompletionSideEffectsById(Long taskId, boolean linkedToCommonInvoice) {
+        try {
+            runCompletionSideEffects(requireTask(taskId), linkedToCommonInvoice);
+        } catch (RuntimeException e) {
+            log.warn("Пост-действия выполненной дополнительной задачи не запущены: taskId={}, reason={}",
+                    taskId, readableException(e), e);
+        }
+    }
+
     private BadReviewTask cancelTaskLocked(
             Long taskId,
             BadReviewTaskStatus expectedStatus,
@@ -546,13 +536,14 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                     "Статус дополнительной задачи изменился. Обновите страницу и повторите действие"
             );
         }
-        Long preparedOrderId = task.getStatus() == BadReviewTaskStatus.DONE
+        PreparedTaskPayableChange preparedChange = task.getStatus() == BadReviewTaskStatus.DONE
                 ? prepareTaskPayableChangeLocked(
                         taskId,
                         observedOrderId,
                         "Отмена выполненной дополнительной задачи изменила сумму счета"
                 )
                 : null;
+        Long preparedOrderId = preparedChange == null ? null : preparedChange.orderId();
         if (isPaid(task)) {
             throw new IllegalStateException("После оплаты заказа отмена плохих задач не пересчитывает чек и начисления");
         }
@@ -566,7 +557,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (!wasNew) {
             Long orderId = savedTask.getOrder() == null ? preparedOrderId : savedTask.getOrder().getId();
             contractorCompletionRewardService.adjustCanceledBadReviewTaskAccrual(orderId, savedTask.getId());
-            refreshLinkedCommonInvoiceStrict(orderId);
+            applyLinkedCommonInvoiceChange(preparedChange, savedTask.getId());
             auditTaskCanceled(savedTask);
         }
         Order order = savedTask.getOrder();
@@ -606,7 +597,11 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         return orderId;
     }
 
-    private Long prepareTaskPayableChangeLocked(Long taskId, Long expectedOrderId, String reason) {
+    private PreparedTaskPayableChange prepareTaskPayableChangeLocked(
+            Long taskId,
+            Long expectedOrderId,
+            String reason
+    ) {
         validateTaskIdAndAccess(taskId);
         Long orderId = badReviewTaskRepository.findOrderIdById(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
@@ -617,11 +612,15 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             );
         }
 
+        CommonPayableChangeDisposition commonDisposition = CommonPayableChangeDisposition.NOT_LINKED;
         CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
         if (commonBillingService != null) {
             // lockedInvoice() acquires every member Order in sorted order before
             // the invoice, matching the common-billing routing prelude.
-            commonBillingService.prepareLinkedOrderPayableChange(orderId);
+            commonDisposition = commonBillingService.prepareLinkedOrderPayableChange(orderId);
+            if (commonDisposition == null) {
+                commonDisposition = CommonPayableChangeDisposition.NOT_LINKED;
+            }
         }
         orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
@@ -629,15 +628,28 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (paymentLinkService != null) {
             paymentLinkService.retireOpenLinksBeforePayableChange(orderId, reason);
         }
-        return orderId;
+        return new PreparedTaskPayableChange(orderId, commonDisposition);
     }
 
-    private boolean refreshLinkedCommonInvoiceStrict(Long orderId) {
-        if (orderId == null) {
+    private boolean applyLinkedCommonInvoiceChange(PreparedTaskPayableChange change, Long taskId) {
+        if (change == null || change.orderId() == null) {
             return false;
         }
         CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
-        return commonBillingService != null && commonBillingService.refreshLinkedOrderAmount(orderId);
+        return switch (change.commonDisposition()) {
+            case NOT_LINKED -> false;
+            case REFRESH_CURRENT_INVOICE ->
+                    commonBillingService != null && commonBillingService.refreshLinkedOrderAmount(change.orderId());
+            case SUPPLEMENT_REQUIRED ->
+                    commonBillingService != null
+                            && commonBillingService.createBadReviewSupplementSuccessor(change.orderId(), taskId);
+        };
+    }
+
+    private record PreparedTaskPayableChange(
+            Long orderId,
+            CommonPayableChangeDisposition commonDisposition
+    ) {
     }
 
     private BadReviewTaskStatus taskStatus(Long taskId) {
@@ -772,9 +784,11 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
     @Override
     public BigDecimal getPayableSum(Order order) {
-        BigDecimal baseSum = order != null && order.getSum() != null ? order.getSum() : BigDecimal.ZERO;
-        BadReviewTaskSummary summary = order == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(order.getId());
-        return baseSum.add(summary.doneSum());
+        if (order == null || order.getId() == null || order.getSum() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Не удалось достоверно определить сумму заказа с дополнительными задачами");
+        }
+        return payableSum(order, getSummaryForOrder(order.getId()));
     }
 
     @Override
@@ -798,7 +812,13 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
         for (OrderDTOList order : orders) {
             BadReviewTaskSummary summary = summaries.getOrDefault(order.getId(), BadReviewTaskSummary.empty());
-            BigDecimal baseSum = order.getSum() != null ? order.getSum() : BigDecimal.ZERO;
+            if (order.getId() == null || order.getSum() == null
+                    || order.getSum().compareTo(BigDecimal.ZERO) < 0
+                    || summary.doneSum() == null
+                    || summary.doneSum().compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalStateException("Не удалось достоверно определить сумму заказа с дополнительными задачами");
+            }
+            BigDecimal baseSum = order.getSum();
             order.setBadReviewTasksTotal(summary.pending() + summary.done());
             order.setBadReviewTasksPending(summary.pending());
             order.setBadReviewTasksDone(summary.done());
@@ -936,7 +956,21 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return order.getSum().divide(BigDecimal.valueOf(order.getAmount()), 2, RoundingMode.HALF_UP);
         }
 
-        return BigDecimal.ZERO;
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Не удалось достоверно определить стоимость дополнительной задачи"
+        );
+    }
+
+    private BigDecimal validatedTaskPrice(Order order, Review review) {
+        BigDecimal price = resolveTaskPrice(order, review);
+        if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Стоимость дополнительной задачи должна быть больше нуля"
+            );
+        }
+        return price;
     }
 
     private BadReviewTask requireTask(Long taskId) {
@@ -1203,9 +1237,19 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     private BigDecimal payableSum(Order order, BadReviewTaskSummary summary) {
-        BigDecimal baseSum = order != null && order.getSum() != null ? order.getSum() : BigDecimal.ZERO;
-        BigDecimal doneSum = summary == null ? BigDecimal.ZERO : summary.doneSum();
-        return baseSum.add(doneSum);
+        if (order == null || order.getId() == null || order.getSum() == null
+                || summary == null || summary.doneSum() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Не удалось достоверно определить сумму заказа с дополнительными задачами");
+        }
+        BigDecimal payable = order.getSum().add(summary.doneSum());
+        if (order.getSum().compareTo(BigDecimal.ZERO) < 0
+                || summary.doneSum().compareTo(BigDecimal.ZERO) < 0
+                || payable.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Итоговая сумма заказа с дополнительными задачами некорректна");
+        }
+        return payable;
     }
 
     private String chatLine(Order order) {
@@ -1270,7 +1314,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (value instanceof Number number) {
             return BigDecimal.valueOf(number.doubleValue());
         }
-        return BigDecimal.ZERO;
+        throw new IllegalStateException("Некорректная сумма в статистике дополнительных задач");
     }
 
     private int toIntCount(long count) {
@@ -1335,14 +1379,17 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         private BigDecimal doneSum = BigDecimal.ZERO;
 
         void add(BadReviewTaskStatus status, long count, BigDecimal sum) {
+            if (sum == null || sum.compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalStateException("Сумма дополнительных задач не определена");
+            }
             if (status == BadReviewTaskStatus.DONE) {
                 done += count;
-                doneSum = doneSum.add(sum == null ? BigDecimal.ZERO : sum);
+                doneSum = doneSum.add(sum);
             } else if (status == BadReviewTaskStatus.CANCELED) {
                 canceled += count;
             } else {
                 pending += count;
-                pendingSum = pendingSum.add(sum == null ? BigDecimal.ZERO : sum);
+                pendingSum = pendingSum.add(sum);
             }
         }
 

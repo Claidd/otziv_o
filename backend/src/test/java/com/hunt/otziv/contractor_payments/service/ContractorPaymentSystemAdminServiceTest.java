@@ -36,7 +36,7 @@ import org.springframework.web.server.ResponseStatusException;
 class ContractorPaymentSystemAdminServiceTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 8, 7);
-    private static final LocalDate CUTOVER = LocalDate.of(2026, 8, 1);
+    private static final LocalDate CUTOVER = TODAY;
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 7, 10, 30);
 
     @Mock
@@ -47,6 +47,8 @@ class ContractorPaymentSystemAdminServiceTest {
     private ContractorCompletionCutoverStateService cutoverStateService;
     @Mock
     private ContractorCompletionRoutingReadinessService completionRoutingReadinessService;
+    @Mock
+    private ContractorCompletionCutoverPreflightService cutoverPreflightService;
     @Mock
     private ContractorPaymentRuntimeSwitch runtimeSwitch;
     @Mock
@@ -63,6 +65,8 @@ class ContractorPaymentSystemAdminServiceTest {
     void setUp() {
         lenient().when(businessClock.today()).thenReturn(TODAY);
         lenient().when(businessClock.now()).thenReturn(NOW);
+        lenient().when(runtimeSwitch.routingConfigurationBlockers()).thenReturn(java.util.List.of());
+        lenient().when(cutoverPreflightService.readyForActivation(TODAY)).thenReturn(true);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(
                         "owner@example.test",
@@ -84,6 +88,7 @@ class ContractorPaymentSystemAdminServiceTest {
         when(rolloutStateService.lockCurrent()).thenReturn(state);
         when(accountingPhaseService.lockCurrent()).thenReturn(ContractorAllocationMode.SHADOW);
         when(cutoverStateService.lockedStartDate()).thenReturn(Optional.empty());
+        when(cutoverPreflightService.readyForActivation(CUTOVER)).thenReturn(true);
         when(cutoverStateService.lockOrVerify(CUTOVER)).thenReturn(Optional.of(CUTOVER));
 
         service.activate(activation(CUTOVER, 4L));
@@ -118,7 +123,7 @@ class ContractorPaymentSystemAdminServiceTest {
                 null,
                 null,
                 "LEGACY;routing=false",
-                "COMPLETION;startDate=2026-08-01;routing=false",
+                "COMPLETION;startDate=2026-08-07;routing=false",
                 "Сверка выполнена"
         );
     }
@@ -157,6 +162,27 @@ class ContractorPaymentSystemAdminServiceTest {
     }
 
     @Test
+    void statusHidesActivationCommandWhileCurrentDatePreflightIsDirty() {
+        when(rolloutStateService.currentSnapshot()).thenReturn(snapshot(
+                ContractorPaymentAccountingAuthority.LEGACY,
+                false,
+                null,
+                3L
+        ));
+        when(accountingPhaseService.current()).thenReturn(ContractorAllocationMode.SHADOW);
+        when(runtimeSwitch.status()).thenReturn(runtimeStatus(false, true));
+        when(cutoverStateService.lockedStartDate()).thenReturn(Optional.empty());
+        when(cutoverPreflightService.readyForActivation(TODAY)).thenReturn(false);
+
+        var response = service.status();
+
+        assertThat(response.mode()).isEqualTo("LEGACY");
+        assertThat(response.activationAvailable()).isFalse();
+        assertThat(response.activationBlockedReasons())
+                .contains("Финансовая подготовка за текущую дату не завершена");
+    }
+
+    @Test
     void activationRejectsWrongTypedConfirmationBeforeReadingFinancialState() {
         ContractorPaymentSystemActivationRequest request = new ContractorPaymentSystemActivationRequest(
                 CUTOVER,
@@ -171,11 +197,27 @@ class ContractorPaymentSystemAdminServiceTest {
     }
 
     @Test
-    void activationRejectsMidMonthAndFutureBoundaries() {
-        assertBadRequest(() -> service.activate(activation(LocalDate.of(2026, 8, 2), 0L)));
-        assertBadRequest(() -> service.activate(activation(LocalDate.of(2026, 9, 1), 0L)));
+    void activationRejectsBackdatedAndFutureBoundaries() {
+        assertBadRequest(() -> service.activate(activation(LocalDate.of(2026, 8, 6), 0L)));
+        assertBadRequest(() -> service.activate(activation(LocalDate.of(2026, 7, 1), 0L)));
+        assertBadRequest(() -> service.activate(activation(LocalDate.of(2026, 8, 8), 0L)));
 
         verifyNoInteractions(runtimeSwitch, rolloutStateService, accountingPhaseService, cutoverStateService);
+    }
+
+    @Test
+    void activationFailsBeforeCutoverLatchWhenFinancialPreflightIsDirty() {
+        ContractorPaymentRolloutState state = legacyState(4L);
+        when(runtimeSwitch.status()).thenReturn(runtimeStatus(false, true));
+        when(rolloutStateService.lockCurrent()).thenReturn(state);
+        when(accountingPhaseService.lockCurrent()).thenReturn(ContractorAllocationMode.SHADOW);
+        when(cutoverStateService.lockedStartDate()).thenReturn(Optional.empty());
+        when(cutoverPreflightService.readyForActivation(CUTOVER)).thenReturn(false);
+
+        assertConflict(() -> service.activate(activation(CUTOVER, 4L)));
+
+        verify(cutoverStateService, never()).lockOrVerify(any());
+        assertThat(state.getAccountingAuthority()).isEqualTo(ContractorPaymentAccountingAuthority.LEGACY);
     }
 
     @Test
@@ -214,13 +256,9 @@ class ContractorPaymentSystemAdminServiceTest {
 
     @Test
     void repeatedActivationCannotMoveImmutableCutover() {
-        ContractorPaymentRolloutState state = completionState(false, 12L);
-        when(runtimeSwitch.status()).thenReturn(runtimeStatus(false, true));
-        when(rolloutStateService.lockCurrent()).thenReturn(state);
+        assertBadRequest(() -> service.activate(activation(LocalDate.of(2026, 7, 1), 12L)));
 
-        assertConflict(() -> service.activate(activation(LocalDate.of(2026, 7, 1), 12L)));
-
-        verifyNoInteractions(accountingPhaseService, cutoverStateService, appSettingService);
+        verifyNoInteractions(runtimeSwitch, rolloutStateService, accountingPhaseService, cutoverStateService, appSettingService);
     }
 
     @Test
@@ -273,6 +311,26 @@ class ContractorPaymentSystemAdminServiceTest {
 
         assertThat(noMasterState.isRoutingRequested()).isFalse();
         assertThat(notReadyState.isRoutingRequested()).isFalse();
+        verify(appSettingService, never()).setBoolean(
+                AppSettingService.CONTRACTOR_PAYMENTS_LIVE_ROUTING_ENABLED,
+                true
+        );
+    }
+
+    @Test
+    void enablingRoutingRejectsIncompleteClientPaymentConfiguration() {
+        ContractorPaymentRolloutState state = completionState(false, 15L);
+        when(rolloutStateService.lockCurrent()).thenReturn(state);
+        when(runtimeSwitch.status()).thenReturn(runtimeStatus(true, true));
+        when(cutoverStateService.lockedStartDate()).thenReturn(Optional.of(CUTOVER));
+        when(completionRoutingReadinessService.readyForLiveRouting()).thenReturn(true);
+        when(runtimeSwitch.routingConfigurationBlockers()).thenReturn(java.util.List.of(
+                "Клиентские сообщения не настроены на платежную ссылку"
+        ));
+
+        assertConflict(() -> service.updateRouting(routing(true, 15L)));
+
+        assertThat(state.isRoutingRequested()).isFalse();
         verify(appSettingService, never()).setBoolean(
                 AppSettingService.CONTRACTOR_PAYMENTS_LIVE_ROUTING_ENABLED,
                 true

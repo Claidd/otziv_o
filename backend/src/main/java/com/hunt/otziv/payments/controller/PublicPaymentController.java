@@ -17,6 +17,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -61,8 +63,8 @@ public class PublicPaymentController {
     }
 
     @GetMapping("/api/payments/public/{token}")
-    public PublicPaymentLinkResponse paymentLink(@PathVariable String token) {
-        return paymentLinkService.publicLink(token);
+    public ResponseEntity<PublicPaymentLinkResponse> paymentLink(@PathVariable String token) {
+        return noStore(paymentLinkService.publicLink(token));
     }
 
     @GetMapping("/api/payments/public/{token}/sbp/banks")
@@ -113,8 +115,15 @@ public class PublicPaymentController {
     }
 
     @PostMapping("/api/payments/public/{token}/manual-paid")
-    public PublicPaymentLinkResponse reportManualPayment(@PathVariable String token) {
-        return paymentLinkService.reportManualPayment(token);
+    public ResponseEntity<PublicPaymentLinkResponse> reportManualPayment(@PathVariable String token) {
+        return noStore(paymentLinkService.reportManualPayment(token));
+    }
+
+    private <T> ResponseEntity<T> noStore(T body) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(body);
     }
 
     private TbankRuntimeSettingsResponseSafe settings() {

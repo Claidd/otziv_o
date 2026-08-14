@@ -80,6 +80,55 @@ public class ContractorRewardLedgerService {
     }
 
     /**
+     * Rebuilds direct legacy rows after an initial profile boundary is moved.
+     * The caller holds source locks followed by the target profile lock. This
+     * intentionally ignores a marker produced while the profile boundary
+     * still excluded the source.
+     */
+    @Transactional
+    public void forceSynchronizeDirectSourcesForLockedProfile(
+            Iterable<Zp> rewards,
+            ContractorPaymentProfile lockedProfile
+    ) {
+        if (rewards == null || lockedProfile == null || lockedProfile.getId() == null
+                || lockedProfile.getUser() == null || lockedProfile.getUser().getId() == null
+                || lockedProfile.getRole() == null) {
+            throw new IllegalArgumentException("A locked contractor profile is required for forced synchronization");
+        }
+        List<Zp> ordered = new ArrayList<>();
+        rewards.forEach(ordered::add);
+        ordered = ordered.stream()
+                .filter(Objects::nonNull)
+                .filter(reward -> reward.getId() != null)
+                .sorted(Comparator.comparing(Zp::getId))
+                .toList();
+        for (Zp reward : ordered) {
+            if (!Objects.equals(reward.getUserId(), lockedProfile.getUser().getId())
+                    || reward.getContractorRole() != lockedProfile.getRole()
+                    || !reward.isAttributionFinal()
+                    || !ContractorRewardSourceCodes.isLedgerSourceCompatible(
+                            reward.getSource(), reward.getContractorRole())) {
+                throw new IllegalStateException(
+                        "Forced contractor reward synchronization requires an exact direct source: sourceId="
+                                + reward.getId()
+                );
+            }
+            boolean foreignLedgerRow = ledgerRepository.findAllBySourceZpId(reward.getId()).stream()
+                    .map(ContractorRewardLedgerEntry::getProfile)
+                    .filter(Objects::nonNull)
+                    .map(ContractorPaymentProfile::getId)
+                    .anyMatch(profileId -> !Objects.equals(profileId, lockedProfile.getId()));
+            if (foreignLedgerRow) {
+                throw new IllegalStateException(
+                        "Forced contractor reward synchronization found a foreign ledger attribution: sourceId="
+                                + reward.getId()
+                );
+            }
+            synchronizeLockedReward(reward, true, true);
+        }
+    }
+
+    /**
      * Completion transactions can touch several people. Lock every source and
      * every direct profile in one deterministic order before applying any
      * ledger row, preventing reversed manager/specialist pairs from deadlocking
@@ -273,10 +322,29 @@ public class ContractorRewardLedgerService {
     }
 
     private void synchronizeLockedReward(Zp lockedReward, boolean profilesAlreadyLocked) {
+        synchronizeLockedReward(lockedReward, profilesAlreadyLocked, false);
+    }
+
+    private void synchronizeLockedReward(
+            Zp lockedReward,
+            boolean profilesAlreadyLocked,
+            boolean force
+    ) {
+        if (!ContractorRewardSourceCodes.isLedgerSourceCompatible(
+                lockedReward.getSource(), lockedReward.getContractorRole())) {
+            // Never turn an unknown source-role pair into a successful marker:
+            // readiness must stay blocked and any old ledger attribution must
+            // remain untouched until an operator fixes the source.
+            throw new IllegalStateException(
+                    "Contractor reward source-role pair is incompatible: sourceId="
+                            + lockedReward.getId() + ", source=" + lockedReward.getSource()
+                            + ", role=" + lockedReward.getContractorRole()
+            );
+        }
         ContractorRewardSyncMarker existingMarker = syncMarkerRepository
                 .findBySourceZpId(lockedReward.getId())
                 .orElse(null);
-        if (!needsSynchronization(lockedReward, existingMarker)) {
+        if (!force && !needsSynchronization(lockedReward, existingMarker)) {
             return;
         }
 

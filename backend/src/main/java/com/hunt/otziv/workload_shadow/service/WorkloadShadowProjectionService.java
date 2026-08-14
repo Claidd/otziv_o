@@ -207,7 +207,7 @@ public class WorkloadShadowProjectionService {
                 producedEvents++;
             }
         }
-        persistSnapshots(snapshots.values(), runId, observedAt, resultSealAt);
+        persistSnapshots(snapshots.values(), runId, settings.revision(), observedAt, resultSealAt);
         persistDailyBatchDecisions(snapshots.values(), batchesByWorker);
 
         persistEvents(pendingEvents, observedAt, settings.alertCooldownMinutes());
@@ -1313,6 +1313,7 @@ public class WorkloadShadowProjectionService {
     private void persistSnapshots(
             Collection<WorkerSnapshot> snapshots,
             long runId,
+            long settingsRevision,
             LocalDateTime observedAt,
             LocalDateTime resultSealAt
     ) {
@@ -1320,16 +1321,19 @@ public class WorkloadShadowProjectionService {
             return;
         }
         boolean finalized = !observedAt.isBefore(resultSealAt);
-        String snapshotsJson = json(snapshots.stream().map(this::snapshotRow).toList());
+        String snapshotsJson = json(snapshots.stream()
+                .map(snapshot -> snapshotRow(snapshot, settingsRevision))
+                .toList());
         repository.upsertCurrentSnapshots(snapshotsJson, runId);
         repository.upsertDailySnapshots(snapshotsJson, finalized, observedAt);
     }
 
-    private Map<String, Object> snapshotRow(WorkerSnapshot snapshot) {
+    private Map<String, Object> snapshotRow(WorkerSnapshot snapshot, long settingsRevision) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("workerId", snapshot.worker().workerId());
         row.put("workerUserId", snapshot.worker().workerUserId());
         row.put("managerId", snapshot.worker().managerId());
+        row.put("settingsRevision", settingsRevision);
         row.put("progressDate", snapshot.progressDate().toString());
         row.put("snapshotAt", sqlDateTime(snapshot.snapshotAt()));
         row.put("completedUnits", snapshot.completedUnits());

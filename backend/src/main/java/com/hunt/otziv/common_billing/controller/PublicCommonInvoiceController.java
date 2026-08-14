@@ -6,6 +6,9 @@ import com.hunt.otziv.payments.dto.PublicPaymentInitRequest;
 import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,13 +22,13 @@ public class PublicCommonInvoiceController {
     private final CommonBillingService commonBillingService;
 
     @GetMapping("/api/payments/public/group/{token}")
-    public PublicCommonInvoiceResponse commonInvoice(@PathVariable String token) {
-        return commonBillingService.publicInvoice(token);
+    public ResponseEntity<PublicCommonInvoiceResponse> commonInvoice(@PathVariable String token) {
+        return noStore(commonBillingService.publicInvoice(token));
     }
 
     @PostMapping("/api/payments/public/group/{token}/reported-paid")
-    public PublicCommonInvoiceResponse reportCommonInvoicePaid(@PathVariable String token) {
-        return commonBillingService.reportPublicCommonPayment(token);
+    public ResponseEntity<PublicCommonInvoiceResponse> reportCommonInvoicePaid(@PathVariable String token) {
+        return noStore(commonBillingService.reportPublicCommonPayment(token));
     }
 
     @PostMapping("/api/payments/public/group/{token}/init")
@@ -40,5 +43,12 @@ public class PublicCommonInvoiceController {
                 Boolean.TRUE.equals(request.privacyConsent()),
                 Boolean.TRUE.equals(request.receiptConsent())
         );
+    }
+
+    private <T> ResponseEntity<T> noStore(T body) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(body);
     }
 }

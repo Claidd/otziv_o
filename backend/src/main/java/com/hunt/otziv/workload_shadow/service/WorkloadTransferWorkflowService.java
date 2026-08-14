@@ -30,6 +30,8 @@ public class WorkloadTransferWorkflowService {
     private final WorkloadLiveSettingsService liveSettingsService;
     private final WorkloadShadowSettingsService shadowSettingsService;
     private final WorkloadTransferGraphSnapshotService graphSnapshotService;
+    private final WorkloadLiveDailyQuotaLockService quotaLockService;
+    private final com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository liveControlRepository;
 
     @Transactional
     public StageResult stageEligibleRecommendations() {
@@ -37,11 +39,18 @@ public class WorkloadTransferWorkflowService {
         if (!liveSettingsService.applicationAllowed(settings)) {
             return StageResult.disabled();
         }
-        LocalDateTime now = now();
+        if (!liveControlMatches(settings)) {
+            return StageResult.disabled();
+        }
+        var shadowSettings = shadowSettingsService.current();
+        LocalDateTime now = LocalDateTime.now(
+                shadowSettingsService.zone(shadowSettings)
+        );
         if (!insideOfferWindow(settings, now.toLocalTime())) {
             return new StageResult(true, 0, 0, 0, "Вне окна отправки предложений");
         }
 
+        quotaLockService.lock(now.toLocalDate());
         List<RecommendationCandidateProjection> rows =
                 repository.findRecommendationCandidates();
         if (rows.isEmpty()) {
@@ -163,6 +172,8 @@ public class WorkloadTransferWorkflowService {
                 workflowsJson,
                 settings.mode(),
                 ownerConfirmationRequired,
+                settings.revision(),
+                shadowSettings.revision(),
                 now.toLocalDate(),
                 now
         );
@@ -249,6 +260,19 @@ public class WorkloadTransferWorkflowService {
                 .filter(value -> value.companyId() == companyId)
                 .findFirst()
                 .orElse(null);
+    }
+
+    private boolean liveControlMatches(WorkloadLiveSettingsResponse settings) {
+        var control = liveControlRepository.lockState().orElse(null);
+        if (control == null || control.getSettingsRevision() == null) {
+            return false;
+        }
+        String mode = control.getMode() == null ? "" : control.getMode();
+        boolean activeMode = WorkloadLiveSettingsService.MODE_CANARY.equals(mode)
+                || WorkloadLiveSettingsService.MODE_LIVE.equals(mode);
+        return activeMode
+                && control.getSettingsRevision() == settings.revision()
+                && "true".equalsIgnoreCase(control.getApplyEnabled());
     }
 
     private boolean insideOfferWindow(

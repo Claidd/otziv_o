@@ -99,6 +99,7 @@ describe('ContractorPaymentsApi', () => {
       rewardRepair: queueItem(),
       shadowBackfill: queueItem(),
       completionRewardRepair: queueItem({ retrying: 2, dueRetries: 1 }),
+      deferredActiveRecoveryBaseGaps: 14,
       observedAt: '2026-08-07T12:00:00'
     };
     get.mockReturnValue(of(health));
@@ -110,6 +111,7 @@ describe('ContractorPaymentsApi', () => {
 
     expect(get).toHaveBeenCalledWith('/api/admin/contractor-payment-allocations/health');
     expect(result?.completionRewardRepair).toMatchObject({ retrying: 2, dueRetries: 1 });
+    expect(result?.deferredActiveRecoveryBaseGaps).toBe(14);
   });
 
   it('passes explicit user, status and page filters to the protected journal', () => {

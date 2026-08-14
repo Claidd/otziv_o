@@ -41,6 +41,16 @@ public class CommonInvoice {
     @JoinColumn(name = "account_id", nullable = false)
     private CommonBillingAccount account;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supersedes_invoice_id")
+    private CommonInvoice supersedesInvoice;
+
+    @Column(name = "invoice_purpose", nullable = false, length = 32)
+    private String invoicePurpose = "STANDARD";
+
+    @Column(name = "cycle_idempotency_key", length = 160)
+    private String cycleIdempotencyKey;
+
     @Column(nullable = false, length = 96)
     private String token;
 

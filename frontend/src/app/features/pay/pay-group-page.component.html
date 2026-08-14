@@ -95,8 +95,11 @@
                     <p class="pay-error" role="alert">Ссылка оплаты не настроена. Обратитесь к менеджеру.</p>
                   }
                 } @else {
-                  <button type="button" (click)="copyPaymentValue(item?.manualPhone)" title="Скопировать телефон">
-                    <small>Телефон</small>
+                  @if (!item?.manualPhone) {
+                    <p class="pay-error" role="alert">Реквизиты для перевода не настроены. Не переводите деньги и обратитесь к менеджеру.</p>
+                  }
+                  <button type="button" (click)="copyPaymentValue(item?.manualPhone)" title="Скопировать реквизиты для перевода">
+                    <small>{{ manualTransferDestinationLabel() }}</small>
                     <strong>{{ item?.manualPhone || 'не указан' }}</strong>
                     <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
                   </button>

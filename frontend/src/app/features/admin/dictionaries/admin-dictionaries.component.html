@@ -3007,6 +3007,124 @@
               }
             </section>
 
+            <section class="settings-section contractor-legacy-reconciliation" aria-label="Сверка старых начислений">
+              <div class="section-head">
+                <div>
+                  <h3>Сверка старых начислений перед запуском</h3>
+                  <p class="settings-hint">
+                    PREPARE создаёт подписанный dry-run и ничего не меняет. Автоматическое применение
+                    и каждое ручное подтверждение доступны только владельцу.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="secondary"
+                  [disabled]="contractorLegacyReconciliationSaving() || contractorSystemStatus()?.systemEnabled"
+                  (click)="prepareContractorLegacyReconciliation()"
+                >
+                  {{ contractorLegacyReconciliationSaving() ? 'Проверяю…' : 'Подготовить PREPARE' }}
+                </button>
+              </div>
+
+              @if (contractorLegacyReconciliation(); as reconciliation) {
+                @if (reconciliation.runId) {
+                  <div class="contractor-system-metrics">
+                    <article>
+                      <small>AUTO: строки / осталось</small>
+                      <strong>{{ reconciliation.autoRowCount }} / {{ reconciliation.autoRemainingRows }}</strong>
+                    </article>
+                    <article>
+                      <small>MANUAL: группы / осталось</small>
+                      <strong>{{ reconciliation.manualOrderCount }} / {{ reconciliation.manualRemainingOrders }}</strong>
+                    </article>
+                    <article>
+                      <small>Снимок</small>
+                      <strong>#{{ reconciliation.runId }} · {{ reconciliation.status }}</strong>
+                    </article>
+                    <article>
+                      <small>Истекает</small>
+                      <strong>{{ reconciliation.expiresAt | date:'dd.MM.yyyy HH:mm:ss' }}</strong>
+                    </article>
+                  </div>
+                  <p class="settings-hint">
+                    Hash: <code>{{ reconciliation.snapshotHash }}</code>
+                  </p>
+
+                  @if (reconciliation.autoRemainingRows > 0 && canControlContractorSystem()) {
+                    <form
+                      class="contractor-system-confirmation-form"
+                      [formGroup]="contractorLegacyAutoForm"
+                      (ngSubmit)="applyContractorLegacyAutomatic()"
+                    >
+                      <label>
+                        <span>Причина применения AUTO</span>
+                        <textarea rows="2" formControlName="reason"></textarea>
+                      </label>
+                      <label>
+                        <span>Введите без изменений: <strong>{{ contractorLegacyAutoConfirmation }}</strong></span>
+                        <input type="text" formControlName="confirmation" autocomplete="off" spellcheck="false">
+                      </label>
+                      <button
+                        type="submit"
+                        [disabled]="contractorLegacyAutoForm.invalid || contractorLegacyReconciliationSaving()"
+                      >
+                        Применить доказуемые строки
+                      </button>
+                    </form>
+                  }
+
+                  @if (reconciliation.manualGroups.length > 0) {
+                    <div class="table-scroll">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Заказ</th>
+                            <th>Причина</th>
+                            <th>Строк</th>
+                            <th>Статус</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (group of reconciliation.manualGroups; track group.orderId) {
+                            <tr>
+                              <td>№{{ group.orderId }}</td>
+                              <td>{{ group.evidenceCategory }}</td>
+                              <td>{{ group.rowCount }}</td>
+                              <td>{{ group.status }}</td>
+                              <td>
+                                @if (
+                                  group.status === 'PENDING'
+                                  && group.evidenceCategory !== 'IDENTITY_OR_SOURCE_AMBIGUOUS'
+                                  && canControlContractorSystem()
+                                ) {
+                                  <button
+                                    type="button"
+                                    class="secondary"
+                                    [disabled]="contractorLegacyReconciliationSaving()"
+                                    (click)="openContractorLegacyManual(group)"
+                                  >
+                                    Подтвердить evidence
+                                  </button>
+                                } @else if (
+                                  group.status === 'PENDING'
+                                  && group.evidenceCategory === 'IDENTITY_OR_SOURCE_AMBIGUOUS'
+                                ) {
+                                  <small>Нужна отдельная коррекция источника</small>
+                                }
+                              </td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  }
+                } @else {
+                  <p class="settings-hint">PREPARE ещё не выполнялся.</p>
+                }
+              }
+            </section>
+
             <form class="settings-form" [formGroup]="settingsForm" (ngSubmit)="saveActive()">
               <div class="settings-section">
                 <h3>Выгул</h3>
@@ -3745,6 +3863,75 @@
     }
   </section>
 
+  @if (contractorLegacyManualGroup(); as group) {
+    <section class="dictionary-modal-backdrop" (click)="closeContractorLegacyManual()">
+      <article
+        class="dictionary-modal contractor-system-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ручное подтверждение старого начисления"
+        (click)="$event.stopPropagation()"
+      >
+        <header>
+          <div>
+            <p class="eyebrow">MANUAL EVIDENCE</p>
+            <h2>Заказ №{{ group.orderId }}</h2>
+          </div>
+          <button
+            type="button"
+            class="row-icon-button"
+            [disabled]="contractorLegacyReconciliationSaving()"
+            (click)="closeContractorLegacyManual()"
+          >
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+        <p class="contractor-system-modal-warning">
+          Получатель выводится сервером только из неизменяемых связей пользователя и профессии.
+          Сумма, заказ и получатель вручную не выбираются. Дата должна быть раньше даты запуска.
+        </p>
+        <form
+          class="contractor-system-confirmation-form"
+          [formGroup]="contractorLegacyManualForm"
+          (ngSubmit)="resolveContractorLegacyManual()"
+        >
+          <label>
+            <span>Подтверждённая дата выполнения</span>
+            <input type="date" formControlName="completedOn">
+          </label>
+          <label>
+            <span>Ссылка или номер первичного доказательства</span>
+            <input type="text" formControlName="evidenceReference" autocomplete="off">
+          </label>
+          <label>
+            <span>Причина решения владельца</span>
+            <textarea rows="3" formControlName="reason"></textarea>
+          </label>
+          <label>
+            <span>Введите без изменений: <strong>{{ contractorLegacyManualConfirmation }}</strong></span>
+            <input type="text" formControlName="confirmation" autocomplete="off" spellcheck="false">
+          </label>
+          <div class="actions">
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="contractorLegacyReconciliationSaving()"
+              (click)="closeContractorLegacyManual()"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              [disabled]="contractorLegacyManualForm.invalid || contractorLegacyReconciliationSaving()"
+            >
+              Подтвердить точный снимок
+            </button>
+          </div>
+        </form>
+      </article>
+    </section>
+  }
+
   @if (contractorSystemActivationOpen()) {
     <section class="dictionary-modal-backdrop" (click)="closeContractorSystemActivation()">
       <article
@@ -3771,7 +3958,8 @@
         </header>
 
         <p class="contractor-system-modal-warning">
-          После подтверждения завершённая работа будет учитываться по новой системе с выбранной даты.
+          После подтверждения завершённая работа будет учитываться по новой системе с текущей рабочей даты.
+          Начисления с начала месяца уже входят в синхронизированный начальный остаток и повторно не создаются.
           Вернуть старый способ учёта переключателем нельзя.
         </p>
 
@@ -3785,6 +3973,7 @@
             <input
               type="date"
               formControlName="attributionStartDate"
+              [min]="contractorSystemToday"
               [max]="contractorSystemToday"
             >
           </label>

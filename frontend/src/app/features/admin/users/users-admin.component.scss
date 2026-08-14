@@ -928,6 +928,21 @@ tr.unlinked td {
   line-height: 1.4;
 }
 
+.transfer-identifier-field small {
+  color: var(--otziv-info);
+  font-size: 0.63rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.transfer-identifier-field.invalid input {
+  border-color: var(--otziv-danger);
+}
+
+.transfer-identifier-field .field-error {
+  color: var(--otziv-danger);
+}
+
 .contractor-profile-fields .wide {
   grid-column: 1 / -1;
 }

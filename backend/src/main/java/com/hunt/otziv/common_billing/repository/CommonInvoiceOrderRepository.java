@@ -24,7 +24,9 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         Long getAccountId();
     }
 
-    Optional<CommonInvoiceOrder> findByOrder_Id(Long orderId);
+    Optional<CommonInvoiceOrder> findByOrder_IdAndActiveMembershipTrue(Long orderId);
+
+    boolean existsByOrder_Id(Long orderId);
 
     /**
      * Performs a current locking read of the common-invoice membership for an
@@ -36,6 +38,7 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         SELECT item
         FROM CommonInvoiceOrder item
         WHERE item.order.id = :orderId
+          AND item.activeMembership = TRUE
     """)
     Optional<CommonInvoiceOrder> findMembershipByOrderIdForRead(@Param("orderId") Long orderId);
 
@@ -56,6 +59,7 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         LEFT JOIN FETCH order.manager orderManager
         LEFT JOIN FETCH orderManager.user
         WHERE order.id = :orderId
+          AND item.activeMembership = TRUE
     """)
     Optional<CommonInvoiceOrder> findByOrderIdWithInvoice(@Param("orderId") Long orderId);
 
@@ -140,6 +144,7 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         LEFT JOIN FETCH order.company company
         LEFT JOIN FETCH order.filial
         WHERE company.id = :companyId
+          AND item.activeMembership = TRUE
           AND account.id <> :targetAccountId
           AND invoice.status IN :statuses
           AND item.paid = FALSE
@@ -162,6 +167,7 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         JOIN item.order order
         JOIN order.company company
         WHERE company.id = :companyId
+          AND item.activeMembership = TRUE
           AND account.id <> :targetAccountId
           AND invoice.status IN :statuses
           AND item.paid = FALSE
@@ -179,6 +185,7 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         FROM CommonInvoiceOrder item
         JOIN item.invoice invoice
         WHERE item.order.id IN :orderIds
+          AND item.activeMembership = TRUE
           AND invoice.status IN :statuses
     """)
     List<Long> findLinkedOrderIds(
@@ -190,6 +197,7 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
     @Query("""
         DELETE FROM CommonInvoiceOrder item
         WHERE item.order.id = :orderId
+          AND item.activeMembership = TRUE
     """)
     int deleteByOrderId(@Param("orderId") Long orderId);
 

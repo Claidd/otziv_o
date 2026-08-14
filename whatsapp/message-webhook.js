@@ -6,6 +6,17 @@ const crypto = require("crypto");
 
 const DELIVERY_STORE_COMPACT_EVERY = 256;
 const DELIVERY_STORE_MAX_ENTRIES = 50_000;
+const SYSTEM_NOTIFICATION_TYPES = new Set([
+  "broadcast_notification",
+  "ciphertext",
+  "debug",
+  "e2e_notification",
+  "gp2",
+  "group_notification",
+  "notification",
+  "notification_template",
+  "protocol",
+]);
 
 function serializedId(value) {
   if (!value) {
@@ -42,6 +53,9 @@ function generatedOutboundKey(externalMessageId) {
 }
 
 function trackedBody(message) {
+  if (isSystemNotification(message)) {
+    return "";
+  }
   const body = String(message && message.body || "").trim();
   if (body) {
     return body;
@@ -51,6 +65,16 @@ function trackedBody(message) {
     return `[Вложение${type ? `: ${type}` : ""}]`;
   }
   return "";
+}
+
+function isSystemNotification(message) {
+  if (!message) {
+    return false;
+  }
+  const type = String(message.type || "").trim().toLowerCase();
+  return message.isNotification === true
+    || Boolean(message._data && message._data.isNotification === true)
+    || SYSTEM_NOTIFICATION_TYPES.has(type);
 }
 
 class RecentOutboundRegistry {
@@ -605,6 +629,7 @@ module.exports = {
   deriveGroupId,
   groupMetadata,
   generatedOutboundKey,
+  isSystemNotification,
   messageId,
   outboundFingerprint,
   reconciliationPayloads,

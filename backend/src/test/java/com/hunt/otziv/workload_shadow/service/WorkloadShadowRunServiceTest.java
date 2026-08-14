@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
 class WorkloadShadowRunServiceTest {
@@ -30,7 +32,8 @@ class WorkloadShadowRunServiceTest {
         when(runRepository.startRun(
                 "MANUAL-TRIGGER-THAT-IS-FAR-TOO-L",
                 LocalDateTime.of(2026, 7, 27, 12, 0),
-                "instance"
+                "instance",
+                9L
         )).thenReturn(1);
         when(runRepository.lastInsertedRunId()).thenReturn(42L);
         LocalDateTime startedAt = LocalDateTime.of(2026, 7, 27, 12, 0);
@@ -38,16 +41,36 @@ class WorkloadShadowRunServiceTest {
         long id = service.start(
                 " manual-trigger-that-is-far-too-long-for-the-column ",
                 "instance",
-                startedAt
+                startedAt,
+                9L
         );
 
         assertThat(id).isEqualTo(42L);
         verify(runRepository).startRun(
                 "MANUAL-TRIGGER-THAT-IS-FAR-TOO-L",
                 startedAt,
-                "instance"
+                "instance",
+                9L
         );
         verify(runRepository).lastInsertedRunId();
+    }
+
+    @Test
+    void revisionAwareStartRequiresItsOwnTransaction() throws NoSuchMethodException {
+        var method = WorkloadShadowRunService.class.getDeclaredMethod(
+                "start",
+                String.class,
+                String.class,
+                LocalDateTime.class,
+                long.class
+        );
+
+        Transactional transactional = method.getAnnotation(Transactional.class);
+
+        assertThat(transactional)
+                .as("revision-aware run creation must wrap modifying queries in a transaction")
+                .isNotNull();
+        assertThat(transactional.propagation()).isEqualTo(Propagation.REQUIRES_NEW);
     }
 
     @Test

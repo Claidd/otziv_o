@@ -83,7 +83,8 @@ class WorkloadShadowCoordinatorTest {
         when(runService.start(
                 eq("MANUAL"),
                 eq("node-a"),
-                any(LocalDateTime.class)
+                any(LocalDateTime.class),
+                org.mockito.ArgumentMatchers.anyLong()
         )).thenReturn(42L);
         when(projectionService.recalculate(eq(42L), any(LocalDateTime.class)))
                 .thenReturn(new WorkloadShadowRunService.RunResult(2, 8, 0, 3, 1));
@@ -109,7 +110,8 @@ class WorkloadShadowCoordinatorTest {
         ordered.verify(runService).start(
                 eq("MANUAL"),
                 eq("node-a"),
-                any(LocalDateTime.class)
+                any(LocalDateTime.class),
+                org.mockito.ArgumentMatchers.anyLong()
         );
         ordered.verify(lease).attachRun(42L);
         ordered.verify(projectionService).recalculate(eq(42L), any(LocalDateTime.class));
@@ -134,7 +136,8 @@ class WorkloadShadowCoordinatorTest {
         when(runService.start(
                 eq("EVENT_DIRTY"),
                 eq("node-a"),
-                any(LocalDateTime.class)
+                any(LocalDateTime.class),
+                org.mockito.ArgumentMatchers.anyLong()
         )).thenReturn(77L);
         when(projectionService.recalculate(eq(77L), any(LocalDateTime.class)))
                 .thenReturn(new WorkloadShadowRunService.RunResult(1, 3, 0, 0, 0));
@@ -166,7 +169,8 @@ class WorkloadShadowCoordinatorTest {
         when(runService.start(
                 eq("MANUAL"),
                 eq("node-a"),
-                any(LocalDateTime.class)
+                any(LocalDateTime.class),
+                org.mockito.ArgumentMatchers.anyLong()
         )).thenThrow(failure);
 
         assertThatThrownBy(() -> coordinator.recalculate("MANUAL"))

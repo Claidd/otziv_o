@@ -34,6 +34,7 @@ public class ContractorPaymentSystemAdminService {
     private final ContractorPaymentAccountingPhaseService accountingPhaseService;
     private final ContractorCompletionCutoverStateService cutoverStateService;
     private final ContractorCompletionRoutingReadinessService completionRoutingReadinessService;
+    private final ContractorCompletionCutoverPreflightService cutoverPreflightService;
     private final ContractorPaymentRuntimeSwitch runtimeSwitch;
     private final ContractorPaymentBusinessClock businessClock;
     private final AppSettingService appSettingService;
@@ -56,6 +57,8 @@ public class ContractorPaymentSystemAdminService {
         boolean legacyBehavior = rollout.legacyAccountingActive()
                 && accountingPhase == ContractorAllocationMode.SHADOW
                 && lockedCutover == null;
+        boolean activationPreflightReady = !legacyBehavior
+                || safeActivationPreflightReady(businessClock.today());
 
         List<String> blockers = blockers(
                 rollout,
@@ -63,9 +66,12 @@ public class ContractorPaymentSystemAdminService {
                 runtime,
                 backlogReady,
                 cutoverConsistent,
-                lockedCutover
+                lockedCutover,
+                activationPreflightReady
         );
-        boolean activationAvailable = legacyBehavior && runtime.rewardAttributionMasterEnabled();
+        boolean activationAvailable = legacyBehavior
+                && runtime.rewardAttributionMasterEnabled()
+                && activationPreflightReady;
         String mode;
         if (!cutoverConsistent
                 || (rollout.legacyAccountingActive() && accountingPhase == ContractorAllocationMode.LIVE)
@@ -103,10 +109,8 @@ public class ContractorPaymentSystemAdminService {
     public void activate(ContractorPaymentSystemActivationRequest request) {
         requireConfirmation(request.confirmation(), ACTIVATE_CONFIRMATION);
         LocalDate startDate = request.attributionStartDate();
-        if (startDate == null
-                || startDate.getDayOfMonth() != 1
-                || startDate.isAfter(businessClock.today())) {
-            throw badRequest("Дата начала должна быть первым числом уже начавшегося месяца");
+        if (startDate == null || !startDate.equals(businessClock.today())) {
+            throw badRequest("Дата начала должна совпадать с текущей рабочей датой");
         }
 
         ContractorPaymentRuntimeSwitch.RuntimeStatus runtime = runtimeSwitch.status();
@@ -127,6 +131,9 @@ public class ContractorPaymentSystemAdminService {
         }
         if (cutoverStateService.lockedStartDate().isPresent()) {
             throw conflict("Граница нового учёта уже существует; требуется ручная сверка состояния");
+        }
+        if (!cutoverPreflightService.readyForActivation(startDate)) {
+            throw conflict("Финансовая подготовка не завершена; устраните legacy-пересечения и очереди синхронизации");
         }
         if (cutoverStateService.lockOrVerify(startDate).isEmpty()) {
             throw conflict("Не удалось необратимо зафиксировать дату начала нового учёта");
@@ -193,6 +200,11 @@ public class ContractorPaymentSystemAdminService {
             if (!completionRoutingReadinessService.readyForLiveRouting()) {
                 throw conflict("Подготовка начислений ещё не завершена; устраните очередь repair");
             }
+            List<String> configurationBlockers = runtimeSwitch.routingConfigurationBlockers();
+            if (!configurationBlockers.isEmpty()) {
+                throw conflict("Конфигурация клиентских платежей не готова: "
+                        + String.join("; ", configurationBlockers));
+            }
         }
 
         String actor = currentActor();
@@ -220,7 +232,8 @@ public class ContractorPaymentSystemAdminService {
             ContractorPaymentRuntimeSwitch.RuntimeStatus runtime,
             boolean backlogReady,
             boolean cutoverConsistent,
-            LocalDate lockedCutover
+            LocalDate lockedCutover,
+            boolean activationPreflightReady
     ) {
         List<String> result = new ArrayList<>();
         if (rollout.legacyAccountingActive()) {
@@ -233,6 +246,9 @@ public class ContractorPaymentSystemAdminService {
             if (lockedCutover != null) {
                 result.add("Обнаружена ранее зафиксированная граница учёта");
             }
+            if (!activationPreflightReady) {
+                result.add("Финансовая подготовка за текущую дату не завершена");
+            }
             return result;
         }
         if (!cutoverConsistent) {
@@ -241,6 +257,7 @@ public class ContractorPaymentSystemAdminService {
         if (accountingPhase != ContractorAllocationMode.LIVE) {
             result.add("Финансовая фаза не активирована вместе с новым учётом");
         }
+        result.addAll(runtimeSwitch.routingConfigurationBlockers());
         if (!runtime.rewardAttributionDatabaseEnabled()) {
             result.add("DB-флаг нового учёта отличается от зафиксированного состояния");
         }
@@ -264,6 +281,14 @@ public class ContractorPaymentSystemAdminService {
     private boolean safeBacklogReady() {
         try {
             return completionRoutingReadinessService.readyForLiveRouting();
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private boolean safeActivationPreflightReady(LocalDate startDate) {
+        try {
+            return cutoverPreflightService.readyForActivation(startDate);
         } catch (RuntimeException exception) {
             return false;
         }

@@ -79,7 +79,7 @@ public class WorkloadShadowCoordinator {
         LocalDateTime startedAt = LocalDateTime.now(settingsService.zone(settings));
         Long runId = null;
         try {
-            runId = runService.start(trigger, instanceId, startedAt);
+            runId = runService.start(trigger, instanceId, startedAt, settings.revision());
             lease.attachRun(runId);
             WorkloadShadowRunService.RunResult projection =
                     projectionService.recalculate(runId, startedAt);

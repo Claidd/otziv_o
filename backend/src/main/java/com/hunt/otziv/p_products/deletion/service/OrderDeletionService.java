@@ -103,11 +103,11 @@ public class OrderDeletionService {
                 });
 
         if (orderDeletionPolicy.canDelete(userRole, orderToDelete)) {
-            if (commonInvoiceOrderRepository.findMembershipByOrderIdForRead(orderId).isPresent()) {
+            if (commonInvoiceOrderRepository.existsByOrder_Id(orderId)) {
                 log.warn("Заказ ID {} не удален: он включен в общий счет", orderId);
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
-                        "Заказ включен в общий счет и может быть удален только вместе с ним"
+                        "Заказ включен в текущий или исторический общий счет и может быть удален только вместе с ним"
                 );
             }
 

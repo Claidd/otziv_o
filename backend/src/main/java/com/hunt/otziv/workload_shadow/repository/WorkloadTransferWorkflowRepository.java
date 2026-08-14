@@ -190,6 +190,8 @@ public interface WorkloadTransferWorkflowRepository
                 graph_json,
                 mode,
                 status,
+                live_settings_revision,
+                shadow_settings_revision,
                 workflow_version,
                 owner_confirmation_required,
                 decision_date,
@@ -220,6 +222,8 @@ public interface WorkloadTransferWorkflowRepository
                    workflow_row.graph_json,
                    :mode,
                    'READY_TO_OFFER',
+                   :liveSettingsRevision,
+                   :shadowSettingsRevision,
                    0,
                    :ownerConfirmationRequired,
                    :decisionDate,
@@ -271,6 +275,8 @@ public interface WorkloadTransferWorkflowRepository
             @Param("workflowsJson") String workflowsJson,
             @Param("mode") String mode,
             @Param("ownerConfirmationRequired") boolean ownerConfirmationRequired,
+            @Param("liveSettingsRevision") long liveSettingsRevision,
+            @Param("shadowSettingsRevision") long shadowSettingsRevision,
             @Param("decisionDate") LocalDate decisionDate,
             @Param("now") LocalDateTime now
     );

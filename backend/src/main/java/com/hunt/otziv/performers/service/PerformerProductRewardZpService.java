@@ -235,6 +235,86 @@ public class PerformerProductRewardZpService {
         completionSpecialistRewards(order.getDetails(), reviewRepository.getAllByOrderId(order.getId()));
     }
 
+    /**
+     * Paid-only bridge for work provably completed before completion cutover.
+     * Recipients come only from the frozen order manager and published review
+     * workers; the mutable current specialist is never used.
+     */
+    @Transactional
+    public int accrueForPreCutoffPaymentLocked(
+            Order suppliedOrder,
+            Manager frozenManager,
+            LocalDate paymentDate
+    ) {
+        if (!contractorPaymentRuntimeSwitch.rewardAttributionLiveEnabled()
+                || suppliedOrder == null
+                || suppliedOrder.getId() == null
+                || !appSettingService.getBoolean(AppSettingService.ZP_PRODUCT_REWARD_PERCENT_ENABLED, false)) {
+            return 0;
+        }
+        Order order = orderRepository.findByIdForOrderDto(suppliedOrder.getId()).orElse(suppliedOrder);
+        RewardTotals totals = rewardTotals(order.getDetails());
+        requireManagerForPositiveReward(frozenManager, totals.managerAmount());
+        List<ProductSpecialistReward> specialistRewards = completionSpecialistRewards(
+                order.getDetails(),
+                reviewRepository.getAllByOrderId(order.getId())
+        );
+        int saved = 0;
+        if (totals.managerAmount().signum() > 0) {
+            saved += ensurePreCutoffPaymentReward(
+                    order,
+                    frozenManager.getUser(),
+                    frozenManager.getId(),
+                    totals.managerAmount(),
+                    totals.amount(),
+                    ContractorRole.MANAGER,
+                    paymentDate
+            );
+        }
+        for (ProductSpecialistReward reward : specialistRewards) {
+            saved += ensurePreCutoffPaymentReward(
+                    order,
+                    reward.user(),
+                    reward.workerId(),
+                    BigDecimal.valueOf(reward.amountKopecks(), 2),
+                    reward.workUnits(),
+                    ContractorRole.SPECIALIST,
+                    paymentDate
+            );
+        }
+        return saved;
+    }
+
+    private int ensurePreCutoffPaymentReward(
+            Order order,
+            User user,
+            Long professionId,
+            BigDecimal amount,
+            int workUnits,
+            ContractorRole role,
+            LocalDate paymentDate
+    ) {
+        if (amount == null || amount.signum() <= 0) {
+            return 0;
+        }
+        Zp existing = zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
+                order.getId(), SOURCE, role, professionId
+        ).orElse(null);
+        if (existing != null) {
+            if (!existing.isActive()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Историческое начисление было скорректировано; нужна ручная сверка"
+                );
+            }
+            return 0;
+        }
+        Zp row = toZp(order, user, professionId, amount, workUnits, role, SOURCE, paymentDate);
+        row.setAttributionFinal(true);
+        zpRepository.save(row);
+        return 1;
+    }
+
     private int saveManagerReward(
             Order order,
             Manager manager,

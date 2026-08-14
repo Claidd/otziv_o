@@ -151,7 +151,7 @@ public class ContractorPaymentProfileService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Остаток превышает допустимый предел");
         }
         String recipientName = normalize(request.recipientName());
-        String paymentPhone = normalize(request.paymentPhone());
+        String paymentPhone = ContractorPaymentTransferNumber.normalize(request.paymentPhone());
         String bankName = normalize(request.bankName());
         String paymentComment = normalize(request.paymentComment());
         validateRequisiteLength(
@@ -162,8 +162,8 @@ public class ContractorPaymentProfileService {
                 profileEligibilityBeingReduced
         );
         validateRequisiteLength(
-                "Номер телефона получателя",
-                profile.getPaymentPhone(),
+                "Номер телефона или карты получателя",
+                ContractorPaymentTransferNumber.normalize(profile.getPaymentPhone()),
                 paymentPhone,
                 PAYMENT_PHONE_MAX_LENGTH,
                 profileEligibilityBeingReduced
@@ -187,13 +187,15 @@ public class ContractorPaymentProfileService {
                 && (recipientName.isBlank() || paymentPhone.isBlank() || bankName.isBlank())) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Для включения платёжного профиля укажите ФИО получателя, номер телефона и банк"
+                    "Для включения платёжного профиля укажите ФИО получателя, номер телефона или карты и банк"
             );
         }
-        if (request.enabled() && !liveRoutingBeingDisabled && !validPaymentPhone(paymentPhone)) {
+        if (request.enabled()
+                && !liveRoutingBeingDisabled
+                && !ContractorPaymentTransferNumber.isValid(paymentPhone)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Номер телефона получателя должен содержать от 10 до 15 цифр"
+                    "Номер для перевода должен быть телефоном (10–15 цифр) или картой (16–19 цифр)"
             );
         }
         if (request.liveEnabled() && !request.enabled()) {
@@ -215,7 +217,12 @@ public class ContractorPaymentProfileService {
                 request.liveEnabled()
         );
         collectSecretChange(changedFields, "recipientName", profile.getRecipientName(), recipientName);
-        collectSecretChange(changedFields, "paymentPhone", profile.getPaymentPhone(), paymentPhone);
+        collectSecretChange(
+                changedFields,
+                "paymentPhone",
+                ContractorPaymentTransferNumber.normalize(profile.getPaymentPhone()),
+                paymentPhone
+        );
         collectSecretChange(changedFields, "bankName", profile.getBankName(), bankName);
         collectSecretChange(changedFields, "paymentComment", profile.getPaymentComment(), paymentComment);
         collectChange(changedFields, oldAudit, newAudit, "openingBalanceKopecks",
@@ -548,14 +555,6 @@ public class ContractorPaymentProfileService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();
-    }
-
-    private boolean validPaymentPhone(String value) {
-        String normalized = normalize(value).replaceAll("[\\s()\\-]", "");
-        if (normalized.startsWith("+")) {
-            normalized = normalized.substring(1);
-        }
-        return normalized.matches("\\d{10,15}");
     }
 
     private ZoneId businessZone() {

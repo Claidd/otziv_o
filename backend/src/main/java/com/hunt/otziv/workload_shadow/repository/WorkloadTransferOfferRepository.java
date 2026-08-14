@@ -609,6 +609,7 @@ public interface WorkloadTransferOfferRepository
             UPDATE workload_transfer_offers
             SET status = 'OFFERED',
                 telegram_message_id = :messageId,
+                keyboard_activated = FALSE,
                 offered_at = :now,
                 expires_at = :expiresAt,
                 processing_token = NULL,
@@ -626,6 +627,22 @@ public interface WorkloadTransferOfferRepository
             @Param("messageId") int messageId,
             @Param("now") LocalDateTime now,
             @Param("expiresAt") LocalDateTime expiresAt
+    );
+
+    @Modifying
+    @Query(value = """
+            UPDATE workload_transfer_offers
+            SET keyboard_activated = TRUE,
+                updated_at = :now
+            WHERE workload_transfer_offer_id = :offerId
+              AND telegram_message_id = :messageId
+              AND status = 'OFFERED'
+              AND keyboard_activated = FALSE
+            """, nativeQuery = true)
+    int markKeyboardActivated(
+            @Param("offerId") long offerId,
+            @Param("messageId") int messageId,
+            @Param("now") LocalDateTime now
     );
 
     @Modifying
@@ -659,6 +676,51 @@ public interface WorkloadTransferOfferRepository
             @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
             @Param("errorCode") String errorCode,
             @Param("errorMessage") String errorMessage,
+            @Param("now") LocalDateTime now
+    );
+
+
+    @Modifying
+    @Query(value = """
+            UPDATE workload_transfer_offers
+            SET status = 'DELIVERY_FAILED',
+                keyboard_activated = FALSE,
+                responded_at = :now,
+                response_reason = 'Не удалось активировать кнопки Telegram',
+                next_attempt_at = NULL,
+                last_error_code = 'TELEGRAM_KEYBOARD_ACTIVATION_FAILED',
+                last_error = 'Сообщение сохранено, но кнопки не активированы',
+                updated_at = :now
+            WHERE workload_transfer_offer_id = :offerId
+              AND telegram_message_id = :messageId
+              AND status = 'OFFERED'
+              AND keyboard_activated = FALSE
+            """, nativeQuery = true)
+    int markKeyboardActivationFailure(
+            @Param("offerId") long offerId,
+            @Param("messageId") int messageId,
+            @Param("now") LocalDateTime now
+    );
+
+    @Modifying
+    @Query(value = """
+            UPDATE workload_transfer_offers
+            SET status = 'DELIVERY_FAILED',
+                keyboard_activated = FALSE,
+                responded_at = :now,
+                response_reason = 'Истёк срок активации кнопок Telegram',
+                next_attempt_at = NULL,
+                last_error_code = 'TELEGRAM_KEYBOARD_ACTIVATION_TIMEOUT',
+                last_error = 'Кнопки не были активированы после доставки',
+                processing_token = NULL,
+                processing_lease_until = NULL,
+                updated_at = :now
+            WHERE status = 'OFFERED'
+              AND keyboard_activated = FALSE
+              AND offered_at <= :activationDeadline
+            """, nativeQuery = true)
+    int failInactiveKeyboardOffers(
+            @Param("activationDeadline") LocalDateTime activationDeadline,
             @Param("now") LocalDateTime now
     );
 
@@ -799,6 +861,7 @@ public interface WorkloadTransferOfferRepository
             JOIN users candidate_user
               ON candidate_user.id = candidate_worker.user_id
             WHERE offer.offer_token = :offerToken
+              AND offer.keyboard_activated = TRUE
             """, nativeQuery = true)
     Optional<CallbackProjection> findCallbackOffer(
             @Param("offerToken") String offerToken
@@ -841,6 +904,7 @@ public interface WorkloadTransferOfferRepository
                 candidate.response_reason = NULL,
                 candidate.updated_at = :now
             WHERE offer.status = 'OFFERED'
+              AND offer.keyboard_activated = TRUE
               AND offer.expires_at > :now
               AND offer.target_group_chat_id = :chatId
               AND offer.telegram_message_id = :messageId
@@ -902,6 +966,7 @@ public interface WorkloadTransferOfferRepository
                 candidate.response_reason = 'Сотрудник отказался',
                 candidate.updated_at = :now
             WHERE offer.status = 'OFFERED'
+              AND offer.keyboard_activated = TRUE
               AND offer.expires_at > :now
               AND offer.target_group_chat_id = :chatId
               AND offer.telegram_message_id = :messageId

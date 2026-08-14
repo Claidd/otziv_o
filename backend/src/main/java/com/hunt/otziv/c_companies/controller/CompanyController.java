@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -163,13 +164,30 @@ public class CompanyController {
 
     @PostMapping("/editCompany/{companyId}") // обновление компании - пост
     public String editCompany(@ModelAttribute ("companyDTO") CompanyDTO companyDTO, @ModelAttribute("newWorkerDTO") WorkerDTO newWorkerDTO,
-                        @PathVariable Long companyId, RedirectAttributes rm, Model model){
+                        @PathVariable Long companyId, RedirectAttributes rm, Model model,
+                        Authentication authentication){
         log.info("1. Начинаем обновлять данные компании");
+        CompanyDTO current = companyService.getCompaniesDTOById(companyId);
+        if (companyDTO.getContractorPaymentRoutingEnabled() != null
+                && companyDTO.isContractorPaymentRoutingEnabled()
+                != current.isContractorPaymentRoutingEnabled()
+                && !hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER")) {
+            throw new AccessDeniedException("Режим платежных ссылок компании доступен только владельцу или администратору");
+        }
         companyService.updateCompany(companyDTO, newWorkerDTO, companyId);
         log.info("5. Обновление компании прошло успешно");
         rm.addFlashAttribute("saveSuccess", "true");
         return "redirect:/companies/editCompany/{companyId}";
     } // обновление компании - пост
+
+    private boolean hasAnyRole(Authentication authentication, String... roles) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        Set<String> required = Set.of(roles);
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> required.contains(authority.getAuthority()));
+    }
 
     @GetMapping("/editCompany/{companyId}/deleteWorker/{workerId}") // удалить работника в компании
     public String editCompanyDeleteWorker(@PathVariable Long companyId, @PathVariable Long workerId, Model model){
@@ -291,4 +309,3 @@ public class CompanyController {
     }
 
 }
-

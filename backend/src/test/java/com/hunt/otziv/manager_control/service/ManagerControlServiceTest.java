@@ -11,6 +11,7 @@ import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepo
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.dto.ClientMessageOrderStatusResponse;
+import com.hunt.otziv.client_messages.dto.TelegramTransferCopyButton;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
@@ -32,6 +33,7 @@ import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.common_billing.service.CommonPaymentInitFailureClassifier;
 import com.hunt.otziv.common_billing.service.CommonInvoicePublicationBlockerService;
+import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.manager.service.ManagerPermissionService;
 import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
@@ -67,6 +69,7 @@ import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
+import com.hunt.otziv.payments.service.BadReviewPaymentInstructionOrchestrator;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.service.ReviewService;
@@ -114,8 +117,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -129,6 +136,8 @@ class ManagerControlServiceTest {
     private UserRepository userRepository;
     @Mock
     private UserService userService;
+    @Mock
+    private ManagerAccessService managerAccessService;
     @Mock
     private ManagerPermissionService managerPermissionService;
     @Mock
@@ -175,6 +184,10 @@ class ManagerControlServiceTest {
     private PaymentLinkRepository paymentLinkRepository;
     @Mock
     private OrderPaymentIntegrityService orderPaymentIntegrityService;
+    @Mock
+    private BadReviewPaymentInstructionOrchestrator paymentInstructionOrchestrator;
+    @Spy
+    private ManagerControlTransactionRunner managerControlTransactionRunner = new ManagerControlTransactionRunner();
     @Mock
     private CommonInvoiceRepository commonInvoiceRepository;
     @Mock
@@ -550,9 +563,20 @@ class ManagerControlServiceTest {
         order.setId(77L);
         order.setCompany(company);
         order.setStatus(OrderStatus.builder().title("Опубликовано").build());
-        stubSuccessfulConcreteAction(concrete, parent);
+        when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dailyControlConcreteItemRepository.findByParentItem(parent)).thenReturn(List.of(concrete));
+        when(dailyControlItemRepository.findByControl(control)).thenReturn(List.of(parent));
+        when(orderRepository.findByIdForCounterUpdate(77L)).thenReturn(Optional.of(order));
         when(orderRepository.findById(77L)).thenReturn(Optional.of(order));
-        when(clientChatMessageSender.send(any(), any(), any(), any()))
+        when(paymentInstructionOrchestrator.prepareAuthorized(eq(77L), any(Authentication.class)))
+                .thenReturn(new BadReviewPaymentInstructionOrchestrator.PreparedPaymentInstruction(
+                        "canonical payment", "token-77", 77L, true, "2202208238396676"));
+        TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
+                .fromFrozenTransferNumber("2202208238396676")
+                .orElseThrow();
+        when(clientChatMessageSender.send(any(), any(), any(), any(), eq(copyButton)))
                 .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
 
         ManagerControlConcreteItemResponse response = service.sendClientMessage(
@@ -566,6 +590,208 @@ class ManagerControlServiceTest {
         assertNotNull(concrete.getResolvedAt());
         assertNull(concrete.getFollowUpAt());
         assertEquals(ManagerDailyControlItemStatus.RESOLVED.name(), response.itemStatus());
+        verify(clientChatMessageSender).send(
+                eq(company), any(), any(), eq("canonical payment"), eq(copyButton)
+        );
+    }
+
+    @Test
+    void statusChangedAfterExternalSendIsQuarantinedWithoutClosingCardOrReleasingSource() throws Exception {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(82L);
+        Company company = new Company();
+        Order order = new Order();
+        order.setId(82L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Опубликовано").build());
+        var prepared = new BadReviewPaymentInstructionOrchestrator.PreparedPaymentInstruction(
+                "payment", "fresh-82", 82L, true);
+        when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId()))
+                .thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.findByIdForCounterUpdate(82L)).thenReturn(Optional.of(order));
+        when(paymentInstructionOrchestrator.prepareAuthorized(eq(82L), any(Authentication.class)))
+                .thenReturn(prepared);
+        when(clientChatMessageSender.send(any(), any(), any(), eq("payment"), isNull())).thenAnswer(invocation -> {
+            order.setStatus(OrderStatus.builder().title("Бан").build());
+            return ClientMessageSendResult.sent("WhatsApp");
+        });
+
+        ResponseStatusException failure = assertThrows(
+                ResponseStatusException.class,
+                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth())
+        );
+
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, failure.getStatusCode());
+        assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, concrete.getStatus());
+        assertTrue(concrete.getComment().startsWith("client_message_delivery_unknown:"));
+        verify(paymentInstructionOrchestrator, never()).releaseKnownUnsent(any(), any());
+        verify(orderService, never()).changeStatusForOrder(eq(82L), anyString());
+    }
+
+    @Test
+    void knownUnsentFreshPaymentInstructionIsReleasedAndCardIsRestored() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(80L);
+        concrete.setStatus(ManagerDailyControlItemStatus.OPEN);
+        Company company = new Company();
+        Order order = new Order();
+        order.setId(80L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        var prepared = new BadReviewPaymentInstructionOrchestrator.PreparedPaymentInstruction(
+                "payment", "fresh-80", 80L, true);
+        when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.findByIdForCounterUpdate(80L)).thenReturn(Optional.of(order));
+        when(paymentInstructionOrchestrator.prepareAuthorized(eq(80L), any(Authentication.class))).thenReturn(prepared);
+        when(clientChatMessageSender.send(any(), any(), any(), eq("payment"), isNull()))
+                .thenReturn(ClientMessageSendResult.failed("DOWN", "unavailable"));
+
+        assertThrows(ResponseStatusException.class,
+                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth()));
+
+        assertEquals(ManagerDailyControlItemStatus.OPEN, concrete.getStatus());
+        verify(paymentInstructionOrchestrator).releaseKnownUnsent(eq(prepared), any(Authentication.class));
+    }
+
+    @Test
+    void unknownSendFailureRetainsPaymentSourceAndMarksManualReview() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(81L);
+        Company company = new Company();
+        Order order = new Order();
+        order.setId(81L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        var prepared = new BadReviewPaymentInstructionOrchestrator.PreparedPaymentInstruction(
+                "payment", "fresh-81", 81L, true);
+        when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.findByIdForCounterUpdate(81L)).thenReturn(Optional.of(order));
+        when(paymentInstructionOrchestrator.prepareAuthorized(eq(81L), any(Authentication.class))).thenReturn(prepared);
+        when(clientChatMessageSender.send(any(), any(), any(), eq("payment"), isNull()))
+                .thenThrow(new IllegalStateException("timeout"));
+
+        assertThrows(ResponseStatusException.class,
+                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth()));
+
+        assertTrue(concrete.getComment().startsWith("client_message_delivery_unknown:"));
+        verify(paymentInstructionOrchestrator, never()).releaseKnownUnsent(any(), any());
+    }
+
+    @Test
+    void commonInvoiceGuardStopsManagerControlStandalonePaymentSend() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(78L);
+        Company company = new Company();
+        Order order = new Order();
+        order.setId(78L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(orderRepository.findByIdForCounterUpdate(78L)).thenReturn(Optional.of(order));
+        when(paymentInstructionOrchestrator.prepareAuthorized(eq(78L), any(Authentication.class)))
+                .thenThrow(new ResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT,
+                        "Заказ входит в общий счет"
+                ));
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth())
+        );
+
+        verify(clientChatMessageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void stalePreparedDeliveryBecomesManualReviewWithoutResend() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setComment("client_message_delivery_prepared:abandoned-token");
+        concrete.setLastManualTouchAt(LocalDateTime.now().minusMinutes(16));
+        when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(dailyControlConcreteItemRepository.save(concrete)).thenReturn(concrete);
+
+        ResponseStatusException failure = assertThrows(
+                ResponseStatusException.class,
+                () -> service.sendClientMessage(concrete.getId(), principal(), adminAuth())
+        );
+
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, failure.getStatusCode());
+        assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, concrete.getStatus());
+        assertEquals(ManagerDailyControlActionType.ACTION_TAKEN, concrete.getActionType());
+        assertTrue(concrete.getComment().startsWith("client_message_delivery_unknown:"));
+        verify(dailyControlConcreteItemRepository, times(1)).findByIdForUpdate(concrete.getId());
+        verify(orderRepository, never()).findByIdForCounterUpdate(anyLong());
+        verify(paymentInstructionOrchestrator, never())
+                .prepareAuthorized(anyLong(), any(Authentication.class));
+        verify(clientChatMessageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void reassignedOrderRejectsStaleManagerCardBeforePaymentInstruction() {
+        User oldManagerUser = new User();
+        oldManagerUser.setId(2L);
+        oldManagerUser.setUsername("manager");
+        Manager oldManager = new Manager();
+        oldManager.setId(11L);
+        oldManager.setUser(oldManagerUser);
+        Manager newManager = new Manager();
+        newManager.setId(12L);
+
+        ManagerDailyControl control = control();
+        control.setManager(oldManager);
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(79L);
+        concrete.setStatusLabel("Не оплачено");
+        Order order = new Order();
+        order.setId(79L);
+        order.setManager(newManager);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        Principal managerPrincipal = () -> "manager";
+        Authentication managerAuthentication = new UsernamePasswordAuthenticationToken(
+                "manager",
+                "n/a",
+                List.of(new SimpleGrantedAuthority("ROLE_MANAGER"))
+        );
+
+        when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(managerAuthentication, "ADMIN")).thenReturn(false);
+        when(managerPermissionService.hasRole(managerAuthentication, "OWNER")).thenReturn(false);
+        when(managerPermissionService.hasRole(managerAuthentication, "MANAGER")).thenReturn(true);
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(oldManagerUser));
+        when(managerRepository.findByUserId(2L)).thenReturn(Optional.of(oldManager));
+        when(orderRepository.findByIdForCounterUpdate(79L)).thenReturn(Optional.of(order));
+        doThrow(new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Заказ не найден"))
+                .when(managerAccessService).requireOrderAccess(79L, managerAuthentication);
+
+        ResponseStatusException failure = assertThrows(
+                ResponseStatusException.class,
+                () -> service.sendClientMessage(concrete.getId(), managerPrincipal, managerAuthentication)
+        );
+
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, failure.getStatusCode());
+        verify(orderRepository).findByIdForCounterUpdate(79L);
+        verify(paymentInstructionOrchestrator, never())
+                .prepareAuthorized(anyLong(), any(Authentication.class));
+        verify(clientChatMessageSender, never()).send(any(), any(), any(), any());
     }
 
     @Test
@@ -771,6 +997,74 @@ class ManagerControlServiceTest {
         assertEquals("RESOLVED", response.itemStatus());
         assertTrue(concrete.getComment().contains("перезапущена"));
         verify(scheduledClientMessageService).retryNow(501L);
+    }
+
+    @Test
+    void repairAutomationFailureWaitsForTelegramBindingWithoutRetrying() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        ManagerDailyControl control = control();
+        control.setManager(manager);
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(
+                control,
+                parent,
+                ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE
+        );
+        concrete.setEntityId(501L);
+        Company company = Company.builder()
+                .id(77L)
+                .title("Юпитер")
+                .urlChat("https://t.me/+private")
+                .manager(manager)
+                .build();
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(501L)
+                .companyId(77L)
+                .scenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER)
+                .lastErrorCode("telegram_group_missing")
+                .lastErrorMessage("Для Telegram-группы не задан chatId")
+                .build();
+        ManagerAutomationFailureService.AutomationFailureIssue issue =
+                new ManagerAutomationFailureService.AutomationFailureIssue(
+                        "AUTOMATION_FAILURE:501",
+                        ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE,
+                        501L,
+                        501L,
+                        null,
+                        "Юпитер",
+                        "Предложение повторного заказа",
+                        "Ошибка автоматизации · 4",
+                        "telegram_group_missing · Для Telegram-группы не задан chatId",
+                        "/orders",
+                        company.getUrlChat(),
+                        ClientMessageScenario.ARCHIVE_REORDER_OFFER,
+                        4,
+                        LocalDateTime.now().minusHours(5),
+                        LocalDateTime.now().minusMinutes(1),
+                        LocalDateTime.now().plusDays(1)
+                );
+
+        when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(managerAutomationFailureService.findIssue(
+                manager,
+                ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE,
+                501L
+        )).thenReturn(Optional.of(issue));
+        when(scheduledClientMessageStateRepository.findById(501L)).thenReturn(Optional.of(state));
+        when(companyRepository.findById(77L)).thenReturn(Optional.of(company));
+        when(telegramGroupLinkService.buildInviteUrl(company))
+                .thenReturn("https://t.me/O_Company_Bot?startgroup=cSignedToken");
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.repairConcreteItem(concrete.getId(), principal(), adminAuth())
+        );
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertTrue(exception.getReason().contains("Если бот уже добавлен"));
+        verify(scheduledClientMessageService, never()).retryNow(anyLong());
     }
 
     @Test
@@ -1532,7 +1826,7 @@ class ManagerControlServiceTest {
                         null,
                         null,
                         LocalDateTime.of(2026, 7, 25, 15, 57),
-                        0,
+                        1,
                         0
                 ))
                 .build();
@@ -1574,6 +1868,55 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void overdueExamplesExcludeHealthyScheduledClientMessageQueue() throws Exception {
+        LocalDate today = LocalDate.of(2026, 7, 25);
+        Manager manager = managerWithWorker(11L, 21L);
+        OrderDTOList order = OrderDTOList.builder()
+                .id(25362L)
+                .status("На проверке")
+                .companyTitle("Галерея")
+                .changed(today.minusDays(2))
+                .clientMessageStatus(new ClientMessageOrderStatusResponse(
+                        "scheduled",
+                        "Ожидает отправки",
+                        "wait",
+                        "REVIEW_CHECK_REMINDER",
+                        "rate_limited",
+                        "Следующий слот отправки",
+                        null,
+                        null,
+                        LocalDateTime.now().plusHours(1),
+                        0,
+                        0
+                ))
+                .build();
+
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS,
+                ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
+        )).thenReturn(2);
+        when(orderService.getManagerControlOverdueOrdersByManager(
+                eq(manager), eq(""), eq("На проверке"), eq(today.minusDays(2)),
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), eq(0), eq(5), eq("desc")
+        )).thenReturn(new PageImpl<>(List.of(order), PageRequest.of(0, 5), 1));
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "overdueOrderExamples",
+                Manager.class,
+                String.class,
+                LocalDate.class,
+                int.class
+        );
+        method.setAccessible(true);
+        List<ManagerControlConcreteItemResponse> examples =
+                (List<ManagerControlConcreteItemResponse>) method.invoke(service, manager, "На проверке", today, 5);
+
+        assertTrue(examples.isEmpty());
+    }
+
+    @Test
     void healthyScheduledClientMessageQueueIsNotAControlRemark() throws Exception {
         OrderDTOList order = OrderDTOList.builder()
                 .id(25362L)
@@ -1589,7 +1932,7 @@ class ManagerControlServiceTest {
                         "Следующий слот отправки",
                         null,
                         null,
-                        LocalDateTime.of(2026, 7, 25, 15, 57),
+                        LocalDateTime.now().plusHours(1),
                         0,
                         0
                 ))
@@ -1602,6 +1945,34 @@ class ManagerControlServiceTest {
         method.setAccessible(true);
 
         assertTrue((boolean) method.invoke(service, order));
+    }
+
+    @Test
+    void expiredScheduledAttemptIsAControlRemarkAgain() throws Exception {
+        OrderDTOList order = OrderDTOList.builder()
+                .id(25363L)
+                .clientMessageStatus(new ClientMessageOrderStatusResponse(
+                        "scheduled",
+                        "Ожидает отправки",
+                        "wait",
+                        "REVIEW_CHECK_REMINDER",
+                        "rate_limited",
+                        "Следующий слот отправки",
+                        null,
+                        null,
+                        LocalDateTime.now().minusMinutes(1),
+                        0,
+                        0
+                ))
+                .build();
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "hasHealthyActiveClientMessageQueue",
+                OrderDTOList.class
+        );
+        method.setAccessible(true);
+
+        assertFalse((boolean) method.invoke(service, order));
     }
 
     @Test
@@ -1815,6 +2186,8 @@ class ManagerControlServiceTest {
             ManagerDailyControlItem parent
     ) {
         when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
+        lenient().when(dailyControlConcreteItemRepository.findByIdForUpdate(concrete.getId()))
+                .thenReturn(Optional.of(concrete));
         when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
         when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(dailyControlConcreteItemRepository.findByParentItem(parent)).thenReturn(List.of(concrete));

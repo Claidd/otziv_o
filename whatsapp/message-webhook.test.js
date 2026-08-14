@@ -231,6 +231,64 @@ test("delivers media-only group messages with a stable placeholder", async () =>
   assert.equal(calls[0].payload.message, "[Вложение: ptt]");
 });
 
+test("ignores WhatsApp system notifications instead of tracking them as attachments", async () => {
+  const calls = [];
+  const handler = createMessageHandler({
+    clientId: "whatsapp_vika",
+    postWebhook: async (path, payload) => calls.push({ path, payload }),
+  });
+
+  for (const type of [
+    "broadcast_notification",
+    "ciphertext",
+    "debug",
+    "e2e_notification",
+    "gp2",
+    "group_notification",
+    "notification",
+    "notification_template",
+    "protocol",
+  ]) {
+    const result = await handler({
+      from: "12001@g.us",
+      id: { _serialized: `system-${type}` },
+      type,
+      hasMedia: false,
+      body: "",
+    });
+    assert.equal(result.ignored, true);
+    assert.equal(trackedBody({ type, body: "" }), "");
+  }
+
+  const flaggedResult = await handler({
+    from: "12001@g.us",
+    id: { _serialized: "system-flagged" },
+    type: "chat",
+    body: "WhatsApp service text",
+    _data: { isNotification: true },
+  });
+  assert.equal(flaggedResult.ignored, true);
+  assert.equal(calls.length, 0);
+});
+
+test("reconciliation excludes WhatsApp system notifications", async () => {
+  const payloads = await reconciliationPayloads({
+    clientId: "whatsapp_vika",
+    groupId: "120363000000000000@g.us",
+    groupName: "Клиент",
+    afterTimestamp: 100,
+    messages: [{
+      id: { _serialized: "system-e2e" },
+      timestamp: 110,
+      from: "120363000000000000@g.us",
+      type: "e2e_notification",
+      body: "",
+    }],
+  });
+
+  assert.deepEqual(payloads, []);
+});
+
 test("reconciliation returns incoming and outgoing messages with generated-message evidence", async () => {
   const outboundRegistry = new RecentOutboundRegistry();
   outboundRegistry.begin("120363000000000000@g.us", "Автоматическое сообщение");

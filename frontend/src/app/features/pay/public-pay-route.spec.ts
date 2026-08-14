@@ -148,6 +148,50 @@ describe('public payment route isolation', () => {
     expect(component.reportingPaid()).toBe(false);
     fixture.destroy();
   });
+
+  it('single contractor payment shows card copy for a 16 digit destination', async () => {
+    const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
+    const current: PublicPaymentLink = {
+      ...payment('A'),
+      paymentMethod: 'MANUAL_MOBILE_BANK',
+      manualPhone: '2202 2082 3839 6676'
+    };
+    const paymentsApi = {
+      getPublicPaymentLink: vi.fn(() => of(current)),
+      getPublicSbpBanks: vi.fn(() => of([])),
+      initPublicPayment: vi.fn(),
+      initPublicSbpPayment: vi.fn(),
+      reportPublicManualPayment: vi.fn()
+    };
+    await configure(PayPageComponent, params, paymentsApi);
+    const fixture = TestBed.createComponent(PayPageComponent);
+    const component = fixture.componentInstance;
+
+    expect(component.manualPaymentTitle()).toBe('Оплата по номеру карты');
+    expect(component.manualTransferDestinationLabel()).toBe('Номер карты');
+    fixture.destroy();
+  });
+
+  it('common contractor payment keeps mobile-bank copy for a phone destination', async () => {
+    const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
+    const current: PublicCommonInvoice = {
+      ...invoice('A'),
+      paymentRouteType: 'MANUAL_MOBILE_BANK',
+      manualPhone: '+7 (999) 123-45-67'
+    };
+    const paymentsApi = {
+      getPublicCommonInvoice: vi.fn(() => of(current)),
+      initPublicCommonInvoicePayment: vi.fn(),
+      reportPublicCommonInvoicePaid: vi.fn()
+    };
+    await configure(PayGroupPageComponent, params, paymentsApi);
+    const fixture = TestBed.createComponent(PayGroupPageComponent);
+    const component = fixture.componentInstance;
+
+    expect(component.routeTitle()).toBe('Оплата через мобильный банк');
+    expect(component.manualTransferDestinationLabel()).toBe('Номер телефона');
+    fixture.destroy();
+  });
 });
 
 async function configure(

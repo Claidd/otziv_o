@@ -7,6 +7,7 @@ import { ApiService, PublicPaymentLink, PublicSbpBank, TbankPaymentPageMode } fr
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 import { configuredPaymentTarget, type PaymentNavigationPurpose } from '../shared/payment-navigation';
+import { manualTransferDestinationPresentation } from '../shared/manual-transfer-destination';
 
 @Component({
   selector: 'app-public-pay-page',
@@ -72,13 +73,16 @@ import { configuredPaymentTarget, type PaymentNavigationPurpose } from '../share
 
                 @if (manualPayment()) {
                   <section class="manual-card">
-                    <h2>{{ externalManualPayment() ? manualPaymentButtonLabel() : (payment.manualPhone || 'Телефон не указан') }}</h2>
+                    <h2>{{ externalManualPayment() ? manualPaymentButtonLabel() : manualTransferDestinationLabel() }}</h2>
                     <p>{{ payment.manualRecipientName || 'Получатель не указан' }}</p>
+                    @if (!externalManualPayment()) {
+                    <strong>{{ payment.manualPhone || 'Реквизиты не указаны' }}</strong>
+                    }
                     <small>{{ payment.manualComment || 'После оплаты нажмите кнопку подтверждения.' }}</small>
                     @if (manualPaymentDestinationAvailable()) {
                     <button type="button" (click)="externalManualPayment() ? openManualPaymentUrl() : copyManualValue(payment.manualPhone)">
                       <span class="material-icons-sharp">{{ externalManualPayment() ? 'open_in_new' : 'content_copy' }}</span>
-                      {{ externalManualPayment() ? 'Открыть оплату' : 'Скопировать телефон' }}
+                      {{ externalManualPayment() ? 'Открыть оплату' : manualTransferCopyLabel() }}
                     </button>
                     } @else {
                     <p class="destination-error" role="alert">Реквизиты не настроены. Не переводите деньги и обратитесь к менеджеру.</p>
@@ -161,6 +165,11 @@ export class PublicPayPage implements OnDestroy {
   readonly title = computed(() => this.payment()?.payable ? 'Оплата заказа' : 'Платежная ссылка');
   readonly manualPayment = computed(() => ['MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK'].includes(this.payment()?.paymentMethod ?? ''));
   readonly externalManualPayment = computed(() => this.payment()?.paymentMethod === 'MANUAL_EXTERNAL_LINK' || this.payment()?.manualPaymentType === 'EXTERNAL_LINK');
+  readonly manualTransferDestination = computed(() => manualTransferDestinationPresentation(
+    this.payment()?.manualPhone
+  ));
+  readonly manualTransferDestinationLabel = computed(() => this.manualTransferDestination().fieldLabel);
+  readonly manualTransferCopyLabel = computed(() => this.manualTransferDestination().copyLabel);
   readonly statusLabel = computed(() => this.statusText(this.payment()?.status));
   readonly paymentPageMode = computed<TbankPaymentPageMode>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
   readonly showSbpPayment = computed(() => !this.manualPayment() && this.paymentPageMode() !== 'BANK_ONLY');

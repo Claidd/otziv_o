@@ -11,7 +11,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 class OrderManualArchivePolicyTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {"В проверку", "На проверке", "Коррекция"})
+    @ValueSource(strings = {"В проверку", "На проверке", "Коррекция", "Публикация"})
     void allowsOnlyApprovedWorkStatuses(String status) {
         assertTrue(OrderManualArchivePolicy.isAllowed(order(status)));
     }
@@ -19,7 +19,6 @@ class OrderManualArchivePolicyTest {
     @ParameterizedTest
     @ValueSource(strings = {
             "Новый",
-            "Публикация",
             "Опубликовано",
             "Выставлен счет",
             "Напоминание",

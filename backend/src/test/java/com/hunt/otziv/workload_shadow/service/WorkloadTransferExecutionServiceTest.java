@@ -12,10 +12,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse;
+import com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository;
+import com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository.LiveControlProjection;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository.ReadyWorkflowProjection;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +34,8 @@ class WorkloadTransferExecutionServiceTest {
     @Mock private WorkloadTransferExecutionFailureService failureService;
     @Mock private WorkloadLiveSettingsService liveSettingsService;
     @Mock private WorkloadShadowSettingsService shadowSettingsService;
+    @Mock private WorkloadLiveControlRepository liveControlRepository;
+    @Mock private LiveControlProjection liveControl;
 
     private WorkloadTransferExecutionService service;
 
@@ -41,7 +46,8 @@ class WorkloadTransferExecutionServiceTest {
                 transactionService,
                 failureService,
                 liveSettingsService,
-                shadowSettingsService
+                shadowSettingsService,
+                liveControlRepository
         );
     }
 
@@ -108,6 +114,13 @@ class WorkloadTransferExecutionServiceTest {
                 .hasMessageContaining("Workflow не указан");
         verify(repository, never()).confirmByOwner(anyLong(), any());
 
+        WorkloadLiveSettingsResponse live = settings("LIVE", true);
+        when(liveSettingsService.current()).thenReturn(live);
+        when(liveSettingsService.applicationAllowed(live)).thenReturn(true);
+        when(liveControlRepository.lockState()).thenReturn(Optional.of(liveControl));
+        when(liveControl.getSettingsRevision()).thenReturn(1L);
+        when(liveControl.getMode()).thenReturn("LIVE");
+        when(liveControl.getApplyEnabled()).thenReturn("true");
         when(shadowSettingsService.current()).thenReturn(null);
         when(shadowSettingsService.zone(null)).thenReturn(ZoneId.of("Asia/Irkutsk"));
         when(repository.confirmByOwner(eq(41L), any())).thenReturn(0);

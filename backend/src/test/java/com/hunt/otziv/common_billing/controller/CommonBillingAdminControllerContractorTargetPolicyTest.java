@@ -10,11 +10,15 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
+import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSourceConfirmationRequest;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.server.ResponseStatusException;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class CommonBillingAdminControllerContractorTargetPolicyTest {
 
@@ -42,6 +46,17 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
                 () -> controller.sendInvoice(INVOICE_ID),
                 () -> controller.remind(INVOICE_ID),
                 () -> controller.markPaid(INVOICE_ID, null, null),
+                () -> controller.confirmContractorPaymentSource(
+                        INVOICE_ID,
+                        new ContractorPaymentSourceConfirmationRequest(
+                                true,
+                                true,
+                                10_000L,
+                                LocalDateTime.now(),
+                                "Проверена выписка"
+                        ),
+                        null
+                ),
                 () -> controller.retryAttention(INVOICE_ID),
                 () -> controller.resolveAttention(INVOICE_ID),
                 () -> controller.repairPaymentRoute(INVOICE_ID),
@@ -70,5 +85,20 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
 
         verify(targetAccessPolicy, times(mutations.size())).requireCanManageCommonInvoice(INVOICE_ID);
         verifyNoInteractions(commonBillingService, approvalFailureMarker);
+    }
+
+    @Test
+    void exactContractorConfirmationIsRestrictedToAdminAndOwner() throws Exception {
+        PreAuthorize authorization = CommonBillingAdminController.class
+                .getMethod(
+                        "confirmContractorPaymentSource",
+                        Long.class,
+                        ContractorPaymentSourceConfirmationRequest.class,
+                        java.security.Principal.class
+                )
+                .getAnnotation(PreAuthorize.class);
+
+        assertThat(authorization).isNotNull();
+        assertThat(authorization.value()).isEqualTo("hasAnyRole('ADMIN', 'OWNER')");
     }
 }

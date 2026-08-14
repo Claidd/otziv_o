@@ -15,6 +15,8 @@ import static org.mockito.Mockito.when;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferOfferRepository;
+import com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository;
+import com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository.LiveControlProjection;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferOfferRepository.CallbackProjection;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -43,6 +45,8 @@ class WorkloadTransferTelegramCallbackServiceTest {
     @Mock private WorkloadTransferOfferRepository repository;
     @Mock private WorkloadLiveSettingsService liveSettingsService;
     @Mock private WorkloadShadowSettingsService shadowSettingsService;
+    @Mock private WorkloadLiveControlRepository liveControlRepository;
+    @Mock private LiveControlProjection liveControl;
     @Mock private TelegramService telegramService;
     @Mock private CallbackProjection projection;
 
@@ -54,8 +58,13 @@ class WorkloadTransferTelegramCallbackServiceTest {
                 repository,
                 liveSettingsService,
                 shadowSettingsService,
-                telegramService
+                telegramService,
+                liveControlRepository
         );
+        lenient().when(liveControlRepository.lockState()).thenReturn(Optional.of(liveControl));
+        lenient().when(liveControl.getSettingsRevision()).thenReturn(1L);
+        lenient().when(liveControl.getMode()).thenReturn("LIVE");
+        lenient().when(liveControl.getApplyEnabled()).thenReturn("true");
     }
 
     @Test

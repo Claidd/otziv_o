@@ -115,8 +115,7 @@ public class PaymentInvoiceRetryScheduler {
 
     @Transactional
     public void scheduleBadReviewAutoBan(Order order) {
-        if (!canSchedule(order)
-                || !appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED, true)) {
+        if (!canSchedule(order)) {
             return;
         }
         scheduleOrderState(

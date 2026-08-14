@@ -413,6 +413,55 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     @Modifying
     @Query(value = """
         UPDATE scheduled_client_message_state state
+        SET state.delivery_status = 'UNKNOWN',
+            state.last_error_code = 'state_transaction_outcome_uncertain',
+            state.last_error_message = 'Подготовленная отправка прервалась; проверьте чат клиента вручную',
+            state.next_attempt_at = NULL,
+            state.locked_until = NULL,
+            state.updated_at = :now
+        WHERE state.scenario = 'BAD_REVIEW_INVOICE'
+          AND state.state_status = 'ACTIVE'
+          AND state.delivery_status = 'PREPARED'
+          AND state.locked_until IS NOT NULL
+          AND state.locked_until < :now
+        """, nativeQuery = true)
+    int quarantineExpiredPreparedBadReviewDeliveries(@Param("now") LocalDateTime now);
+
+    @Modifying
+    @Query(value = """
+        UPDATE scheduled_client_message_state state
+        SET state.next_attempt_at = :now,
+            state.locked_until = NULL,
+            state.last_error_code = 'expired_claim_recovered',
+            state.last_error_message = 'Захват истек до подготовки отправки; задача возвращена в очередь',
+            state.updated_at = :now
+        WHERE state.scenario = 'BAD_REVIEW_INVOICE'
+          AND state.state_status = 'ACTIVE'
+          AND state.delivery_status IS NULL
+          AND state.last_error_code = 'state_transaction_in_progress'
+          AND state.locked_until IS NOT NULL
+          AND state.locked_until < :now
+        """, nativeQuery = true)
+    int releaseExpiredUnpreparedBadReviewClaims(@Param("now") LocalDateTime now);
+
+    @Modifying
+    @Query(value = """
+        UPDATE scheduled_client_message_state state
+        SET state.next_attempt_at = :now,
+            state.locked_until = NULL,
+            state.updated_at = :now
+        WHERE state.scenario = :scenario
+          AND state.state_status = 'ACTIVE'
+          AND state.last_error_code = :errorCode
+          AND (state.next_attempt_at IS NULL OR state.next_attempt_at > :now)
+        """, nativeQuery = true)
+    int releaseReenabledScenario(@Param("scenario") String scenario,
+                                 @Param("errorCode") String errorCode,
+                                 @Param("now") LocalDateTime now);
+
+    @Modifying
+    @Query(value = """
+        UPDATE scheduled_client_message_state state
         SET state.locked_until = :lockedUntil,
             state.next_attempt_at = NULL,
             state.last_error_code = :claimCode,

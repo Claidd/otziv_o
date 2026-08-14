@@ -538,14 +538,38 @@
                           (input)="updateContractorProfile(profile.id, 'recipientName', $any($event.target).value)"
                         >
                       </label>
-                      <label>
-                        <span>Номер для перевода</span>
+                      <label
+                        class="transfer-identifier-field"
+                        [class.invalid]="contractorTransferIdentifierErrorVisible(profile)"
+                      >
+                        <span>Телефон или номер карты для перевода</span>
                         <input
                           type="text"
+                          inputmode="tel"
                           [value]="profile.paymentPhone || ''"
                           [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
                           (input)="updateContractorProfile(profile.id, 'paymentPhone', $any($event.target).value)"
+                          (blur)="markContractorTransferIdentifierTouched(profile.id)"
+                          [attr.aria-invalid]="contractorTransferIdentifierErrorVisible(profile)"
+                          [attr.aria-describedby]="'transfer-identifier-help-' + profile.id
+                            + (contractorTransferIdentifierErrorVisible(profile)
+                              ? ' transfer-identifier-error-' + profile.id
+                              : '')"
+                          placeholder="+7 999 123-45-67 или 2202 2082 3839 6676"
                         >
+                        <small [id]="'transfer-identifier-help-' + profile.id">
+                          Телефон: 10–15 цифр; можно использовать +, пробелы, скобки и дефисы.
+                          Карта: 16–19 цифр; можно использовать пробелы и дефисы.
+                        </small>
+                        @if (contractorTransferIdentifierErrorVisible(profile)) {
+                          <small
+                            class="field-error"
+                            [id]="'transfer-identifier-error-' + profile.id"
+                            role="alert"
+                          >
+                            {{ contractorTransferIdentifierValidation(profile).error }}
+                          </small>
+                        }
                       </label>
                       <label>
                         <span>Банк</span>
@@ -848,6 +872,7 @@
                       <small>Начисления за выполненные работы</small>
                       <strong>{{ contractorQueueHealth()?.completionRewardRepair?.retrying || 0 }} повторов</strong>
                       <em>{{ contractorQueueHealth()?.completionRewardRepair?.dueRetries || 0 }} просрочено</em>
+                      <em>{{ contractorQueueHealth()?.deferredActiveRecoveryBaseGaps || 0 }} ожидают завершения восстановления</em>
                       <em>Код: {{ contractorQueueHealth()?.completionRewardRepair?.lastErrorCode || '—' }}</em>
                     </span>
                   </div>

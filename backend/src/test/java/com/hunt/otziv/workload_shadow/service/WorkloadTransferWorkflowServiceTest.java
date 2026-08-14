@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository;
+import com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository.LiveControlProjection;
 import com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferWorkflowRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferWorkflowRepository.RecommendationCandidateProjection;
@@ -22,6 +24,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +40,9 @@ class WorkloadTransferWorkflowServiceTest {
     @Mock private WorkloadTransferGraphQueryService graphQueryService;
     @Mock private WorkloadLiveSettingsService liveSettingsService;
     @Mock private WorkloadShadowSettingsService shadowSettingsService;
+    @Mock private WorkloadLiveDailyQuotaLockService quotaLockService;
+    @Mock private WorkloadLiveControlRepository liveControlRepository;
+    @Mock private LiveControlProjection liveControl;
 
     private ObjectMapper objectMapper;
     private WorkloadTransferWorkflowService service;
@@ -49,11 +55,21 @@ class WorkloadTransferWorkflowServiceTest {
                 graphQueryService,
                 liveSettingsService,
                 shadowSettingsService,
-                new WorkloadTransferGraphSnapshotService(objectMapper)
+                new WorkloadTransferGraphSnapshotService(objectMapper),
+                quotaLockService,
+                liveControlRepository
         );
-        when(shadowSettingsService.current()).thenReturn(null);
-        when(shadowSettingsService.zone(null))
+        var shadow = org.mockito.Mockito.mock(
+                com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsResponse.class
+        );
+        when(shadow.revision()).thenReturn(7L);
+        when(shadowSettingsService.current()).thenReturn(shadow);
+        when(shadowSettingsService.zone(shadow))
                 .thenReturn(ZoneId.of("Asia/Irkutsk"));
+        when(liveControlRepository.lockState()).thenReturn(Optional.of(liveControl));
+        when(liveControl.getSettingsRevision()).thenReturn(1L);
+        when(liveControl.getMode()).thenReturn("CANARY");
+        when(liveControl.getApplyEnabled()).thenReturn("true");
     }
 
     @Test
@@ -81,6 +97,8 @@ class WorkloadTransferWorkflowServiceTest {
                 anyString(),
                 eq("CANARY"),
                 eq(true),
+                anyLong(),
+                anyLong(),
                 any(LocalDate.class),
                 any(LocalDateTime.class)
         )).thenReturn(2);
@@ -100,6 +118,8 @@ class WorkloadTransferWorkflowServiceTest {
                 workflowsJson.capture(),
                 eq("CANARY"),
                 eq(true),
+                anyLong(),
+                anyLong(),
                 any(LocalDate.class),
                 any(LocalDateTime.class)
         );

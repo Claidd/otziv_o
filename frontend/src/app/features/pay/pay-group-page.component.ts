@@ -5,6 +5,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PaymentsApi, PublicCommonInvoice } from '../../core/payments.api';
 import { LatestRouteRequest } from '../../core/latest-route-request';
 import { RouteEpoch, RouteEpochTicket } from '../../core/route-epoch';
+import { manualTransferDestinationPresentation } from '../../shared/manual-transfer-destination';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
@@ -53,6 +54,10 @@ export class PayGroupPageComponent {
   readonly manualPaymentButtonLabel = computed(() => this.invoice()?.manualPaymentButtonLabel?.trim()
     || 'Открыть ссылку оплаты');
   readonly manualComment = computed(() => this.invoice()?.manualComment?.trim() || 'Оплата общего счета');
+  readonly manualTransferDestination = computed(() => manualTransferDestinationPresentation(
+    this.invoice()?.manualPhone
+  ));
+  readonly manualTransferDestinationLabel = computed(() => this.manualTransferDestination().fieldLabel);
   readonly clientReported = computed(() => Boolean(this.invoice()?.clientReportedAt));
   readonly canReportPaid = computed(() => Boolean(
     this.invoice()?.clientReportable
@@ -68,7 +73,7 @@ export class PayGroupPageComponent {
       return 'Оплата по ссылке банка';
     }
     if (this.manualRoute()) {
-      return 'Оплата по номеру телефона';
+      return this.manualTransferDestination().paymentTitle;
     }
     return 'Оплата остатка';
   });

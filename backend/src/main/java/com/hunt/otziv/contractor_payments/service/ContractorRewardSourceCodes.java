@@ -1,6 +1,8 @@
 package com.hunt.otziv.contractor_payments.service;
 
+import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import java.util.List;
+import java.util.OptionalLong;
 
 /**
  * Stable internal identifiers for contractor reward sources. They are kept
@@ -61,10 +63,39 @@ public final class ContractorRewardSourceCodes {
         return ORDER_COMPLETION_MANAGER.equals(source)
                 || ORDER_COMPLETION_SPECIALIST.equals(source)
                 || PERFORMER_PRODUCT_COMPLETION.equals(source)
-                || startsWith(source, BAD_REVIEW_MANAGER_PREFIX)
-                || startsWith(source, BAD_REVIEW_SPECIALIST_PREFIX)
-                || startsWith(source, BAD_REVIEW_CANCEL_MANAGER_PREFIX)
-                || startsWith(source, BAD_REVIEW_CANCEL_SPECIALIST_PREFIX);
+                || completionTaskId(source).isPresent();
+    }
+
+    /**
+     * Parses only source identifiers that this application can generate.
+     * Prefix lookalikes, blank suffixes, non-numeric values and overflows stay
+     * unclassified so financial transitions fail closed.
+     */
+    public static OptionalLong completionTaskId(String source) {
+        for (String prefix : List.of(
+                BAD_REVIEW_MANAGER_PREFIX,
+                BAD_REVIEW_SPECIALIST_PREFIX,
+                BAD_REVIEW_CANCEL_MANAGER_PREFIX,
+                BAD_REVIEW_CANCEL_SPECIALIST_PREFIX
+        )) {
+            if (!startsWith(source, prefix)) {
+                continue;
+            }
+            String suffix = source.substring(prefix.length());
+            if (suffix.isEmpty()
+                    || suffix.charAt(0) < '1'
+                    || suffix.charAt(0) > '9'
+                    || !suffix.chars().allMatch(character -> character >= '0' && character <= '9')) {
+                return OptionalLong.empty();
+            }
+            try {
+                long taskId = Long.parseLong(suffix);
+                return taskId > 0L ? OptionalLong.of(taskId) : OptionalLong.empty();
+            } catch (NumberFormatException ignored) {
+                return OptionalLong.empty();
+            }
+        }
+        return OptionalLong.empty();
     }
 
     public static boolean isOrderSpecialistAttributionSource(String source) {
@@ -86,6 +117,34 @@ public final class ContractorRewardSourceCodes {
         return isLegacyOrderReward(source) || LEGACY_PERFORMER_PRODUCT.equals(source);
     }
 
+    /**
+     * The ledger accepts only application-owned source/role pairs. A persisted
+     * role or final-attribution flag is not enough to turn an unknown source
+     * into contractor debt.
+     */
+    public static boolean isLedgerSourceCompatible(String source, ContractorRole role) {
+        if (source == null || role == null) {
+            return false;
+        }
+        if (role == ContractorRole.MANAGER) {
+            return LEGACY_ORDER_MANAGER.equals(source)
+                    || LEGACY_PERFORMER_PRODUCT.equals(source)
+                    || ORDER_COMPLETION_MANAGER.equals(source)
+                    || PERFORMER_PRODUCT_COMPLETION.equals(source)
+                    || validTaskSource(source, BAD_REVIEW_MANAGER_PREFIX)
+                    || validTaskSource(source, BAD_REVIEW_CANCEL_MANAGER_PREFIX);
+        }
+        if (role == ContractorRole.SPECIALIST) {
+            return LEGACY_ORDER_SPECIALIST.equals(source)
+                    || LEGACY_PERFORMER_PRODUCT.equals(source)
+                    || ORDER_COMPLETION_SPECIALIST.equals(source)
+                    || PERFORMER_PRODUCT_COMPLETION.equals(source)
+                    || validTaskSource(source, BAD_REVIEW_SPECIALIST_PREFIX)
+                    || validTaskSource(source, BAD_REVIEW_CANCEL_SPECIALIST_PREFIX);
+        }
+        return false;
+    }
+
     private static String taskSource(String prefix, Long taskId) {
         if (taskId == null || taskId <= 0) {
             throw new IllegalArgumentException("Task id is required for contractor reward source");
@@ -99,5 +158,9 @@ public final class ContractorRewardSourceCodes {
 
     private static boolean startsWith(String source, String prefix) {
         return source != null && source.startsWith(prefix);
+    }
+
+    private static boolean validTaskSource(String source, String prefix) {
+        return startsWith(source, prefix) && completionTaskId(source).isPresent();
     }
 }
