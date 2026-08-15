@@ -10,6 +10,7 @@ import {
   type CommonInvoiceDetailsResponse,
   type ManualPaymentConfirmationRequest
 } from '../../core/common-billing.api';
+import { CommonManualPaymentAttributionApi } from '../../core/common-manual-payment-attribution.api';
 import { MetricSnapshotApi } from '../../core/metric-snapshot.api';
 import { PaymentsApi } from '../../core/payments.api';
 import {
@@ -74,6 +75,11 @@ import {
   trackManagerStatus
 } from './manager-board.config';
 import { ManagerBoardActionFacade } from './manager-board-action.facade';
+import { CommonManualPaymentAttributionModalComponent } from '../admin/common-billing/common-manual-payment-attribution-modal.component';
+import {
+  ManagerCommonInvoicePaymentFacade,
+  type ManagerCommonManualPaymentContext
+} from './manager-common-invoice-payment.facade';
 import { ManagerCompanyCardComponent } from './manager-company-card.component';
 import type {
   ManagerCompanyBillingDraftChange,
@@ -94,6 +100,10 @@ import type { ManagerOrderEditDraftChange } from './manager-order-edit-modal.com
 import { ManagerOrderEditModalComponent } from './manager-order-edit-modal.component';
 import type { ManagerCreateOrderDraftChange } from './manager-order-create-modal.component';
 import { ManagerOrderCreateModalComponent } from './manager-order-create-modal.component';
+import {
+  ManagerManualCardPaymentModalComponent,
+  type ManagerManualCardPaymentCompleted
+} from './manager-manual-card-payment-modal.component';
 
 type CompanyCreateContext = {
   source: CompanyCreateSource;
@@ -105,6 +115,11 @@ type ChatBotLinkPlatform = Exclude<ManagerChatBotInviteKind, null>;
 type ChatBotLinkPoll = {
   startedAt: number;
   platform: ChatBotLinkPlatform;
+};
+
+type ChatLinkEditor = {
+  companyId: number;
+  title: string;
 };
 
 @Component({
@@ -123,6 +138,8 @@ type ChatBotLinkPoll = {
     ManagerOrderCardComponent,
     ManagerOrderEditModalComponent,
     ManagerOrderCreateModalComponent,
+    ManagerManualCardPaymentModalComponent,
+    CommonManualPaymentAttributionModalComponent,
     PersonalRemindersComponent,
     RouterLink
   ],
@@ -134,6 +151,7 @@ export class ManagerBoardComponent implements OnDestroy {
   private readonly managerApi = inject(ManagerApi);
   private readonly paymentsApi = inject(PaymentsApi);
   private readonly commonBillingApi = inject(CommonBillingApi);
+  private readonly commonManualPaymentApi = inject(CommonManualPaymentAttributionApi);
   private readonly metricSnapshotApi = inject(MetricSnapshotApi);
   private readonly toastService = inject(ToastService);
   private readonly companyDeepReportLaunch = inject(CompanyDeepReportLaunchService);
@@ -182,7 +200,12 @@ export class ManagerBoardComponent implements OnDestroy {
   readonly companyCreateContext = signal<CompanyCreateContext | null>(null);
   readonly overdueOrders = signal<ManagerOverdueOrders | null>(null);
   readonly overdueModalOpen = signal(false);
+  readonly chatLinkEditor = signal<ChatLinkEditor | null>(null);
+  readonly chatLinkDraft = signal('');
+  readonly chatLinkSaving = signal(false);
 
+  readonly manualCardPaymentOrder = signal<OrderCardItem | null>(null);
+  readonly commonManualPayment = signal<ManagerCommonManualPaymentContext | null>(null);
   private readonly companyFacade = new ManagerBoardCompanyFacade({
     managerApi: this.managerApi,
     commonBillingApi: this.commonBillingApi,
@@ -206,7 +229,18 @@ export class ManagerBoardComponent implements OnDestroy {
     loadBoard: () => this.loadBoard(),
     patchBoard: (updater) => this.patchBoard(updater),
     errorMessage: (err, fallback) => this.errorMessage(err, fallback),
-    canOverrideActiveBankPayment: () => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER'])
+    canOverrideActiveBankPayment: () => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']),
+    openManualCardPayment: (order) => this.manualCardPaymentOrder.set(order)
+  });
+  private readonly commonInvoicePaymentFacade = new ManagerCommonInvoicePaymentFacade({
+    attributionApi: this.commonManualPaymentApi,
+    commonBillingApi: this.commonBillingApi,
+    mutationKey: this.mutationKey,
+    requestLegacyEvidence: (invoiceId) => this.requestCommonInvoiceManualPaymentEvidence(invoiceId),
+    openAttribution: (context) => this.commonManualPayment.set(context),
+    completed: (details, order) => this.completeCommonInvoicePaid(details, order),
+    failed: (title, message) => this.toastService.error(title, message),
+    errorMessage: (error, fallback) => this.errorMessage(error, fallback)
   });
   readonly editCompany = this.companyFacade.editCompany;
   readonly editDraft = this.companyFacade.editDraft;
@@ -687,6 +721,50 @@ export class ManagerBoardComponent implements OnDestroy {
     this.repairChatBinding(order.companyId, order.companyTitle, order);
   }
 
+  openChatLinkEditor(companyId: number | null | undefined, title: string | null | undefined, urlChat: string): void {
+    if (!companyId) {
+      this.toastService.error('Компания не найдена', 'У карточки отсутствует ID компании');
+      return;
+    }
+    this.chatLinkDraft.set(urlChat || '');
+    this.chatLinkEditor.set({ companyId, title: title || `Компания #${companyId}` });
+  }
+
+  closeChatLinkEditor(): void {
+    if (this.chatLinkSaving()) {
+      return;
+    }
+    this.chatLinkEditor.set(null);
+    this.chatLinkDraft.set('');
+  }
+
+  saveChatLink(): void {
+    const editor = this.chatLinkEditor();
+    if (!editor || this.chatLinkSaving()) {
+      return;
+    }
+    const urlChat = this.chatLinkDraft().trim();
+    this.chatLinkSaving.set(true);
+    this.managerApi.updateCompanyChatLink(editor.companyId, urlChat).subscribe({
+      next: (response) => {
+        this.applyChatBindingRepair(response);
+        this.chatLinkSaving.set(false);
+        this.chatLinkEditor.set(null);
+        this.chatLinkDraft.set('');
+        if (response.repaired) {
+          this.toastService.success('Ссылка сохранена', 'Группа уже привязана');
+        } else {
+          this.toastService.warning('Ссылка сохранена', response.message || 'Нажмите «Починить», чтобы завершить привязку');
+        }
+        this.loadBoard();
+      },
+      error: (err) => {
+        this.chatLinkSaving.set(false);
+        this.toastService.error('Ссылка не сохранена', this.errorMessage(err, 'Не удалось обновить ссылку на чат'));
+      }
+    });
+  }
+
   private repairChatBinding(companyId: number, title: string | null | undefined, item: CompanyCardItem | OrderCardItem): void {
     const platform = managerChatBotInviteKind(item);
     const fallbackUrl = this.chatBindingFallbackUrl(item);
@@ -970,15 +1048,55 @@ export class ManagerBoardComponent implements OnDestroy {
     this.actionFacade.updateOrderStatus(order, action);
   }
 
+
+  closeManualCardPayment(): void {
+    this.manualCardPaymentOrder.set(null);
+  }
+
+  completeManualCardPayment(result: ManagerManualCardPaymentCompleted): void {
+    const order = this.manualCardPaymentOrder();
+    this.manualCardPaymentOrder.set(null);
+    this.toastService.success(
+      'Оплата отмечена',
+      `${order?.companyTitle || `Заказ #${result.context.orderId}`}: получатель — ${this.manualCardPaymentRecipientLabel(result)}`
+    );
+    this.loadBoard();
+  }
+
+  private manualCardPaymentRecipientLabel(result: ManagerManualCardPaymentCompleted): string {
+    const prefix = result.recipient.recipientType === 'OWNER'
+      ? 'Владелец'
+      : result.recipient.recipientType === 'MANAGER' ? 'Менеджер' : 'Специалист';
+    return result.recipient.displayName?.trim() ? `${prefix} · ${result.recipient.displayName.trim()}` : prefix;
+  }
+  closeCommonManualPayment(): void {
+    this.commonManualPayment.set(null);
+    this.mutationKey.set(null);
+  }
+
+  completeCommonManualPayment(details: CommonInvoiceDetailsResponse): void {
+    const context = this.commonManualPayment();
+    this.commonManualPayment.set(null);
+    this.mutationKey.set(null);
+    if (context) {
+      this.completeCommonInvoicePaid(details, context.order);
+    }
+  }
+
+  private completeCommonInvoicePaid(details: CommonInvoiceDetailsResponse, order: OrderCardItem): void {
+    this.toastService.success(
+      'Общий счет обновлен',
+      `${order.companyTitle}: ${this.commonInvoiceStatusLabel(details, 'Оплачено')}`
+    );
+    this.loadBoard();
+  }
+
   private updateCommonInvoiceStatus(order: OrderCardItem, action: StatusAction): void {
     const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
     const key = `order-${order.id}-${action.status}`;
     this.mutationKey.set(key);
-    const paymentEvidence = action.status === 'Оплачено'
-      ? this.requestCommonInvoiceManualPaymentEvidence(invoiceId)
-      : null;
-    if (action.status === 'Оплачено' && !paymentEvidence) {
-      this.mutationKey.set(null);
+    if (action.status === 'Оплачено') {
+      this.commonInvoicePaymentFacade.start(order, invoiceId);
       return;
     }
     if (action.status === 'Архив') {
@@ -996,8 +1114,6 @@ export class ManagerBoardComponent implements OnDestroy {
           return this.commonBillingApi.markUnpaid(invoiceId);
         case 'Бан':
           return this.commonBillingApi.markBan(invoiceId);
-        case 'Оплачено':
-          return this.commonBillingApi.markPaid(invoiceId, paymentEvidence!);
         default:
           return null;
       }

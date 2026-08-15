@@ -3,6 +3,7 @@ package com.hunt.otziv.manager_control.service;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
@@ -1473,6 +1474,35 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void repairCompanyChatBindingResolvesWithoutSyncWhenCompanyIsBanned() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setReasonCode("CHAT_BINDING_ISSUES");
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMPANY_CHAT_BINDING");
+        concrete.setEntityId(501L);
+        concrete.setReason("Почему в контроле: WhatsApp-группа не привязана к компании");
+        Company company = new Company();
+        company.setId(501L);
+        company.setTitle("Компания без связи");
+        company.setUrlChat("https://chat.whatsapp.com/old-link");
+        company.setStatus(CompanyStatus.builder().title("Бан").build());
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(companyRepository.findById(501L)).thenReturn(Optional.of(company));
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals("RESOLVED", response.itemStatus());
+        assertTrue(concrete.getComment().contains("статусе «Бан»"));
+        verify(whatsAppGroupLinkSyncService, never()).repairCompanyLink(any());
+        verify(sharedChatLinkSyncService, never()).syncSharedChatIds();
+    }
+
+    @Test
     void repairRegularOrderCardRestoresClientTextReminderForNewWaitingOrder() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);
@@ -1948,7 +1978,7 @@ class ManagerControlServiceTest {
     }
 
     @Test
-    void expiredScheduledAttemptIsAControlRemarkAgain() throws Exception {
+    void dueScheduledAttemptRemainsHealthyWhileItWaitsInTheActiveQueue() throws Exception {
         OrderDTOList order = OrderDTOList.builder()
                 .id(25363L)
                 .clientMessageStatus(new ClientMessageOrderStatusResponse(
@@ -1972,7 +2002,7 @@ class ManagerControlServiceTest {
         );
         method.setAccessible(true);
 
-        assertFalse((boolean) method.invoke(service, order));
+        assertTrue((boolean) method.invoke(service, order));
     }
 
     @Test
@@ -2021,6 +2051,37 @@ class ManagerControlServiceTest {
 
         assertEquals(1, synced.size());
         verify(dailyControlConcreteItemRepository, times(1)).save(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void concreteSynchronizationAutomaticallyClosesStoredOrderWhenHealthyQueueRemovesItFromFreshExamples() throws Exception {
+        ManagerDailyControl control = new ManagerDailyControl();
+        control.setId(72L);
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setId(579L);
+        parent.setItemType(ManagerDailyControlItemType.ORDER_STATUS);
+
+        ManagerDailyControlConcreteItem stale = concrete(control, parent, "ORDER");
+        stale.setStatus(ManagerDailyControlItemStatus.OPEN);
+        when(dailyControlConcreteItemRepository.findByParentItemForUpdate(parent)).thenReturn(List.of(stale));
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "syncConcreteExamples",
+                ManagerDailyControlItem.class,
+                List.class
+        );
+        method.setAccessible(true);
+        List<ManagerControlConcreteItemResponse> synced =
+                (List<ManagerControlConcreteItemResponse>) method.invoke(service, parent, List.of());
+
+        assertTrue(synced.isEmpty());
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, stale.getStatus());
+        assertEquals(ManagerDailyControlActionType.RESOLVED, stale.getActionType());
+        assertTrue(stale.isAutomaticResolution());
+        assertEquals("Проблема больше не актуальна и закрыта автоматически", stale.getComment());
+        verify(dailyControlConcreteItemRepository).save(stale);
     }
 
     @Test

@@ -257,6 +257,7 @@ public class OrderDtoMapper {
                 .maxGroupChatId(company.getMaxGroupChatId())
                 .maxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company))
                 .maxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company))
+                .allowWorkerPublicationDateEdit(company.isAllowWorkerPublicationDateEdit())
                 .build();
     }
 

@@ -6,14 +6,14 @@
   [class.card-tone--bad]="isBadTone()"
 >
   <header>
-    @if (hasCompanyHeaderUrl()) {
+    @if (hasCompanyFilialUrl()) {
       <a
-        [href]="companyHeaderUrl()"
-        [class.chat-bot-link-pending]="hasActiveChatBindingIssue()"
-        [title]="chatLinkTitle()"
+        [href]="companyFilialUrl()"
+        title="Двойной клик или тап: открыть филиал"
         target="_blank"
         rel="noopener"
-        (click)="handleChatLinkClick($event)"
+        (pointerdown)="rememberTitlePointer($event)"
+        (click)="handleTitleClick($event)"
       >
         {{ company.title || 'Без названия' }}
       </a>
@@ -60,6 +60,16 @@
     <div class="chat-link-warning" [title]="warning">
       <span class="material-icons-sharp">warning</span>
       <span>{{ warning }}</span>
+    </div>
+    <div class="card-actions chat-binding-actions">
+      <button type="button" (click)="chatBotInviteOpened.emit()">
+        <span class="material-icons-sharp">build</span>
+        Починить
+      </button>
+      <button type="button" (click)="chatLinkEditOpened.emit()">
+        <span class="material-icons-sharp">link</span>
+        Ссылка на чат
+      </button>
     </div>
   } @else if (chatBindingNotRequired()) {
     <div class="chat-link-note" title="Проверка включится после вывода компании из этого статуса">

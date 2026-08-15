@@ -45,7 +45,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
     } // Взять детали по Id
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = UsernameNotFoundException.class)
     public OrderDetails getOrderDetailForReviewCheckById(UUID orderDetailId) {
         return orderDetailsRepository.findByIdForReviewCheck(orderDetailId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Детали заказа '%s' не найдены", orderDetailId)));

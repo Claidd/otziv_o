@@ -56,6 +56,46 @@ describe('ManagerOrderCardComponent', () => {
     expect(element.querySelector<HTMLButtonElement>('.unchanged-age')?.title).toBe('Город филиала: Иркутск');
   });
 
+  it('opens the filial URL on a mouse double click or one touch tap', () => {
+    const fixture = TestBed.createComponent(ManagerOrderCardComponent);
+    const component = fixture.componentInstance;
+    component.order = order({ filialUrl: 'https://example.test/filial' });
+    fixture.detectChanges();
+
+    const title = fixture.nativeElement.querySelector('.order-title-button') as HTMLButtonElement;
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    component.rememberTitlePointer({ pointerType: 'mouse' } as PointerEvent);
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    expect(openSpy).not.toHaveBeenCalled();
+
+    component.rememberTitlePointer({ pointerType: 'mouse' } as PointerEvent);
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 2 }));
+    expect(openSpy).toHaveBeenCalledWith('https://example.test/filial', '_blank', 'noopener');
+
+    openSpy.mockClear();
+    component.rememberTitlePointer({ pointerType: 'touch' } as PointerEvent);
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    expect(openSpy).toHaveBeenCalledWith('https://example.test/filial', '_blank', 'noopener');
+
+    openSpy.mockRestore();
+  });
+
+  it('does not replace a missing filial URL with the order details page', () => {
+    const fixture = TestBed.createComponent(ManagerOrderCardComponent);
+    const component = fixture.componentInstance;
+    component.order = order({ filialUrl: undefined });
+    fixture.detectChanges();
+
+    const title = fixture.nativeElement.querySelector('.order-title-button') as HTMLButtonElement;
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    component.rememberTitlePointer({ pointerType: 'touch' } as PointerEvent);
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+
+    expect(openSpy).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
   it('keeps full category names available from compact category chips', () => {
     const fixture = TestBed.createComponent(ManagerOrderCardComponent);
     fixture.componentInstance.order = order({

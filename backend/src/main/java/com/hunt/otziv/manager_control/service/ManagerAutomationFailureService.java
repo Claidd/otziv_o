@@ -82,12 +82,16 @@ public class ManagerAutomationFailureService {
         );
         Map<String, AutomationFailureIssue> unique = new LinkedHashMap<>();
         stateRepository.findAllById(candidateIds).forEach(state -> {
-            if (!policy.isActionable(state, now, threshold, afterMinutes)) {
+            boolean transientWait = policy.isTransientWait(state);
+            if (!policy.isActionable(state, now, threshold, afterMinutes) && !transientWait) {
                 return;
             }
-            resolveIssue(manager, state, now).ifPresent(issue ->
-                    unique.merge(issue.deduplicationKey(), issue, this::moreImportant)
-            );
+            resolveIssue(manager, state, now).ifPresent(issue -> {
+                if (transientWait && !issue.reason().contains("telegram_group_missing")) {
+                    return;
+                }
+                unique.merge(issue.deduplicationKey(), issue, this::moreImportant);
+            });
         });
         return unique.values().stream()
                 .sorted(Comparator

@@ -46,6 +46,7 @@ import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.ManualCardPaymentReviewNotificationService;
+import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
@@ -168,6 +169,9 @@ class PaymentLinkServiceTest {
 
     @Mock
     private ContractorPaymentTargetAccessPolicy contractorPaymentTargetAccessPolicy;
+
+    @Mock
+    private ContractorActualPaymentAttributionService actualPaymentAttributionService;
 
     @Mock
     private Authentication authentication;
@@ -4000,11 +4004,11 @@ class PaymentLinkServiceTest {
                 25047L,
                 "Заказ оплачен переводом на карту; T-Bank сессия закрыта"
         );
-        verify(managerAccessService, times(11)).requireOrderAccess(25047L, authentication);
+        verify(managerAccessService, times(12)).requireOrderAccess(25047L, authentication);
     }
 
     @Test
-    void managerManualCardReportCancelsFormShowedUsingServerAmountAndRequestsOwnerReview() throws Exception {
+    void managerManualCardReportCancelsFormShowedAndDoesNotRequestSecondOwnerReview() throws Exception {
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
@@ -4039,15 +4043,32 @@ class PaymentLinkServiceTest {
         );
 
         assertTrue(link.getManualComment().startsWith("Заявлено менеджером: оплата переводом"));
-        ArgumentCaptor<ManualCardPaymentReviewNotificationService.ReviewRequest> notification =
-                ArgumentCaptor.forClass(ManualCardPaymentReviewNotificationService.ReviewRequest.class);
-        verify(manualCardPaymentReviewNotificationService).notifyAfterCommit(notification.capture());
-        assertEquals(25070L, notification.getValue().orderId());
-        assertEquals(100_000L, notification.getValue().amountKopecks());
-        assertEquals("Клиент оплатил переводом по номеру телефона", notification.getValue().reason());
-        assertEquals(5270L, notification.getValue().bankLinkId());
+        verifyNoInteractions(manualCardPaymentReviewNotificationService);
         verify(tbankClient).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService).handlePaymentStatus(order);
+    }
+
+    @Test
+    void managerManualCardReportRequiresExplicitRecipientWhenActualRecipientAccountingIsEnabled() {
+        PaymentLinkService service = service(properties());
+        Order order = order(25071L, "Требуется получатель", BigDecimal.valueOf(1000));
+        PaymentLink link = initiatedBankLink(5271L, order, 100_000L);
+        when(orderRepository.findByIdForCounterUpdate(25071L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25071L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(5271L)).thenReturn(Optional.of(link));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
+                service.reportPaidByManualCardTransferForOrder(
+                        25071L, "Клиент перевёл напрямую", "manager@example.ru", authentication
+                ));
+
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
+        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(actualPaymentAttributionService, never()).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), anyString(), any(), anyString()
+        );
     }
 
     @Test
@@ -4586,6 +4607,70 @@ class PaymentLinkServiceTest {
         assertEquals(409, commonError.getStatusCode().value());
         verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
         verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+    }
+
+    @Test
+    void manualCardPaymentRechecksCompetingRouteAfterProviderObservationBeforeCancel() throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(25072L, "Конкурентный платёж", BigDecimal.valueOf(1000));
+        PaymentLink selected = initiatedBankLink(5272L, order, 100_000L);
+        PaymentLink competing = initiatedBankLink(5273L, order, 100_000L);
+        competing.setStatus(PaymentLinkStatus.AUTHORIZED);
+        java.util.concurrent.atomic.AtomicInteger lockedReads = new java.util.concurrent.atomic.AtomicInteger();
+        when(orderRepository.findByIdForCounterUpdate(25072L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25072L)).thenAnswer(invocation ->
+                lockedReads.incrementAndGet() >= 5 ? List.of(selected, competing) : List.of(selected));
+        when(paymentLinkRepository.findByIdWithOrder(5272L)).thenReturn(Optional.of(selected));
+        when(paymentLinkRepository.findByIdForUpdate(5272L)).thenReturn(Optional.of(selected));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5272")))
+                .thenReturn(tbankState("NEW", "payment-5272", "order-5272", 100_000L));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
+                service.reportPaidByManualCardTransferForOrder(
+                        25072L, "Клиент перевёл напрямую", null,
+                        ContractorRecipientType.OWNER, null, "manager@example.ru", authentication
+                ));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(lockedReads.get() >= 5);
+        verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-5272"));
+        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(actualPaymentAttributionService, never()).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), anyString(), any(), anyString()
+        );
+    }
+
+    @Test
+    void manualCardPaymentRechecksSettledEvidenceAfterProviderObservationBeforeCancel() throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(25073L, "Позднее поступление", BigDecimal.valueOf(1000));
+        PaymentLink selected = initiatedBankLink(5274L, order, 100_000L);
+        when(orderRepository.findByIdForCounterUpdate(25073L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25073L)).thenReturn(List.of(selected));
+        when(paymentLinkRepository.findByIdWithOrder(5274L)).thenReturn(Optional.of(selected));
+        when(paymentLinkRepository.findByIdForUpdate(5274L)).thenReturn(Optional.of(selected));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        when(orderPaymentIntegrityService.hasSettledPaymentEvidence(order)).thenReturn(false, true);
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5274")))
+                .thenReturn(tbankState("NEW", "payment-5274", "order-5274", 100_000L));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
+                service.reportPaidByManualCardTransferForOrder(
+                        25073L, "Клиент перевёл напрямую", null,
+                        ContractorRecipientType.OWNER, null, "manager@example.ru", authentication
+                ));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-5274"));
+        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(actualPaymentAttributionService, never()).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), anyString(), any(), anyString()
+        );
     }
 
     @Test
@@ -5724,6 +5809,7 @@ class PaymentLinkServiceTest {
                 manualCardPaymentReviewNotificationService,
                 contractorPaymentLiveRoutingService,
                 contractorPaymentShadowService,
+                actualPaymentAttributionService,
                 contractorPaymentTargetAccessPolicy,
                 new PaymentLinkTransactionExecutor()
         );
@@ -5733,6 +5819,16 @@ class PaymentLinkServiceTest {
         TbankPaymentProperties properties = new TbankPaymentProperties();
         properties.setPublicBaseUrl("https://example.ru");
         PaymentProfile defaultProfile = profile(1L, TbankPaymentProfile.PRIMARY_CODE, "Основной магазин", "terminal");
+        java.util.concurrent.atomic.AtomicLong savedLinkId = new java.util.concurrent.atomic.AtomicLong(900_000L);
+        org.mockito.Mockito.lenient().when(paymentLinkRepository.saveAndFlush(any(PaymentLink.class)))
+                .thenAnswer(invocation -> {
+                    PaymentLink saved = invocation.getArgument(0);
+                    if (saved.getId() == null) {
+                        saved.setId(savedLinkId.getAndIncrement());
+                    }
+                    paymentLinkRepository.save(saved);
+                    return saved;
+                });
         org.mockito.Mockito.lenient().when(runtimeSettingsService.runtimeMode()).thenReturn(TbankRuntimeMode.TEST);
         org.mockito.Mockito.lenient().when(runtimeSettingsService.isTbankEnabled()).thenAnswer(invocation -> properties.isEnabled());
         org.mockito.Mockito.lenient().when(runtimeSettingsService.isPaymentLinksEnabled()).thenAnswer(invocation -> properties.isPaymentLinksEnabled());

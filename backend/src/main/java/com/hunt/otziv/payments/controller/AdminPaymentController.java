@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.controller;
 
+import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSourceConfirmationRequest;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
@@ -30,6 +31,8 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -83,22 +86,40 @@ public class AdminPaymentController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @PostMapping("/api/admin/payments/tbank-links/{linkId}/confirm-manual-card-payment")
-    public AdminPaymentLinkResponse confirmManualCardPayment(
+    public ResponseEntity<AdminPaymentLinkResponse> confirmManualCardPayment(
             @PathVariable Long linkId,
             @RequestBody ConfirmManualCardPaymentRequest request,
             Authentication authentication
     ) {
         contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
-        return paymentLinkService.confirmPaidByManualCardTransfer(
+        AdminPaymentLinkResponse response = paymentLinkService.confirmPaidByManualCardTransfer(
                 linkId,
                 request != null && Boolean.TRUE.equals(request.recipientStatementChecked()),
                 request != null && Boolean.TRUE.equals(request.paymentReceived()),
                 request == null ? null : request.receivedAmountKopecks(),
                 request == null ? null : request.note(),
                 request == null ? null : request.receiptUrl(),
+                request == null ? null : request.recipientType(),
+                request == null ? null : request.recipientProfileId(),
                 actor(authentication),
                 authentication
         );
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(response);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @GetMapping("/api/manager/orders/{orderId}/manual-card-payment-context")
+    public ResponseEntity<ManualCardPaymentContextResponse> manualCardPaymentContext(
+            @PathVariable Long orderId,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(paymentLinkService.manualCardPaymentContextForOrder(orderId, authentication));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
@@ -111,6 +132,9 @@ public class AdminPaymentController {
         paymentLinkService.reportPaidByManualCardTransferForOrder(
                 orderId,
                 request == null ? null : request.reason(),
+                request == null ? null : request.receiptUrl(),
+                request == null ? null : request.recipientType(),
+                request == null ? null : request.recipientProfileId(),
                 actor(authentication),
                 authentication
         );

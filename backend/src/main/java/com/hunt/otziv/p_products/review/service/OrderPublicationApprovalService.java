@@ -44,13 +44,26 @@ public class OrderPublicationApprovalService {
 
     @Transactional
     public void approvePreparedOrder(Long orderId, List<OrderDetailsDTO> details, String auditDetails) {
+        approvePreparedOrder(orderId, details, auditDetails, false);
+    }
+
+    @Transactional
+    public void approvePreparedOrder(
+            Long orderId,
+            List<OrderDetailsDTO> details,
+            String auditDetails,
+            boolean restoredFromArchive
+    ) {
         lockAggregate(orderId);
         List<OrderDetailsDTO> completeDetails = completeOrderDetails(orderId, details);
         validate(orderId, completeDetails);
         assignDates(orderId, completeDetails);
 
         try {
-            if (!orderStatusTransitionService.changeStatusForOrder(orderId, STATUS_TO_PUBLISH)) {
+            boolean statusChanged = restoredFromArchive
+                    ? orderStatusTransitionService.changeStatusForRestoredArchiveOrder(orderId, STATUS_TO_PUBLISH)
+                    : orderStatusTransitionService.changeStatusForOrder(orderId, STATUS_TO_PUBLISH);
+            if (!statusChanged) {
                 throw failure(
                         orderId,
                         "статус заказа не удалось изменить на «Публикация»",
@@ -68,7 +81,10 @@ public class OrderPublicationApprovalService {
             );
         }
 
-        recordApproval(orderId, completeDetails, auditDetails);
+        String resolvedAuditDetails = restoredFromArchive
+                ? appendAuditDetails(auditDetails, "restoredFromArchive=true")
+                : auditDetails;
+        recordApproval(orderId, completeDetails, resolvedAuditDetails);
     }
 
     @Transactional
@@ -222,6 +238,15 @@ public class OrderPublicationApprovalService {
     private String appendAuditDetails(String details) {
         String normalized = safe(details);
         return normalized.isBlank() ? "" : ";" + normalized;
+    }
+
+    private String appendAuditDetails(String details, String extra) {
+        String normalized = safe(details);
+        String normalizedExtra = safe(extra);
+        if (normalized.isBlank()) {
+            return normalizedExtra;
+        }
+        return normalizedExtra.isBlank() ? normalized : normalized + ";" + normalizedExtra;
     }
 
     private String concise(Throwable throwable) {

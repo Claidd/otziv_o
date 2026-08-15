@@ -10,6 +10,8 @@ import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
+import com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionRequest;
+import com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionRowRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceManualCardPaymentRequest;
@@ -33,6 +35,7 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentRequisitesSnapshot;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
+import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionFlowPolicy;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService.FrozenCommonRouteAction;
@@ -126,6 +129,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -212,6 +216,10 @@ class CommonBillingServiceTest {
     private ContractorPaymentLiveRoutingService contractorPaymentLiveRoutingService;
     @Mock
     private ContractorPaymentShadowService contractorPaymentShadowService;
+    @Mock
+    private CommonManualPaymentAttributionCoordinator commonManualPaymentAttributionCoordinator;
+    @Mock
+    private ContractorActualPaymentAttributionFlowPolicy actualPaymentAttributionFlowPolicy;
     @Mock
     private TbankRuntimeSettingsService runtimeSettingsService;
     @Mock
@@ -504,6 +512,7 @@ class CommonBillingServiceTest {
                 orderAggregateMutationLockService,
                 invoiceRepository,
                 paymentLinkRepository,
+                actualPaymentAttributionFlowPolicy,
                 orderTransactionService
         );
         lockOrder.verify(invoiceOrderRepository).findOrderIdsByInvoiceId(10L);
@@ -512,6 +521,7 @@ class CommonBillingServiceTest {
         lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
         lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(102L);
         lockOrder.verify(invoiceRepository).findByIdWithAccountForUpdate(10L);
+        lockOrder.verify(actualPaymentAttributionFlowPolicy).requireLegacyFlowLocked();
         lockOrder.verify(paymentLinkRepository).findByOrderIdForUpdate(101L);
         lockOrder.verify(orderTransactionService).handlePaymentStatus(firstOrder, false);
     }
@@ -780,6 +790,104 @@ class CommonBillingServiceTest {
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertFalse(invoiceItem.isPaid());
         verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+
+    @Test
+    void attributedMarkPaidRejectsActiveCommonTbankLinkBeforeCreditingRecipient() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setTbankOrderId("active-order");
+        invoice.setTbankPaymentId("active-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setPaymentUrl("https://pay.example/active");
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        stubLockedInvoice(invoice, invoiceItem, order);
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(invoiceItem));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
+                "active-tbank",
+                true,
+                true,
+                LocalDateTime.of(2026, 8, 15, 12, 0),
+                "Клиент перевёл другому получателю",
+                "",
+                List.of(new CommonManualPaymentAttributionRowRequest(
+                        "owner",
+                        ContractorRecipientType.OWNER,
+                        null,
+                        100_000L
+                ))
+        );
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markPaidWithAttributions(10L, request, () -> "manager")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(commonManualPaymentAttributionCoordinator, never()).recordFinalReceipt(
+                any(), anyList(), anyLong(), any(), any()
+        );
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void finalAttributionFailureStopsSuccessSideEffects() throws Exception {
+        CommonBillingAccount account = account();
+        account.setAutoRepeatOrders(true);
+        Manager manager = manager(7L);
+        manager.setClientId("whatsapp-manager");
+        Company company = company();
+        company.setManager(manager);
+        company.setGroupId("120363@test");
+        account.setInvoiceCompany(company);
+
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaymentRouteManualTaskId(900L);
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        stubLockedInvoice(invoice, invoiceItem, order);
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(invoiceItem));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+
+        CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
+                "attribution-failure-before-effects",
+                true,
+                true,
+                LocalDateTime.of(2026, 8, 15, 12, 0),
+                "Клиент перевёл другому получателю",
+                "",
+                List.of(new CommonManualPaymentAttributionRowRequest(
+                        "owner",
+                        ContractorRecipientType.OWNER,
+                        null,
+                        100_000L
+                ))
+        );
+        when(commonManualPaymentAttributionCoordinator.recordFinalReceipt(
+                any(), anyList(), anyLong(), any(), any()
+        )).thenThrow(new IllegalStateException("attribution failed"));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> service.markPaidWithAttributions(10L, request, () -> "manager")
+        );
+
+        assertEquals("attribution failed", exception.getMessage());
+        verify(entityManager).flush();
+        verify(commonManualPaymentAttributionCoordinator).recordFinalReceipt(
+                any(), anyList(), anyLong(), any(), any()
+        );
+        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(manualPaymentTaskService, never()).completeCommonInvoiceTaskIfTargetReached(any());
+        verify(nextOrderRequestService, never()).openForPaidOrder(any());
+        verify(contractorPaymentShadowService, never()).reconcileCommonInvoiceId(anyLong());
     }
 
     @Test
@@ -1313,6 +1421,7 @@ class CommonBillingServiceTest {
 
         verify(paymentLinkService).reconcileBankLink(eq(5_208L), any(LocalDateTime.class));
         verify(paymentLinkService).cancel(5_208L);
+        verify(actualPaymentAttributionFlowPolicy).requireLegacyFlowLocked();
         assertEquals(PaymentLinkStatus.CANCELED, bankLink.getStatus());
         assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
         assertTrue(item.isPaid());
@@ -2462,6 +2571,7 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.PAID, readyInvoice.getStatus());
         assertThrows(ResponseStatusException.class, () -> service.markUnpaid(10L));
 
+        verify(actualPaymentAttributionFlowPolicy).requireLegacyFlowLocked();
         verify(orderTransactionService).handlePaymentStatus(order, false);
         verify(orderStatusTransitionService, never()).changeStatusForCommonBillingOrder(any(), any());
     }
@@ -3753,6 +3863,42 @@ class CommonBillingServiceTest {
 
         assertTrue(Boolean.TRUE.equals(providerClosed));
         assertFalse(Boolean.TRUE.equals(localClosed));
+    }
+
+    @Test
+    void canceledManualCardAttributionIntentRemainsUnsafeUntilCompleted() {
+        PaymentLink frozen = new PaymentLink();
+        frozen.setStatus(PaymentLinkStatus.CANCELED);
+        frozen.setManualActualRecipientFrozenAt(LocalDateTime.of(2026, 8, 15, 12, 0));
+
+        PaymentLink legacyPending = new PaymentLink();
+        legacyPending.setStatus(PaymentLinkStatus.CANCELED);
+        legacyPending.setLastError("manual_card_payment_pending: local_route_closed");
+
+        PaymentLink completed = new PaymentLink();
+        completed.setStatus(PaymentLinkStatus.CANCELED);
+        completed.setManualActualRecipientFrozenAt(LocalDateTime.of(2026, 8, 15, 12, 1));
+        completed.setLastError("manual_card_payment_completed: evidence_token=test");
+
+        Boolean frozenClosed = ReflectionTestUtils.invokeMethod(
+                service,
+                "isSafelyClosedStandaloneRoute",
+                frozen
+        );
+        Boolean pendingClosed = ReflectionTestUtils.invokeMethod(
+                service,
+                "isSafelyClosedStandaloneRoute",
+                legacyPending
+        );
+        Boolean completedClosed = ReflectionTestUtils.invokeMethod(
+                service,
+                "isSafelyClosedStandaloneRoute",
+                completed
+        );
+
+        assertFalse(Boolean.TRUE.equals(frozenClosed));
+        assertFalse(Boolean.TRUE.equals(pendingClosed));
+        assertTrue(Boolean.TRUE.equals(completedClosed));
     }
 
     @Test

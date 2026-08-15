@@ -37,6 +37,7 @@ export interface ReviewCheckReview {
 
 export interface ReviewCheckPayload {
   orderDetailId: string;
+  archived: boolean;
   orderId?: number | null;
   companyId?: number | null;
   companyTitle: string;

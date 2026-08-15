@@ -40,7 +40,25 @@ public class MobilePushBusinessNotificationService {
         );
     }
 
-    public void notifyWorkerCorrection(Order order) {
+    public void notifyWorkerCorrection(Order order, String clientCorrectionNote) {
+        User workerUser = workerUser(order);
+        if (workerUser == null) {
+            return;
+        }
+
+        String note = compact(clientCorrectionNote);
+        String body = note.isBlank()
+                ? orderTitle(order) + ": внесите правки по заказу."
+                : orderTitle(order) + ". Замечания клиента: " + note;
+        sendSafely(
+                workerUser,
+                "Заказ на коррекции",
+                limit(body, 420),
+                orderRoute(order)
+        );
+    }
+
+    public void notifyWorkerArchiveReadyForPublication(Order order) {
         User workerUser = workerUser(order);
         if (workerUser == null) {
             return;
@@ -48,9 +66,9 @@ public class MobilePushBusinessNotificationService {
 
         sendSafely(
                 workerUser,
-                "Заказ на коррекции",
-                orderTitle(order) + ": внесите правки по заказу.",
-                orderRoute(order)
+                "Заказ из архива готов к публикации",
+                orderTitle(order) + ": клиент одобрил отзывы, можно публиковать.",
+                "/tabs/worker?section=publish"
         );
     }
 
@@ -177,5 +195,17 @@ public class MobilePushBusinessNotificationService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String compact(String value) {
+        return normalize(value).replaceAll("\\s+", " ");
+    }
+
+    private String limit(String value, int maxLength) {
+        String normalized = normalize(value);
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength - 1).trim() + "…";
     }
 }

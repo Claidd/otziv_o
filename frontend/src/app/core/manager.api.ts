@@ -345,8 +345,35 @@ export interface CompanyFilialEditItem {
   archivedAt?: string | null;
 }
 
+export type ManualCardPaymentRecipientType = 'OWNER' | 'MANAGER' | 'SPECIALIST';
+
+export interface ManualCardPaymentRecipientOption {
+  recipientType: ManualCardPaymentRecipientType;
+  recipientProfileId?: number | null;
+  recipientUserId?: number | null;
+  displayName: string;
+  availableKopecks?: number | null;
+  projectedOverrunKopecks?: number | null;
+  anomalyWarning?: string | null;
+}
+
+export interface ManualCardPaymentContext {
+  orderId: number;
+  amountKopecks: number;
+  originalRecipient: ManualCardPaymentRecipientOption;
+  candidates: ManualCardPaymentRecipientOption[];
+  anomalyWarning?: string | null;
+  recipientSelectionFrozen: boolean;
+  preparedRecipient: ManualCardPaymentRecipientOption | null;
+  preparedReason: string | null;
+  preparedReceiptUrl: string | null;
+}
+
 export interface ManualCardPaymentConfirmationRequest {
   reason: string;
+  receiptUrl?: string | null;
+  recipientType: ManualCardPaymentRecipientType;
+  recipientProfileId?: number | null;
 }
 
 export interface FilialDeletionPreview {
@@ -958,6 +985,13 @@ export class ManagerApi {
     );
   }
 
+  updateCompanyChatLink(companyId: number, urlChat: string): Observable<CompanyChatBindingRepair> {
+    return this.http.put<CompanyChatBindingRepair>(
+      `${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/chat-link`,
+      { urlChat }
+    );
+  }
+
   updateCompanyNote(companyId: number, companyComments: string): Observable<void> {
     return this.http.put<void>(
       `${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/note`,
@@ -1109,6 +1143,12 @@ export class ManagerApi {
     return this.http.post<ManagerCredentialRevealResponse>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/credential-reveal`,
       { ...source, field }
+    );
+  }
+
+  getManualCardPaymentContext(orderId: number): Observable<ManualCardPaymentContext> {
+    return this.http.get<ManualCardPaymentContext>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/manual-card-payment-context`
     );
   }
 

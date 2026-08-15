@@ -27,6 +27,7 @@ import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
@@ -37,6 +38,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.model.ContractorRoutingDecisionReason;
+import com.hunt.otziv.contractor_payments.repository.ContractorActualPaymentAttributionRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationEventRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
@@ -69,6 +71,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 class ContractorPaymentShadowServiceTest {
 
+    private final ContractorActualPaymentAttributionRepository actualPaymentAttributionRepository =
+            mock(ContractorActualPaymentAttributionRepository.class);
     private final ContractorPaymentAllocationRepository allocationRepository = mock(ContractorPaymentAllocationRepository.class);
     private final ContractorPaymentProfileRepository profileRepository = mock(ContractorPaymentProfileRepository.class);
     private final ContractorPaymentProfileService profileService = mock(ContractorPaymentProfileService.class);
@@ -89,6 +93,7 @@ class ContractorPaymentShadowServiceTest {
             spy(new ContractorOrderManagerResolver());
     private final Map<Long, ContractorPaymentProfile> discoveredProfiles = new HashMap<>();
     private final ContractorPaymentShadowService service = new ContractorPaymentShadowService(
+            actualPaymentAttributionRepository,
             allocationRepository,
             profileRepository,
             profileService,
@@ -803,6 +808,38 @@ class ContractorPaymentShadowServiceTest {
 
         assertEquals(150_000L, allocation.getConfirmedKopecks());
         assertEquals(ContractorAllocationStatus.SIMULATED_PAID, allocation.getStatus());
+    }
+
+    @Test
+    void finalActualRecipientPreventsPeriodicReconcileFromConfirmingOriginalRecipientAgain() {
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(5_200L);
+        invoice.setPaidKopecks(150_000L);
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        ContractorPaymentAllocation original = new ContractorPaymentAllocation();
+        original.setId(5_201L);
+        original.setMode(ContractorAllocationMode.SHADOW);
+        original.setSourceType(ContractorAllocationSourceType.COMMON_INVOICE);
+        original.setSourceId(5_200L);
+        original.setAmountKopecks(150_000L);
+        original.setStatus(ContractorAllocationStatus.RESERVED);
+        when(allocationRepository.findCommonInvoicesForReconciliation(
+                eq(ContractorAllocationMode.SHADOW), anyCollection(), anyCollection(), any(), any(), any()
+        )).thenReturn(List.of(original));
+        when(allocationRepository.findByIdForUpdate(5_201L)).thenReturn(Optional.of(original));
+        when(commonInvoiceRepository.findById(5_200L)).thenReturn(Optional.of(invoice));
+        when(commonInvoiceRepository.findByIdForUpdate(5_200L)).thenReturn(Optional.of(invoice));
+        when(actualPaymentAttributionRepository.existsBySourceKindAndSourceIdAndEvidenceId(
+                ContractorActualPaymentSourceKind.COMMON_INVOICE,
+                5_200L,
+                null
+        )).thenReturn(true);
+        registerReconciliation(original);
+
+        service.reconcilePaymentLinks();
+
+        assertEquals(0L, original.getConfirmedKopecks());
+        assertEquals(ContractorAllocationStatus.RESERVED, original.getStatus());
     }
 
     @Test

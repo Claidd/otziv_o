@@ -422,7 +422,7 @@ export function managerOrderChatBindingNotRequired(order: OrderCardItem): boolea
 
 function managerInactiveCompanyStatus(status?: string | null): boolean {
   const normalized = (status ?? '').trim().toLocaleLowerCase('ru-RU');
-  return normalized === 'на стопе' || normalized === 'бан';
+  return normalized === 'бан';
 }
 
 export function managerCompanyHeaderUrl(company: CompanyCardItem): string {

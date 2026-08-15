@@ -629,6 +629,20 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             Pageable pageable
     );
 
+    @Query(value = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM contractor_actual_payment_attributions attribution
+            WHERE attribution.source_kind = 'PAYMENT_LINK'
+              AND attribution.source_id = :originalLinkId
+              AND attribution.evidence_id = :evidenceId
+        )
+    """, nativeQuery = true)
+    boolean existsContractorActualPaymentAttribution(
+            @Param("originalLinkId") Long originalLinkId,
+            @Param("evidenceId") Long evidenceId
+    );
+
     /**
      * Manual mobile-bank evidence is stored as a separate CONFIRMED payment
      * row while the original T-Bank row remains terminal/cancelled. This query
@@ -656,6 +670,13 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
           AND evidence.updated_at >= :startedAt
           AND evidence.status = 'CONFIRMED'
           AND evidence.payment_method = 'MANUAL_MOBILE_BANK'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM contractor_actual_payment_attributions attribution
+              WHERE attribution.source_kind = 'PAYMENT_LINK'
+                AND attribution.source_id = evidence.contractor_evidence_original_link_id
+                AND attribution.evidence_id = evidence.id
+          )
           AND NOT EXISTS (
               SELECT 1
               FROM contractor_payment_allocation_events event

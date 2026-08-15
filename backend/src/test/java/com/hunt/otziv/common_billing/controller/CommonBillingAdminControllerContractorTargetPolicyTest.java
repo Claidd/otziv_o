@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionFlowPolicy;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSourceConfirmationRequest;
 import java.time.LocalDateTime;
@@ -29,10 +30,13 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
             mock(CommonBillingPublicationApprovalFailureMarker.class);
     private final ContractorPaymentTargetAccessPolicy targetAccessPolicy =
             mock(ContractorPaymentTargetAccessPolicy.class);
+    private final ContractorActualPaymentAttributionFlowPolicy actualPaymentFlowPolicy =
+            mock(ContractorActualPaymentAttributionFlowPolicy.class);
     private final CommonBillingAdminController controller = new CommonBillingAdminController(
             commonBillingService,
             approvalFailureMarker,
-            targetAccessPolicy
+            targetAccessPolicy,
+            actualPaymentFlowPolicy
     );
 
     @Test

@@ -68,6 +68,45 @@ public interface ContractorPaymentAllocationRepository extends JpaRepository<Con
     @Query("SELECT allocation FROM ContractorPaymentAllocation allocation WHERE allocation.id = :id")
     Optional<ContractorPaymentAllocation> findByIdForUpdate(@Param("id") Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT allocation FROM ContractorPaymentAllocation allocation WHERE allocation.id IN :ids ORDER BY allocation.id")
+    List<ContractorPaymentAllocation> findAllByIdForUpdate(@Param("ids") Collection<Long> ids);
+
+    @Query(value = """
+        SELECT allocation.id
+        FROM contractor_payment_allocations allocation
+        WHERE allocation.mode = :mode
+          AND allocation.source_type = :sourceType
+          AND allocation.source_id = :sourceId
+        ORDER BY allocation.attempt_no DESC, allocation.id DESC
+        LIMIT 1
+    """, nativeQuery = true)
+    Optional<Long> findLatestId(
+            @Param("mode") String mode,
+            @Param("sourceType") String sourceType,
+            @Param("sourceId") Long sourceId
+    );
+
+    /** Latest attempt in every accounting mode, used before canonical profile/allocation locks. */
+    @Query(value = """
+        SELECT allocation.id
+        FROM contractor_payment_allocations allocation
+        WHERE allocation.source_type = :sourceType
+          AND allocation.source_id = :sourceId
+          AND allocation.attempt_no = (
+              SELECT MAX(latest.attempt_no)
+              FROM contractor_payment_allocations latest
+              WHERE latest.mode = allocation.mode
+                AND latest.source_type = allocation.source_type
+                AND latest.source_id = allocation.source_id
+          )
+        ORDER BY allocation.id
+    """, nativeQuery = true)
+    List<Long> findLatestIdsBySourceAcrossModes(
+            @Param("sourceType") String sourceType,
+            @Param("sourceId") Long sourceId
+    );
+
     /** Non-locking prelude used only to establish profile -> allocation lock order. */
     @Query("SELECT allocation.recipientProfile.id FROM ContractorPaymentAllocation allocation WHERE allocation.id = :id")
     Optional<Long> findRecipientProfileIdById(@Param("id") Long id);

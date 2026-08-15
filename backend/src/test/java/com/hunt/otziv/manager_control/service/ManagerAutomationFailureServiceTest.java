@@ -126,6 +126,39 @@ class ManagerAutomationFailureServiceTest {
     }
 
     @Test
+    void doesNotExposePureRateLimitWaitWithStaleFailureCounter() {
+        Manager manager = Manager.builder().id(7L).build();
+        Company company = Company.builder()
+                .id(21L)
+                .title("Очередь исправна")
+                .manager(manager)
+                .urlChat("https://chat.whatsapp.com/valid")
+                .groupId("120363000000000000@g.us")
+                .build();
+        LocalDateTime now = LocalDateTime.now();
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(32L)
+                .scenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER)
+                .targetType(ClientMessageTargetType.ARCHIVE_COMPANY)
+                .targetKey("archive-company:21")
+                .companyId(21L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode("rate_limited")
+                .lastErrorMessage("Следующий слот отправки")
+                .consecutiveFailures(4)
+                .lastAttemptAt(now.minusHours(2))
+                .nextAttemptAt(now.minusSeconds(1))
+                .createdAt(now.minusDays(1))
+                .updatedAt(now)
+                .build();
+        when(stateRepository.findManagerControlCandidateIds(eq(7L), any(Pageable.class))).thenReturn(List.of(32L));
+        when(stateRepository.findAllById(List.of(32L))).thenReturn(List.of(state));
+        when(companyRepository.findByIdForCompanyDto(21L)).thenReturn(Optional.of(company));
+
+        assertTrue(service.issues(manager, 10).isEmpty());
+    }
+
+    @Test
     void explainsThatRepairReusesExistingPaymentInsteadOfCreatingAnotherOne() {
         Manager manager = Manager.builder().id(7L).build();
         Company company = Company.builder().id(20L).title("Мастер на дом").manager(manager).build();

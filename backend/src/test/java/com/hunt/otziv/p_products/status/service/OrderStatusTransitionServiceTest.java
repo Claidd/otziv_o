@@ -961,6 +961,11 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithWorker(7L, "Публикация", 700L);
         order.setZametka("заметка");
         order.getCompany().setCommentsCompany("комментарий");
+        order.getDetails().getFirst().setComment("Общее замечание клиента");
+        Review clientReview = new Review();
+        clientReview.setId(701L);
+        clientReview.setAnswer("Исправьте название");
+        order.getDetails().getFirst().setReviews(List.of(clientReview));
         OrderStatus correction = status("Коррекция");
 
         when(orderRepository.findByIdForMutation(7L)).thenReturn(Optional.of(order));
@@ -970,14 +975,21 @@ class OrderStatusTransitionServiceTest {
         assertTrue(service.changeStatusForOrder(7L, "Коррекция"));
 
         assertSame(correction, order.getStatus());
-        InOrder inOrder = inOrder(orderRepository, orderCorrectionTelegramNotifier);
+        InOrder inOrder = inOrder(
+                orderRepository,
+                mobilePushBusinessNotificationService,
+                orderCorrectionTelegramNotifier
+        );
         inOrder.verify(orderRepository).save(order);
+        inOrder.verify(mobilePushBusinessNotificationService).notifyWorkerCorrection(
+                order,
+                "Общее замечание клиента\nОтзыв #701: Исправьте название"
+        );
         inOrder.verify(orderCorrectionTelegramNotifier).notifyWorkerCorrection(
                 7L,
                 -700L,
                 "Компания",
-                "заметка",
-                "комментарий"
+                "Общее замечание клиента\nОтзыв #701: Исправьте название"
         );
         verify(telegramService, never()).sendMessage(
                 eq(700L),
@@ -1000,7 +1012,6 @@ class OrderStatusTransitionServiceTest {
         verify(orderCorrectionTelegramNotifier, never()).notifyWorkerCorrection(
                 org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyLong(),
-                org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString()
         );
@@ -1030,7 +1041,6 @@ class OrderStatusTransitionServiceTest {
         verify(orderCorrectionTelegramNotifier, never()).notifyWorkerCorrection(
                 org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyLong(),
-                org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString()
         );
@@ -1079,9 +1089,35 @@ class OrderStatusTransitionServiceTest {
         );
         verify(telegramService).sendMessage(
                 -800L,
-                "Компания. Новый заказ из Архива. \n https://o-ogo.ru/worker/new_orders"
+                "Компания. Новый заказ из Архива. \n https://o-ogo.ru/worker?section=publish"
         );
+        verify(mobilePushBusinessNotificationService).notifyWorkerArchiveReadyForPublication(order);
         verify(orderRepository).save(order);
+    }
+
+    @Test
+    void restoredArchiveApprovalNotifiesWorkerEvenAfterRestoreChangedStatusToInCheck() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithWorker(81L, "На проверке", 810L);
+        Review review = new Review();
+        review.setId(810L);
+        review.setText("Готовый текст отзыва");
+        review.setBot(bot(810L, "Анна Иванова", "79000000810", true));
+        order.getDetails().getFirst().setReviews(List.of(review));
+        OrderStatus toPublish = status("Публикация");
+
+        when(orderRepository.findByIdForMutation(81L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(toPublish);
+        when(orderStatusNotificationService.hasWorkerWithTelegram(order)).thenReturn(true);
+
+        assertTrue(service.changeStatusForRestoredArchiveOrder(81L, "Публикация"));
+
+        assertSame(toPublish, order.getStatus());
+        verify(telegramService).sendMessage(
+                -810L,
+                "Компания. Новый заказ из Архива. \n https://o-ogo.ru/worker?section=publish"
+        );
+        verify(mobilePushBusinessNotificationService).notifyWorkerArchiveReadyForPublication(order);
     }
 
     @Test

@@ -197,6 +197,9 @@ export class ManagerControlComponent implements OnInit {
   readonly managerReportReviewsLoading = signal(false);
   readonly reportDisputeComments = signal<Record<number, string>>({});
   readonly resolvingReportReviewIds = signal<Set<number>>(new Set());
+  readonly chatLinkEditor = signal<ManagerControlConcreteItem | null>(null);
+  readonly chatLinkDraft = signal('');
+  readonly chatLinkSaving = signal(false);
   readonly isDetailPage = computed(() => this.detailPageManagerId() !== null);
   readonly clock = signal(Date.now());
   readonly managers = computed(() => {
@@ -229,8 +232,16 @@ export class ManagerControlComponent implements OnInit {
 
   constructor() {
     const clockTimer = window.setInterval(() => this.clock.set(Date.now()), 1000);
+    const refreshDetailsOnFocus = (): void => {
+      const managerId = this.detail()?.managerId;
+      if (managerId) {
+        this.refreshDetailsAfterReconciliation(managerId);
+      }
+    };
+    window.addEventListener('focus', refreshDetailsOnFocus);
     this.destroyRef.onDestroy(() => {
       window.clearInterval(clockTimer);
+      window.removeEventListener('focus', refreshDetailsOnFocus);
       for (const timer of this.telegramBindingPollTimers.values()) {
         window.clearTimeout(timer);
       }
@@ -257,6 +268,55 @@ export class ManagerControlComponent implements OnInit {
     this.load({
       afterSuccess: () => this.load({ silent: true, sync: true })
     });
+  }
+
+  repairCompanyChatBinding(example: ManagerControlConcreteItem): void {
+    this.repairConcreteItem(example);
+  }
+
+  companyBindingActionLabel(example: ManagerControlConcreteItem): string {
+    const url = (example.chatUrl || '').toLowerCase();
+    if (url.includes('t.me/') || url.includes('telegram.me/') || url.startsWith('tg://')) return 'Привязать Telegram';
+    if (url.includes('max.ru/') || url.includes('max.com/')) return 'Привязать MAX';
+    if (url.includes('chat.whatsapp.com/')) return 'Починить WhatsApp';
+    return 'Починить';
+  }
+
+  openControlChatLinkEditor(example: ManagerControlConcreteItem): void {
+    this.chatLinkDraft.set(example.chatUrl || '');
+    this.chatLinkEditor.set(example);
+  }
+
+  closeControlChatLinkEditor(): void {
+    if (this.chatLinkSaving()) return;
+    this.chatLinkEditor.set(null);
+    this.chatLinkDraft.set('');
+  }
+
+  saveControlChatLink(): void {
+    const example = this.chatLinkEditor();
+    if (!example?.entityId || this.chatLinkSaving()) return;
+    this.chatLinkSaving.set(true);
+    this.managerApi.updateCompanyChatLink(example.entityId, this.chatLinkDraft().trim()).subscribe({
+      next: (response) => {
+        this.chatLinkSaving.set(false);
+        this.chatLinkEditor.set(null);
+        this.chatLinkDraft.set('');
+        response.repaired
+          ? this.toast.success('Ссылка сохранена', 'Группа привязана')
+          : this.toast.warning('Ссылка сохранена', response.message || 'Нажмите «Починить» для завершения привязки');
+        this.reloadSelectedManagerDetail();
+      },
+      error: (error) => {
+        this.chatLinkSaving.set(false);
+        this.toast.error('Ссылка не сохранена', apiErrorMessage(error, 'Не удалось обновить ссылку на чат'));
+      }
+    });
+  }
+
+  private reloadSelectedManagerDetail(): void {
+    const managerId = this.detail()?.managerId ?? this.selectedManagerId();
+    if (managerId) this.loadDetails(managerId);
   }
 
   load(options: { silent?: boolean; sync?: boolean; afterSuccess?: () => void } = {}): void {
@@ -1562,10 +1622,12 @@ export class ManagerControlComponent implements OnInit {
 
   private showManualChatBindingRepairToast(message: string, example: ManagerControlConcreteItem): void {
     const url = this.firstExternalUrl(message);
-    const telegram = message.toLowerCase().includes('telegram');
+    const normalizedMessage = message.toLowerCase();
+    const telegram = normalizedMessage.includes('telegram');
+    const max = normalizedMessage.includes('max');
     const title = telegram
       ? 'Привяжите Telegram-группу'
-      : message.toLowerCase().includes('max')
+      : max
         ? 'Жду привязку MAX'
         : 'Жду привязку группы';
 
@@ -1594,6 +1656,18 @@ export class ManagerControlComponent implements OnInit {
             }
           }] : [])
         ]
+      );
+      return;
+    }
+
+    if (max && url) {
+      this.toast.info(
+        title,
+        'Откройте MAX-бота, запустите его и добавьте администратором в нужную группу. Затем нажмите «Привязать MAX» ещё раз.',
+        {
+          label: 'Открыть привязку',
+          callback: () => window.open(url, '_blank', 'noopener,noreferrer')
+        }
       );
       return;
     }

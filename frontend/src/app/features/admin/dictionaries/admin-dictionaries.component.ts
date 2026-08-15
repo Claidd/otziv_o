@@ -115,6 +115,7 @@ type DictionaryMetric = {
   value: number;
   icon: string;
   tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink';
+  tooltip?: string;
 };
 
 type DictionaryGuide = {
@@ -758,20 +759,39 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly monitorMetrics = computed<DictionaryMetric[]>(() => {
     const monitor = this.clientMessageMonitor();
     return [
-      { label: 'Активных', value: monitor?.activeCandidates ?? 0, icon: 'playlist_add_check', tone: 'blue' },
-      { label: 'Пора проверить', value: monitor?.dueNow ?? 0, icon: 'schedule', tone: 'blue' },
-      { label: 'Готово к отправке', value: monitor?.readyToSendNow ?? 0, icon: 'bolt', tone: 'green' },
-      { label: 'Ждет окно', value: monitor?.waitingForWindow ?? 0, icon: 'access_time', tone: 'yellow' },
-      { label: 'Нет chatId', value: monitor?.missingChannelBindings ?? 0, icon: 'link_off', tone: monitor?.missingChannelBindings ? 'pink' : 'teal' },
-      { label: 'Ручной контроль', value: monitor?.manualControlCandidates ?? 0, icon: 'support_agent', tone: monitor?.manualControlCandidates ? 'pink' : 'teal' },
-      { label: 'Ждут retry', value: monitor?.retryWaitingCandidates ?? 0, icon: 'replay', tone: monitor?.retryWaitingCandidates ? 'yellow' : 'teal' },
-      { label: 'Ждут восстановления', value: monitor?.recoveryHoldCandidates ?? 0, icon: 'healing', tone: monitor?.recoveryHoldCandidates ? 'blue' : 'teal' },
-      { label: 'Автовосстановлено', value: monitor?.autoRecoveredToday ?? 0, icon: 'auto_fix_high', tone: monitor?.autoRecoveredToday ? 'green' : 'teal' },
-      { label: 'Отправлено сегодня', value: monitor?.sentToday ?? 0, icon: 'send', tone: 'green' },
-      { label: 'Ошибок сегодня', value: monitor?.failedToday ?? 0, icon: 'priority_high', tone: monitor?.failedToday ? 'pink' : 'teal' },
-      { label: 'Пропущено', value: monitor?.skippedToday ?? 0, icon: 'pause_circle', tone: 'teal' },
-      { label: 'Отключено задач', value: monitor?.disabledStates ?? 0, icon: 'block', tone: monitor?.disabledStates ? 'pink' : 'blue' }
+      { label: 'Активных', value: monitor?.activeCandidates ?? 0, icon: 'playlist_add_check', tone: 'blue', tooltip: 'Все активные задачи автоответчика: и просроченные, и запланированные на будущее.' },
+      { label: 'Пора проверить', value: monitor?.dueNow ?? 0, icon: 'schedule', tone: 'blue', tooltip: 'У этих задач уже наступило время следующей проверки, и они не захвачены другим worker-ом. Это еще не означает, что сообщение будет отправлено: задача может ждать окно, канал, лимит или проверку условий.' },
+      { label: 'Готово к отправке', value: monitor?.readyToSendNow ?? 0, icon: 'bolt', tone: 'green', tooltip: 'Предварительно готовые задачи: worker и live-отправка включены, рабочее окно открыто, обязательный chatId/groupId найден. Перед отправкой еще применяются интервалы каналов, дневной лимит и финальные проверки.' },
+      { label: 'Ждет окно', value: monitor?.waitingForWindow ?? 0, icon: 'access_time', tone: 'yellow', tooltip: 'Время проверки уже наступило, но сейчас закрыто рабочее окно. Задачи останутся в очереди до ближайшего разрешенного времени.' },
+      { label: 'Нет chatId', value: monitor?.missingChannelBindings ?? 0, icon: 'link_off', tone: monitor?.missingChannelBindings ? 'pink' : 'teal', tooltip: 'Активные задачи, для которых не найден обязательный идентификатор WhatsApp, Telegram или MAX-группы. Без исправления привязки сообщение не уйдет.' },
+      { label: 'Ручной контроль', value: monitor?.manualControlCandidates ?? 0, icon: 'support_agent', tone: monitor?.manualControlCandidates ? 'pink' : 'teal', tooltip: 'Задачи, где нужен человек: отсутствует или неверно настроен чат, повторилось слишком много ошибок либо ошибка остается без успешной обработки дольше допустимого времени.' },
+      { label: 'Ждут retry', value: monitor?.retryWaitingCandidates ?? 0, icon: 'replay', tone: monitor?.retryWaitingCandidates ? 'yellow' : 'teal', tooltip: 'Недавние временные ошибки, для которых уже назначена автоматическая повторная попытка. Пока вмешательство не требуется.' },
+      { label: 'Ждут восстановления', value: monitor?.recoveryHoldCandidates ?? 0, icon: 'healing', tone: monitor?.recoveryHoldCandidates ? 'blue' : 'teal', tooltip: 'Задачи поставлены на паузу, пока не завершится восстановление отзывов. После завершения зависимость будет снята автоматически.' },
+      { label: 'Автовосстановлено', value: monitor?.autoRecoveredToday ?? 0, icon: 'auto_fix_high', tone: monitor?.autoRecoveredToday ? 'green' : 'teal', tooltip: 'Сколько некорректных состояний очереди сервис автоматически исправил сегодня без ручного вмешательства.' },
+      { label: 'Отправлено сегодня', value: monitor?.sentToday ?? 0, icon: 'send', tone: 'green', tooltip: 'Успешные действия всех сценариев с начала сегодняшнего дня по иркутскому времени. Отдельное число только по архивному офферу показано ниже.' },
+      { label: 'Ошибок сегодня', value: monitor?.failedToday ?? 0, icon: 'priority_high', tone: monitor?.failedToday ? 'pink' : 'teal', tooltip: 'Неуспешные попытки всех сценариев за сегодня. Часть временных ошибок будет повторена автоматически.' },
+      { label: 'Пропущено', value: monitor?.skippedToday ?? 0, icon: 'pause_circle', tone: 'teal', tooltip: 'Попытки, где отправка осознанно не выполнялась: изменились условия, сработал dry-run, задача уже неактуальна или было выполнено системное действие. Это не обязательно ошибка или потерянное сообщение.' },
+      { label: 'Отключено задач', value: monitor?.disabledStates ?? 0, icon: 'block', tone: monitor?.disabledStates ? 'pink' : 'blue', tooltip: 'Задачи, окончательно исключенные из автоматической обработки. Они не вернутся в очередь без отдельного восстановления.' }
     ];
+  });
+
+  readonly archiveOfferMetrics = computed<DictionaryMetric[]>(() => {
+    const offer = this.clientMessageMonitor()?.archiveOfferToday;
+    return [
+      { label: 'Весь план на сегодня', value: offer?.plannedToday ?? 0, icon: 'today', tone: 'blue', tooltip: 'Весь объем архивного оффера на сегодня: уже отправленные плюс еще не завершенные задачи. Формула: «уже отправлено» + «осталось в плане».' },
+      { label: 'Пора обрабатывать', value: offer?.queuedNow ?? 0, icon: 'outbox', tone: 'yellow', tooltip: 'Часть оставшегося плана, у которой уже наступило время проверки. Остальные задачи из плана назначены на более позднее время сегодня.' },
+      { label: 'В обработке', value: offer?.processingNow ?? 0, icon: 'sync', tone: 'teal', tooltip: 'Офферы, которые worker уже захватил для проверки или отправки прямо сейчас. Обычно это число быстро возвращается к нулю.' },
+      { label: 'Можно отправлять сейчас', value: offer?.readyNow ?? 0, icon: 'bolt', tone: 'green', tooltip: 'Часть показателя «пора обрабатывать», для которой включена live-отправка, открыто рабочее окно и найдена безопасная привязка чата. Это еще не отправленные сообщения.' },
+      { label: 'Уже отправлено', value: offer?.sentToday ?? 0, icon: 'send', tone: 'green', tooltip: 'Только успешно отправленные сегодня сообщения сценария «Архивные компании», с начала дня по иркутскому времени.' },
+      { label: 'Осталось в плане', value: offer?.remainingToday ?? 0, icon: 'pending_actions', tone: 'blue', tooltip: 'Активные офферы, назначенные не позже конца сегодняшнего дня и еще не завершенные. Часть из них может быть перенесена на следующий день.' },
+      { label: 'Нет привязки чата', value: offer?.blockedByChannel ?? 0, icon: 'link_off', tone: offer?.blockedByChannel ? 'pink' : 'teal', tooltip: 'Активные задачи архивного оффера из оставшегося плана, у компаний которых нет корректного WhatsApp groupId, Telegram chatId или MAX chatId. Это количество задач, а не отдельный подсчет уникальных компаний. Перед отправкой статус компании проверяется повторно.' },
+      { label: 'Остаток общего лимита', value: offer?.dailyLimitRemaining ?? 0, icon: 'speed', tone: 'yellow', tooltip: 'Сколько клиентских сообщений еще разрешает общий дневной лимит автоответчика. Этот остаток делят все сценарии, а не только архивный оффер.' }
+    ];
+  });
+
+  readonly monitorArchiveOfferText = computed(() => {
+    const template = this.clientMessageSettings()?.archiveOfferText?.trim() ?? '';
+    return template.replace(/^\{company\}\s*/i, '').trim() || 'Текст архивного оффера не задан.';
   });
 
   readonly selectedImportCity = computed(() => {

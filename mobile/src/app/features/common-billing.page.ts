@@ -8,6 +8,7 @@ import {
   CommonInvoiceDetailsResponse,
   CommonInvoiceOrderResponse,
   CommonInvoiceSummaryResponse,
+  CommonManualPaymentMode,
   ManualPaymentConfirmationRequest,
   OrderItem
 } from '../core/api.service';
@@ -16,6 +17,7 @@ import { RouteEpochGuard, type RouteEpochTicket } from '../core/route-epoch.guar
 import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-format';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { MobileCommonManualPaymentFlowService } from '../shared/mobile-common-manual-payment-flow.service';
 import { MobileOrderCardComponent } from '../shared/mobile-order-card.component';
 import {
   COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL,
@@ -109,6 +111,12 @@ type InvoiceAction =
                   <button type="button" (click)="runInvoiceAction('payment-init-check')" [disabled]="!!mutating() || !paymentInitCheckReady()">{{ paymentInitNoPaymentActionLabel }}</button>
                   <p class="invoice-action-hint">{{ paymentInitNoPaymentActionHint }}</p>
                 }
+                @if (attentionPolicy(invoice).standaloneRouteConflict) {
+                  <button type="button" class="success" (click)="reportManualCardPayment()" [disabled]="!!mutating() || manualAttributionRequired() == null">
+                    Оплата переводом
+                  </button>
+                  <p class="invoice-action-hint">Укажите, кому фактически поступили деньги; выбор сразу изменит расчёты.</p>
+                }
                 @if (!attentionPolicy(invoice).requiresManualCheck) {
                   <button type="button" (click)="runInvoiceAction('retry')" [disabled]="!!mutating()">Повторить</button>
                   <button type="button" (click)="runInvoiceAction('resolve')" [disabled]="!!mutating()">Закрыть проверку</button>
@@ -182,6 +190,9 @@ type InvoiceAction =
                 <strong>{{ orders().length }}</strong>
               </header>
 
+              @if (manualAttributionRequired()) {
+                <p class="invoice-action-hint">В новом режиме частичную ручную оплату не закрывают по одному заказу: распределите весь остаток через кнопку «Оплачен».</p>
+              }
               @for (order of orderCards(); track order.id) {
                 <div class="invoice-order-card">
                   <app-mobile-order-card
@@ -218,7 +229,7 @@ type InvoiceAction =
                   @if (invoiceOrderForCard(order); as invoiceOrder) {
                     <div class="order-actions">
                       <button type="button" (click)="openOrder(invoiceOrder)">Открыть</button>
-                      <button type="button" (click)="markOrderPaid(invoiceOrder)" [disabled]="!!mutating() || invoiceOrder.paid || summary()?.status === 'NEEDS_ATTENTION'">
+                      <button type="button" (click)="markOrderPaid(invoiceOrder)" [disabled]="!!mutating() || invoiceOrder.paid || summary()?.status === 'NEEDS_ATTENTION' || manualAttributionRequired() !== false">
                         Оплачен
                       </button>
                       <button type="button" class="danger" (click)="detachOrder(invoiceOrder)" [disabled]="!!mutating() || !invoiceOrder.detachable || summary()?.status === 'NEEDS_ATTENTION'">
@@ -539,6 +550,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
   readonly copiedKey = signal<string | null>(null);
   readonly summary = computed(() => this.details()?.summary ?? null);
   readonly orders = computed(() => this.details()?.orders ?? []);
+  readonly manualAttributionRequired = signal<boolean | null>(null);
   readonly orderCards = computed(() => this.details()?.orderCards ?? []);
   readonly reviewApprovalCount = computed(() => this.orders()
     .filter(order => order.orderStatus === 'В проверку' || order.orderStatus === 'На проверке')
@@ -568,7 +580,8 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
-    private readonly confirm: MobileConfirmService
+    private readonly confirm: MobileConfirmService,
+    private readonly commonManualPaymentFlow: MobileCommonManualPaymentFlowService
   ) {}
 
   ngOnInit(): void {
@@ -584,6 +597,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       this.error.set(null);
       this.loading.set(false);
       this.mutating.set(null);
+      this.manualAttributionRequired.set(null);
       void this.load();
     });
   }
@@ -626,6 +640,18 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       this.error.set('Полные платежные реквизиты не загружены. Обновите карточку счета и повторите проверку.');
       return;
     }
+    if (action === 'paid') {
+      const required = this.manualAttributionRequired();
+      if (required == null) {
+        this.error.set('Режим учёта получателей не загружен. Обновите карточку счёта.');
+        return;
+      }
+      if (required) {
+        await this.runAttributedPayment(ticket, invoiceId, 'STANDARD');
+        return;
+      }
+    }
+
     const manualPaymentEvidence = action === 'paid'
       ? await this.requestManualPaymentEvidence(
         'Подтверждение поступления денег',
@@ -675,6 +701,10 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     if (!invoiceId || !ticket || this.mutating()) {
       return;
     }
+    if (this.manualAttributionRequired() !== false) {
+      this.error.set('В новом режиме фиксируйте ручную оплату целиком через кнопку «Оплачен» и список фактических получателей.');
+      return;
+    }
 
     const evidence = await this.requestManualPaymentEvidence(
       'Подтверждение поступления денег',
@@ -688,6 +718,34 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       ticket,
       `paid-${order.orderId}`,
       () => this.api.markCommonInvoiceOrderPaid(invoiceId, order.orderId, evidence)
+    );
+  }
+
+  async reportManualCardPayment(): Promise<void> {
+    const invoice = this.summary();
+    const invoiceId = this.invoiceId();
+    const ticket = this.routeGuard.capture();
+    if (!invoice || !invoiceId || !ticket || this.mutating()
+      || !this.attentionPolicy(invoice).standaloneRouteConflict) {
+      return;
+    }
+    const required = this.manualAttributionRequired();
+    if (required == null) {
+      this.error.set('Режим учёта получателей не загружен. Обновите карточку счёта.');
+      return;
+    }
+    if (required) {
+      await this.runAttributedPayment(ticket, invoiceId, 'TBANK_FALLBACK');
+      return;
+    }
+    const reason = window.prompt('Клиент оплатил общий счёт переводом на карту. Укажите краткую причину:')?.trim();
+    if (!reason) {
+      return;
+    }
+    await this.runOrderMutation(
+      ticket,
+      'manual-card-paid',
+      () => this.api.reportCommonInvoiceManualCardPayment(invoiceId, reason)
     );
   }
 
@@ -1017,7 +1075,19 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         return;
       }
       this.details.set(details);
-      this.error.set(null);
+      try {
+        const mode = await firstValueFrom(this.api.getCommonManualPaymentMode(invoiceId));
+        if (!this.acceptsRead(ticket, readRun)) {
+          return;
+        }
+        this.manualAttributionRequired.set(mode.attributionRequired);
+        this.error.set(null);
+      } catch (modeError) {
+        if (this.acceptsRead(ticket, readRun)) {
+          this.manualAttributionRequired.set(null);
+          this.error.set(this.errorMessage(modeError, 'Счёт загружен, но режим учёта получателей недоступен; ручная оплата заблокирована.'));
+        }
+      }
     } catch (error) {
       if (this.acceptsRead(ticket, readRun)) {
         this.error.set(this.errorMessage(error, 'Не удалось загрузить общий счет.'));
@@ -1025,6 +1095,32 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     } finally {
       if (this.acceptsRead(ticket, readRun)) {
         this.loading.set(false);
+      }
+    }
+  }
+
+  private async runAttributedPayment(
+    ticket: RouteEpochTicket,
+    invoiceId: number,
+    mode: CommonManualPaymentMode
+  ): Promise<void> {
+    this.readRun += 1;
+    const mutation = mode === 'TBANK_FALLBACK' ? 'manual-card-paid' : 'paid';
+    this.mutating.set(mutation);
+    try {
+      const details = await this.commonManualPaymentFlow.confirm(invoiceId, mode);
+      if (!this.routeGuard.accepts(ticket) || !details) {
+        return;
+      }
+      this.details.set(details);
+      this.error.set(null);
+    } catch (error) {
+      if (this.routeGuard.accepts(ticket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось открыть подтверждение фактических получателей.'));
+      }
+    } finally {
+      if (this.routeGuard.accepts(ticket) && this.mutating() === mutation) {
+        this.mutating.set(null);
       }
     }
   }

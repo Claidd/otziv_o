@@ -48,10 +48,6 @@ function createFacade(config: {
           ? of(void 0)
           : throwError(() => config.orderStatusError);
       },
-      confirmManualCardPayment: (orderId: number, request) => {
-        calls.push(`manual-card:${orderId}:${request.reason}`);
-        return of(void 0);
-      },
       updateOrderClientWaiting: (orderId: number, waitingForClient: boolean) => {
         calls.push(`client-waiting:${orderId}:${waitingForClient}`);
         return of(void 0);
@@ -84,7 +80,10 @@ function createFacade(config: {
       calls.push('load-board');
     },
     errorMessage: (_err, fallback) => fallback,
-    canOverrideActiveBankPayment: () => config.canOverrideActiveBankPayment ?? true
+    canOverrideActiveBankPayment: () => config.canOverrideActiveBankPayment ?? true,
+    openManualCardPayment: (targetOrder) => {
+      calls.push(`open-manual-card:${targetOrder.id}`);
+    }
   };
 
   return {
@@ -127,7 +126,7 @@ describe('ManagerBoardActionFacade', () => {
     expect(toastMessages).toContain('error:Статус не изменен:Не удалось изменить статус компании');
   });
 
-  it('uses the safe manual-card fallback only after the exact active-bank conflict and a reason', () => {
+  it('opens the manual-card modal once after the exact active-bank conflict', () => {
     const conflict = {
       status: 409,
       error: {
@@ -135,7 +134,7 @@ describe('ManagerBoardActionFacade', () => {
       }
     };
     const { facade, calls, mutationKey, toastMessages } = createFacade({ orderStatusError: conflict });
-    vi.spyOn(window, 'prompt').mockReturnValue('Клиент оплатил переводом по номеру телефона');
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('Устаревший прямой ввод');
 
     facade.updateOrderStatus(order({
       id: 25047,
@@ -148,36 +147,17 @@ describe('ManagerBoardActionFacade', () => {
       icon: 'payments'
     });
 
-    expect(calls[0]).toBe('order-status:25047:Оплачено');
-    expect(calls[1]).toBe('manual-card:25047:Клиент оплатил переводом по номеру телефона');
-    expect(calls[2]).toBe('load-board');
+    expect(calls).toEqual([
+      'order-status:25047:Оплачено',
+      'open-manual-card:25047'
+    ]);
+    expect(calls.filter((call) => call === 'open-manual-card:25047')).toHaveLength(1);
+    expect(prompt).not.toHaveBeenCalled();
     expect(mutationKey()).toBeNull();
-    expect(toastMessages).toContain(
-      'success:Оплата отмечена:Мастер на дом: T-Bank ссылка закрыта, владельцам отправлена причина'
-    );
+    expect(toastMessages).toEqual([]);
   });
 
-  it('does not send the fallback when entering a reason is canceled', () => {
-    const conflict = {
-      status: 409,
-      error: {
-        message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
-      }
-    };
-    const { facade, calls, mutationKey } = createFacade({ orderStatusError: conflict });
-    vi.spyOn(window, 'prompt').mockReturnValue(null);
-
-    facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
-      label: 'оплатили',
-      status: 'Оплачено',
-      icon: 'payments'
-    });
-
-    expect(calls).toEqual(['order-status:25047:Оплачено']);
-    expect(mutationKey()).toBeNull();
-  });
-
-  it('requires a non-blank reason for a manual payment report', () => {
+  it('does not open the manual-card modal for a non-paid status', () => {
     const conflict = {
       status: 409,
       error: {
@@ -185,14 +165,32 @@ describe('ManagerBoardActionFacade', () => {
       }
     };
     const { facade, calls, toastMessages } = createFacade({ orderStatusError: conflict });
-    vi.spyOn(window, 'prompt').mockReturnValue('   ');
 
     facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
+      label: 'архив', status: 'Архив', icon: 'archive'
+    });
+
+    expect(calls).toEqual(['order-status:25047:Архив']);
+    expect(calls.some((call) => call.startsWith('open-manual-card:'))).toBe(false);
+    expect(toastMessages).toContain('error:Статус не изменен:Не удалось изменить статус заказа');
+  });
+
+  it('does not open the manual-card modal for an order in a common invoice', () => {
+    const conflict = {
+      status: 409,
+      error: {
+        message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+      }
+    };
+    const { facade, calls, toastMessages } = createFacade({ orderStatusError: conflict });
+
+    facade.updateOrderStatus(order({ id: 25047, sum: 1000, commonInvoice: true }), {
       label: 'оплатили', status: 'Оплачено', icon: 'payments'
     });
 
     expect(calls).toEqual(['order-status:25047:Оплачено']);
-    expect(toastMessages).toContain('error:Оплата не отмечена:Укажите короткую причину ручной оплаты');
+    expect(calls.some((call) => call.startsWith('open-manual-card:'))).toBe(false);
+    expect(toastMessages).toContain('error:Статус не изменен:Не удалось изменить статус заказа');
   });
 
   it('does not bypass an active bank payment for a manager', () => {
@@ -212,11 +210,12 @@ describe('ManagerBoardActionFacade', () => {
     });
 
     expect(calls).toEqual(['order-status:25047:Оплачено']);
+    expect(calls.some((call) => call.startsWith('open-manual-card:'))).toBe(false);
     expect(toastMessages).toContain('error:Статус не изменен:Не удалось изменить статус заказа');
   });
 
-  it('does not use the privileged fallback for a different 409 response', () => {
-    const { facade, calls } = createFacade({
+  it('does not open the manual-card modal for a different 409 response', () => {
+    const { facade, calls, toastMessages } = createFacade({
       orderStatusError: { status: 409, error: { message: 'Другой конфликт' } }
     });
 
@@ -225,10 +224,12 @@ describe('ManagerBoardActionFacade', () => {
     });
 
     expect(calls).toEqual(['order-status:25047:Оплачено']);
+    expect(calls.some((call) => call.startsWith('open-manual-card:'))).toBe(false);
+    expect(toastMessages).toContain('error:Статус не изменен:Не удалось изменить статус заказа');
   });
 
-  it('recognizes the exact Spring ProblemDetail conflict without accepting other errors', () => {
-    const { facade, calls } = createFacade({
+  it('opens the modal for the exact Spring ProblemDetail conflict', () => {
+    const { facade, calls, toastMessages } = createFacade({
       orderStatusError: {
         status: 409,
         error: {
@@ -236,16 +237,18 @@ describe('ManagerBoardActionFacade', () => {
         }
       }
     });
-    vi.spyOn(window, 'prompt').mockReturnValue('Оплата по номеру телефона');
 
     facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
       label: 'оплатили', status: 'Оплачено', icon: 'payments'
     });
 
-    expect(calls[0]).toBe('order-status:25047:Оплачено');
-    expect(calls[1]).toBe('manual-card:25047:Оплата по номеру телефона');
+    expect(calls).toEqual([
+      'order-status:25047:Оплачено',
+      'open-manual-card:25047'
+    ]);
+    expect(calls.filter((call) => call === 'open-manual-card:25047')).toHaveLength(1);
+    expect(toastMessages).toEqual([]);
   });
-
   it('toggles client waiting for an order', () => {
     const { facade, calls, mutationKey, toastMessages } = createFacade();
 

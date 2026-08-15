@@ -15,15 +15,15 @@ class OrderCorrectionTelegramNotifierTest {
         TelegramService telegramService = mock(TelegramService.class);
         OrderCorrectionTelegramNotifier notifier = new OrderCorrectionTelegramNotifier(telegramService);
 
-        when(telegramService.sendMessage(700L, "Компания отправлен в Коррекцию - заметка комментарий\n https://o-ogo.ru/worker/correct"))
+        String message = "Компания отправлена в коррекцию."
+                + "\nЗамечания клиента:\nОбщее замечание\nОтзыв #17: исправьте имя"
+                + "\n\nhttps://o-ogo.ru/worker?section=correct";
+        when(telegramService.sendMessage(700L, message))
                 .thenReturn(true);
 
-        notifier.notifyWorkerCorrection(7L, 700L, "Компания", "заметка", "комментарий");
+        notifier.notifyWorkerCorrection(7L, 700L, "Компания", "Общее замечание\nОтзыв #17: исправьте имя");
 
-        verify(telegramService).sendMessage(
-                700L,
-                "Компания отправлен в Коррекцию - заметка комментарий\n https://o-ogo.ru/worker/correct"
-        );
+        verify(telegramService).sendMessage(700L, message);
     }
 
     @Test
@@ -31,15 +31,15 @@ class OrderCorrectionTelegramNotifierTest {
         TelegramService telegramService = mock(TelegramService.class);
         OrderCorrectionTelegramNotifier notifier = new OrderCorrectionTelegramNotifier(telegramService);
 
-        when(telegramService.sendMessage(700L, "Компания отправлен в Коррекцию -  \n https://o-ogo.ru/worker/correct"))
+        String message = "Компания отправлена в коррекцию."
+                + "\nЗамечания клиента не указаны."
+                + "\n\nhttps://o-ogo.ru/worker?section=correct";
+        when(telegramService.sendMessage(700L, message))
                 .thenReturn(false);
 
-        notifier.notifyWorkerCorrection(7L, 700L, "Компания", null, null);
+        notifier.notifyWorkerCorrection(7L, 700L, "Компания", null);
 
-        verify(telegramService).sendMessage(
-                700L,
-                "Компания отправлен в Коррекцию -  \n https://o-ogo.ru/worker/correct"
-        );
+        verify(telegramService).sendMessage(700L, message);
     }
 
     @Test
@@ -47,7 +47,7 @@ class OrderCorrectionTelegramNotifierTest {
         TelegramService telegramService = mock(TelegramService.class);
         OrderCorrectionTelegramNotifier notifier = new OrderCorrectionTelegramNotifier(telegramService);
 
-        notifier.notifyWorkerCorrection(7L, null, "Компания", "заметка", "комментарий");
+        notifier.notifyWorkerCorrection(7L, null, "Компания", "замечание клиента");
 
         verifyNoInteractions(telegramService);
     }

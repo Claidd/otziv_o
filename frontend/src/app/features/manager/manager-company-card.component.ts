@@ -2,13 +2,13 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { CompanyCardItem } from '../../core/manager.api';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
+import { safeHttpsExternalUrl } from '../../shared/external-navigation';
 import {
   ManagerChatBotInviteKind,
   StatusAction,
   managerCompanyChatBindingNotRequired,
   managerCompanyChatBindingWarning,
   managerCompanyChatBotInviteKind,
-  managerCompanyHeaderUrl,
   managerCompanyChatUrl,
   managerCompanyFilialUrl,
   managerCompanyNeedsChatBot,
@@ -37,17 +37,16 @@ export class ManagerCompanyCardComponent {
   @Output() readonly allOrdersOpened = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();
   @Output() readonly chatBotInviteOpened = new EventEmitter<void>();
+  @Output() readonly chatLinkEditOpened = new EventEmitter<void>();
+
+  private titlePointerType: string | null = null;
 
   companyChatUrl(): string {
     return managerCompanyChatUrl(this.company);
   }
 
-  companyHeaderUrl(): string {
-    return managerCompanyHeaderUrl(this.company);
-  }
-
   companyFilialUrl(): string {
-    return managerCompanyFilialUrl(this.company);
+    return safeHttpsExternalUrl(managerCompanyFilialUrl(this.company)) ?? '';
   }
 
   companyOrdersUrl(): string {
@@ -56,10 +55,6 @@ export class ManagerCompanyCardComponent {
 
   hasCompanyFilialUrl(): boolean {
     return !!this.companyFilialUrl();
-  }
-
-  hasCompanyHeaderUrl(): boolean {
-    return !!this.companyHeaderUrl();
   }
 
   needsChatBot(): boolean {
@@ -104,6 +99,30 @@ export class ManagerCompanyCardComponent {
     if (this.hasActiveChatBindingIssue()) {
       event.preventDefault();
       this.chatBotInviteOpened.emit();
+    }
+  }
+
+  rememberTitlePointer(event: PointerEvent): void {
+    this.titlePointerType = event.pointerType;
+  }
+
+  handleTitleClick(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const pointerType = this.titlePointerType;
+    this.titlePointerType = null;
+    const isPointerDoubleClick = pointerType === 'mouse' && event.detail >= 2;
+    const isTouchActivation = pointerType === 'touch' || pointerType === 'pen';
+    const isKeyboardActivation = !pointerType && event.detail === 0;
+
+    if (!isPointerDoubleClick && !isTouchActivation && !isKeyboardActivation) {
+      return;
+    }
+
+    const url = this.companyFilialUrl();
+    if (url) {
+      window.open(url, '_blank', 'noopener');
     }
   }
 

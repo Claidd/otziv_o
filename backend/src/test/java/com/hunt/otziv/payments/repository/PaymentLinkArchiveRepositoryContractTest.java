@@ -262,6 +262,10 @@ class PaymentLinkArchiveRepositoryContractTest {
         assertTrue(sql.contains("bank_init_nonce IS NOT NULL"));
         assertTrue(sql.contains("bank_cancel_nonce IS NOT NULL"));
         assertTrue(sql.contains("bank_cancel_origin_status IS NOT NULL"));
+        assertTrue(sql.contains(
+                "LOWER(TRIM(COALESCE(pl.last_error, ''))) LIKE 'manual_card_payment_pending:%'"
+        ));
+        assertFalse(sql.contains("manual_card_payment_completed:"));
         assertTrue(sql.contains("COALESCE(pl.status, '') NOT IN"));
         assertTrue(sql.contains("receipt_status"));
         assertTrue(sql.contains("payment_success_notification_retry_eligible"));

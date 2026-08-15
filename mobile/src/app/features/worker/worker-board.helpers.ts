@@ -101,6 +101,13 @@ export function workerSectionIcon(section: WorkerBoardSection): string {
   return WORKER_SECTION_ICONS[section];
 }
 
+export function workerSectionFromRouteParam(value: string | null | undefined): WorkerBoardSection | null {
+  const normalized = value?.trim().toLowerCase();
+  return WORKER_SECTIONS.includes(normalized as WorkerBoardSection)
+    ? normalized as WorkerBoardSection
+    : null;
+}
+
 export function isWorkerReviewSection(section: WorkerBoardSection): boolean {
   return REVIEW_SECTIONS.has(section);
 }

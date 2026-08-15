@@ -1,6 +1,7 @@
 export interface CommonInvoiceAttentionPolicy {
   latePayment: boolean;
   finalCancelCheck: boolean;
+  standaloneRouteConflict: boolean;
   paymentInitCheck: boolean;
   migrationQuarantine: boolean;
   requiresManualCheck: boolean;
@@ -107,12 +108,14 @@ export function commonInvoiceAttentionPolicy(
   const migrationQuarantine = error.startsWith('migration_common_payment_registry:');
   const paymentInitCheck = PAYMENT_INIT_PREFIXES.some(prefix => error.startsWith(prefix))
     || error.startsWith(MANUALLY_CONFIRMABLE_MIGRATION_PAYMENT_ERROR);
+  const standaloneRouteConflict = error.startsWith('standalone_payment_route_conflict');
   return {
     latePayment,
     finalCancelCheck,
     paymentInitCheck,
+    standaloneRouteConflict,
     migrationQuarantine,
-    requiresManualCheck: latePayment || finalCancelCheck || paymentInitCheck || migrationQuarantine
+    requiresManualCheck: latePayment || finalCancelCheck || paymentInitCheck || migrationQuarantine || standaloneRouteConflict
   };
 }
 

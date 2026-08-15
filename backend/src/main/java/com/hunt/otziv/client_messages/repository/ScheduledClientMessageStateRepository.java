@@ -79,11 +79,87 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     List<ScenarioCount> countDueByScenario(@Param("status") ScheduledMessageStateStatus status,
                                            @Param("now") LocalDateTime now);
 
+    @Query("""
+        SELECT COUNT(s)
+        FROM ScheduledClientMessageState s
+        WHERE s.scenario = :scenario
+          AND s.status = :status
+          AND (
+              (s.nextAttemptAt IS NOT NULL AND s.nextAttemptAt < :before)
+              OR (s.lockedUntil IS NOT NULL AND s.lockedUntil > :now)
+          )
+    """)
+    long countScheduledBefore(
+            @Param("scenario") ClientMessageScenario scenario,
+            @Param("status") ScheduledMessageStateStatus status,
+            @Param("now") LocalDateTime now,
+            @Param("before") LocalDateTime before
+    );
+
+    @Query("""
+        SELECT COUNT(s)
+        FROM ScheduledClientMessageState s
+        WHERE s.scenario = :scenario
+          AND s.status = :status
+          AND s.lockedUntil IS NOT NULL
+          AND s.lockedUntil > :now
+    """)
+    long countProcessingNow(
+            @Param("scenario") ClientMessageScenario scenario,
+            @Param("status") ScheduledMessageStateStatus status,
+            @Param("now") LocalDateTime now
+    );
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM scheduled_client_message_state state
+        LEFT JOIN companies company ON company.company_id = state.company_id
+        LEFT JOIN company_status company_status ON company_status.company_status_id = company.company_status
+        WHERE state.state_status = :status
+          AND state.scenario = :scenario
+          AND state.next_attempt_at IS NOT NULL
+          AND state.next_attempt_at < :before
+          AND (company_status.status_title IS NULL OR LOWER(TRIM(company_status.status_title)) <> 'бан')
+          AND (
+              company.company_id IS NULL
+              OR company.company_url_chat IS NULL
+              OR TRIM(company.company_url_chat) = ''
+              OR (
+                  LOWER(company.company_url_chat) LIKE '%chat.whatsapp.com/%'
+                  AND (company.company_group_id IS NULL OR TRIM(company.company_group_id) = '')
+              )
+              OR (
+                  (
+                      LOWER(company.company_url_chat) REGEXP '(^|//)(t\\\\.me|telegram\\\\.me|telegram\\\\.dog)/'
+                      OR LOWER(company.company_url_chat) LIKE 'tg://resolve%'
+                  )
+                  AND company.company_telegram_group_chat_id IS NULL
+              )
+              OR (
+                  LOWER(company.company_url_chat) REGEXP '(^|//)(web\\\\.)?max\\\\.ru/'
+                  AND company.company_max_group_chat_id IS NULL
+              )
+              OR (
+                  LOWER(company.company_url_chat) NOT LIKE '%chat.whatsapp.com/%'
+                  AND LOWER(company.company_url_chat) NOT REGEXP '(^|//)(t\\\\.me|telegram\\\\.me|telegram\\\\.dog)/'
+                  AND LOWER(company.company_url_chat) NOT LIKE 'tg://resolve%'
+                  AND LOWER(company.company_url_chat) NOT REGEXP '(^|//)(web\\\\.)?max\\\\.ru/'
+              )
+          )
+        """, nativeQuery = true)
+    long countMissingChannelBindingsBefore(
+            @Param("scenario") String scenario,
+            @Param("status") String status,
+            @Param("before") LocalDateTime before
+    );
+
     @Query(value = """
         SELECT state.scenario AS scenario, COUNT(*) AS total
         FROM scheduled_client_message_state state
         LEFT JOIN companies company ON company.company_id = state.company_id
+        LEFT JOIN company_status company_status ON company_status.company_status_id = company.company_status
         WHERE state.state_status = :status
+          AND (company_status.status_title IS NULL OR LOWER(TRIM(company_status.status_title)) <> 'бан')
           AND state.scenario IN (
               'CLIENT_TEXT_REMINDER',
               'REVIEW_CHECK_REMINDER',
@@ -128,10 +204,12 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
         SELECT state.scenario AS scenario, COUNT(*) AS total
         FROM scheduled_client_message_state state
         LEFT JOIN companies company ON company.company_id = state.company_id
+        LEFT JOIN company_status company_status ON company_status.company_status_id = company.company_status
         WHERE state.state_status = :status
           AND state.next_attempt_at IS NOT NULL
           AND state.next_attempt_at <= :now
           AND (state.locked_until IS NULL OR state.locked_until < :now)
+          AND (company_status.status_title IS NULL OR LOWER(TRIM(company_status.status_title)) <> 'бан')
           AND state.scenario IN (
               'CLIENT_TEXT_REMINDER',
               'REVIEW_CHECK_REMINDER',
@@ -177,7 +255,9 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
         SELECT COUNT(DISTINCT state.state_id)
         FROM scheduled_client_message_state state
         LEFT JOIN companies company ON company.company_id = state.company_id
+        LEFT JOIN company_status company_status ON company_status.company_status_id = company.company_status
         WHERE state.state_status = :status
+          AND (company_status.status_title IS NULL OR LOWER(TRIM(company_status.status_title)) <> 'бан')
           AND (
               (
                   state.scenario IN (

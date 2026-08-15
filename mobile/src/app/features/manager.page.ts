@@ -56,10 +56,9 @@ import {
 import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-format';
 import { safeExternalSchemeUrl, safeHttpsExternalUrl } from '../shared/external-navigation';
 import { orderReviewCopyText } from '../shared/order-review-copy-text';
-import {
-  buildManualCardPaymentConfirmationRequest,
-  buildManualPaymentConfirmationRequest
-} from '../shared/manual-payment-confirmation';
+import { buildManualPaymentConfirmationRequest } from '../shared/manual-payment-confirmation';
+import { MobileManualCardPaymentFlowService } from '../shared/mobile-manual-card-payment-flow.service';
+import { MobileCommonManualPaymentFlowService } from '../shared/mobile-common-manual-payment-flow.service';
 import {
   ALL_STATUS,
   COMPANY_ACTIONS,
@@ -2226,7 +2225,9 @@ export class ManagerPage implements OnInit, OnDestroy {
     private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
-    private readonly confirm: MobileConfirmService
+    private readonly confirm: MobileConfirmService,
+    private readonly manualCardPaymentFlow: MobileManualCardPaymentFlowService,
+    private readonly commonManualPaymentFlow: MobileCommonManualPaymentFlowService
   ) {}
 
   ngOnInit(): void {
@@ -3253,28 +3254,6 @@ export class ManagerPage implements OnInit, OnDestroy {
       return true;
     }
 
-    const amountKopecks = Math.round(this.orderPayableSum(order) * 100);
-    const manualCardRequest = buildManualCardPaymentConfirmationRequest(
-      amountKopecks,
-      `Явно подтверждено мобильной кнопкой «Оплатили» после проверки выписки; заказ #${order.id}`
-    );
-    if (!manualCardRequest) {
-      throw new Error('Не удалось определить точную сумму заказа. Оплата не отмечена.');
-    }
-    const amountLabel = `${new Intl.NumberFormat('ru-RU', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amountKopecks / 100)} ₽`;
-    const confirmed = await this.confirm.confirm({
-      title: 'Подтвердить оплату',
-      message: `Подтвердите по заказу #${order.id}: выписка получателя проверена и перевод ${amountLabel} действительно поступил. `
-        + 'Сообщение клиента «Я оплатил» само по себе этого не доказывает. '
-        + 'Если обнаружится незавершённая неоплаченная T-Bank/СБП-ссылка, владелец или администратор безопасно закроет её перед зачислением.',
-      confirmText: 'Деньги поступили'
-    });
-    if (!confirmed) {
-      return false;
-    }
 
     try {
       await firstValueFrom(this.api.updateManagerOrderStatus(order.id, status));
@@ -3282,7 +3261,10 @@ export class ManagerPage implements OnInit, OnDestroy {
       if (!this.canUsePrivilegedPaymentFallback() || !this.isUnfinishedProviderPaymentConflict(error)) {
         throw error;
       }
-      await firstValueFrom(this.api.confirmManagerManualCardPayment(order.id, manualCardRequest));
+      const completed = await this.manualCardPaymentFlow.confirm(order.id);
+      if (!completed) {
+        return false;
+      }
     }
 
     this.patchOrder(order.id, { status, waitingForClient: false });
@@ -3290,7 +3272,7 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   private canUsePrivilegedPaymentFallback(): boolean {
-    return this.auth.hasAnyRealmRole(['OWNER', 'ADMIN']);
+    return this.auth.hasAnyRealmRole(['OWNER', 'ADMIN', 'MANAGER']);
   }
 
   private isUnfinishedProviderPaymentConflict(error: unknown): boolean {
@@ -3319,6 +3301,17 @@ export class ManagerPage implements OnInit, OnDestroy {
         await firstValueFrom(this.api.markCommonInvoiceBan(invoiceId));
         return true;
       case 'Оплачено': {
+        const mode = await firstValueFrom(this.api.getCommonManualPaymentMode(invoiceId));
+        if (mode.attributionRequired) {
+          const fallback = (order.commonInvoiceStatus ?? '').toUpperCase() === 'NEEDS_ATTENTION'
+            && (order.commonInvoiceLastError ?? '').trim().toLowerCase()
+              .startsWith('standalone_payment_route_conflict');
+          const details = await this.commonManualPaymentFlow.confirm(
+            invoiceId,
+            fallback ? 'TBANK_FALLBACK' : 'STANDARD'
+          );
+          return details !== null;
+        }
         const evidence = await this.requestCommonInvoiceManualPaymentEvidence(invoiceId);
         if (!evidence) {
           return false;

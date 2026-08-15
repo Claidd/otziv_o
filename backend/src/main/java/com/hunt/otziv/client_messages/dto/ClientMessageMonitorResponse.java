@@ -28,6 +28,7 @@ public record ClientMessageMonitorResponse(
         long autoRecoveredToday,
         long disabledStates,
         ArchiveDiagnostics archiveDiagnostics,
+        ArchiveOfferToday archiveOfferToday,
         List<ScenarioSummary> scenarios,
         List<QueueItem> queue,
         List<AttemptItem> attempts
@@ -40,6 +41,21 @@ public record ClientMessageMonitorResponse(
             long withoutChat,
             long blockedByActiveOrder,
             long blockedByOpenRequest
+    ) {
+    }
+
+    public record ArchiveOfferToday(
+            long plannedToday,
+            long queuedNow,
+            long processingNow,
+            long readyNow,
+            long sentToday,
+            long remainingToday,
+            long blockedByChannel,
+            long dailyLimitRemaining,
+            long forecastAdditionalToday,
+            long forecastTotalToday,
+            String forecastNote
     ) {
     }
 

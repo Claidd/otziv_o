@@ -932,9 +932,9 @@
                         (change)="changeContractorJournalSourceType($any($event.target).value)"
                       >
                         <option value="">Все типы</option>
-                        <option value="PAYMENT_LINK">Платёжная ссылка</option>
-                        <option value="COMMON_INVOICE">Общий счёт</option>
-                        <option value="DIRECT_SETTLEMENT">Прямой перевод</option>
+                        @for (option of contractorJournalSourceOptions; track option.value) {
+                          <option [value]="option.value">{{ option.label }}</option>
+                        }
                       </select>
                     </label>
                     <label>

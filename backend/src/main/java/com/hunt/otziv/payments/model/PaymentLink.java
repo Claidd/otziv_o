@@ -1,5 +1,9 @@
 package com.hunt.otziv.payments.model;
 
+import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
+import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
+import com.hunt.otziv.security.credentials.EncryptedCredentialConverter;
+import jakarta.persistence.Convert;
 import com.hunt.otziv.p_products.model.Order;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -150,6 +154,64 @@ public class PaymentLink {
      * recorded the evidence event. */
     @Column(name = "contractor_evidence_original_link_id")
     private Long contractorEvidenceOriginalLinkId;
+
+    /** Durable, typed recipient intent frozen before any remote bank cancel. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_actual_accounting_mode", length = 16)
+    private ContractorAllocationMode manualActualAccountingMode;
+
+    @Column(name = "manual_actual_original_allocation_id")
+    private Long manualActualOriginalAllocationId;
+
+    @Column(name = "manual_actual_client_facing_allocation_id")
+    private Long manualActualClientFacingAllocationId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_actual_original_recipient_type", length = 24)
+    private ContractorRecipientType manualActualOriginalRecipientType;
+
+    @Column(name = "manual_actual_original_recipient_profile_id")
+    private Long manualActualOriginalRecipientProfileId;
+
+    @Column(name = "manual_actual_original_recipient_user_id")
+    private Long manualActualOriginalRecipientUserId;
+
+    @Convert(converter = EncryptedCredentialConverter.class)
+    @Column(name = "manual_actual_original_recipient_name_snapshot", columnDefinition = "TEXT")
+    private String manualActualOriginalRecipientNameSnapshot;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_actual_recipient_type", length = 24)
+    private ContractorRecipientType manualActualRecipientType;
+
+    @Column(name = "manual_actual_recipient_profile_id")
+    private Long manualActualRecipientProfileId;
+
+    @Column(name = "manual_actual_recipient_user_id")
+    private Long manualActualRecipientUserId;
+
+    @Convert(converter = EncryptedCredentialConverter.class)
+    @Column(name = "manual_actual_recipient_name_snapshot", columnDefinition = "TEXT")
+    private String manualActualRecipientNameSnapshot;
+
+    @Column(name = "manual_actual_current_worker_id")
+    private Long manualActualCurrentWorkerId;
+
+    @Column(name = "manual_actual_current_manager_id")
+    private Long manualActualCurrentManagerId;
+
+    @Column(name = "manual_actual_reason", length = 500)
+    private String manualActualReason;
+
+    @Convert(converter = EncryptedCredentialConverter.class)
+    @Column(name = "manual_actual_receipt_url", columnDefinition = "TEXT")
+    private String manualActualReceiptUrl;
+
+    @Column(name = "manual_actual_actor", length = 150)
+    private String manualActualActor;
+
+    @Column(name = "manual_actual_recipient_frozen_at")
+    private LocalDateTime manualActualRecipientFrozenAt;
 
     @Column(name = "payment_url", length = 1024)
     private String paymentUrl;

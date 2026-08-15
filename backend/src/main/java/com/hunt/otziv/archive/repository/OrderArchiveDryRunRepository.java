@@ -47,6 +47,7 @@ public class OrderArchiveDryRunRepository {
                 OR pl.bank_init_nonce IS NOT NULL
                 OR pl.bank_cancel_nonce IS NOT NULL
                 OR pl.bank_cancel_origin_status IS NOT NULL
+                OR LOWER(TRIM(COALESCE(pl.last_error, ''))) LIKE 'manual_card_payment_pending:%'
                 OR COALESCE(pl.receipt_status, 'DONE') = 'PENDING'
                 OR (
                     pl.status = 'CONFIRMED'
@@ -473,6 +474,13 @@ public class OrderArchiveDryRunRepository {
                     WHERE evidence.contractor_evidence_original_link_id IS NOT NULL
                       AND evidence.status = 'CONFIRMED'
                       AND evidence.payment_method = 'MANUAL_MOBILE_BANK'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM contractor_actual_payment_attributions attribution
+                          WHERE attribution.source_kind = 'PAYMENT_LINK'
+                            AND attribution.source_id = evidence.contractor_evidence_original_link_id
+                            AND attribution.evidence_id = evidence.id
+                      )
                       AND NOT EXISTS (
                           SELECT 1
                           FROM contractor_payment_allocation_events event

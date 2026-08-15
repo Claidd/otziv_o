@@ -125,7 +125,9 @@ public class ContractorPaymentAllocation {
     private ContractorRoutingDecisionReason managerRejectionReason;
 
     @Convert(converter = EncryptedCredentialConverter.class)
-    @Column(name = "recipient_name_snapshot", length = 512)
+    // Converter ciphertext can exceed 512 characters for a valid 255-char
+    // UTF-8 recipient name; TEXT avoids a strict-MySQL truncation after encryption.
+    @Column(name = "recipient_name_snapshot", columnDefinition = "TEXT")
     private String recipientNameSnapshot;
 
     @Convert(converter = EncryptedCredentialConverter.class)

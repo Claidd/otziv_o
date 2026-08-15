@@ -7,7 +7,6 @@ type ManagerBoardActionApi = Pick<
   ManagerApi,
   | 'updateCompanyStatus'
   | 'updateOrderStatus'
-  | 'confirmManualCardPayment'
   | 'updateOrderClientWaiting'
   | 'updateCompanyNote'
   | 'updateOrderCompanyNote'
@@ -24,6 +23,7 @@ export type ManagerBoardActionFacadeDeps = {
   patchBoard?: (updater: (board: ManagerBoard) => ManagerBoard) => void;
   errorMessage: (err: unknown, fallback: string) => string;
   canOverrideActiveBankPayment: () => boolean;
+  openManualCardPayment: (order: OrderCardItem) => void;
 };
 
 export class ManagerBoardActionFacade {
@@ -63,55 +63,12 @@ export class ManagerBoardActionFacade {
       },
       error: (err) => {
         if (this.canFallbackToManualCardPayment(order, action, err)) {
-          this.confirmManualCardPayment(order, key);
+          this.deps.mutationKey.set(null);
+          this.deps.openManualCardPayment(order);
           return;
         }
         this.deps.mutationKey.set(null);
         this.deps.toastService.error('Статус не изменен', this.deps.errorMessage(err, 'Не удалось изменить статус заказа'));
-      }
-    });
-  }
-
-  private confirmManualCardPayment(order: OrderCardItem, mutationKey: string): void {
-    const enteredReason = window.prompt(
-      `Почему заказ #${order.id} отмечается оплаченным вручную?`,
-      ''
-    );
-    if (enteredReason === null) {
-      this.deps.mutationKey.set(null);
-      return;
-    }
-    const reason = enteredReason.trim();
-    if (!reason) {
-      this.deps.mutationKey.set(null);
-      this.deps.toastService.error('Оплата не отмечена', 'Укажите короткую причину ручной оплаты');
-      return;
-    }
-    if (reason.length > 500) {
-      this.deps.mutationKey.set(null);
-      this.deps.toastService.error('Оплата не отмечена', 'Причина не должна превышать 500 символов');
-      return;
-    }
-
-    this.deps.mutationKey.set(mutationKey);
-    this.deps.managerApi.confirmManualCardPayment(order.id, {
-      reason
-    }).subscribe({
-      next: () => {
-        this.patchOrder(order.id, { status: 'Оплачено', waitingForClient: false });
-        this.deps.mutationKey.set(null);
-        this.deps.toastService.success(
-          'Оплата отмечена',
-          `${order.companyTitle}: T-Bank ссылка закрыта, владельцам отправлена причина`
-        );
-        this.deps.loadBoard();
-      },
-      error: (err) => {
-        this.deps.mutationKey.set(null);
-        this.deps.toastService.error(
-          'Оплата не отмечена',
-          this.deps.errorMessage(err, 'Не удалось безопасно подтвердить перевод на карту')
-        );
       }
     });
   }

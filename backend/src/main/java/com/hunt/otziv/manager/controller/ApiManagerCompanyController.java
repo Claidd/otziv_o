@@ -21,6 +21,7 @@ import com.hunt.otziv.c_companies.service.SharedChatLinkSyncService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
 import com.hunt.otziv.manager.dto.api.CompanyEditResponse;
 import com.hunt.otziv.manager.dto.api.CompanyChatBindingRepairResponse;
+import com.hunt.otziv.manager.dto.api.CompanyChatLinkUpdateRequest;
 import com.hunt.otziv.manager.dto.api.CompanyNoteUpdateRequest;
 import com.hunt.otziv.manager.dto.api.CompanyOrderCreateRequest;
 import com.hunt.otziv.manager.dto.api.CompanyOrderCreateResponse;
@@ -256,6 +257,30 @@ public class ApiManagerCompanyController {
                 ? "Группа привязана"
                 : "Группа не привязана, откройте привязку бота";
         return chatBindingRepairResponse(refreshed, platform, repaired, launchUrl, message);
+    }
+
+    @PutMapping("/companies/{companyId}/chat-link")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public CompanyChatBindingRepairResponse updateCompanyChatLink(
+            @PathVariable Long companyId,
+            @RequestBody CompanyChatLinkUpdateRequest request,
+            Authentication authentication
+    ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
+        String chatUrl = blankToNull(request == null ? null : request.urlChat());
+        companyService.updateChatUrl(companyId, chatUrl);
+        syncChatBindingAfterCompanySave(companyId, chatUrl, true);
+
+        CompanyDTO refreshed = companyService.getCompaniesDTOById(companyId);
+        ChatPlatform platform = chatPlatform(chatUrl);
+        boolean repaired = isChatBindingReady(refreshed, platform);
+        return chatBindingRepairResponse(
+                refreshed,
+                platform,
+                repaired,
+                repaired ? "" : chatBindingLaunchUrl(refreshed, platform),
+                repaired ? "Группа привязана" : "Ссылка сохранена; для завершения привязки используйте кнопку «Починить»"
+        );
     }
 
     private void syncChatBindingAfterCompanySave(Long companyId, String chatUrl, boolean chatUrlChanged) {

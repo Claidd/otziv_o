@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class OrderCorrectionTelegramNotifier {
 
-    private static final String WORKER_CORRECTION_URL = "https://o-ogo.ru/worker/correct";
+    private static final String WORKER_CORRECTION_URL = "https://o-ogo.ru/worker?section=correct";
 
     private final TelegramService telegramService;
 
@@ -20,20 +20,20 @@ public class OrderCorrectionTelegramNotifier {
             Long orderId,
             Long chatId,
             String companyTitle,
-            String orderNote,
-            String companyComments
+            String clientCorrectionNote
     ) {
         if (chatId == null) {
             log.warn("Telegram-уведомление о коррекции заказа ID {} не отправлено: у специалиста не привязана рабочая группа", orderId);
             return;
         }
 
+        String correctionNote = normalize(clientCorrectionNote);
         String message = normalize(companyTitle)
-                + " отправлен в Коррекцию - "
-                + normalize(orderNote)
-                + " "
-                + normalize(companyComments)
-                + "\n "
+                + " отправлена в коррекцию."
+                + (correctionNote.isBlank()
+                ? "\nЗамечания клиента не указаны."
+                : "\nЗамечания клиента:\n" + correctionNote)
+                + "\n\n"
                 + WORKER_CORRECTION_URL;
 
         try {

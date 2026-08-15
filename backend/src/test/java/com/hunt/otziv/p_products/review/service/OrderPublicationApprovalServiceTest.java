@@ -71,6 +71,29 @@ class OrderPublicationApprovalServiceTest {
     }
 
     @Test
+    void restoredArchiveApprovalUsesArchiveAwareTransitionAndAuditsOrigin() throws Exception {
+        OrderDetailsDTO details = details(review(7L, "Готовый текст", null));
+        canonicalOrder(101L, details);
+        when(reviewService.updateOrderDetailsAndReviewsAndPublishDates(101L, List.of(details))).thenReturn(true);
+        when(orderStatusTransitionService.changeStatusForRestoredArchiveOrder(101L, "Публикация")).thenReturn(true);
+
+        service().approvePreparedOrder(101L, List.of(details), "source=public-link", true);
+
+        verify(orderStatusTransitionService).changeStatusForRestoredArchiveOrder(101L, "Публикация");
+        verify(orderStatusTransitionService, never()).changeStatusForOrder(101L, "Публикация");
+        verify(businessAuditService).recordSafely(
+                "publication_allowed",
+                "order_detail",
+                details.getId(),
+                101L,
+                null,
+                null,
+                "Публикация",
+                "reviews=1;source=public-link;restoredFromArchive=true"
+        );
+    }
+
+    @Test
     void invalidTextStopsBeforeDatesAndStatus() {
         OrderDetailsDTO details = details(review(7L, "Текст отзыва", null));
         canonicalOrder(101L, details);

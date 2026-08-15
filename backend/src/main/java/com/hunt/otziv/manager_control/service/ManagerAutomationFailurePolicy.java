@@ -54,9 +54,7 @@ public class ManagerAutomationFailurePolicy {
         if (ClientMessageStateSafety.TRANSACTION_IN_PROGRESS.equals(code)) {
             return state.getLockedUntil() == null || !state.getLockedUntil().isAfter(effectiveNow);
         }
-        if (TRANSIENT_ERROR_CODES.contains(code)
-                && state.getNextAttemptAt() != null
-                && state.getNextAttemptAt().isAfter(effectiveNow)) {
+        if (TRANSIENT_ERROR_CODES.contains(code)) {
             return false;
         }
         if (IMMEDIATE_ERROR_CODES.contains(code)) {
@@ -66,12 +64,16 @@ public class ManagerAutomationFailurePolicy {
         if (state.getConsecutiveFailures() >= safeThreshold) {
             return true;
         }
-        if (code.isBlank() || TRANSIENT_ERROR_CODES.contains(code)) {
+        if (code.isBlank()) {
             return false;
         }
         LocalDateTime attemptAt = state.getLastAttemptAt();
         int safeMinutes = Math.max(1, manualControlAfterMinutes);
         return attemptAt != null && !attemptAt.isAfter(effectiveNow.minusMinutes(safeMinutes));
+    }
+
+    boolean isTransientWait(ScheduledClientMessageState state) {
+        return state != null && TRANSIENT_ERROR_CODES.contains(normalize(state.getLastErrorCode()));
     }
 
     private boolean isExpectedControlState(String code) {

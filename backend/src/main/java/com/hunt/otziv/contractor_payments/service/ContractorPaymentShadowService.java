@@ -7,6 +7,7 @@ import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
+import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
@@ -15,6 +16,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.model.ContractorRoutingDecisionReason;
+import com.hunt.otziv.contractor_payments.repository.ContractorActualPaymentAttributionRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
 import com.hunt.otziv.p_products.model.Order;
@@ -96,6 +98,7 @@ public class ContractorPaymentShadowService {
             PaymentLinkStatus.PARTIAL_REFUNDED
     );
 
+    private final ContractorActualPaymentAttributionRepository actualPaymentAttributionRepository;
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorPaymentProfileRepository profileRepository;
     private final ContractorPaymentProfileService profileService;
@@ -709,6 +712,9 @@ public class ContractorPaymentShadowService {
                 || (paidAt != null && !Objects.equals(paidAt, evidence.getPaidAt()))) {
             return false;
         }
+        if (paymentLinkRepository.existsContractorActualPaymentAttribution(originalLinkId, evidenceLinkId)) {
+            return false;
+        }
         List<ContractorPaymentAllocation> snapshots = new ArrayList<>();
         if (shadowEnabled()) {
             ContractorPaymentAllocation shadowAllocation = latestAllocation(
@@ -981,7 +987,7 @@ public class ContractorPaymentShadowService {
                         now,
                         "COMMON:SOURCE_MISSING"
                 );
-            } else {
+            } else if (!hasFinalCommonActualRecipient(invoice.getId())) {
                 applyCommonInvoiceStatus(allocation, invoice, now);
                 releaseIfCommonInvoiceContainsUnpaidOrder(
                         allocation,
@@ -993,6 +999,15 @@ public class ContractorPaymentShadowService {
             return allocationRepository.save(allocation);
         }
         return snapshot;
+    }
+
+    private boolean hasFinalCommonActualRecipient(Long invoiceId) {
+        return invoiceId != null && actualPaymentAttributionRepository
+                .existsBySourceKindAndSourceIdAndEvidenceId(
+                        ContractorActualPaymentSourceKind.COMMON_INVOICE,
+                        invoiceId,
+                        null
+                );
     }
 
     /** Test/backfill entry point. Production scheduling is handled by the

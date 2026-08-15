@@ -458,6 +458,7 @@ export interface AdminClientMessageMonitor {
   autoRecoveredToday: number;
   disabledStates: number;
   archiveDiagnostics?: AdminClientMessageArchiveDiagnostics | null;
+  archiveOfferToday?: AdminClientMessageArchiveOfferToday | null;
   scenarios: AdminClientMessageMonitorScenario[];
   queue: AdminClientMessageMonitorQueueItem[];
   attempts: AdminClientMessageMonitorAttempt[];
@@ -471,6 +472,20 @@ export interface AdminClientMessageArchiveDiagnostics {
   withoutChat: number;
   blockedByActiveOrder: number;
   blockedByOpenRequest: number;
+}
+
+export interface AdminClientMessageArchiveOfferToday {
+  plannedToday: number;
+  queuedNow: number;
+  processingNow: number;
+  readyNow: number;
+  sentToday: number;
+  remainingToday: number;
+  blockedByChannel: number;
+  dailyLimitRemaining: number;
+  forecastAdditionalToday: number;
+  forecastTotalToday: number;
+  forecastNote: string;
 }
 
 export interface AdminClientMessageMonitorSettings {

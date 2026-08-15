@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.dto;
 
+import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
+
 /**
  * Explicit operator assertions for a payment received outside T-Bank.
  * Both booleans are intentionally required: a message or screenshot from the
@@ -10,6 +12,17 @@ public record ConfirmManualCardPaymentRequest(
         Boolean paymentReceived,
         Long receivedAmountKopecks,
         String note,
-        String receiptUrl
+        String receiptUrl,
+        ContractorRecipientType recipientType,
+        Long recipientProfileId
 ) {
+    public ConfirmManualCardPaymentRequest(
+            Boolean recipientStatementChecked,
+            Boolean paymentReceived,
+            Long receivedAmountKopecks,
+            String note,
+            String receiptUrl
+    ) {
+        this(recipientStatementChecked, paymentReceived, receivedAmountKopecks, note, receiptUrl, null, null);
+    }
 }

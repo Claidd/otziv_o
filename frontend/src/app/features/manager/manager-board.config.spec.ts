@@ -265,7 +265,7 @@ describe('manager-board config helpers', () => {
       status: 'На стопе',
       urlChat: 'https://chat.whatsapp.com/abc',
       groupId: ''
-    }))).toBe('');
+    }))).toBe('WhatsApp-группа не привязана');
     expect(managerOrderChatBindingWarning(order({
       companyStatus: 'Бан',
       companyUrlChat: 'https://t.me/+abc',

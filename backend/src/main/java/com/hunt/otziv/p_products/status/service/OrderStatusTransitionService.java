@@ -26,6 +26,7 @@ import com.hunt.otziv.r_review.service.ReviewArchiveService;
 import com.hunt.otziv.review_recovery.service.ReviewRecoveryGateService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import jakarta.ws.rs.NotFoundException;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -137,29 +138,35 @@ public class OrderStatusTransitionService {
 
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
-        return changeStatusForOrderInternal(orderID, title, false, false);
+        return changeStatusForOrderInternal(orderID, title, false, false, false);
+    }
+
+    @Transactional
+    public boolean changeStatusForRestoredArchiveOrder(Long orderID, String title) throws Exception {
+        return changeStatusForOrderInternal(orderID, title, false, false, true);
     }
 
     @Transactional
     public boolean changeStatusForPrivilegedOrder(Long orderID, String title) throws Exception {
-        return changeStatusForOrderInternal(orderID, title, false, true);
+        return changeStatusForOrderInternal(orderID, title, false, true, false);
     }
 
     @Transactional
     public boolean changeStatusForCommonBillingOrder(Long orderID, String title) throws Exception {
-        return changeStatusForOrderInternal(orderID, title, true, false);
+        return changeStatusForOrderInternal(orderID, title, true, false, false);
     }
 
     @Transactional
     public boolean changeStatusForPrivilegedCommonBillingOrder(Long orderID, String title) throws Exception {
-        return changeStatusForOrderInternal(orderID, title, true, true);
+        return changeStatusForOrderInternal(orderID, title, true, true, false);
     }
 
     private boolean changeStatusForOrderInternal(
             Long orderID,
             String title,
             boolean allowCommonBillingFinancialStatus,
-            boolean allowBanWithPendingBadTasks
+            boolean allowBanWithPendingBadTasks,
+            boolean restoredArchiveOrigin
     ) throws Exception {
         try {
             orderAggregateMutationLockService.lock(orderID);
@@ -189,7 +196,7 @@ public class OrderStatusTransitionService {
                 case STATUS_IN_CHECK -> handleManualInCheckStatus(order);
                 case STATUS_CORRECTION -> handleCorrectionStatus(order);
                 case STATUS_PUBLIC -> handlePublicStatus(order);
-                case STATUS_TO_PUBLISH -> handleToPublicStatus(order);
+                case STATUS_TO_PUBLISH -> handleToPublicStatus(order, restoredArchiveOrigin);
                 case STATUS_TO_PAY -> handleManualToPayStatus(order);
                 case STATUS_NOT_PAID -> handleNotPaidStatus(order);
                 case STATUS_BAN -> handleBanStatus(order, allowBanWithPendingBadTasks);
@@ -412,7 +419,7 @@ public class OrderStatusTransitionService {
         return true;
     }
 
-    private boolean handleToPublicStatus(Order order) {
+    private boolean handleToPublicStatus(Order order, boolean restoredArchiveOrigin) {
         validateReviewsReadyForPublication(order);
 
         try {
@@ -436,15 +443,16 @@ public class OrderStatusTransitionService {
             orderRepository.save(order);
 
             log.info("=== УСПЕШНЫЙ ПЕРЕВОД ЗАКАЗА ===");
-            if (STATUS_ARCHIVE.equals(previousOrderStatus)) {
+            if (STATUS_ARCHIVE.equals(previousOrderStatus) || restoredArchiveOrigin) {
                 log.info("Заказ ID {} переведен в статус 'К публикации' ИЗ АРХИВА", order.getId());
+                mobilePushBusinessNotificationService.notifyWorkerArchiveReadyForPublication(order);
 
                 if (orderStatusNotificationService.hasWorkerWithTelegram(order)) {
                     String companyTitle = order.getCompany().getTitle();
                     telegramService.sendMessage(
                             order.getWorker().getUser().getWorkerTelegramGroupChatId(),
                             companyTitle + ". Новый заказ из Архива. " +
-                                    "\n https://o-ogo.ru/worker/new_orders"
+                                    "\n https://o-ogo.ru/worker?section=publish"
                     );
                 }
             } else {
@@ -853,7 +861,8 @@ public class OrderStatusTransitionService {
 
             order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
             orderRepository.save(order);
-            mobilePushBusinessNotificationService.notifyWorkerCorrection(order);
+            String clientCorrectionNote = clientCorrectionNote(order);
+            mobilePushBusinessNotificationService.notifyWorkerCorrection(order, clientCorrectionNote);
             enqueueCorrectionTelegramNotification(order);
 
             log.info("✅ Заказ ID {} переведен в статус 'Коррекция'", order.getId());
@@ -865,7 +874,7 @@ public class OrderStatusTransitionService {
                 clearPublicationDatesForUnpublishedReviews(order);
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_CORRECTION));
                 orderRepository.save(order);
-                mobilePushBusinessNotificationService.notifyWorkerCorrection(order);
+                mobilePushBusinessNotificationService.notifyWorkerCorrection(order, clientCorrectionNote(order));
                 log.warn("Статус заказа ID {} изменен на 'Коррекция' без дополнительных действий из-за ошибки",
                         order.getId());
             } catch (Exception ex) {
@@ -883,19 +892,60 @@ public class OrderStatusTransitionService {
 
             Long chatId = order.getWorker().getUser().getWorkerTelegramGroupChatId();
             String companyTitle = order.getCompany() == null ? "" : safeString(order.getCompany().getTitle());
-            String comments = order.getCompany() == null ? "" : safeString(order.getCompany().getCommentsCompany());
             orderCorrectionTelegramNotifier.notifyWorkerCorrection(
                     order.getId(),
                     chatId,
                     companyTitle,
-                    safeString(order.getZametka()),
-                    comments
+                    clientCorrectionNote(order)
             );
             log.info("Уведомление о коррекции заказа ID {} поставлено в очередь Telegram", order.getId());
         } catch (RuntimeException e) {
             log.warn("Не удалось поставить Telegram-уведомление о коррекции заказа ID {} в очередь. Статус уже изменен.",
                     order.getId(), e);
         }
+    }
+
+    private String clientCorrectionNote(Order order) {
+        LinkedHashSet<String> notes = new LinkedHashSet<>();
+        if (order != null && order.getDetails() != null) {
+            for (OrderDetails detail : order.getDetails()) {
+                if (detail == null) {
+                    continue;
+                }
+                addCorrectionNote(notes, detail.getComment());
+                if (detail.getReviews() == null) {
+                    continue;
+                }
+                for (Review review : detail.getReviews()) {
+                    if (review == null) {
+                        continue;
+                    }
+                    String answer = safeString(review.getAnswer());
+                    if (!answer.isBlank()) {
+                        addCorrectionNote(
+                                notes,
+                                review.getId() == null ? answer : "Отзыв #" + review.getId() + ": " + answer
+                        );
+                    }
+                }
+            }
+        }
+        return limitTelegramText(String.join("\n", notes), 3000);
+    }
+
+    private void addCorrectionNote(Set<String> notes, String value) {
+        String normalized = safeString(value);
+        if (!normalized.isBlank()) {
+            notes.add(normalized);
+        }
+    }
+
+    private String limitTelegramText(String value, int maxLength) {
+        String normalized = safeString(value);
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength - 1).trim() + "…";
     }
 
     private void clearPublicationDatesForUnpublishedReviews(Order order) {

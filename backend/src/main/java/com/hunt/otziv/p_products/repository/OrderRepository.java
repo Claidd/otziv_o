@@ -171,7 +171,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN c.status cs
         WHERE o.complete = false
           AND o.manager = :manager
-          AND (cs.title IS NULL OR cs.title NOT IN ('Бан', 'На стопе'))
+          AND (cs.title IS NULL OR cs.title <> 'Бан')
           AND c.urlChat IS NOT NULL
           AND TRIM(c.urlChat) <> ''
           AND (
@@ -218,7 +218,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN FETCH c.status cs
         WHERE o.complete = false
           AND o.manager = :manager
-          AND (cs.title IS NULL OR cs.title NOT IN ('Бан', 'На стопе'))
+          AND (cs.title IS NULL OR cs.title <> 'Бан')
           AND c.urlChat IS NOT NULL
           AND TRIM(c.urlChat) <> ''
           AND (
@@ -1410,7 +1410,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
-                      OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                      OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                   )
               )
@@ -1450,7 +1450,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
-                      OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                      OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                   )
               )
@@ -1490,7 +1490,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
-                        OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                        OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                     )
               )
@@ -1531,7 +1531,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                     AND (
                         state.sentCount > 0
                         OR state.lastSuccessAt IS NOT NULL
-                        OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                        OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                     )
               )
@@ -1622,7 +1622,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                              OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                           )
                       )
@@ -1662,7 +1662,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                              OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                           )
                       )
@@ -1702,7 +1702,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                                OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                             )
                       )
@@ -1743,7 +1743,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                                OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                             )
                       )
@@ -1815,7 +1815,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                              OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                           )
                       )
@@ -1855,7 +1855,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                              OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                           )
                       )
@@ -1895,7 +1895,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                                OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                             )
                       )
@@ -1936,7 +1936,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                             AND (
                                 state.sentCount > 0
                                 OR state.lastSuccessAt IS NOT NULL
-                                OR (state.status = :activeStatus AND state.nextAttemptAt > CURRENT_TIMESTAMP)
+                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
                         OR state.status = :doneStatus
                             )
                       )

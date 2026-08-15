@@ -1,5 +1,6 @@
 package com.hunt.otziv.archive.repository;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -66,6 +67,10 @@ class OrderArchiveDryRunRepositoryContractTest {
         assertTrue(contract.contains("common_invoice_orders"));
         assertTrue(contract.contains("bank_init_nonce IS NOT NULL"));
         assertTrue(contract.contains("bank_cancel_origin_status IS NOT NULL"));
+        assertTrue(contract.contains(
+                "LOWER(TRIM(COALESCE(pl.last_error, ''))) LIKE 'manual_card_payment_pending:%'"
+        ));
+        assertFalse(contract.contains("manual_card_payment_completed:"));
         assertTrue(contract.contains("payment_success_notification_retry_claims"));
         assertTrue(contract.contains("notification_claim.processing_lease_until > CURRENT_TIMESTAMP(6)"));
         assertTrue(contract.contains("COALESCE(pl.status, '') NOT IN"));

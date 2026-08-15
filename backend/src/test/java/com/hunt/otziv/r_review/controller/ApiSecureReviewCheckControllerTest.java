@@ -162,6 +162,7 @@ class ApiSecureReviewCheckControllerTest {
     private ReviewCheckResponse response(UUID orderDetailId) {
         return new ReviewCheckResponse(
                 orderDetailId,
+                false,
                 11L,
                 22L,
                 "Компания",

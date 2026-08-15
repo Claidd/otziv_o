@@ -583,6 +583,42 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
 """)
     List<Company> findAllWithChatUrl();
 
+    @Query("""
+        SELECT COUNT(DISTINCT c.id)
+        FROM Company c
+        LEFT JOIN c.status cs
+        WHERE c.manager = :manager
+          AND c.active = true
+          AND (cs.title IS NULL OR LOWER(TRIM(cs.title)) <> 'бан')
+          AND c.urlChat IS NOT NULL
+          AND TRIM(c.urlChat) <> ''
+          AND (
+              (LOWER(c.urlChat) LIKE '%chat.whatsapp.com/%' AND (c.groupId IS NULL OR TRIM(c.groupId) = ''))
+              OR ((LOWER(c.urlChat) LIKE '%t.me/%' OR LOWER(c.urlChat) LIKE '%telegram.me/%' OR LOWER(c.urlChat) LIKE 'tg://resolve%') AND c.telegramGroupChatId IS NULL)
+              OR ((LOWER(c.urlChat) LIKE '%max.ru/%' OR LOWER(c.urlChat) LIKE '%max.com/%') AND c.maxGroupChatId IS NULL)
+          )
+    """)
+    long countChatBindingIssuesByManager(@Param("manager") Manager manager);
+
+    @EntityGraph(attributePaths = {"status", "workers", "workers.user"})
+    @Query("""
+        SELECT DISTINCT c
+        FROM Company c
+        LEFT JOIN c.status cs
+        WHERE c.manager = :manager
+          AND c.active = true
+          AND (cs.title IS NULL OR LOWER(TRIM(cs.title)) <> 'бан')
+          AND c.urlChat IS NOT NULL
+          AND TRIM(c.urlChat) <> ''
+          AND (
+              (LOWER(c.urlChat) LIKE '%chat.whatsapp.com/%' AND (c.groupId IS NULL OR TRIM(c.groupId) = ''))
+              OR ((LOWER(c.urlChat) LIKE '%t.me/%' OR LOWER(c.urlChat) LIKE '%telegram.me/%' OR LOWER(c.urlChat) LIKE 'tg://resolve%') AND c.telegramGroupChatId IS NULL)
+              OR ((LOWER(c.urlChat) LIKE '%max.ru/%' OR LOWER(c.urlChat) LIKE '%max.com/%') AND c.maxGroupChatId IS NULL)
+          )
+        ORDER BY c.id
+    """)
+    List<Company> findChatBindingIssuesByManager(@Param("manager") Manager manager);
+
     List<Company> findTop3ByMaxGroupChatIdIsNullAndUrlChatContaining(String chatIdText);
 
     List<Company> findTop3ByTelegramGroupChatIdIsNullAndUrlChatContainingIgnoreCase(String chatUsername);

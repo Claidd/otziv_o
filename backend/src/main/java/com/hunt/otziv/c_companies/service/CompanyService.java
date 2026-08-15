@@ -33,6 +33,7 @@ public interface CompanyService {
     Map<String, Long> getAllNewCompanies(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth);
 
     void updateCompany(CompanyDTO companyDTO, WorkerDTO workerDTO, Long companyId);
+    void updateChatUrl(Long companyId, String urlChat);
     boolean deleteWorkers(Long companyId, Long workerId);
     boolean deleteFilial(Long companyId, Long filialId);
     void save(Company company);

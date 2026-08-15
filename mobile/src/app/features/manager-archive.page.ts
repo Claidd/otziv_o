@@ -411,7 +411,7 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
                   </article>
                   <article>
                     <header>
-                      <h3>ЗП</h3>
+                      <h3>Вознаграждения</h3>
                       <span>{{ payload.zp.length }}</span>
                     </header>
                     @for (zp of payload.zp; track trackZp(zp)) {
@@ -420,7 +420,7 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
                         <span>{{ orderMoney(zp.sum) }}</span>
                       </p>
                     } @empty {
-                      <p class="archive-empty-line">ЗП нет</p>
+                      <p class="archive-empty-line">Начислений нет</p>
                     }
                   </article>
                 </section>

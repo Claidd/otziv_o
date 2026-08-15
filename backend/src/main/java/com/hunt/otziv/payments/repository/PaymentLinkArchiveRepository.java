@@ -109,6 +109,16 @@ public class PaymentLinkArchiveRepository {
                 OR pl.bank_init_nonce IS NOT NULL
                 OR pl.bank_cancel_nonce IS NOT NULL
                 OR pl.bank_cancel_origin_status IS NOT NULL
+                OR LOWER(TRIM(COALESCE(pl.last_error, ''))) LIKE 'manual_card_payment_pending:%'
+                OR (
+                    pl.manual_actual_recipient_frozen_at IS NOT NULL
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM contractor_actual_payment_attributions actual_attribution
+                        WHERE actual_attribution.source_kind = 'PAYMENT_LINK'
+                          AND actual_attribution.source_id = pl.id
+                    )
+                )
                 OR COALESCE(pl.receipt_status, 'DONE') = 'PENDING'
                 OR (
                     pl.status = 'CONFIRMED'
@@ -197,6 +207,13 @@ public class PaymentLinkArchiveRepository {
                   AND contractor_evidence.payment_method = 'MANUAL_MOBILE_BANK'
                   AND NOT EXISTS (
                       SELECT 1
+                      FROM contractor_actual_payment_attributions actual_attribution
+                      WHERE actual_attribution.source_kind = 'PAYMENT_LINK'
+                        AND actual_attribution.source_id = contractor_evidence.contractor_evidence_original_link_id
+                        AND actual_attribution.evidence_id = contractor_evidence.id
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1
                       FROM contractor_payment_allocation_events contractor_event
                       WHERE contractor_event.allocation_id = contractor_allocation.id
                         AND contractor_event.external_ref = CONCAT(
@@ -241,6 +258,13 @@ public class PaymentLinkArchiveRepository {
                   AND contractor_evidence.contractor_evidence_original_link_id IS NOT NULL
                   AND contractor_evidence.status = 'CONFIRMED'
                   AND contractor_evidence.payment_method = 'MANUAL_MOBILE_BANK'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM contractor_actual_payment_attributions actual_attribution
+                      WHERE actual_attribution.source_kind = 'PAYMENT_LINK'
+                        AND actual_attribution.source_id = contractor_evidence.contractor_evidence_original_link_id
+                        AND actual_attribution.evidence_id = contractor_evidence.id
+                  )
                   AND NOT EXISTS (
                       SELECT 1
                       FROM contractor_payment_allocation_events contractor_event

@@ -96,6 +96,7 @@ public class ClientMessageMonitorService {
                     0,
                     0,
                     archiveDiagnostics(nowStorage),
+                    emptyArchiveOfferToday(),
                     scenarioSummaries(
                             Map.of(),
                             Map.of(),
@@ -116,6 +117,7 @@ public class ClientMessageMonitorService {
         }
 
         LocalDateTime todayStartStorage = toStorageTime(nowIrkutsk.toLocalDate().atStartOfDay());
+        LocalDateTime tomorrowStartStorage = toStorageTime(nowIrkutsk.toLocalDate().plusDays(1).atStartOfDay());
         LocalDateTime sevenDaysStartStorage = toStorageTime(nowIrkutsk.minusDays(7).toLocalDate().atStartOfDay());
         Map<ClientMessageScenario, Long> activeByScenario = scenarioCountMap(
                 stateRepository.countByStatusGrouped(ScheduledMessageStateStatus.ACTIVE)
@@ -194,6 +196,20 @@ public class ClientMessageMonitorService {
                 .findFirst()
                 .map(this::toIrkutskTime)
                 .orElse(null);
+        ClientMessageMonitorResponse.ArchiveOfferToday archiveOfferToday = archiveOfferToday(
+                nowStorage,
+                nowIrkutsk,
+                tomorrowStartStorage,
+                rawPausedUntil,
+                businessWindows,
+                workerEnabled,
+                liveEnabled,
+                paused,
+                dueByScenario.getOrDefault(ClientMessageScenario.ARCHIVE_REORDER_OFFER, 0L),
+                dueMissingChannelByScenario.getOrDefault(ClientMessageScenario.ARCHIVE_REORDER_OFFER, 0L),
+                sentTodayByScenario.getOrDefault(ClientMessageScenario.ARCHIVE_REORDER_OFFER, 0L),
+                todayStartStorage
+        );
 
         return new ClientMessageMonitorResponse(
                 true,
@@ -220,6 +236,7 @@ public class ClientMessageMonitorService {
                 autoRecoveredToday,
                 stateRepository.countByStatus(ScheduledMessageStateStatus.DISABLED),
                 archiveDiagnostics(nowStorage),
+                archiveOfferToday,
                 scenarioSummaries(
                         activeByScenario,
                         dueByScenario,
@@ -764,6 +781,138 @@ public class ClientMessageMonitorService {
                 diagnostics.blockedByActiveOrder(),
                 diagnostics.blockedByOpenRequest()
         );
+    }
+
+    private ClientMessageMonitorResponse.ArchiveOfferToday archiveOfferToday(
+            LocalDateTime nowStorage,
+            LocalDateTime nowIrkutsk,
+            LocalDateTime tomorrowStartStorage,
+            LocalDateTime rawPausedUntil,
+            String businessWindows,
+            boolean workerEnabled,
+            boolean liveEnabled,
+            boolean paused,
+            long queuedNow,
+            long dueMissingChannel,
+            long sentToday,
+            LocalDateTime todayStartStorage
+    ) {
+        ClientMessageScenario scenario = ClientMessageScenario.ARCHIVE_REORDER_OFFER;
+        long remainingToday = stateRepository.countScheduledBefore(
+                scenario,
+                ScheduledMessageStateStatus.ACTIVE,
+                nowStorage,
+                tomorrowStartStorage
+        );
+        long processingNow = stateRepository.countProcessingNow(
+                scenario,
+                ScheduledMessageStateStatus.ACTIVE,
+                nowStorage
+        );
+        long blockedByChannel = stateRepository.countMissingChannelBindingsBefore(
+                scenario.name(),
+                ScheduledMessageStateStatus.ACTIVE.name(),
+                tomorrowStartStorage
+        );
+        long readyNow = readyToSendNow(
+                scenario,
+                queuedNow,
+                dueMissingChannel,
+                workerEnabled,
+                liveEnabled,
+                slotPlanner.isAllowedNow(nowIrkutsk, businessWindows),
+                paused
+        );
+        int dailyLimit = Math.max(1, appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_DAILY_LIMIT,
+                ScheduledClientMessageService.DEFAULT_DAILY_LIMIT
+        ));
+        long clientSentToday = attemptRepository.countClientSentSince(
+                ScheduledMessageAttemptStatus.SENT,
+                todayStartStorage
+        );
+        long dailyLimitRemaining = Math.max(0L, dailyLimit - clientSentToday);
+        long sendableRemaining = Math.max(0L, remainingToday - blockedByChannel);
+
+        LocalDateTime forecastStartIrkutsk = nowIrkutsk;
+        if (paused && rawPausedUntil != null) {
+            LocalDateTime pauseEndIrkutsk = toIrkutskTime(rawPausedUntil);
+            if (pauseEndIrkutsk != null && pauseEndIrkutsk.isAfter(forecastStartIrkutsk)) {
+                forecastStartIrkutsk = pauseEndIrkutsk;
+            }
+        }
+        boolean hasSlotToday = slotPlanner.nextAllowedAt(forecastStartIrkutsk, businessWindows)
+                .toLocalDate()
+                .equals(nowIrkutsk.toLocalDate());
+        long forecastAdditionalToday = workerEnabled && liveEnabled && hasSlotToday
+                ? Math.min(sendableRemaining, dailyLimitRemaining)
+                : 0L;
+        long forecastTotalToday = sentToday + forecastAdditionalToday;
+
+        return new ClientMessageMonitorResponse.ArchiveOfferToday(
+                sentToday + remainingToday,
+                queuedNow,
+                processingNow,
+                readyNow,
+                sentToday,
+                remainingToday,
+                blockedByChannel,
+                dailyLimitRemaining,
+                forecastAdditionalToday,
+                forecastTotalToday,
+                archiveOfferForecastNote(
+                        workerEnabled,
+                        liveEnabled,
+                        paused,
+                        hasSlotToday,
+                        dailyLimitRemaining,
+                        sendableRemaining
+                )
+        );
+    }
+
+    private ClientMessageMonitorResponse.ArchiveOfferToday emptyArchiveOfferToday() {
+        return new ClientMessageMonitorResponse.ArchiveOfferToday(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                "Включите наблюдение, чтобы рассчитать план архивного оффера на сегодня."
+        );
+    }
+
+    private String archiveOfferForecastNote(
+            boolean workerEnabled,
+            boolean liveEnabled,
+            boolean paused,
+            boolean hasSlotToday,
+            long dailyLimitRemaining,
+            long sendableRemaining
+    ) {
+        if (!workerEnabled) {
+            return "Worker выключен: новых отправок сегодня не ожидается.";
+        }
+        if (!liveEnabled) {
+            return "Включен dry-run: реальные сообщения сегодня не отправляются.";
+        }
+        if (!hasSlotToday) {
+            return paused
+                    ? "Пауза закончится после последнего рабочего окна: новых отправок сегодня не ожидается."
+                    : "Рабочие окна на сегодня закончились: новых отправок сегодня не ожидается.";
+        }
+        if (dailyLimitRemaining <= 0) {
+            return "Общий дневной лимит авторассылки исчерпан.";
+        }
+        if (sendableRemaining <= 0) {
+            return "Дополнительных офферов с настроенным каналом на сегодня нет.";
+        }
+        return "Это верхний прогноз: фактическое число может быть меньше из-за интервалов каналов, других сценариев и ошибок отправки.";
     }
 
     private String businessWindows() {

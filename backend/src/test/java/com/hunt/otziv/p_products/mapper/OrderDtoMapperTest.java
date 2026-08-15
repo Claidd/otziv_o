@@ -176,6 +176,7 @@ class OrderDtoMapperTest {
         assertEquals(new BigDecimal("300.00"), dto.getSum());
         assertEquals("В работе", dto.getStatus().getTitle());
         assertEquals("Компания", dto.getCompany().getTitle());
+        assertTrue(dto.getCompany().isAllowWorkerPublicationDateEdit());
         assertEquals("Комментарий компании", dto.getCommentsCompany());
         assertEquals("Центр", dto.getFilial().getTitle());
         assertEquals(2L, dto.getManager().getManagerId());
@@ -239,6 +240,7 @@ class OrderDtoMapperTest {
                 .categoryCompany(category)
                 .subCategory(subCategory)
                 .groupId("group-1")
+                .allowWorkerPublicationDateEdit(true)
                 .build();
         Product product = Product.builder()
                 .id(30L)

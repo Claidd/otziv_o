@@ -37,14 +37,8 @@ import { MobileReviewFieldEditorComponent } from '../shared/mobile-review-field-
 import { MobileReviewCardShellComponent } from '../shared/mobile-review-card-shell.component';
 import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
-import {
-  buildManualCardPaymentConfirmationRequest,
-  exactPaymentAmountKopecks,
-  manualCardPaymentConfirmationPrompt,
-  manualCardPaymentFallbackAccessDecision,
-  manualCardPaymentFallbackDecision,
-  shouldSubmitManualCardPaymentFallback
-} from '../shared/manual-payment-confirmation';
+import { manualCardPaymentFallbackAccessDecision } from '../shared/manual-payment-confirmation';
+import { MobileManualCardPaymentFlowService } from '../shared/mobile-manual-card-payment-flow.service';
 import {
   mobilePageIndex,
   mobilePageIsFirst,
@@ -69,6 +63,7 @@ import {
   workerReviewTitle,
   workerReviewToneClass,
   workerOrderTargetStatus,
+  workerSectionFromRouteParam,
   workerSectionIcon,
   workerSectionLabel,
   type ReviewCopyKind,
@@ -1696,6 +1691,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly confirm: MobileConfirmService,
+    private readonly manualCardPaymentFlow: MobileManualCardPaymentFlowService,
     private readonly media: MobileMediaService
   ) {}
 
@@ -1894,46 +1890,10 @@ export class WorkerPage implements OnInit, OnDestroy {
           throw genericError;
         }
 
-        let authoritativeOrder;
-        try {
-          authoritativeOrder = await firstValueFrom(this.api.getManagerOrderDetails(order.id));
-        } catch {
-          this.error.set('Не удалось загрузить точную сумму заказа. Оплата не отмечена, ссылка T-Bank/СБП не закрыта.');
+        const completed = await this.manualCardPaymentFlow.confirm(order.id);
+        if (!completed) {
           return;
         }
-        const amountKopecks = exactPaymentAmountKopecks(
-          authoritativeOrder.totalSumWithBadReviews ?? authoritativeOrder.sum
-        );
-        const fallback = manualCardPaymentFallbackDecision(
-          genericError,
-          this.auth.user()?.roles,
-          order.id,
-          amountKopecks
-        );
-        if (!fallback.allowed) {
-          this.error.set(fallback.userMessage ?? 'Безопасное ручное подтверждение оплаты недоступно.');
-          return;
-        }
-
-        const prompt = manualCardPaymentConfirmationPrompt(order.id, amountKopecks!);
-        if (!prompt) {
-          this.error.set('Не удалось подготовить безопасное подтверждение. Оплата не изменена.');
-          return;
-        }
-        const explicitlyConfirmed = await this.confirm.confirm(prompt);
-        if (!shouldSubmitManualCardPaymentFallback(fallback, explicitlyConfirmed)) {
-          return;
-        }
-
-        const request = buildManualCardPaymentConfirmationRequest(
-          amountKopecks!,
-          `Владелец/администратор проверил выписку и полное поступление по кнопке «Оплатили» на странице работника; заказ #${order.id}`
-        );
-        if (!request) {
-          this.error.set('Не удалось сформировать запрос с точной суммой. Оплата не изменена.');
-          return;
-        }
-        await firstValueFrom(this.api.confirmManagerManualCardPayment(order.id, request));
       }
       await this.load();
     } catch (error) {
@@ -3230,6 +3190,20 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   private applyMobileNavIntent(load: boolean, params: ParamMap = this.route.snapshot.queryParamMap): boolean {
+    const requestedSection = workerSectionFromRouteParam(params.get('section'));
+    if (requestedSection) {
+      const sectionChanged = this.activeSection() !== requestedSection;
+      this.activeSection.set(requestedSection);
+      this.pageNumber.set(0);
+      this.sortDirection.set(workerDefaultSortDirection(requestedSection));
+      this.listExpanded.set(false);
+      this.sectionSheetOpen.set(false);
+      if (load && sectionChanged) {
+        void this.load(requestedSection);
+      }
+      return load && sectionChanged;
+    }
+
     const intent = params.get('mobileNav');
     if (intent === 'menu') {
       this.sectionSheetOpen.set(true);
@@ -3254,7 +3228,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   private mobileNavKey(params: ParamMap = this.route.snapshot.queryParamMap): string {
-    return `${params.get('mobileNav') ?? ''}:${params.get('navTs') ?? ''}`;
+    return `${params.get('section') ?? ''}:${params.get('mobileNav') ?? ''}:${params.get('navTs') ?? ''}`;
   }
 
   private restoreStoredListState(): void {

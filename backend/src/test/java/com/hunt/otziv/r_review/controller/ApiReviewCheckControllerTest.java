@@ -46,6 +46,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -97,6 +98,7 @@ class ApiReviewCheckControllerTest {
         ApiReviewCheckController.ReviewCheckResponse response = controller()
                 .getReviewCheck(orderDetailId, null);
 
+        assertThat(response.archived()).isFalse();
         assertThat(response.orderId()).isNull();
         assertThat(response.companyId()).isNull();
         assertThat(response.workerFio()).isEmpty();
@@ -201,7 +203,7 @@ class ApiReviewCheckControllerTest {
                 .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
 
-        verify(publicationApprovalService, never()).approvePreparedOrder(anyLong(), any(), any());
+        verify(publicationApprovalService, never()).approvePreparedOrder(anyLong(), any(), any(), anyBoolean());
         verify(orderService, never()).changeStatusForOrder(101L, "Коррекция");
         verify(reviewService, never()).updateOrderDetailAndReviews(any());
     }
@@ -315,7 +317,8 @@ class ApiReviewCheckControllerTest {
         verify(publicationApprovalService).approvePreparedOrder(
                 eq(101L),
                 any(),
-                auditDetailsCaptor.capture()
+                auditDetailsCaptor.capture(),
+                eq(false)
         );
         assertThat(auditDetailsCaptor.getValue())
                 .contains("ip=203.0.113.10")
@@ -352,7 +355,7 @@ class ApiReviewCheckControllerTest {
         );
 
         ArgumentCaptor<String> auditCaptor = ArgumentCaptor.forClass(String.class);
-        verify(publicationApprovalService).approvePreparedOrder(eq(101L), any(), auditCaptor.capture());
+        verify(publicationApprovalService).approvePreparedOrder(eq(101L), any(), auditCaptor.capture(), eq(false));
         String audit = auditCaptor.getValue();
         String userAgent = auditValue(audit, "userAgent");
         String origin = auditValue(audit, "origin");
@@ -398,7 +401,7 @@ class ApiReviewCheckControllerTest {
                 .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
 
-        verify(publicationApprovalService, never()).approvePreparedOrder(anyLong(), any(), any());
+        verify(publicationApprovalService, never()).approvePreparedOrder(anyLong(), any(), any(), anyBoolean());
     }
 
     @Test
@@ -748,6 +751,7 @@ class ApiReviewCheckControllerTest {
         ApiReviewCheckController.ReviewCheckResponse response = controller()
                 .getReviewCheck(orderDetailId, null);
 
+        assertThat(response.archived()).isFalse();
         assertThat(response.status()).isEqualTo("Архив");
         assertThat(response.permissions().canSave()).isTrue();
         assertThat(response.permissions().canApprovePublication()).isTrue();
@@ -765,6 +769,7 @@ class ApiReviewCheckControllerTest {
         ApiReviewCheckController.ReviewCheckResponse response = controller()
                 .getReviewCheck(orderDetailId, null);
 
+        assertThat(response.archived()).isTrue();
         assertThat(response.status()).isEqualTo("Архив");
         assertThat(response.permissions().canSave()).isTrue();
         assertThat(response.permissions().canSendCorrection()).isTrue();
@@ -783,9 +788,14 @@ class ApiReviewCheckControllerTest {
         ApiReviewCheckController.ReviewCheckResponse related = controller()
                 .getReviewCheck(orderDetailId, relatedManager);
 
+        assertThat(related.archived()).isTrue();
+        assertThat(related.orderId()).isEqualTo(101L);
+        assertThat(related.companyId()).isEqualTo(202L);
         assertThat(related.workerFio()).isEqualTo("Специалист");
         assertThat(related.orderComments()).isEqualTo("internal order note");
         assertThat(related.reviews().getFirst().botName()).isEqualTo("Bot Fio");
+        assertThat(related.permissions().canOpenManagerLinks()).isTrue();
+        assertThat(related.permissions().canMarkPaid()).isTrue();
 
         Authentication relatedWorker = authentication("ROLE_WORKER");
         when(managerAccessService.canAccessArchivedOrder(707L, 303L, relatedWorker)).thenReturn(true);
@@ -794,6 +804,8 @@ class ApiReviewCheckControllerTest {
         assertThat(worker.permissions().canSave()).isTrue();
         assertThat(worker.permissions().canApprovePublication()).isFalse();
         assertThat(worker.permissions().canSendCorrection()).isFalse();
+        assertThat(worker.permissions().canOpenManagerLinks()).isFalse();
+        assertThat(worker.permissions().canMarkPaid()).isFalse();
 
         Authentication foreignManager = authentication("ROLE_MANAGER");
         when(managerAccessService.canAccessArchivedOrder(707L, 303L, foreignManager)).thenReturn(false);
@@ -807,6 +819,8 @@ class ApiReviewCheckControllerTest {
         assertThat(foreign.permissions().canSave()).isTrue();
         assertThat(foreign.permissions().canApprovePublication()).isTrue();
         assertThat(foreign.permissions().canSendCorrection()).isTrue();
+        assertThat(foreign.permissions().canOpenManagerLinks()).isFalse();
+        assertThat(foreign.permissions().canMarkPaid()).isFalse();
     }
 
     @Test
@@ -954,7 +968,7 @@ class ApiReviewCheckControllerTest {
                 "На проверке",
                 "anonymous-review-check"
         );
-        verify(publicationApprovalService).approvePreparedOrder(eq(101L), any(), any());
+        verify(publicationApprovalService).approvePreparedOrder(eq(101L), any(), any(), eq(true));
         assertThat(response.status()).isEqualTo("На проверке");
     }
 
@@ -983,6 +997,32 @@ class ApiReviewCheckControllerTest {
         );
         verify(reviewService).updateReviewTextFromSharedCheck(101L, 501L, "client text");
         assertThat(response.id()).isEqualTo(501L);
+    }
+
+    @Test
+    void managerCanMarkArchivedPublishedOrderPaidThroughNormalStatusTransition() throws Exception {
+        UUID orderDetailId = UUID.randomUUID();
+        Authentication manager = authentication("ROLE_MANAGER");
+        OrderDetails restoredDetails = orderDetails(orderDetailId, "Опубликовано");
+        restoredDetails.getReviews().getFirst().setPublish(true);
+        restoredDetails.getOrder().setCounter(1);
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenThrow(new UsernameNotFoundException("not live"))
+                .thenReturn(restoredDetails)
+                .thenReturn(restoredDetails);
+        when(managerAccessService.canAccessOrder(101L, manager)).thenReturn(true);
+        when(orderService.changeStatusForOrder(101L, "Оплачено")).thenReturn(true);
+
+        ApiReviewCheckController.ReviewCheckResponse response = controller()
+                .markPaid(orderDetailId, manager);
+
+        verify(reviewCheckArchiveService).restoreByOrderDetailId(
+                orderDetailId,
+                "Опубликовано",
+                "manager"
+        );
+        verify(orderService).changeStatusForOrder(101L, "Оплачено");
+        assertThat(response.archived()).isFalse();
     }
 
     private ApiReviewCheckController controller() {

@@ -7,6 +7,17 @@ const auth = readFileSync(new URL('../src/app/core/auth.service.ts', import.meta
 const header = readFileSync(new URL('../src/app/shared/mobile-header.component.ts', import.meta.url), 'utf8');
 const home = readFileSync(new URL('../src/app/features/home.page.ts', import.meta.url), 'utf8');
 const profile = readFileSync(new URL('../src/app/features/profile.page.ts', import.meta.url), 'utf8');
+const appDiagnosticsPlugin = readFileSync(new URL('../src/app/core/app-diagnostics.plugin.ts', import.meta.url), 'utf8');
+const telemetryInterceptor = readFileSync(new URL('../src/app/core/mobile-telemetry.interceptor.ts', import.meta.url), 'utf8');
+const externalLinks = readFileSync(new URL('../src/app/shared/mobile-external-link.service.ts', import.meta.url), 'utf8');
+const androidDiagnostics = readFileSync(
+  new URL('../android/app/src/main/java/com/hunt/otziv/AppDiagnosticsPlugin.java', import.meta.url),
+  'utf8'
+);
+const mainActivity = readFileSync(
+  new URL('../android/app/src/main/java/com/hunt/otziv/MainActivity.java', import.meta.url),
+  'utf8'
+);
 const prodProperties = readFileSync(new URL('../../backend/src/main/resources/application-prod.properties', import.meta.url), 'utf8');
 
 test('auth diagnostics survive process death in a bounded native ring buffer', () => {
@@ -64,4 +75,39 @@ test('app transitions, network changes and every auth-clearing branch are classi
 
 test('the dedicated production logger keeps diagnostic info events', () => {
   assert.match(prodProperties, /logging\.level\.MOBILE_AUTH_DIAGNOSTICS=.*INFO/);
+});
+
+test('Android exit reasons are captured, deduplicated and attached to a bounded process summary', () => {
+  assert.match(mainActivity, /registerPlugin\(AppDiagnosticsPlugin\.class\)/);
+  assert.match(androidDiagnostics, /getHistoricalProcessExitReasons/);
+  assert.match(androidDiagnostics, /getProcessStateSummary/);
+  assert.match(androidDiagnostics, /setProcessStateSummary/);
+  assert.match(androidDiagnostics, /MAX_PROCESS_STATE_BYTES = 128/);
+  assert.match(androidDiagnostics, /KEY_ACKNOWLEDGED_EXIT_TIMESTAMP/);
+  assert.match(androidDiagnostics, /REASON_LOW_MEMORY/);
+  assert.match(androidDiagnostics, /REASON_CRASH_NATIVE/);
+  assert.match(androidDiagnostics, /REASON_ANR/);
+  assert.match(appDiagnosticsPlugin, /getPreviousExits/);
+  assert.match(diagnostics, /'app\.previous_exit'/);
+  assert.match(diagnostics, /acknowledgePreviousExits/);
+});
+
+test('last-state breadcrumbs omit query values and dynamic resource identifiers', () => {
+  assert.match(diagnostics, /split\(\/\[\?\#\]\//);
+  assert.match(diagnostics, /replace\(\/\\\/\\d\+\(\?=\\\/\|\$\)\/gu, '\/:id'\)/);
+  assert.match(telemetryInterceptor, /diagnosticRequestPath/);
+  assert.match(telemetryInterceptor, /http\.\$\{request\.method\.toLowerCase\(\)\}/);
+  assert.match(externalLinks, /diagnostics\.checkpoint\(`external\.https:/);
+  assert.doesNotMatch(externalLinks, /checkpoint\(`external\.https:\$\{target\}/);
+});
+
+test('JavaScript errors and unhandled rejections enter the persistent diagnostic buffer', () => {
+  assert.match(diagnostics, /window\.addEventListener\('error'/);
+  assert.match(diagnostics, /'runtime\.javascript_error'/);
+  assert.match(diagnostics, /window\.addEventListener\('unhandledrejection'/);
+  assert.match(diagnostics, /'runtime\.unhandled_rejection'/);
+  assert.match(diagnostics, /route: this\.currentRoute/);
+  assert.match(diagnostics, /sanitizeRuntimeMessage/);
+  assert.match(diagnostics, /redacted-jwt/);
+  assert.match(diagnostics, /access_token\|refresh_token\|id_token/);
 });

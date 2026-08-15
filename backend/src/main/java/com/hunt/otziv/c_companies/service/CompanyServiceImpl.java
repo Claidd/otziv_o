@@ -1768,6 +1768,20 @@ public class CompanyServiceImpl implements CompanyService{
         return true;
     }
 
+    @Override
+    @Transactional
+    public void updateChatUrl(Long companyId, String urlChat) {
+        Company company = companyRepository.findByIdForUpdate(companyId)
+                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найдена", companyId)));
+        String normalized = urlChat == null || urlChat.isBlank() ? null : urlChat.trim();
+        if (Objects.equals(company.getUrlChat(), normalized)) {
+            return;
+        }
+        company.setUrlChat(normalized);
+        resetCurrentChatBinding(company, normalized);
+        companyRepository.save(company);
+    }
+
     private CompanyInfo resolveCompanyInfo(Company company) {
         if (company == null) {
             return null;

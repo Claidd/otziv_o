@@ -32,15 +32,17 @@ public class ContractorPaymentTargetAccessPolicy {
     private boolean ownerManagePrivilegedUsers;
 
     public void requireCanManageUser(Long userId) {
-        if (!restrictedOwner() || userId == null) {
-            return;
-        }
-        if (isPrivilegedTarget(userId)) {
+        if (!canManageUser(userId)) {
             // User-scoped contractor-payment endpoints are identifier based.
             // Conceal privileged targets exactly like allocation/link targets
             // so the response cannot be used as a user-existence oracle.
             throw concealed("Пользователь не найден");
         }
+    }
+
+    /** Safe predicate for filtering recipient candidates before DTO creation. */
+    public boolean canManageUser(Long userId) {
+        return !restrictedOwner() || userId == null || !isPrivilegedTarget(userId);
     }
 
     /**

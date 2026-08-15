@@ -87,6 +87,7 @@ public class ManagerReportReviewRestrictionFilter extends OncePerRequestFilter {
 
     private boolean allowed(String path) {
         return path.equals("/api/me")
+                || path.equals("/api/contractor-payments/me")
                 || path.equals("/api/manager-report-review/access-state")
                 || path.equals("/api/manager-report-review/check-in")
                 || path.equals("/api/cabinet/profile")

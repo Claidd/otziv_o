@@ -12,6 +12,10 @@ import {
   CommonInvoiceSummaryResponse,
   ManualPaymentConfirmationRequest
 } from '../../../core/common-billing.api';
+import {
+  CommonManualPaymentAttributionApi,
+  type CommonManualPaymentMode
+} from '../../../core/common-manual-payment-attribution.api';
 import { AuthService } from '../../../core/auth.service';
 import { CompanyCardItem, ManagerApi, OrderCardItem } from '../../../core/manager.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
@@ -24,6 +28,7 @@ import { ManagerBoardOrderFacade } from '../../manager/manager-board-order.facad
 import { ManagerOrderCardComponent } from '../../manager/manager-order-card.component';
 import type { ManagerOrderEditDraftChange } from '../../manager/manager-order-edit-modal.component';
 import { ManagerOrderEditModalComponent } from '../../manager/manager-order-edit-modal.component';
+import { CommonManualPaymentAttributionModalComponent } from './common-manual-payment-attribution-modal.component';
 import {
   StatusAction,
   managerErrorMessage,
@@ -204,6 +209,7 @@ export function isIncompletePartiallyPaidInvoice(
   selector: 'app-common-billing',
   imports: [
     AdminLayoutComponent,
+    CommonManualPaymentAttributionModalComponent,
     DatePipe,
     FormsModule,
     LoadErrorCardComponent,
@@ -220,6 +226,7 @@ export class CommonBillingComponent implements OnDestroy {
   @ViewChild('invoiceOrderCardsViewport') private invoiceOrderCardsElement?: ElementRef<HTMLElement>;
 
   private readonly commonBillingApi = inject(CommonBillingApi);
+  private readonly commonManualPaymentApi = inject(CommonManualPaymentAttributionApi);
   private readonly managerApi = inject(ManagerApi);
   private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
@@ -243,6 +250,8 @@ export class CommonBillingComponent implements OnDestroy {
   readonly error = signal('');
   readonly mutating = signal('');
   readonly copied = signal('');
+  readonly manualAttributionRequired = signal<boolean | null>(null);
+  readonly manualAttributionMode = signal<CommonManualPaymentMode | null>(null);
   readonly companySearch = signal('');
   readonly companySearchResults = signal<CompanyCardItem[]>([]);
   readonly companySearchLoading = signal(false);
@@ -817,13 +826,20 @@ export class CommonBillingComponent implements OnDestroy {
     if (!invoice || this.mutating() || !this.canMarkPaid()) {
       return;
     }
+    if (this.manualAttributionRequired() == null) {
+      this.toastService.error('Режим оплаты загружается', 'Повторите действие через несколько секунд');
+      this.loadManualAttributionMode(invoice.id);
+      return;
+    }
+    if (this.manualAttributionRequired()) {
+      this.manualAttributionMode.set('STANDARD');
+      return;
+    }
     const evidence = this.requestManualPaymentEvidence(
       'Подтверждение ручной оплаты общего счёта',
       'Отметить весь общий счет оплаченным? Все заказы внутри перейдут через штатную логику оплаты.'
     );
-    if (!evidence) {
-      return;
-    }
+    if (!evidence) return;
     this.invoiceAction(
       invoice.id,
       'mark-paid',
@@ -1012,12 +1028,19 @@ export class CommonBillingComponent implements OnDestroy {
     if (!invoice || invoice.status !== 'NEEDS_ATTENTION' || !this.attentionHasStandaloneRouteConflict() || this.mutating()) {
       return;
     }
+    if (this.manualAttributionRequired() == null) {
+      this.toastService.error('Режим оплаты загружается', 'Повторите действие через несколько секунд');
+      this.loadManualAttributionMode(invoice.id);
+      return;
+    }
+    if (this.manualAttributionRequired()) {
+      this.manualAttributionMode.set('TBANK_FALLBACK');
+      return;
+    }
     const reasonValue = window.prompt(
       `Клиент оплатил общий счет №${invoice.id} переводом на карту. Укажите краткую причину:`
     );
-    if (reasonValue === null) {
-      return;
-    }
+    if (reasonValue === null) return;
     const reason = reasonValue.trim();
     if (!reason) {
       this.toastService.error('Оплата не подтверждена', 'Укажите причину ручной оплаты.');
@@ -1029,6 +1052,21 @@ export class CommonBillingComponent implements OnDestroy {
       () => this.commonBillingApi.reportManualCardPayment(invoice.id, reason),
       'Общий счет закрыт ручной оплатой'
     );
+  }
+
+  closeManualAttribution(): void {
+    this.manualAttributionMode.set(null);
+  }
+
+  completeManualAttribution(details: CommonInvoiceDetailsResponse): void {
+    const invoiceId = details.summary.id;
+    this.manualAttributionMode.set(null);
+    this.invoiceDetails.set(details);
+    this.accounts.update((accounts) => accounts.map((account) =>
+      account.currentInvoice?.id === invoiceId
+        ? { ...account, currentInvoice: details.summary }
+        : account));
+    this.toastService.success('Фактическое поступление учтено, общий счёт закрыт');
   }
 
   resolveAttention(): void {
@@ -1624,6 +1662,7 @@ export class CommonBillingComponent implements OnDestroy {
     this.invoiceLoadSubscription?.unsubscribe();
     if (!invoiceId) {
       this.invoiceDetails.set(null);
+      this.manualAttributionRequired.set(null);
       this.invoiceLoading.set(false);
       return;
     }
@@ -1634,6 +1673,7 @@ export class CommonBillingComponent implements OnDestroy {
           return;
         }
         this.invoiceDetails.set(details);
+        this.loadManualAttributionMode(invoiceId);
         this.invoiceCardIndex.set(0);
         this.invoiceLoading.set(false);
       },
@@ -1672,6 +1712,7 @@ export class CommonBillingComponent implements OnDestroy {
           return;
         }
         this.invoiceDetails.set(details);
+        this.loadManualAttributionMode(invoiceId);
         this.invoiceCardIndex.set(0);
         this.selectedAccountId.set(details.summary.accountId);
         this.accounts.update((accounts) => accounts.map((account) =>
@@ -1837,6 +1878,29 @@ export class CommonBillingComponent implements OnDestroy {
     });
   }
 
+  private loadManualAttributionMode(invoiceId: number): void {
+    const viewGeneration = this.invoiceViewGeneration;
+    this.manualAttributionRequired.set(null);
+    this.commonManualPaymentApi.mode(invoiceId).subscribe({
+      next: (mode) => {
+        if (this.isCurrentInvoiceView(viewGeneration, invoiceId)) {
+          this.manualAttributionRequired.set(Boolean(mode.attributionRequired));
+        }
+      },
+      error: () => {
+        if (this.isCurrentInvoiceView(viewGeneration, invoiceId)) {
+          // Mode-read failure is fail-closed: never expose a legacy action
+          // that could silently credit the original recipient.
+          this.manualAttributionRequired.set(true);
+          this.toastService.error(
+            'Режим расчётов не проверен',
+            'Старое ручное подтверждение отключено до успешной проверки режима'
+          );
+        }
+      }
+    });
+  }
+
   private invalidateInvoiceView(): void {
     this.invoiceViewGeneration += 1;
     this.invoiceReadRun += 1;
@@ -1844,6 +1908,7 @@ export class CommonBillingComponent implements OnDestroy {
     this.invoiceLoadSubscription = undefined;
     this.invoiceLoading.set(false);
     this.mutating.set('');
+    this.manualAttributionRequired.set(null);
   }
 
   private isCurrentAccountLoad(loadRun: number): boolean {

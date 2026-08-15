@@ -221,13 +221,13 @@
           @if (clientMessageMonitor(); as monitor) {
             <div class="monitor-status-row">
               <div class="monitor-status-pills">
-                <span [class]="monitor.workerEnabled ? 'status-pill' : 'status-pill off'">
+                <span tabindex="0" appTooltip="Фоновый worker регулярно разбирает наступившие задачи. Если он выключен, очередь сохраняется, но автоматически не обрабатывается." [class]="monitor.workerEnabled ? 'status-pill' : 'status-pill off'">
                   {{ monitor.workerEnabled ? 'worker включен' : 'worker выключен' }}
                 </span>
-                <span [class]="monitor.liveEnabled ? 'status-pill' : 'status-pill off'">
+                <span tabindex="0" appTooltip="Live-режим разрешает реальную отправку клиентам. В dry-run задачи проверяются без отправки сообщений." [class]="monitor.liveEnabled ? 'status-pill' : 'status-pill off'">
                   {{ monitor.liveEnabled ? 'live-отправка' : 'dry-run' }}
                 </span>
-                <span [class]="monitor.windowAllowed ? 'status-pill' : 'status-pill off'">
+                <span tabindex="0" appTooltip="Показывает, разрешена ли отправка прямо сейчас по настроенным рабочим окнам. Вне окна задачи не теряются и ждут следующего." [class]="monitor.windowAllowed ? 'status-pill' : 'status-pill off'">
                   {{ monitor.windowAllowed ? 'рабочее окно сейчас' : 'вне рабочего окна' }}
                 </span>
                 @if (monitor.pausedUntil) {
@@ -237,9 +237,9 @@
                 }
               </div>
               <div class="monitor-clock-list">
-                <span><b>Обновлено</b>{{ monitor.updatedAt | date:'HH:mm:ss' }} ИРК</span>
-                <span><b>Окна</b>{{ monitor.businessWindows }}</span>
-                <span><b>Ближайший слот</b>{{ monitor.nextAttemptAt ? (monitor.nextAttemptAt | date:'dd.MM HH:mm') : 'не запланирован' }}</span>
+                <span tabindex="0" appTooltip="Время последнего обновления показателей по иркутскому часовому поясу."><b>Обновлено</b>{{ monitor.updatedAt | date:'HH:mm:ss' }} ИРК</span>
+                <span tabindex="0" appTooltip="Периоды иркутского времени, когда автоответчику разрешена отправка клиентских сообщений."><b>Окна</b>{{ monitor.businessWindows }}</span>
+                <span tabindex="0" appTooltip="Самое раннее запланированное время среди всех активных задач. Это время проверки задачи, а не обещанное время отправки."><b>Ближайший слот</b>{{ monitor.nextAttemptAt ? (monitor.nextAttemptAt | date:'dd.MM HH:mm') : 'не запланирован' }}</span>
               </div>
             </div>
 
@@ -252,7 +252,7 @@
 
             <div class="monitor-metric-grid">
               @for (metric of monitorMetrics(); track trackMonitorMetric($index, metric)) {
-                <article class="monitor-metric-card" [class]="metric.tone">
+                <article class="monitor-metric-card" [class]="metric.tone" tabindex="0" [appTooltip]="metric.tooltip || metric.label">
                   <span class="material-icons-sharp">{{ metric.icon }}</span>
                   <div>
                     <small>{{ metric.label }}</small>
@@ -261,6 +261,56 @@
                 </article>
               }
             </div>
+
+            @if (monitor.archiveOfferToday; as offer) {
+              <section class="monitor-table-card archive-offer-today-card">
+                <div class="monitor-table-head archive-offer-head">
+                  <div>
+                    <h3>Архивный оффер сегодня</h3>
+                    <p class="settings-hint">Отдельный срез только по напоминанию о новом заказе. Все границы дня и время — иркутские.</p>
+                  </div>
+                  <span
+                    class="monitor-table-count archive-offer-forecast-count"
+                    tabindex="0"
+                    [appTooltip]="offer.forecastNote"
+                  >
+                    прогноз: до {{ offer.forecastTotalToday }}
+                  </span>
+                </div>
+
+                <blockquote class="archive-offer-copy">
+                  {{ monitorArchiveOfferText() }}
+                </blockquote>
+
+                <p class="settings-hint">
+                  План {{ offer.plannedToday }} = отправлено {{ offer.sentToday }} + осталось {{ offer.remainingToday }}.
+                  Из оставшихся пора обрабатывать {{ offer.queuedNow }}; можно отправлять сейчас {{ offer.readyNow }}.
+                  Без привязки чата в оставшемся плане — {{ offer.blockedByChannel }}.
+                </p>
+
+                <div class="monitor-metric-grid archive-offer-metric-grid">
+                  @for (metric of archiveOfferMetrics(); track trackMonitorMetric($index, metric)) {
+                    <article class="monitor-metric-card" [class]="metric.tone" tabindex="0" [appTooltip]="metric.tooltip || metric.label">
+                      <span class="material-icons-sharp">{{ metric.icon }}</span>
+                      <div>
+                        <small>{{ metric.label }}</small>
+                        <strong>{{ metric.value }}</strong>
+                      </div>
+                    </article>
+                  }
+                </div>
+
+                <div class="archive-offer-forecast" tabindex="0" [appTooltip]="offer.forecastNote">
+                  <span class="material-icons-sharp">query_stats</span>
+                  <div>
+                    <small>Прогноз итого за сегодня</small>
+                    <strong>до {{ offer.forecastTotalToday }}</strong>
+                    <span>{{ offer.sentToday }} уже отправлено · еще до {{ offer.forecastAdditionalToday }}</span>
+                  </div>
+                  <p>{{ offer.forecastNote }}</p>
+                </div>
+              </section>
+            }
 
             @if (monitor.archiveDiagnostics; as archiveDiagnostics) {
               <section class="monitor-table-card archive-diagnostics-card">
@@ -271,12 +321,12 @@
                   </div>
                 </div>
                 <div class="archive-diagnostics-grid">
-                  <span><b>{{ archiveDiagnostics.totalInStatus }}</b> всего в статусе</span>
-                  <span><b>{{ archiveDiagnostics.ready }}</b> готовы к предложению</span>
-                  <span><b>{{ archiveDiagnostics.tooFresh }}</b> еще рано</span>
-                  <span><b>{{ archiveDiagnostics.withoutChat }}</b> без чата</span>
-                  <span><b>{{ archiveDiagnostics.blockedByActiveOrder }}</b> с активным заказом</span>
-                  <span><b>{{ archiveDiagnostics.blockedByOpenRequest }}</b> с открытой заявкой</span>
+                  <span tabindex="0" appTooltip="Все компании, которые сейчас находятся в настроенном архивном статусе."><b>{{ archiveDiagnostics.totalInStatus }}</b> всего в статусе</span>
+                  <span tabindex="0" appTooltip="Компании достаточно давно находятся в архивном статусе, имеют чат и не заблокированы активным заказом или открытой заявкой."><b>{{ archiveDiagnostics.ready }}</b> готовы к предложению</span>
+                  <span tabindex="0" appTooltip="Компании еще не провели в архивном статусе установленное число месяцев. Их оффер будет запланирован позже."><b>{{ archiveDiagnostics.tooFresh }}</b> еще рано</span>
+                  <span tabindex="0" appTooltip="У компании нет ссылки на клиентский чат, поэтому создать безопасную отправку архивного оффера нельзя."><b>{{ archiveDiagnostics.withoutChat }}</b> без чата</span>
+                  <span tabindex="0" appTooltip="У компании есть активный заказ. Повторный оффер ей не отправляется, чтобы не дублировать текущую работу."><b>{{ archiveDiagnostics.blockedByActiveOrder }}</b> с активным заказом</span>
+                  <span tabindex="0" appTooltip="По компании уже открыта заявка на следующий заказ. Новый архивный оффер не отправляется повторно."><b>{{ archiveDiagnostics.blockedByOpenRequest }}</b> с открытой заявкой</span>
                 </div>
               </section>
             }

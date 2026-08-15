@@ -6,6 +6,7 @@ import { firstValueFrom, Subscription } from 'rxjs';
 import {
   AnalyticsResponse,
   CabinetProfile,
+  ContractorPaymentSummary,
   DailyWorkProgress,
   DictionarySummary,
   DictionarySummaryItem,
@@ -47,6 +48,10 @@ import {
   ManagerReportReviewAccessService,
   type ManagerReportReviewAccessState
 } from '../core/manager-report-review-access.service';
+import { MobileContractorPaymentSummaryComponent } from '../shared/mobile-contractor-payment-summary.component';
+import {
+  shouldShowLegacyContractorMetrics
+} from '../shared/contractor-payment-summary';
 
 type HomeSectionKey = 'profile' | 'analytics' | 'team' | 'score' | 'dictionaries';
 type HomeTone = 'blue' | 'green' | 'teal' | 'violet' | 'yellow';
@@ -71,7 +76,7 @@ type Row = {
 
 const HOME_SECTIONS: HomeSectionLink[] = [
   { key: 'profile', title: 'Личный кабинет', subtitle: 'профиль и показатели', icon: 'dashboard', tone: 'blue', roles: [] },
-  { key: 'analytics', title: 'Аналитика', subtitle: 'оборот, ЗП и графики', icon: 'analytics', tone: 'violet', roles: MOBILE_ROLES.ownerAdmin },
+  { key: 'analytics', title: 'Аналитика', subtitle: 'оборот, вознаграждения и графики', icon: 'analytics', tone: 'violet', roles: MOBILE_ROLES.ownerAdmin },
   { key: 'team', title: 'Моя команда', subtitle: 'сотрудники и показатели', icon: 'badge', tone: 'green', roles: MOBILE_ROLES.manager },
   { key: 'score', title: 'Рейтинг', subtitle: 'рабочие счетчики', icon: 'leaderboard', tone: 'teal', roles: MOBILE_ROLES.score },
   { key: 'dictionaries', title: 'Справочники', subtitle: 'настройки данных', icon: 'tune', tone: 'yellow', roles: MOBILE_ROLES.manager }
@@ -91,7 +96,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
 
 @Component({
   selector: 'app-home',
-  imports: [FormsModule, IonContent, IonModal, MobileActionSheetComponent, MobileDictionariesComponent, MobileHeaderComponent, MobileStatusSliderComponent, RouterLink],
+  imports: [FormsModule, IonContent, IonModal, MobileActionSheetComponent, MobileContractorPaymentSummaryComponent, MobileDictionariesComponent, MobileHeaderComponent, MobileStatusSliderComponent, RouterLink],
   template: `
     <div class="ion-page">
       <app-mobile-header [title]="sectionTitle()" />
@@ -376,6 +381,15 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                     </article>
                   }
 
+                  @if (showContractorPayments()) {
+                    <app-mobile-contractor-payment-summary
+                      [summaries]="contractorPayments()"
+                      [loading]="contractorPaymentsLoading()"
+                      [error]="contractorPaymentsError()"
+                      (retry)="loadContractorPayments()"
+                    />
+                  }
+
                   <section class="metric-grid">
                     @for (row of profileRows(); track row.label) {
                       <article class="data-card">
@@ -389,7 +403,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                     @if (profileSalaryDayChart(); as chart) {
                       <article class="mobile-chart-card mobile-chart-card--salary">
                         <div class="chart-head">
-                          <h3>Зарплаты по дням</h3>
+                          <h3>Вознаграждения по дням</h3>
                           <small>{{ profile()?.date || selectedDate() }}</small>
                         </div>
                         <div class="bar-chart-frame">
@@ -413,7 +427,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                     @if (profileSalaryMonthChart(); as chart) {
                       <article class="mobile-chart-card mobile-chart-card--salary">
                         <div class="chart-head">
-                          <h3>Зарплаты по месяцам</h3>
+                          <h3>Вознаграждения по месяцам</h3>
                           <small>все годы</small>
                         </div>
                         <div class="line-legend">
@@ -429,7 +443,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                           </div>
                           <div class="line-chart-scroll">
                             <div class="line-chart-plot">
-                              <svg class="line-chart" [attr.viewBox]="chart.viewBox" preserveAspectRatio="none" role="img" aria-label="Зарплаты по месяцам">
+                              <svg class="line-chart" [attr.viewBox]="chart.viewBox" preserveAspectRatio="none" role="img" aria-label="Вознаграждения по месяцам">
                                 @for (lineY of chart.gridLines; track lineY) {
                                   <line class="grid-line" [attr.x1]="chart.plotStart" [attr.x2]="chart.plotEnd" [attr.y1]="lineY" [attr.y2]="lineY"></line>
                                 }
@@ -606,7 +620,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                   <section class="analytics-block analytics-block--salary">
                     <header class="analytics-block-title">
                       <span class="material-icons-sharp">account_balance_wallet</span>
-                      <strong>Зарплаты</strong>
+                      <strong>Вознаграждения</strong>
                       <small>{{ periodSubtitle() }}</small>
                     </header>
 
@@ -625,7 +639,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                     @if (salaryMonthChart(); as chart) {
                       <article class="mobile-chart-card mobile-chart-card--salary">
                         <div class="chart-head">
-                          <h3>Зарплаты по месяцам</h3>
+                          <h3>Вознаграждения по месяцам</h3>
                           <small>{{ periodSubtitle() }}</small>
                         </div>
                         <div class="line-legend">
@@ -641,7 +655,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                           </div>
                           <div class="line-chart-scroll">
                             <div class="line-chart-plot">
-                              <svg class="line-chart" [attr.viewBox]="chart.viewBox" preserveAspectRatio="none" role="img" aria-label="Зарплаты по месяцам">
+                              <svg class="line-chart" [attr.viewBox]="chart.viewBox" preserveAspectRatio="none" role="img" aria-label="Вознаграждения по месяцам">
                                 @for (lineY of chart.gridLines; track lineY) {
                                   <line class="grid-line" [attr.x1]="chart.plotStart" [attr.x2]="chart.plotEnd" [attr.y1]="lineY" [attr.y2]="lineY"></line>
                                 }
@@ -674,7 +688,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                     @if (salaryDayChart(); as chart) {
                       <article class="mobile-chart-card mobile-chart-card--salary">
                         <div class="chart-head">
-                          <h3>Зарплаты по дням</h3>
+                          <h3>Вознаграждения по дням</h3>
                           <small>{{ analytics()?.date || selectedDate() }}</small>
                         </div>
                         <div class="bar-chart-frame">
@@ -2376,6 +2390,7 @@ export class HomePage implements OnInit, OnDestroy {
   private lastMobileNavKey = '';
   private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private reloadEpoch = 0;
+  private contractorPaymentsRequestEpoch = 0;
 
   readonly activeSection = signal<HomeSectionKey>('profile');
   readonly selectedDate = signal(this.todayIso());
@@ -2389,6 +2404,9 @@ export class HomePage implements OnInit, OnDestroy {
   readonly sectionSheetOpen = signal(false);
 
   readonly profile = signal<CabinetProfile | null>(null);
+  readonly contractorPayments = signal<ContractorPaymentSummary[]>([]);
+  readonly contractorPaymentsLoading = signal(false);
+  readonly contractorPaymentsError = signal<string | null>(null);
   readonly team = signal<TeamResponse | null>(null);
   readonly score = signal<ScoreResponse | null>(null);
   readonly analytics = signal<AnalyticsResponse | null>(null);
@@ -2466,6 +2484,7 @@ export class HomePage implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.reloadEpoch += 1;
+    this.contractorPaymentsRequestEpoch += 1;
     this.closeSectionSheet();
     this.routeSubscription?.unsubscribe();
     this.querySubscription?.unsubscribe();
@@ -2626,6 +2645,10 @@ export class HomePage implements OnInit, OnDestroy {
             return;
           }
           this.profile.set(profile);
+          await this.loadContractorPayments(requestId);
+          if (requestId !== this.reloadEpoch) {
+            return;
+          }
           if (!this.workLocked()) {
             await this.loadManualPaymentSettings(forceRefresh, requestId);
             if (requestId !== this.reloadEpoch) {
@@ -2772,12 +2795,28 @@ export class HomePage implements OnInit, OnDestroy {
     return MOBILE_ROLE_LABELS[role] ?? role;
   }
 
+  showContractorPayments(): boolean {
+    return this.contractorPayments().length > 0
+      || this.auth.hasRealmRole('MANAGER')
+      || this.auth.hasRealmRole('WORKER');
+  }
+
   profileRows(): Row[] {
     const profile = this.profile();
     const stats = profile?.workerZp;
-    return [
+    const identityRows: Row[] = [
       { label: 'Лиды', value: this.count(profile?.user?.leadCount ?? 0) },
-      { label: 'Отзывы', value: this.count(profile?.user?.reviewCount ?? 0) },
+      { label: 'Отзывы', value: this.count(profile?.user?.reviewCount ?? 0) }
+    ];
+    if (!shouldShowLegacyContractorMetrics(
+      this.showContractorPayments(),
+      this.contractorPaymentsError(),
+      this.contractorPayments()
+    )) {
+      return identityRows;
+    }
+    return [
+      ...identityRows,
       { label: 'За день', value: this.money(stats?.sum1Day ?? 0) },
       { label: 'За неделю', value: this.money(stats?.sum1Week ?? 0) },
       { label: 'За месяц', value: this.money(stats?.sum1Month ?? 0) },
@@ -3376,7 +3415,7 @@ export class HomePage implements OnInit, OnDestroy {
 
     if (key === 'managers') {
       rows.push(
-        { label: 'ЗП', value: this.money(member.sum1Month) },
+        { label: 'Начислено', value: this.money(member.sum1Month) },
         { label: 'Выручка', value: this.money(member.payment1Month) },
         { label: 'Заказы', value: this.count(member.order1Month) },
         { label: 'Отзывы', value: this.count(member.review1Month) }
@@ -3387,7 +3426,7 @@ export class HomePage implements OnInit, OnDestroy {
 
     if (key === 'workers') {
       rows.push(
-        { label: 'ЗП', value: this.money(member.sum1Month) },
+        { label: 'Начислено', value: this.money(member.sum1Month) },
         { label: 'Заказы', value: this.count(member.order1Month) },
         { label: 'Отзывы', value: this.count(member.review1Month) }
       );
@@ -3406,7 +3445,7 @@ export class HomePage implements OnInit, OnDestroy {
     }
 
     rows.push(
-      { label: 'ЗП', value: this.money(member.sum1Month) },
+      { label: 'Начислено', value: this.money(member.sum1Month) },
       { label: 'Новые', value: this.count(member.leadsNew) },
       { label: 'В работе', value: this.count(member.leadsInWork) },
       { label: 'Конверсия', value: `${member.percentInWork || 0}%` }
@@ -3466,7 +3505,7 @@ export class HomePage implements OnInit, OnDestroy {
     const finance = this.score()?.financeVisible;
     const rows: Row[] = [];
     if (finance) {
-      rows.push({ label: 'ЗП', value: this.money(user.salary) });
+      rows.push({ label: 'Начислено', value: this.money(user.salary) });
     }
 
     if (key === 'managers') {
@@ -3513,6 +3552,39 @@ export class HomePage implements OnInit, OnDestroy {
 
   logout(): void {
     void this.auth.logoutFrom('home_actions');
+  }
+
+  async loadContractorPayments(reloadRequestId = this.reloadEpoch): Promise<void> {
+    if (!this.auth.hasRealmRole('MANAGER') && !this.auth.hasRealmRole('WORKER')) {
+      this.contractorPaymentsRequestEpoch += 1;
+      this.contractorPayments.set([]);
+      this.contractorPaymentsError.set(null);
+      this.contractorPaymentsLoading.set(false);
+      return;
+    }
+
+    const requestId = ++this.contractorPaymentsRequestEpoch;
+    this.contractorPaymentsLoading.set(true);
+    this.contractorPaymentsError.set(null);
+    try {
+      const summaries = await firstValueFrom(this.api.getMyContractorPaymentSummaries());
+      if (requestId !== this.contractorPaymentsRequestEpoch || reloadRequestId !== this.reloadEpoch) {
+        return;
+      }
+      this.contractorPayments.set(summaries ?? []);
+    } catch (error) {
+      if (requestId !== this.contractorPaymentsRequestEpoch || reloadRequestId !== this.reloadEpoch) {
+        return;
+      }
+      const status = Number((error as { status?: unknown })?.status);
+      this.contractorPaymentsError.set(status === 403
+        ? 'Личные расчёты недоступны (403). Обновите приложение или обратитесь к администратору.'
+        : 'Расчёты по вознаграждениям временно недоступны. Старые показатели ниже продолжают работать.');
+    } finally {
+      if (requestId === this.contractorPaymentsRequestEpoch && reloadRequestId === this.reloadEpoch) {
+        this.contractorPaymentsLoading.set(false);
+      }
+    }
   }
 
   private async loadManualPaymentSettings(forceRefresh = false, requestId = this.reloadEpoch): Promise<void> {

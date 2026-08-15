@@ -41,7 +41,10 @@ public class WorkerServiceImpl implements WorkerService {
     }
 
     public List<Worker> getAllWorkersToManager(Manager manager) {
-        return workerRepository.findAllToManagerWorkers(manager.getUser().getWorkers());
+        if (manager == null || manager.getId() == null) {
+            return Collections.emptyList();
+        }
+        return workerRepository.findAllToManager(manager);
     }
 
     @Override

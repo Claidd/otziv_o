@@ -195,6 +195,7 @@
             (allOrdersOpened)="openAllOrders()"
             (editOpened)="openCompanyEdit(company)"
             (chatBotInviteOpened)="handleChatBotInviteOpened(company)"
+            (chatLinkEditOpened)="openChatLinkEditor(company.id, company.title, company.urlChat || '')"
           />
         } @empty {
           <div class="empty">
@@ -220,6 +221,7 @@
             (clientWaitingToggled)="toggleOrderClientWaiting(order)"
             (editOpened)="openOrderEdit(order)"
             (chatBotInviteOpened)="handleOrderChatBotInviteOpened(order)"
+            (chatLinkEditOpened)="openChatLinkEditor(order.companyId, order.companyTitle, order.companyUrlChat || '')"
           />
         } @empty {
           <div class="empty">
@@ -348,6 +350,24 @@
     />
   }
 
+  @if (manualCardPaymentOrder(); as manualPaymentOrder) {
+    <app-manager-manual-card-payment-modal
+      [order]="manualPaymentOrder"
+      (closed)="closeManualCardPayment()"
+      (completed)="completeManualCardPayment($event)"
+    />
+  }
+
+  @if (commonManualPayment(); as commonPayment) {
+    <app-common-manual-payment-attribution-modal
+      [invoiceId]="commonPayment.invoiceId"
+      [mode]="commonPayment.mode"
+      [invoiceTitle]="commonPayment.order.companyTitle"
+      (closed)="closeCommonManualPayment()"
+      (completed)="completeCommonManualPayment($event)"
+    />
+  }
+
   @if (orderLoading() || editOrder()) {
     <app-manager-order-edit-modal
       [loading]="orderLoading()"
@@ -451,5 +471,46 @@
       (billingCompanySearchChanged)="onCompanyBillingSearchChange($event)"
       (billingCompanyAdded)="addCompanyToBillingAccount($event)"
     />
+  }
+
+  @if (chatLinkEditor(); as editor) {
+    <div class="lead-edit-backdrop" role="presentation" (click)="closeChatLinkEditor()">
+      <section
+        class="lead-edit-modal lead-edit-modal--compact chat-link-editor-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="chat-link-editor-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="lead-edit-head">
+          <div>
+            <small>Привязка компании</small>
+            <h2 id="chat-link-editor-title">Ссылка на чат</h2>
+          </div>
+          <button type="button" class="lead-edit-close" (click)="closeChatLinkEditor()" title="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+        <label class="chat-link-editor-field">
+          <span>{{ editor.title || ('Компания #' + editor.companyId) }}</span>
+          <input
+            type="url"
+            [ngModel]="chatLinkDraft()"
+            (ngModelChange)="chatLinkDraft.set($event)"
+            placeholder="https://chat.whatsapp.com/... или https://t.me/..."
+            [disabled]="chatLinkSaving()"
+          >
+        </label>
+        <p class="chat-link-editor-hint">
+          После сохранения система безопасно сбросит устаревший ID для выбранной платформы и попробует восстановить привязку автоматически.
+        </p>
+        <div class="chat-link-editor-actions">
+          <button type="button" (click)="closeChatLinkEditor()" [disabled]="chatLinkSaving()">Отмена</button>
+          <button type="button" class="primary" (click)="saveChatLink()" [disabled]="chatLinkSaving()">
+            {{ chatLinkSaving() ? 'Сохраняем…' : 'Сохранить' }}
+          </button>
+        </div>
+      </section>
+    </div>
   }
 </app-admin-layout>

@@ -169,7 +169,11 @@ public class ApiReviewCheckController {
             HttpServletRequest servletRequest
     ) throws Exception {
         mutationLockService.lock(orderDetailId);
-        OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "На проверке", authentication);
+        Optional<OrderDetails> liveOrderDetails = findLiveReviewCheckDetails(orderDetailId);
+        boolean restoredFromArchive = liveOrderDetails.isEmpty();
+        OrderDetails orderDetails = liveOrderDetails.orElseGet(
+                () -> restoreArchivedReviewCheck(orderDetailId, "На проверке", authentication)
+        );
         requireLiveClientMutationAllowed(orderDetails, authentication);
         Order order = requireOrder(orderDetails);
         ReviewCheckPermissions permissions = permissionsForOrder(order, authentication);
@@ -184,7 +188,8 @@ public class ApiReviewCheckController {
         publicationApprovalService.approvePreparedOrder(
                 order.getId(),
                 List.of(updateDto),
-                approvalAuditDetails(authentication, servletRequest)
+                approvalAuditDetails(authentication, servletRequest),
+                restoredFromArchive
         );
 
         return buildResponse(orderDetailId, authentication);
@@ -251,15 +256,11 @@ public class ApiReviewCheckController {
             Authentication authentication
     ) throws Exception {
         mutationLockService.lock(orderDetailId);
-        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Опубликовано", authentication);
         Order order = requireOrder(orderDetails);
         ReviewCheckPermissions permissions = permissionsForOrder(order, authentication);
         if (!permissions.canMarkPaid()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отметки оплаты");
-        }
-
-        if (order.getAmount() > order.getCounter()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Нельзя отметить оплату: опубликованы не все отзывы");
         }
 
         if (!orderService.changeStatusForOrder(order.getId(), "Оплачено")) {
@@ -466,6 +467,7 @@ public class ApiReviewCheckController {
 
         return new ReviewCheckResponse(
                 orderDetails.getId(),
+                false,
                 permissions.canOpenManagerLinks() ? order.getId() : null,
                 permissions.canOpenManagerLinks() && company != null ? company.getId() : null,
                 company != null ? safe(company.getTitle()) : "",
@@ -496,6 +498,7 @@ public class ApiReviewCheckController {
 
         return new ReviewCheckResponse(
                 archived.orderDetailId(),
+                true,
                 permissions.canOpenManagerLinks() ? archived.orderId() : null,
                 permissions.canOpenManagerLinks() ? archived.companyId() : null,
                 archived.companyTitle(),
@@ -720,8 +723,8 @@ public class ApiReviewCheckController {
                 mutationAllowed && base.canSave(),
                 mutationAllowed && base.canSendCorrection(),
                 false,
-                false,
-                false,
+                mutationAllowed && canManage,
+                canManage,
                 false
         );
     }
@@ -955,6 +958,7 @@ public class ApiReviewCheckController {
 
     public record ReviewCheckResponse(
             UUID orderDetailId,
+            boolean archived,
             Long orderId,
             Long companyId,
             String companyTitle,

@@ -108,7 +108,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
                     configureApiAuthorization(auth);
-                    auth.requestMatchers("/images/**", "/favicon.ico", "/.well-known/acme-challenge/**").permitAll();
+                    auth.requestMatchers("/images/**", "/favicon.ico", "/.well-known/acme-challenge/**", "/error").permitAll();
                     auth.anyRequest().denyAll();
                 })
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -194,6 +194,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/auth", "/api/auth/**").permitAll();
         auth.requestMatchers(HttpMethod.GET, "/api/mobile-update", "/api/mobile-update/**").permitAll();
         auth.requestMatchers("/api/me").authenticated();
+        auth.requestMatchers(HttpMethod.GET, "/api/contractor-payments/me").authenticated();
         auth.requestMatchers("/api/manager-report-review/access-state", "/api/manager-report-review/check-in").authenticated();
         auth.requestMatchers("/api/manager-activity/**").authenticated();
         auth.requestMatchers("/api/mobile/**").authenticated();

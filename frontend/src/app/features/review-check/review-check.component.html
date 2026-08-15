@@ -650,7 +650,7 @@
                 <span class="material-icons-sharp">business</span>
                 Компания
               </a>
-              <a [routerLink]="managerOrderRoute(details)">
+              <a [routerLink]="managerOrderRoute(details)" [queryParams]="managerOrderQuery(details)">
                 <span class="material-icons-sharp">inventory_2</span>
                 Заказ
               </a>
@@ -779,7 +779,7 @@
               <span class="material-icons-sharp">business</span>
               Компания
             </a>
-            <a [routerLink]="managerOrderRoute(details)">
+            <a [routerLink]="managerOrderRoute(details)" [queryParams]="managerOrderQuery(details)">
               <span class="material-icons-sharp">inventory_2</span>
               Заказ
             </a>

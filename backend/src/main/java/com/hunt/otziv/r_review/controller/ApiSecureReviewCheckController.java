@@ -148,6 +148,7 @@ public class ApiSecureReviewCheckController {
         // Never disclose the legacy UUID through a scoped opaque capability.
         return new ReviewCheckResponse(
                 OPAQUE_PUBLIC_ID,
+                response.archived(),
                 null,
                 null,
                 response.companyTitle(),

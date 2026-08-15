@@ -13,6 +13,7 @@ const {
   workerReviewTitle,
   workerReviewToneClass,
   workerOrderTargetStatus,
+  workerSectionFromRouteParam,
   workerSectionIcon,
   workerSectionLabel
 } = loadTsModule('src/app/features/worker/worker-board.helpers.ts');
@@ -24,6 +25,9 @@ test('keeps worker section navigation stable', () => {
   assert.equal(workerSectionIcon('publish'), 'published_with_changes');
   assert.equal(workerDefaultSortDirection('new'), 'desc');
   assert.equal(workerDefaultSortDirection('nagul'), 'desc');
+  assert.equal(workerSectionFromRouteParam('publish'), 'publish');
+  assert.equal(workerSectionFromRouteParam(' CORRECT '), 'correct');
+  assert.equal(workerSectionFromRouteParam('archive'), null);
 });
 
 test('keeps the mobile credential source contract and formats its countdown', () => {

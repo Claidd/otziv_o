@@ -44,7 +44,7 @@ export class ManagerOrderCardComponent implements OnDestroy {
   unchangedCityOpen = false;
   communicationPopoverOpen = false;
   titlePopoverOpen = false;
-  private lastTitleTapAt = 0;
+  private titlePointerType: string | null = null;
   private unchangedCityTimer: ReturnType<typeof setTimeout> | null = null;
 
   @Output() readonly companyNoteSaved = new EventEmitter<string>();
@@ -55,6 +55,7 @@ export class ManagerOrderCardComponent implements OnDestroy {
   @Output() readonly clientWaitingToggled = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();
   @Output() readonly chatBotInviteOpened = new EventEmitter<void>();
+  @Output() readonly chatLinkEditOpened = new EventEmitter<void>();
 
   ngOnDestroy(): void {
     this.clearUnchangedCityTimer();
@@ -322,17 +323,20 @@ export class ManagerOrderCardComponent implements OnDestroy {
     return details;
   }
 
+  rememberTitlePointer(event: PointerEvent): void {
+    this.titlePointerType = event.pointerType;
+  }
+
   toggleTitlePopover(event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
 
-    const now = Date.now();
-    const isPointerDoubleClick = event.detail >= 2;
-    const isTouchDoubleTap = !isPointerDoubleClick && now - this.lastTitleTapAt <= 360;
-    this.lastTitleTapAt = now;
+    const pointerType = this.titlePointerType;
+    this.titlePointerType = null;
+    const isPointerDoubleClick = pointerType === 'mouse' && event.detail >= 2;
+    const isTouchActivation = pointerType === 'touch' || pointerType === 'pen';
 
-    if (isPointerDoubleClick || isTouchDoubleTap) {
-      this.lastTitleTapAt = 0;
+    if (isPointerDoubleClick || isTouchActivation) {
       this.closeTitlePopover();
       this.openFilialFromTitle();
       return;
@@ -347,7 +351,7 @@ export class ManagerOrderCardComponent implements OnDestroy {
   }
 
   private openFilialFromTitle(): void {
-    const url = this.orderFilialUrl();
+    const url = safeHttpsExternalUrl(this.order.filialUrl);
     if (!url) {
       return;
     }

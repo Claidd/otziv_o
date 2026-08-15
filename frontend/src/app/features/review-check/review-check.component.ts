@@ -1281,11 +1281,23 @@ export class ReviewCheckComponent {
   }
 
   managerOrderRoute(details: ReviewCheckPayload): unknown[] {
+    if (details.archived && details.orderId) {
+      return ['/manager/archive'];
+    }
+
     if (!details.companyId || !details.orderId) {
       return ['/orders'];
     }
 
     return ['/orders', details.companyId, details.orderId];
+  }
+
+  managerOrderQuery(details: ReviewCheckPayload): Record<string, number> {
+    if (!details.archived || !details.orderId) {
+      return {};
+    }
+
+    return { archiveOrderId: details.orderId };
   }
 
   managerCompanyOrdersQuery(details: ReviewCheckPayload): Record<string, string | number> {

@@ -1,3 +1,25 @@
+@if (chatLinkEditor(); as editor) {
+  <div class="control-modal-backdrop" role="presentation" (click)="closeControlChatLinkEditor()">
+    <section class="control-chat-link-modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+      <header>
+        <div><small>Привязка компании</small><h2>Ссылка на чат</h2></div>
+        <button type="button" (click)="closeControlChatLinkEditor()" title="Закрыть"><span class="material-icons-sharp">close</span></button>
+      </header>
+      <label>
+        <span>{{ editor.title }}</span>
+        <input type="url" [ngModel]="chatLinkDraft()" (ngModelChange)="chatLinkDraft.set($event)" [disabled]="chatLinkSaving()">
+      </label>
+      <p>Укажите ссылку WhatsApp, Telegram или MAX. После сохранения система попробует восстановить ID группы.</p>
+      <footer>
+        <button type="button" (click)="closeControlChatLinkEditor()" [disabled]="chatLinkSaving()">Отмена</button>
+        <button type="button" class="primary" (click)="saveControlChatLink()" [disabled]="chatLinkSaving()">
+          {{ chatLinkSaving() ? 'Сохраняем…' : 'Сохранить' }}
+        </button>
+      </footer>
+    </section>
+  </div>
+}
+
 @if (embeddedMode()) {
   <ng-container [ngTemplateOutlet]="managerControlContent"></ng-container>
 } @else {
@@ -1334,6 +1356,29 @@
                               @if (isTelegramBindingFailure(example)) {
                                 <small>бот не добавлен — ссылка; бот уже в группе — одноразовая команда</small>
                               }
+                            </div>
+                          }
+
+                          @if (item.reasonCode === 'CHAT_BINDING_ISSUES') {
+                            <div class="review-followup order-open-action">
+                              <button
+                                type="button"
+                                class="review-action repair-action"
+                                (click)="repairCompanyChatBinding(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                              >
+                                <span class="material-icons-sharp">build</span>
+                                {{ companyBindingActionLabel(example) }}
+                              </button>
+                              <button
+                                type="button"
+                                class="review-action secondary-action"
+                                (click)="openControlChatLinkEditor(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                              >
+                                <span class="material-icons-sharp">link</span>
+                                Ссылка на чат
+                              </button>
                             </div>
                           }
 

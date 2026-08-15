@@ -42,6 +42,7 @@ import {
   contractorPaymentModeLabel as paymentModeLabel,
   shouldShowLegacyCabinetMetrics
 } from './contractor-payment-coverage';
+import { ContractorPaymentMetricHelpComponent } from './contractor-payment-metric-help.component';
 
 type DashboardAction = {
   label: string;
@@ -97,7 +98,8 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     CabinetBarChartComponent,
     CabinetLineChartComponent,
     ManagerControlComponent,
-    DailyProgressStripComponent
+    DailyProgressStripComponent,
+    ContractorPaymentMetricHelpComponent
   ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'

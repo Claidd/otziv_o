@@ -10,6 +10,7 @@ import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentInitCheckRequest;
 import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionFlowPolicy;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSourceConfirmationRequest;
 import jakarta.validation.Valid;
@@ -33,6 +34,7 @@ public class CommonBillingAdminController {
     private final CommonBillingService commonBillingService;
     private final CommonBillingPublicationApprovalFailureMarker publicationApprovalFailureMarker;
     private final ContractorPaymentTargetAccessPolicy contractorPaymentTargetAccessPolicy;
+    private final ContractorActualPaymentAttributionFlowPolicy actualPaymentFlowPolicy;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @GetMapping("/api/common-billing/accounts")
@@ -118,6 +120,7 @@ public class CommonBillingAdminController {
             Principal principal
     ) {
         requireCanMutateInvoice(invoiceId);
+        actualPaymentFlowPolicy.requireLegacyFlow();
         return commonBillingService.markPaid(invoiceId, request, principal);
     }
 
@@ -172,6 +175,7 @@ public class CommonBillingAdminController {
             Principal principal
     ) {
         requireCanMutateInvoice(invoiceId);
+        actualPaymentFlowPolicy.requireLegacyFlow();
         return commonBillingService.reportPaidByManualCardTransfer(invoiceId, request, principal);
     }
 
@@ -253,6 +257,7 @@ public class CommonBillingAdminController {
             Principal principal
     ) {
         requireCanMutateInvoice(invoiceId);
+        actualPaymentFlowPolicy.requireLegacyFlow();
         return commonBillingService.markOrderPaid(invoiceId, orderId, request, principal);
     }
 

@@ -42,6 +42,21 @@ import { validateContractorTransferIdentifierForSave } from './contractor-transf
 
 type UserStatusFilter = 'all' | 'active' | 'inactive' | 'linked' | 'unlinked';
 
+export const CONTRACTOR_PAYMENT_SOURCE_FILTER_OPTIONS: ReadonlyArray<{
+  value: ContractorPaymentSourceType;
+  label: string;
+}> = [
+  { value: 'PAYMENT_LINK', label: 'Платёжная ссылка' },
+  { value: 'COMMON_INVOICE', label: 'Общий счёт' },
+  { value: 'DIRECT_SETTLEMENT', label: 'Прямой перевод' },
+  { value: 'ACTUAL_PAYMENT', label: 'Фактическое поступление' }
+];
+
+export function contractorPaymentSourceLabel(sourceType: ContractorPaymentSourceType): string {
+  return CONTRACTOR_PAYMENT_SOURCE_FILTER_OPTIONS.find(option => option.value === sourceType)?.label
+    ?? sourceType;
+}
+
 type UserStatusTab = {
   key: UserStatusFilter;
   label: string;
@@ -144,6 +159,7 @@ export class UsersAdminComponent implements OnDestroy {
   readonly contractorJournalStatus = signal<ContractorPaymentAllocationStatus | ''>('');
   readonly contractorJournalMode = signal<ContractorPaymentMode | ''>('');
   readonly contractorJournalSourceType = signal<ContractorPaymentSourceType | ''>('');
+  readonly contractorJournalSourceOptions = CONTRACTOR_PAYMENT_SOURCE_FILTER_OPTIONS;
   readonly contractorJournalSourceId = signal<number | null>(null);
   readonly contractorJournalAllUsers = signal(false);
   readonly contractorJournalPage = signal(0);
@@ -942,10 +958,7 @@ export class UsersAdminComponent implements OnDestroy {
   }
 
   contractorAllocationSource(item: ContractorPaymentAllocationJournalItem): string {
-    const source = item.sourceType === 'PAYMENT_LINK'
-      ? 'Платёжная ссылка'
-      : item.sourceType === 'COMMON_INVOICE' ? 'Общий счёт' : 'Прямой перевод';
-    return `${source} №${item.sourceId}`;
+    return `${contractorPaymentSourceLabel(item.sourceType)} №${item.sourceId}`;
   }
 
   contractorAllocationEventLabel(eventType: string): string {

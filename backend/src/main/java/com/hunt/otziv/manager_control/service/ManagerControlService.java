@@ -4,6 +4,7 @@ import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.service.CompanyChatBindingPolicy;
 import com.hunt.otziv.c_companies.service.SharedChatLinkSyncService;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
@@ -1406,6 +1407,11 @@ public class ManagerControlService {
         if (ENTITY_TELEGRAM_CHAT.equals(entityType)) {
             return repairTelegramChatConcreteItem(concreteItem, control, principal);
         }
+        if ("COMPANY_CHAT_BINDING".equals(entityType)) {
+            Company company = companyRepository.findById(concreteItem.getEntityId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Компания карточки контроля не найдена"));
+            return repairCompanyChatBindingConcreteItem(concreteItem, control, company, principal);
+        }
         if (ENTITY_ORDER_PAYMENT_INTEGRITY.equals(entityType)) {
             OrderPaymentIntegrityService.RepairResult result =
                     orderPaymentIntegrityService.repair(concreteItem.getEntityId());
@@ -1916,6 +1922,27 @@ public class ManagerControlService {
         Company company = order == null ? null : order.getCompany();
         if (company == null || company.getId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У заказа нет компании для привязки группы");
+        }
+        return repairCompanyChatBindingConcreteItem(concreteItem, control, company, principal);
+    }
+
+    private ManagerControlConcreteItemResponse repairCompanyChatBindingConcreteItem(
+            ManagerDailyControlConcreteItem concreteItem,
+            ManagerDailyControl control,
+            Company company,
+            Principal principal
+    ) {
+        if (company == null || company.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У карточки нет компании для привязки группы");
+        }
+        if (!CompanyChatBindingPolicy.isRequired(company)) {
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Компания в статусе «Бан»: привязка группы не требуется, карточка скрыта из контроля",
+                    principal,
+                    "Закрыта лишняя карточка привязки соцсети"
+            );
         }
         String before = clientTextChatBindingProblem(company);
         if (before.isBlank()) {
@@ -2736,7 +2763,7 @@ public class ManagerControlService {
         long automationFailureCount = automationFailures.size();
         long commonInvoiceActionCount = commonInvoiceActionCount(manager, automationInvoiceIds);
         long publicationDateIssueCount = reviewRepository.countPublicationDateIssuesByManager(manager);
-        long chatBindingIssueCount = orderRepository.countManagerControlChatBindingIssuesByManager(manager);
+        long chatBindingIssueCount = companyRepository.countChatBindingIssuesByManager(manager);
         long paymentIntegrityIssueCount = orderRepository.countPaymentIntegrityIssuesByManager(
                 manager,
                 PAYMENT_AUTOMATION_STATUSES
@@ -2889,9 +2916,11 @@ public class ManagerControlService {
         List<ManagerDailyControlItem> items = dailyControlItemRepository.findByControl(control);
         for (ManagerDailyControlItem item : items) {
             if (item == null
-                    || item.getGroup() != ManagerDailyControlGroup.ACTION
-                    || item.getItemType() == ManagerDailyControlItemType.ORDER_STATUS
-                    || item.getCount() <= 0) {
+                    || item.getGroup() != ManagerDailyControlGroup.ACTION) {
+                continue;
+            }
+            if (item.getCount() <= 0) {
+                syncConcreteExamples(item, List.of());
                 continue;
             }
             syncConcreteExamples(item, detailExamples(manager, item, today));
@@ -4399,7 +4428,6 @@ public class ManagerControlService {
         var status = order.getClientMessageStatus();
         if (!"scheduled".equalsIgnoreCase(safe(status.state()))
                 || status.nextAttemptAt() == null
-                || !status.nextAttemptAt().isAfter(LocalDateTime.now())
                 || status.consecutiveFailures() > 0) {
             return false;
         }
@@ -4435,13 +4463,70 @@ public class ManagerControlService {
     }
 
     private List<ManagerControlConcreteItemResponse> chatBindingIssueExamples(Manager manager, LocalDate today, int limit) {
-        return orderRepository.findManagerControlChatBindingIssueOrdersByManager(
-                        manager,
-                        PageRequest.of(0, Math.max(1, limit))
-                ).stream()
-                .map(this::orderDtoFromOrder)
-                .map(order -> chatBindingIssueExample(order, today, manager))
+        return companyRepository.findChatBindingIssuesByManager(manager).stream()
+                .limit(Math.max(1, limit))
+                .map(company -> companyChatBindingIssueExample(company, today, manager))
                 .toList();
+    }
+
+    private ManagerControlConcreteItemResponse companyChatBindingIssueExample(
+            Company company,
+            LocalDate today,
+            Manager manager
+    ) {
+        String status = company == null || company.getStatus() == null ? "" : safe(company.getStatus().getTitle());
+        String specialistName = companySpecialistName(company);
+        return new ManagerControlConcreteItemResponse(
+                null,
+                "COMPANY_CHAT_BINDING",
+                company.getId(),
+                safe(company.getTitle()).isBlank() ? "Компания #" + company.getId() : company.getTitle(),
+                specialistName.isBlank() ? "Специалист не назначен" : specialistName,
+                status,
+                company.getUpdateStatus() == null ? null : daysSince(company.getUpdateStatus(), today),
+                "Почему в контроле: " + companyChatBindingReason(company)
+                        + ". Сохраните правильную ссылку на чат и нажмите «Починить».",
+                companyTargetUrl(manager, company),
+                null,
+                company.getUrlChat(),
+                null,
+                null,
+                ManagerDailyControlItemStatus.OPEN.name(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                specialistName
+        );
+    }
+
+    private String companyChatBindingReason(Company company) {
+        String chat = safe(company == null ? null : company.getUrlChat()).toLowerCase(Locale.ROOT);
+        if (isWhatsAppChat(chat)) return "WhatsApp-группа не привязана к компании";
+        if (isTelegramChat(chat)) return "Telegram-группа не привязана к компании";
+        if (isMaxChat(chat)) return "MAX-группа не привязана к компании";
+        return "ссылка на чат не распознана";
+    }
+
+    private String companySpecialistName(Company company) {
+        if (company == null || company.getWorkers() == null) return "";
+        List<String> names = company.getWorkers().stream()
+                .map(Worker::getUser)
+                .map(this::userDisplayName)
+                .filter(name -> !name.isBlank())
+                .distinct()
+                .toList();
+        if (names.size() == 1) return names.getFirst();
+        if (names.size() > 1) return String.join(", ", names);
+        return "";
     }
 
     private OrderDTOList orderDtoFromOrder(Order order) {
@@ -4955,6 +5040,14 @@ public class ManagerControlService {
         }
         if ("COMMON_INVOICE".equals(safe(concreteItem.getEntityType()))) {
             return commonInvoiceSpecialistName(concreteItem.getEntityId());
+        }
+        if (ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE.equals(safe(concreteItem.getEntityType()))) {
+            ScheduledClientMessageState state = scheduledClientMessageStateRepository.findById(concreteItem.getEntityId()).orElse(null);
+            Company company = state == null || state.getCompanyId() == null
+                    ? null
+                    : companyRepository.findByIdWithWorkers(state.getCompanyId()).orElse(null);
+            String names = companySpecialistName(company);
+            if (!names.isBlank()) return names;
         }
         return userDisplayName(workerUserForTask(concreteItem));
     }
@@ -5488,6 +5581,9 @@ public class ManagerControlService {
     private String clientTextChatBindingProblem(Company company) {
         if (company == null) {
             return "компания не найдена";
+        }
+        if (!CompanyChatBindingPolicy.isRequired(company)) {
+            return "";
         }
         String chat = safe(company.getUrlChat()).toLowerCase(Locale.ROOT);
         if (chat.isBlank()) {

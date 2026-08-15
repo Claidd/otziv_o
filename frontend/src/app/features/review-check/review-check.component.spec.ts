@@ -44,6 +44,7 @@ function review(overrides: Partial<ReviewCheckReview> = {}): ReviewCheckReview {
 function details(overrides: Partial<ReviewCheckPayload> = {}): ReviewCheckPayload {
   return {
     orderDetailId: 'detail-1',
+    archived: false,
     orderId: 11,
     companyId: 3,
     companyTitle: 'Компания',
@@ -299,6 +300,44 @@ describe('ReviewCheckComponent', () => {
     expect(component.isReviewFooterStatePublished(payload, payload.reviews[0])).toBe(false);
     expect(component.reviewFooterStateLabel(payload, payload.reviews[1])).toBe('опубликован');
     expect(component.isReviewFooterStatePublished(payload, payload.reviews[1])).toBe(true);
+  });
+
+  it('opens stored orders in the archive while keeping live order links unchanged', () => {
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+    const archived = details({ archived: true, orderId: 22752, companyId: 202 });
+    const live = details({ archived: false, orderId: 22753, companyId: 202 });
+
+    expect(component.managerOrderRoute(archived)).toEqual(['/manager/archive']);
+    expect(component.managerOrderQuery(archived)).toEqual({ archiveOrderId: 22752 });
+    expect(component.managerOrderRoute(live)).toEqual(['/orders', 202, 22753]);
+    expect(component.managerOrderQuery(live)).toEqual({});
+  });
+
+  it('shows manager navigation and payment actions for an accessible archived order', async () => {
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    fixture.componentInstance.details.set(details({
+      archived: true,
+      orderId: 22752,
+      companyId: 202,
+      permissions: {
+        ...details().permissions,
+        canOpenManagerLinks: true,
+        canMarkPaid: true
+      }
+    }));
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const rightActions = (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLElement>('section[admin-right-content] .staff-actions-card');
+    expect(rightActions?.textContent).toContain('Компания');
+    expect(rightActions?.textContent).toContain('Заказ');
+    expect(rightActions?.textContent).toContain('Оплатили');
+    const orderLink = Array.from(rightActions?.querySelectorAll<HTMLAnchorElement>('a') ?? [])
+      .find((link) => link.textContent?.includes('Заказ'));
+    expect(orderLink?.getAttribute('href')).toBe('/manager/archive?archiveOrderId=22752');
   });
 
   it('counts every review as approved after publication is allowed', () => {

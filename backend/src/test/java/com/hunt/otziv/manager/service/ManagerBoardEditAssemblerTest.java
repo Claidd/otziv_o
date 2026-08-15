@@ -406,6 +406,33 @@ class ManagerBoardEditAssemblerTest {
     }
 
     @Test
+    void buildOrderDetailsResponseLetsWorkerEditDatesWhenCompanyAllowsIt() {
+        Authentication worker = authentication("ROLE_WORKER");
+        OrderDTO order = OrderDTO.builder()
+                .id(12L)
+                .company(CompanyDTO.builder()
+                        .id(7L)
+                        .title("Компания с разрешением")
+                        .allowWorkerPublicationDateEdit(true)
+                        .build())
+                .sum(BigDecimal.ZERO)
+                .status(OrderStatusDTO.builder().title("Публикация").build())
+                .build();
+
+        when(orderService.getOrderDTO(12L)).thenReturn(order);
+        when(reviewService.getReviewsAllByOrderId(12L)).thenReturn(List.of());
+        when(badReviewTaskService.getSummaryForOrder(12L)).thenReturn(BadReviewTaskSummary.empty());
+        when(badReviewTaskService.getTasksByOrderId(12L)).thenReturn(List.of());
+        when(reviewRecoveryTaskService.getTasksByOrderId(12L)).thenReturn(List.of());
+        when(productService.findAll()).thenReturn(List.of());
+
+        OrderDetailsResponse response = assembler.buildOrderDetailsResponse(12L, worker);
+
+        assertTrue(response.canEditReviewDates());
+        assertFalse(response.canEditReviewPublish());
+    }
+
+    @Test
     void buildOrderDetailsResponseIncludesRecoveryTasks() {
         Authentication admin = authentication("ROLE_ADMIN");
         ReviewDTOOne review = ReviewDTOOne.builder()

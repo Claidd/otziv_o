@@ -26,18 +26,11 @@ import {
 } from './review-check-load.guard';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
-import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
 import { MobileReviewFieldEditorComponent } from '../shared/mobile-review-field-editor.component';
 import { safeHttpsOrInternalUrl } from '../shared/external-navigation';
-import {
-  buildManualCardPaymentConfirmationRequest,
-  exactPaymentAmountKopecks,
-  manualCardPaymentConfirmationPrompt,
-  manualCardPaymentFallbackAccessDecision,
-  manualCardPaymentFallbackDecision,
-  shouldSubmitManualCardPaymentFallback
-} from '../shared/manual-payment-confirmation';
+import { manualCardPaymentFallbackAccessDecision } from '../shared/manual-payment-confirmation';
+import { MobileManualCardPaymentFlowService } from '../shared/mobile-manual-card-payment-flow.service';
 
 type ReviewEditableField = 'text' | 'answer';
 type ReviewCheckAction = 'load' | 'save' | 'approve' | 'correction' | 'send-check' | 'pay-ok';
@@ -1035,7 +1028,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
-    private readonly confirm: MobileConfirmService
+    private readonly manualCardPaymentFlow: MobileManualCardPaymentFlowService
   ) {}
 
   ngOnInit(): void {
@@ -1206,55 +1199,12 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
           throw genericError;
         }
 
-        let authoritativeOrder;
-        try {
-          authoritativeOrder = await firstValueFrom(
-            this.api.getManagerOrderDetails(sourceDetails.orderId!)
-          );
-        } catch {
-          this.error.set('Не удалось загрузить точную сумму заказа. Оплата не отмечена, ссылка T-Bank/СБП не закрыта.');
-          return;
-        }
-        const amountKopecks = exactPaymentAmountKopecks(
-          authoritativeOrder.totalSumWithBadReviews ?? authoritativeOrder.sum
-        );
-        const fallback = manualCardPaymentFallbackDecision(
-          genericError,
-          this.auth.user()?.roles,
-          sourceDetails.orderId,
-          amountKopecks
-        );
-        if (!fallback.allowed) {
-          this.error.set(fallback.userMessage ?? 'Безопасное ручное подтверждение оплаты недоступно.');
-          return;
-        }
-
-        const prompt = manualCardPaymentConfirmationPrompt(sourceDetails.orderId!, amountKopecks!);
-        if (!prompt) {
-          this.error.set('Не удалось подготовить безопасное подтверждение. Оплата не изменена.');
-          return;
-        }
-        const explicitlyConfirmed = await this.confirm.confirm(prompt);
+        const completed = await this.manualCardPaymentFlow.confirm(sourceDetails.orderId!);
         if (!this.acceptsReviewCheckRoute(routeTicket)) {
           return;
         }
-        if (!shouldSubmitManualCardPaymentFallback(fallback, explicitlyConfirmed)) {
+        if (!completed) {
           this.statusMessage.set('Оплата не изменена');
-          return;
-        }
-
-        const request = buildManualCardPaymentConfirmationRequest(
-          amountKopecks!,
-          `Владелец/администратор проверил выписку и полное поступление по кнопке «Оплатили» в проверке отзывов; заказ #${sourceDetails.orderId}`
-        );
-        if (!request) {
-          this.error.set('Не удалось сформировать запрос с точной суммой. Оплата не изменена.');
-          return;
-        }
-        await firstValueFrom(
-          this.api.confirmManagerManualCardPayment(sourceDetails.orderId!, request)
-        );
-        if (!this.acceptsReviewCheckRoute(routeTicket)) {
           return;
         }
         updatedDetails = await firstValueFrom(

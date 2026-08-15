@@ -46,6 +46,7 @@
         [class.chat-bot-link-pending]="hasActiveChatBindingIssue()"
         [attr.aria-label]="orderFullTitle()"
         [attr.aria-expanded]="titlePopoverOpen"
+        (pointerdown)="rememberTitlePointer($event)"
         (click)="toggleTitlePopover($event)"
         (blur)="closeTitlePopover()"
       >
@@ -114,6 +115,19 @@
     <div class="chat-link-note" title="Проверка включится после вывода компании из этого статуса">
       <span class="material-icons-sharp">link_off</span>
       <span>Привязка чата пока не требуется</span>
+    </div>
+  }
+
+  @if (hasActiveChatBindingIssue()) {
+    <div class="card-actions chat-binding-actions">
+      <button type="button" (click)="chatBotInviteOpened.emit()">
+        <span class="material-icons-sharp">build</span>
+        Починить
+      </button>
+      <button type="button" (click)="chatLinkEditOpened.emit()">
+        <span class="material-icons-sharp">link</span>
+        Ссылка на чат
+      </button>
     </div>
   }
 

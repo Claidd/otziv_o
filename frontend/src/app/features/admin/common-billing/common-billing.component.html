@@ -94,9 +94,9 @@
                   </a>
                   <button
                     type="button"
-                    title="Отметить этот заказ оплаченным внутри общего счета"
+                    [title]="manualAttributionRequired() === false ? 'Отметить этот заказ оплаченным внутри общего счета' : 'В TEST/LIVE ручную оплату фиксируйте целиком через «Оплачен» с выбором получателей'"
                     (click)="invoiceOrder && markOrderPaid(invoiceOrder)"
-                    [disabled]="!!mutating() || invoiceNeedsAttention() || !invoiceOrder || invoiceOrder.paid"
+                    [disabled]="manualAttributionRequired() !== false || !!mutating() || invoiceNeedsAttention() || !invoiceOrder || invoiceOrder.paid"
                   >
                     <span class="material-icons-sharp" aria-hidden="true">{{ invoiceOrder?.paid ? 'check_circle' : 'done' }}</span>
                   </button>
@@ -606,6 +606,18 @@
       </section>
     }
   </section>
+
+  @if (manualAttributionMode(); as mode) {
+    @if (currentInvoice(); as invoice) {
+      <app-common-manual-payment-attribution-modal
+        [invoiceId]="invoice.id"
+        [invoiceTitle]="invoice.title || invoice.accountName || ''"
+        [mode]="mode"
+        (closed)="closeManualAttribution()"
+        (completed)="completeManualAttribution($event)"
+      />
+    }
+  }
 
   @if (orderLoading() || editOrder()) {
     <app-manager-order-edit-modal

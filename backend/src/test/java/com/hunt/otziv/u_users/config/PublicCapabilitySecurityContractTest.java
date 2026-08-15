@@ -112,6 +112,12 @@ class PublicCapabilitySecurityContractTest {
     }
 
     @Test
+    void apiErrorDispatchIsNotRewrittenAsAnExpiredSession() throws Exception {
+        mockMvc.perform(get("/error"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void reviewCheckUsesValidBearerButIgnoresExpiredBearer() throws Exception {
         stubJwt("owner-review-token", "OWNER");
         mockMvc.perform(get("/api/review-check/contract-id")
@@ -233,6 +239,37 @@ class PublicCapabilitySecurityContractTest {
                 true,
                 true
         );
+    }
+
+    @Test
+    void contractorPaymentSelfSummaryRequiresAuthenticationButAllowsManagerAndWorker() throws Exception {
+        mockMvc.perform(get("/api/contractor-payments/me"))
+                .andExpect(status().isUnauthorized());
+
+        stubJwt("manager-contractor-token", "MANAGER");
+        mockMvc.perform(get("/api/contractor-payments/me")
+                        .header("Authorization", "Bearer manager-contractor-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actor").value("manager"));
+
+        stubJwt("worker-contractor-token", "WORKER");
+        mockMvc.perform(get("/api/contractor-payments/me")
+                        .header("Authorization", "Bearer worker-contractor-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actor").value("worker"));
+    }
+
+    @Test
+    void contractorPaymentSelfMatcherDoesNotOpenBroaderSurface() throws Exception {
+        stubJwt("worker-contractor-near-miss-token", "WORKER");
+
+        mockMvc.perform(post("/api/contractor-payments/me")
+                        .header("Authorization", "Bearer worker-contractor-near-miss-token"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/contractor-payments/me/extra")
+                        .header("Authorization", "Bearer worker-contractor-near-miss-token"))
+                .andExpect(status().isForbidden());
     }
 
     private void stubJwt(String tokenValue, String role) {
@@ -358,6 +395,11 @@ class PublicCapabilitySecurityContractTest {
 
     @RestController
     static class ReviewCheckPublicProbe {
+
+        @GetMapping("/api/contractor-payments/me")
+        Map<String, String> contractorPaymentSelf(Authentication authentication) {
+            return Map.of("actor", authentication.getName());
+        }
 
         @GetMapping("/api/review-check/{orderDetailId}")
         Map<String, String> get(@PathVariable String orderDetailId, Authentication authentication) {

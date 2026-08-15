@@ -1412,6 +1412,33 @@ resume_self_heal_timer() {
   return 0
 }
 
+prune_old_deploy_backups() {
+  backup_root="`$remote_path/.deploy-backups"
+  keep_count=3
+  [ -d "`$backup_root" ] || return 0
+
+  mapfile -t backup_names < <(
+    find "`$backup_root" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %f\n' \
+      | sort -n \
+      | sed 's/^[^ ]* //'
+  )
+  backup_count="`${#backup_names[@]}"
+  [ "`$backup_count" -gt "`$keep_count" ] || return 0
+  delete_count="`$((backup_count - keep_count))"
+
+  for ((backup_index=0; backup_index<delete_count; backup_index++)); do
+    backup_candidate="`$backup_root/`${backup_names[`$backup_index]}"
+    backup_resolved="`$(realpath -e -- "`$backup_candidate")"
+    case "`$backup_resolved" in
+      "`$backup_root"/*) rm -rf -- "`$backup_resolved" ;;
+      *)
+        echo "Refusing to prune unexpected deploy backup path: `$backup_resolved" >&2
+        return 1
+        ;;
+    esac
+  done
+}
+
 deploy_cleanup() {
   status="`$?"
   trap - EXIT INT TERM
@@ -1453,6 +1480,9 @@ deploy_cleanup() {
     elif ! release_deploy_lock; then
       status="1"
     else
+      if ! prune_old_deploy_backups; then
+        echo "WARNING: could not prune old deploy rollback directories." >&2
+      fi
       printf 'OTZIV_DEPLOY_COMPLETE=%s\n' "`$deploy_lock_token"
     fi
     if [ "`$status" -ne 0 ]; then

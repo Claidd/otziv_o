@@ -11,7 +11,11 @@ export type ContractorPaymentSystemMode =
   | 'ROUTING_LIVE'
   | 'ROUTING_PAUSED'
   | 'CONFIGURATION_ERROR';
-export type ContractorPaymentSourceType = 'PAYMENT_LINK' | 'COMMON_INVOICE' | 'DIRECT_SETTLEMENT';
+export type ContractorPaymentSourceType =
+  | 'PAYMENT_LINK'
+  | 'COMMON_INVOICE'
+  | 'DIRECT_SETTLEMENT'
+  | 'ACTUAL_PAYMENT';
 export type ContractorPaymentRecipientType = 'SPECIALIST' | 'MANAGER' | 'OWNER';
 export type ContractorRoutingDecisionReason =
   | 'SPECIALIST_SELECTED'

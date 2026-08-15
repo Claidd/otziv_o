@@ -98,6 +98,17 @@ class ManagerReportReviewRestrictionFilterTest {
     }
 
     @Test
+    void leavesContractorPaymentSelfSummaryAvailable() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/contractor-payments/me");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verify(userRepository, never()).findByUsername("manager");
+    }
+
+    @Test
     void exposesPublicByLinkApisWithAnonymousRightsForRestrictedManager() throws Exception {
         stubRestrictedManager();
         Authentication originalAuthentication = SecurityContextHolder.getContext().getAuthentication();

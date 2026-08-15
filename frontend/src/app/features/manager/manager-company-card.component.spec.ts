@@ -9,6 +9,7 @@ function company(overrides: Partial<CompanyCardItem> = {}): CompanyCardItem {
     title: 'Company',
     telephone: '+79086431055',
     urlChat: 'https://chat',
+    urlFilial: 'https://example.test/filial',
     countFilials: 2,
     status: 'В работе',
     manager: 'Manager',
@@ -35,11 +36,54 @@ describe('ManagerCompanyCardComponent', () => {
 
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('header a')?.textContent?.trim()).toBe('Company');
+    expect(element.querySelector<HTMLAnchorElement>('header a')?.href).toBe('https://example.test/filial');
     expect(element.textContent).toContain('7-908-643-10-55');
     expect(element.textContent).toContain('Филиалов:');
     expect(element.querySelector<HTMLAnchorElement>('.company-manager-link')?.getAttribute('href'))
       .toBe('/orders?status=%D0%92%D1%81%D0%B5');
-    expect(element.querySelector<HTMLButtonElement>('.card-actions button')?.disabled).toBe(true);
+    expect(element.querySelector<HTMLButtonElement>('.card-more .card-actions button[title="Ожидание"]')?.disabled)
+      .toBe(true);
+  });
+
+  it('opens the filial URL on a mouse double click or one touch tap', () => {
+    const fixture = TestBed.createComponent(ManagerCompanyCardComponent);
+    const component = fixture.componentInstance;
+    component.company = company();
+    fixture.detectChanges();
+
+    const title = fixture.nativeElement.querySelector('header a') as HTMLAnchorElement;
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    component.rememberTitlePointer({ pointerType: 'mouse' } as PointerEvent);
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    expect(openSpy).not.toHaveBeenCalled();
+
+    component.rememberTitlePointer({ pointerType: 'mouse' } as PointerEvent);
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 2 }));
+    expect(openSpy).toHaveBeenCalledWith('https://example.test/filial', '_blank', 'noopener');
+
+    openSpy.mockClear();
+    component.rememberTitlePointer({ pointerType: 'touch' } as PointerEvent);
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    expect(openSpy).toHaveBeenCalledWith('https://example.test/filial', '_blank', 'noopener');
+
+    openSpy.mockRestore();
+  });
+
+  it('does not use the company chat URL when the filial URL is missing', () => {
+    const fixture = TestBed.createComponent(ManagerCompanyCardComponent);
+    const component = fixture.componentInstance;
+    let editOpened = false;
+    component.company = company({ urlFilial: undefined, urlChat: 'https://chat.example.test' });
+    component.editOpened.subscribe(() => {
+      editOpened = true;
+    });
+    fixture.detectChanges();
+
+    const title = fixture.nativeElement.querySelector('header a') as HTMLAnchorElement;
+    expect(title.getAttribute('href')).toBe('');
+    title.click();
+    expect(editOpened).toBe(true);
   });
 
   it('emits card actions', () => {
@@ -77,7 +121,7 @@ describe('ManagerCompanyCardComponent', () => {
     const element = fixture.nativeElement as HTMLElement;
     element.querySelector<HTMLButtonElement>('.phone-row button')?.click();
     element.querySelector<HTMLButtonElement>('.order-create-trigger')?.click();
-    element.querySelector<HTMLButtonElement>('.card-actions button')?.click();
+    element.querySelector<HTMLButtonElement>('.card-more .card-actions button[title="Ожидание"]')?.click();
     element.querySelector<HTMLAnchorElement>('.details-button')?.click();
     element.querySelector<HTMLAnchorElement>('.company-manager-link')?.click();
     element.querySelector<HTMLAnchorElement>('.company-edit-link')?.click();

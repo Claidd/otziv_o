@@ -1077,12 +1077,99 @@ export interface ManualPaymentConfirmationRequest {
   receiptUrl: string;
 }
 
+export type ManualCardPaymentRecipientType = 'OWNER' | 'MANAGER' | 'SPECIALIST';
+
+export interface ManualCardPaymentRecipientOption {
+  recipientType: ManualCardPaymentRecipientType;
+  recipientProfileId?: number | null;
+  recipientUserId?: number | null;
+  displayName: string;
+  availableKopecks?: number | null;
+  projectedOverrunKopecks?: number | null;
+  anomalyWarning?: string | null;
+}
+
+export interface ManualCardPaymentContext {
+  orderId: number;
+  amountKopecks: number;
+  originalRecipient: ManualCardPaymentRecipientOption;
+  candidates: ManualCardPaymentRecipientOption[];
+  anomalyWarning?: string | null;
+  recipientSelectionFrozen: boolean;
+  preparedRecipient: ManualCardPaymentRecipientOption | null;
+  preparedReason: string | null;
+  preparedReceiptUrl: string | null;
+}
+
 export interface ManualCardPaymentConfirmationRequest {
-  recipientStatementChecked: true;
+  reason: string;
+  receiptUrl?: string | null;
+  recipientType: ManualCardPaymentRecipientType;
+  recipientProfileId?: number | null;
+}
+
+export interface CommonManualPaymentAttributionModeResponse {
+  attributionRequired: boolean;
+}
+
+export type CommonActualRecipientType = 'SPECIALIST' | 'MANAGER' | 'OWNER';
+export type CommonManualPaymentMode = 'STANDARD' | 'TBANK_FALLBACK';
+
+export interface CommonManualPaymentRecipientCandidate {
+  key: string;
+  recipientType: CommonActualRecipientType;
+  recipientProfileId?: number | null;
+  recipientUserId?: number | null;
+  label: string;
+  originalRecipient: boolean;
+  currentParticipant: boolean;
+  profileEnabled: boolean;
+  availableKopecks?: number | null;
+}
+
+export interface CommonManualPaymentAttributionHistoryItem {
+  id: number;
+  attributionKey: string;
+  accountingMode: 'SHADOW' | 'LIVE';
+  originalRecipientType: CommonActualRecipientType;
+  originalRecipientProfileId?: number | null;
+  originalRecipientLabel: string;
+  actualRecipientType: CommonActualRecipientType;
+  actualRecipientProfileId?: number | null;
+  actualRecipientLabel: string;
+  amountKopecks: number;
+  availableBeforeKopecks?: number | null;
+  projectedOverrunKopecks: number;
+  effectiveAt: string;
+  reason: string;
+  evidenceReference: string;
+  actor: string;
+  createdAt: string;
+}
+
+export interface CommonManualPaymentOptions {
+  invoiceId: number;
+  remainingKopecks: number;
+  defaultRecipientKey: string;
+  candidates: CommonManualPaymentRecipientCandidate[];
+  history: CommonManualPaymentAttributionHistoryItem[];
+}
+
+export interface CommonManualPaymentAttributionRowRequest {
+  rowKey: string;
+  recipientType: CommonActualRecipientType;
+  recipientProfileId: number | null;
+  amountKopecks: number;
+}
+
+export interface CommonManualPaymentAttributionRequest {
+  idempotencyKey: string;
+  finalAccountingAcknowledged: true;
   paymentReceived: true;
-  receivedAmountKopecks: number;
-  note: string;
-  receiptUrl?: string;
+  effectiveAt: string;
+  reason: string;
+  receiptUrl: string;
+  attributions: CommonManualPaymentAttributionRowRequest[];
 }
 
 export interface CredentialRevealResponse {
@@ -3012,6 +3099,37 @@ export interface TeamOptions {
   month?: string;
 }
 
+export type ContractorPaymentRole = 'SPECIALIST' | 'MANAGER';
+
+export interface ContractorPaymentSummary {
+  profileId: number;
+  userId: number;
+  role: ContractorPaymentRole;
+  profileEnabled: boolean;
+  liveEnabled: boolean;
+  accruedMonthKopecks: number;
+  accruedTotalKopecks: number;
+  reservedKopecks: number;
+  clientReportedKopecks: number;
+  partiallyConfirmedOutstandingKopecks: number;
+  grossConfirmedMonthKopecks: number;
+  grossConfirmedTotalKopecks: number;
+  returnedMonthKopecks: number;
+  returnedTotalKopecks: number;
+  closedWithoutPaymentMonthKopecks: number;
+  closedWithoutPaymentTotalKopecks: number;
+  netReceivedMonthKopecks: number;
+  netReceivedTotalKopecks: number;
+  availableKopecks: number;
+  creditKopecks: number;
+  exposureOverrunKopecks: number;
+  reportingLive: boolean;
+  shadowMode: boolean;
+  liveRouting: boolean;
+  trackingStartedAt: string;
+  currentMonthCoverageComplete: boolean;
+}
+
 export interface ManagerManualPaymentSettings {
   profileId?: number | null;
   profileName: string;
@@ -3076,6 +3194,10 @@ export class ApiService {
 
   getCurrentUser(): Observable<CurrentUser> {
     return this.http.get<CurrentUser>(this.apiUrl('/api/me'));
+  }
+
+  getMyContractorPaymentSummaries(): Observable<ContractorPaymentSummary[]> {
+    return this.http.get<ContractorPaymentSummary[]>(this.apiUrl('/api/contractor-payments/me'));
   }
 
   getCabinetProfile(date?: string, options: { forceRefresh?: boolean } = {}): Observable<CabinetProfile> {
@@ -3748,6 +3870,12 @@ export class ApiService {
     return this.http.post<void>(this.apiUrl(`/api/manager/orders/${orderId}/status`), { status });
   }
 
+  getManagerManualCardPaymentContext(orderId: number): Observable<ManualCardPaymentContext> {
+    return this.http.get<ManualCardPaymentContext>(
+      this.apiUrl(`/api/manager/orders/${orderId}/manual-card-payment-context`)
+    );
+  }
+
   confirmManagerManualCardPayment(
     orderId: number,
     request: ManualCardPaymentConfirmationRequest
@@ -4051,10 +4179,44 @@ export class ApiService {
   markCommonInvoicePaid(
     invoiceId: number,
     request: ManualPaymentConfirmationRequest
+
   ): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/paid`),
       request
+    );
+  }
+
+  getCommonManualPaymentMode(invoiceId: number): Observable<CommonManualPaymentAttributionModeResponse> {
+    return this.http.get<CommonManualPaymentAttributionModeResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/manual-payment-mode`)
+    );
+  }
+
+  getCommonManualPaymentOptions(invoiceId: number): Observable<CommonManualPaymentOptions> {
+    return this.http.get<CommonManualPaymentOptions>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/manual-payment-options`)
+    );
+  }
+
+  confirmCommonManualPayment(
+    invoiceId: number,
+    mode: CommonManualPaymentMode,
+    request: CommonManualPaymentAttributionRequest
+  ): Observable<CommonInvoiceDetailsResponse> {
+    const action = mode === 'TBANK_FALLBACK'
+      ? 'attention/manual-card-paid-with-attributions'
+      : 'paid-with-attributions';
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/${action}`),
+      request
+    );
+  }
+
+  reportCommonInvoiceManualCardPayment(invoiceId: number, reason: string): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/manual-card-paid`),
+      { reason }
     );
   }
 
