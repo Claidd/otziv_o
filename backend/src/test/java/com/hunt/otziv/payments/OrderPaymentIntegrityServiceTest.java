@@ -14,6 +14,7 @@ import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
+import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -42,6 +43,8 @@ class OrderPaymentIntegrityServiceTest {
     private OrderStatusService orderStatusService;
     @Mock
     private BusinessAuditService businessAuditService;
+    @Mock
+    private ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
 
     @InjectMocks
     private OrderPaymentIntegrityService service;
@@ -80,7 +83,8 @@ class OrderPaymentIntegrityServiceTest {
                 .build();
 
         when(orderRepository.findByIdForCounterUpdate(24572L)).thenReturn(Optional.of(order));
-        when(paymentLinkRepository.findByOrder_IdAndStatusIn(org.mockito.ArgumentMatchers.eq(24572L), anyCollection()))
+        when(paymentLinkRepository.findByOrderIdAndStatusInForUpdate(
+                org.mockito.ArgumentMatchers.eq(24572L), anyCollection()))
                 .thenReturn(List.of(duplicate));
         when(stateRepository.findByOrderIdIn(List.of(24572L))).thenReturn(List.of(paymentState, unrelatedState));
         when(orderStatusService.getOrderStatusByTitle("Оплачено")).thenReturn(paid);
@@ -96,6 +100,10 @@ class OrderPaymentIntegrityServiceTest {
         assertEquals(1, result.closedMessageStates());
         verify(orderRepository).save(order);
         verify(paymentLinkRepository).saveAll(List.of(duplicate));
+        verify(taskReceiptIntegrationService).release(
+                duplicate,
+                "Срок резерва истек: Повторная платежная ссылка закрыта: заказ уже был полностью оплачен"
+        );
         verify(stateRepository).saveAll(List.of(paymentState));
     }
 

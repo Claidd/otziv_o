@@ -1,0 +1,39 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/repository/ContractorPaymentAllocationRepository.java
+@@
+         SELECT a
+         FROM ContractorPaymentAllocation a
+         WHERE a.mode = :mode
+-          AND a.sourceType = com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType.PAYMENT_LINK
++          AND (
++              a.sourceType = com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType.PAYMENT_LINK
++              OR (
++                  a.sourceType = com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType.ACTUAL_PAYMENT
++                  AND EXISTS (
++                      SELECT attribution.id
++                      FROM ContractorActualPaymentAttribution attribution
++                      WHERE attribution.id = a.sourceId
++                        AND attribution.sourceKind = com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind.PAYMENT_LINK
++                  )
++              )
++          )
+           AND a.status IN :statuses
+@@
+               OR EXISTS (
+                   SELECT link.id
+                   FROM PaymentLink link
+                   WHERE link.id = a.sourceId
++                    AND a.sourceType = com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType.PAYMENT_LINK
+                     AND (a.lastReconciledAt IS NULL OR link.updatedAt > a.lastReconciledAt)
+               )
++              OR EXISTS (
++                  SELECT attribution.id
++                  FROM ContractorActualPaymentAttribution attribution, PaymentLink actualLink
++                  WHERE a.sourceType = com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType.ACTUAL_PAYMENT
++                    AND attribution.id = a.sourceId
++                    AND attribution.sourceKind = com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind.PAYMENT_LINK
++                    AND actualLink.id = attribution.sourceId
++                    AND (a.lastReconciledAt IS NULL OR actualLink.updatedAt > a.lastReconciledAt)
++              )
+           )
+*** End Patch

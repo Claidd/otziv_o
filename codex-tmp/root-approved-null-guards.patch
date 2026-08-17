@@ -1,0 +1,38 @@
+diff --git a/backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionService.java b/backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionService.java
+--- a/backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionService.java
++++ b/backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionService.java
+@@ -479,2 +479,6 @@
+-        ContractorPaymentAllocation accountingAllocation = allocations.get(accountingAllocationId);
+-        ContractorPaymentAllocation clientFacingAllocation = allocations.get(clientFacingAllocationId);
++        ContractorPaymentAllocation accountingAllocation = accountingAllocationId == null
++                ? null
++                : allocations.get(accountingAllocationId);
++        ContractorPaymentAllocation clientFacingAllocation = clientFacingAllocationId == null
++                ? null
++                : allocations.get(clientFacingAllocationId);
+@@ -1618,1 +1622,3 @@
+-        ContractorPaymentProfile profile = profiles.get(link.getManualActualOriginalRecipientProfileId());
++        Long originalProfileId = link.getManualActualOriginalRecipientProfileId();
++        ContractorPaymentProfile profile = originalProfileId == null
++                ? null : profiles.get(originalProfileId);
+diff --git a/backend/src/main/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinator.java b/backend/src/main/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinator.java
+--- a/backend/src/main/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinator.java
++++ b/backend/src/main/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinator.java
+@@ -695,4 +695,18 @@
+     private boolean canExposeHistory(ContractorActualPaymentAttribution row) {
+         return row != null
+-                && targetAccessPolicy.canManageUser(row.getOriginalRecipientUserId())
+-                && targetAccessPolicy.canManageUser(row.getActualRecipientUserId());
++                && canExposeRecipient(row.getOriginalRecipientType(), row.getOriginalRecipientUserId())
++                && canExposeRecipient(row.getActualRecipientType(), row.getActualRecipientUserId());
++    }
++
++    private boolean canExposeRecipient(ContractorRecipientType type, Long userId) {
++        if (type == ContractorRecipientType.SPECIALIST
++                || type == ContractorRecipientType.MANAGER) {
++            return userId != null && targetAccessPolicy.canManageUser(userId);
++        }
++        // OWNER and EXTERNAL_TASK legitimately have no contractor user. If a
++        // user snapshot is present, keep the ordinary object-scope check.
++        return userId == null || targetAccessPolicy.canManageUser(userId);
+     }

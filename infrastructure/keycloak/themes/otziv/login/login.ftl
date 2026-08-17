@@ -59,7 +59,7 @@
           <div class="otziv-login__options">
             <#if realm.rememberMe && !usernameHidden??>
               <label class="otziv-login__remember">
-                <input tabindex="3" id="rememberMe" name="rememberMe" type="checkbox" <#if login.rememberMe??>checked</#if>>
+                <input tabindex="3" id="rememberMe" name="rememberMe" type="checkbox" checked>
                 <span>${msg("rememberMe")}</span>
               </label>
             </#if>

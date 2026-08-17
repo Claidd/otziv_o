@@ -54,6 +54,7 @@ public class OrderPaymentIntegrityService {
     private final ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
     private final OrderStatusService orderStatusService;
     private final BusinessAuditService businessAuditService;
+    private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
 
     public boolean hasSettledPaymentEvidence(Order order) {
         if (order == null) {
@@ -95,11 +96,15 @@ public class OrderPaymentIntegrityService {
         }
 
         String oldStatus = order.getStatus() == null ? "" : order.getStatus().getTitle();
-        List<PaymentLink> duplicateLinks = paymentLinkRepository.findByOrder_IdAndStatusIn(
+        List<PaymentLink> duplicateLinks = paymentLinkRepository.findByOrderIdAndStatusInForUpdate(
                 orderId,
                 DUPLICATE_ACTIVE_LINK_STATUSES
         );
         for (PaymentLink link : duplicateLinks) {
+            taskReceiptIntegrationService.release(
+                    link,
+                    "Срок резерва истек: " + RETIRED_LINK_REASON
+            );
             link.setStatus(PaymentLinkStatus.EXPIRED);
             link.setExpiresAt(LocalDateTime.now());
             link.setLastError(RETIRED_LINK_REASON);

@@ -214,7 +214,8 @@ export class MobileAuthDiagnosticsService {
       rssKb: exit.rssKb,
       description: exit.description,
       stateSummary: exit.stateSummary,
-      stateSource: exit.stateSource
+      stateSource: exit.stateSource,
+      androidStateSummaryRejected: exit.androidStateSummaryRejected
     });
   }
 

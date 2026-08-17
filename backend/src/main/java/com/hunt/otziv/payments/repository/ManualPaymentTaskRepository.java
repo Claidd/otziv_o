@@ -21,6 +21,8 @@ public interface ManualPaymentTaskRepository extends CrudRepository<ManualPaymen
         JOIN FETCH task.manager manager
         JOIN FETCH manager.user user
         JOIN FETCH task.paymentProfile profile
+        LEFT JOIN FETCH task.accountingTargetProfile targetProfile
+        LEFT JOIN FETCH targetProfile.user
         WHERE user.id = :userId
         ORDER BY task.createdAt DESC, task.id DESC
     """)
@@ -32,6 +34,8 @@ public interface ManualPaymentTaskRepository extends CrudRepository<ManualPaymen
         JOIN FETCH task.manager manager
         JOIN FETCH manager.user user
         JOIN FETCH task.paymentProfile profile
+        LEFT JOIN FETCH task.accountingTargetProfile targetProfile
+        LEFT JOIN FETCH targetProfile.user
         ORDER BY task.createdAt DESC, task.id DESC
     """)
     List<ManualPaymentTask> findAllForManagement();
@@ -42,9 +46,24 @@ public interface ManualPaymentTaskRepository extends CrudRepository<ManualPaymen
         JOIN FETCH task.manager manager
         JOIN FETCH manager.user user
         JOIN FETCH task.paymentProfile profile
+        LEFT JOIN FETCH task.accountingTargetProfile targetProfile
+        LEFT JOIN FETCH targetProfile.user
         WHERE task.id = :id
     """)
     Optional<ManualPaymentTask> findByIdWithDetails(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT task
+        FROM ManualPaymentTask task
+        JOIN FETCH task.manager manager
+        JOIN FETCH manager.user user
+        JOIN FETCH task.paymentProfile profile
+        LEFT JOIN FETCH task.accountingTargetProfile targetProfile
+        LEFT JOIN FETCH targetProfile.user
+        WHERE task.id = :id
+    """)
+    Optional<ManualPaymentTask> findByIdWithDetailsForUpdate(@Param("id") Long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT task FROM ManualPaymentTask task WHERE task.id = :id")
@@ -57,6 +76,8 @@ public interface ManualPaymentTaskRepository extends CrudRepository<ManualPaymen
         JOIN FETCH task.manager manager
         JOIN FETCH manager.user user
         JOIN FETCH task.paymentProfile profile
+        LEFT JOIN FETCH task.accountingTargetProfile targetProfile
+        LEFT JOIN FETCH targetProfile.user
         WHERE manager.id = :managerId
           AND profile.id = :profileId
           AND task.status = :status

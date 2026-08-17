@@ -1,0 +1,6 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskLedgerServiceTest.java
+@@
+ import com.hunt.otziv.payments.dto.ManualPaymentTaskReserveCommand;
++import com.hunt.otziv.payments.dto.ManualPaymentTaskBalance;
+*** End Patch

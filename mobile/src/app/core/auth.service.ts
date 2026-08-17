@@ -297,9 +297,13 @@ export class AuthService {
     return this.logoutFrom('unknown');
   }
 
-  async logoutFrom(source: MobileLogoutSource): Promise<void> {
+  async logoutFrom(
+    source: MobileLogoutSource,
+    diagnosticDetails: Record<string, MobileAuthDiagnosticValue> = {}
+  ): Promise<void> {
     const accessToken = this.tokens()?.accessToken;
     await this.recordAuthDiagnostic('auth.logout_requested', {
+      ...diagnosticDetails,
       source,
       account: this.user()?.preferredUsername ?? 'unknown'
     });
@@ -314,7 +318,7 @@ export class AuthService {
     }
     await this.revokeCurrentPushTokenBestEffort();
     await this.clearSession('anonymous');
-    void this.recordAuthDiagnostic('auth.logout_local_session_cleared', { source });
+    void this.recordAuthDiagnostic('auth.logout_local_session_cleared', { ...diagnosticDetails, source });
     await this.storage.clearPendingLogin().catch(() => undefined);
 
     const logoutUrl = new URL(`${this.issuerUrl()}/protocol/openid-connect/logout`, window.location.origin);

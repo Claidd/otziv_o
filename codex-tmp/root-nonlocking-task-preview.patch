@@ -1,0 +1,234 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/repository/ContractorRewardLedgerRepository.java
+@@
+     long sumActiveForCapacityUpdate(@Param("profileId") Long profileId);
++
++    /** Reporting/preview snapshot; never use this method for a write decision. */
++    @Query(value = """
++        SELECT COALESCE(SUM(entry.amount_kopecks), 0)
++        FROM contractor_reward_ledger entry
++        WHERE entry.profile_id = :profileId
++          AND entry.active = TRUE
++    """, nativeQuery = true)
++    long sumActiveForCapacitySnapshot(@Param("profileId") Long profileId);
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/repository/ContractorPaymentAllocationRepository.java
+@@
+     CapacityTotals capacityTotalsForUpdate(
+             @Param("profileId") Long profileId,
+             @Param("mode") String mode
+     );
++
++    /** Reporting/preview snapshot; write decisions must use capacityTotalsForUpdate. */
++    @Query(value = """
++        SELECT
++            COALESCE(SUM(GREATEST(0, allocation.confirmed_kopecks)), 0) AS confirmedKopecks,
++            COALESCE(SUM(GREATEST(0, allocation.returned_kopecks)), 0) AS returnedKopecks,
++            COALESCE(SUM(
++                CASE
++                    WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
++                        THEN GREATEST(
++                            0,
++                            allocation.amount_kopecks
++                                - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++                        )
++                    ELSE 0
++                END
++            ), 0) AS outstandingKopecks
++        FROM contractor_payment_allocations allocation
++        WHERE allocation.recipient_profile_id = :profileId
++          AND allocation.mode = :mode
++    """, nativeQuery = true)
++    CapacityTotals capacityTotalsSnapshot(
++            @Param("profileId") Long profileId,
++            @Param("mode") String mode
++    );
+@@
+     long taskCapacityExposureOutsideModeForUpdate(
+             @Param("profileId") Long profileId,
+             @Param("mode") String mode
+     );
++
++    @Query(value = """
++        SELECT COALESCE(SUM(
++            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++            + CASE
++                WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
++                    THEN GREATEST(
++                        0,
++                        allocation.amount_kopecks
++                            - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++                    )
++                ELSE 0
++              END
++        ), 0)
++        FROM contractor_payment_allocations allocation
++        WHERE allocation.recipient_profile_id = :profileId
++          AND allocation.manual_payment_task_id IS NOT NULL
++          AND allocation.mode <> :mode
++    """, nativeQuery = true)
++    long taskCapacityExposureOutsideModeSnapshot(
++            @Param("profileId") Long profileId,
++            @Param("mode") String mode
++    );
+@@
+     long taskCapacityExposureOutsideModeForUpdate(
+             @Param("profileId") Long profileId,
+             @Param("taskId") Long taskId,
+             @Param("mode") String mode
+     );
++
++    @Query(value = """
++        SELECT COALESCE(SUM(
++            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++            + CASE
++                WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
++                    THEN GREATEST(
++                        0,
++                        allocation.amount_kopecks
++                            - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++                    )
++                ELSE 0
++              END
++        ), 0)
++        FROM contractor_payment_allocations allocation
++        WHERE allocation.recipient_profile_id = :profileId
++          AND allocation.manual_payment_task_id = :taskId
++          AND allocation.mode <> :mode
++    """, nativeQuery = true)
++    long taskCapacityExposureOutsideModeSnapshot(
++            @Param("profileId") Long profileId,
++            @Param("taskId") Long taskId,
++            @Param("mode") String mode
++    );
+@@
+     long taskCapacityExposureAllModesForUpdate(
+             @Param("profileId") Long profileId,
+             @Param("taskId") Long taskId
+     );
++
++    @Query(value = """
++        SELECT COALESCE(SUM(
++            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++            + CASE
++                WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
++                    THEN GREATEST(
++                        0,
++                        allocation.amount_kopecks
++                            - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++                    )
++                ELSE 0
++              END
++        ), 0)
++        FROM contractor_payment_allocations allocation
++        WHERE allocation.recipient_profile_id = :profileId
++          AND allocation.manual_payment_task_id = :taskId
++    """, nativeQuery = true)
++    long taskCapacityExposureAllModesSnapshot(
++            @Param("profileId") Long profileId,
++            @Param("taskId") Long taskId
++    );
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentProfileService.java
+@@
+     public long capacityPosition(ContractorPaymentProfile profile, ContractorAllocationMode mode) {
+@@
+         return Math.subtractExact(Math.subtractExact(accrued, paid), outstanding);
+     }
++
++    /** Non-locking display snapshot. Never use it to authorize a financial write. */
++    public long capacityPositionSnapshot(
++            ContractorPaymentProfile profile,
++            ContractorAllocationMode mode
++    ) {
++        if (profile == null || profile.getId() == null || mode == null) {
++            return 0L;
++        }
++        long accrued = Math.addExact(
++                profile.getOpeningBalanceKopecks(),
++                rewardLedgerRepository.sumActiveForCapacitySnapshot(profile.getId())
++        );
++        ContractorPaymentAllocationRepository.CapacityTotals totals = allocationRepository
++                .capacityTotalsSnapshot(profile.getId(), mode.name());
++        long confirmed = totals == null ? 0L : totals.safeConfirmedKopecks();
++        long returned = totals == null ? 0L : totals.safeReturnedKopecks();
++        long outstanding = totals == null ? 0L : totals.safeOutstandingKopecks();
++        long paid = Math.max(0L, Math.subtractExact(confirmed, returned));
++        return Math.subtractExact(Math.subtractExact(accrued, paid), outstanding);
++    }
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskContractorCapacityService.java
+@@
+     public TargetCapacity evaluateTarget(
+             ContractorPaymentProfile profile,
+             ContractorAllocationMode mode,
+@@
+             long pendingAmountKopecks,
+             boolean pendingAlreadyBackedByThisProfile
+     ) {
++        return evaluateTarget(profile, mode, current, targetAmountKopecks,
++                confirmedAmountKopecks, pendingAmountKopecks,
++                pendingAlreadyBackedByThisProfile, false);
++    }
++
++    /** Non-locking preview for read-only task/list/options endpoints. */
++    public TargetCapacity evaluateTargetSnapshot(
++            ContractorPaymentProfile profile,
++            ContractorAllocationMode mode,
++            TaskCommitmentSnapshot current,
++            long targetAmountKopecks,
++            long confirmedAmountKopecks,
++            long pendingAmountKopecks,
++            boolean pendingAlreadyBackedByThisProfile
++    ) {
++        return evaluateTarget(profile, mode, current, targetAmountKopecks,
++                confirmedAmountKopecks, pendingAmountKopecks,
++                pendingAlreadyBackedByThisProfile, true);
++    }
++
++    private TargetCapacity evaluateTarget(
++            ContractorPaymentProfile profile,
++            ContractorAllocationMode mode,
++            TaskCommitmentSnapshot current,
++            long targetAmountKopecks,
++            long confirmedAmountKopecks,
++            long pendingAmountKopecks,
++            boolean pendingAlreadyBackedByThisProfile,
++            boolean snapshot
++    ) {
+@@
+-        long foreignProfileExposure = nonNegative(
+-                allocationRepository.taskCapacityExposureOutsideModeForUpdate(
+-                        profile.getId(), mode.name()));
+-        long ownForeignExposure = safeCurrent.taskId() == null ? 0L : nonNegative(
+-                allocationRepository.taskCapacityExposureOutsideModeForUpdate(
+-                        profile.getId(), safeCurrent.taskId(), mode.name()));
+-        long ownAllModeExposure = safeCurrent.taskId() == null ? 0L : nonNegative(
+-                allocationRepository.taskCapacityExposureAllModesForUpdate(
+-                        profile.getId(), safeCurrent.taskId()));
++        long foreignProfileExposure = nonNegative(snapshot
++                ? allocationRepository.taskCapacityExposureOutsideModeSnapshot(
++                        profile.getId(), mode.name())
++                : allocationRepository.taskCapacityExposureOutsideModeForUpdate(
++                        profile.getId(), mode.name()));
++        long ownForeignExposure = safeCurrent.taskId() == null ? 0L : nonNegative(snapshot
++                ? allocationRepository.taskCapacityExposureOutsideModeSnapshot(
++                        profile.getId(), safeCurrent.taskId(), mode.name())
++                : allocationRepository.taskCapacityExposureOutsideModeForUpdate(
++                        profile.getId(), safeCurrent.taskId(), mode.name()));
++        long ownAllModeExposure = safeCurrent.taskId() == null ? 0L : nonNegative(snapshot
++                ? allocationRepository.taskCapacityExposureAllModesSnapshot(
++                        profile.getId(), safeCurrent.taskId())
++                : allocationRepository.taskCapacityExposureAllModesForUpdate(
++                        profile.getId(), safeCurrent.taskId()));
+@@
+-        long position = profileService.capacityPosition(profile, mode);
++        long position = snapshot
++                ? profileService.capacityPositionSnapshot(profile, mode)
++                : profileService.capacityPosition(profile, mode);
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskAccountingTargetPolicy.java
+@@
+-                    capacityService.evaluateTarget(
++                    capacityService.evaluateTargetSnapshot(
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskService.java
+@@
+-                : contractorCapacityService.evaluateTarget(
++                : contractorCapacityService.evaluateTargetSnapshot(
+*** End Patch

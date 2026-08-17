@@ -1,0 +1,37 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/PaymentLinkService.java
+@@
+     public Optional<PaymentRouteSelection> selectCommonInvoiceTaskRoute(
+             com.hunt.otziv.common_billing.model.CommonInvoice invoice,
+             Manager manager,
+             long amountKopecks
+     ) {
++        // A new task route is safe only while the typed actual-recipient flow
++        // is authoritative. Existing frozen routes are handled by the caller
++        // before this selector is reached.
++        if (!actualPaymentAttributionService.actualRecipientAccountingEnabled()) {
++            invoice.setPaymentRouteManualTaskSourceGeneration(null);
++            return Optional.empty();
++        }
+         PaymentProfile profile = paymentProfileService.lockForRouting(
+                 paymentProfileService.selectForManager(manager));
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/service/CommonBillingService.java
+@@
+     private void ensureGenericConfirmationDoesNotUseContractorSource(CommonInvoice invoice) {
+-        if (isFrozenLiveContractorSource(invoice)) {
++        if (isFrozenLiveContractorSource(invoice)
++                || isFrozenManualTaskSource(invoice)) {
+             throw new ResponseStatusException(
+                     HttpStatus.CONFLICT,
+-                    "Поступление по реквизитам специалиста или менеджера подтверждается только сверкой конкретного счета"
++                    "Поступление по зафиксированному получателю подтверждается только с указанием фактического получателя"
+             );
+         }
+     }
++
++    private boolean isFrozenManualTaskSource(CommonInvoice invoice) {
++        return invoice != null
++                && hasFrozenCommonPaymentRoute(invoice)
++                && invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK;
++    }
+*** End Patch

@@ -1,0 +1,68 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowService.java
+@@
+         for (ContractorAllocationMode mode : modes) {
+             ContractorPaymentAllocation snapshot = latestAllocation(
+                     mode, ContractorAllocationSourceType.PAYMENT_LINK, paymentLinkId
+             ).orElse(null);
+             if (snapshot != null) {
+                 snapshots.add(snapshot);
+             }
+         }
++        if (RETURNED_LINK_STATUSES.contains(link.getStatus())) {
++            PaymentLinkActualReturnPlan actualReturnPlan = paymentLinkActualReturnPlan(link, snapshots);
++            if (actualReturnPlan.attributionPresent()) {
++                return reconcileAttributedPaymentLinkReturn(
++                        link, snapshots, actualReturnPlan, LocalDateTime.now()
++                );
++            }
++        }
+         int updated = 0;
+@@
+         if (snapshot == null || !RECONCILABLE_STATUSES.contains(snapshot.getStatus())) {
+             return snapshot;
+         }
+         LocalDateTime now = databaseNow();
++        if (snapshot.getSourceType() == ContractorAllocationSourceType.ACTUAL_PAYMENT) {
++            ContractorActualPaymentAttribution row = actualPaymentAttributionRepository
++                    .findById(snapshot.getSourceId()).orElse(null);
++            if (row == null || row.getSourceKind() != ContractorActualPaymentSourceKind.PAYMENT_LINK) {
++                throw new ContractorReconciliationRequiredException(
++                        "Фактическое назначение не связано с платежной ссылкой"
++                );
++            }
++            PaymentSourcePrelude sourcePrelude = lockPaymentSourceOrderFirst(row.getSourceId(), row.getOrderId());
++            if (sourcePrelude == null || sourcePrelude.link() == null) {
++                throw new ContractorReconciliationRequiredException(
++                        "Источник фактического назначения больше не существует"
++                );
++            }
++            PaymentLink link = sourcePrelude.link();
++            if (!RETURNED_LINK_STATUSES.contains(link.getStatus())) {
++                return snapshot;
++            }
++            taskReturnBridge.recordAuthoritativePaymentLinkReturn(link);
++            List<ContractorPaymentAllocation> sourceSnapshots = paymentLinkSourceSnapshots(link.getId());
++            PaymentLinkActualReturnPlan plan = paymentLinkActualReturnPlan(link, sourceSnapshots);
++            Map<Long, ContractorPaymentAllocation> reconciled = reconcileAttributedPaymentLinkReturnLocked(
++                    link, sourceSnapshots, plan, now
++            );
++            return reconciled.getOrDefault(snapshot.getId(), snapshot);
++        }
+         if (snapshot.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK) {
+@@
+             }
+             PaymentLink link = sourcePrelude.link();
++            if (link != null && RETURNED_LINK_STATUSES.contains(link.getStatus())) {
++                taskReturnBridge.recordAuthoritativePaymentLinkReturn(link);
++                List<ContractorPaymentAllocation> sourceSnapshots = paymentLinkSourceSnapshots(link.getId());
++                PaymentLinkActualReturnPlan plan = paymentLinkActualReturnPlan(link, sourceSnapshots);
++                if (plan.attributionPresent()) {
++                    Map<Long, ContractorPaymentAllocation> reconciled = reconcileAttributedPaymentLinkReturnLocked(
++                            link, sourceSnapshots, plan, now
++                    );
++                    return reconciled.getOrDefault(snapshot.getId(), snapshot);
++                }
++            }
+             ManualPaymentTaskContractorReturnBridge.Binding taskReturnBinding = link == null
+*** End Patch

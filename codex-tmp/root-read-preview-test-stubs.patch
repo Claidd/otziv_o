@@ -1,0 +1,14 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskAccountingTargetPolicyTest.java
+@@
+-        when(capacityService.evaluateTarget(
++        when(capacityService.evaluateTargetSnapshot(
+                 any(), any(), any(), anyLong(), anyLong(), anyLong(), anyBoolean()
+         )).thenReturn(new ManualPaymentTaskContractorCapacityService.TargetCapacity(
+                 500_000L, 0L, 0L, 500_000L, 100_000L, 0L));
+@@
+-        when(capacityService.evaluateTarget(
++        when(capacityService.evaluateTargetSnapshot(
+                 any(), any(), any(), anyLong(), anyLong(), anyLong(), anyBoolean()
+         )).thenReturn(new ManualPaymentTaskContractorCapacityService.TargetCapacity(
+*** End Patch

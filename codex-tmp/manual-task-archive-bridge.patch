@@ -1,0 +1,134 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridge.java
+@@
+ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
++import com.hunt.otziv.payments.repository.ManualPaymentTaskArchivedSourceRepository;
+@@
+     private final CommonInvoiceRepository commonInvoiceRepository;
+     private final ManualPaymentTaskLedgerService taskLedgerService;
++    private final ManualPaymentTaskArchivedSourceRepository archivedSourceRepository;
+@@
+         if (row.getSourceKind() == ContractorActualPaymentSourceKind.PAYMENT_LINK) {
+-            PaymentLink link = paymentLinkRepository.findByIdForUpdate(row.getSourceId())
+-                    .orElseThrow(ManualPaymentTaskRouteErrors::stale);
++            PaymentLink link = paymentLinkRepository.findByIdForUpdate(row.getSourceId())
++                    .orElse(null);
++            if (link == null) {
++                return lockArchivedActualPaymentBinding(row, allocation);
++            }
+@@
+         if (row.getSourceKind() == ContractorActualPaymentSourceKind.COMMON_INVOICE) {
+-            CommonInvoice invoice = commonInvoiceRepository.findByIdForUpdate(row.getSourceId())
+-                    .orElseThrow(ManualPaymentTaskRouteErrors::stale);
++            CommonInvoice invoice = commonInvoiceRepository.findByIdForUpdate(row.getSourceId())
++                    .orElse(null);
++            if (invoice == null) {
++                return lockArchivedActualPaymentBinding(row, allocation);
++            }
+@@
+         throw ManualPaymentTaskRouteErrors.stale();
+     }
++
++    /**
++     * Locks a deleted live source through its immutable archive row, then
++     * reconstructs the exact task generation from attribution + task ledger.
++     * This is the only fallback accepted by the manual return API.
++     */
++    @Transactional(propagation = Propagation.MANDATORY)
++    public Binding lockArchivedSourceBinding(ContractorPaymentAllocation allocation) {
++        if (allocation == null || allocation.getId() == null
++                || allocation.getSourceId() == null) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        ContractorActualPaymentSourceKind sourceKind;
++        if (allocation.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK) {
++            sourceKind = ContractorActualPaymentSourceKind.PAYMENT_LINK;
++        } else if (allocation.getSourceType() == ContractorAllocationSourceType.COMMON_INVOICE) {
++            sourceKind = ContractorActualPaymentSourceKind.COMMON_INVOICE;
++        } else {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        lockArchivedSource(sourceKind, allocation.getSourceId());
++        List<ContractorActualPaymentAttribution> rows = attributionRepository
++                .findAllBySourceForUpdate(sourceKind, allocation.getSourceId());
++        if (rows.isEmpty()) {
++            return Binding.none(allocation);
++        }
++        boolean allocationWasReused = rows.stream().allMatch(row ->
++                Objects.equals(row.getOriginalAllocationId(), allocation.getId())
++                        && sameContractor(row, allocation));
++        if (!allocationWasReused) {
++            return Binding.none(allocation);
++        }
++        List<ContractorActualPaymentAttribution> taskRows = rows.stream()
++                .filter(this::taskDestination)
++                .toList();
++        if (taskRows.isEmpty()) {
++            return Binding.none(allocation);
++        }
++        if (rows.size() != 1 || taskRows.size() != 1) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        ContractorActualPaymentAttribution row = taskRows.getFirst();
++        requireSourceRow(row, sourceKind, allocation.getSourceId());
++        requireSourceAllocation(row, allocation);
++        return bindArchived(row, allocation);
++    }
++
++    private Binding lockArchivedActualPaymentBinding(
++            ContractorActualPaymentAttribution snapshot,
++            ContractorPaymentAllocation allocation
++    ) {
++        lockArchivedSource(snapshot.getSourceKind(), snapshot.getSourceId());
++        ContractorActualPaymentAttribution row = attributionRepository
++                .findByIdForUpdate(snapshot.getId())
++                .orElseThrow(ManualPaymentTaskRouteErrors::stale);
++        requireSourceRow(row, snapshot.getSourceKind(), snapshot.getSourceId());
++        requireActualAllocation(row, allocation);
++        if (!taskDestination(row)) {
++            return Binding.none(allocation);
++        }
++        return bindArchived(row, allocation);
++    }
++
++    private Binding bindArchived(
++            ContractorActualPaymentAttribution row,
++            ContractorPaymentAllocation allocation
++    ) {
++        ManualPaymentTaskLedgerSourceKind sourceKind = row.getSourceKind()
++                == ContractorActualPaymentSourceKind.PAYMENT_LINK
++                ? ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK
++                : ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE;
++        ManualPaymentTaskLedgerService.LockedArchivedReturnSource locked =
++                taskLedgerService.lockArchivedReturnSource(
++                        row.getActualManualPaymentTaskId(),
++                        row.getActualManualPaymentTaskGeneration(),
++                        sourceKind,
++                        row.getSourceId()
++                );
++        return new Binding(
++                row.getId(),
++                row.getActualManualPaymentTaskId(),
++                locked.source(),
++                allocation.getId(),
++                allocation.getMode(),
++                allocation.getSourceType(),
++                allocation.getSourceId(),
++                row.getAmountKopecks(),
++                locked.returnedKopecks()
++        );
++    }
++
++    private void lockArchivedSource(
++            ContractorActualPaymentSourceKind sourceKind,
++            Long sourceId
++    ) {
++        boolean locked = sourceKind == ContractorActualPaymentSourceKind.PAYMENT_LINK
++                ? archivedSourceRepository.lockPaymentLink(sourceId)
++                : sourceKind == ContractorActualPaymentSourceKind.COMMON_INVOICE
++                        && archivedSourceRepository.lockCommonInvoice(sourceId);
++        if (!locked) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++    }
+*** End Patch

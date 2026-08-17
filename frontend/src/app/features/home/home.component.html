@@ -439,7 +439,7 @@
                 >
               </label>
               <label>
-                <span>Получатель</span>
+                <span>Получатель в банке</span>
                 <input
                   type="text"
                   autocomplete="name"
@@ -458,7 +458,7 @@
                 >
               </label>
               <label>
-                <span>Получатель</span>
+                <span>Получатель в банке</span>
                 <input
                   type="text"
                   autocomplete="name"
@@ -585,6 +585,43 @@
                 (ngModelChange)="setManualTaskAmount($event)"
               >
             </label>
+            <label class="manual-task-accounting-field">
+              <span>Кому учитывать оплату</span>
+              <select
+                [ngModel]="manualTaskAccountingTargetKey()"
+                (ngModelChange)="setManualTaskAccountingTarget($event)"
+                [disabled]="manualTaskAccountingTargetsLoading() || !manualTaskAmountRubles()"
+              >
+                <option value="">Выберите получателя</option>
+                @for (target of manualTaskAccountingTargets(); track target.key) {
+                  <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">
+                    {{ target.label }}
+                  </option>
+                }
+              </select>
+            </label>
+            @if (manualTaskAccountingTargetsLoading()) {
+              <small class="manual-task-accounting-note">Проверяем доступный лимит…</small>
+            } @else if (manualTaskAccountingTargetError()) {
+              <small class="manual-task-accounting-warning" role="alert">{{ manualTaskAccountingTargetError() }}</small>
+            } @else if (selectedManualTaskAccountingTarget(); as target) {
+              <div class="manual-task-accounting-preview">
+                <strong>{{ target.label }}</strong>
+                <small>{{ manualTaskTargetEffect(target) }}</small>
+                @if (target.currentAvailableKopecks != null) {
+                  <small>Доступно сейчас: {{ formatKopecks(target.currentAvailableKopecks) }}</small>
+                }
+                @if ((target.projectedOverrunKopecks || 0) > 0) {
+                  <small class="manual-task-accounting-warning">
+                    Превышение: {{ formatKopecks(target.projectedOverrunKopecks) }}. Оно будет записано как аномалия, сумма не будет уменьшена или перенаправлена владельцу.
+                  </small>
+                  <label class="manual-task-accounting-ack">
+                    <input type="checkbox" [ngModel]="manualTaskAccountingTargetAcknowledged()" (ngModelChange)="setManualTaskAccountingTargetAcknowledged($event)">
+                    <span>Подтверждаю создание задания с этим превышением.</span>
+                  </label>
+                }
+              </div>
+            }
             <label>
               <span>Комментарий</span>
               <input
@@ -602,6 +639,14 @@
               <span class="material-icons-sharp">{{ manualTaskSaving() ? 'hourglass_top' : 'add' }}</span>
               {{ manualTaskSaving() ? 'Создаю' : 'Создать задание' }}
             </button>
+            <button
+              type="button"
+              class="secondary manual-task-create"
+              (click)="resetManualPaymentTaskDraft()"
+              [disabled]="manualTaskSaving()"
+            >
+              Новый черновик
+            </button>
           </div>
 
           <div class="manual-task-list">
@@ -611,6 +656,9 @@
                   <div>
                     <strong>{{ manualTaskTitle(task) }}</strong>
                     <small>{{ manualTaskSubtitle(task) }}</small>
+                    <small>
+                      Учёт: {{ task.accountingTargetResolved === false ? 'получатель задания не привязан' : (task.accountingTargetLabel || 'не указан') }}
+                    </small>
                   </div>
                   <span class="task-status">{{ manualTaskStatusLabel(task.status) }}</span>
                 </header>
@@ -636,6 +684,14 @@
                 @if (task.comment) {
                   <p>{{ task.comment }}</p>
                 }
+                @if (task.accountingTargetResolved === false) {
+                  <p class="manual-task-accounting-warning" role="alert">Новые счета по заданию заблокированы, пока получатель не будет привязан.</p>
+                }
+                @if ((task.targetProjectedOverrunKopecks || 0) > 0) {
+                  <p class="manual-task-accounting-warning" role="alert">
+                    Нужна сверка: учёт получателя превышает доступный лимит на {{ formatKopecks(task.targetProjectedOverrunKopecks) }}.
+                  </p>
+                }
                 @if (manualTaskEditingId() === task.id) {
                   <div class="manual-task-edit-form">
                     <div class="manual-mode-toggle" aria-label="Способ задания">
@@ -651,12 +707,43 @@
                     @if (manualTaskEditPaymentType() === 'EXTERNAL_LINK') {
                       <label><span>Ссылка оплаты</span><input type="url" [ngModel]="manualTaskEditPaymentUrl()" (ngModelChange)="setManualTaskEditPaymentUrl($event)"></label>
                       <label><span>Текст кнопки</span><input [ngModel]="manualTaskEditPaymentButtonLabel()" (ngModelChange)="setManualTaskEditPaymentButtonLabel($event)"></label>
-                      <label><span>Получатель</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                      <label><span>Получатель в банке</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
                     } @else {
                       <label><span>Телефон</span><input autocomplete="tel" [ngModel]="manualTaskEditPhone()" (ngModelChange)="setManualTaskEditPhone($event)" placeholder="+7..."></label>
-                      <label><span>Получатель</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                      <label><span>Получатель в банке</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
                     }
                     <label><span>Цель, руб.</span><input type="number" min="1" step="100" [ngModel]="manualTaskEditAmountRubles()" (ngModelChange)="setManualTaskEditAmount($event)"></label>
+                    <label>
+                      <span>Кому учитывать оплату</span>
+                      <select [ngModel]="manualTaskEditAccountingTargetKey()" (ngModelChange)="setManualTaskEditAccountingTarget($event)" [disabled]="manualTaskEditAccountingTargetsLoading()">
+                        <option value="">Выберите получателя</option>
+                        @for (target of manualTaskEditAccountingTargets(); track target.key) {
+                          <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">{{ target.label }}</option>
+                        }
+                      </select>
+                    </label>
+                    @if (manualTaskEditAccountingTargetsLoading()) {
+                      <small class="manual-task-accounting-note">Пересчитываем лимит…</small>
+                    } @else if (manualTaskEditAccountingTargetError()) {
+                      <small class="manual-task-accounting-warning" role="alert">{{ manualTaskEditAccountingTargetError() }}</small>
+                    } @else if (selectedManualTaskEditAccountingTarget(); as target) {
+                      <div class="manual-task-accounting-preview">
+                        <strong>{{ target.label }}</strong>
+                        <small>{{ manualTaskTargetEffect(target) }}</small>
+                        @if (target.currentAvailableKopecks != null) {
+                          <small>Доступно сейчас: {{ formatKopecks(target.currentAvailableKopecks) }}</small>
+                        }
+                        @if ((target.projectedOverrunKopecks || 0) > 0) {
+                          <small class="manual-task-accounting-warning">
+                            Превышение: {{ formatKopecks(target.projectedOverrunKopecks) }}. Система сохранит его как аномалию.
+                          </small>
+                          <label class="manual-task-accounting-ack">
+                            <input type="checkbox" [ngModel]="manualTaskEditAccountingTargetAcknowledged()" (ngModelChange)="setManualTaskEditAccountingTargetAcknowledged($event)">
+                            <span>Подтверждаю сохранение задания с этим превышением.</span>
+                          </label>
+                        }
+                      </div>
+                    }
                     <label><span>Комментарий</span><input [ngModel]="manualTaskEditComment()" (ngModelChange)="setManualTaskEditComment($event)"></label>
                   </div>
                   <footer>

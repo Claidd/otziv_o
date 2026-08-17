@@ -1,0 +1,10 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/repository/ContractorPaymentAccountingPhaseRepository.java
+@@
+                        WHEN balance.pending_kopecks < 0
+                          OR balance.confirmed_kopecks < 0
+-                         OR balance.unverified_confirmation > 0
++                         OR (balance.confirmed_kopecks > 0
++                             AND balance.unverified_confirmation > 0)
+                        THEN 1 ELSE 0
+*** End Patch

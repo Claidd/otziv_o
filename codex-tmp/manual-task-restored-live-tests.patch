@@ -1,0 +1,119 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowServiceTest.java
+@@
+         when(allocationRepository.findLatestIdForUpdate("LIVE", "PAYMENT_LINK", 108L))
+                 .thenReturn(Optional.of(107L));
+-        when(paymentLinkRepository.findByIdForUpdate(108L)).thenReturn(Optional.of(new PaymentLink()));
++        PaymentLink lockedLink = new PaymentLink();
++        lockedLink.setId(108L);
++        when(paymentLinkRepository.findByIdForUpdate(108L)).thenReturn(Optional.of(lockedLink));
++        when(taskReturnBridge.lockPaymentLinkBinding(allocation, lockedLink))
++                .thenReturn(ManualPaymentTaskContractorReturnBridge.Binding.none(allocation));
+@@
+         when(allocationRepository.findLatestIdForUpdate("LIVE", "PAYMENT_LINK", 1_080L))
+                 .thenReturn(Optional.of(1_070L));
+-        when(paymentLinkRepository.findByIdForUpdate(1_080L)).thenReturn(Optional.of(new PaymentLink()));
++        PaymentLink lockedLink = new PaymentLink();
++        lockedLink.setId(1_080L);
++        when(paymentLinkRepository.findByIdForUpdate(1_080L)).thenReturn(Optional.of(lockedLink));
++        when(taskReturnBridge.lockPaymentLinkBinding(allocation, lockedLink))
++                .thenReturn(ManualPaymentTaskContractorReturnBridge.Binding.none(allocation));
+@@
+-    void archivedConfirmedTaskCommonInvoiceSupportsPartialFullAndReplayInLockOrder() {
++    void restoredConfirmedTaskCommonInvoiceSupportsPartialFullAndReplayInLockOrder() {
+@@
+         allocation.setSourceId(1_083L);
+         allocation.setStatus(ContractorAllocationStatus.CONFIRMED);
++        CommonInvoice restoredInvoice = new CommonInvoice();
++        restoredInvoice.setId(1_083L);
++        restoredInvoice.setPaymentRouteManualSource(com.hunt.otziv.payments.model.ManualPaymentSource.MANUAL_TASK);
++        restoredInvoice.setPaymentRouteManualTaskId(16L);
+         ManualPaymentTaskContractorReturnBridge.Binding binding =
+@@
+         when(allocationRepository.findLatestIdForUpdate("LIVE", "COMMON_INVOICE", 1_083L))
+                 .thenReturn(Optional.of(1_073L));
+         when(profileRepository.findByIdForUpdate(1_090L)).thenReturn(Optional.of(profile));
+-        when(commonInvoiceRepository.findByIdForUpdate(1_083L)).thenReturn(Optional.empty());
+-        when(taskReturnBridge.lockArchivedSourceBinding(allocation)).thenReturn(binding);
++        when(commonInvoiceRepository.findByIdForUpdate(1_083L)).thenReturn(Optional.of(restoredInvoice));
++        when(taskReturnBridge.lockCommonInvoiceBinding(allocation, restoredInvoice)).thenReturn(binding);
+@@
+         verify(taskReturnBridge, times(3)).recordReturn(binding, allocation);
+         InOrder locks = inOrder(taskReturnBridge, profileRepository, allocationRepository);
+-        locks.verify(taskReturnBridge).lockArchivedSourceBinding(allocation);
++        locks.verify(taskReturnBridge).lockCommonInvoiceBinding(allocation, restoredInvoice);
+         locks.verify(profileRepository).findByIdForUpdate(1_090L);
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridgeTest.java
+@@
+ import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.times;
+ import static org.mockito.Mockito.verify;
+@@
+     void archivedCommonActualAllocationUsesAttributionAndLedgerWithoutLiveInvoice() {
+         Scenario scenario = actualScenario(ContractorActualPaymentSourceKind.COMMON_INVOICE);
++        when(commonInvoiceRepository.findByIdForUpdate(scenario.source().sourceId()))
++                .thenReturn(Optional.empty());
+         when(archivedSourceRepository.lockCommonInvoice(scenario.source().sourceId())).thenReturn(true);
+@@
+         assertReturn(ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE, 75_000L, AMOUNT);
+     }
++
++    @Test
++    void restoredCommonSourceUsesLedgerForPartialFullAndReplayWithoutV252Fields() {
++        Scenario scenario = sourceScenario(ContractorActualPaymentSourceKind.COMMON_INVOICE);
++        scenario.invoice().setPaymentRouteManualTaskGeneration(null);
++        scenario.invoice().setPaymentRouteManualTaskSourceGeneration(null);
++        when(taskLedgerService.lockArchivedReturnSource(
++                TASK_ID,
++                TASK_GENERATION,
++                ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE,
++                scenario.source().sourceId()
++        )).thenReturn(
++                new ManualPaymentTaskLedgerService.LockedArchivedReturnSource(
++                        scenario.source(), 0L),
++                new ManualPaymentTaskLedgerService.LockedArchivedReturnSource(
++                        scenario.source(), 25_000L),
++                new ManualPaymentTaskLedgerService.LockedArchivedReturnSource(
++                        scenario.source(), AMOUNT)
++        );
++
++        ManualPaymentTaskContractorReturnBridge.Binding partial =
++                service.lockCommonInvoiceBinding(scenario.allocation(), scenario.invoice());
++        scenario.allocation().setReturnedKopecks(25_000L);
++        service.recordReturn(partial, scenario.allocation());
++        ManualPaymentTaskContractorReturnBridge.Binding full =
++                service.lockCommonInvoiceBinding(scenario.allocation(), scenario.invoice());
++        scenario.allocation().setReturnedKopecks(AMOUNT);
++        service.recordReturn(full, scenario.allocation());
++        ManualPaymentTaskContractorReturnBridge.Binding replay =
++                service.lockCommonInvoiceBinding(scenario.allocation(), scenario.invoice());
++        service.recordReturn(replay, scenario.allocation());
++
++        ArgumentCaptor<ManualPaymentTaskReturnCommand> commands =
++                ArgumentCaptor.forClass(ManualPaymentTaskReturnCommand.class);
++        verify(taskLedgerService, times(2)).recordReturn(commands.capture());
++        assertEquals(List.of(25_000L, 75_000L), commands.getAllValues().stream()
++                .map(ManualPaymentTaskReturnCommand::amountKopecks)
++                .toList());
++        assertEquals(List.of(25_000L, AMOUNT), commands.getAllValues().stream()
++                .map(command -> Long.parseLong(command.operationKey()
++                        .substring(command.operationKey().lastIndexOf(':') + 1)))
++                .toList());
++        verify(taskLedgerService, times(3)).lockArchivedReturnSource(
++                TASK_ID,
++                TASK_GENERATION,
++                ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE,
++                scenario.source().sourceId()
++        );
++        verify(archivedSourceRepository, never()).lockCommonInvoice(any());
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskLedgerServiceTest.java
+@@
+ import org.mockito.junit.jupiter.MockitoExtension;
++import org.springframework.web.server.ResponseStatusException;
+@@
+         assertThat(error)
+-                .isInstanceOf(CodedResponseStatusException.class)
++                .isInstanceOf(ResponseStatusException.class)
+                 .hasMessageContaining("неоднозначен");
+*** End Patch

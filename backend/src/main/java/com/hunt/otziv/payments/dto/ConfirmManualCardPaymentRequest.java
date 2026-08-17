@@ -14,8 +14,17 @@ public record ConfirmManualCardPaymentRequest(
         String note,
         String receiptUrl,
         ContractorRecipientType recipientType,
-        Long recipientProfileId
+        Long recipientProfileId,
+        String recipientKey
 ) {
+    public ConfirmManualCardPaymentRequest(
+            Boolean recipientStatementChecked, Boolean paymentReceived, Long receivedAmountKopecks,
+            String note, String receiptUrl, ContractorRecipientType recipientType, Long recipientProfileId
+    ) {
+        this(recipientStatementChecked, paymentReceived, receivedAmountKopecks, note, receiptUrl,
+                recipientType, recipientProfileId, null);
+    }
+
     public ConfirmManualCardPaymentRequest(
             Boolean recipientStatementChecked,
             Boolean paymentReceived,
@@ -23,6 +32,6 @@ public record ConfirmManualCardPaymentRequest(
             String note,
             String receiptUrl
     ) {
-        this(recipientStatementChecked, paymentReceived, receivedAmountKopecks, note, receiptUrl, null, null);
+        this(recipientStatementChecked, paymentReceived, receivedAmountKopecks, note, receiptUrl, null, null, null);
     }
 }

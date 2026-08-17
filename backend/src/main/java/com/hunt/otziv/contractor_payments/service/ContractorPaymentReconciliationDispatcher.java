@@ -41,9 +41,9 @@ public class ContractorPaymentReconciliationDispatcher {
 
     @Scheduled(fixedDelayString = "${otziv.contractor-payments.reconcile-delay-ms:60000}")
     public void reconcile() {
-        if (appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true)) {
-            dispatchMode(ContractorAllocationMode.SHADOW);
-        }
+        // The switch gates only new SHADOW allocations. Persisted attempts
+        // remain financial obligations and must always be polled to terminality.
+        dispatchMode(ContractorAllocationMode.SHADOW);
         dispatchMode(ContractorAllocationMode.LIVE);
     }
 

@@ -1,0 +1,26 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridgeTest.java
+@@
+ import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.inOrder;
+ import static org.mockito.Mockito.never;
+@@
+ import org.mockito.ArgumentCaptor;
++import org.mockito.InOrder;
+@@
+         ManualPaymentTaskContractorReturnBridge.Binding binding =
+                 service.lockArchivedSourceBinding(scenario.allocation());
++        InOrder locks = inOrder(archivedSourceRepository, attributionRepository, taskLedgerService);
++        locks.verify(archivedSourceRepository).lockPaymentLink(scenario.source().sourceId());
++        locks.verify(attributionRepository).findAllBySourceForUpdate(
++                ContractorActualPaymentSourceKind.PAYMENT_LINK,
++                scenario.source().sourceId()
++        );
++        locks.verify(taskLedgerService).lockArchivedReturnSource(
++                TASK_ID,
++                TASK_GENERATION,
++                ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK,
++                scenario.source().sourceId()
++        );
+         scenario.allocation().setReturnedKopecks(55_000L);
+*** End Patch

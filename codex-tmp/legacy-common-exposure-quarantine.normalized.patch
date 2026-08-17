@@ -1,0 +1,239 @@
+*** Begin Patch
+*** Update File: backend/src/main/resources/db/migration/V1_10_251__manual_payment_task_accounting_ledger.sql
+@@
+ FROM common_invoices invoice
+ JOIN manual_payment_tasks task ON task.id = invoice.payment_route_manual_task_id
+ WHERE invoice.payment_route_manual_source = 'MANUAL_TASK'
+@@
+   )
+-  AND invoice.paid_kopecks < invoice.amount_kopecks;
++  AND invoice.paid_kopecks < invoice.amount_kopecks
++  AND invoice.payment_route_amount_kopecks <= invoice.amount_kopecks
++  AND invoice.paid_kopecks >= GREATEST(
++      0, invoice.amount_kopecks - invoice.payment_route_amount_kopecks
++  );
++
++-- A partially-paid invoice can legitimately retain the entire frozen route:
++-- paid_kopecks may include evidence that predates the task route. Preserve the
++-- conservative exposure, but force explicit reconciliation when paid evidence
++-- exceeds that baseline. Impossible route arithmetic is quarantined without
++-- inventing a task reserve.
++UPDATE common_invoices invoice
++JOIN manual_payment_tasks task ON task.id = invoice.payment_route_manual_task_id
++SET invoice.status = 'NEEDS_ATTENTION',
++    task.status = 'NEEDS_ATTENTION',
++    task.needs_reconciliation = TRUE
++WHERE invoice.payment_route_manual_source = 'MANUAL_TASK'
++  AND invoice.payment_route_selected_at IS NOT NULL
++  AND invoice.payment_route_amount_kopecks > 0
++  AND invoice.paid_kopecks < invoice.amount_kopecks
++  AND (
++      invoice.payment_route_amount_kopecks > invoice.amount_kopecks
++      OR invoice.paid_kopecks < GREATEST(
++          0, invoice.amount_kopecks - invoice.payment_route_amount_kopecks
++      )
++      OR invoice.paid_kopecks > GREATEST(
++          0, invoice.amount_kopecks - invoice.payment_route_amount_kopecks
++      )
++  );
++
++-- A closed task with a still-positive exact source reserve is not terminal.
++-- Reopen it for attention so the administrator can bind or release that
++-- source instead of leaving hidden exposure under COMPLETED/CANCELED.
++UPDATE manual_payment_tasks task
++SET task.status = 'NEEDS_ATTENTION',
++    task.needs_reconciliation = TRUE
++WHERE task.status IN ('COMPLETED', 'CANCELED')
++  AND EXISTS (
++      SELECT 1
++      FROM manual_payment_task_ledger_entries source_entry
++      WHERE source_entry.task_id = task.id
++        AND source_entry.source_kind IN ('PAYMENT_LINK', 'COMMON_INVOICE')
++      GROUP BY source_entry.source_kind,
++               source_entry.source_id,
++               source_entry.source_generation
++      HAVING SUM(source_entry.reserved_delta_kopecks) > 0
++  );
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptIntegrationService.java
+@@
+         long routeAmount = invoice.getPaymentRouteAmountKopecks() == null
+                 ? 0 : invoice.getPaymentRouteAmountKopecks();
++        long invoiceAmount = invoice.getAmountKopecks();
++        long paidAmount = invoice.getPaidKopecks();
++        long paidBaseline = routeAmount > invoiceAmount
++                ? -1L : Math.max(0L, invoiceAmount - routeAmount);
+         if (invoice.getPaymentRouteManualSource() != ManualPaymentSource.MANUAL_TASK
+@@
+-                || invoice.getPaidKopecks() >= invoice.getAmountKopecks()
++                || routeAmount <= 0
++                || routeAmount > invoiceAmount
++                || paidAmount < paidBaseline
++                || paidAmount >= invoiceAmount
+                 || routeAmount != snapshot.reservedAmountKopecks()) {
+             throw ManualPaymentTaskRouteErrors.stale();
+         }
++        if (paidAmount > paidBaseline) {
++            // Do not reinterpret pre-existing/other paid evidence as task
++            // confirmation. Keep the full frozen exposure and make the
++            // anomaly explicit until an administrator reconciles it.
++            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
++            task.setStatus(com.hunt.otziv.payments.model.ManualPaymentTaskStatus.NEEDS_ATTENTION);
++            task.setNeedsReconciliation(true);
++        }
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskAccountingLedgerMigrationContractTest.java
+@@
+     void legacyPendingBackfillIncludesExpiredRowsForDeterministicRuntimeRelease() throws Exception {
+@@
+     }
++
++    @Test
++    void commonLegacyExposureIsArithmeticCheckedAndClosedTasksAreReopened() throws Exception {
++        String sql = migration().toUpperCase(Locale.ROOT);
++
++        assertThat(sql).contains(
++                "INVOICE.PAYMENT_ROUTE_AMOUNT_KOPECKS <= INVOICE.AMOUNT_KOPECKS",
++                "INVOICE.PAID_KOPECKS >= GREATEST(",
++                "INVOICE.AMOUNT_KOPECKS - INVOICE.PAYMENT_ROUTE_AMOUNT_KOPECKS",
++                "SET INVOICE.STATUS = 'NEEDS_ATTENTION'",
++                "TASK.STATUS = 'NEEDS_ATTENTION'",
++                "TASK.NEEDS_RECONCILIATION = TRUE",
++                "TASK.STATUS IN ('COMPLETED', 'CANCELED')",
++                "HAVING SUM(SOURCE_ENTRY.RESERVED_DELTA_KOPECKS) > 0"
++        );
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptLegacyBindingTest.java
+@@
+ import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.verify;
+ import static org.mockito.Mockito.when;
+@@
+ import com.hunt.otziv.common_billing.model.CommonInvoice;
++import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
+@@
++import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
+ import com.hunt.otziv.contractor_payments.service.ManualPaymentTaskContractorReservationService;
+@@
++import com.hunt.otziv.payments.model.ManualPaymentTaskStatus;
+@@
++import java.util.List;
+ import java.util.Optional;
+@@
+     private ManualPaymentTaskLedgerService ledgerService;
++    private ManualPaymentTaskContractorReservationService reservationService;
++    private PaymentLinkRepository paymentLinkRepository;
++    private CommonInvoiceRepository commonInvoiceRepository;
+     private ManualPaymentTaskReceiptIntegrationService service;
+@@
+         ledgerService = mock(ManualPaymentTaskLedgerService.class);
++        reservationService = mock(ManualPaymentTaskContractorReservationService.class);
++        paymentLinkRepository = mock(PaymentLinkRepository.class);
++        commonInvoiceRepository = mock(CommonInvoiceRepository.class);
+         service = new ManualPaymentTaskReceiptIntegrationService(
+                 ledgerService,
+-                mock(ManualPaymentTaskContractorReservationService.class),
+-                mock(PaymentLinkRepository.class),
+-                mock(CommonInvoiceRepository.class)
++                reservationService,
++                paymentLinkRepository,
++                commonInvoiceRepository
+         );
+@@
+     void nonLegacyCandidateStillRejectsGenerationMismatch() {
+@@
+     }
++
++    @Test
++    void partialCommonRouteKeepsFullExposureButMarksUnexpectedPaidEvidenceForAttention() {
++        ManualPaymentTask task = task(16L);
++        CommonInvoice invoice = pendingCommonInvoice(91L, 16L, 300_000L, 200_000L, 150_000L);
++        ManualPaymentTaskSourceRef source = new ManualPaymentTaskSourceRef(
++                ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE, 91L, "LEGACY-91");
++        ManualPaymentTaskRouteSnapshot snapshot = snapshot(source, 9L, 200_000L);
++        var locks = new ManualPaymentTaskReceiptIntegrationService.LegacySourceLocks(
++                List.of(source), ContractorAllocationMode.SHADOW);
++        when(ledgerService.bindPendingLegacyReservations(task, "owner"))
++                .thenReturn(List.of(snapshot));
++        when(commonInvoiceRepository.findByIdForUpdate(91L)).thenReturn(Optional.of(invoice));
++
++        service.bindPendingLegacyReservations(task, "owner", locks);
++
++        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
++        assertEquals(ManualPaymentTaskStatus.NEEDS_ATTENTION, task.getStatus());
++        assertEquals(true, task.isNeedsReconciliation());
++        verify(reservationService).remediateLegacy(
++                invoice, snapshot, ContractorAllocationMode.SHADOW);
++        verify(commonInvoiceRepository).save(invoice);
++    }
++
++    @Test
++    void impossibleCommonRouteArithmeticFailsBeforeContractorRemediation() {
++        ManualPaymentTask task = task(16L);
++        CommonInvoice invoice = pendingCommonInvoice(92L, 16L, 300_000L, 200_000L, 50_000L);
++        ManualPaymentTaskSourceRef source = new ManualPaymentTaskSourceRef(
++                ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE, 92L, "LEGACY-92");
++        ManualPaymentTaskRouteSnapshot snapshot = snapshot(source, 9L, 200_000L);
++        var locks = new ManualPaymentTaskReceiptIntegrationService.LegacySourceLocks(
++                List.of(source), ContractorAllocationMode.SHADOW);
++        when(ledgerService.bindPendingLegacyReservations(task, "owner"))
++                .thenReturn(List.of(snapshot));
++        when(commonInvoiceRepository.findByIdForUpdate(92L)).thenReturn(Optional.of(invoice));
++
++        assertThrows(ResponseStatusException.class, () ->
++                service.bindPendingLegacyReservations(task, "owner", locks));
++
++        verify(reservationService, never()).remediateLegacy(
++                invoice, snapshot, ContractorAllocationMode.SHADOW);
++        verify(commonInvoiceRepository, never()).save(invoice);
++    }
+@@
+     private ManualPaymentTaskRouteSnapshot snapshot(
+             ManualPaymentTaskSourceRef source,
+             long taskGeneration
+     ) {
++        return snapshot(source, taskGeneration, 250_000L);
++    }
++
++    private ManualPaymentTaskRouteSnapshot snapshot(
++            ManualPaymentTaskSourceRef source,
++            long taskGeneration,
++            long amount
++    ) {
+         return new ManualPaymentTaskRouteSnapshot(
+@@
+-                250_000L,
++                amount,
+@@
+         );
+     }
++
++    private ManualPaymentTask task(Long id) {
++        ManualPaymentTask task = new ManualPaymentTask();
++        task.setId(id);
++        task.setGeneration(9L);
++        task.setStatus(ManualPaymentTaskStatus.ACTIVE);
++        return task;
++    }
++
++    private CommonInvoice pendingCommonInvoice(
++            Long invoiceId,
++            Long taskId,
++            long amount,
++            long routeAmount,
++            long paid
++    ) {
++        CommonInvoice invoice = new CommonInvoice();
++        invoice.setId(invoiceId);
++        invoice.setAmountKopecks(amount);
++        invoice.setPaidKopecks(paid);
++        invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
++        invoice.setPaymentRouteManualSource(ManualPaymentSource.MANUAL_TASK);
++        invoice.setPaymentRouteManualTaskId(taskId);
++        invoice.setPaymentRouteManualTaskGeneration(3L);
++        invoice.setPaymentRouteManualTaskSourceGeneration("LEGACY-" + invoiceId);
++        invoice.setPaymentRouteSelectedAt(java.time.LocalDateTime.now().minusDays(1));
++        invoice.setPaymentRouteAmountKopecks(routeAmount);
++        return invoice;
++    }
+ }
+*** End Patch

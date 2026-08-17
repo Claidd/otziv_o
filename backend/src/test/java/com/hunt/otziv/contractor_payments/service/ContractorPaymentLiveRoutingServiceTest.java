@@ -40,6 +40,7 @@ import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.model.PaymentMethod;
+import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
@@ -86,6 +87,8 @@ class ContractorPaymentLiveRoutingServiceTest {
     private ContractorPaymentAccountingPhaseService accountingPhaseService;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private ManualPaymentTaskContractorCapacityService taskCapacityService;
 
     private ContractorPaymentLiveRoutingService service;
     private final Map<Long, ContractorPaymentProfile> discoveredProfiles = new HashMap<>();
@@ -105,8 +108,12 @@ class ContractorPaymentLiveRoutingServiceTest {
                 rolloutStateService,
                 accountingPhaseService,
                 userRepository,
-                new ContractorOrderManagerResolver()
+                new ContractorOrderManagerResolver(),
+                taskCapacityService
         );
+        lenient().when(taskCapacityService.ordinaryAvailable(any(), any()))
+                .thenAnswer(invocation -> profileService.available(
+                        invocation.getArgument(0), invocation.getArgument(1)));
         lenient().when(rolloutStateService.lockAndCheckRoutingRequested()).thenReturn(true);
         lenient().when(userRepository.lockContractorActiveFlag(anyLong())).thenReturn(Optional.of(true));
         lenient().when(userRepository.lockContractorRoleIds(anyLong(), anyString())).thenReturn(List.of(1));

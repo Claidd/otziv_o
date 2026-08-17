@@ -1,0 +1,37 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskContractorCapacityService.java
+@@
+     @Transactional(propagation = Propagation.MANDATORY)
+     public ReservationCapacity validateReservationIntent(
+@@
+         return requireCovered(profile, mode, 0L, task);
+     }
++
++    @Transactional(propagation = Propagation.MANDATORY)
++    public void requireActivationCovered(
++            ManualPaymentTask task,
++            ManualPaymentTaskBalance balance,
++            ContractorAllocationMode mode
++    ) {
++        TaskCommitmentSnapshot current = snapshot(task, balance);
++        if (current.profileId() == null) {
++            return;
++        }
++        ContractorPaymentProfile profile = profileRepository.findByIdForUpdate(current.profileId())
++                .orElseThrow(ManualPaymentTaskRouteErrors::stale);
++        TargetCapacity capacity = evaluateTarget(
++                profile,
++                mode,
++                current,
++                task.getTargetAmountKopecks(),
++                balance == null ? 0L : balance.netConfirmedAmountKopecks(),
++                balance == null ? 0L : balance.pendingAmountKopecks(),
++                true
++        );
++        if (capacity.projectedOverrunKopecks() > current.acknowledgedOverrunKopecks()) {
++            throw conflict("Доступный лимит получателя изменился; подтвердите точную сумму превышения");
++        }
++    }
+ 
+     /** Rechecks the invariant including the allocation that is about to be persisted. */
+*** End Patch

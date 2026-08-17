@@ -1,0 +1,145 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskMigrationContractTest.java
+@@
+         assertTrue(sql.contains("invoice.payment_route_manual_task_generation = task.generation"));
++        assertTrue(sql.contains("payment_route_manual_task_accounting_mode"));
++        assertTrue(sql.contains("ALTER TABLE archive_common_invoices"));
++        assertTrue(sql.contains("JOIN contractor_payment_allocations allocation"));
++        assertTrue(sql.contains("allocation.mode"));
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/controller/CommonManualPaymentAttributionControllerTest.java
+@@
+ import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.never;
+@@
+     void modeResponseIsNoStore() throws Exception {
+@@
+         verify(targetAccessPolicy).requireCanManageCommonInvoice(77L);
+     }
++
++    @Test
++    void frozenTaskRouteKeepsTypedEndpointAvailableWhenGlobalFlagIsOff() throws Exception {
++        when(flowPolicy.attributionRequired()).thenReturn(false);
++        when(commonBillingService.hasFrozenManualTaskRoute(77L)).thenReturn(true);
++
++        mockMvc.perform(get("/api/common-billing/invoices/77/manual-payment-options"))
++                .andExpect(status().isOk())
++                .andExpect(header().string("Cache-Control", containsString("no-store")));
++
++        verify(flowPolicy).requireAttributionFlowOrFrozenTask(true);
++        verify(flowPolicy, never()).requireAttributionFlow();
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinatorTest.java
+@@
+ import static org.mockito.Mockito.when;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.ArgumentMatchers.anyList;
+@@
+ import org.junit.jupiter.api.Test;
++import org.junit.jupiter.params.ParameterizedTest;
++import org.junit.jupiter.params.provider.EnumSource;
+@@
+     void taskOwnerSuppressesOrdinaryOwnerAlias() {
+@@
+     }
++
++    @ParameterizedTest
++    @EnumSource(ContractorAllocationMode.class)
++    void frozenTaskReceiptUsesPersistedModeAfterGlobalFeatureDisable(
++            ContractorAllocationMode persistedMode
++    ) {
++        CommonInvoice invoice = new CommonInvoice();
++        invoice.setId(191L);
++        invoice.setPaymentRouteManualSource(
++                com.hunt.otziv.payments.model.ManualPaymentSource.MANUAL_TASK);
++        invoice.setPaymentRouteManualTaskId(116L);
++        invoice.setPaymentRouteManualTaskGeneration(2L);
++        invoice.setPaymentRouteManualTaskSourceGeneration("source-191");
++        invoice.setPaymentRouteManualTaskAccountingMode(persistedMode);
++        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 15, 9, 0));
++        var snapshot = mock(com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot.class);
++        when(snapshot.candidateKey()).thenReturn("TASK:116:2");
++        when(snapshot.taskId()).thenReturn(116L);
++        when(snapshot.taskGeneration()).thenReturn(2L);
++        when(snapshot.source()).thenReturn(new com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef(
++                com.hunt.otziv.payments.model.ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE,
++                191L,
++                "source-191"));
++        when(snapshot.accountingTargetKind()).thenReturn(
++                com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.OWNER);
++        when(snapshot.bankRecipientName()).thenReturn("Наталья П.");
++        when(snapshot.accountingTargetLabel()).thenReturn("Владелец");
++        when(snapshot.reservedAmountKopecks()).thenReturn(10_000L);
++        when(taskReceiptIntegrationService.candidate(invoice))
++                .thenReturn(java.util.Optional.of(snapshot));
++        when(taskReceiptIntegrationService.destination(snapshot)).thenReturn(
++                new ManualPaymentTaskReceiptIntegrationService.Destination(
++                        "TASK:116:2",
++                        com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind.MANUAL_PAYMENT_TASK,
++                        ContractorRecipientType.OWNER,
++                        null,
++                        116L,
++                        2L,
++                        com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.OWNER,
++                        "Наталья П.",
++                        "Владелец"
++                ));
++        when(accountingPhaseService.lockCurrent()).thenReturn(
++                persistedMode == ContractorAllocationMode.SHADOW
++                        ? ContractorAllocationMode.LIVE : ContractorAllocationMode.LIVE);
++        when(attributionService.recordFinalAttributionsForFrozenSource(
++                any(), anyList(), org.mockito.ArgumentMatchers.eq(persistedMode)))
++                .thenReturn(List.of());
++        CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
++                "batch-191",
++                true,
++                true,
++                LocalDateTime.of(2026, 8, 15, 10, 0),
++                "Ручная сверка frozen route",
++                "",
++                List.of(new CommonManualPaymentAttributionRowRequest(
++                        "task-owner",
++                        "TASK:116:2",
++                        ContractorRecipientType.OWNER,
++                        null,
++                        10_000L
++                ))
++        );
++
++        coordinator.recordFinalReceipt(invoice, List.of(), 10_000L, request, () -> "owner");
++
++        verify(accountingPhaseService).lockCurrent();
++        verify(attributionService, never()).lockEnabledAccountingMode();
++        verify(attributionService).recordFinalAttributionsForFrozenSource(
++                any(), anyList(), org.mockito.ArgumentMatchers.eq(persistedMode));
++        verify(attributionService, never()).recordFinalAttributions(any(), anyList());
++        verify(taskReceiptIntegrationService).settle(
++                invoice,
++                "TASK:116:2",
++                10_000L,
++                "TASK:SETTLE:COMMON_INVOICE:191:batch-191",
++                "owner",
++                "Ручная сверка frozen route"
++        );
++    }
++
++    @Test
++    void frozenLegacyTaskWithoutPersistedModeFailsClosed() {
++        CommonInvoice invoice = new CommonInvoice();
++        invoice.setId(192L);
++        invoice.setPaymentRouteManualSource(
++                com.hunt.otziv.payments.model.ManualPaymentSource.MANUAL_TASK);
++        invoice.setPaymentRouteManualTaskId(117L);
++        invoice.setPaymentRouteManualTaskGeneration(2L);
++        invoice.setPaymentRouteManualTaskSourceGeneration("LEGACY-192");
++        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 15, 9, 0));
++
++        ResponseStatusException error = assertThrows(
++                ResponseStatusException.class,
++                () -> coordinator.options(invoice, List.of(), 10_000L)
++        );
++
++        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
++        verify(accountingPhaseService, never()).lockCurrent();
++        verify(attributionService, never()).lockEnabledAccountingMode();
++    }
+*** End Patch

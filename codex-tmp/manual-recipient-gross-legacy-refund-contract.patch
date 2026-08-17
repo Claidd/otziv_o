@@ -1,0 +1,10 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentRecipientMonthlyArchiveContractTest.java
+@@
+         assertTrue(paymentLinks.contains("contractor_actual_payment_attributions attribution"));
+         assertTrue(paymentLinks.contains("attribution.source_kind = 'PAYMENT_LINK'"));
++        assertTrue(paymentLinks.contains("link.manual_confirmed_at IS NOT NULL"));
++        assertTrue(paymentLinks.contains("archived.manual_confirmed_at IS NOT NULL"));
++        assertTrue(paymentLinks.contains("link.status = 'CONFIRMED' AND link.paid_at IS NOT NULL"));
++        assertTrue(paymentLinks.contains("archived.status = 'CONFIRMED' AND archived.paid_at IS NOT NULL"));
+*** End Patch

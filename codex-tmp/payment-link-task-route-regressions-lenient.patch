@@ -1,0 +1,7 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+-        when(manualPaymentTaskService.findRoutableTask(manager, profile, 230_000L, null))
++        lenient().when(manualPaymentTaskService.findRoutableTask(manager, profile, 230_000L, null))
+                 .thenReturn(Optional.of(task));
+*** End Patch

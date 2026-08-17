@@ -1,0 +1,200 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/repository/PaymentLinkRepository.java
+@@
+-    @Query("""
+-        SELECT link.id AS sourceId,
+-               CASE
+-                   WHEN link.confirmedAmountKopecks IS NOT NULL THEN link.confirmedAmountKopecks
+-                   WHEN link.reservedAmountKopecks IS NOT NULL THEN link.reservedAmountKopecks
+-                   ELSE link.amountKopecks
+-               END AS amountKopecks,
+-               COALESCE(link.manualConfirmedAt, link.paidAt) AS effectiveAt
+-        FROM PaymentLink link
+-        WHERE link.status = :confirmedStatus
+-          AND link.paymentMethod IN :paymentMethods
+-          AND COALESCE(link.manualConfirmedAt, link.paidAt) >= :from
+-          AND COALESCE(link.manualConfirmedAt, link.paidAt) < :to
+-          AND NOT EXISTS (
+-              SELECT attribution.id
+-              FROM ContractorActualPaymentAttribution attribution
+-              WHERE (attribution.sourceKind = :sourceKind AND attribution.sourceId = link.id)
+-                 OR attribution.evidenceId = link.id
+-          )
+-        ORDER BY COALESCE(link.manualConfirmedAt, link.paidAt), link.id
+-    """)
++    @Query(value = """
++        SELECT receipt.sourceId AS sourceId,
++               receipt.amountKopecks AS amountKopecks,
++               receipt.effectiveAt AS effectiveAt
++        FROM (
++            SELECT link.id AS sourceId,
++                   COALESCE(
++                       link.confirmed_amount_kopecks,
++                       link.reserved_amount_kopecks,
++                       link.amount_kopecks
++                   ) AS amountKopecks,
++                   COALESCE(link.manual_confirmed_at, link.paid_at) AS effectiveAt
++            FROM payment_links link
++            WHERE link.status = 'CONFIRMED'
++              AND link.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
++              AND COALESCE(link.manual_confirmed_at, link.paid_at) >= :from
++              AND COALESCE(link.manual_confirmed_at, link.paid_at) < :to
++              AND NOT EXISTS (
++                  SELECT 1
++                  FROM contractor_actual_payment_attributions attribution
++                  WHERE (attribution.source_kind = 'PAYMENT_LINK' AND attribution.source_id = link.id)
++                     OR attribution.evidence_id = link.id
++              )
++            UNION ALL
++            SELECT archived.id AS sourceId,
++                   COALESCE(
++                       archived.confirmed_amount_kopecks,
++                       archived.reserved_amount_kopecks,
++                       archived.amount_kopecks
++                   ) AS amountKopecks,
++                   COALESCE(archived.manual_confirmed_at, archived.paid_at) AS effectiveAt
++            FROM archive_payment_links archived
++            WHERE archived.status = 'CONFIRMED'
++              AND archived.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
++              AND COALESCE(archived.manual_confirmed_at, archived.paid_at) >= :from
++              AND COALESCE(archived.manual_confirmed_at, archived.paid_at) < :to
++              AND NOT EXISTS (
++                  SELECT 1 FROM payment_links live WHERE live.id = archived.id
++              )
++              AND NOT EXISTS (
++                  SELECT 1
++                  FROM contractor_actual_payment_attributions attribution
++                  WHERE (attribution.source_kind = 'PAYMENT_LINK' AND attribution.source_id = archived.id)
++                     OR attribution.evidence_id = archived.id
++              )
++        ) receipt
++        ORDER BY receipt.effectiveAt, receipt.sourceId
++    """, nativeQuery = true)
+     List<ManualPaymentLegacyMonthlySourceProjection> findLegacyManualConfirmedForMonthlyRecipientSummary(
+-            @Param("paymentMethods") Collection<PaymentMethod> paymentMethods,
+-            @Param("confirmedStatus") PaymentLinkStatus confirmedStatus,
+-            @Param("sourceKind") ContractorActualPaymentSourceKind sourceKind,
+             @Param("from") LocalDateTime from,
+             @Param("to") LocalDateTime to
+     );
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/repository/CommonInvoiceRepository.java
+@@
+-    @Query("""
+-        SELECT invoice.id AS sourceId,
+-               SUM(item.amountKopecks) AS amountKopecks,
+-               MAX(item.paidAt) AS effectiveAt
+-        FROM CommonInvoiceOrder item
+-        JOIN item.invoice invoice
+-        WHERE item.paid = true
+-          AND item.paidAt >= :from
+-          AND item.paidAt < :to
+-          AND (
+-              UPPER(COALESCE(item.paymentMethod, '')) IN ('MANUAL', 'MANUAL_LEGACY')
+-              OR COALESCE(item.manualPaidBy, '') <> ''
+-              OR COALESCE(item.manualPaymentComment, '') <> ''
+-              OR COALESCE(item.manualPaymentReceiptUrl, '') <> ''
+-              OR (
+-                  COALESCE(item.paymentMethod, '') = ''
+-                  AND UPPER(COALESCE(invoice.paymentMethod, '')) = 'MANUAL'
+-              )
+-          )
+-          AND NOT EXISTS (
+-              SELECT attribution.id
+-              FROM ContractorActualPaymentAttribution attribution
+-              WHERE attribution.sourceKind = :sourceKind
+-                AND attribution.sourceId = invoice.id
+-          )
+-        GROUP BY invoice.id
+-        ORDER BY MAX(item.paidAt), invoice.id
+-    """)
++    @Query(value = """
++        SELECT receipt.sourceId AS sourceId,
++               SUM(receipt.amountKopecks) AS amountKopecks,
++               MAX(receipt.effectiveAt) AS effectiveAt
++        FROM (
++            SELECT invoice.invoice_id AS sourceId,
++                   item.amount_kopecks AS amountKopecks,
++                   item.paid_at AS effectiveAt
++            FROM common_invoice_orders item
++            JOIN common_invoices invoice ON invoice.invoice_id = item.invoice_id
++            WHERE item.paid = 1
++              AND item.paid_at >= :from
++              AND item.paid_at < :to
++              AND item.source_payment_link_id IS NULL
++              AND item.actual_payment_evidence_reference IS NULL
++              AND (
++                  UPPER(COALESCE(item.payment_method, '')) IN ('MANUAL', 'MANUAL_LEGACY')
++                  OR COALESCE(item.manual_paid_by, '') <> ''
++                  OR COALESCE(item.manual_payment_comment, '') <> ''
++                  OR COALESCE(item.manual_payment_receipt_url, '') <> ''
++                  OR (
++                      COALESCE(item.payment_method, '') = ''
++                      AND UPPER(COALESCE(invoice.payment_method, '')) = 'MANUAL'
++                  )
++              )
++            UNION ALL
++            SELECT archived_invoice.invoice_id AS sourceId,
++                   archived_item.amount_kopecks AS amountKopecks,
++                   archived_item.paid_at AS effectiveAt
++            FROM archive_common_invoice_orders archived_item
++            JOIN archive_common_invoices archived_invoice
++              ON archived_invoice.invoice_id = archived_item.invoice_id
++            WHERE archived_invoice.restored_at IS NULL
++              AND archived_item.paid = 1
++              AND archived_item.paid_at >= :from
++              AND archived_item.paid_at < :to
++              AND archived_item.source_payment_link_id IS NULL
++              AND archived_item.actual_payment_evidence_reference IS NULL
++              AND NOT EXISTS (
++                  SELECT 1
++                  FROM common_invoice_orders live_item
++                  WHERE live_item.invoice_order_id = archived_item.invoice_order_id
++              )
++              AND (
++                  UPPER(COALESCE(archived_item.payment_method, '')) IN ('MANUAL', 'MANUAL_LEGACY')
++                  OR COALESCE(archived_item.manual_paid_by, '') <> ''
++                  OR COALESCE(archived_item.manual_payment_comment, '') <> ''
++                  OR COALESCE(archived_item.manual_payment_receipt_url, '') <> ''
++                  OR (
++                      COALESCE(archived_item.payment_method, '') = ''
++                      AND UPPER(COALESCE(archived_invoice.payment_method, '')) = 'MANUAL'
++                  )
++              )
++        ) receipt
++        GROUP BY receipt.sourceId
++        ORDER BY MAX(receipt.effectiveAt), receipt.sourceId
++    """, nativeQuery = true)
+     List<ManualPaymentLegacyMonthlySourceProjection> findLegacyManualConfirmedForMonthlyRecipientSummary(
+-            @Param("sourceKind") ContractorActualPaymentSourceKind sourceKind,
+             @Param("from") LocalDateTime from,
+             @Param("to") LocalDateTime to
+     );
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentRecipientMonthlySummaryService.java
+@@
+-import com.hunt.otziv.payments.model.PaymentLinkStatus;
+-import com.hunt.otziv.payments.model.PaymentMethod;
+ import com.hunt.otziv.payments.repository.ManualPaymentLegacyMonthlySourceProjection;
+@@
+-    private static final Set<PaymentMethod> MANUAL_PAYMENT_METHODS = Set.of(
+-            PaymentMethod.MANUAL_MOBILE_BANK,
+-            PaymentMethod.MANUAL_EXTERNAL_LINK
+-    );
+-
+     private final ContractorActualPaymentAttributionRepository attributionRepository;
+@@
+                 legacy,
+                 safeList(paymentLinkRepository.findLegacyManualConfirmedForMonthlyRecipientSummary(
+-                        MANUAL_PAYMENT_METHODS,
+-                        PaymentLinkStatus.CONFIRMED,
+-                        ContractorActualPaymentSourceKind.PAYMENT_LINK,
+                         from,
+                         to
+                 )),
+@@
+                 legacy,
+                 safeList(commonInvoiceRepository.findLegacyManualConfirmedForMonthlyRecipientSummary(
+-                        ContractorActualPaymentSourceKind.COMMON_INVOICE,
+                         from,
+                         to
+                 )),
+*** End Patch

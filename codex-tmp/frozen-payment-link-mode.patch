@@ -1,0 +1,26 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionService.java
+@@
+-        ContractorAllocationMode currentMode = accountingPhaseService.lockCurrent();
++        ContractorAllocationMode frozenMode = requireFrozenMode(
++                originalLink.getManualActualAccountingMode());
++        ContractorAllocationMode currentMode = accountingPhaseService.lockCurrent();
+@@
+-        return recordFinalAttributionsInternal(source, List.of(command), true).getFirst();
++        return recordFinalAttributionsInternal(
++                source, List.of(command), true, frozenMode).getFirst();
+@@
+-        requireFrozenIntent(link);
++        requireFrozenIntent(link);
++        ContractorAllocationMode frozenMode = requireFrozenMode(
++                link.getManualActualAccountingMode());
+@@
+-        if (row.getActualRecipientType() != link.getManualActualRecipientType()
++        if (row.getAccountingMode() != frozenMode) {
++            throw conflict("Режим учёта выданного платежа изменился; требуется сверка");
++        }
++        if (row.getActualRecipientType() != link.getManualActualRecipientType()
+@@
+-        recordFinalAttributionsInternal(source, List.of(command), true);
++        recordFinalAttributionsInternal(source, List.of(command), true, frozenMode);
+*** End Patch

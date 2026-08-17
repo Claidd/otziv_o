@@ -1,0 +1,52 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionServiceTest.java
+@@
+ import com.hunt.otziv.contractor_payments.dto.ContractorActualPaymentSource;
++import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentRecipientResponse;
+@@
+ import com.hunt.otziv.payments.model.PaymentLink;
++import com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot;
++import com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef;
++import com.hunt.otziv.payments.model.ManualPaymentTaskLedgerSourceKind;
++import com.hunt.otziv.payments.model.ManualPaymentType;
+@@
+         lenient().when(eventRepository.existsByAllocationIdAndExternalRef(anyLong(), anyString()))
+                 .thenAnswer(invocation -> events.contains(eventKey(invocation.getArgument(0), invocation.getArgument(1))));
+     }
++
++    @Test
++    void frozenOwnerTaskSuppressesOrdinaryOwnerAlias() {
++        ManualPaymentTaskRouteSnapshot task = taskSnapshot(
++                ManualPaymentTaskAccountingTargetKind.OWNER, null);
++        LinkedHashMap<String, ManualCardPaymentRecipientResponse> candidates = aliases(
++                task, new ManualCardPaymentRecipientResponse(
++                        ContractorRecipientType.OWNER, null, null,
++                        "Владелец", 0L, 0L, true), "OWNER:OWNER");
++
++        ReflectionTestUtils.invokeMethod(service,
++                "suppressOrdinaryAliasForTask", candidates, task);
++
++        assertThat(candidates.keySet()).containsExactly(task.candidateKey());
++    }
++
++    @Test
++    void frozenSpecialistTaskSuppressesProfileAliasSoOldKeyFailsClosed() {
++        ManualPaymentTaskRouteSnapshot task = taskSnapshot(
++                ManualPaymentTaskAccountingTargetKind.SPECIALIST, 1L);
++        LinkedHashMap<String, ManualCardPaymentRecipientResponse> candidates = aliases(
++                task, new ManualCardPaymentRecipientResponse(
++                        ContractorRecipientType.SPECIALIST, 1L, 11L,
++                        "Анна", 0L, 0L, true), "SPECIALIST:1");
++
++        ReflectionTestUtils.invokeMethod(service,
++                "suppressOrdinaryAliasForTask", candidates, task);
++
++        assertThat(candidates.keySet()).containsExactly(task.candidateKey());
++        assertThat(candidates.values()).noneMatch(value -> "PROFILE:1".equals(value.key()));
++    }
+ 
+     @Test
+     void confirmsOriginalRecipientWithoutCreatingSecondAllocation() {
+@@
+     private ContractorPaymentProfile profile(Long id, Long userId, ContractorRole role, String name) {
+*** End Patch

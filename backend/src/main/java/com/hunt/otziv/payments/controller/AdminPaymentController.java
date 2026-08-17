@@ -9,6 +9,7 @@ import com.hunt.otziv.payments.dto.CloseManualPaymentUnpaidRequest;
 import com.hunt.otziv.payments.dto.ConfirmManualCardPaymentRequest;
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
+import com.hunt.otziv.payments.dto.ManualPaymentTaskAccountingTargetOption;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
 import com.hunt.otziv.payments.dto.PaymentLinkArchiveRunResponse;
 import com.hunt.otziv.payments.dto.ReportManualCardPaymentRequest;
@@ -101,6 +102,7 @@ public class AdminPaymentController {
                 request == null ? null : request.receiptUrl(),
                 request == null ? null : request.recipientType(),
                 request == null ? null : request.recipientProfileId(),
+                request == null ? null : request.recipientKey(),
                 actor(authentication),
                 authentication
         );
@@ -135,6 +137,7 @@ public class AdminPaymentController {
                 request == null ? null : request.receiptUrl(),
                 request == null ? null : request.recipientType(),
                 request == null ? null : request.recipientProfileId(),
+                request == null ? null : request.recipientKey(),
                 actor(authentication),
                 authentication
         );
@@ -280,53 +283,64 @@ public class AdminPaymentController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @GetMapping("/api/admin/payments/manual-tasks")
-    public List<ManualPaymentTaskResponse> manualPaymentTasks() {
-        return manualPaymentTaskService.managementTasks();
+    public ResponseEntity<List<ManualPaymentTaskResponse>> manualPaymentTasks() {
+        return noStore(manualPaymentTaskService.managementTasks());
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @GetMapping("/api/admin/payments/manual-tasks/accounting-targets")
+    public ResponseEntity<List<ManualPaymentTaskAccountingTargetOption>> manualPaymentTaskAccountingTargets(
+            @RequestParam(required = false) Long managerId,
+            @RequestParam(required = false) Long targetAmountKopecks,
+            @RequestParam(required = false) Long taskId
+    ) {
+        return noStore(manualPaymentTaskService.managementAccountingTargetOptions(
+                managerId, targetAmountKopecks, taskId));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @GetMapping("/api/admin/payments/manual-recipients/monthly-summary")
-    public ManualPaymentRecipientMonthlySummaryResponse manualRecipientMonthlySummary(
+    public ResponseEntity<ManualPaymentRecipientMonthlySummaryResponse> manualRecipientMonthlySummary(
             @RequestParam(required = false) String month
     ) {
-        return manualPaymentTaskService.recipientMonthlySummary(month);
+        return noStore(manualPaymentTaskService.recipientMonthlySummary(month));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @PostMapping("/api/admin/payments/manual-tasks")
-    public ManualPaymentTaskResponse createManualPaymentTask(
+    public ResponseEntity<ManualPaymentTaskResponse> createManualPaymentTask(
             @RequestBody CreateManualPaymentTaskRequest request,
             Authentication authentication
     ) {
-        return manualPaymentTaskService.createManagementTask(request, actor(authentication));
+        return noStore(manualPaymentTaskService.createManagementTask(request, actor(authentication)));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @PutMapping("/api/admin/payments/manual-tasks/{taskId}/status")
-    public ManualPaymentTaskResponse updateManualPaymentTaskStatus(
+    public ResponseEntity<ManualPaymentTaskResponse> updateManualPaymentTaskStatus(
             @PathVariable Long taskId,
             @RequestBody UpdateManualPaymentTaskStatusRequest request,
             Authentication authentication
     ) {
-        return manualPaymentTaskService.updateManagementTaskStatus(
+        return noStore(manualPaymentTaskService.updateManagementTaskStatus(
                 taskId,
                 request == null ? null : request.status(),
                 actor(authentication)
-        );
+        ));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @PutMapping("/api/admin/payments/manual-tasks/{taskId}")
-    public ManualPaymentTaskResponse updateManualPaymentTask(
+    public ResponseEntity<ManualPaymentTaskResponse> updateManualPaymentTask(
             @PathVariable Long taskId,
             @RequestBody UpdateManualPaymentTaskRequest request,
             Authentication authentication
     ) {
-        return manualPaymentTaskService.updateManagementTask(
+        return noStore(manualPaymentTaskService.updateManagementTask(
                 taskId,
                 request,
                 actor(authentication)
-        );
+        ));
     }
 
     private TbankClientPaymentModeResponse clientPaymentModeResponse(TbankRuntimeSettingsResponse settings) {
@@ -334,6 +348,13 @@ public class AdminPaymentController {
                 settings.clientTbankEnabled(),
                 settings.paymentInstructionSource()
         );
+    }
+
+    private <T> ResponseEntity<T> noStore(T body) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(body);
     }
 
     private String actor(Authentication authentication) {

@@ -1,0 +1,38 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentLiveRoutingService.java
+@@
+ import com.hunt.otziv.payments.model.PaymentMethod;
++import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
+@@
+     private final UserRepository userRepository;
+     private final ContractorOrderManagerResolver orderManagerResolver;
++    private final ManualPaymentTaskContractorCapacityService taskCapacityService;
+@@
+-            allocation.setAvailableBeforeKopecks(profileService.available(
+-                    recipient,
+-                    ContractorAllocationMode.LIVE
+-            ));
++            allocation.setAvailableBeforeKopecks(taskCapacityService.ordinaryAvailable(
++                    recipient, ContractorAllocationMode.LIVE));
+@@
+-        if (profileService.available(profile, ContractorAllocationMode.LIVE) < amount) {
++        if (taskCapacityService.ordinaryAvailable(
++                profile, ContractorAllocationMode.LIVE) < amount) {
+             return ContractorRoutingDecisionReason.INSUFFICIENT_AVAILABLE_BALANCE;
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowService.java
+@@
+ import com.hunt.otziv.payments.model.PaymentMethod;
++import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
+@@
+     private final ContractorPaymentProfileService profileService;
++    private final ManualPaymentTaskContractorCapacityService taskCapacityService;
+@@
+-        if (profileService.available(profile, ContractorAllocationMode.SHADOW) < amount) {
++        if (taskCapacityService.ordinaryAvailable(
++                profile, ContractorAllocationMode.SHADOW) < amount) {
+             return ContractorRoutingDecisionReason.INSUFFICIENT_AVAILABLE_BALANCE;
+@@
+-        allocation.setAvailableBeforeKopecks(profileService.available(recipient, ContractorAllocationMode.SHADOW));
++        allocation.setAvailableBeforeKopecks(taskCapacityService.ordinaryAvailable(
++                recipient, ContractorAllocationMode.SHADOW));
+*** End Patch

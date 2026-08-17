@@ -1,0 +1,28 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowServiceTest.java
+@@
+     void disabledShadowCallbacksReturnBeforeSourceReadsAndLocks() {
+@@
+         verify(commonInvoiceRepository, never()).existsById(anyLong());
+     }
++
++    @Test
++    void paymentLinkReconcileChecksTaskReturnEvenWithoutContractorAllocation() {
++        PaymentLink link = new PaymentLink();
++        link.setId(9_105L);
++        when(paymentLinkRepository.findByIdForUpdate(9_105L)).thenReturn(Optional.of(link));
++
++        assertEquals(0, service.reconcilePaymentLinkId(9_105L));
++
++        verify(taskReturnBridge).recordAuthoritativePaymentLinkReturn(link);
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+-            assertEquals(1, synchronizations.size());
++            assertEquals(2, synchronizations.size());
+             synchronizations.forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+@@
+                     PaymentLinkStatus.REFUNDED
+             );
++            verify(contractorPaymentShadowService).reconcilePaymentLinkId(53L);
+*** End Patch

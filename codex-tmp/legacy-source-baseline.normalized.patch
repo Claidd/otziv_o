@@ -1,0 +1,153 @@
+*** Begin Patch
+*** Update File: backend/src/main/resources/db/migration/V1_10_251__manual_payment_task_accounting_ledger.sql
+@@
+--- Preserve the exact pre-V251 confirmed totals as unverified opening evidence.
+--- It keeps old dashboards stable but cannot credit any owner or contractor.
++-- Preserve every pre-V251 confirmed source as separate unverified opening
++-- evidence. The recipient remains unresolved, but an authoritative provider
++-- reversal can now debit the exact task/source without guessing or
++-- double-counting another payment belonging to the same task.
+ INSERT INTO manual_payment_task_ledger_entries (
+@@
+-SELECT task.id,
+-       task.generation,
+-       'LEGACY_TASK_BASELINE',
+-       task.id,
+-       'LEGACY',
++SELECT task.id,
++       task.generation,
++       confirmed.source_kind,
++       confirmed.source_id,
++       CONCAT('LEGACY-', confirmed.source_id),
+        'LEGACY_BASELINE',
+-       CONCAT('V251:BASELINE:TASK:', task.id),
++       CONCAT('V251:BASELINE:', confirmed.source_kind, ':', confirmed.source_id),
+@@
+-       totals.confirmed_kopecks,
++       confirmed.confirmed_kopecks,
+@@
+-       task.manual_payment_type,
++       COALESCE(confirmed.manual_payment_type, task.manual_payment_type),
+@@
+-       task.manual_payment_button_label,
++       COALESCE(confirmed.manual_payment_button, task.manual_payment_button_label),
+@@
+-       'Непроверенный подтвержденный остаток до типизированного учета',
++       'Непроверенная подтвержденная оплата до типизированного учета',
+        CURRENT_TIMESTAMP(6)
+ FROM manual_payment_tasks task
+-JOIN (
+-    SELECT confirmed.task_id, SUM(confirmed.amount_kopecks) AS confirmed_kopecks
+-    FROM (
+-        SELECT link.manual_task_id AS task_id,
+-               COALESCE(link.confirmed_amount_kopecks,
+-                        link.reserved_amount_kopecks,
+-                        link.amount_kopecks) AS amount_kopecks
++JOIN (
++        SELECT link.manual_task_id AS task_id,
++               'PAYMENT_LINK' AS source_kind,
++               link.id AS source_id,
++               COALESCE(link.confirmed_amount_kopecks,
++                        link.reserved_amount_kopecks,
++                        link.amount_kopecks) AS confirmed_kopecks,
++               link.manual_payment_type AS manual_payment_type,
++               link.manual_payment_button_label AS manual_payment_button
+         FROM payment_links link
+         WHERE link.manual_task_id IS NOT NULL
++          AND link.manual_source = 'MANUAL_TASK'
+           AND link.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
+           AND link.status = 'CONFIRMED'
+ 
+         UNION ALL
+ 
+         SELECT invoice.payment_route_manual_task_id AS task_id,
+-               invoice.payment_route_amount_kopecks AS amount_kopecks
++               'COMMON_INVOICE' AS source_kind,
++               invoice.invoice_id AS source_id,
++               invoice.payment_route_amount_kopecks AS confirmed_kopecks,
++               invoice.payment_route_manual_type AS manual_payment_type,
++               invoice.payment_route_manual_button AS manual_payment_button
+         FROM common_invoices invoice
+         WHERE invoice.payment_route_manual_task_id IS NOT NULL
++          AND invoice.payment_route_manual_source = 'MANUAL_TASK'
+           AND invoice.payment_route_selected_at IS NOT NULL
+           AND invoice.payment_route_amount_kopecks > 0
+           AND invoice.paid_kopecks >= invoice.amount_kopecks
+ 
+         UNION ALL
+ 
+         SELECT archived_link.manual_task_id AS task_id,
++               'PAYMENT_LINK' AS source_kind,
++               archived_link.id AS source_id,
+                COALESCE(archived_link.confirmed_amount_kopecks,
+                         archived_link.reserved_amount_kopecks,
+-                        archived_link.amount_kopecks) AS amount_kopecks
++                        archived_link.amount_kopecks) AS confirmed_kopecks,
++               NULL AS manual_payment_type,
++               NULL AS manual_payment_button
+         FROM archive_payment_links archived_link
+         WHERE archived_link.manual_task_id IS NOT NULL
++          AND archived_link.manual_source = 'MANUAL_TASK'
+           AND archived_link.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
+           AND archived_link.status = 'CONFIRMED'
+@@
+         UNION ALL
+ 
+         SELECT archived_invoice.payment_route_manual_task_id AS task_id,
+-               archived_invoice.payment_route_amount_kopecks AS amount_kopecks
++               'COMMON_INVOICE' AS source_kind,
++               archived_invoice.invoice_id AS source_id,
++               archived_invoice.payment_route_amount_kopecks AS confirmed_kopecks,
++               NULL AS manual_payment_type,
++               NULL AS manual_payment_button
+         FROM archive_common_invoices archived_invoice
+         WHERE archived_invoice.payment_route_manual_task_id IS NOT NULL
++          AND archived_invoice.payment_route_manual_source = 'MANUAL_TASK'
+           AND archived_invoice.payment_route_selected_at IS NOT NULL
+@@
+-    ) confirmed
+-    GROUP BY confirmed.task_id
+-) totals ON totals.task_id = task.id
+-WHERE totals.confirmed_kopecks > 0;
++    ) confirmed ON confirmed.task_id = task.id
++WHERE confirmed.confirmed_kopecks > 0;
+*** Update File: backend/src/main/resources/db/migration/V1_10_252__manual_payment_task_actual_destination.sql
+@@
+--- V251 quarantines pre-existing pending task routes under these exact source generations.
++-- V251 quarantines pre-existing pending and confirmed task routes under these
++-- exact source generations. Confirmed rows need the same binding so an
++-- authoritative full reversal can debit its exact unverified source baseline.
+@@
+-  AND link.status IN ('WAITING_MANUAL_PAYMENT', 'MANUAL_REPORTED')
++  AND link.status IN ('WAITING_MANUAL_PAYMENT', 'MANUAL_REPORTED', 'CONFIRMED')
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskAccountingLedgerMigrationContractTest.java
+@@
+                 "UK_MANUAL_TASK_LEDGER_RESERVATION_KEY",
+                 "LEGACY_BASELINE",
++                "CONCAT('V251:BASELINE:', CONFIRMED.SOURCE_KIND, ':', CONFIRMED.SOURCE_ID)",
++                "'PAYMENT_LINK' AS SOURCE_KIND",
++                "'COMMON_INVOICE' AS SOURCE_KIND",
++                "CONCAT('LEGACY-', CONFIRMED.SOURCE_ID)",
+                 "VERIFIED BOOLEAN NOT NULL",
+@@
+                 "RESTORED_AT IS NULL"
+         );
++        assertThat(sql).doesNotContain("CONCAT('V251:BASELINE:TASK:'");
+@@
+     }
++
++    @Test
++    void legacyConfirmedBackfillKeepsExactSourceAmountsInsteadOfTaskAggregate() throws Exception {
++        String sql = migration().toUpperCase(Locale.ROOT);
++
++        assertThat(sql).contains(
++                "LINK.STATUS = 'CONFIRMED'",
++                "LINK.MANUAL_SOURCE = 'MANUAL_TASK'",
++                "INVOICE.PAYMENT_ROUTE_MANUAL_SOURCE = 'MANUAL_TASK'",
++                "CONFIRMED.CONFIRMED_KOPECKS",
++                "'UNRESOLVED'",
++                "FALSE"
++        );
++        assertThat(sql).doesNotContain("SUM(CONFIRMED.AMOUNT_KOPECKS)");
++    }
+*** End Patch

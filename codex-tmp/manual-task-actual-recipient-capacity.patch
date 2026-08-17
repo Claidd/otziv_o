@@ -1,0 +1,48 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionService.java
+@@
+ import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
++import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
+ import com.hunt.otziv.payments.service.ManualPaymentTaskRouteErrors;
+@@
+     private final AppSettingService appSettingService;
+     private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
++    private final ManualPaymentTaskContractorCapacityService taskCapacityService;
+@@
+     private long capacity(
+             ContractorPaymentProfile profile,
+             ContractorAllocationMode mode,
+-            ContractorPaymentAllocation reusableOriginal
++            ContractorPaymentAllocation reusableOriginal,
++            boolean frozenTaskTarget
+     ) {
+-        long available = profileService.available(profile, mode);
++        long available = frozenTaskTarget
++                ? Math.max(0L, profileService.capacityPosition(profile, mode))
++                : taskCapacityService.ordinaryAvailable(profile, mode);
+         if (reusableOriginal != null && Objects.equals(profileId(reusableOriginal), profile.getId())) {
+@@
+-        long available = profile == null ? 0L : capacity(profile, mode, original);
++        long available = profile == null ? 0L : capacity(profile, mode, original, false);
+@@
+-        long available = profile == null ? 0L : capacity(profile, mode, original);
++        long available = profile == null ? 0L : capacity(profile, mode, original, true);
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionServiceTest.java
+@@
+ import com.hunt.otziv.payments.model.PaymentLink;
++import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
++import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
+@@
+     @Mock
+     private AppSettingService appSettingService;
++    @Mock
++    private ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
++    @Mock
++    private ManualPaymentTaskContractorCapacityService taskCapacityService;
+@@
+         lenient().when(accountingPhaseService.lockCurrent()).thenReturn(ContractorAllocationMode.LIVE);
++        lenient().when(taskCapacityService.ordinaryAvailable(any(), any())).thenAnswer(invocation ->
++                profileService.available(invocation.getArgument(0), invocation.getArgument(1)));
++        lenient().when(profileService.capacityPosition(any(), any())).thenAnswer(invocation ->
++                profileService.available(invocation.getArgument(0), invocation.getArgument(1)));
+*** End Patch

@@ -1,0 +1,20 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionService.java
+@@
+         // after the bank route was irreversibly closed. New operations still
+         // pass through lockEnabledAccountingMode() before freezing.
+         ContractorAllocationMode currentMode = accountingPhaseService.lockCurrent();
++        taskReceiptIntegrationService.lockTaskForFinalAttribution(originalLink);
+         Long originalAllocationId = originalLink.getManualActualAccountingMode() == currentMode
+@@
+     public void requireCompletedPaymentReplay(
+             PaymentLink link,
+             long requestedAmountKopecks,
+@@
+             String reason,
+             String receiptUrl
+     ) {
++        accountingPhaseService.lockCurrent();
++        taskReceiptIntegrationService.lockTaskForFinalAttribution(link);
+         if (requestedAmountKopecks != link.getAmountKopecks()) {
+*** End Patch

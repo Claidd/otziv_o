@@ -1,0 +1,28 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridge.java
+@@
+-        if (rows.size() != 1) {
+-            // A PaymentLink refund has no recipient-level amount. Never guess
+-            // when final attribution contains multiple rows.
+-            throw ManualPaymentTaskRouteErrors.stale();
++        if (rows.size() != 1) {
++            long total = 0L;
++            for (ContractorActualPaymentAttribution row : rows) {
++                requireSourceRow(row, ContractorActualPaymentSourceKind.PAYMENT_LINK, lockedLink.getId());
++                if (row.getAmountKopecks() <= 0L
++                        || anyTaskDestination(row)
++                        || !ordinaryRedirectDestination(row)) {
++                    // A provider partial status has no recipient-level amount.
++                    // Mixed TASK batches therefore still require reconciliation.
++                    throw ManualPaymentTaskRouteErrors.stale();
++                }
++                total = Math.addExact(total, row.getAmountKopecks());
++            }
++            if (total != lockedLink.getAmountKopecks()) {
++                throw ManualPaymentTaskRouteErrors.stale();
++            }
++            // Every exact row is an ordinary redirected destination: the task
++            // ledger was never credited and has nothing to return.
++            return;
+         }
+*** End Patch

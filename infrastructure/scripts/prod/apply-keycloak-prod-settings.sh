@@ -177,8 +177,11 @@ kc_retry update "realms/$REALM" \
   -s loginTheme=otziv \
   -s editUsernameAllowed=true \
   -s accessTokenLifespan=600 \
+  -s rememberMe=true \
   -s ssoSessionIdleTimeout=28800 \
   -s ssoSessionMaxLifespan=86400 \
+  -s ssoSessionIdleTimeoutRememberMe=86400 \
+  -s ssoSessionMaxLifespanRememberMe=86400 \
   -s "offlineSessionIdleTimeout=$MOBILE_SESSION_SECONDS" \
   -s offlineSessionMaxLifespanEnabled=true \
   -s "offlineSessionMaxLifespan=$MOBILE_SESSION_SECONDS"

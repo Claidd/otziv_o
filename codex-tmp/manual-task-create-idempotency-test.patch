@@ -1,0 +1,117 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskServiceTest.java
+@@
+ import com.hunt.otziv.contractor_payments.service.ContractorPaymentAccountingPhaseService;
++import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
+ import com.hunt.otziv.payments.dto.ManualPaymentTaskBalance;
+@@
+ import com.hunt.otziv.payments.model.ManualPaymentTask;
+ import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
++import com.hunt.otziv.payments.model.ManualPaymentTaskCreationRequest;
+@@
++import com.hunt.otziv.payments.repository.ManualPaymentTaskCreationRequestRepository;
+ import com.hunt.otziv.payments.repository.ManualPaymentTaskRepository;
+@@
+     private ManualPaymentTaskRepository taskRepository;
++    @Mock
++    private ManualPaymentTaskCreationRequestRepository taskCreationRequestRepository;
+@@
+                 taskRepository,
++                taskCreationRequestRepository,
+                 paymentLinkRepository,
+@@
+     }
++
++    @Test
++    void creationOperationKeyReturnsExactReplayAndRejectsChangedPayload() {
++        com.hunt.otziv.u_users.model.Manager manager =
++                org.mockito.Mockito.mock(com.hunt.otziv.u_users.model.Manager.class);
++        com.hunt.otziv.u_users.model.User user =
++                org.mockito.Mockito.mock(com.hunt.otziv.u_users.model.User.class);
++        com.hunt.otziv.payments.model.PaymentProfile bankProfile =
++                org.mockito.Mockito.mock(com.hunt.otziv.payments.model.PaymentProfile.class);
++        when(managerRepository.findByIdWithPaymentProfile(5L)).thenReturn(Optional.of(manager));
++        when(manager.getId()).thenReturn(5L);
++        when(manager.getUser()).thenReturn(user);
++        when(user.getFio()).thenReturn("Менеджер");
++        when(user.getUsername()).thenReturn("manager");
++        when(paymentProfileService.selectForManager(manager)).thenReturn(bankProfile);
++        when(bankProfile.getId()).thenReturn(9L);
++        when(bankProfile.getName()).thenReturn("Основные реквизиты");
++        when(accountingTargetPolicy.resolveForManagement(
++                ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK.name(),
++                null,
++                100_000L,
++                false,
++                null
++        )).thenReturn(new TargetResolution(
++                ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK,
++                null,
++                "Внешний получатель",
++                0,
++                0,
++                false
++        ));
++        ManualPaymentTaskCreationRequest creation = new ManualPaymentTaskCreationRequest();
++        when(taskCreationRequestRepository.insertIfAbsent(
++                org.mockito.ArgumentMatchers.eq("task-create-1"),
++                org.mockito.ArgumentMatchers.anyString()
++        )).thenAnswer(invocation -> {
++            if (creation.getPayloadHash() == null) {
++                creation.setOperationKey("task-create-1");
++                creation.setPayloadHash(invocation.getArgument(1));
++            }
++            return 1;
++        });
++        when(taskCreationRequestRepository.findByOperationKeyForUpdate("task-create-1"))
++                .thenReturn(Optional.of(creation));
++        ManualPaymentTask[] savedTask = new ManualPaymentTask[1];
++        when(taskRepository.save(any(ManualPaymentTask.class))).thenAnswer(invocation -> {
++            ManualPaymentTask value = invocation.getArgument(0);
++            value.setId(71L);
++            savedTask[0] = value;
++            return value;
++        });
++        when(taskRepository.findByIdWithDetails(71L)).thenAnswer(ignored -> Optional.of(savedTask[0]));
++        when(ledgerService.balance(71L)).thenReturn(ManualPaymentTaskBalance.empty(false));
++        when(contractorPaymentAccountingPhaseService.current()).thenReturn(ContractorAllocationMode.SHADOW);
++        CreateManualPaymentTaskRequest request = new CreateManualPaymentTaskRequest(
++                5L,
++                ManualPaymentType.MOBILE_BANK.name(),
++                "+79990000000",
++                "Наталья",
++                "",
++                "Перейти к оплате",
++                100_000L,
++                "Тест",
++                ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK.name(),
++                null,
++                false,
++                "task-create-1"
++        );
++
++        var first = service.createManagementTask(request, "admin");
++        var replay = service.createManagementTask(request, "admin");
++        CreateManualPaymentTaskRequest changed = new CreateManualPaymentTaskRequest(
++                5L,
++                ManualPaymentType.MOBILE_BANK.name(),
++                "+79990000000",
++                "Наталья",
++                "",
++                "Перейти к оплате",
++                200_000L,
++                "Тест",
++                ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK.name(),
++                null,
++                false,
++                "task-create-1"
++        );
++        ResponseStatusException conflict = assertThrows(ResponseStatusException.class, () ->
++                service.createManagementTask(changed, "admin"));
++
++        assertEquals(71L, first.id());
++        assertEquals(71L, replay.id());
++        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
++        verify(taskRepository, org.mockito.Mockito.times(1)).save(any(ManualPaymentTask.class));
++    }
+*** End Patch

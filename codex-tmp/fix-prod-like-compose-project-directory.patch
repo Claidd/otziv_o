@@ -1,0 +1,11 @@
+*** Begin Patch
+*** Update File: infrastructure/scripts/local/prod-like-smoke.ps1
+@@
+-$composeArgs = @("compose", "-f", $composePath, "--env-file", $envPath)
++$composeArgs = @(
++    "compose",
++    "--project-directory", $repoRoot,
++    "-f", $composePath,
++    "--env-file", $envPath
++)
+*** End Patch

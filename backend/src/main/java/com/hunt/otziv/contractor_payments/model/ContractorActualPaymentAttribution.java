@@ -11,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -58,7 +59,11 @@ public class ContractorActualPaymentAttribution {
     private ContractorAllocationMode accountingMode;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "original_recipient_type", nullable = false, length = 24, updatable = false)
+    @Column(name = "original_cash_destination_kind", nullable = false, length = 32, updatable = false)
+    private ContractorCashDestinationKind originalCashDestinationKind;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "original_recipient_type", length = 24, updatable = false)
     private ContractorRecipientType originalRecipientType;
 
     @Column(name = "original_recipient_profile_id", updatable = false)
@@ -71,8 +76,22 @@ public class ContractorActualPaymentAttribution {
     @Column(name = "original_recipient_name_snapshot", columnDefinition = "TEXT", updatable = false)
     private String originalRecipientNameSnapshot;
 
+    @Column(name = "original_manual_payment_task_id", updatable = false)
+    private Long originalManualPaymentTaskId;
+
+    @Column(name = "original_manual_payment_task_generation", updatable = false)
+    private Long originalManualPaymentTaskGeneration;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "actual_recipient_type", nullable = false, length = 24, updatable = false)
+    @Column(name = "original_manual_payment_task_target_kind", length = 32, updatable = false)
+    private ManualPaymentTaskAccountingTargetKind originalManualPaymentTaskTargetKind;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "actual_cash_destination_kind", nullable = false, length = 32, updatable = false)
+    private ContractorCashDestinationKind actualCashDestinationKind;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "actual_recipient_type", length = 24, updatable = false)
     private ContractorRecipientType actualRecipientType;
 
     @Column(name = "actual_recipient_profile_id", updatable = false)
@@ -84,6 +103,16 @@ public class ContractorActualPaymentAttribution {
     @Convert(converter = EncryptedCredentialConverter.class)
     @Column(name = "actual_recipient_name_snapshot", columnDefinition = "TEXT", updatable = false)
     private String actualRecipientNameSnapshot;
+
+    @Column(name = "actual_manual_payment_task_id", updatable = false)
+    private Long actualManualPaymentTaskId;
+
+    @Column(name = "actual_manual_payment_task_generation", updatable = false)
+    private Long actualManualPaymentTaskGeneration;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "actual_manual_payment_task_target_kind", length = 32, updatable = false)
+    private ManualPaymentTaskAccountingTargetKind actualManualPaymentTaskTargetKind;
 
     @Column(name = "current_worker_id", updatable = false)
     private Long currentWorkerId;
@@ -162,6 +191,8 @@ public class ContractorActualPaymentAttribution {
         row.originalAllocationId = originalAllocationId;
         row.clientFacingAllocationId = clientFacingAllocationId;
         row.accountingMode = accountingMode;
+        row.originalCashDestinationKind = originalRecipientType == ContractorRecipientType.OWNER
+                ? ContractorCashDestinationKind.OWNER : ContractorCashDestinationKind.CONTRACTOR_PROFILE;
         row.originalRecipientType = originalRecipientType;
         row.originalRecipientProfileId = originalRecipientProfileId;
         row.originalRecipientUserId = originalRecipientUserId;
@@ -170,6 +201,8 @@ public class ContractorActualPaymentAttribution {
         row.actualRecipientProfileId = actualRecipientProfileId;
         row.actualRecipientUserId = actualRecipientUserId;
         row.actualRecipientNameSnapshot = actualRecipientNameSnapshot;
+        row.actualCashDestinationKind = actualRecipientType == ContractorRecipientType.OWNER
+                ? ContractorCashDestinationKind.OWNER : ContractorCashDestinationKind.CONTRACTOR_PROFILE;
         row.currentWorkerId = currentWorkerId;
         row.currentManagerId = currentManagerId;
         row.amountKopecks = amountKopecks;
@@ -182,6 +215,44 @@ public class ContractorActualPaymentAttribution {
         row.actor = actor;
         row.correctionOfId = correctionOfId;
         row.createdAt = LocalDateTime.now();
+        return row;
+    }
+
+    public static ContractorActualPaymentAttribution createWithDestinations(
+            String attributionKey, ContractorActualPaymentSourceKind sourceKind, Long sourceId,
+            Long evidenceId, Long orderId, Long commonInvoiceId, Long originalAllocationId,
+            Long clientFacingAllocationId, ContractorAllocationMode accountingMode,
+            ContractorRecipientType originalRecipientType, Long originalRecipientProfileId,
+            Long originalRecipientUserId, String originalRecipientNameSnapshot,
+            ContractorRecipientType actualRecipientType, Long actualRecipientProfileId,
+            Long actualRecipientUserId, String actualRecipientNameSnapshot,
+            Long currentWorkerId, Long currentManagerId, long amountKopecks,
+            Long availableBeforeKopecks, long projectedOverrunKopecks, LocalDateTime effectiveAt,
+            String reason, String evidenceReference, String receiptUrl, String actor, Long correctionOfId,
+            ContractorCashDestinationKind originalCashDestinationKind,
+            Long originalTaskId, Long originalTaskGeneration,
+            ManualPaymentTaskAccountingTargetKind originalTaskTargetKind,
+            ContractorCashDestinationKind actualCashDestinationKind,
+            Long actualTaskId, Long actualTaskGeneration,
+            ManualPaymentTaskAccountingTargetKind actualTaskTargetKind
+    ) {
+        ContractorActualPaymentAttribution row = create(
+                attributionKey, sourceKind, sourceId, evidenceId, orderId, commonInvoiceId,
+                originalAllocationId, clientFacingAllocationId, accountingMode,
+                originalRecipientType, originalRecipientProfileId, originalRecipientUserId,
+                originalRecipientNameSnapshot, actualRecipientType, actualRecipientProfileId,
+                actualRecipientUserId, actualRecipientNameSnapshot, currentWorkerId, currentManagerId,
+                amountKopecks, availableBeforeKopecks, projectedOverrunKopecks, effectiveAt,
+                reason, evidenceReference, receiptUrl, actor, correctionOfId
+        );
+        row.originalCashDestinationKind = originalCashDestinationKind;
+        row.originalManualPaymentTaskId = originalTaskId;
+        row.originalManualPaymentTaskGeneration = originalTaskGeneration;
+        row.originalManualPaymentTaskTargetKind = originalTaskTargetKind;
+        row.actualCashDestinationKind = actualCashDestinationKind;
+        row.actualManualPaymentTaskId = actualTaskId;
+        row.actualManualPaymentTaskGeneration = actualTaskGeneration;
+        row.actualManualPaymentTaskTargetKind = actualTaskTargetKind;
         return row;
     }
 }

@@ -1,0 +1,12 @@
+*** Begin Patch
+*** Update File: frontend/src/app/core/payments.api.ts
+@@
+ export interface CreateManualPaymentTaskRequest {
++  operationKey: string;
+   managerId?: number | null;
+*** Update File: mobile/src/app/core/api.service.ts
+@@
+ export interface CreateManualPaymentTaskRequest {
++  operationKey: string;
+   managerId?: number | null;
+*** End Patch

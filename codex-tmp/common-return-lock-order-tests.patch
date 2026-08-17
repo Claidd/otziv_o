@@ -1,0 +1,49 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentTaskReturnServiceTest.java
+@@
+         when(invoiceRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(invoice));
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.COMMON_INVOICE, 77L))
++                .thenReturn(List.of(row));
+         when(attributionRepository.findAllBySourceForUpdate(
+@@
+         when(invoiceRepository.findByIdForUpdate(78L)).thenReturn(Optional.empty());
+         when(archivedSourceRepository.lockCommonInvoice(78L)).thenReturn(true);
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.COMMON_INVOICE, 78L))
++                .thenReturn(List.of(row));
+         when(attributionRepository.findAllBySourceForUpdate(
+@@
+-        order.verify(attributionRepository).findAllBySourceForUpdate(
++        order.verify(attributionRepository)
++                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                        ContractorActualPaymentSourceKind.COMMON_INVOICE, 78L);
++        order.verify(taskLedgerService).lockArchivedReturnSource(
++                10L, 5L, ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE, 78L);
++        order.verify(attributionRepository).findAllBySourceForUpdate(
+                 ContractorActualPaymentSourceKind.COMMON_INVOICE, 78L);
+-        order.verify(taskLedgerService).lockArchivedReturnSource(
+-                10L, 5L, ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE, 78L);
+         order.verify(taskLedgerService).recordReturn(any(ManualPaymentTaskReturnCommand.class));
+@@
+         when(invoiceRepository.findByIdForUpdate(79L)).thenReturn(Optional.of(restored));
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.COMMON_INVOICE, 79L))
++                .thenReturn(List.of(row));
+         when(attributionRepository.findAllBySourceForUpdate(
+@@
+         when(invoiceRepository.findByIdForUpdate(80L)).thenReturn(Optional.of(invoice));
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.COMMON_INVOICE, 80L))
++                .thenReturn(List.of(first, second), List.of(first));
+         when(attributionRepository.findAllBySourceForUpdate(
+                 ContractorActualPaymentSourceKind.COMMON_INVOICE, 80L))
+-                .thenReturn(List.of(first, second), List.of(first));
++                .thenReturn(List.of(first));
+@@
+         when(invoiceRepository.findByIdForUpdate(81L)).thenReturn(Optional.of(invoice));
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.COMMON_INVOICE, 81L))
++                .thenReturn(List.of(row));
+         when(attributionRepository.findAllBySourceForUpdate(
+*** End Patch

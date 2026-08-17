@@ -1,0 +1,13 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/repository/ContractorPaymentAccountingPhaseRepository.java
+@@
+                     task.accounting_target_kind = 'UNRESOLVED'
++                    AND task.status IN ('ACTIVE', 'PAUSED', 'NEEDS_ATTENTION')
+                     AND (COALESCE(ledger.exposure_kopecks, 0) <> 0
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentAccountingPhaseServiceTest.java
+@@
+     void promotionFailsClosedWhenTaskLedgerAndAllocationExposureDoNotMatch() {
+@@
+         verify(repository, never()).saveAndFlush(state);
+     }
+*** End Patch

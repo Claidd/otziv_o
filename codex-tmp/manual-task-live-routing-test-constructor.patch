@@ -1,0 +1,21 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentLiveRoutingServiceTest.java
+@@
+ import com.hunt.otziv.payments.model.PaymentMethod;
++import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
+@@
+     @Mock
+     private UserRepository userRepository;
++    @Mock
++    private ManualPaymentTaskContractorCapacityService taskCapacityService;
+@@
+                 accountingPhaseService,
+                 userRepository,
+-                new ContractorOrderManagerResolver()
++                new ContractorOrderManagerResolver(),
++                taskCapacityService
+         );
++        lenient().when(taskCapacityService.ordinaryAvailable(any(), any()))
++                .thenAnswer(invocation -> profileService.available(
++                        invocation.getArgument(0), invocation.getArgument(1)));
+*** End Patch

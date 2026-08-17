@@ -20,6 +20,7 @@ import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.model.PaymentMethod;
+import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -75,6 +76,7 @@ public class ContractorPaymentLiveRoutingService {
     private final ContractorPaymentAccountingPhaseService accountingPhaseService;
     private final UserRepository userRepository;
     private final ContractorOrderManagerResolver orderManagerResolver;
+    private final ManualPaymentTaskContractorCapacityService taskCapacityService;
 
     public boolean enabledForNewRoutes() {
         return runtimeSwitch.liveRoutingEnabled();
@@ -825,10 +827,8 @@ public class ContractorPaymentLiveRoutingService {
             );
             allocation.setBankNameSnapshot(recipient.getBankName());
             allocation.setPaymentCommentSnapshot(recipient.getPaymentComment());
-            allocation.setAvailableBeforeKopecks(profileService.available(
-                    recipient,
-                    ContractorAllocationMode.LIVE
-            ));
+            allocation.setAvailableBeforeKopecks(taskCapacityService.ordinaryAvailable(
+                    recipient, ContractorAllocationMode.LIVE));
             allocation.setStatus(ContractorAllocationStatus.RESERVED);
             allocation.setReservedAt(LocalDateTime.now());
         }
@@ -976,7 +976,8 @@ public class ContractorPaymentLiveRoutingService {
                 || normalize(profile.getBankName()).isBlank()) {
             return ContractorRoutingDecisionReason.RECIPIENT_DETAILS_INCOMPLETE;
         }
-        if (profileService.available(profile, ContractorAllocationMode.LIVE) < amount) {
+        if (taskCapacityService.ordinaryAvailable(
+                profile, ContractorAllocationMode.LIVE) < amount) {
             return ContractorRoutingDecisionReason.INSUFFICIENT_AVAILABLE_BALANCE;
         }
         ContractorPaymentRoutingLimitService.RoutingLimitDecision limitDecision =

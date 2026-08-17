@@ -1,0 +1,20 @@
+name: otziv-build
+
+services:
+  app:
+    image: ${APP_IMAGE:-claid38/otziv-app:latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+  nginx:
+    image: ${WEB_IMAGE:-claid38/otziv-web:latest}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+
+  external-review-worker:
+    image: ${EXTERNAL_REVIEW_WORKER_IMAGE:-claid38/otziv-external-review-worker:latest}
+    build:
+      context: ./backend/external-review-worker
+      dockerfile: Dockerfile

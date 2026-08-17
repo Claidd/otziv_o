@@ -1,0 +1,12 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinatorTest.java
+@@
+         ContractorActualPaymentAttribution row = mock(ContractorActualPaymentAttribution.class);
+         when(row.getOriginalRecipientType()).thenReturn(null);
+         when(row.getActualRecipientType()).thenReturn(null);
++        when(row.getOriginalRecipientUserId()).thenReturn(null);
++        when(row.getActualRecipientUserId()).thenReturn(null);
+@@
+-        when(targetAccessPolicy.canManageUser(null)).thenReturn(true);
+         when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
+*** End Patch

@@ -1,0 +1,40 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/PaymentLinkService.java
+@@
+-        Optional<ManualPaymentTask> task = manualPaymentTaskService.findRoutableTask(
+-                manager,
+-                profile,
+-                amountKopecks,
+-                null
+-        );
+-        if (task.isPresent()) {
+-            applyManualTaskPayment(route, task.get());
+-        } else if (shouldUseManualPayment(profile, amountKopecks, LocalDateTime.now(), null)) {
++        // Common-invoice tasks are reserved exclusively through the typed
++        // task ledger in selectCommonInvoiceTaskRoute. Falling back here must
++        // never rediscover a legacy task without source generation/binding.
++        if (shouldUseManualPayment(profile, amountKopecks, LocalDateTime.now(), null)) {
+             applyManualProfilePayment(route, profile);
+         } else {
+@@
+-        validatePayable(link);
++        validatePayable(link, true);
+         ensureManualPayment(link);
+@@
+     private void validatePayable(PaymentLink link) {
++        validatePayable(link, false);
++    }
++
++    private void validatePayable(PaymentLink link, boolean releaseTaskReservationOnExpiry) {
+         orderPaymentIntegrityService.assertPaymentCycleAllowed(link == null ? null : link.getOrder());
+@@
+         }
+         if (link.getExpiresAt().isBefore(LocalDateTime.now())) {
++            if (releaseTaskReservationOnExpiry) {
++                taskReceiptIntegrationService.release(
++                        link,
++                        "Срок действия платёжной ссылки истек"
++                );
++            }
+             link.setStatus(PaymentLinkStatus.EXPIRED);
+*** End Patch

@@ -73,6 +73,7 @@ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
+import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import com.hunt.otziv.payments.service.TbankClient;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
@@ -124,6 +125,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -141,6 +143,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.CaughtFailureStage.CLOSE_ORDER;
@@ -176,6 +179,8 @@ class CommonBillingServiceTest {
     private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
     @Mock
     private ManualPaymentTaskService manualPaymentTaskService;
+    @Mock
+    private ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
     @Mock
     private ManagerRepository managerRepository;
     @Mock
@@ -1286,6 +1291,18 @@ class CommonBillingServiceTest {
         assertEquals(PaymentLinkStatus.CANCELED, expiredManual.getStatus());
         assertEquals(PaymentLinkStatus.CANCELED, waitingManual.getStatus());
         assertEquals("PAID", response.summary().status());
+        verify(taskReceiptIntegrationService).release(
+                localBankDraft,
+                "Отдельный маршрут отменен после ручной оплаты общего счета"
+        );
+        verify(taskReceiptIntegrationService).release(
+                expiredManual,
+                "Отдельный маршрут отменен после ручной оплаты общего счета"
+        );
+        verify(taskReceiptIntegrationService).release(
+                waitingManual,
+                "Отдельный маршрут отменен после ручной оплаты общего счета"
+        );
         ArgumentCaptor<ManualCardPaymentReviewNotificationService.CommonInvoiceReviewRequest> notification =
                 ArgumentCaptor.forClass(ManualCardPaymentReviewNotificationService.CommonInvoiceReviewRequest.class);
         verify(manualCardPaymentReviewNotificationService).notifyCommonInvoiceAfterCommit(notification.capture());
@@ -2393,6 +2410,16 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.DISABLED, duplicateA.getStatus());
         assertEquals(CommonInvoiceStatus.DISABLED, duplicateB.getStatus());
         verify(invoiceOrderRepository).saveAll(List.of(movedItemA, movedItemB));
+    }
+
+    @Test
+    void duplicateNormalizationSkipsWholeBatchWhenOneRouteFreezesAfterDiscovery() {
+        assertDuplicateNormalizationSkipsFrozenRoute(false);
+    }
+
+    @Test
+    void duplicateNormalizationSkipsWholeBatchWhenBothRoutesFreezeAfterDiscovery() {
+        assertDuplicateNormalizationSkipsFrozenRoute(true);
     }
 
     @Test
@@ -3683,6 +3710,10 @@ class CommonBillingServiceTest {
         assertEquals(PaymentLinkStatus.CANCELED, second.getStatus());
         assertTrue(first.getLastError().contains("invoice=10"));
         assertTrue(first.getLastError().contains("order=201"));
+        verify(taskReceiptIntegrationService).release(
+                first, "Отдельный маршрут отменен при создании общего счета");
+        verify(taskReceiptIntegrationService).release(
+                second, "Отдельный маршрут отменен при создании общего счета");
         verify(paymentLinkRepository).saveAll(org.mockito.ArgumentMatchers.argThat(saved -> {
             if (saved == null) {
                 return false;
@@ -4124,6 +4155,77 @@ class CommonBillingServiceTest {
         assertNull(link.getReconcileLeaseToken());
         assertNull(link.getReconcileLeaseUntil());
         verify(accountCompanyRepository, times(2)).findByIdForUpdate(701L);
+    }
+
+    @Test
+    void pendingCompanyReconcileDefersReadyTaskRouteWithoutMovingItsItems() {
+        CommonBillingAccount targetAccount = account();
+        targetAccount.setEnabled(true);
+        CommonBillingAccount sourceAccount = account();
+        sourceAccount.setId(56L);
+        sourceAccount.setEnabled(true);
+        Company company = company(20L, null);
+        CommonBillingAccountCompany link = new CommonBillingAccountCompany();
+        link.setId(703L);
+        link.setAccount(targetAccount);
+        link.setCompany(company);
+        link.setEnabled(true);
+        link.setReconcilePending(true);
+        link.setReconcileNextAttemptAt(LocalDateTime.now().minusMinutes(1));
+
+        CommonInvoice frozen = invoice(sourceAccount);
+        frozen.setId(90L);
+        frozen.setStatus(CommonInvoiceStatus.READY);
+        frozen.setPaymentRouteSelectedAt(LocalDateTime.now().minusMinutes(5));
+        frozen.setPaymentRouteType("MANUAL_EXTERNAL_LINK");
+        frozen.setPaymentRouteManualSource(ManualPaymentSource.MANUAL_TASK);
+        frozen.setPaymentRouteManualTaskId(900L);
+        frozen.setPaymentRouteManualTaskGeneration(4L);
+        frozen.setPaymentRouteManualTaskSourceGeneration("source-90");
+        Order sourceOrder = order(24_670L);
+        sourceOrder.setCompany(company);
+        CommonInvoiceOrder sourceItem = item(frozen, sourceOrder);
+
+        when(accountCompanyRepository.findPendingReconciliationIds(
+                any(LocalDateTime.class), any(Pageable.class))).thenReturn(List.of(703L));
+        when(accountCompanyRepository.findByIdForUpdate(703L)).thenReturn(Optional.of(link));
+        when(accountCompanyRepository.findByAccount_IdAndCompany_Id(1L, 20L))
+                .thenReturn(Optional.of(link));
+        when(accountCompanyRepository.findConfiguredEnabledLinksForCompany(20L))
+                .thenReturn(List.of(link));
+        when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(targetAccount));
+        when(accountRepository.findByIdWithRelations(56L)).thenReturn(Optional.of(sourceAccount));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(targetAccount));
+        when(accountRepository.findByIdWithRelationsForUpdate(56L)).thenReturn(Optional.of(sourceAccount));
+        when(invoiceRepository.findCurrentForAccount(eq(1L), any(), any(Pageable.class)))
+                .thenReturn(List.of());
+        when(invoiceRepository.findFrozenCompositionInvoiceIdsForCompanyReconcile(
+                eq(20L), eq(1L), any())).thenReturn(List.of(90L));
+        when(invoiceOrderRepository.findBindingsByInvoiceIds(any()))
+                .thenReturn(List.of(binding(24_670L, 90L, 56L)));
+        when(invoiceRepository.findByIdWithAccount(90L)).thenReturn(Optional.of(frozen));
+        when(invoiceRepository.findByIdWithAccountForUpdate(90L)).thenReturn(Optional.of(frozen));
+        when(orderAggregateMutationLockService.lock(24_670L)).thenReturn(sourceOrder);
+
+        int processed = service.reconcilePendingCompanyLinks(20);
+
+        assertEquals(1, processed);
+        assertTrue(link.isReconcilePending());
+        assertEquals(0, link.getReconcileAttempts());
+        assertNull(link.getReconcileLeaseToken());
+        assertNull(link.getReconcileLeaseUntil());
+        assertNotNull(link.getReconcileNextAttemptAt());
+        assertTrue(link.getReconcileLastError()
+                .startsWith("company_reconcile_deferred_frozen_route"));
+        assertSame(frozen, sourceItem.getInvoice());
+        assertEquals(CommonInvoiceStatus.READY, frozen.getStatus());
+        assertEquals(ManualPaymentSource.MANUAL_TASK, frozen.getPaymentRouteManualSource());
+        assertEquals("source-90", frozen.getPaymentRouteManualTaskSourceGeneration());
+        verify(invoiceOrderRepository, never()).saveAll(any());
+        verify(invoiceRepository, never()).save(any(CommonInvoice.class));
+        verify(invoiceOrderRepository, never())
+                .findMovableOpenItemsForCompany(any(), any(), any());
+        verifyNoInteractions(taskReceiptIntegrationService);
     }
 
     @Test
@@ -5722,6 +5824,84 @@ class CommonBillingServiceTest {
         assertEquals("ARCHIVED", result.summary().status());
         verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Архив");
         verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(102L, "Архив");
+    }
+
+    @Test
+    void archivePreviewAndArchiveRejectCollectingInvoiceWithIssuedTaskRoute() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.now().minusMinutes(2));
+        invoice.setPaymentRouteType("MANUAL_MOBILE_BANK");
+        invoice.setPaymentRouteManualSource(ManualPaymentSource.MANUAL_TASK);
+        invoice.setPaymentRouteManualTaskId(901L);
+        invoice.setPaymentRouteManualTaskGeneration(5L);
+        invoice.setPaymentRouteManualTaskSourceGeneration("archive-source");
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setReady(false);
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(badReviewTaskService.getSummaryForOrder(101L)).thenReturn(BadReviewTaskSummary.empty());
+
+        var preview = service.archivePreview(10L);
+        ResponseStatusException conflict = assertThrows(
+                ResponseStatusException.class,
+                () -> service.archiveInvoice(
+                        10L, new CommonInvoiceCloseRequest(true, ""), () -> "manager")
+        );
+
+        assertFalse(preview.allowed());
+        assertTrue(preview.blockers().contains("платёжный маршрут уже выдан клиенту"));
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertEquals(CommonInvoiceStatus.COLLECTING, invoice.getStatus());
+        assertFalse(item.isPaid());
+        assertEquals("archive-source", invoice.getPaymentRouteManualTaskSourceGeneration());
+        verify(orderStatusTransitionService, never())
+                .changeStatusForCommonBillingOrder(any(), eq("Архив"));
+        verify(invoiceRepository, never()).save(invoice);
+        verifyNoInteractions(taskReceiptIntegrationService);
+    }
+
+    @Test
+    void legacyPaidConfirmationRejectsIssuedManualTaskRouteWithoutClosingInvoice() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.now().minusMinutes(2));
+        invoice.setPaymentRouteType("MANUAL_EXTERNAL_LINK");
+        invoice.setPaymentRouteManualSource(ManualPaymentSource.MANUAL_TASK);
+        invoice.setPaymentRouteManualTaskId(902L);
+        invoice.setPaymentRouteManualTaskGeneration(6L);
+        invoice.setPaymentRouteManualTaskSourceGeneration("legacy-source");
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+
+        when(invoiceOrderRepository.findOrderIdsByInvoiceId(10L)).thenReturn(List.of(101L));
+        when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(10L)).thenReturn(List.of(item));
+        when(orderAggregateMutationLockService.lock(101L)).thenReturn(order);
+        when(paymentLinkRepository.findByOrderIdForUpdate(101L)).thenReturn(List.of());
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+
+        ResponseStatusException conflict = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markPaid(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertFalse(item.isPaid());
+        assertEquals("legacy-source", invoice.getPaymentRouteManualTaskSourceGeneration());
+        verify(actualPaymentAttributionFlowPolicy).requireLegacyFlowLocked();
+        verify(invoiceOrderRepository, never()).saveAll(any());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+        verifyNoInteractions(taskReceiptIntegrationService);
     }
 
     @Test
@@ -7389,6 +7569,67 @@ class CommonBillingServiceTest {
         assertEquals("CANCELING", ref.getStatus());
         assertEquals(1, ref.getCancelAttempts());
         verify(tbankClient, never()).cancel(any(), any());
+    }
+
+    private void assertDuplicateNormalizationSkipsFrozenRoute(boolean bothFrozen) {
+        CommonBillingAccount account = account();
+        CommonInvoice discoveredA = invoice(account);
+        discoveredA.setId(35L);
+        discoveredA.setStatus(CommonInvoiceStatus.READY);
+        CommonInvoice discoveredB = invoice(account);
+        discoveredB.setId(36L);
+        discoveredB.setStatus(CommonInvoiceStatus.READY);
+        CommonInvoice lockedA = invoice(account);
+        lockedA.setId(35L);
+        lockedA.setStatus(CommonInvoiceStatus.READY);
+        lockedA.setPaymentRouteSelectedAt(LocalDateTime.now());
+        lockedA.setPaymentRouteType("MANUAL_EXTERNAL_LINK");
+        lockedA.setPaymentRouteManualSource(ManualPaymentSource.MANUAL_TASK);
+        lockedA.setPaymentRouteManualTaskId(910L);
+        lockedA.setPaymentRouteManualTaskGeneration(2L);
+        lockedA.setPaymentRouteManualTaskSourceGeneration("duplicate-35");
+        CommonInvoice lockedB = invoice(account);
+        lockedB.setId(36L);
+        lockedB.setStatus(CommonInvoiceStatus.READY);
+        if (bothFrozen) {
+            lockedB.setPaymentRouteSelectedAt(LocalDateTime.now());
+            lockedB.setPaymentRouteType("MANUAL_MOBILE_BANK");
+            lockedB.setPaymentRouteManualSource(ManualPaymentSource.MANUAL_TASK);
+            lockedB.setPaymentRouteManualTaskId(911L);
+            lockedB.setPaymentRouteManualTaskGeneration(3L);
+            lockedB.setPaymentRouteManualTaskSourceGeneration("duplicate-36");
+        }
+
+        when(invoiceRepository.findAccountIdsWithDuplicateCurrentInvoices(any()))
+                .thenReturn(List.of(1L));
+        when(accountRepository.findByIdWithRelations(1L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByIdWithRelationsForUpdate(1L)).thenReturn(Optional.of(account));
+        when(invoiceRepository.findCurrentForAccount(eq(1L), any(), any(Pageable.class)))
+                .thenReturn(List.of(discoveredB, discoveredA));
+        when(invoiceOrderRepository.findBindingsByInvoiceIds(any())).thenReturn(List.of());
+        when(invoiceRepository.findByIdWithAccount(35L)).thenReturn(Optional.of(discoveredA));
+        when(invoiceRepository.findByIdWithAccount(36L)).thenReturn(Optional.of(discoveredB));
+        when(invoiceRepository.findByIdWithAccountForUpdate(35L)).thenReturn(Optional.of(lockedA));
+        when(invoiceRepository.findByIdWithAccountForUpdate(36L)).thenReturn(Optional.of(lockedB));
+        when(invoiceBoardQueryRepository.findPage(
+                eq("Все"), eq(""), eq(null),
+                org.mockito.ArgumentMatchers.<Set<Long>>isNull(),
+                eq(false), eq(0), eq(20), any(LocalDateTime.class)
+        )).thenReturn(new CommonInvoiceBoardQueryRepository.PageSelection(List.of(), 0L, 0));
+
+        CommonBillingService.ManagerBoardPage page = service.managerBoardPage(
+                "Все", "", null, null, "desc", 0, 20);
+
+        assertTrue(page.cards().isEmpty());
+        assertEquals(CommonInvoiceStatus.READY, lockedA.getStatus());
+        assertEquals("duplicate-35", lockedA.getPaymentRouteManualTaskSourceGeneration());
+        assertEquals(CommonInvoiceStatus.READY, lockedB.getStatus());
+        if (bothFrozen) {
+            assertEquals("duplicate-36", lockedB.getPaymentRouteManualTaskSourceGeneration());
+        }
+        verify(invoiceOrderRepository, never()).saveAll(any());
+        verify(invoiceRepository, never()).save(any(CommonInvoice.class));
+        verifyNoInteractions(taskReceiptIntegrationService);
     }
 
     private CommonBillingAccount account() {

@@ -128,26 +128,26 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
 
         ReviewRecoveryBatch batch = getOrCreateActiveBatch(order, createdBy);
         LocalDate scheduledDate = nextScheduledDate(batch);
+        Bot publicationBot = review.getBot();
         ReviewRecoveryTask task = ReviewRecoveryTask.builder()
                 .batch(batch)
                 .order(order)
                 .sourceReview(review)
                 .worker(resolveWorker(order, review))
                 .manager(order.getManager())
-                .bot(null)
+                .bot(publicationBot)
                 .status(ReviewRecoveryTaskStatus.PLANNED)
                 .originalText(review.getText())
                 .recoveryText(safeText(review.getText()))
                 .originalAnswer(review.getAnswer())
                 .recoveryAnswer(review.getAnswer())
-                .botLoginSnapshot(null)
-                .botPasswordSnapshot(null)
-                .botFioSnapshot(null)
+                .botLoginSnapshot(botLogin(publicationBot))
+                .botPasswordSnapshot(botPassword(publicationBot))
+                .botFioSnapshot(botFio(publicationBot))
                 .scheduledDate(scheduledDate)
                 .createdBy(createdBy)
                 .build();
 
-        applyInitialEligibleBot(task);
         ReviewRecoveryTask savedTask = taskRepository.save(task);
         reserveTaskBot(savedTask, "review recovery task created");
         log.info("Создана задача восстановления {} для отзыва {}, заказа {}, дата {}",
@@ -171,6 +171,9 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         Worker worker = source.workerId() == null
                 ? null
                 : workerRepository.findById(source.workerId()).orElse(null);
+        Bot publicationBot = source.botId() == null
+                ? null
+                : botService.findBotById(source.botId());
         ReviewRecoveryBatch batch = getOrCreateActiveArchiveBatch(source, manager, createdBy);
         LocalDate scheduledDate = nextArchiveScheduledDate(source);
 
@@ -201,20 +204,19 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                 .archiveReviewUrl(source.url())
                 .worker(worker)
                 .manager(manager)
-                .bot(null)
+                .bot(publicationBot)
                 .status(ReviewRecoveryTaskStatus.PLANNED)
                 .originalText(source.text())
                 .recoveryText(safeText(source.text()))
                 .originalAnswer(source.answer())
                 .recoveryAnswer(source.answer())
-                .botLoginSnapshot(null)
-                .botPasswordSnapshot(null)
-                .botFioSnapshot(null)
+                .botLoginSnapshot(firstNonBlank(botLogin(publicationBot), source.botLogin()))
+                .botPasswordSnapshot(firstNonBlank(botPassword(publicationBot), source.botPassword()))
+                .botFioSnapshot(firstNonBlank(botFio(publicationBot), source.botFio()))
                 .scheduledDate(scheduledDate)
                 .createdBy(createdBy)
                 .build();
 
-        applyInitialEligibleBot(task);
         ReviewRecoveryTask savedTask = taskRepository.save(task);
         reserveTaskBot(savedTask, "archive review recovery task created");
         log.info("Создана архивная задача восстановления {} для архивного отзыва {}, заказа {}, дата {}",
@@ -964,6 +966,18 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         return text == null ? "" : text;
     }
 
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
+    }
+
     private Long orderId(ReviewRecoveryTask task) {
         if (task == null) {
             return null;
@@ -1045,20 +1059,6 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         return crossCityCandidates.isEmpty()
                 ? null
                 : lockRandomEligible(crossCityCandidates, assignmentScope);
-    }
-
-    private void applyInitialEligibleBot(ReviewRecoveryTask task) {
-        Bot selectedBot = pickReplacementBot(task);
-        if (selectedBot == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Нет свободного выгулянного аккаунта для восстановления"
-            );
-        }
-        task.setBot(selectedBot);
-        task.setBotLoginSnapshot(botLogin(selectedBot));
-        task.setBotPasswordSnapshot(botPassword(selectedBot));
-        task.setBotFioSnapshot(botFio(selectedBot));
     }
 
     private Bot lockRandomEligible(

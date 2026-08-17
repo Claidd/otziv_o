@@ -1,0 +1,82 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridgeTest.java
+@@
+ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
++import com.hunt.otziv.payments.repository.ManualPaymentTaskArchivedSourceRepository;
+@@
+     private ManualPaymentTaskLedgerService taskLedgerService;
++    private ManualPaymentTaskArchivedSourceRepository archivedSourceRepository;
+@@
+         taskLedgerService = mock(ManualPaymentTaskLedgerService.class);
++        archivedSourceRepository = mock(ManualPaymentTaskArchivedSourceRepository.class);
+         service = new ManualPaymentTaskContractorReturnBridge(
+@@
+-                taskLedgerService
++                taskLedgerService,
++                archivedSourceRepository
+         );
+@@
+     void commonOwnerReturnWithoutAllocationIsNotSynthesized() {
+@@
+         verify(taskLedgerService, never()).lockReturnSource(any(), any());
+     }
++
++    @Test
++    void archivedPaymentLinkReusedAllocationUsesImmutableLedgerGeneration() {
++        Scenario scenario = sourceScenario(ContractorActualPaymentSourceKind.PAYMENT_LINK);
++        when(archivedSourceRepository.lockPaymentLink(scenario.source().sourceId())).thenReturn(true);
++        when(attributionRepository.findAllBySourceForUpdate(
++                ContractorActualPaymentSourceKind.PAYMENT_LINK,
++                scenario.source().sourceId()
++        )).thenReturn(List.of(scenario.attribution()));
++        when(taskLedgerService.lockArchivedReturnSource(
++                TASK_ID,
++                TASK_GENERATION,
++                ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK,
++                scenario.source().sourceId()
++        )).thenReturn(new ManualPaymentTaskLedgerService.LockedArchivedReturnSource(
++                scenario.source(), 20_000L));
++
++        ManualPaymentTaskContractorReturnBridge.Binding binding =
++                service.lockArchivedSourceBinding(scenario.allocation());
++        scenario.allocation().setReturnedKopecks(55_000L);
++        service.recordReturn(binding, scenario.allocation());
++
++        assertReturn(ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 35_000L, 55_000L);
++    }
++
++    @Test
++    void archivedCommonActualAllocationUsesAttributionAndLedgerWithoutLiveInvoice() {
++        Scenario scenario = actualScenario(ContractorActualPaymentSourceKind.COMMON_INVOICE);
++        when(archivedSourceRepository.lockCommonInvoice(scenario.source().sourceId())).thenReturn(true);
++        when(attributionRepository.findByIdForUpdate(ATTRIBUTION_ID))
++                .thenReturn(Optional.of(scenario.attribution()));
++        when(taskLedgerService.lockArchivedReturnSource(
++                TASK_ID,
++                TASK_GENERATION,
++                ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE,
++                scenario.source().sourceId()
++        )).thenReturn(new ManualPaymentTaskLedgerService.LockedArchivedReturnSource(
++                scenario.source(), 25_000L));
++
++        ManualPaymentTaskContractorReturnBridge.Binding binding =
++                service.lockActualPaymentBinding(scenario.allocation());
++        scenario.allocation().setReturnedKopecks(AMOUNT);
++        service.recordReturn(binding, scenario.allocation());
++
++        assertReturn(ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE, 75_000L, AMOUNT);
++    }
++
++    @Test
++    void missingArchiveRowFailsClosedBeforeTaskOrAllocationLocks() {
++        Scenario scenario = sourceScenario(ContractorActualPaymentSourceKind.PAYMENT_LINK);
++        when(archivedSourceRepository.lockPaymentLink(scenario.source().sourceId())).thenReturn(false);
++
++        assertThrows(RuntimeException.class,
++                () -> service.lockArchivedSourceBinding(scenario.allocation()));
++
++        verify(attributionRepository, never()).findAllBySourceForUpdate(any(), any());
++        verify(taskLedgerService, never()).lockArchivedReturnSource(
++                any(), org.mockito.ArgumentMatchers.anyLong(), any(), any());
++    }
+*** End Patch

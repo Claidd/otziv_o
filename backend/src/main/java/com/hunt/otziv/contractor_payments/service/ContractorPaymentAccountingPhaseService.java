@@ -9,8 +9,10 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +37,13 @@ public class ContractorPaymentAccountingPhaseService {
     public ContractorAllocationMode lockAndPromoteForLiveRoute() {
         ContractorPaymentAccountingPhase state = lockState();
         if (state.getPhase() == ContractorAllocationMode.SHADOW) {
+            long anomalies = repository.countManualTaskPromotionAnomalies();
+            if (anomalies != 0L) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Переход в LIVE заблокирован: платёжные задания требуют точной сверки"
+                );
+            }
             state.promoteToLive(currentActor(), LocalDateTime.now());
             repository.saveAndFlush(state);
         }

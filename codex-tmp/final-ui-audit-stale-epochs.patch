@@ -1,0 +1,74 @@
+*** Begin Patch
+*** Update File: frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.ts
+@@
+     } catch (error) {
+       if (isRetryablePaymentRouteError(error)) {
+         this.idempotencyKey = this.newKey();
++        this.rows.set([]);
++        this.paymentReceived.set(false);
++        this.finalAcknowledged.set(false);
+         await this.load(true);
+*** Update File: mobile/src/app/shared/mobile-common-manual-payment-dialog.component.ts
+@@
+     } catch (error) {
+       if (mobileRetryablePaymentRouteError(error)) {
+         this.idempotencyKey = this.newKey();
++        this.rows.set([]);
++        this.paymentReceived.set(false);
++        this.finalAcknowledged.set(false);
+         await this.load(true);
+*** Update File: frontend/src/app/features/admin/tbank-payments/tbank-payments.component.ts
+@@
+   readonly loadingRecipientSummary = signal(false);
++  private recipientSummaryLoadEpoch = 0;
+   private searchReloadTimer: number | null = null;
+@@
+   loadRecipientMonthlySummary(): void {
++    const loadEpoch = ++this.recipientSummaryLoadEpoch;
+     this.loadingRecipientSummary.set(true);
+     this.recipientSummaryError.set(null);
+     this.paymentsApi.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()).subscribe({
+       next: (summary) => {
++        if (loadEpoch !== this.recipientSummaryLoadEpoch) {
++          return;
++        }
+         this.recipientMonthlySummary.set(summary);
+@@
+       },
+       error: (err) => {
++        if (loadEpoch !== this.recipientSummaryLoadEpoch) {
++          return;
++        }
+         const message = apiErrorDetail(err, 'Не удалось обновить сводку по получателям');
+*** Update File: mobile/src/app/features/tbank.page.ts
+@@
+   readonly loadingRecipientSummary = signal(false);
++  private recipientSummaryLoadEpoch = 0;
+   readonly savingRoutingSettings = computed(() => this.savingProfiles() || this.savingProfilePolicies());
+@@
+   async loadRecipientMonthlySummary(): Promise<void> {
+-    if (this.loadingRecipientSummary()) {
+-      return;
+-    }
++    const loadEpoch = ++this.recipientSummaryLoadEpoch;
+     this.loadingRecipientSummary.set(true);
+     this.recipientSummaryError.set(null);
+     try {
+       const summary = await firstValueFrom(this.api.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()));
++      if (loadEpoch !== this.recipientSummaryLoadEpoch) {
++        return;
++      }
+       this.recipientMonthlySummary.set(summary);
+       this.recipientSummaryError.set(null);
+     } catch (error) {
++      if (loadEpoch !== this.recipientSummaryLoadEpoch) {
++        return;
++      }
+       this.recipientSummaryError.set(this.errorMessage(error, 'Не удалось обновить сводку по получателям.'));
+     } finally {
+-      this.loadingRecipientSummary.set(false);
++      if (loadEpoch === this.recipientSummaryLoadEpoch) {
++        this.loadingRecipientSummary.set(false);
++      }
+     }
+*** End Patch

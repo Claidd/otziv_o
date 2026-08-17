@@ -1,0 +1,21 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskServiceTest.java
+@@
+         org.mockito.Mockito.lenient().when(accountingTargetPolicy.resolveForManagement(
+                         org.mockito.ArgumentMatchers.eq(ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK.name()),
+                         org.mockito.ArgumentMatchers.isNull(),
+                         org.mockito.ArgumentMatchers.eq(100_000L),
+                         org.mockito.ArgumentMatchers.anyBoolean(),
+-                        org.mockito.ArgumentMatchers.eq(71L)))
++                        org.mockito.ArgumentMatchers.eq(71L),
++                        org.mockito.ArgumentMatchers.eq(false)))
+@@
+         when(accountingTargetPolicy.resolveForManagement(
+                 ManualPaymentTaskAccountingTargetKind.OWNER.name(), null, 100_000L,
+-                false, 71L)).thenReturn(new TargetResolution(
++                false, 71L, false)).thenReturn(new TargetResolution(
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskAccountingTargetPolicyTest.java
+@@
+-        when(targetAccessPolicy.canManageUser(42L)).thenReturn(true);
+         when(taskRepository.findByIdWithDetails(16L)).thenReturn(Optional.of(task));
+*** End Patch

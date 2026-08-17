@@ -1,0 +1,61 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptIntegrationService.java
+@@
+-        requireBinding(
+-                snapshot,
+-                link.getManualPaymentTask().getId(),
+-                link.getManualTaskGeneration(),
+-                link.getAmountKopecks()
+-        );
+        requireLegacyAwareBinding(
+@@
+-        requireBinding(
+-                snapshot,
+-                invoice.getPaymentRouteManualTaskId(),
+-                invoice.getPaymentRouteManualTaskGeneration(),
+-                invoice.getPaymentRouteAmountKopecks() == null
+-                        ? snapshot.reservedAmountKopecks()
+-                        : invoice.getPaymentRouteAmountKopecks()
+-        );
+        requireLegacyAwareBinding(
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinator.java
+@@
+        for (CommonManualPaymentAttributionRowRequest row : request.attributions()) {
+            String rowKey = cleanKey(row.rowKey(), "ключ строки");
+            String key = attributionKey(invoice.getId(), request.idempotencyKey(), rowKey);
+            ContractorActualPaymentAttribution existing = recorded.get(key);
+@@
+                throw conflict("Ключ фактического поступления уже использован с другими данными");
+            }
+        }
++        attributionService.lockEnabledAccountingMode();
+        settleTaskReceipt(invoice, request, recordedBatch);
+        attributionService.requireFinalAttributionsAccountingApplied(
+@@
+        if (expectedAmountKopecks <= 0) {
+            throw conflict("У общего счета нет суммы для ручного зачисления");
+        }
++        ContractorAllocationMode mode = attributionService.lockEnabledAccountingMode();
+        Optional<ManualPaymentTaskRouteSnapshot> frozenTaskRoute = taskReceiptIntegrationService.candidate(invoice);
+        settleTaskReceipt(invoice, request, frozenTaskRoute, principal);
+-        ContractorAllocationMode mode = attributionService.lockEnabledAccountingMode();
+        PreparedBatch batch = prepare(
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskService.java
+@@
+    public ManualPaymentTaskResponse updateManagerTask(
+            Long userId,
+            Long taskId,
+            UpdateManualPaymentTaskRequest request,
+            String actor
+    ) {
++        contractorPaymentAccountingPhaseService.lockCurrent();
+        ManualPaymentTask task = taskByIdForUpdate(taskId);
+@@
+    public ManualPaymentTaskResponse updateManagementTask(
+            Long taskId,
+            UpdateManualPaymentTaskRequest request,
+            String actor
+    ) {
++        contractorPaymentAccountingPhaseService.lockCurrent();
+        return updateTask(taskByIdForUpdate(taskId), request, actor, false);
+*** End Patch

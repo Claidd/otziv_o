@@ -1,0 +1,266 @@
+*** Begin Patch
+*** Add File: backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonManualPaymentTaskReturnRequest.java
++package com.hunt.otziv.common_billing.dto;
++
++import jakarta.validation.constraints.NotBlank;
++import jakarta.validation.constraints.NotNull;
++import jakarta.validation.constraints.Positive;
++import jakarta.validation.constraints.PositiveOrZero;
++import jakarta.validation.constraints.Size;
++
++public record CommonManualPaymentTaskReturnRequest(
++        @NotNull @Positive Long attributionId,
++        @NotBlank @Size(max = 160) String evidenceReference,
++        @PositiveOrZero long cumulativeReturnedKopecks,
++        @NotBlank @Size(max = 500) String reason
++) {
++}
+*** Add File: backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonManualPaymentTaskReturnResponse.java
++package com.hunt.otziv.common_billing.dto;
++
++public record CommonManualPaymentTaskReturnResponse(
++        Long invoiceId,
++        Long attributionId,
++        Long taskId,
++        long cumulativeReturnedKopecks,
++        long appliedDeltaKopecks,
++        boolean replay
++) {
++}
+*** Add File: backend/src/main/java/com/hunt/otziv/common_billing/service/CommonManualPaymentTaskReturnService.java
++package com.hunt.otziv.common_billing.service;
++
++import com.hunt.otziv.common_billing.dto.CommonManualPaymentTaskReturnRequest;
++import com.hunt.otziv.common_billing.dto.CommonManualPaymentTaskReturnResponse;
++import com.hunt.otziv.common_billing.model.CommonInvoice;
++import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
++import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentAttribution;
++import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
++import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
++import com.hunt.otziv.contractor_payments.repository.ContractorActualPaymentAttributionRepository;
++import com.hunt.otziv.payments.dto.ManualPaymentTaskReturnCommand;
++import com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef;
++import com.hunt.otziv.payments.model.ManualPaymentSource;
++import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
++import com.hunt.otziv.payments.model.ManualPaymentTaskLedgerSourceKind;
++import com.hunt.otziv.payments.repository.ManualPaymentTaskArchivedSourceRepository;
++import com.hunt.otziv.payments.service.ManualPaymentTaskLedgerService;
++import com.hunt.otziv.payments.service.ManualPaymentTaskRouteErrors;
++import java.util.List;
++import java.util.Objects;
++import lombok.RequiredArgsConstructor;
++import org.springframework.http.HttpStatus;
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++import org.springframework.web.server.ResponseStatusException;
++
++/**
++ * Privileged exact-evidence return for common-invoice task receipts whose
++ * accounting target is OWNER or EXTERNAL_TASK. Those targets intentionally
++ * have no contractor allocation, so no provider/allocation return hook can
++ * produce this fact for them.
++ */
++@Service
++@RequiredArgsConstructor
++public class CommonManualPaymentTaskReturnService {
++
++    private static final String OPERATION_PREFIX = "TASK:RETURN:COMMON_INVOICE:";
++
++    private final CommonInvoiceRepository invoiceRepository;
++    private final ContractorActualPaymentAttributionRepository attributionRepository;
++    private final ManualPaymentTaskArchivedSourceRepository archivedSourceRepository;
++    private final ManualPaymentTaskLedgerService taskLedgerService;
++
++    @Transactional
++    public CommonManualPaymentTaskReturnResponse record(
++            Long invoiceId,
++            CommonManualPaymentTaskReturnRequest request,
++            String actor
++    ) {
++        if (invoiceId == null || invoiceId <= 0 || request == null) {
++            throw badRequest("Некорректный источник возврата");
++        }
++        String evidenceReference = normalize(request.evidenceReference());
++        String reason = normalize(request.reason());
++        String normalizedActor = normalize(actor);
++        if (evidenceReference.isBlank() || reason.isBlank() || normalizedActor.isBlank()) {
++            throw badRequest("Укажите атрибуцию, подтверждение, причину и исполнителя возврата");
++        }
++
++        CommonInvoice live = invoiceRepository.findByIdForUpdate(invoiceId).orElse(null);
++        if (live == null && !archivedSourceRepository.lockCommonInvoice(invoiceId)) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++
++        List<ContractorActualPaymentAttribution> rows = attributionRepository
++                .findAllBySourceForUpdate(ContractorActualPaymentSourceKind.COMMON_INVOICE, invoiceId);
++        if (rows.size() != 1) {
++            // Even an explicitly supplied row id must not reinterpret a split
++            // receipt. A recipient-level reversal needs its own evidence/API.
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        ContractorActualPaymentAttribution row = rows.getFirst();
++        requireExactAttribution(invoiceId, request, evidenceReference, row);
++
++        LockedSource locked = live == null
++                ? archivedSource(row)
++                : liveSource(live, row);
++        long requestedTotal = request.cumulativeReturnedKopecks();
++        long attributedAmount = row.getAmountKopecks();
++        if (requestedTotal > attributedAmount
++                || locked.returnedKopecks() < 0
++                || locked.returnedKopecks() > attributedAmount
++                || requestedTotal < locked.returnedKopecks()) {
++            throw conflict("Накопительный возврат не соответствует подтверждённой сумме источника");
++        }
++        long delta = requestedTotal - locked.returnedKopecks();
++        if (delta > 0) {
++            taskLedgerService.recordReturn(new ManualPaymentTaskReturnCommand(
++                    row.getActualManualPaymentTaskId(),
++                    locked.source(),
++                    delta,
++                    operationKey(invoiceId, row.getId(), requestedTotal),
++                    normalizedActor,
++                    reason
++            ));
++        }
++        return new CommonManualPaymentTaskReturnResponse(
++                invoiceId,
++                row.getId(),
++                row.getActualManualPaymentTaskId(),
++                requestedTotal,
++                delta,
++                delta == 0
++        );
++    }
++
++    private LockedSource liveSource(
++            CommonInvoice invoice,
++            ContractorActualPaymentAttribution row
++    ) {
++        if (invoice.getPaymentRouteManualSource() != ManualPaymentSource.MANUAL_TASK
++                || !Objects.equals(invoice.getPaymentRouteManualTaskId(),
++                        row.getActualManualPaymentTaskId())) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        boolean completeBinding = invoice.getPaymentRouteManualTaskGeneration() != null
++                && !normalize(invoice.getPaymentRouteManualTaskSourceGeneration()).isBlank();
++        boolean restoredWithoutV252Binding = invoice.getPaymentRouteManualTaskGeneration() == null
++                && normalize(invoice.getPaymentRouteManualTaskSourceGeneration()).isBlank();
++        if (completeBinding) {
++            if (!Objects.equals(invoice.getPaymentRouteManualTaskGeneration(),
++                    row.getActualManualPaymentTaskGeneration())) {
++                throw ManualPaymentTaskRouteErrors.stale();
++            }
++            ManualPaymentTaskSourceRef source = new ManualPaymentTaskSourceRef(
++                    ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE,
++                    invoice.getId(),
++                    normalize(invoice.getPaymentRouteManualTaskSourceGeneration())
++            );
++            return new LockedSource(
++                    source,
++                    taskLedgerService.lockReturnSource(row.getActualManualPaymentTaskId(), source)
++            );
++        }
++        if (!restoredWithoutV252Binding) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        return archivedSource(row);
++    }
++
++    private LockedSource archivedSource(ContractorActualPaymentAttribution row) {
++        ManualPaymentTaskLedgerService.LockedArchivedReturnSource locked =
++                taskLedgerService.lockArchivedReturnSource(
++                        row.getActualManualPaymentTaskId(),
++                        row.getActualManualPaymentTaskGeneration(),
++                        ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE,
++                        row.getSourceId()
++                );
++        return new LockedSource(locked.source(), locked.returnedKopecks());
++    }
++
++    private void requireExactAttribution(
++            Long invoiceId,
++            CommonManualPaymentTaskReturnRequest request,
++            String evidenceReference,
++            ContractorActualPaymentAttribution row
++    ) {
++        ManualPaymentTaskAccountingTargetKind target = row == null
++                ? null : row.getActualManualPaymentTaskTargetKind();
++        if (row == null
++                || !Objects.equals(row.getId(), request.attributionId())
++                || row.getSourceKind() != ContractorActualPaymentSourceKind.COMMON_INVOICE
++                || !Objects.equals(row.getSourceId(), invoiceId)
++                || !Objects.equals(normalize(row.getEvidenceReference()), evidenceReference)
++                || row.getActualCashDestinationKind() != ContractorCashDestinationKind.MANUAL_PAYMENT_TASK
++                || (target != ManualPaymentTaskAccountingTargetKind.OWNER
++                    && target != ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK)
++                || row.getActualManualPaymentTaskId() == null
++                || row.getActualManualPaymentTaskGeneration() == null
++                || row.getActualManualPaymentTaskGeneration() <= 0
++                || row.getAmountKopecks() <= 0) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++    }
++
++    private String operationKey(Long invoiceId, Long attributionId, long total) {
++        return OPERATION_PREFIX + invoiceId + ":ATTR:" + attributionId + ":TOTAL:" + total;
++    }
++
++    private String normalize(String value) {
++        return value == null ? "" : value.trim();
++    }
++
++    private ResponseStatusException badRequest(String reason) {
++        return new ResponseStatusException(HttpStatus.BAD_REQUEST, reason);
++    }
++
++    private ResponseStatusException conflict(String reason) {
++        return new ResponseStatusException(HttpStatus.CONFLICT, reason);
++    }
++
++    private record LockedSource(ManualPaymentTaskSourceRef source, long returnedKopecks) {
++    }
++}
+*** Add File: backend/src/main/java/com/hunt/otziv/common_billing/controller/CommonManualPaymentTaskReturnController.java
++package com.hunt.otziv.common_billing.controller;
++
++import com.hunt.otziv.common_billing.dto.CommonManualPaymentTaskReturnRequest;
++import com.hunt.otziv.common_billing.dto.CommonManualPaymentTaskReturnResponse;
++import com.hunt.otziv.common_billing.service.CommonManualPaymentTaskReturnService;
++import jakarta.validation.Valid;
++import java.security.Principal;
++import lombok.RequiredArgsConstructor;
++import org.springframework.http.CacheControl;
++import org.springframework.http.ResponseEntity;
++import org.springframework.security.access.prepost.PreAuthorize;
++import org.springframework.web.bind.annotation.PathVariable;
++import org.springframework.web.bind.annotation.PostMapping;
++import org.springframework.web.bind.annotation.RequestBody;
++import org.springframework.web.bind.annotation.RestController;
++
++@RestController
++@RequiredArgsConstructor
++public class CommonManualPaymentTaskReturnController {
++
++    private final CommonManualPaymentTaskReturnService returnService;
++
++    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
++    @PostMapping("/api/common-billing/invoices/{invoiceId}/manual-task-return")
++    public ResponseEntity<CommonManualPaymentTaskReturnResponse> record(
++            @PathVariable Long invoiceId,
++            @Valid @RequestBody CommonManualPaymentTaskReturnRequest request,
++            Principal principal
++    ) {
++        CommonManualPaymentTaskReturnResponse response = returnService.record(
++                invoiceId,
++                request,
++                principal == null ? "system:authenticated-admin" : principal.getName()
++        );
++        return ResponseEntity.ok()
++                .cacheControl(CacheControl.noStore())
++                .header("Pragma", "no-cache")
++                .body(response);
++    }
++}
+*** End Patch

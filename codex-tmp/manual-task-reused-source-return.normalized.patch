@@ -1,0 +1,62 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowService.java
+@@
+-        boolean paymentLinkReturn = snapshot.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK
+-                && canRecordObservedReturn(snapshot.getStatus());
+-        boolean actualPaymentReturn = snapshot.getSourceType() == ContractorAllocationSourceType.ACTUAL_PAYMENT
+-                && canRecordActualPaymentReturn(snapshot.getStatus());
+-        if (!paymentLinkReturn && !actualPaymentReturn) {
++        boolean sourceAllocation = snapshot.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK
++                || snapshot.getSourceType() == ContractorAllocationSourceType.COMMON_INVOICE;
++        boolean actualPaymentReturn = snapshot.getSourceType() == ContractorAllocationSourceType.ACTUAL_PAYMENT;
++        if ((!sourceAllocation && !actualPaymentReturn)
++                || (sourceAllocation
++                    && !canRecordObservedReturn(snapshot.getStatus())
++                    && !canRecordActualPaymentReturn(snapshot.getStatus()))
++                || (actualPaymentReturn && !canRecordActualPaymentReturn(snapshot.getStatus()))) {
+             throw new IllegalArgumentException(
+                     "Сумму возврата можно уточнить только для подтвержденного поступления работнику"
+             );
+         }
+         ManualPaymentTaskContractorReturnBridge.Binding taskReturnBinding;
+-        if (paymentLinkReturn) {
++        if (snapshot.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK) {
+             PaymentLink lockedLink = paymentLinkRepository.findByIdForUpdate(snapshot.getSourceId())
+-                    .orElseThrow(() -> new IllegalArgumentException("Источник банковского платежа не найден"));
+-            taskReturnBinding = taskReturnBridge.lockPaymentLinkBinding(snapshot, lockedLink);
++                    .orElse(null);
++            taskReturnBinding = lockedLink == null
++                    ? taskReturnBridge.lockArchivedSourceBinding(snapshot)
++                    : taskReturnBridge.lockPaymentLinkBinding(snapshot, lockedLink);
++        } else if (snapshot.getSourceType() == ContractorAllocationSourceType.COMMON_INVOICE) {
++            CommonInvoice lockedInvoice = commonInvoiceRepository
++                    .findByIdForUpdate(snapshot.getSourceId())
++                    .orElse(null);
++            taskReturnBinding = lockedInvoice == null
++                    ? taskReturnBridge.lockArchivedSourceBinding(snapshot)
++                    : taskReturnBridge.lockCommonInvoiceBinding(snapshot, lockedInvoice);
+         } else {
+             taskReturnBinding = taskReturnBridge.lockActualPaymentBinding(snapshot);
+         }
++        boolean exactTaskSourceReturn = sourceAllocation && taskReturnBinding.taskBound();
++        if (sourceAllocation
++                && !canRecordObservedReturn(snapshot.getStatus())
++                && (!exactTaskSourceReturn
++                    || !canRecordActualPaymentReturn(snapshot.getStatus()))) {
++            throw new IllegalArgumentException(
++                    "Возврат подтвержденного назначения разрешен только для точного получателя платежного задания"
++            );
++        }
+         ContractorPaymentAllocation allocation = lockLatestAttempt(snapshot);
+@@
+-        boolean lockedPaymentLinkReturn = allocation.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK
+-                && canRecordObservedReturn(allocation.getStatus());
++        boolean lockedSourceReturn = (allocation.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK
++                || allocation.getSourceType() == ContractorAllocationSourceType.COMMON_INVOICE)
++                && (canRecordObservedReturn(allocation.getStatus())
++                    || (exactTaskSourceReturn && canRecordActualPaymentReturn(allocation.getStatus())));
+         boolean lockedActualPaymentReturn = allocation.getSourceType() == ContractorAllocationSourceType.ACTUAL_PAYMENT
+                 && canRecordActualPaymentReturn(allocation.getStatus());
+-        if (!lockedPaymentLinkReturn && !lockedActualPaymentReturn) {
++        if (!lockedSourceReturn && !lockedActualPaymentReturn) {
+*** End Patch

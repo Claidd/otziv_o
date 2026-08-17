@@ -1,0 +1,16 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/PaymentLinkService.java
+@@
+         link.setLastError(null);
+         paymentLinkRepository.save(link);
++        if (REFUNDED_STATUSES.contains(merged)) {
++            reconcileContractorPaymentRouteAfterCommit(link.getId());
++        }
+         return toAdminResponse(link);
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+         assertFalse(response.refundable());
+         verify(paymentLinkRepository, times(2)).save(link);
++        verify(contractorPaymentShadowService).reconcilePaymentLinkId(1L);
+         InOrder ordered = inOrder(tbankClient, orderRepository, paymentLinkRepository);
+*** End Patch

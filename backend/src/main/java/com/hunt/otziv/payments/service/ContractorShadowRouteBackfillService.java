@@ -65,10 +65,9 @@ public class ContractorShadowRouteBackfillService {
         int commonInvoices = shadowEnabled
                 ? backfillCommonInvoices(startedAt, preparationStartedAt, now, batch)
                 : 0;
-        // Existing LIVE obligations are reconciled even when SHADOW is off.
-        // A rollout/emergency switch may stop new routes but must never make
-        // already received manual evidence disappear after a process crash.
-        int manualEvidence = backfillManualEvidence(startedAt, shadowEnabled, now, batch);
+        // New SHADOW routes remain gated above. Evidence for an already
+        // persisted SHADOW or LIVE obligation must remain repairable after OFF.
+        int manualEvidence = backfillManualEvidence(startedAt, true, now, batch);
         if (paymentLinks + commonInvoices + manualEvidence > 0) {
             log.info(
                     "Восстановлены тестовые платежные маршруты: links={}, commonInvoices={}, manualEvidence={}",

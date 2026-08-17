@@ -1,0 +1,174 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/model/ContractorPaymentProfile.java
+@@
+     @Column(name = "opening_balance_kopecks", nullable = false)
+     private long openingBalanceKopecks;
++
++    /**
++     * Capacity promised to non-terminal typed manual-payment tasks but not yet
++     * represented by contractor allocations. Mutations are serialized by this
++     * profile row's PESSIMISTIC_WRITE mutex.
++     */
++    @Column(name = "manual_task_commitment_kopecks", nullable = false)
++    private long manualTaskCommitmentKopecks;
++
++    /** Exact, persisted operator acknowledgement covering task capacity overrun. */
++    @Column(name = "manual_task_overrun_ack_kopecks", nullable = false)
++    private long manualTaskOverrunAcknowledgedKopecks;
+ 
+     @Column(name = "tracking_started_at", nullable = false)
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/model/ManualPaymentTask.java
+@@
+     @Column(name = "target_overrun_acknowledged_by", length = 160)
+     private String targetOverrunAcknowledgedBy;
++
++    @Column(name = "target_overrun_acknowledged_kopecks")
++    private Long targetOverrunAcknowledgedKopecks;
++
++    @Column(name = "target_capacity_available_snapshot_kopecks")
++    private Long targetCapacityAvailableSnapshotKopecks;
+ 
+     @Enumerated(EnumType.STRING)
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/model/ContractorPaymentAllocation.java
+@@
+     @Column(name = "common_invoice_id")
+     private Long commonInvoiceId;
++
++    @Column(name = "manual_payment_task_id")
++    private Long manualPaymentTaskId;
+@@
+     @Column(name = "available_before_kopecks")
+     private Long availableBeforeKopecks;
++
++    @Column(name = "task_capacity_position_before_kopecks")
++    private Long taskCapacityPositionBeforeKopecks;
++
++    @Column(name = "task_capacity_commitment_before_kopecks")
++    private Long taskCapacityCommitmentBeforeKopecks;
++
++    @Column(name = "task_capacity_projected_overrun_kopecks")
++    private Long taskCapacityProjectedOverrunKopecks;
++
++    @Column(name = "task_capacity_acknowledged_kopecks")
++    private Long taskCapacityAcknowledgedKopecks;
++
++    @Column(name = "task_capacity_acknowledged_at")
++    private LocalDateTime taskCapacityAcknowledgedAt;
++
++    @Column(name = "task_capacity_acknowledged_by", length = 160)
++    private String taskCapacityAcknowledgedBy;
+ 
+     @Column(name = "reserved_at")
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentProfileService.java
+@@
+     public long available(ContractorPaymentProfile profile, ContractorAllocationMode mode) {
++        return Math.max(0L, capacityPosition(profile, mode));
++    }
++
++    /**
++     * Signed capacity position used by acknowledged task overruns. Unlike the
++     * public available amount it keeps an existing deficit visible, so a
++     * second reservation cannot reuse the same acknowledgement indefinitely.
++     */
++    public long capacityPosition(ContractorPaymentProfile profile, ContractorAllocationMode mode) {
+         if (profile == null || profile.getId() == null || mode == null) {
+             return 0L;
+         }
+@@
+         long confirmed = totals == null ? 0L : totals.safeConfirmedKopecks();
+         long returned = totals == null ? 0L : totals.safeReturnedKopecks();
+         long outstanding = totals == null ? 0L : totals.safeOutstandingKopecks();
+         long paid = Math.max(0L, Math.subtractExact(confirmed, returned));
+-        long debt = Math.max(0L, Math.subtractExact(accrued, paid));
+-        return Math.max(0L, Math.subtractExact(debt, outstanding));
++        return Math.subtractExact(Math.subtractExact(accrued, paid), outstanding);
+     }
+*** Add File: backend/src/main/resources/db/migration/V1_10_254__manual_payment_task_profile_capacity.sql
++ALTER TABLE contractor_payment_profiles
++    ADD COLUMN manual_task_commitment_kopecks BIGINT NOT NULL DEFAULT 0
++        AFTER opening_balance_kopecks,
++    ADD COLUMN manual_task_overrun_ack_kopecks BIGINT NOT NULL DEFAULT 0
++        AFTER manual_task_commitment_kopecks,
++    ADD CONSTRAINT chk_contractor_profile_manual_task_commitment
++        CHECK (manual_task_commitment_kopecks >= 0),
++    ADD CONSTRAINT chk_contractor_profile_manual_task_ack
++        CHECK (manual_task_overrun_ack_kopecks >= 0);
++
++ALTER TABLE manual_payment_tasks
++    ADD COLUMN target_overrun_acknowledged_kopecks BIGINT NULL
++        AFTER target_overrun_acknowledged_by,
++    ADD COLUMN target_capacity_available_snapshot_kopecks BIGINT NULL
++        AFTER target_overrun_acknowledged_kopecks,
++    ADD CONSTRAINT chk_manual_task_overrun_ack_amount CHECK (
++        target_overrun_acknowledged_kopecks IS NULL
++        OR target_overrun_acknowledged_kopecks >= 0
++    );
++
++ALTER TABLE contractor_payment_allocations
++    ADD COLUMN manual_payment_task_id BIGINT NULL AFTER common_invoice_id,
++    ADD COLUMN task_capacity_position_before_kopecks BIGINT NULL
++        AFTER available_before_kopecks,
++    ADD COLUMN task_capacity_commitment_before_kopecks BIGINT NULL
++        AFTER task_capacity_position_before_kopecks,
++    ADD COLUMN task_capacity_projected_overrun_kopecks BIGINT NULL
++        AFTER task_capacity_commitment_before_kopecks,
++    ADD COLUMN task_capacity_acknowledged_kopecks BIGINT NULL
++        AFTER task_capacity_projected_overrun_kopecks,
++    ADD COLUMN task_capacity_acknowledged_at DATETIME(6) NULL
++        AFTER task_capacity_acknowledged_kopecks,
++    ADD COLUMN task_capacity_acknowledged_by VARCHAR(160) NULL
++        AFTER task_capacity_acknowledged_at,
++    ADD CONSTRAINT fk_contractor_allocation_manual_task
++        FOREIGN KEY (manual_payment_task_id) REFERENCES manual_payment_tasks (id),
++    ADD INDEX idx_contractor_allocation_manual_task (manual_payment_task_id, id),
++    ADD CONSTRAINT chk_contractor_allocation_task_capacity_overrun CHECK (
++        task_capacity_projected_overrun_kopecks IS NULL
++        OR task_capacity_projected_overrun_kopecks >= 0
++    );
++
++-- Link the currently frozen task attempts. Historical attempts stay immutable
++-- and are not treated as backing a live task reservation.
++UPDATE contractor_payment_allocations allocation
++JOIN payment_links link
++  ON allocation.source_type = 'PAYMENT_LINK'
++ AND allocation.source_id = link.id
++ AND allocation.id = link.contractor_allocation_id
++SET allocation.manual_payment_task_id = link.manual_task_id
++WHERE link.manual_task_id IS NOT NULL;
++
++UPDATE contractor_payment_allocations allocation
++JOIN common_invoices invoice
++  ON allocation.source_type = 'COMMON_INVOICE'
++ AND allocation.source_id = invoice.invoice_id
++ AND allocation.id = invoice.contractor_allocation_id
++SET allocation.manual_payment_task_id = invoice.payment_route_manual_task_id
++WHERE invoice.payment_route_manual_task_id IS NOT NULL;
++
++-- Old acknowledgements did not persist an amount and therefore cannot safely
++-- authorize a future overrun. They remain visible for audit, but amount-based
++-- authorization starts fail-closed at zero.
++UPDATE contractor_payment_profiles profile
++LEFT JOIN (
++    SELECT task.accounting_target_profile_id AS profile_id,
++           SUM(GREATEST(
++               0,
++               task.target_amount_kopecks
++                   - GREATEST(0, COALESCE(balance.confirmed_kopecks, 0))
++                   - GREATEST(0, COALESCE(balance.pending_kopecks, 0))
++           )) AS commitment_kopecks
++    FROM manual_payment_tasks task
++    LEFT JOIN (
++        SELECT entry.task_id,
++               SUM(entry.confirmed_delta_kopecks) AS confirmed_kopecks,
++               SUM(entry.reserved_delta_kopecks) AS pending_kopecks
++        FROM manual_payment_task_ledger_entries entry
++        GROUP BY entry.task_id
++    ) balance ON balance.task_id = task.id
++    WHERE task.accounting_target_kind IN ('SPECIALIST', 'MANAGER')
++      AND task.accounting_target_profile_id IS NOT NULL
++      AND task.status IN ('ACTIVE', 'PAUSED', 'NEEDS_ATTENTION')
++    GROUP BY task.accounting_target_profile_id
++) totals ON totals.profile_id = profile.id
++SET profile.manual_task_commitment_kopecks = COALESCE(totals.commitment_kopecks, 0),
++    profile.manual_task_overrun_ack_kopecks = 0;
+*** End Patch

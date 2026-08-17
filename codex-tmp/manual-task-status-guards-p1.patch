@@ -1,0 +1,90 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskService.java
+@@
+     ) {
+         ManualPaymentTaskStatus newStatus = parseStatus(status);
++        if (newStatus == ManualPaymentTaskStatus.CANCELED
++                || newStatus == ManualPaymentTaskStatus.COMPLETED) {
++            ManualPaymentTaskBalance balance = taskLedgerService.balance(task.getId());
++            if (balance.pendingAmountKopecks() > 0) {
++                throw new ResponseStatusException(
++                        HttpStatus.CONFLICT,
++                        "Нельзя закрыть задание, пока по нему есть активные резервы"
++                );
++            }
++            if (newStatus == ManualPaymentTaskStatus.COMPLETED
++                    && balance.netConfirmedAmountKopecks() < task.getTargetAmountKopecks()) {
++                throw new ResponseStatusException(
++                        HttpStatus.CONFLICT,
++                        "Нельзя завершить задание до подтверждения полной суммы"
++                );
++            }
++        }
+         if (newStatus == ManualPaymentTaskStatus.ACTIVE) {
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskServiceTest.java
+@@
+     void destinationChangeWithPendingMoneyIsRejectedAfterSourcePhaseThenTaskLocks() {
+@@
+         locks.verify(taskRepository).findByIdWithDetailsForUpdate(71L);
+     }
++
++    @Test
++    void canceledStatusIsRejectedWhileTaskHasPendingReservation() {
++        ManualPaymentTask task = unsafeExternalTask();
++        when(taskRepository.findByIdWithDetailsForUpdate(71L)).thenReturn(Optional.of(task));
++        when(ledgerService.balance(71L)).thenReturn(new ManualPaymentTaskBalance(
++                10_000L, 0, 10_000L, 0, 0, 0, 0, 1, 0, false));
++
++        ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
++                service.updateManagementTaskStatus(71L, "CANCELED", "admin"));
++
++        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
++        assertEquals(ManualPaymentTaskStatus.ACTIVE, task.getStatus());
++        verify(taskRepository, never()).save(task);
++    }
++
++    @Test
++    void completedStatusIsRejectedWhileTaskHasPendingReservation() {
++        ManualPaymentTask task = unsafeExternalTask();
++        when(taskRepository.findByIdWithDetailsForUpdate(71L)).thenReturn(Optional.of(task));
++        when(ledgerService.balance(71L)).thenReturn(new ManualPaymentTaskBalance(
++                10_000L, 100_000L, 110_000L, 0, 0, 0, 0, 1, 0, false));
++
++        ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
++                service.updateManagementTaskStatus(71L, "COMPLETED", "admin"));
++
++        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
++        assertEquals(ManualPaymentTaskStatus.ACTIVE, task.getStatus());
++        verify(taskRepository, never()).save(task);
++    }
++
++    @Test
++    void completedStatusIsRejectedBeforeConfirmedTargetIsReached() {
++        ManualPaymentTask task = unsafeExternalTask();
++        when(taskRepository.findByIdWithDetailsForUpdate(71L)).thenReturn(Optional.of(task));
++        when(ledgerService.balance(71L)).thenReturn(new ManualPaymentTaskBalance(
++                0, 99_999L, 99_999L, 0, 0, 0, 0, 0, 0, false));
++
++        ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
++                service.updateManagementTaskStatus(71L, "COMPLETED", "admin"));
++
++        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
++        assertEquals(ManualPaymentTaskStatus.ACTIVE, task.getStatus());
++        verify(taskRepository, never()).save(task);
++    }
++
++    @Test
++    void completedStatusAllowsReachedTargetEvenWhenAggregateNeedsLaterReview() {
++        ManualPaymentTask task = unsafeExternalTask();
++        when(taskRepository.findByIdWithDetailsForUpdate(71L)).thenReturn(Optional.of(task));
++        when(ledgerService.balance(71L)).thenReturn(new ManualPaymentTaskBalance(
++                0, 100_000L, 100_000L, 0, 0, 0, 100_000L, 0, 1, true));
++
++        service.updateManagementTaskStatus(71L, "COMPLETED", "admin");
++
++        assertEquals(ManualPaymentTaskStatus.COMPLETED, task.getStatus());
++        verify(taskRepository).save(task);
++    }
+ 
+     private ManualPaymentTask unsafeExternalTask() {
+*** End Patch

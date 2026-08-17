@@ -1,0 +1,243 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/repository/ContractorPaymentAccountingPhaseRepository.java
+@@
+     Optional<ContractorPaymentAccountingPhase> findByIdForUpdate(@Param("id") Integer id);
++
++    /**
++     * Fail-closed reconciliation gate executed while the singleton phase row
++     * is locked. A zero result proves that every typed task ledger exposure
++     * has one matching contractor allocation exposure before SHADOW becomes
++     * historical.
++     */
++    @Query(value = """
++        WITH source_balance AS (
++            SELECT entry.task_id,
++                   entry.source_kind,
++                   entry.source_id,
++                   entry.source_generation,
++                   SUM(entry.reserved_delta_kopecks) AS pending_kopecks,
++                   SUM(entry.confirmed_delta_kopecks) AS confirmed_kopecks,
++                   MAX(CASE
++                       WHEN entry.verified = FALSE
++                        AND entry.confirmed_delta_kopecks > 0 THEN 1 ELSE 0
++                   END) AS unverified_confirmation
++            FROM manual_payment_task_ledger_entries entry
++            GROUP BY entry.task_id, entry.source_kind,
++                     entry.source_id, entry.source_generation
++        ),
++        task_ledger AS (
++            SELECT balance.task_id,
++                   SUM(GREATEST(0, balance.pending_kopecks)
++                       + GREATEST(0, balance.confirmed_kopecks)) AS exposure_kopecks,
++                   MAX(CASE
++                       WHEN balance.pending_kopecks < 0
++                         OR balance.confirmed_kopecks < 0
++                         OR balance.unverified_confirmation > 0
++                       THEN 1 ELSE 0
++                   END) AS invalid_ledger
++            FROM source_balance balance
++            GROUP BY balance.task_id
++        ),
++        task_allocation AS (
++            SELECT allocation.manual_payment_task_id AS task_id,
++                   SUM(
++                       GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++                       + CASE
++                           WHEN allocation.status IN
++                                ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
++                           THEN GREATEST(
++                               0,
++                               allocation.amount_kopecks
++                                   - GREATEST(0, allocation.confirmed_kopecks
++                                       - allocation.returned_kopecks)
++                           )
++                           ELSE 0
++                         END
++                   ) AS exposure_kopecks,
++                   MAX(CASE
++                       WHEN allocation.returned_kopecks > allocation.confirmed_kopecks
++                         OR allocation.mode = 'LIVE'
++                       THEN 1 ELSE 0
++                   END) AS invalid_allocation
++            FROM contractor_payment_allocations allocation
++            WHERE allocation.manual_payment_task_id IS NOT NULL
++            GROUP BY allocation.manual_payment_task_id
++        )
++        SELECT COUNT(*)
++        FROM (
++            SELECT task.id AS anomaly_id
++            FROM manual_payment_tasks task
++            LEFT JOIN task_ledger ledger ON ledger.task_id = task.id
++            LEFT JOIN task_allocation allocation ON allocation.task_id = task.id
++            WHERE (
++                    task.accounting_target_kind = 'UNRESOLVED'
++                    AND (COALESCE(ledger.exposure_kopecks, 0) <> 0
++                         OR COALESCE(ledger.invalid_ledger, 0) <> 0)
++                  )
++               OR (
++                    task.accounting_target_kind IN ('SPECIALIST', 'MANAGER')
++                    AND (COALESCE(ledger.invalid_ledger, 0) <> 0
++                         OR COALESCE(allocation.invalid_allocation, 0) <> 0
++                         OR COALESCE(ledger.exposure_kopecks, 0)
++                            <> COALESCE(allocation.exposure_kopecks, 0))
++                  )
++
++            UNION ALL
++
++            SELECT allocation.id AS anomaly_id
++            FROM contractor_payment_allocations allocation
++            LEFT JOIN manual_payment_tasks task
++              ON task.id = allocation.manual_payment_task_id
++            WHERE allocation.manual_payment_task_id IS NOT NULL
++              AND (task.id IS NULL
++                   OR task.accounting_target_kind NOT IN ('SPECIALIST', 'MANAGER')
++                   OR task.accounting_target_profile_id
++                        <> allocation.recipient_profile_id
++                   OR allocation.returned_kopecks > allocation.confirmed_kopecks
++                   OR allocation.mode = 'LIVE')
++
++            UNION ALL
++
++            SELECT attribution.id AS anomaly_id
++            FROM contractor_actual_payment_attributions attribution
++            LEFT JOIN manual_payment_tasks task
++              ON task.id = attribution.actual_manual_payment_task_id
++            WHERE attribution.actual_cash_destination_kind = 'MANUAL_PAYMENT_TASK'
++              AND attribution.actual_manual_payment_task_target_kind
++                    IN ('SPECIALIST', 'MANAGER')
++              AND (task.id IS NULL
++                   OR task.accounting_target_kind
++                        <> attribution.actual_manual_payment_task_target_kind
++                   OR task.accounting_target_profile_id
++                        <> attribution.actual_recipient_profile_id
++                   OR (
++                       SELECT COUNT(*)
++                       FROM contractor_payment_allocations exact_allocation
++                       WHERE (exact_allocation.id = attribution.original_allocation_id
++                              OR (exact_allocation.source_type = 'ACTUAL_PAYMENT'
++                                  AND exact_allocation.source_id = attribution.id))
++                         AND exact_allocation.manual_payment_task_id = task.id
++                         AND exact_allocation.recipient_profile_id
++                                = task.accounting_target_profile_id
++                         AND exact_allocation.mode = attribution.accounting_mode
++                         AND exact_allocation.amount_kopecks = attribution.amount_kopecks
++                         AND exact_allocation.confirmed_kopecks >= attribution.amount_kopecks
++                         AND exact_allocation.returned_kopecks
++                                <= exact_allocation.confirmed_kopecks
++                   ) <> 1)
++
++            UNION ALL
++
++            SELECT allocation.id AS anomaly_id
++            FROM contractor_payment_allocations allocation
++            LEFT JOIN contractor_actual_payment_attributions attribution
++              ON attribution.id = allocation.source_id
++             AND allocation.source_type = 'ACTUAL_PAYMENT'
++            WHERE allocation.source_type = 'ACTUAL_PAYMENT'
++              AND allocation.manual_payment_task_id IS NOT NULL
++              AND (attribution.id IS NULL
++                   OR attribution.actual_cash_destination_kind
++                        <> 'MANUAL_PAYMENT_TASK'
++                   OR attribution.actual_manual_payment_task_id
++                        <> allocation.manual_payment_task_id)
++        ) anomalies
++    """, nativeQuery = true)
++    long countManualTaskPromotionAnomalies();
+ }
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentAccountingPhaseService.java
+@@
+ import org.springframework.stereotype.Service;
++import org.springframework.http.HttpStatus;
+@@
+ import org.springframework.transaction.annotation.Transactional;
++import org.springframework.web.server.ResponseStatusException;
+@@
+         ContractorPaymentAccountingPhase state = lockState();
+         if (state.getPhase() == ContractorAllocationMode.SHADOW) {
++            long anomalies = repository.countManualTaskPromotionAnomalies();
++            if (anomalies != 0L) {
++                throw new ResponseStatusException(
++                        HttpStatus.CONFLICT,
++                        "Переход в LIVE заблокирован: платёжные задания требуют точной сверки"
++                );
++            }
+             state.promoteToLive(currentActor(), LocalDateTime.now());
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentAccountingPhaseServiceTest.java
+@@
+ import static org.assertj.core.api.Assertions.assertThat;
++import static org.assertj.core.api.Assertions.assertThatThrownBy;
+@@
+ import org.springframework.test.util.ReflectionTestUtils;
++import org.springframework.web.server.ResponseStatusException;
+@@
+     void livePhaseIsIrreversibleAndDoesNotRewriteAuditRow() {
+@@
+         verify(repository, never()).saveAndFlush(state);
+     }
++
++    @Test
++    void promotionFailsClosedWhenTaskLedgerAndAllocationExposureDoNotMatch() {
++        ContractorPaymentAccountingPhase state = state(ContractorAllocationMode.SHADOW);
++        when(repository.findByIdForUpdate(ContractorPaymentAccountingPhase.SINGLETON_ID))
++                .thenReturn(Optional.of(state));
++        when(repository.countManualTaskPromotionAnomalies()).thenReturn(1L);
++
++        assertThatThrownBy(service::lockAndPromoteForLiveRoute)
++                .isInstanceOf(ResponseStatusException.class)
++                .hasMessageContaining("заблокирован");
++        assertThat(state.getPhase()).isEqualTo(ContractorAllocationMode.SHADOW);
++        verify(repository, never()).saveAndFlush(state);
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskProfileCapacityMutexMySqlIntegrationTest.java
+@@
+         jdbc.execute("DROP TABLE IF EXISTS contractor_payment_profiles");
++        jdbc.execute("DROP TABLE IF EXISTS contractor_payment_accounting_phase");
++        jdbc.execute("""
++                CREATE TABLE contractor_payment_accounting_phase (
++                    id INT NOT NULL,
++                    phase VARCHAR(16) NOT NULL,
++                    PRIMARY KEY (id)
++                ) ENGINE=InnoDB
++                """);
++        jdbc.update("""
++                INSERT INTO contractor_payment_accounting_phase (id, phase)
++                VALUES (1, 'SHADOW')
++                """);
+@@
+     void concurrentTasksOnSameProfileSerializeAndCannotBothPromiseFullCapacity() throws Exception {
+@@
+     }
++
++    @Test
++    void promotionAndConcurrentTaskSettlementSerializeOnPhaseMutex() throws Exception {
++        CountDownLatch promotionLocked = new CountDownLatch(1);
++        CountDownLatch finishPromotion = new CountDownLatch(1);
++        Future<String> promotion = executor.submit(() -> transaction.execute(status -> {
++            String phase = jdbc.queryForObject("""
++                    SELECT phase FROM contractor_payment_accounting_phase
++                    WHERE id = 1 FOR UPDATE
++                    """, String.class);
++            promotionLocked.countDown();
++            await(finishPromotion);
++            jdbc.update("""
++                    UPDATE contractor_payment_accounting_phase SET phase = 'LIVE' WHERE id = 1
++                    """);
++            return phase;
++        }));
++        assertThat(promotionLocked.await(10, TimeUnit.SECONDS)).isTrue();
++
++        Future<String> settlement = executor.submit(() -> transaction.execute(status ->
++                jdbc.queryForObject("""
++                        SELECT phase FROM contractor_payment_accounting_phase
++                        WHERE id = 1 FOR UPDATE
++                        """, String.class)));
++        Thread.sleep(150L);
++        assertThat(settlement.isDone())
++                .as("settlement cannot cross an in-flight phase promotion")
++                .isFalse();
++
++        finishPromotion.countDown();
++        assertThat(promotion.get(10, TimeUnit.SECONDS)).isEqualTo("SHADOW");
++        assertThat(settlement.get(10, TimeUnit.SECONDS)).isEqualTo("LIVE");
++    }
+*** End Patch

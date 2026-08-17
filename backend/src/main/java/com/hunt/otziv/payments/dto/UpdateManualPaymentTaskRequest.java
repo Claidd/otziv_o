@@ -8,7 +8,11 @@ public record UpdateManualPaymentTaskRequest(
         String manualPaymentButtonLabel,
         Long targetAmountKopecks,
         String comment,
-        Boolean manualPaymentUrlReplacementConfirmed
+        Boolean manualPaymentUrlReplacementConfirmed,
+        String accountingTargetKind,
+        Long accountingTargetProfileId,
+        Boolean accountingTargetOverrunAcknowledged,
+        Long expectedGeneration
 ) {
     /** Legacy request shape kept for Java callers and mixed-version clients. */
     public UpdateManualPaymentTaskRequest(
@@ -28,7 +32,11 @@ public record UpdateManualPaymentTaskRequest(
                 manualPaymentButtonLabel,
                 targetAmountKopecks,
                 comment,
-                false
+                false,
+                null,
+                null,
+                false,
+                null
         );
     }
 }

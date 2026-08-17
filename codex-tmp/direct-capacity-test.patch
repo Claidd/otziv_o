@@ -1,0 +1,45 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorDirectSettlementServiceTest.java
+@@
+-    private ContractorPaymentProfileService profileService;
++    private com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService taskCapacityService;
+@@
+-        verify(profileService, never()).available(any(), any());
++        verify(taskCapacityService, never()).ordinaryAvailable(any(), any());
+@@
+-        when(profileService.available(profile, ContractorAllocationMode.SHADOW)).thenReturn(999L);
++        when(taskCapacityService.ordinaryAvailable(profile, ContractorAllocationMode.SHADOW)).thenReturn(999L);
+@@
+         verify(settlementRepository, never()).saveAndFlush(any());
+     }
++
++    @Test
++    void liveDirectPaymentCannotConsumeCapacityPromisedToTasksIncludingShadowCarry() {
++        // Canonical LIVE availability is 20k from a 100k position after an
++        // 80k task commitment/foreign SHADOW task exposure.
++        stubNewPayment(ContractorAllocationMode.LIVE, 20_000L);
++
++        assertThatThrownBy(() -> service.createPayment(
++                42L, 7L, request(30_000L, "task-priority-reject", ContractorAllocationMode.LIVE)
++        ))
++                .isInstanceOf(ResponseStatusException.class)
++                .hasMessageContaining("доступный остаток");
++
++        ContractorDirectSettlementResponse response = service.createPayment(
++                42L, 7L, request(20_000L, "task-priority-exact", ContractorAllocationMode.LIVE)
++        );
++        assertThat(response.amountKopecks()).isEqualTo(20_000L);
++    }
+@@
+-        verify(profileService, never()).available(any(), any());
++        verify(taskCapacityService, never()).ordinaryAvailable(any(), any());
+@@
+-        verify(profileService, never()).available(any(), any());
++        verify(taskCapacityService, never()).ordinaryAvailable(any(), any());
+@@
+-        verify(profileService, never()).available(any(), any());
++        verify(taskCapacityService, never()).ordinaryAvailable(any(), any());
+@@
+-        when(profileService.available(profile, mode)).thenReturn(available);
++        when(taskCapacityService.ordinaryAvailable(profile, mode)).thenReturn(available);
+*** End Patch

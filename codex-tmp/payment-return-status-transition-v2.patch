@@ -1,0 +1,6 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/p_products/status/service/OrderStatusTransitionService.java
+@@
+-            Map.entry(STATUS_NOT_PAID, Set.of(STATUS_TO_PUBLISH, STATUS_PUBLIC, STATUS_TO_PAY, STATUS_REMINDER, STATUS_WAITING_COMMON_INVOICE)),
++            Map.entry(STATUS_NOT_PAID, Set.of(STATUS_TO_PUBLISH, STATUS_PUBLIC, STATUS_TO_PAY, STATUS_REMINDER, STATUS_WAITING_COMMON_INVOICE, STATUS_PAYMENT, STATUS_BAN)),
+*** End Patch

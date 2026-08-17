@@ -1,0 +1,35 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionServiceTest.java
+@@
+     private ContractorPaymentProfile profile(Long id, Long userId, ContractorRole role, String name) {
++    private LinkedHashMap<String, ManualCardPaymentRecipientResponse> aliases(
++            ManualPaymentTaskRouteSnapshot task,
++            ManualCardPaymentRecipientResponse alias,
++            String aliasMapKey
++    ) {
++        LinkedHashMap<String, ManualCardPaymentRecipientResponse> values = new LinkedHashMap<>();
++        values.put(task.candidateKey(), new ManualCardPaymentRecipientResponse(
++                alias.recipientType(), task.accountingTargetProfileId(), alias.recipientUserId(),
++                "Получатель задания", 0L, 0L, true,
++                task.candidateKey(), ContractorCashDestinationKind.MANUAL_PAYMENT_TASK,
++                task.taskId(), task.taskGeneration(), task.accountingTargetKind(),
++                "Держатель карты", "Получатель учёта", "Зачесть в задание"));
++        values.put(aliasMapKey, alias);
++        return values;
++    }
++
++    private ManualPaymentTaskRouteSnapshot taskSnapshot(
++            ManualPaymentTaskAccountingTargetKind kind,
++            Long profileId
++    ) {
++        return new ManualPaymentTaskRouteSnapshot(
++                91L, 4L,
++                new ManualPaymentTaskSourceRef(
++                        ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 10L, "generation"),
++                "TASK:91:4", kind, profileId, "Получатель учёта",
++                ManualPaymentType.MOBILE_BANK, "+79990000000", "Держатель карты",
++                null, null, 10_000L, LocalDateTime.now(), "admin");
++    }
++
++    private ContractorPaymentProfile profile(Long id, Long userId, ContractorRole role, String name) {
+*** End Patch

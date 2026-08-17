@@ -1,0 +1,89 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/repository/ContractorPaymentAllocationRepository.java
+@@
+-            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++            CASE
++                WHEN EXISTS (
++                    SELECT 1
++                    FROM contractor_actual_payment_attributions attribution
++                    JOIN contractor_completion_cutover_state cutover ON cutover.id = 1
++                    WHERE attribution.actual_cash_destination_kind = 'MANUAL_PAYMENT_TASK'
++                      AND attribution.actual_manual_payment_task_id
++                            = allocation.manual_payment_task_id
++                      AND attribution.actual_recipient_profile_id
++                            = allocation.recipient_profile_id
++                      AND attribution.accounting_mode = allocation.mode
++                      AND (attribution.original_allocation_id = allocation.id
++                           OR (allocation.source_type = 'ACTUAL_PAYMENT'
++                               AND allocation.source_id = attribution.id))
++                      AND DATE(attribution.effective_at) >= cutover.attribution_start_date
++                )
++                THEN GREATEST(
++                    0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++                ELSE 0
++              END
+             + CASE
+@@
+-            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++            CASE
++                WHEN EXISTS (
++                    SELECT 1
++                    FROM contractor_actual_payment_attributions attribution
++                    JOIN contractor_completion_cutover_state cutover ON cutover.id = 1
++                    WHERE attribution.actual_cash_destination_kind = 'MANUAL_PAYMENT_TASK'
++                      AND attribution.actual_manual_payment_task_id
++                            = allocation.manual_payment_task_id
++                      AND attribution.actual_recipient_profile_id
++                            = allocation.recipient_profile_id
++                      AND attribution.accounting_mode = allocation.mode
++                      AND (attribution.original_allocation_id = allocation.id
++                           OR (allocation.source_type = 'ACTUAL_PAYMENT'
++                               AND allocation.source_id = attribution.id))
++                      AND DATE(attribution.effective_at) >= cutover.attribution_start_date
++                )
++                THEN GREATEST(
++                    0, allocation.confirmed_kopecks - allocation.returned_kopecks)
++                ELSE 0
++              END
+             + CASE
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/repository/ContractorPaymentAccountingPhaseRepository.java
+@@
+             SELECT allocation.id AS anomaly_id
+             FROM contractor_payment_allocations allocation
+             LEFT JOIN contractor_actual_payment_attributions attribution
+@@
+                    OR attribution.actual_manual_payment_task_id
+                         <> allocation.manual_payment_task_id)
++
++            UNION ALL
++
++            SELECT allocation.id AS anomaly_id
++            FROM contractor_payment_allocations allocation
++            WHERE allocation.manual_payment_task_id IS NOT NULL
++              AND (allocation.confirmed_kopecks > 0
++                   OR allocation.returned_kopecks > 0)
++              AND (
++                   (SELECT COUNT(*)
++                    FROM contractor_completion_cutover_state cutover
++                    WHERE cutover.id = 1) <> 1
++                   OR (SELECT COUNT(*)
++                       FROM contractor_actual_payment_attributions attribution
++                       WHERE attribution.actual_cash_destination_kind
++                                = 'MANUAL_PAYMENT_TASK'
++                         AND attribution.actual_manual_payment_task_id
++                                = allocation.manual_payment_task_id
++                         AND attribution.actual_recipient_profile_id
++                                = allocation.recipient_profile_id
++                         AND attribution.accounting_mode = allocation.mode
++                         AND (attribution.original_allocation_id = allocation.id
++                              OR (allocation.source_type = 'ACTUAL_PAYMENT'
++                                  AND allocation.source_id = attribution.id))) <> 1
++                  )
+         ) anomalies
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskCapacityMigrationContractTest.java
+@@
+             assertThat(sql).contains("manual_payment_task_id BIGINT NULL");
++            assertThat(sql).contains("allocation.source_type = 'ACTUAL_PAYMENT'")
++                    .contains("attribution.actual_manual_payment_task_id")
++                    .contains("allocation.id = attribution.original_allocation_id");
+*** End Patch

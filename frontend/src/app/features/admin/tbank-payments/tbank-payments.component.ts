@@ -4,12 +4,14 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { forkJoin, switchMap, tap } from 'rxjs';
 import { PaymentsApi } from '../../../core/payments.api';
+import type { OrderCardItem } from '../../../core/manager.api';
 import type {
   AdminPaymentLinkResponse,
   AdminPaymentLinkSummaryResponse,
   AdminPaymentLinksPageResponse,
   ManualPaymentRecipientMonthlySummaryItem,
   ManualPaymentRecipientMonthlySummaryResponse,
+  ManualPaymentTaskAccountingTargetOption,
   ManualPaymentTaskResponse,
   ManualPaymentTaskStatus,
   ManualPaymentType,
@@ -37,10 +39,31 @@ import {
 } from '../../../shared/payment-navigation';
 import { ToastService } from '../../../shared/toast.service';
 import {
+  ManagerManualCardPaymentModalComponent,
+  type ManagerManualCardPaymentCompleted
+} from '../../manager/manager-manual-card-payment-modal.component';
+import {
+  manualPaymentRecipientLabel,
+  manualPaymentRouteErrorCode,
+  manualPaymentRouteErrorMessage
+} from '../../../shared/manual-payment-routing';
+import { ManualPaymentTaskOperationKeyDraft } from '../../../shared/manual-payment-operation-key';
+import {
   canCloseManualPaymentAsUnpaid,
   manualPaymentUnpaidCloseConfirmation,
   manualPaymentUnpaidCloseNotePrompt
 } from './manual-payment-unpaid-close';
+import {
+  manualPaymentTaskSelectedTarget,
+  manualPaymentTaskTargetEffect,
+  manualPaymentTaskTargetForSnapshot,
+  manualPaymentTaskTargetValid
+} from '../../../shared/manual-payment-task-target';
+import {
+  manualPaymentAccountingDestinationLabel,
+  manualPaymentAccountingRecipientLabel,
+  manualPaymentAccountingSourceLabel
+} from '../../../shared/manual-payment-recipient-summary';
 
 type PaymentMetric = {
   label: string;
@@ -70,7 +93,7 @@ type StatusFilterOption = {
 
 @Component({
   selector: 'app-tbank-payments',
-  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, MobileBottomPagerComponent, RouterLink],
+  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, ManagerManualCardPaymentModalComponent, MobileBottomPagerComponent, RouterLink],
   templateUrl: './tbank-payments.component.html',
   styleUrl: './tbank-payments.component.scss'
 })
@@ -90,6 +113,9 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly manualTasks = signal<ManualPaymentTaskResponse[]>([]);
   readonly recipientSummaryMonth = signal(TbankPaymentsComponent.currentMonthInput());
   readonly recipientMonthlySummary = signal<ManualPaymentRecipientMonthlySummaryResponse | null>(null);
+  readonly recipientSummaryError = signal<string | null>(null);
+  readonly journalManualCardPaymentOrder = signal<OrderCardItem | null>(null);
+  private readonly adminTaskOperationKey = new ManualPaymentTaskOperationKeyDraft();
   readonly adminTaskManagerId = signal<number | null>(null);
   readonly adminTaskPaymentType = signal<ManualPaymentType>('MOBILE_BANK');
   readonly adminTaskPhone = signal('');
@@ -98,6 +124,11 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly adminTaskPaymentButtonLabel = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly adminTaskAmountRubles = signal('');
   readonly adminTaskComment = signal('');
+  readonly adminTaskAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
+  readonly adminTaskAccountingTargetKey = signal('');
+  readonly adminTaskAccountingTargetAcknowledged = signal(false);
+  readonly adminTaskAccountingTargetsLoading = signal(false);
+  readonly adminTaskAccountingTargetError = signal<string | null>(null);
   readonly profileAssignments = signal<Record<number, number | null>>({});
   readonly profilePolicies = signal<Record<number, ProfilePolicyDraft>>({});
   readonly runtimeSettings = signal<TbankRuntimeSettings | null>(null);
@@ -113,6 +144,13 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly editTaskPaymentButtonLabel = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly editTaskAmountRubles = signal('');
   readonly editTaskComment = signal('');
+  readonly editTaskAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
+  readonly editTaskAccountingTargetKey = signal('');
+  readonly editTaskAccountingTargetAcknowledged = signal(false);
+  readonly editTaskAccountingTargetsLoading = signal(false);
+  readonly editTaskAccountingTargetError = signal<string | null>(null);
+  private adminTaskAccountingPreviewEpoch = 0;
+  private editTaskAccountingPreviewEpoch = 0;
   readonly savingManualTask = signal(false);
   readonly savingProfiles = signal(false);
   readonly savingProfilePolicies = signal(false);
@@ -131,6 +169,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly paymentSummary = signal<AdminPaymentLinkSummaryResponse | null>(null);
   readonly archiving = signal(false);
   readonly loadingRecipientSummary = signal(false);
+  private recipientSummaryLoadEpoch = 0;
   private searchReloadTimer: number | null = null;
 
   readonly statusOptions: StatusFilterOption[] = [
@@ -168,6 +207,13 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly receiptOverdueCount = computed(() => this.paymentSummary()?.receiptOverdue ?? 0);
 
   readonly recipientSummaryItems = computed(() => this.recipientMonthlySummary()?.items ?? []);
+  readonly selectedAdminTaskAccountingTarget = computed(() => manualPaymentTaskSelectedTarget(
+    this.adminTaskAccountingTargets(), this.adminTaskAccountingTargetKey()
+  ));
+  readonly selectedEditTaskAccountingTarget = computed(() => manualPaymentTaskSelectedTarget(
+    this.editTaskAccountingTargets(), this.editTaskAccountingTargetKey()
+  ));
+  readonly manualTaskTargetEffect = manualPaymentTaskTargetEffect;
 
   readonly paymentPageLabel = computed(() => {
     const totalPages = this.paymentTotalPages();
@@ -184,7 +230,11 @@ export class TbankPaymentsComponent implements OnDestroy {
     return !this.savingManualTask()
       && this.adminTaskManagerId() != null
       && hasTarget
-      && this.adminTaskTargetKopecks() > 0;
+      && this.adminTaskTargetKopecks() > 0
+      && !this.adminTaskAccountingTargetsLoading()
+      && manualPaymentTaskTargetValid(
+        this.selectedAdminTaskAccountingTarget(), this.adminTaskAccountingTargetAcknowledged()
+      );
   });
 
   readonly tbankClientPaymentEnabled = computed(() => {
@@ -345,19 +395,18 @@ export class TbankPaymentsComponent implements OnDestroy {
   load(): void {
     this.loading.set(true);
     this.error.set(null);
+    this.loadRecipientMonthlySummary();
     forkJoin({
       status: this.paymentsApi.getTbankStatus(),
       links: this.paymentsApi.getAdminTbankPaymentLinks(this.paymentLinkQuery()),
       profiles: this.paymentsApi.getAdminTbankPaymentProfiles(),
       manualTasks: this.paymentsApi.getAdminManualPaymentTasks(),
-      recipientSummary: this.paymentsApi.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()),
       runtimeSettings: this.paymentsApi.getAdminTbankRuntimeSettings()
     }).subscribe({
-      next: ({ status, links, profiles, manualTasks, recipientSummary, runtimeSettings }) => {
+      next: ({ status, links, profiles, manualTasks, runtimeSettings }) => {
         this.status.set(status);
         this.applyPaymentLinksPage(links);
         this.manualTasks.set(manualTasks ?? []);
-        this.recipientMonthlySummary.set(recipientSummary);
         this.runtimeSettings.set(runtimeSettings);
         this.applyProfilesState(profiles.profiles, profiles.managers);
         this.loading.set(false);
@@ -838,11 +887,47 @@ export class TbankPaymentsComponent implements OnDestroy {
         this.loadRecipientMonthlySummary();
       },
       error: (err) => {
-        const message = apiErrorDetail(err, 'Не удалось подтвердить ручную оплату');
         this.mutatingId.set(null);
+        const routeCode = manualPaymentRouteErrorCode(err);
+        if (routeCode === 'ACTUAL_RECIPIENT_REQUIRED') {
+          const orderId = Number(link.orderId);
+          if (!Number.isSafeInteger(orderId) || orderId <= 0) {
+            this.toastService.error(
+              'Оплата не подтверждена',
+              'У платежа нет корректного заказа, поэтому безопасный выбор фактического получателя недоступен.'
+            );
+            return;
+          }
+          this.journalManualCardPaymentOrder.set({
+            id: orderId,
+            companyId: 0,
+            companyTitle: link.companyTitle || `Заказ №${orderId}`,
+            status: link.status
+          });
+          return;
+        }
+        const message = routeCode
+          ? manualPaymentRouteErrorMessage(err, 'Не удалось подтвердить ручную оплату')
+          : apiErrorDetail(err, 'Не удалось подтвердить ручную оплату');
         this.toastService.error('Оплата не подтверждена', message);
       }
     });
+  }
+
+  closeJournalManualCardPayment(): void {
+    this.journalManualCardPaymentOrder.set(null);
+  }
+
+  completeJournalManualCardPayment(result: ManagerManualCardPaymentCompleted): void {
+    this.journalManualCardPaymentOrder.set(null);
+    this.toastService.success(
+      'Ручная оплата подтверждена',
+      `Получатель: ${manualPaymentRecipientLabel(result.recipient)}`
+    );
+    this.loadPaymentLinks();
+    this.loadProfilesOnly(true);
+    this.loadManualTasks();
+    this.loadRecipientMonthlySummary();
   }
 
   confirmContractorSource(link: AdminPaymentLinkResponse): void {
@@ -1022,10 +1107,18 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.editTaskPaymentButtonLabel.set(task.manualPaymentButtonLabel || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
     this.editTaskAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
     this.editTaskComment.set(task.comment ?? '');
+    this.editTaskAccountingTargetKey.set('');
+    this.editTaskAccountingTargetAcknowledged.set(false);
+    this.loadEditTaskAccountingTargets(task);
   }
 
   cancelManualTaskEdit(): void {
     this.editingTaskId.set(null);
+    this.editTaskAccountingTargets.set([]);
+    this.editTaskAccountingTargetKey.set('');
+    this.editTaskAccountingTargetAcknowledged.set(false);
+    this.editTaskAccountingTargetError.set(null);
+    this.editTaskAccountingPreviewEpoch += 1;
   }
 
   setEditTaskPaymentType(value: ManualPaymentType): void {
@@ -1053,6 +1146,16 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   setEditTaskAmountRubles(value: string | number | null): void {
     this.editTaskAmountRubles.set(value == null ? '' : String(value));
+    this.loadEditTaskAccountingTargets();
+  }
+
+  setEditTaskAccountingTarget(value: string | null): void {
+    this.editTaskAccountingTargetKey.set(value?.trim() ?? '');
+    this.editTaskAccountingTargetAcknowledged.set(false);
+  }
+
+  setEditTaskAccountingTargetAcknowledged(value: boolean): void {
+    this.editTaskAccountingTargetAcknowledged.set(Boolean(value));
   }
 
   setEditTaskComment(value: string | null): void {
@@ -1068,11 +1171,19 @@ export class TbankPaymentsComponent implements OnDestroy {
       && task.status !== 'COMPLETED'
       && task.status !== 'CANCELED'
       && hasTarget
-      && this.editTaskTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0);
+      && this.editTaskTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0)
+      && !this.editTaskAccountingTargetsLoading()
+      && manualPaymentTaskTargetValid(
+        this.selectedEditTaskAccountingTarget(), this.editTaskAccountingTargetAcknowledged()
+      );
   }
 
   saveManualTaskEdit(task: ManualPaymentTaskResponse): void {
     if (!task?.id || !this.canSaveManualTaskEdit(task)) {
+      return;
+    }
+    const accountingTarget = this.selectedEditTaskAccountingTarget();
+    if (!accountingTarget) {
       return;
     }
     this.mutatingTaskId.set(task.id);
@@ -1086,7 +1197,11 @@ export class TbankPaymentsComponent implements OnDestroy {
       comment: this.editTaskComment().trim() || null,
       manualPaymentUrlReplacementConfirmed: this.editTaskPaymentType() === 'EXTERNAL_LINK'
         && !Boolean(task.manualPaymentUrl?.trim())
-        && Boolean(this.editTaskPaymentUrl().trim())
+        && Boolean(this.editTaskPaymentUrl().trim()),
+      accountingTargetKind: accountingTarget.kind,
+      accountingTargetProfileId: accountingTarget.profileId ?? null,
+      accountingTargetOverrunAcknowledged: this.editTaskAccountingTargetAcknowledged(),
+      expectedGeneration: task.generation ?? null
     }).subscribe({
       next: (updated) => {
         this.manualTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
@@ -1105,6 +1220,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   setAdminTaskManagerId(value: number | string | null): void {
     const id = value == null || value === '' ? NaN : Number(value);
     this.adminTaskManagerId.set(Number.isFinite(id) && id > 0 ? id : null);
+    this.loadAdminTaskAccountingTargets();
   }
 
   setAdminTaskPaymentType(value: ManualPaymentType): void {
@@ -1132,6 +1248,16 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   setAdminTaskAmountRubles(value: string | number | null): void {
     this.adminTaskAmountRubles.set(value == null ? '' : String(value));
+    this.loadAdminTaskAccountingTargets();
+  }
+
+  setAdminTaskAccountingTarget(value: string | null): void {
+    this.adminTaskAccountingTargetKey.set(value?.trim() ?? '');
+    this.adminTaskAccountingTargetAcknowledged.set(false);
+  }
+
+  setAdminTaskAccountingTargetAcknowledged(value: boolean): void {
+    this.adminTaskAccountingTargetAcknowledged.set(Boolean(value));
   }
 
   setAdminTaskComment(value: string | null): void {
@@ -1142,8 +1268,13 @@ export class TbankPaymentsComponent implements OnDestroy {
     if (!this.canCreateManualTask()) {
       return;
     }
+    const accountingTarget = this.selectedAdminTaskAccountingTarget();
+    if (!accountingTarget) {
+      return;
+    }
     this.savingManualTask.set(true);
     this.paymentsApi.createAdminManualPaymentTask({
+      operationKey: this.adminTaskOperationKey.current(),
       managerId: this.adminTaskManagerId(),
       manualPaymentType: this.adminTaskPaymentType(),
       manualPhone: this.adminTaskPhone().trim(),
@@ -1151,18 +1282,15 @@ export class TbankPaymentsComponent implements OnDestroy {
       manualPaymentUrl: this.adminTaskPaymentUrl().trim(),
       manualPaymentButtonLabel: this.adminTaskPaymentButtonLabel().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
       targetAmountKopecks: this.adminTaskTargetKopecks(),
-      comment: this.adminTaskComment().trim() || null
+      comment: this.adminTaskComment().trim() || null,
+      accountingTargetKind: accountingTarget.kind,
+      accountingTargetProfileId: accountingTarget.profileId ?? null,
+      accountingTargetOverrunAcknowledged: this.adminTaskAccountingTargetAcknowledged()
     }).subscribe({
       next: (task) => {
-        this.manualTasks.update((tasks) => [task, ...tasks]);
-        this.adminTaskPhone.set('');
-        this.adminTaskRecipient.set(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
-        this.adminTaskPaymentType.set('MOBILE_BANK');
-        this.adminTaskPaymentUrl.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
-        this.adminTaskPaymentButtonLabel.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
-        this.adminTaskAmountRubles.set('');
-        this.adminTaskComment.set('');
+        this.manualTasks.update((tasks) => [task, ...tasks.filter((item) => item.id !== task.id)]);
         this.savingManualTask.set(false);
+        this.resetAdminTaskDraft();
         this.toastService.success('Ручное задание создано');
       },
       error: (err) => {
@@ -1171,6 +1299,25 @@ export class TbankPaymentsComponent implements OnDestroy {
         this.toastService.error('Задание не создано', message);
       }
     });
+  }
+
+  resetAdminTaskDraft(): void {
+    if (this.savingManualTask()) {
+      return;
+    }
+    this.adminTaskPhone.set('');
+    this.adminTaskRecipient.set(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+    this.adminTaskPaymentType.set('MOBILE_BANK');
+    this.adminTaskPaymentUrl.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
+    this.adminTaskPaymentButtonLabel.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+    this.adminTaskAmountRubles.set('');
+    this.adminTaskComment.set('');
+    this.adminTaskAccountingTargets.set([]);
+    this.adminTaskAccountingTargetKey.set('');
+    this.adminTaskAccountingTargetAcknowledged.set(false);
+    this.adminTaskAccountingTargetError.set(null);
+    this.adminTaskAccountingPreviewEpoch += 1;
+    this.adminTaskOperationKey.rotate();
   }
 
   async copy(value: string | null | undefined, key: string): Promise<void> {
@@ -1283,20 +1430,16 @@ export class TbankPaymentsComponent implements OnDestroy {
     return '';
   }
 
-  recipientSummaryPaymentTarget(item: ManualPaymentRecipientMonthlySummaryItem): string {
-    const isExternal = item.manualPaymentType === 'EXTERNAL_LINK';
-    const target = isExternal
-      ? (item.manualPaymentUrl || item.manualPaymentButtonLabel || 'ссылка не указана')
-      : (item.manualPhone || 'телефон не указан');
-    const profile = item.paymentProfileName?.trim();
-    return profile ? `${target} · ${profile}` : target;
+  recipientSummaryRecipientLabel(item: ManualPaymentRecipientMonthlySummaryItem): string {
+    return manualPaymentAccountingRecipientLabel(item);
+  }
+
+  recipientSummaryDestinationLabel(item: ManualPaymentRecipientMonthlySummaryItem): string {
+    return manualPaymentAccountingDestinationLabel(item);
   }
 
   recipientSummarySourceLabel(item: ManualPaymentRecipientMonthlySummaryItem): string {
-    if (item.manualSource === 'CONTRACTOR_PAYMENT_PROFILE') {
-      return 'Платёжный профиль исполнителя';
-    }
-    return item.manualSource === 'MANUAL_TASK' ? 'Ручное задание' : 'Лимит профиля';
+    return manualPaymentAccountingSourceLabel(item);
   }
 
   hasPaymentNotificationInfo(link: AdminPaymentLinkResponse): boolean {
@@ -1482,6 +1625,85 @@ export class TbankPaymentsComponent implements OnDestroy {
     return task.id;
   }
 
+  private loadAdminTaskAccountingTargets(): void {
+    const managerId = this.adminTaskManagerId();
+    const amount = this.adminTaskTargetKopecks();
+    const previousKey = this.adminTaskAccountingTargetKey();
+    const epoch = ++this.adminTaskAccountingPreviewEpoch;
+    this.adminTaskAccountingTargetAcknowledged.set(false);
+    this.adminTaskAccountingTargetError.set(null);
+    if (managerId == null || amount <= 0) {
+      this.adminTaskAccountingTargets.set([]);
+      this.adminTaskAccountingTargetKey.set('');
+      this.adminTaskAccountingTargetsLoading.set(false);
+      return;
+    }
+    this.adminTaskAccountingTargetsLoading.set(true);
+    this.paymentsApi.getAdminManualPaymentTaskAccountingTargets(managerId, amount).subscribe({
+      next: (options) => {
+        if (epoch !== this.adminTaskAccountingPreviewEpoch) {
+          return;
+        }
+        const normalized = options ?? [];
+        this.adminTaskAccountingTargets.set(normalized);
+        this.adminTaskAccountingTargetKey.set(
+          normalized.some(option => option.key === previousKey) ? previousKey : ''
+        );
+        this.adminTaskAccountingTargetsLoading.set(false);
+      },
+      error: (error) => {
+        if (epoch !== this.adminTaskAccountingPreviewEpoch) {
+          return;
+        }
+        this.adminTaskAccountingTargets.set([]);
+        this.adminTaskAccountingTargetKey.set('');
+        this.adminTaskAccountingTargetsLoading.set(false);
+        this.adminTaskAccountingTargetError.set(apiErrorDetail(
+          error, 'Не удалось рассчитать получателя и возможное превышение.'
+        ));
+      }
+    });
+  }
+
+  private loadEditTaskAccountingTargets(sourceTask?: ManualPaymentTaskResponse): void {
+    const task = sourceTask ?? this.manualTasks().find(item => item.id === this.editingTaskId());
+    const amount = this.editTaskTargetKopecks();
+    const previousKey = this.editTaskAccountingTargetKey();
+    const epoch = ++this.editTaskAccountingPreviewEpoch;
+    this.editTaskAccountingTargetAcknowledged.set(false);
+    this.editTaskAccountingTargetError.set(null);
+    if (!task?.managerId || amount <= 0) {
+      this.editTaskAccountingTargets.set([]);
+      this.editTaskAccountingTargetKey.set('');
+      this.editTaskAccountingTargetsLoading.set(false);
+      this.editTaskAccountingTargetError.set(task?.managerId ? null : 'У задания не найден менеджер. Сохранение заблокировано.');
+      return;
+    }
+    this.editTaskAccountingTargetsLoading.set(true);
+    this.paymentsApi.getAdminManualPaymentTaskAccountingTargets(task.managerId, amount, task.id).subscribe({
+      next: (options) => {
+        if (epoch !== this.editTaskAccountingPreviewEpoch) {
+          return;
+        }
+        const normalized = options ?? [];
+        const restored = normalized.find(option => option.key === previousKey)
+          ?? manualPaymentTaskTargetForSnapshot(normalized, task);
+        this.editTaskAccountingTargets.set(normalized);
+        this.editTaskAccountingTargetKey.set(restored?.key ?? '');
+        this.editTaskAccountingTargetsLoading.set(false);
+      },
+      error: (error) => {
+        if (epoch !== this.editTaskAccountingPreviewEpoch) {
+          return;
+        }
+        this.editTaskAccountingTargets.set([]);
+        this.editTaskAccountingTargetKey.set('');
+        this.editTaskAccountingTargetsLoading.set(false);
+        this.editTaskAccountingTargetError.set(apiErrorDetail(error, 'Не удалось пересчитать получателя задания.'));
+      }
+    });
+  }
+
   totalAmount(links: AdminPaymentLinkResponse[]): number {
     return links.reduce((sum, link) => sum + Number(link.amount || 0), 0);
   }
@@ -1665,16 +1887,36 @@ export class TbankPaymentsComponent implements OnDestroy {
     });
   }
 
+  private loadManualTasks(): void {
+    this.paymentsApi.getAdminManualPaymentTasks().subscribe({
+      next: (tasks) => this.manualTasks.set(tasks ?? []),
+      error: (err) => this.toastService.error(
+        'Задания не обновлены',
+        apiErrorDetail(err, 'Обновите страницу перед следующей операцией')
+      )
+    });
+  }
+
   loadRecipientMonthlySummary(): void {
+    const loadEpoch = ++this.recipientSummaryLoadEpoch;
     this.loadingRecipientSummary.set(true);
+    this.recipientSummaryError.set(null);
     this.paymentsApi.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()).subscribe({
       next: (summary) => {
+        if (loadEpoch !== this.recipientSummaryLoadEpoch) {
+          return;
+        }
         this.recipientMonthlySummary.set(summary);
+        this.recipientSummaryError.set(null);
         this.loadingRecipientSummary.set(false);
       },
       error: (err) => {
+        if (loadEpoch !== this.recipientSummaryLoadEpoch) {
+          return;
+        }
         const message = apiErrorDetail(err, 'Не удалось обновить сводку по получателям');
         this.loadingRecipientSummary.set(false);
+        this.recipientSummaryError.set(message);
         this.toastService.error('Сводка не обновлена', message);
       }
     });

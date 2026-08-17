@@ -1,0 +1,148 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskService.java
+@@
+     private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
+     private final ManualPaymentTaskAccountingTargetPolicy accountingTargetPolicy;
+-    private final ContractorPaymentProfileService contractorPaymentProfileService;
++    private final ManualPaymentTaskContractorCapacityService contractorCapacityService;
+     private final ContractorPaymentAccountingPhaseService contractorPaymentAccountingPhaseService;
+@@
+         ManualPaymentTask saved = manualPaymentTaskRepository.save(task);
+         if (saved.getId() == null) {
+@@
+                     "Не удалось зафиксировать созданное платёжное задание"
+             );
+         }
++        contractorCapacityService.synchronize(
++                ManualPaymentTaskContractorCapacityService.TaskCommitmentSnapshot.NONE,
++                saved,
++                taskLedgerService.balance(saved.getId())
++        );
+         creation.setTaskId(saved.getId());
+@@
+     private void completeLockedIfConfirmedTargetReached(ManualPaymentTask task) {
+@@
+         ManualPaymentTaskBalance balance = taskLedgerService.balance(task.getId());
++        ManualPaymentTaskContractorCapacityService.TaskCommitmentSnapshot beforeCommitment =
++                contractorCapacityService.snapshot(task, balance);
+         long netConfirmed = Math.max(0, balance.netConfirmedAmountKopecks());
+@@
+         task.setCompletedAt(LocalDateTime.now());
+-        manualPaymentTaskRepository.save(task);
++        ManualPaymentTask saved = manualPaymentTaskRepository.save(task);
++        contractorCapacityService.synchronize(beforeCommitment, saved, balance);
+@@
+         ManualPaymentTaskBalance balance = taskLedgerService.balance(task.getId());
++        ManualPaymentTaskContractorCapacityService.TaskCommitmentSnapshot beforeCommitment =
++                contractorCapacityService.snapshot(task, balance);
+         long reserved = balance.occupiedAmountKopecks();
+@@
+         boolean acknowledged = request != null
+                 && Boolean.TRUE.equals(request.accountingTargetOverrunAcknowledged());
+-        if (!targetChanged && task.getTargetOverrunAcknowledgedAt() != null) {
+-            acknowledged = true;
+-        }
++        ManualPaymentTaskAccountingTargetKind previousKind = targetKind(task);
++        Long previousProfileId = profileId(task.getAccountingTargetProfile());
++        contractorCapacityService.lockProfilesForChange(previousProfileId, effectiveProfileId);
+         TargetResolution target = managerScoped
+@@
+-        ManualPaymentTaskAccountingTargetKind previousKind = targetKind(task);
+-        Long previousProfileId = profileId(task.getAccountingTargetProfile());
+         Long targetProfileId = profileId(target.profile());
+@@
+         if (targetChanged) {
+             task.setTargetOverrunAcknowledgedAt(null);
+             task.setTargetOverrunAcknowledgedBy(null);
++            task.setTargetOverrunAcknowledgedKopecks(null);
++            task.setTargetCapacityAvailableSnapshotKopecks(null);
+         }
+@@
+         task.setUpdatedBy(limit(actor, 160));
+         ManualPaymentTask saved = manualPaymentTaskRepository.save(task);
++        contractorCapacityService.synchronize(beforeCommitment, saved, balance);
+         if (previousKind == ManualPaymentTaskAccountingTargetKind.UNRESOLVED
+@@
+     ) {
+         ManualPaymentTaskStatus newStatus = parseStatus(status);
++        ManualPaymentTaskBalance balance = taskLedgerService.balance(task.getId());
++        ManualPaymentTaskContractorCapacityService.TaskCommitmentSnapshot beforeCommitment =
++                contractorCapacityService.snapshot(task, balance);
+         if (newStatus == ManualPaymentTaskStatus.CANCELED
+                 || newStatus == ManualPaymentTaskStatus.COMPLETED) {
+-            ManualPaymentTaskBalance balance = taskLedgerService.balance(task.getId());
+             if (balance.pendingAmountKopecks() > 0) {
+@@
+         if (newStatus == ManualPaymentTaskStatus.ACTIVE) {
+             validatePaymentTarget(task);
+             validateAccountingTargetForActivation(task, accountingMode);
++            contractorCapacityService.requireActivationCovered(task, balance, accountingMode);
+@@
+-        return toResponse(manualPaymentTaskRepository.save(task));
++        ManualPaymentTask saved = manualPaymentTaskRepository.save(task);
++        contractorCapacityService.synchronize(beforeCommitment, saved, balance);
++        return toResponse(saved);
+@@
+         ManualPaymentTaskAccountingTargetKind accountingKind = targetKind(task);
+         ContractorPaymentProfile targetProfile = task.getAccountingTargetProfile();
+         ContractorAllocationMode accountingMode = contractorPaymentAccountingPhaseService.current();
+-        long targetAvailable = targetAvailable(
+-                targetProfile, balance.pendingAmountKopecks(), accountingMode);
+-        long remainingToFund = Math.max(0,
+-                saturatedSubtract(task.getTargetAmountKopecks(), confirmed));
+-        long targetOverrun = targetProfile == null ? 0
+-                : Math.max(0, saturatedSubtract(remainingToFund, targetAvailable));
++        ManualPaymentTaskContractorCapacityService.TargetCapacity targetCapacity = targetProfile == null
++                ? null
++                : contractorCapacityService.evaluateTarget(
++                        targetProfile,
++                        accountingMode,
++                        contractorCapacityService.snapshot(task, balance),
++                        task.getTargetAmountKopecks(),
++                        balance.netConfirmedAmountKopecks(),
++                        balance.pendingAmountKopecks(),
++                        true
++                );
++        long targetAvailable = targetCapacity == null ? 0L
++                : targetCapacity.currentAvailableKopecks();
++        long targetOverrun = targetCapacity == null ? 0L
++                : targetCapacity.projectedOverrunKopecks();
+@@
+     private void applyTarget(ManualPaymentTask task, TargetResolution target, String actor) {
+         task.setAccountingTargetKind(target.kind());
+         task.setAccountingTargetProfile(target.profile());
+         if (target.acknowledgementUsed()) {
+-            if (task.getTargetOverrunAcknowledgedAt() == null) {
++            if (target.acknowledgementRefreshed()) {
+                 task.setTargetOverrunAcknowledgedAt(LocalDateTime.now());
+                 task.setTargetOverrunAcknowledgedBy(limit(actor, 160));
++                task.setTargetOverrunAcknowledgedKopecks(target.projectedOverrunKopecks());
++                task.setTargetCapacityAvailableSnapshotKopecks(target.currentAvailableKopecks());
+             }
+         } else {
+             task.setTargetOverrunAcknowledgedAt(null);
+             task.setTargetOverrunAcknowledgedBy(null);
++            task.setTargetOverrunAcknowledgedKopecks(null);
++            task.setTargetCapacityAvailableSnapshotKopecks(null);
+         }
+     }
+@@
+-    private long targetAvailable(
+-            ContractorPaymentProfile profile,
+-            long ownPending,
+-            ContractorAllocationMode accountingMode
+-    ) {
+-        if (profile == null) {
+-            return 0;
+-        }
+-        long available = Math.max(0,
+-                contractorPaymentProfileService.available(
+-                        profile, accountingMode));
+-        try {
+-            return Math.addExact(available, ownPending);
+-        } catch (ArithmeticException overflow) {
+-            return Long.MAX_VALUE;
+-        }
+-    }
+-
+*** End Patch

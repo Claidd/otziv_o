@@ -2,27 +2,42 @@ package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
+import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
+import com.hunt.otziv.contractor_payments.model.ContractorRole;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentAccountingPhaseService;
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
+import com.hunt.otziv.payments.dto.ManualPaymentTaskAccountingTargetOption;
+import com.hunt.otziv.payments.dto.ManualPaymentTaskBalance;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
 import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.model.ManualPaymentTask;
+import com.hunt.otziv.payments.model.ManualPaymentTaskCreationRequest;
+import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
 import com.hunt.otziv.payments.model.ManualPaymentTaskStatus;
 import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentProfile;
+import com.hunt.otziv.payments.repository.ManualPaymentTaskCreationRequestRepository;
 import com.hunt.otziv.payments.repository.ManualPaymentTaskRepository;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import com.hunt.otziv.payments.service.ManualPaymentTaskAccountingTargetPolicy.TargetResolution;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.Collection;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -61,10 +76,17 @@ public class ManualPaymentTaskService {
     );
 
     private final ManualPaymentTaskRepository manualPaymentTaskRepository;
+    private final ManualPaymentTaskCreationRequestRepository taskCreationRequestRepository;
     private final PaymentLinkRepository paymentLinkRepository;
     private final CommonInvoiceRepository commonInvoiceRepository;
     private final ManagerRepository managerRepository;
     private final PaymentProfileService paymentProfileService;
+    private final ManualPaymentTaskLedgerService taskLedgerService;
+    private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
+    private final ManualPaymentTaskAccountingTargetPolicy accountingTargetPolicy;
+    private final ManualPaymentTaskContractorCapacityService contractorCapacityService;
+    private final ContractorPaymentAccountingPhaseService contractorPaymentAccountingPhaseService;
+    private final ManualPaymentRecipientMonthlySummaryService recipientMonthlySummaryService;
 
     @Transactional(readOnly = true)
     public List<ManualPaymentTaskResponse> managerTasks(Long userId) {
@@ -80,7 +102,7 @@ public class ManualPaymentTaskService {
             String actor
     ) {
         Manager manager = managerByUserId(userId);
-        return createTask(manager, request, actor);
+        return createTask(manager, request, actor, true);
     }
 
     @Transactional
@@ -89,15 +111,60 @@ public class ManualPaymentTaskService {
             String actor
     ) {
         Manager manager = managerById(request == null ? null : request.managerId());
-        return createTask(manager, request, actor);
+        return createTask(manager, request, actor, false);
     }
 
     private ManualPaymentTaskResponse createTask(
             Manager manager,
             CreateManualPaymentTaskRequest request,
-            String actor
+            String actor,
+            boolean managerScoped
     ) {
+        String operationKey = requiredCreationOperationKey(request == null ? null : request.operationKey());
+        String payloadHash = creationPayloadHash(manager, request, managerScoped);
+        taskCreationRequestRepository.insertIfAbsent(operationKey, payloadHash);
+        ManualPaymentTaskCreationRequest creation = taskCreationRequestRepository
+                .findByOperationKeyForUpdate(operationKey)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Ключ создания задания не удалось зафиксировать"
+                ));
+        if (!payloadHash.equals(creation.getPayloadHash())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ключ создания задания уже использован с другими данными"
+            );
+        }
+        if (creation.getTaskId() != null) {
+            ManualPaymentTask replay = manualPaymentTaskRepository
+                    .findByIdWithDetails(creation.getTaskId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Созданное ранее платёжное задание недоступно; нужна сверка"
+                    ));
+            return toResponse(replay);
+        }
+        // A genuinely new task participates in profile capacity even for an
+        // OWNER/EXTERNAL target. Serialize phase promotion before target
+        // resolution and before the first task/profile write. Exact creation
+        // replays above remain write-free and need no financial lock.
+        contractorPaymentAccountingPhaseService.lockCurrent();
         PaymentProfile profile = paymentProfileService.selectForManager(manager);
+        long targetAmountKopecks = requiredPositive(request == null ? null : request.targetAmountKopecks());
+        TargetResolution target = managerScoped
+                ? accountingTargetPolicy.resolveForManager(
+                        manager,
+                        request == null ? null : request.accountingTargetKind(),
+                        request == null ? null : request.accountingTargetProfileId(),
+                        targetAmountKopecks,
+                        request != null && Boolean.TRUE.equals(request.accountingTargetOverrunAcknowledged()),
+                        null)
+                : accountingTargetPolicy.resolveForManagement(
+                        request == null ? null : request.accountingTargetKind(),
+                        request == null ? null : request.accountingTargetProfileId(),
+                        targetAmountKopecks,
+                        request != null && Boolean.TRUE.equals(request.accountingTargetOverrunAcknowledged()),
+                        null);
         ManualPaymentTask task = new ManualPaymentTask();
         task.setManager(manager);
         task.setPaymentProfile(profile);
@@ -109,11 +176,29 @@ public class ManualPaymentTaskService {
         task.setManualPaymentUrl(paymentUrlOrDefault(request == null ? null : request.manualPaymentUrl()));
         task.setManualPaymentButtonLabel(buttonLabelOrDefault(request == null ? null : request.manualPaymentButtonLabel()));
         validatePaymentTarget(task);
-        task.setTargetAmountKopecks(requiredPositive(request == null ? null : request.targetAmountKopecks()));
+        task.setTargetAmountKopecks(targetAmountKopecks);
+        applyTarget(task, target, actor);
+        task.setGeneration(1);
+        task.setNeedsReconciliation(false);
         task.setComment(limit(request == null ? null : request.comment(), 255));
         task.setCreatedBy(limit(actor, 160));
         task.setUpdatedBy(limit(actor, 160));
-        return toResponse(manualPaymentTaskRepository.save(task));
+        ManualPaymentTask saved = manualPaymentTaskRepository.save(task);
+        if (saved.getId() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Не удалось зафиксировать созданное платёжное задание"
+            );
+        }
+        contractorCapacityService.synchronize(
+                ManualPaymentTaskContractorCapacityService.TaskCommitmentSnapshot.NONE,
+                saved,
+                taskLedgerService.balance(saved.getId())
+        );
+        creation.setTaskId(saved.getId());
+        creation.setCompletedAt(LocalDateTime.now());
+        taskCreationRequestRepository.save(creation);
+        return toResponse(saved);
     }
 
     @Transactional
@@ -123,9 +208,11 @@ public class ManualPaymentTaskService {
             UpdateManualPaymentTaskRequest request,
             String actor
     ) {
-        ManualPaymentTask task = taskById(taskId);
+        ManualPaymentTaskReceiptIntegrationService.LegacySourceLocks legacyLocks =
+                taskReceiptIntegrationService.lockLegacySourcesThenAccountingMode(taskId);
+        ManualPaymentTask task = taskByIdForUpdate(taskId);
         assertTaskOwner(userId, task);
-        return updateTask(task, request, actor);
+        return updateTask(task, request, actor, true, legacyLocks);
     }
 
     @Transactional
@@ -134,7 +221,9 @@ public class ManualPaymentTaskService {
             UpdateManualPaymentTaskRequest request,
             String actor
     ) {
-        return updateTask(taskById(taskId), request, actor);
+        ManualPaymentTaskReceiptIntegrationService.LegacySourceLocks legacyLocks =
+                taskReceiptIntegrationService.lockLegacySourcesThenAccountingMode(taskId);
+        return updateTask(taskByIdForUpdate(taskId), request, actor, false, legacyLocks);
     }
 
     @Transactional(readOnly = true)
@@ -145,53 +234,27 @@ public class ManualPaymentTaskService {
     }
 
     @Transactional(readOnly = true)
-    public ManualPaymentRecipientMonthlySummaryResponse recipientMonthlySummary(String month) {
-        YearMonth selectedMonth = parseMonth(month);
-        LocalDateTime from = selectedMonth.atDay(1).atStartOfDay();
-        LocalDateTime to = selectedMonth.plusMonths(1).atDay(1).atStartOfDay();
-        List<ManualPaymentRecipientMonthlySummaryItem> items =
-                paymentLinkRepository.summarizeManualConfirmedByRecipientForPeriod(
-                        MANUAL_PAYMENT_METHODS,
-                        PaymentLinkStatus.CONFIRMED,
-                        from,
-                        to
-                ).stream()
-                        .map(this::safeRecipientSummaryItem)
-                        .toList();
-        long totalPayments = items.stream()
-                .mapToLong(ManualPaymentRecipientMonthlySummaryItem::paymentCount)
-                .sum();
-        long totalAmountKopecks = items.stream()
-                .mapToLong(ManualPaymentRecipientMonthlySummaryItem::amountKopecks)
-                .sum();
-        return new ManualPaymentRecipientMonthlySummaryResponse(
-                selectedMonth.toString(),
-                selectedMonth.atDay(1),
-                selectedMonth.plusMonths(1).atDay(1),
-                items.size(),
-                totalPayments,
-                totalAmountKopecks,
-                amountRubles(totalAmountKopecks),
-                items
-        );
+    public List<ManualPaymentTaskAccountingTargetOption> managerAccountingTargetOptions(
+            Long userId,
+            Long targetAmountKopecks,
+            Long taskId
+    ) {
+        return accountingTargetPolicy.managerOptions(
+                managerByUserId(userId), targetAmountKopecks, taskId);
     }
 
-    private ManualPaymentRecipientMonthlySummaryItem safeRecipientSummaryItem(
-            ManualPaymentRecipientMonthlySummaryItem item
+    @Transactional(readOnly = true)
+    public List<ManualPaymentTaskAccountingTargetOption> managementAccountingTargetOptions(
+            Long managerId,
+            Long targetAmountKopecks,
+            Long taskId
     ) {
-        return new ManualPaymentRecipientMonthlySummaryItem(
-                item.manualRecipientName(),
-                item.manualPhone(),
-                PaymentUrlPolicy.safe(item.manualPaymentUrl(), PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL),
-                item.manualPaymentButtonLabel(),
-                item.paymentProfileName(),
-                item.manualSource(),
-                item.manualPaymentType(),
-                item.paymentCount(),
-                item.amountKopecks(),
-                item.firstConfirmedAt(),
-                item.lastConfirmedAt()
-        );
+        return accountingTargetPolicy.managementOptions(managerId, targetAmountKopecks, taskId);
+    }
+
+    @Transactional(readOnly = true)
+    public ManualPaymentRecipientMonthlySummaryResponse recipientMonthlySummary(String month) {
+        return recipientMonthlySummaryService.summary(month);
     }
 
     @Transactional
@@ -201,9 +264,10 @@ public class ManualPaymentTaskService {
             String status,
             String actor
     ) {
-        ManualPaymentTask task = taskById(taskId);
+        ContractorAllocationMode accountingMode = contractorPaymentAccountingPhaseService.lockCurrent();
+        ManualPaymentTask task = taskByIdForUpdate(taskId);
         assertTaskOwner(userId, task);
-        return updateStatus(task, status, actor);
+        return updateStatus(task, status, actor, accountingMode);
     }
 
     @Transactional
@@ -212,7 +276,8 @@ public class ManualPaymentTaskService {
             String status,
             String actor
     ) {
-        return updateStatus(taskById(taskId), status, actor);
+        ContractorAllocationMode accountingMode = contractorPaymentAccountingPhaseService.lockCurrent();
+        return updateStatus(taskByIdForUpdate(taskId), status, actor, accountingMode);
     }
 
     @Transactional
@@ -229,26 +294,40 @@ public class ManualPaymentTaskService {
                 || amountKopecks <= 0) {
             return Optional.empty();
         }
+        ContractorAllocationMode accountingMode = contractorPaymentAccountingPhaseService.lockCurrent();
 
         return manualPaymentTaskRepository
                 .findActiveForRouting(manager.getId(), profile.getId(), ManualPaymentTaskStatus.ACTIVE)
                 .stream()
-                .filter(task -> isRoutable(task, amountKopecks, excludedLinkId))
+                .filter(task -> isRoutable(task, amountKopecks, excludedLinkId, accountingMode))
                 .findFirst();
     }
 
     @Transactional
     public void completeIfConfirmedTargetReached(ManualPaymentTask task) {
-        if (task == null || task.getId() == null || task.getStatus() != ManualPaymentTaskStatus.ACTIVE) {
+        if (task == null || task.getId() == null) {
             return;
         }
-        long confirmed = taskAmount(task.getId(), CONFIRMED_STATUSES);
-        if (confirmed < task.getTargetAmountKopecks()) {
+        manualPaymentTaskRepository.findByIdWithDetailsForUpdate(task.getId())
+                .ifPresent(this::completeLockedIfConfirmedTargetReached);
+    }
+
+    private void completeLockedIfConfirmedTargetReached(ManualPaymentTask task) {
+        if (task.getStatus() != ManualPaymentTaskStatus.ACTIVE
+                && task.getStatus() != ManualPaymentTaskStatus.NEEDS_ATTENTION) {
+            return;
+        }
+        ManualPaymentTaskBalance balance = taskLedgerService.balance(task.getId());
+        ManualPaymentTaskContractorCapacityService.TaskCommitmentSnapshot beforeCommitment =
+                contractorCapacityService.snapshot(task, balance);
+        long netConfirmed = Math.max(0, balance.netConfirmedAmountKopecks());
+        if (netConfirmed < task.getTargetAmountKopecks()) {
             return;
         }
         task.setStatus(ManualPaymentTaskStatus.COMPLETED);
         task.setCompletedAt(LocalDateTime.now());
-        manualPaymentTaskRepository.save(task);
+        ManualPaymentTask saved = manualPaymentTaskRepository.save(task);
+        contractorCapacityService.synchronize(beforeCommitment, saved, balance);
     }
 
     @Transactional
@@ -256,23 +335,35 @@ public class ManualPaymentTaskService {
         if (taskId == null) {
             return;
         }
-        manualPaymentTaskRepository.findByIdForUpdate(taskId)
-                .ifPresent(this::completeIfConfirmedTargetReached);
+        manualPaymentTaskRepository.findByIdWithDetailsForUpdate(taskId)
+                .ifPresent(this::completeLockedIfConfirmedTargetReached);
     }
 
     private ManualPaymentTaskResponse updateTask(
             ManualPaymentTask task,
             UpdateManualPaymentTaskRequest request,
-            String actor
+            String actor,
+            boolean managerScoped,
+            ManualPaymentTaskReceiptIntegrationService.LegacySourceLocks legacyLocks
     ) {
         if (task.getStatus() == ManualPaymentTaskStatus.COMPLETED
                 || task.getStatus() == ManualPaymentTaskStatus.CANCELED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Закрытое платежное задание нельзя редактировать");
         }
+        if (request != null && request.expectedGeneration() != null
+                && request.expectedGeneration() != task.getGeneration()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Платёжное задание уже изменилось; обновите данные"
+            );
+        }
 
         ManualPaymentType type = parseManualPaymentType(request == null ? null : request.manualPaymentType());
         long targetAmountKopecks = requiredPositive(request == null ? null : request.targetAmountKopecks());
-        long reserved = taskAmount(task.getId(), RESERVED_STATUSES);
+        ManualPaymentTaskBalance balance = taskLedgerService.balance(task.getId());
+        ManualPaymentTaskContractorCapacityService.TaskCommitmentSnapshot beforeCommitment =
+                contractorCapacityService.snapshot(task, balance);
+        long reserved = balance.occupiedAmountKopecks();
         if (targetAmountKopecks < reserved) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -286,25 +377,112 @@ public class ManualPaymentTaskService {
         boolean quarantinedPaymentUrlPreserved = applyManualPaymentUrlUpdate(task, request);
         task.setManualPaymentButtonLabel(buttonLabelOrDefault(request == null ? null : request.manualPaymentButtonLabel()));
         validatePaymentTarget(task, quarantinedPaymentUrlPreserved);
+        String requestedKind = request == null ? null : request.accountingTargetKind();
+        boolean preserveKind = normalize(requestedKind).isBlank();
+        String effectiveKind = preserveKind ? targetKind(task).name() : requestedKind;
+        Long effectiveProfileId = preserveKind
+                ? profileId(task.getAccountingTargetProfile())
+                : request.accountingTargetProfileId();
+        boolean targetChanged = !effectiveKind.equalsIgnoreCase(targetKind(task).name())
+                || !java.util.Objects.equals(effectiveProfileId, profileId(task.getAccountingTargetProfile()))
+                || targetAmountKopecks != task.getTargetAmountKopecks();
+        boolean acknowledged = request != null
+                && Boolean.TRUE.equals(request.accountingTargetOverrunAcknowledged());
+        ManualPaymentTaskAccountingTargetKind previousKind = targetKind(task);
+        boolean legacyRemediation = previousKind
+                == ManualPaymentTaskAccountingTargetKind.UNRESOLVED
+                && legacyLocks != null
+                && !legacyLocks.sources().isEmpty();
+        Long previousProfileId = profileId(task.getAccountingTargetProfile());
+        contractorCapacityService.lockProfilesForChange(previousProfileId, effectiveProfileId);
+        TargetResolution target = managerScoped
+                ? accountingTargetPolicy.resolveForManager(
+                        task.getManager(), effectiveKind, effectiveProfileId,
+                        targetAmountKopecks, acknowledged, task.getId(), legacyRemediation)
+                : accountingTargetPolicy.resolveForManagement(
+                        effectiveKind, effectiveProfileId, targetAmountKopecks,
+                        acknowledged, task.getId(), legacyRemediation);
+        Long targetProfileId = profileId(target.profile());
+        boolean historicalProfile = legacyRemediation && target.profile() != null
+                && (!target.profile().isEnabled()
+                    || (legacyLocks.accountingMode() == ContractorAllocationMode.LIVE
+                        && !target.profile().isLiveEnabled()));
+        boolean destinationChanged = previousKind != target.kind()
+                || !java.util.Objects.equals(previousProfileId, targetProfileId);
+        if (previousKind != ManualPaymentTaskAccountingTargetKind.UNRESOLVED
+                && destinationChanged
+                && (balance.pendingAmountKopecks() > 0 || balance.netConfirmedAmountKopecks() > 0)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "У задания уже есть резервы или подтверждённые оплаты; создайте новое платёжное задание"
+            );
+        }
+        if (targetChanged) {
+            task.setTargetOverrunAcknowledgedAt(null);
+            task.setTargetOverrunAcknowledgedBy(null);
+            task.setTargetOverrunAcknowledgedKopecks(null);
+            task.setTargetCapacityAvailableSnapshotKopecks(null);
+        }
         task.setTargetAmountKopecks(targetAmountKopecks);
+        applyTarget(task, target, actor);
+        task.setGeneration(nextGeneration(task.getGeneration()));
         task.setComment(limit(request == null ? null : request.comment(), 255));
         task.setUpdatedBy(limit(actor, 160));
-        return toResponse(manualPaymentTaskRepository.save(task));
+        ManualPaymentTask saved = manualPaymentTaskRepository.save(task);
+        contractorCapacityService.synchronize(beforeCommitment, saved, balance);
+        if (previousKind == ManualPaymentTaskAccountingTargetKind.UNRESOLVED
+                && target.kind() != ManualPaymentTaskAccountingTargetKind.UNRESOLVED) {
+            taskReceiptIntegrationService.bindPendingLegacyReservations(saved, actor, legacyLocks);
+            if (historicalProfile) {
+                saved.setNeedsReconciliation(true);
+                manualPaymentTaskRepository.save(saved);
+            }
+        }
+        return toResponse(saved);
     }
 
-    private ManualPaymentTaskResponse updateStatus(ManualPaymentTask task, String status, String actor) {
+    private ManualPaymentTaskResponse updateStatus(
+            ManualPaymentTask task,
+            String status,
+            String actor,
+            ContractorAllocationMode accountingMode
+    ) {
         ManualPaymentTaskStatus newStatus = parseStatus(status);
+        ManualPaymentTaskBalance balance = taskLedgerService.balance(task.getId());
+        ManualPaymentTaskContractorCapacityService.TaskCommitmentSnapshot beforeCommitment =
+                contractorCapacityService.snapshot(task, balance);
+        if (newStatus == ManualPaymentTaskStatus.CANCELED
+                || newStatus == ManualPaymentTaskStatus.COMPLETED) {
+            if (balance.pendingAmountKopecks() > 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Нельзя закрыть задание, пока по нему есть активные резервы"
+                );
+            }
+            if (newStatus == ManualPaymentTaskStatus.COMPLETED
+                    && balance.netConfirmedAmountKopecks() < task.getTargetAmountKopecks()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Нельзя завершить задание до подтверждения полной суммы"
+                );
+            }
+        }
         if (newStatus == ManualPaymentTaskStatus.ACTIVE) {
             validatePaymentTarget(task);
+            validateAccountingTargetForActivation(task, accountingMode);
+            contractorCapacityService.requireActivationCovered(task, balance, accountingMode);
         }
         task.setStatus(newStatus);
         task.setUpdatedBy(limit(actor, 160));
+        task.setGeneration(nextGeneration(task.getGeneration()));
         if (newStatus == ManualPaymentTaskStatus.COMPLETED) {
             task.setCompletedAt(task.getCompletedAt() == null ? LocalDateTime.now() : task.getCompletedAt());
         } else if (newStatus == ManualPaymentTaskStatus.ACTIVE) {
             task.setCompletedAt(null);
         }
-        return toResponse(manualPaymentTaskRepository.save(task));
+        ManualPaymentTask saved = manualPaymentTaskRepository.save(task);
+        contractorCapacityService.synchronize(beforeCommitment, saved, balance);
+        return toResponse(saved);
     }
 
     private void assertTaskOwner(Long userId, ManualPaymentTask task) {
@@ -323,6 +501,15 @@ public class ManualPaymentTaskService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежное задание не найдено"));
     }
 
+    private ManualPaymentTask taskByIdForUpdate(Long taskId) {
+        if (taskId == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежное задание не найдено");
+        }
+        return manualPaymentTaskRepository.findByIdWithDetailsForUpdate(taskId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Платежное задание не найдено"));
+    }
+
     private Manager managerByUserId(Long userId) {
         if (userId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Пользователь не найден");
@@ -339,34 +526,54 @@ public class ManualPaymentTaskService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден"));
     }
 
-    private boolean isRoutable(ManualPaymentTask task, long amountKopecks, Long excludedLinkId) {
+    private boolean isRoutable(
+            ManualPaymentTask task,
+            long amountKopecks,
+            Long excludedLinkId,
+            ContractorAllocationMode accountingMode
+    ) {
         if (task.getStatus() != ManualPaymentTaskStatus.ACTIVE
                 || !hasPaymentTarget(task)
+                || !hasResolvedAccountingTarget(task, accountingMode)
                 || task.getTargetAmountKopecks() <= 0) {
             return false;
         }
-        long reserved = taskAmount(task.getId(), RESERVED_STATUSES, excludedLinkId);
-        return reserved + amountKopecks <= task.getTargetAmountKopecks();
+        long occupied = taskLedgerService.balance(task.getId()).occupiedAmountKopecks();
+        try {
+            return Math.addExact(occupied, amountKopecks) <= task.getTargetAmountKopecks();
+        } catch (ArithmeticException overflow) {
+            return false;
+        }
     }
 
     private ManualPaymentTaskResponse toResponse(ManualPaymentTask task) {
         Long taskId = task.getId();
-        long reserved = taskAmount(taskId, RESERVED_STATUSES);
-        long confirmed = taskAmount(taskId, CONFIRMED_STATUSES);
-        long pendingAmount = Math.max(0, reserved - confirmed);
-        long remaining = Math.max(0, task.getTargetAmountKopecks() - reserved);
-        long pendingCount = taskId == null ? 0 : paymentLinkRepository.countActiveManualPendingForTask(
-                taskId,
-                MANUAL_PAYMENT_METHODS,
-                PENDING_STATUSES,
-                LocalDateTime.now()
-        ) + commonInvoiceRepository.countActivePaymentRoutesForTask(
-                taskId,
-                ACTIVE_COMMON_ROUTE_STATUSES
-        );
+        ManualPaymentTaskBalance balance = taskLedgerService.balance(taskId);
+        long occupied = balance.occupiedAmountKopecks();
+        long confirmed = balance.netConfirmedAmountKopecks();
+        long pendingAmount = balance.pendingAmountKopecks();
+        long remaining = Math.max(0, task.getTargetAmountKopecks() - occupied);
         Manager manager = task.getManager();
         User user = manager == null ? null : manager.getUser();
         PaymentProfile profile = task.getPaymentProfile();
+        ManualPaymentTaskAccountingTargetKind accountingKind = targetKind(task);
+        ContractorPaymentProfile targetProfile = task.getAccountingTargetProfile();
+        ContractorAllocationMode accountingMode = contractorPaymentAccountingPhaseService.current();
+        ManualPaymentTaskContractorCapacityService.TargetCapacity targetCapacity = targetProfile == null
+                ? null
+                : contractorCapacityService.evaluateTargetSnapshot(
+                        targetProfile,
+                        accountingMode,
+                        contractorCapacityService.snapshot(task, balance),
+                        task.getTargetAmountKopecks(),
+                        balance.netConfirmedAmountKopecks(),
+                        balance.pendingAmountKopecks(),
+                        true
+                );
+        long targetAvailable = targetCapacity == null ? 0L
+                : targetCapacity.currentAvailableKopecks();
+        long targetOverrun = targetCapacity == null ? 0L
+                : targetCapacity.projectedOverrunKopecks();
         return new ManualPaymentTaskResponse(
                 task.getId(),
                 manager == null ? null : manager.getId(),
@@ -381,23 +588,44 @@ public class ManualPaymentTaskService {
                 paymentUrlForRead(task.getManualPaymentUrl()),
                 buttonLabelOrDefault(task.getManualPaymentButtonLabel()),
                 task.getTargetAmountKopecks(),
-                reserved,
+                occupied,
                 confirmed,
                 pendingAmount,
                 remaining,
-                pendingCount,
+                balance.pendingCount(),
                 normalize(task.getComment()),
                 task.getCreatedAt(),
                 task.getUpdatedAt(),
                 task.getCompletedAt(),
-                isRoutableForAnyAmount(task, remaining)
+                isRoutableForAnyAmount(task, remaining, accountingMode),
+                accountingKind.name(),
+                profileId(targetProfile),
+                accountingTargetLabel(task),
+                accountingKind != ManualPaymentTaskAccountingTargetKind.UNRESOLVED,
+                task.getGeneration(),
+                task.getRowVersion(),
+                balance.redirectedAmountKopecks(),
+                balance.releasedAmountKopecks(),
+                balance.returnedAmountKopecks(),
+                balance.unverifiedConfirmedAmountKopecks(),
+                balance.needsReconciliationCount(),
+                balance.needsReconciliation(),
+                targetAvailable,
+                targetOverrun,
+                task.getTargetOverrunAcknowledgedAt(),
+                normalize(task.getTargetOverrunAcknowledgedBy())
         );
     }
 
-    private boolean isRoutableForAnyAmount(ManualPaymentTask task, long remaining) {
+    private boolean isRoutableForAnyAmount(
+            ManualPaymentTask task,
+            long remaining,
+            ContractorAllocationMode accountingMode
+    ) {
         return task.getStatus() == ManualPaymentTaskStatus.ACTIVE
                 && remaining > 0
-                && hasPaymentTarget(task);
+                && hasPaymentTarget(task)
+                && hasResolvedAccountingTarget(task, accountingMode);
     }
 
     private long taskAmount(Long taskId, Collection<PaymentLinkStatus> statuses) {
@@ -506,6 +734,102 @@ public class ManualPaymentTaskService {
         return false;
     }
 
+    private void applyTarget(ManualPaymentTask task, TargetResolution target, String actor) {
+        task.setAccountingTargetKind(target.kind());
+        task.setAccountingTargetProfile(target.profile());
+        if (target.acknowledgementUsed()) {
+            if (target.acknowledgementRefreshed()) {
+                task.setTargetOverrunAcknowledgedAt(LocalDateTime.now());
+                task.setTargetOverrunAcknowledgedBy(limit(actor, 160));
+                task.setTargetOverrunAcknowledgedKopecks(target.projectedOverrunKopecks());
+                task.setTargetCapacityAvailableSnapshotKopecks(target.currentAvailableKopecks());
+            }
+        } else {
+            task.setTargetOverrunAcknowledgedAt(null);
+            task.setTargetOverrunAcknowledgedBy(null);
+            task.setTargetOverrunAcknowledgedKopecks(null);
+            task.setTargetCapacityAvailableSnapshotKopecks(null);
+        }
+    }
+
+    private void validateAccountingTargetForActivation(
+            ManualPaymentTask task,
+            ContractorAllocationMode accountingMode
+    ) {
+        if (!hasResolvedAccountingTarget(task, accountingMode)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Привяжите точного получателя платёжного задания"
+            );
+        }
+    }
+
+    private boolean hasResolvedAccountingTarget(
+            ManualPaymentTask task,
+            ContractorAllocationMode accountingMode
+    ) {
+        ManualPaymentTaskAccountingTargetKind kind = targetKind(task);
+        if (kind == ManualPaymentTaskAccountingTargetKind.UNRESOLVED) {
+            return false;
+        }
+        if (kind == ManualPaymentTaskAccountingTargetKind.SPECIALIST
+                || kind == ManualPaymentTaskAccountingTargetKind.MANAGER) {
+            ContractorPaymentProfile profile = task.getAccountingTargetProfile();
+            ContractorRole expected = kind == ManualPaymentTaskAccountingTargetKind.SPECIALIST
+                    ? ContractorRole.SPECIALIST : ContractorRole.MANAGER;
+            return profile != null
+                    && profile.isEnabled()
+                    && (accountingMode != ContractorAllocationMode.LIVE || profile.isLiveEnabled())
+                    && profile.getUser() != null
+                    && profile.getUser().getId() != null
+                    && profile.getRole() == expected;
+        }
+        return task.getAccountingTargetProfile() == null;
+    }
+
+    private ManualPaymentTaskAccountingTargetKind targetKind(ManualPaymentTask task) {
+        return task.getAccountingTargetKind() == null
+                ? ManualPaymentTaskAccountingTargetKind.UNRESOLVED
+                : task.getAccountingTargetKind();
+    }
+
+    private String accountingTargetLabel(ManualPaymentTask task) {
+        return switch (targetKind(task)) {
+            case UNRESOLVED -> "Получатель задания не привязан";
+            case EXTERNAL_TASK -> recipientOrDefault(task.getManualRecipientName());
+            case OWNER -> "Владелец";
+            case SPECIALIST, MANAGER -> {
+                ContractorPaymentProfile profile = task.getAccountingTargetProfile();
+                User targetUser = profile == null ? null : profile.getUser();
+                String fio = targetUser == null ? "" : normalize(targetUser.getFio());
+                yield fio.isBlank() && targetUser != null ? normalize(targetUser.getUsername()) : fio;
+            }
+        };
+    }
+
+    private long saturatedSubtract(long left, long right) {
+        try {
+            return Math.subtractExact(left, right);
+        } catch (ArithmeticException overflow) {
+            return left >= 0 && right < 0 ? Long.MAX_VALUE : Long.MIN_VALUE;
+        }
+    }
+
+    private Long profileId(ContractorPaymentProfile profile) {
+        return profile == null ? null : profile.getId();
+    }
+
+    private long nextGeneration(long current) {
+        try {
+            return Math.addExact(current, 1);
+        } catch (ArithmeticException overflow) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Исчерпан номер поколения платёжного задания"
+            );
+        }
+    }
+
     private ManualPaymentTaskStatus parseStatus(String value) {
         String clean = normalize(value).toUpperCase(Locale.ROOT);
         if (clean.isBlank()) {
@@ -523,6 +847,57 @@ public class ManualPaymentTaskService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите сумму задания");
         }
         return value;
+    }
+
+    private String requiredCreationOperationKey(String value) {
+        String clean = normalize(value);
+        if (clean.isBlank()
+                || clean.length() > 160
+                || !clean.matches("[A-Za-z0-9:._-]+")) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Обновите приложение и повторите создание платёжного задания"
+            );
+        }
+        return clean.toLowerCase(Locale.ROOT);
+    }
+
+    private String creationPayloadHash(
+            Manager manager,
+            CreateManualPaymentTaskRequest request,
+            boolean managerScoped
+    ) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            updateDigest(digest, managerScoped);
+            updateDigest(digest, manager == null ? null : manager.getId());
+            updateDigest(digest, request == null ? null : normalize(request.manualPaymentType()).toUpperCase(Locale.ROOT));
+            updateDigest(digest, request == null ? null : normalize(request.manualPhone()));
+            updateDigest(digest, request == null ? null : normalize(request.manualRecipientName()));
+            updateDigest(digest, request == null ? null : normalize(request.manualPaymentUrl()));
+            updateDigest(digest, request == null ? null : normalize(request.manualPaymentButtonLabel()));
+            updateDigest(digest, request == null ? null : request.targetAmountKopecks());
+            updateDigest(digest, request == null ? null : normalize(request.comment()));
+            updateDigest(digest, request == null ? null : normalize(request.accountingTargetKind()).toUpperCase(Locale.ROOT));
+            updateDigest(digest, request == null ? null : request.accountingTargetProfileId());
+            updateDigest(digest, request != null && Boolean.TRUE.equals(
+                    request.accountingTargetOverrunAcknowledged()));
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 недоступен", impossible);
+        }
+    }
+
+    private void updateDigest(MessageDigest digest, Object value) {
+        if (value == null) {
+            digest.update((byte) 0);
+            return;
+        }
+        digest.update((byte) 1);
+        byte[] bytes = String.valueOf(value).getBytes(StandardCharsets.UTF_8);
+        digest.update(Integer.toString(bytes.length).getBytes(StandardCharsets.US_ASCII));
+        digest.update((byte) ':');
+        digest.update(bytes);
     }
 
     private YearMonth parseMonth(String value) {

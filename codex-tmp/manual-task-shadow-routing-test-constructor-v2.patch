@@ -1,0 +1,26 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowServiceTest.java
+@@
+ import static org.mockito.Mockito.inOrder;
++import static org.mockito.Mockito.lenient;
+ import static org.mockito.Mockito.doThrow;
+@@
+ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
++import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
+@@
+     private final ContractorPaymentProfileService profileService = mock(ContractorPaymentProfileService.class);
++    private final ManualPaymentTaskContractorCapacityService taskCapacityService =
++            mock(ManualPaymentTaskContractorCapacityService.class);
+@@
+             profileRepository,
+             profileService,
++            taskCapacityService,
+             routingLimitService,
+@@
+     @BeforeEach
+     void enableShadowMode() {
++        lenient().when(taskCapacityService.ordinaryAvailable(any(), any()))
++                .thenAnswer(invocation -> profileService.available(
++                        invocation.getArgument(0), invocation.getArgument(1)));
+         when(allocationRepository.currentDatabaseTime())
+*** End Patch

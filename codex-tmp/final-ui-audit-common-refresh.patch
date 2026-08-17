@@ -1,0 +1,89 @@
+*** Begin Patch
+*** Update File: frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.ts
+@@
+ import {
+   isManualPaymentTaskRecipient,
+@@
+ } from '../../../shared/manual-payment-routing';
++import { commonManualPaymentDraftAfterRouteRefresh } from '../../../shared/common-manual-payment-route-refresh';
+@@
+       this.options.set({
+         ...options,
+         candidates: options.candidates ?? [],
+         history: options.history ?? []
+       });
+-      const defaultRecipient = options.candidates?.find(candidate => candidate.key === options.defaultRecipientKey);
+-      if (options.remainingKopecks > 0 && !defaultRecipient) {
+-        throw new Error('Исходный получатель отсутствует в безопасном списке. Оплата не изменена.');
+-      }
+-      this.rows.set(defaultRecipient && options.remainingKopecks > 0 ? [{
+-        rowKey: this.newKey(),
+-        recipientKey: defaultRecipient.key,
+-        amountRubles: this.rublesInput(options.remainingKopecks)
+-      }] : []);
+-      this.reason.set(preserveDraft ? draftReason : '');
+-      this.receiptUrl.set(preserveDraft ? draftReceiptUrl : '');
+-      this.paymentReceived.set(false);
+-      this.finalAcknowledged.set(false);
++      const refreshedDraft = commonManualPaymentDraftAfterRouteRefresh(
++        { ...options, candidates: options.candidates ?? [] },
++        preserveDraft ? draftReason : '',
++        preserveDraft ? draftReceiptUrl : '',
++        () => this.newKey()
++      );
++      this.rows.set(refreshedDraft.rows);
++      this.reason.set(refreshedDraft.reason);
++      this.receiptUrl.set(refreshedDraft.receiptUrl);
++      this.paymentReceived.set(refreshedDraft.paymentReceived);
++      this.finalAcknowledged.set(refreshedDraft.finalAcknowledged);
+@@
+-  private rublesInput(kopecks: number): string {
+-    return (kopecks / 100).toFixed(2).replace('.', ',');
+-  }
+-
+   private localDateTime(date: Date): string {
+*** Update File: mobile/src/app/shared/mobile-common-manual-payment-dialog.component.ts
+@@
+ import {
+   mobileIsTaskRecipient,
+@@
+ } from './manual-payment-routing';
++import { mobileCommonManualPaymentDraftAfterRouteRefresh } from './common-manual-payment-route-refresh';
+@@
+       const normalized = {
+         ...options,
+         candidates: options.candidates ?? [],
+         history: options.history ?? []
+       };
+-      const original = normalized.candidates.find(candidate => candidate.key === normalized.defaultRecipientKey);
+-      if (normalized.remainingKopecks > 0 && !original) {
+-        throw new Error('Исходный получатель отсутствует в безопасном списке. Оплата не изменена.');
+-      }
+       this.options.set(normalized);
+-      this.rows.set(original && normalized.remainingKopecks > 0 ? [{
+-        rowKey: this.newKey(),
+-        recipientKey: original.key,
+-        amountRubles: this.rublesInput(normalized.remainingKopecks)
+-      }] : []);
+-      this.reason.set(preserveDraft ? draftReason : '');
+-      this.receiptUrl.set(preserveDraft ? draftReceiptUrl : '');
+-      this.paymentReceived.set(false);
+-      this.finalAcknowledged.set(false);
++      const refreshedDraft = mobileCommonManualPaymentDraftAfterRouteRefresh(
++        normalized,
++        preserveDraft ? draftReason : '',
++        preserveDraft ? draftReceiptUrl : '',
++        () => this.newKey()
++      );
++      this.rows.set(refreshedDraft.rows);
++      this.reason.set(refreshedDraft.reason);
++      this.receiptUrl.set(refreshedDraft.receiptUrl);
++      this.paymentReceived.set(refreshedDraft.paymentReceived);
++      this.finalAcknowledged.set(refreshedDraft.finalAcknowledged);
+@@
+-  private rublesInput(kopecks: number): string {
+-    return (kopecks / 100).toFixed(2).replace('.', ',');
+-  }
+-
+   private localDateTime(date: Date): string {
+*** End Patch

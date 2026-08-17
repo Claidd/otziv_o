@@ -115,18 +115,18 @@
     </div>
   </section>
 
-  <section class="analytics-section recipient-summary-section" aria-label="Фактические ручные оплаты по получателям">
+  <section class="analytics-section recipient-summary-section" aria-label="Подтверждённые ручные оплаты по получателям до возвратов">
     <div class="section-title recipient-summary-title">
       <span class="material-icons-sharp">account_balance_wallet</span>
       <div>
-        <h2>Факт по получателям</h2>
+        <h2>Подтверждённые ручные оплаты · до возвратов</h2>
         @if (recipientMonthlySummary(); as summary) {
           <p>
             {{ summary.month }} · {{ summary.totalRecipients }} получателей ·
             {{ summary.totalPayments }} платежей · {{ formatKopecks(summary.totalAmountKopecks) }}
           </p>
         } @else {
-          <p>Подтвержденные ручные оплаты за выбранный месяц.</p>
+          <p>Кому первоначально зачтены подтверждённые оплаты; последующие возвраты здесь не вычитаются.</p>
         }
       </div>
       <label class="month-field">
@@ -149,26 +149,32 @@
       </button>
     </div>
 
+    @if (recipientSummaryError(); as summaryError) {
+      <p class="error-text" role="alert">
+        {{ summaryError }} Журнал платежей и задания продолжают работать; повторите обновление сводки отдельно.
+      </p>
+    }
+
     <div class="recipient-summary-table">
       <table>
         <thead>
           <tr>
-            <th>Получатель</th>
-            <th>Реквизиты</th>
+            <th>Кому зачтена оплата</th>
+            <th>Основание учёта</th>
             <th>Платежи</th>
-            <th>Сумма</th>
+            <th>Подтверждено до возвратов</th>
             <th>Сверка</th>
           </tr>
         </thead>
         <tbody>
-          @for (item of recipientSummaryItems(); track item.manualRecipientName + item.manualPhone + item.manualPaymentUrl + item.paymentProfileName) {
+          @for (item of recipientSummaryItems(); track item.accountingRecipientKey || item.manualRecipientName) {
             <tr>
-              <td data-label="Получатель">
-                <strong>{{ item.manualRecipientName || 'Получатель не указан' }}</strong>
+              <td data-label="Кому зачтена оплата">
+                <strong>{{ recipientSummaryRecipientLabel(item) }}</strong>
                 <small>{{ recipientSummarySourceLabel(item) }}</small>
               </td>
-              <td data-label="Реквизиты">
-                <span>{{ recipientSummaryPaymentTarget(item) }}</span>
+              <td data-label="Основание учёта">
+                <span>{{ recipientSummaryDestinationLabel(item) }}</span>
               </td>
               <td data-label="Платежи">{{ item.paymentCount }}</td>
               <td data-label="Сумма"><strong>{{ formatKopecks(item.amountKopecks) }}</strong></td>
@@ -839,7 +845,7 @@
               />
             </label>
             <label class="profile-field">
-              <span>Получатель</span>
+              <span>Получатель в банке</span>
               <input
                 type="text"
                 [ngModel]="adminTaskRecipient()"
@@ -848,24 +854,53 @@
               />
             </label>
           } @else {
-          <label class="profile-field">
-            <span>Телефон</span>
-            <input
-              type="tel"
-              [ngModel]="adminTaskPhone()"
-              (ngModelChange)="setAdminTaskPhone($event)"
-              placeholder="+7..."
-            />
+            <label class="profile-field">
+              <span>Телефон</span>
+              <input
+                type="tel"
+                [ngModel]="adminTaskPhone()"
+                (ngModelChange)="setAdminTaskPhone($event)"
+                placeholder="+7..."
+              />
+            </label>
+            <label class="profile-field">
+              <span>Получатель в банке</span>
+              <input
+                type="text"
+                [ngModel]="adminTaskRecipient()"
+                (ngModelChange)="setAdminTaskRecipient($event)"
+                placeholder="ФИО получателя"
+              />
+            </label>
+          }
+          <label class="profile-field manual-task-accounting-field">
+            <span>Кому учитывать оплату</span>
+            <select [ngModel]="adminTaskAccountingTargetKey()" (ngModelChange)="setAdminTaskAccountingTarget($event)" [disabled]="adminTaskAccountingTargetsLoading() || !adminTaskAmountRubles() || adminTaskManagerId() == null">
+              <option value="">Выберите получателя</option>
+              @for (target of adminTaskAccountingTargets(); track target.key) {
+                <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">{{ target.label }}</option>
+              }
+            </select>
           </label>
-          <label class="profile-field">
-            <span>Получатель</span>
-            <input
-              type="text"
-              [ngModel]="adminTaskRecipient()"
-              (ngModelChange)="setAdminTaskRecipient($event)"
-              placeholder="ФИО получателя"
-            />
-          </label>
+          @if (adminTaskAccountingTargetsLoading()) {
+            <small class="manual-task-accounting-note">Проверяем лимиты и резервы…</small>
+          } @else if (adminTaskAccountingTargetError()) {
+            <small class="manual-task-accounting-warning" role="alert">{{ adminTaskAccountingTargetError() }}</small>
+          } @else if (selectedAdminTaskAccountingTarget(); as target) {
+            <div class="manual-task-accounting-preview">
+              <strong>{{ target.label }}</strong>
+              <small>{{ manualTaskTargetEffect(target) }}</small>
+              @if (target.currentAvailableKopecks != null) {
+                <small>Доступно сейчас: {{ formatKopecks(target.currentAvailableKopecks) }}</small>
+              }
+              @if ((target.projectedOverrunKopecks || 0) > 0) {
+                <small class="manual-task-accounting-warning">Превышение {{ formatKopecks(target.projectedOverrunKopecks) }} будет сохранено как аномалия; сумма не уменьшится и не уйдёт владельцу.</small>
+                <label class="manual-task-accounting-ack">
+                  <input type="checkbox" [ngModel]="adminTaskAccountingTargetAcknowledged()" (ngModelChange)="setAdminTaskAccountingTargetAcknowledged($event)">
+                  <span>Подтверждаю создание задания с этим превышением.</span>
+                </label>
+              }
+            </div>
           }
           <label class="profile-field limit-field">
             <span>Сумма, руб.</span>
@@ -897,6 +932,14 @@
             <span class="material-icons-sharp" aria-hidden="true">{{ savingManualTask() ? 'hourglass_top' : 'add' }}</span>
             {{ savingManualTask() ? 'Создаю' : 'Создать' }}
           </button>
+          <button
+            type="button"
+            class="quiet-action"
+            (click)="resetAdminTaskDraft()"
+            [disabled]="savingManualTask()"
+          >
+            Новый черновик
+          </button>
         </div>
 
         <div class="manual-task-admin-list">
@@ -909,6 +952,7 @@
                 <div>
                   <strong>{{ manualTaskTitle(task) }}</strong>
                   <small>{{ manualTaskTargetLine(task) }}</small>
+                  <small>Учёт: {{ task.accountingTargetResolved === false ? 'получатель задания не привязан' : (task.accountingTargetLabel || 'не указан') }}</small>
                 </div>
                 <span class="status-pill manual">{{ manualTaskStatusLabel(task.status) }}</span>
               </header>
@@ -935,6 +979,14 @@
                 </div>
               </div>
               <small class="profile-terminal">{{ task.paymentProfileName }}</small>
+              @if (task.accountingTargetResolved === false) {
+                <small class="manual-task-accounting-warning" role="alert">Маршрутизация новых счетов заблокирована до привязки получателя.</small>
+              }
+              @if ((task.targetProjectedOverrunKopecks || 0) > 0) {
+                <small class="manual-task-accounting-warning" role="alert">
+                  Нужна сверка: учёт получателя превышает доступный лимит на {{ formatKopecks(task.targetProjectedOverrunKopecks) }}.
+                </small>
+              }
               @if (task.comment) {
                 <small class="profile-terminal">{{ task.comment }}</small>
               }
@@ -960,7 +1012,7 @@
                       <input type="text" [ngModel]="editTaskPaymentButtonLabel()" (ngModelChange)="setEditTaskPaymentButtonLabel($event)" />
                     </label>
                     <label class="profile-field">
-                      <span>Получатель</span>
+                      <span>Получатель в банке</span>
                       <input type="text" [ngModel]="editTaskRecipient()" (ngModelChange)="setEditTaskRecipient($event)" />
                     </label>
                   } @else {
@@ -969,7 +1021,7 @@
                       <input type="tel" [ngModel]="editTaskPhone()" (ngModelChange)="setEditTaskPhone($event)" placeholder="+7..." />
                     </label>
                     <label class="profile-field">
-                      <span>Получатель</span>
+                      <span>Получатель в банке</span>
                       <input type="text" [ngModel]="editTaskRecipient()" (ngModelChange)="setEditTaskRecipient($event)" />
                     </label>
                   }
@@ -977,6 +1029,35 @@
                     <span>Сумма, руб.</span>
                     <input type="number" min="1" step="1" inputmode="numeric" [ngModel]="editTaskAmountRubles()" (ngModelChange)="setEditTaskAmountRubles($event)" />
                   </label>
+                  <label class="profile-field manual-task-accounting-field">
+                    <span>Кому учитывать оплату</span>
+                    <select [ngModel]="editTaskAccountingTargetKey()" (ngModelChange)="setEditTaskAccountingTarget($event)" [disabled]="editTaskAccountingTargetsLoading()">
+                      <option value="">Выберите получателя</option>
+                      @for (target of editTaskAccountingTargets(); track target.key) {
+                        <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">{{ target.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  @if (editTaskAccountingTargetsLoading()) {
+                    <small class="manual-task-accounting-note">Пересчитываем лимит…</small>
+                  } @else if (editTaskAccountingTargetError()) {
+                    <small class="manual-task-accounting-warning" role="alert">{{ editTaskAccountingTargetError() }}</small>
+                  } @else if (selectedEditTaskAccountingTarget(); as target) {
+                    <div class="manual-task-accounting-preview">
+                      <strong>{{ target.label }}</strong>
+                      <small>{{ manualTaskTargetEffect(target) }}</small>
+                      @if (target.currentAvailableKopecks != null) {
+                        <small>Доступно сейчас: {{ formatKopecks(target.currentAvailableKopecks) }}</small>
+                      }
+                      @if ((target.projectedOverrunKopecks || 0) > 0) {
+                        <small class="manual-task-accounting-warning">Превышение {{ formatKopecks(target.projectedOverrunKopecks) }} будет сохранено как аномалия.</small>
+                        <label class="manual-task-accounting-ack">
+                          <input type="checkbox" [ngModel]="editTaskAccountingTargetAcknowledged()" (ngModelChange)="setEditTaskAccountingTargetAcknowledged($event)">
+                          <span>Подтверждаю сохранение задания с превышением.</span>
+                        </label>
+                      }
+                    </div>
+                  }
                   <label class="profile-field">
                     <span>Комментарий</span>
                     <input type="text" [ngModel]="editTaskComment()" (ngModelChange)="setEditTaskComment($event)" />
@@ -1243,3 +1324,11 @@
     </section>
   </section>
 </app-admin-layout>
+
+@if (journalManualCardPaymentOrder(); as order) {
+  <app-manager-manual-card-payment-modal
+    [order]="order"
+    (closed)="closeJournalManualCardPayment()"
+    (completed)="completeJournalManualCardPayment($event)"
+  />
+}

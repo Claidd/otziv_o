@@ -1,0 +1,85 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowService.java
+@@
+         List<ContractorPaymentAllocation> allocations = new ArrayList<>();
+-        if (shadowEnabled()) {
+-            allocations.addAll(allocationRepository.findActiveByOrderId(
+-                    orderId, ContractorAllocationMode.SHADOW, UNPAID_RELEASABLE_STATUSES
+-            ));
+-        }
++        // The toggle controls creation only. Existing SHADOW obligations must
++        // always finish their lifecycle after rollout, promotion, or emergency stop.
++        allocations.addAll(allocationRepository.findActiveByOrderId(
++                orderId, ContractorAllocationMode.SHADOW, UNPAID_RELEASABLE_STATUSES
++        ));
+@@
+-        List<ContractorAllocationMode> modes = shadowEnabled()
+-                ? List.of(ContractorAllocationMode.SHADOW, ContractorAllocationMode.LIVE)
+-                : List.of(ContractorAllocationMode.LIVE);
++        List<ContractorAllocationMode> modes =
++                List.of(ContractorAllocationMode.SHADOW, ContractorAllocationMode.LIVE);
+@@
+         List<ContractorPaymentAllocation> snapshots = new ArrayList<>();
+-        if (shadowEnabled()) {
+-            ContractorPaymentAllocation shadowAllocation = latestAllocation(
+-                    ContractorAllocationMode.SHADOW,
+-                    ContractorAllocationSourceType.PAYMENT_LINK,
+-                    originalLinkId
+-            ).orElse(null);
+-            if (shadowAllocation != null) {
+-                snapshots.add(shadowAllocation);
+-            }
++        ContractorPaymentAllocation shadowAllocation = latestAllocation(
++                ContractorAllocationMode.SHADOW,
++                ContractorAllocationSourceType.PAYMENT_LINK,
++                originalLinkId
++        ).orElse(null);
++        if (shadowAllocation != null) {
++            snapshots.add(shadowAllocation);
+         }
+@@
+-        List<ContractorAllocationMode> modes = shadowEnabled()
+-                ? List.of(ContractorAllocationMode.SHADOW, ContractorAllocationMode.LIVE)
+-                : List.of(ContractorAllocationMode.LIVE);
++        List<ContractorAllocationMode> modes =
++                List.of(ContractorAllocationMode.SHADOW, ContractorAllocationMode.LIVE);
+@@
+-        List<ContractorAllocationMode> modes = shadowEnabled()
+-                ? List.of(ContractorAllocationMode.SHADOW, ContractorAllocationMode.LIVE)
+-                : List.of(ContractorAllocationMode.LIVE);
++        List<ContractorAllocationMode> modes =
++                List.of(ContractorAllocationMode.SHADOW, ContractorAllocationMode.LIVE);
+@@
+     @Transactional
+     public void reconcilePaymentLinks() {
+-        if (shadowEnabled()) {
+-            reconcilePaymentLinks(ContractorAllocationMode.SHADOW);
+-        }
+-        // Existing LIVE obligations must keep reconciling even when every
+-        // creation switch is disabled as an emergency stop.
++        // Creation switches never suspend cleanup of already persisted obligations.
++        reconcilePaymentLinks(ContractorAllocationMode.SHADOW);
+         reconcilePaymentLinks(ContractorAllocationMode.LIVE);
+     }
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentReconciliationDispatcher.java
+@@
+     @Scheduled(fixedDelayString = "${otziv.contractor-payments.reconcile-delay-ms:60000}")
+     public void reconcile() {
+-        if (appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true)) {
+-            dispatchMode(ContractorAllocationMode.SHADOW);
+-        }
++        // The switch gates only new SHADOW allocations. Persisted attempts
++        // remain financial obligations and must always be polled to terminality.
++        dispatchMode(ContractorAllocationMode.SHADOW);
+         dispatchMode(ContractorAllocationMode.LIVE);
+     }
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ContractorShadowRouteBackfillService.java
+@@
+-        // Existing LIVE obligations are reconciled even when SHADOW is off.
+-        // A rollout/emergency switch may stop new routes but must never make
+-        // already received manual evidence disappear after a process crash.
+-        int manualEvidence = backfillManualEvidence(startedAt, shadowEnabled, now, batch);
++        // New SHADOW routes remain gated above. Evidence for an already
++        // persisted SHADOW or LIVE obligation must remain repairable after OFF.
++        int manualEvidence = backfillManualEvidence(startedAt, true, now, batch);
+*** End Patch

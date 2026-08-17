@@ -10,6 +10,7 @@ import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentRequisitesSnapshot;
 import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse;
+import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService;
@@ -45,6 +46,8 @@ import com.hunt.otziv.payments.dto.TbankInitResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.ManualPaymentTask;
+import com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot;
+import com.hunt.otziv.payments.repository.ManualPaymentTaskRepository;
 import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
@@ -240,6 +243,8 @@ public class PaymentLinkService {
     private final TbankTokenSigner tokenSigner;
     private final PaymentSuccessNotificationDeliveryService paymentSuccessNotificationDeliveryService;
     private final ManualPaymentTaskService manualPaymentTaskService;
+    private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
+    private final ManualPaymentTaskRepository manualPaymentTaskRepository;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final PaymentLinkArchiveService paymentLinkArchiveService;
     private final AppSettingService appSettingService;
@@ -249,13 +254,14 @@ public class PaymentLinkService {
     private final ManualCardPaymentReviewNotificationService manualCardPaymentReviewNotificationService;
     private final ContractorPaymentLiveRoutingService contractorPaymentLiveRoutingService;
     private final ContractorPaymentShadowService contractorPaymentShadowService;
+    private final PaymentLinkReturnOutboxService paymentLinkReturnOutboxService;
     private final ContractorActualPaymentAttributionService actualPaymentAttributionService;
     private final ContractorPaymentTargetAccessPolicy contractorPaymentTargetAccessPolicy;
     private final PaymentLinkTransactionExecutor transactionExecutor;
     private final SecureRandom secureRandom = new SecureRandom();
     private final ConcurrentMap<String, LocalDateTime> publicBankStateClaims = new ConcurrentHashMap<>();
 
-    @Transactional(noRollbackFor = ResponseStatusException.class)
+    @Transactional
     public ManagerPaymentLinkResponse createForOrder(Long orderId) {
         requirePaymentLinksEnabled();
         return prepareForOrder(orderId, null, false).response();
@@ -266,7 +272,7 @@ public class PaymentLinkService {
      * object-scope check, so a concurrent reassignment cannot invalidate the
      * authorization between the check and payment-link creation.
      */
-    @Transactional(noRollbackFor = ResponseStatusException.class)
+    @Transactional
     public ManagerPaymentLinkResponse createForOrderAuthorized(
             Long orderId,
             Authentication authentication
@@ -274,7 +280,7 @@ public class PaymentLinkService {
         return prepareForOrder(orderId, authentication, true).response();
     }
 
-    @Transactional(noRollbackFor = ResponseStatusException.class)
+    @Transactional
     public PaymentInstructionPreparation prepareForOrderAuthorized(
             Long orderId,
             Authentication authentication
@@ -310,6 +316,7 @@ public class PaymentLinkService {
         }
         link.setStatus(PaymentLinkStatus.CANCELED);
         link.setLastError("Внешнее сообщение достоверно не отправлено");
+        taskReceiptIntegrationService.release(link, link.getLastError());
         paymentLinkRepository.save(link);
         if (link.getContractorAllocationId() != null) {
             contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
@@ -451,31 +458,34 @@ public class PaymentLinkService {
             );
         }
 
-        PaymentLink link;
-        if (contractorPaymentLiveRoutingService.enabledForNewRoutes()) {
-            link = paymentLinkRepository.save(newPaymentLink(order, amountKopecks, now));
+        PaymentLink link = paymentLinkRepository.save(newPaymentLink(order, amountKopecks, now));
+        boolean typedActualRecipientEnabled =
+                actualPaymentAttributionService.actualRecipientAccountingEnabled();
+        profile = paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
+        Optional<ManualPaymentTaskRouteSnapshot> taskRoute = typedActualRecipientEnabled
+                ? taskReceiptIntegrationService.reserveForPaymentLink(
+                        link, manager.getId(), profile.getId())
+                : Optional.empty();
+        if (taskRoute.isPresent()) {
+            applyManualTaskPayment(link, taskRoute.get());
+            link = paymentLinkRepository.save(link);
+        } else if (contractorPaymentLiveRoutingService.enabledForNewRoutes()) {
             ContractorPaymentAllocation liveAllocation =
                     contractorPaymentLiveRoutingService.reserveForPaymentLink(link);
             if (isContractorRecipient(liveAllocation)) {
                 applyContractorPaymentRoute(link, liveAllocation);
             } else {
-                profile = paymentProfileService.lockForRouting(
-                        paymentProfileService.selectForManager(manager)
-                );
                 applyPaymentProfile(link, profile);
-                routePayment(link, manager, profile, amountKopecks, now, null);
+                routePaymentWithoutTask(link, profile, amountKopecks, now, null);
                 if (liveAllocation != null) {
                     link.setContractorAllocationId(liveAllocation.getId());
                 }
             }
             link = paymentLinkRepository.save(link);
         } else {
-            profile = paymentProfileService.lockForRouting(
-                    paymentProfileService.selectForManager(manager)
-            );
-            link = paymentLinkRepository.save(
-                    preparedCandidate(order, manager, profile, amountKopecks, now, null)
-            );
+            applyPaymentProfile(link, profile);
+            routePaymentWithoutTask(link, profile, amountKopecks, now, null);
+            link = paymentLinkRepository.save(link);
         }
         return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), true);
     }
@@ -550,15 +560,10 @@ public class PaymentLinkService {
         route.setDescription("Общий счет");
         applyPaymentProfile(route, profile);
 
-        Optional<ManualPaymentTask> task = manualPaymentTaskService.findRoutableTask(
-                manager,
-                profile,
-                amountKopecks,
-                null
-        );
-        if (task.isPresent()) {
-            applyManualTaskPayment(route, task.get());
-        } else if (shouldUseManualPayment(profile, amountKopecks, LocalDateTime.now(), null)) {
+        // Common-invoice tasks are reserved exclusively through the typed
+        // task ledger in selectCommonInvoiceTaskRoute. Falling back here must
+        // never rediscover a legacy task without source generation/binding.
+        if (shouldUseManualPayment(profile, amountKopecks, LocalDateTime.now(), null)) {
             applyManualProfilePayment(route, profile);
         } else {
             route.setStatus(PaymentLinkStatus.CREATED);
@@ -584,6 +589,39 @@ public class PaymentLinkService {
                 normalize(route.getManualComment()),
                 isManualPayment(route) ? paymentInstructionText(route, "") : ""
         );
+    }
+
+    @Transactional
+    public Optional<PaymentRouteSelection> selectCommonInvoiceTaskRoute(
+            com.hunt.otziv.common_billing.model.CommonInvoice invoice,
+            Manager manager,
+            long amountKopecks
+    ) {
+        // A new task route is safe only while the typed actual-recipient flow
+        // is authoritative. Existing frozen routes are handled by the caller
+        // before this selector is reached.
+        if (!actualPaymentAttributionService.actualRecipientAccountingEnabled()) {
+            invoice.setPaymentRouteManualTaskSourceGeneration(null);
+            return Optional.empty();
+        }
+        PaymentProfile profile = paymentProfileService.lockForRouting(
+                paymentProfileService.selectForManager(manager));
+        Optional<ManualPaymentTaskRouteSnapshot> snapshot = taskReceiptIntegrationService
+                .reserveForCommonInvoice(invoice, manager.getId(), profile.getId(), amountKopecks);
+        if (snapshot.isEmpty()) {
+            invoice.setPaymentRouteManualTaskSourceGeneration(null);
+            return Optional.empty();
+        }
+        ManualPaymentTaskRouteSnapshot task = snapshot.get();
+        return Optional.of(new PaymentRouteSelection(
+                paymentMethodFor(task.manualPaymentType()).name(), profile.getId(),
+                normalize(profile.getCode()), normalize(profile.getName()), "",
+                ManualPaymentSource.MANUAL_TASK.name(), task.taskId(), task.manualPaymentType().name(),
+                normalize(task.manualPhone()), manualRecipientName(task.bankRecipientName()),
+                manualPaymentUrl(task.manualPaymentUrl()), manualButtonLabel(task.manualPaymentButtonLabel()),
+                "Платёжное задание #" + task.taskId(),
+                paymentInstructionTextForTask(task), task.source().sourceGeneration(), task.taskGeneration()
+        ));
     }
 
     private String commonInvoiceManagerText(Manager manager) {
@@ -792,15 +830,14 @@ public class PaymentLinkService {
             LocalDateTime now,
             Long excludedLinkId
     ) {
-        Optional<ManualPaymentTask> manualTask = manualPaymentTaskService.findRoutableTask(
-                manager,
-                profile,
-                amountKopecks,
-                excludedLinkId
-        );
-        if (manualTask.isPresent()) {
-            applyManualTaskPayment(link, manualTask.get());
-        } else if (shouldUseManualPayment(profile, amountKopecks, now, excludedLinkId)) {
+        routePaymentWithoutTask(link, profile, amountKopecks, now, excludedLinkId);
+    }
+
+    private void routePaymentWithoutTask(
+            PaymentLink link, PaymentProfile profile, long amountKopecks,
+            LocalDateTime now, Long excludedLinkId
+    ) {
+        if (shouldUseManualPayment(profile, amountKopecks, now, excludedLinkId)) {
             applyManualProfilePayment(link, profile);
         } else {
             link.setStatus(PaymentLinkStatus.CREATED);
@@ -933,19 +970,24 @@ public class PaymentLinkService {
     }
 
     private void retireStaleReusableLink(PaymentLink link) {
+        taskReceiptIntegrationService.release(link,
+                "Платежная ссылка пересоздана из-за изменения суммы или маршрута оплаты");
         link.setStatus(PaymentLinkStatus.EXPIRED);
         link.setLastError("Платежная ссылка пересоздана из-за изменения суммы или маршрута оплаты");
         paymentLinkRepository.save(link);
     }
 
     private void expireStaleManualLinks(LocalDateTime now) {
-        paymentLinkRepository.expireManualLinks(
+        String reason = "Срок действия ручной платежной ссылки истек";
+        paymentLinkRepository.findExpiredManualLinksForUpdate(
                 MANUAL_PAYMENT_METHODS,
-                Set.of(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, PaymentLinkStatus.MANUAL_REPORTED),
-                PaymentLinkStatus.EXPIRED,
-                "Срок действия ручной платежной ссылки истек",
-                now
-        );
+                Set.of(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, PaymentLinkStatus.MANUAL_REPORTED), now
+        ).forEach(link -> {
+            taskReceiptIntegrationService.release(link, reason);
+            link.setStatus(PaymentLinkStatus.EXPIRED);
+            link.setLastError(reason);
+            paymentLinkRepository.save(link);
+        });
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -1532,6 +1574,7 @@ public class PaymentLinkService {
                 receiptUrl,
                 null,
                 null,
+                null,
                 actor,
                 authentication
         );
@@ -1545,7 +1588,7 @@ public class PaymentLinkService {
             Authentication authentication
     ) {
         return reportPaidByManualCardTransferForOrder(
-                orderId, reason, null, null, null, actor, authentication
+                orderId, reason, null, null, null, null, actor, authentication
         );
     }
 
@@ -1556,6 +1599,7 @@ public class PaymentLinkService {
             String receiptUrl,
             ContractorRecipientType recipientType,
             Long recipientProfileId,
+            String recipientKey,
             String actor,
             Authentication authentication
     ) {
@@ -1580,7 +1624,8 @@ public class PaymentLinkService {
                 authentication,
                 new ManualCardPaymentContext(ManualCardPaymentMode.MANAGER_REPORTED, cleanReason),
                 recipientType,
-                recipientProfileId
+                recipientProfileId,
+                recipientKey
         );
     }
 
@@ -1626,7 +1671,7 @@ public class PaymentLinkService {
     ) {
         return confirmPaidByManualCardTransfer(
                 linkId, recipientStatementChecked, paymentReceived, receivedAmountKopecks,
-                note, receiptUrl, null, null, actor, authentication
+                note, receiptUrl, null, null, null, actor, authentication
         );
     }
 
@@ -1640,6 +1685,7 @@ public class PaymentLinkService {
             String receiptUrl,
             ContractorRecipientType recipientType,
             Long recipientProfileId,
+            String recipientKey,
             String actor,
             Authentication authentication
     ) {
@@ -1672,7 +1718,8 @@ public class PaymentLinkService {
                 authentication,
                 new ManualCardPaymentContext(ManualCardPaymentMode.OWNER_VERIFIED, cleanNote),
                 recipientType,
-                recipientProfileId
+                recipientProfileId,
+                recipientKey
         );
     }
 
@@ -1685,7 +1732,8 @@ public class PaymentLinkService {
             Authentication authentication,
             ManualCardPaymentContext context,
             ContractorRecipientType requestedRecipientType,
-            Long requestedRecipientProfileId
+            Long requestedRecipientProfileId,
+            String requestedRecipientKey
     ) {
         contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
         String cleanNote = normalize(note);
@@ -1705,14 +1753,12 @@ public class PaymentLinkService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Заказ платежной ссылки изменился во время сверки");
         }
         boolean actualRecipientAccountingRequired = snapshot.getManualActualRecipientFrozenAt() != null
+                || snapshot.getManualSource() == ManualPaymentSource.MANUAL_TASK
                 || transactionExecutor.required(actualPaymentAttributionService::actualRecipientAccountingEnabled);
         if (!isCompletedManualCardPayment(snapshot)
                 && actualRecipientAccountingRequired
-                && requestedRecipientType == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Выберите фактического получателя оплаты и обновите приложение, если список не отображается"
-            );
+                && requestedRecipientType == null && normalize(requestedRecipientKey).isBlank()) {
+            throw ManualPaymentTaskRouteErrors.actualRecipientRequired();
         }
         transactionExecutor.required(() -> {
             if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
@@ -1727,6 +1773,12 @@ public class PaymentLinkService {
                     "Сумма перевода не равна полной сумме заказа. Оплата не зачислена; проверьте выписку и заказ."
             );
         }
+        if (isDirectManualAttributionRoute(snapshot)) {
+            return transactionExecutor.required(() -> applyDirectManualPayment(
+                    linkId, orderId, receivedAmountKopecks, cleanNote, cleanReceiptUrl, cleanActor,
+                    authentication, context, requestedRecipientType, requestedRecipientProfileId,
+                    requestedRecipientKey));
+        }
         if (isCompletedManualCardPayment(snapshot)) {
             return transactionExecutor.required(() -> {
                 PaymentLink locked = paymentLinkRepository.findByIdForUpdate(linkId)
@@ -1734,6 +1786,7 @@ public class PaymentLinkService {
                 actualPaymentAttributionService.requireCompletedPaymentReplay(
                         locked,
                         receivedAmountKopecks,
+                        requestedRecipientKey,
                         requestedRecipientType,
                         requestedRecipientProfileId,
                         context.reason(),
@@ -1752,6 +1805,7 @@ public class PaymentLinkService {
                 cleanActor.isBlank() ? "system" : cleanActor,
                 requestedRecipientType,
                 requestedRecipientProfileId,
+                requestedRecipientKey,
                 authentication
         );
         if (completedDuringPreflight != null) {
@@ -1771,7 +1825,8 @@ public class PaymentLinkService {
                         authentication,
                         context,
                         requestedRecipientType,
-                        requestedRecipientProfileId
+                        requestedRecipientProfileId,
+                        requestedRecipientKey
                 );
                 return null;
             });
@@ -1786,7 +1841,8 @@ public class PaymentLinkService {
                             authentication,
                             context,
                             requestedRecipientType,
-                            requestedRecipientProfileId
+                            requestedRecipientProfileId,
+                            requestedRecipientKey
                     )
             );
         } else if (isSafeHistoricalBankRoute(snapshot)) {
@@ -1801,7 +1857,8 @@ public class PaymentLinkService {
                         authentication,
                         context,
                         requestedRecipientType,
-                        requestedRecipientProfileId
+                        requestedRecipientProfileId,
+                        requestedRecipientKey
                 );
                 return null;
             });
@@ -1824,7 +1881,8 @@ public class PaymentLinkService {
                             authentication,
                             context,
                             requestedRecipientType,
-                            requestedRecipientProfileId
+                            requestedRecipientProfileId,
+                            requestedRecipientKey
                     )
             );
         }
@@ -1854,7 +1912,8 @@ public class PaymentLinkService {
                             authentication,
                             context,
                             requestedRecipientType,
-                            requestedRecipientProfileId
+                            requestedRecipientProfileId,
+                            requestedRecipientKey
                     );
                 }
                 return null;
@@ -1876,7 +1935,8 @@ public class PaymentLinkService {
                 authentication,
                 context,
                 requestedRecipientType,
-                requestedRecipientProfileId
+                requestedRecipientProfileId,
+                requestedRecipientKey
         ));
     }
 
@@ -1980,7 +2040,8 @@ public class PaymentLinkService {
             Authentication authentication,
             ManualCardPaymentContext context,
             ContractorRecipientType requestedRecipientType,
-            Long requestedRecipientProfileId
+            Long requestedRecipientProfileId,
+            String requestedRecipientKey
     ) {
         Order order = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -2002,6 +2063,7 @@ public class PaymentLinkService {
                 link,
                 requestedRecipientType,
                 requestedRecipientProfileId,
+                requestedRecipientKey,
                 context.reason(),
                 receiptUrl,
                 actor.isBlank() ? "system" : actor
@@ -2027,7 +2089,8 @@ public class PaymentLinkService {
             Authentication authentication,
             ManualCardPaymentContext context,
             ContractorRecipientType requestedRecipientType,
-            Long requestedRecipientProfileId
+            Long requestedRecipientProfileId,
+            String requestedRecipientKey
     ) {
         Order order = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
@@ -2099,6 +2162,7 @@ public class PaymentLinkService {
                     link,
                     requestedRecipientType,
                     requestedRecipientProfileId,
+                    requestedRecipientKey,
                     context.reason(),
                     receiptUrl,
                     actor.isBlank() ? "system" : actor
@@ -2117,7 +2181,8 @@ public class PaymentLinkService {
                     authentication,
                     context,
                     requestedRecipientType,
-                    requestedRecipientProfileId
+                    requestedRecipientProfileId,
+                    requestedRecipientKey
             );
             return plan;
         }
@@ -2146,6 +2211,7 @@ public class PaymentLinkService {
             String actor,
             ContractorRecipientType requestedRecipientType,
             Long requestedRecipientProfileId,
+            String requestedRecipientKey,
             Authentication authentication
     ) {
         return transactionExecutor.required(() -> {
@@ -2168,6 +2234,7 @@ public class PaymentLinkService {
                 actualPaymentAttributionService.requireCompletedPaymentReplay(
                         link,
                         amountKopecks,
+                        requestedRecipientKey,
                         requestedRecipientType,
                         requestedRecipientProfileId,
                         reason,
@@ -2189,11 +2256,13 @@ public class PaymentLinkService {
             PaymentLink link,
             ContractorRecipientType requestedRecipientType,
             Long requestedRecipientProfileId,
+            String requestedRecipientKey,
             String reason,
             String receiptUrl,
             String actor
     ) {
         boolean required = link.getManualActualRecipientFrozenAt() != null
+                || link.getManualSource() == ManualPaymentSource.MANUAL_TASK
                 || actualPaymentAttributionService.actualRecipientAccountingEnabled();
         if (!required) {
             boolean legacyOwnerShape = requestedRecipientType == null
@@ -2208,15 +2277,13 @@ public class PaymentLinkService {
             }
             return;
         }
-        if (requestedRecipientType == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Выберите фактического получателя оплаты и обновите приложение, если список не отображается"
-            );
+        if (requestedRecipientType == null && normalize(requestedRecipientKey).isBlank()) {
+            throw ManualPaymentTaskRouteErrors.actualRecipientRequired();
         }
         actualPaymentAttributionService.freezePaymentLinkRecipientIntent(
                 order,
                 link,
+                requestedRecipientKey,
                 requestedRecipientType,
                 requestedRecipientProfileId,
                 reason,
@@ -2263,7 +2330,8 @@ public class PaymentLinkService {
             Authentication authentication,
             ManualCardPaymentContext context,
             ContractorRecipientType requestedRecipientType,
-            Long requestedRecipientProfileId
+            Long requestedRecipientProfileId,
+            String requestedRecipientKey
     ) {
         Order order = orderRepository.findByIdForCounterUpdate(plan.orderId())
                 .orElseThrow(() -> new ResponseStatusException(
@@ -2285,6 +2353,7 @@ public class PaymentLinkService {
                 link,
                 requestedRecipientType,
                 requestedRecipientProfileId,
+                requestedRecipientKey,
                 context.reason(),
                 receiptUrl,
                 actor.isBlank() ? "system" : actor
@@ -2306,7 +2375,8 @@ public class PaymentLinkService {
             Authentication authentication,
             ManualCardPaymentContext context,
             ContractorRecipientType requestedRecipientType,
-            Long requestedRecipientProfileId
+            Long requestedRecipientProfileId,
+            String requestedRecipientKey
     ) {
         Order order = orderRepository.findByIdForCounterUpdate(plan.orderId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
@@ -2319,6 +2389,7 @@ public class PaymentLinkService {
             actualPaymentAttributionService.requireCompletedPaymentReplay(
                     link,
                     plan.amountKopecks(),
+                    requestedRecipientKey,
                     requestedRecipientType,
                     requestedRecipientProfileId,
                     context.reason(),
@@ -2394,6 +2465,17 @@ public class PaymentLinkService {
                     link,
                     manualEvidence
             );
+            boolean toTask = link.getManualActualCashDestinationKind()
+                    == com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind.MANUAL_PAYMENT_TASK;
+            String selectedKey = toTask
+                    ? ManualPaymentTaskLedgerService.candidateKey(
+                            link.getManualActualTaskId(), link.getManualActualTaskGeneration())
+                    : link.getManualActualRecipientType() == ContractorRecipientType.OWNER
+                            ? "OWNER" : "PROFILE:" + link.getManualActualRecipientProfileId();
+            taskReceiptIntegrationService.settle(
+                    link, selectedKey, toTask ? manualEvidence.getAmountKopecks() : 0L,
+                    "TASK:SETTLE:PAYMENT_LINK:" + link.getId(),
+                    link.getManualActualActor(), link.getManualActualReason());
         } else if (actualPaymentAttributionService.actualRecipientAccountingEnabled()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -2409,6 +2491,80 @@ public class PaymentLinkService {
                 actor
         );
         return toAdminResponse(link);
+    }
+
+    private AdminPaymentLinkResponse applyDirectManualPayment(
+            Long linkId, Long orderId, long amountKopecks, String note, String receiptUrl,
+            String actor, Authentication authentication, ManualCardPaymentContext context,
+            ContractorRecipientType requestedType, Long requestedProfileId, String requestedRecipientKey
+    ) {
+        Order order = orderRepository.findByIdForCounterUpdate(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        ensureOrderNotCoveredByActiveCommonInvoice(orderId);
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        if (!hasOrderBinding(link, orderId) || !isDirectManualAttributionRoute(link)
+                || link.getAmountKopecks() != amountKopecks) {
+            throw ManualPaymentTaskRouteErrors.stale();
+        }
+        if (link.getStatus() == PaymentLinkStatus.CONFIRMED) {
+            actualPaymentAttributionService.requireCompletedPaymentReplay(
+                    link, amountKopecks, requestedRecipientKey, requestedType, requestedProfileId,
+                    context.reason(), receiptUrl);
+            settleTaskReceipt(link);
+            return toAdminResponse(link);
+        }
+        validateManualConfirmable(link);
+        validateAmountCurrentForManualConfirm(link);
+        freezeActualRecipientIntentIfRequired(
+                order, link, requestedType, requestedProfileId, requestedRecipientKey,
+                context.reason(), receiptUrl, actor.isBlank() ? "system" : actor);
+        if (orderPaymentIntegrityService.hasSettledPaymentEvidence(order)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Заказ уже имеет признаки оплаты. Повторное зачисление заблокировано.");
+        }
+        boolean updated = false;
+        try {
+            if (canApplyOrderPaymentNow(order)) {
+                updated = handlePaymentStatusWithoutPrematureRepeat(order);
+            }
+        } catch (Exception failure) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось зачислить ручную оплату", failure);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaidAt(now);
+        link.setManualConfirmedAt(now);
+        link.setManualConfirmedBy(limit(actor, 160));
+        link.setConfirmedAmountKopecks(amountKopecks);
+        link.setReceiptStatus(PaymentReceiptStatus.PENDING);
+        link.setManualComment(manualCardPaymentAudit(note, receiptUrl, context.mode()));
+        link.setLastError(canApplyOrderPaymentNow(order) ? null : PREPAID_WAITING_ORDER_COMPLETION);
+        prepareSuccessNotificationRetry(link);
+        paymentLinkRepository.saveAndFlush(link);
+        settleTaskReceipt(link);
+        actualPaymentAttributionService.recordPaymentLinkFinalAttribution(order, link, link);
+        manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
+        if (updated) cancelBadReviewAutoBanAfterCommit(order, "Ручная оплата подтверждена");
+        syncCommonInvoiceOrderPayment(link, "Ручная оплата заказа");
+        closeManualPaymentAutomationAfterCommit(order);
+        return toAdminResponse(link);
+    }
+
+    private void settleTaskReceipt(PaymentLink link) {
+        if (link == null || link.getManualSource() != ManualPaymentSource.MANUAL_TASK) return;
+        boolean selectedTask = link.getManualActualCashDestinationKind()
+                == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK;
+        String selectedKey = selectedTask
+                ? ManualPaymentTaskLedgerService.candidateKey(
+                        link.getManualActualTaskId(), link.getManualActualTaskGeneration())
+                : link.getManualActualRecipientType() == ContractorRecipientType.OWNER
+                        ? "OWNER" : "PROFILE:" + link.getManualActualRecipientProfileId();
+        taskReceiptIntegrationService.settle(
+                link, selectedKey, selectedTask ? link.getAmountKopecks() : 0L,
+                "TASK:SETTLE:PAYMENT_LINK:" + link.getId(),
+                link.getManualActualActor(), link.getManualActualReason());
     }
 
     private void recordContractorManualEvidenceAfterCommit(
@@ -2528,14 +2684,23 @@ public class PaymentLinkService {
             );
         }
 
+        List<PaymentLink> directManual = links.stream()
+                .filter(this::isDirectManualAttributionRoute)
+                .toList();
+        if (directManual.size() > 1) throw ambiguousManualCardPaymentRoute();
+
         List<PaymentLink> active = links.stream()
                 .filter(this::isActivePublicBankRouteForManualCardPayment)
                 .toList();
         int selectedRouteKinds = (marked.isEmpty() ? 0 : 1)
                 + (active.isEmpty() ? 0 : 1)
-                + (terminalToVerify.isEmpty() ? 0 : 1);
+                + (terminalToVerify.isEmpty() ? 0 : 1)
+                + (directManual.isEmpty() ? 0 : 1);
         if (active.size() > 1 || selectedRouteKinds > 1) {
             throw ambiguousManualCardPaymentRoute();
+        }
+        if (!directManual.isEmpty()) {
+            return directManual.getFirst();
         }
         if (!marked.isEmpty()) {
             return marked.getFirst();
@@ -2558,6 +2723,14 @@ public class PaymentLinkService {
                         "У заказа нет активной или проверяемой завершенной T-Bank ссылки. "
                                 + "Оплата переводом не зачислена; откройте журнал платежей для сверки."
                 ));
+    }
+
+    private boolean isDirectManualAttributionRoute(PaymentLink link) {
+        return link != null && isManualPayment(link)
+                && (link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT
+                || link.getStatus() == PaymentLinkStatus.MANUAL_REPORTED
+                || (link.getStatus() == PaymentLinkStatus.CONFIRMED
+                    && link.getManualActualRecipientFrozenAt() != null));
     }
 
     private ResponseStatusException ambiguousManualCardPaymentRoute() {
@@ -2970,6 +3143,10 @@ public class PaymentLinkService {
         link.setBankReconciliationAttemptedAt(null);
         link.setLastError(null);
         paymentLinkRepository.save(link);
+        if (REFUNDED_STATUSES.contains(merged)) {
+            paymentLinkReturnOutboxService.enqueue(link);
+            reconcileContractorPaymentRouteAfterCommit(link.getId());
+        }
         return toAdminResponse(link);
     }
 
@@ -3346,6 +3523,7 @@ public class PaymentLinkService {
         }
         ensureManualPayment(link);
         validateManualUnpaidClosable(link);
+        taskReceiptIntegrationService.release(link, "Перевод не поступил");
 
         link.setStatus(PaymentLinkStatus.CANCELED);
         link.setLastError(limit(
@@ -3422,6 +3600,10 @@ public class PaymentLinkService {
                     HttpStatus.CONFLICT,
                     "Поступление по профилю получателя подтверждается только сверкой конкретного счета"
             );
+        }
+        if (link.getManualSource() == ManualPaymentSource.MANUAL_TASK
+                || actualPaymentAttributionService.actualRecipientAccountingEnabled()) {
+            throw ManualPaymentTaskRouteErrors.actualRecipientRequired();
         }
         validateManualConfirmable(link);
         validateAmountCurrentForManualConfirm(link);
@@ -3506,7 +3688,7 @@ public class PaymentLinkService {
         if (isFrozenContractorRoute(link)) {
             contractorPaymentLiveRoutingService.validatePaymentLinkClientReportedRoute(link);
         }
-        validatePayable(link);
+        validatePayable(link, true);
         ensureManualPayment(link);
         validateManualPaymentTargetAvailable(link);
         if (link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT) {
@@ -4716,6 +4898,13 @@ public class PaymentLinkService {
                 log.info("T-Bank status stored without final transition: linkId={}, status={}", link.getId(), status);
             }
         }
+        if (REFUNDED_STATUSES.contains(link.getStatus())) {
+            paymentLinkReturnOutboxService.enqueue(link);
+            // The provider state is now durable. Reconcile after commit even
+            // for OWNER/EXTERNAL_TASK task receipts that have no contractor
+            // allocation and therefore no periodic allocation claim.
+            reconcileContractorPaymentRouteAfterCommit(link.getId());
+        }
     }
 
     private void confirmPayment(PaymentLink link) {
@@ -5270,6 +5459,10 @@ public class PaymentLinkService {
     }
 
     private void validatePayable(PaymentLink link) {
+        validatePayable(link, false);
+    }
+
+    private void validatePayable(PaymentLink link, boolean releaseTaskReservationOnExpiry) {
         orderPaymentIntegrityService.assertPaymentCycleAllowed(link == null ? null : link.getOrder());
         if (link.getStatus() == PaymentLinkStatus.NEEDS_RECONCILIATION) {
             throw new ResponseStatusException(
@@ -5284,6 +5477,12 @@ public class PaymentLinkService {
             );
         }
         if (link.getExpiresAt().isBefore(LocalDateTime.now())) {
+            if (releaseTaskReservationOnExpiry) {
+                taskReceiptIntegrationService.release(
+                        link,
+                        "Срок действия платёжной ссылки истек"
+                );
+            }
             link.setStatus(PaymentLinkStatus.EXPIRED);
             throw new ResponseStatusException(HttpStatus.GONE, "Срок действия платежной ссылки истек");
         }
@@ -5320,6 +5519,7 @@ public class PaymentLinkService {
                 && (link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT
                 || link.getStatus() == PaymentLinkStatus.MANUAL_REPORTED
                 || link.getStatus() == PaymentLinkStatus.CREATED)) {
+            taskReceiptIntegrationService.release(link, "Срок действия платежной ссылки истек");
             link.setStatus(PaymentLinkStatus.EXPIRED);
             link.setLastError("Срок действия платежной ссылки истек");
             paymentLinkRepository.save(link);
@@ -5330,6 +5530,7 @@ public class PaymentLinkService {
         if (!canRetireStaleLink(link) || !isAmountChanged(link)) {
             return false;
         }
+        taskReceiptIntegrationService.release(link, "Сумма заказа изменилась; старый резерв освобожден");
         long currentAmount = currentAmountKopecks(link);
         link.setStatus(PaymentLinkStatus.EXPIRED);
         link.setLastError("Сумма заказа изменилась: было "
@@ -5919,10 +6120,39 @@ public class PaymentLinkService {
         link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
         link.setManualPhone(limit(task.getManualPhone(), 32));
         link.setManualRecipientName(manualRecipientName(task.getManualRecipientName()));
-        link.setManualPaymentUrl(manualPaymentUrl(task.getManualPaymentUrl()));
+        link.setManualPaymentUrl(type == ManualPaymentType.EXTERNAL_LINK
+                ? manualPaymentUrl(task.getManualPaymentUrl())
+                : null);
         link.setManualPaymentButtonLabel(manualButtonLabel(task.getManualPaymentButtonLabel()));
         link.setManualComment(manualComment(task.getComment(), link));
         link.setReceiptStatus(PaymentReceiptStatus.PENDING);
+    }
+
+    private void applyManualTaskPayment(PaymentLink link, ManualPaymentTaskRouteSnapshot snapshot) {
+        ManualPaymentTask task = manualPaymentTaskRepository.findByIdForUpdate(snapshot.taskId())
+                .orElseThrow(ManualPaymentTaskRouteErrors::stale);
+        applyManualTaskPayment(link, task);
+        link.setManualTaskSourceGeneration(snapshot.source().sourceGeneration());
+        link.setManualTaskGeneration(snapshot.taskGeneration());
+        link.setManualPaymentType(snapshot.manualPaymentType());
+        link.setPaymentMethod(paymentMethodFor(snapshot.manualPaymentType()));
+        link.setManualPhone(limit(snapshot.manualPhone(), 32));
+        link.setManualRecipientName(manualRecipientName(snapshot.bankRecipientName()));
+        link.setManualPaymentUrl(snapshot.manualPaymentType() == ManualPaymentType.EXTERNAL_LINK
+                ? manualPaymentUrl(snapshot.manualPaymentUrl())
+                : null);
+        link.setManualPaymentButtonLabel(manualButtonLabel(snapshot.manualPaymentButtonLabel()));
+    }
+
+    private String paymentInstructionTextForTask(ManualPaymentTaskRouteSnapshot task) {
+        PaymentLink view = new PaymentLink();
+        view.setPaymentMethod(paymentMethodFor(task.manualPaymentType()));
+        view.setManualPaymentType(task.manualPaymentType());
+        view.setManualPhone(task.manualPhone());
+        view.setManualRecipientName(task.bankRecipientName());
+        view.setManualPaymentUrl(task.manualPaymentUrl());
+        view.setManualPaymentButtonLabel(task.manualPaymentButtonLabel());
+        return paymentInstructionText(view, "");
     }
 
     private void applyPaymentProfile(PaymentLink link, PaymentProfile profile) {

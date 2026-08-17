@@ -1,0 +1,372 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskLedgerService.java
+@@
+     @Transactional
+     public ManualPaymentTaskBalance recordReturn(ManualPaymentTaskReturnCommand command) {
+         requireReturnCommand(command);
+         ManualPaymentTask task = lockTask(command.taskId());
+@@
+         markNeedsAttention(task);
+         return balance(task.getId());
+     }
++
++    /**
++     * Locks the task in the global financial order and returns the amount
++     * already returned for the exact source generation. The caller keeps this
++     * transaction open while locking the contractor profile/allocation, then
++     * invokes {@link #recordReturn(ManualPaymentTaskReturnCommand)}.
++     */
++    @Transactional
++    public long lockReturnSource(Long taskId, ManualPaymentTaskSourceRef sourceRef) {
++        requireSource(sourceRef);
++        ManualPaymentTask task = lockTask(taskId);
++        List<ManualPaymentTaskLedgerEntry> history = sourceHistory(sourceRef);
++        requireSourceTask(history, task.getId());
++        long returned = 0L;
++        for (ManualPaymentTaskLedgerEntry entry : history) {
++            if (entry.getEventType() == ManualPaymentTaskLedgerEventType.RETURNED) {
++                returned = addExact(returned, Math.negateExact(entry.getConfirmedDeltaKopecks()));
++            }
++        }
++        return returned;
++    }
+ 
+     @Transactional
+     public ManualPaymentTaskBalance correct(ManualPaymentTaskCorrectionCommand command) {
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptIntegrationService.java
+@@
+     public void release(PaymentLink link, String reason) {
+         if (link == null || link.getManualSource() != ManualPaymentSource.MANUAL_TASK) return;
+         ManualPaymentTaskRouteSnapshot snapshot = routeBinding(link);
+-        ContractorAllocationMode mode = contractorReservationService.lockAccountingMode();
+         release(snapshot, reason);
+         contractorReservationService.releaseLocked(
+-                mode, link.getContractorAllocationId(), ContractorAllocationSourceType.PAYMENT_LINK,
++                link.getContractorAllocationId(), ContractorAllocationSourceType.PAYMENT_LINK,
+                 link.getId(), snapshot.source().sourceGeneration(), releaseStatus(reason), reason);
+     }
+@@
+     public void release(CommonInvoice invoice, String reason) {
+         if (invoice == null || invoice.getPaymentRouteManualSource() != ManualPaymentSource.MANUAL_TASK) return;
+         ManualPaymentTaskRouteSnapshot snapshot = routeBinding(invoice);
+-        ContractorAllocationMode mode = contractorReservationService.lockAccountingMode();
+         release(snapshot, reason);
+         contractorReservationService.releaseLocked(
+-                mode, invoice.getContractorAllocationId(), ContractorAllocationSourceType.COMMON_INVOICE,
++                invoice.getContractorAllocationId(), ContractorAllocationSourceType.COMMON_INVOICE,
+                 invoice.getId(), snapshot.source().sourceGeneration(), releaseStatus(reason), reason);
+     }
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReservationService.java
+@@
+     @Transactional(propagation = Propagation.MANDATORY)
+     public void releaseLocked(
+-            ContractorAllocationMode mode, Long allocationId, ContractorAllocationSourceType sourceType,
++            Long allocationId, ContractorAllocationSourceType sourceType,
+             Long sourceId, String sourceGeneration, ContractorAllocationStatus terminalStatus, String reason
+     ) {
+         if (allocationId == null) return;
+@@
+         ContractorPaymentAllocation row = allocationRepository.findByIdForUpdate(allocationId)
+                 .orElseThrow(ManualPaymentTaskRouteErrors::stale);
+-        if (row.getMode() != mode || row.getSourceType() != sourceType
++        // Release belongs to the immutable allocation attempt. The global
++        // phase may have changed from SHADOW to LIVE since the route was
++        // created and must never be used to reinterpret that attempt.
++        ContractorAllocationMode persistedMode = row.getMode();
++        if (persistedMode == null || row.getSourceType() != sourceType
+                 || !Objects.equals(row.getSourceId(), sourceId)
+                 || !Objects.equals(row.getSourceGenerationSnapshot(), sourceGeneration)) {
+             throw ManualPaymentTaskRouteErrors.stale();
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridge.java
+@@
+ import java.util.List;
+ import java.util.Objects;
++import java.util.function.Supplier;
+@@
+         return bindSourceAllocation(
+                 allocation,
+                 ContractorActualPaymentSourceKind.PAYMENT_LINK,
+                 lockedLink.getId(),
+-                paymentLinkSource(lockedLink)
++                () -> paymentLinkSource(lockedLink),
++                lockedLink.getManualPaymentTask() == null
++                        ? null : lockedLink.getManualPaymentTask().getId(),
++                lockedLink.getManualTaskGeneration()
+         );
+@@
+         return bindSourceAllocation(
+                 allocation,
+                 ContractorActualPaymentSourceKind.COMMON_INVOICE,
+                 lockedInvoice.getId(),
+-                commonInvoiceSource(lockedInvoice)
++                () -> commonInvoiceSource(lockedInvoice),
++                lockedInvoice.getPaymentRouteManualTaskId(),
++                lockedInvoice.getPaymentRouteManualTaskGeneration()
+         );
+@@
+         ContractorActualPaymentAttribution row = attributionRepository.findById(allocation.getSourceId())
+                 .orElseThrow(ManualPaymentTaskRouteErrors::stale);
+-        ManualPaymentTaskSourceRef source = lockAndValidateSource(row);
+         requireActualAllocation(row, allocation);
+-        return bind(row, allocation, source);
++        if (row.getSourceKind() == ContractorActualPaymentSourceKind.PAYMENT_LINK) {
++            PaymentLink link = paymentLinkRepository.findByIdForUpdate(row.getSourceId())
++                    .orElseThrow(ManualPaymentTaskRouteErrors::stale);
++            requireSourceRow(row, ContractorActualPaymentSourceKind.PAYMENT_LINK, link.getId());
++            if (!taskDestination(row)) {
++                return Binding.none(allocation);
++            }
++            ManualPaymentTaskSourceRef source = paymentLinkSource(link);
++            validateTaskSource(
++                    row, source,
++                    link.getManualPaymentTask() == null ? null : link.getManualPaymentTask().getId(),
++                    link.getManualTaskGeneration()
++            );
++            return bind(row, allocation, source);
++        }
++        if (row.getSourceKind() == ContractorActualPaymentSourceKind.COMMON_INVOICE) {
++            CommonInvoice invoice = commonInvoiceRepository.findByIdForUpdate(row.getSourceId())
++                    .orElseThrow(ManualPaymentTaskRouteErrors::stale);
++            requireSourceRow(row, ContractorActualPaymentSourceKind.COMMON_INVOICE, invoice.getId());
++            if (!taskDestination(row)) {
++                return Binding.none(allocation);
++            }
++            ManualPaymentTaskSourceRef source = commonInvoiceSource(invoice);
++            validateTaskSource(
++                    row, source,
++                    invoice.getPaymentRouteManualTaskId(),
++                    invoice.getPaymentRouteManualTaskGeneration()
++            );
++            return bind(row, allocation, source);
++        }
++        throw ManualPaymentTaskRouteErrors.stale();
+@@
+             ContractorPaymentAllocation allocation,
+             ContractorActualPaymentSourceKind sourceKind,
+             Long sourceId,
+-            ManualPaymentTaskSourceRef source
++            Supplier<ManualPaymentTaskSourceRef> sourceSupplier,
++            Long sourceTaskId,
++            Long sourceTaskGeneration
+     ) {
+@@
+         ContractorActualPaymentAttribution row = matches.getFirst();
+         requireSourceRow(row, sourceKind, sourceId);
+         requireSourceAllocation(row, allocation);
+-        validateTaskSource(row, source);
++        ManualPaymentTaskSourceRef source = sourceSupplier.get();
++        validateTaskSource(row, source, sourceTaskId, sourceTaskGeneration);
+         return bind(row, allocation, source);
+@@
+-    private ManualPaymentTaskSourceRef lockAndValidateSource(ContractorActualPaymentAttribution row) {
+-        if (row.getSourceKind() == ContractorActualPaymentSourceKind.PAYMENT_LINK) {
+-            PaymentLink link = paymentLinkRepository.findByIdForUpdate(row.getSourceId())
+-                    .orElseThrow(ManualPaymentTaskRouteErrors::stale);
+-            ManualPaymentTaskSourceRef source = paymentLinkSource(link);
+-            validateTaskSource(row, source);
+-            return source;
+-        }
+-        if (row.getSourceKind() == ContractorActualPaymentSourceKind.COMMON_INVOICE) {
+-            CommonInvoice invoice = commonInvoiceRepository.findByIdForUpdate(row.getSourceId())
+-                    .orElseThrow(ManualPaymentTaskRouteErrors::stale);
+-            ManualPaymentTaskSourceRef source = commonInvoiceSource(invoice);
+-            validateTaskSource(row, source);
+-            return source;
+-        }
+-        throw ManualPaymentTaskRouteErrors.stale();
+-    }
+-
+@@
+     private void validateTaskSource(
+             ContractorActualPaymentAttribution row,
+-            ManualPaymentTaskSourceRef source
++            ManualPaymentTaskSourceRef source,
++            Long sourceTaskId,
++            Long sourceTaskGeneration
+     ) {
+@@
+         if (!taskDestination(row)
+                 || row.getActualManualPaymentTaskId() == null
+-                || row.getActualManualPaymentTaskGeneration() == null) {
++                || row.getActualManualPaymentTaskGeneration() == null
++                || !Objects.equals(row.getActualManualPaymentTaskId(), sourceTaskId)
++                || !Objects.equals(row.getActualManualPaymentTaskGeneration(), sourceTaskGeneration)) {
+             throw ManualPaymentTaskRouteErrors.stale();
+         }
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowService.java
+@@
+     private final ContractorActualPaymentAttributionRepository actualPaymentAttributionRepository;
++    private final ManualPaymentTaskContractorReturnBridge taskReturnBridge;
+     private final ContractorPaymentAllocationRepository allocationRepository;
+@@
+         ContractorPaymentAllocation snapshot = allocationRepository.findById(allocationId)
+                 .orElseThrow(() -> new IllegalArgumentException("Назначение платежа не найдено"));
+-        if (snapshot.getSourceType() != ContractorAllocationSourceType.PAYMENT_LINK
+-                || !canRecordObservedReturn(snapshot.getStatus())) {
++        boolean paymentLinkReturn = snapshot.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK
++                && canRecordObservedReturn(snapshot.getStatus());
++        boolean actualPaymentReturn = snapshot.getSourceType() == ContractorAllocationSourceType.ACTUAL_PAYMENT
++                && canRecordActualPaymentReturn(snapshot.getStatus());
++        if (!paymentLinkReturn && !actualPaymentReturn) {
+             throw new IllegalArgumentException(
+-                    "Сумму возврата можно уточнить только для банковского платежа с возвратом"
++                    "Сумму возврата можно уточнить только для подтвержденного поступления работнику"
+             );
+         }
+-        if (paymentLinkRepository.findByIdForUpdate(snapshot.getSourceId()).isEmpty()) {
+-            throw new IllegalArgumentException("Источник банковского платежа не найден");
+-        }
++        ManualPaymentTaskContractorReturnBridge.Binding taskReturnBinding;
++        if (paymentLinkReturn) {
++            PaymentLink lockedLink = paymentLinkRepository.findByIdForUpdate(snapshot.getSourceId())
++                    .orElseThrow(() -> new IllegalArgumentException("Источник банковского платежа не найден"));
++            taskReturnBinding = taskReturnBridge.lockPaymentLinkBinding(snapshot, lockedLink);
++        } else {
++            taskReturnBinding = taskReturnBridge.lockActualPaymentBinding(snapshot);
++        }
+         ContractorPaymentAllocation allocation = lockLatestAttempt(snapshot);
+@@
+-        if (allocation.getSourceType() != ContractorAllocationSourceType.PAYMENT_LINK
+-                || !canRecordObservedReturn(allocation.getStatus())) {
++        boolean lockedPaymentLinkReturn = allocation.getSourceType() == ContractorAllocationSourceType.PAYMENT_LINK
++                && canRecordObservedReturn(allocation.getStatus());
++        boolean lockedActualPaymentReturn = allocation.getSourceType() == ContractorAllocationSourceType.ACTUAL_PAYMENT
++                && canRecordActualPaymentReturn(allocation.getStatus());
++        if (!lockedPaymentLinkReturn && !lockedActualPaymentReturn) {
+             throw new IllegalArgumentException(
+-                    "Сумму возврата можно уточнить только для банковского платежа с возвратом"
++                    "Сумму возврата можно уточнить только для подтвержденного поступления работнику"
+             );
+         }
+@@
+         accountingService.recordReturnTotal(
+                 allocation,
+                 returnedTotalKopecks,
+@@
+                 externalRef
+         );
++        taskReturnBridge.recordReturn(taskReturnBinding, allocation);
+         return allocationRepository.save(allocation);
+@@
+         int updated = 0;
++        Map<Long, ManualPaymentTaskContractorReturnBridge.Binding> taskReturnBindings = new HashMap<>();
++        for (ContractorPaymentAllocation snapshot : snapshots) {
++            taskReturnBindings.put(
++                    snapshot.getId(),
++                    taskReturnBridge.lockPaymentLinkBinding(snapshot, link)
++            );
++        }
+         for (ContractorPaymentAllocation allocation : lockLatestAttemptsCanonical(snapshots)) {
+             long version = allocation.getRowVersion();
+             ContractorAllocationStatus status = allocation.getStatus();
+             applyLinkStatus(allocation, link, LocalDateTime.now());
++            taskReturnBridge.recordReturn(taskReturnBindings.get(allocation.getId()), allocation);
+             allocationRepository.save(allocation);
+@@
+             }
+             PaymentLink link = sourcePrelude.link();
++            ManualPaymentTaskContractorReturnBridge.Binding taskReturnBinding = link == null
++                    ? null : taskReturnBridge.lockPaymentLinkBinding(snapshot, link);
+             ContractorPaymentAllocation allocation = lockLatestAttempt(snapshot);
+@@
+                     applyLinkStatus(allocation, link, now);
+                 }
+             }
++            taskReturnBridge.recordReturn(taskReturnBinding, allocation);
+             clearReconciliationFailure(allocation);
+@@
+             }
+             CommonInvoice invoice = sourcePrelude.invoice();
++            ManualPaymentTaskContractorReturnBridge.Binding taskReturnBinding = invoice == null
++                    ? null : taskReturnBridge.lockCommonInvoiceBinding(snapshot, invoice);
+             ContractorPaymentAllocation allocation = lockLatestAttempt(snapshot);
+@@
+                 releaseIfCommonInvoiceContainsUnpaidOrder(
+                         allocation,
+                         sourcePrelude.orders(),
+                         now
+                 );
+             }
++            taskReturnBridge.recordReturn(taskReturnBinding, allocation);
+             clearReconciliationFailure(allocation);
+@@
+     private boolean canRecordObservedReturn(ContractorAllocationStatus status) {
+         return status == ContractorAllocationStatus.RETURN_AMOUNT_PENDING
+                 || status == ContractorAllocationStatus.PARTIALLY_RETURNED;
+     }
++
++    private boolean canRecordActualPaymentReturn(ContractorAllocationStatus status) {
++        return status == ContractorAllocationStatus.CONFIRMED
++                || status == ContractorAllocationStatus.SIMULATED_PAID
++                || status == ContractorAllocationStatus.LATE_PAYMENT_AFTER_RELEASE
++                || status == ContractorAllocationStatus.PARTIALLY_CONFIRMED
++                || status == ContractorAllocationStatus.PARTIALLY_RETURNED
++                || status == ContractorAllocationStatus.RETURN_AMOUNT_PENDING;
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptIntegrationServiceTest.java
+@@
+ import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
++import com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType;
++import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
+ import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
++import com.hunt.otziv.contractor_payments.service.ManualPaymentTaskContractorReservationService;
+@@
+ import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.never;
+ import static org.mockito.Mockito.verify;
+@@
+     private ManualPaymentTaskLedgerService ledgerService;
++    private ManualPaymentTaskContractorReservationService contractorReservationService;
+     private ManualPaymentTaskReceiptIntegrationService service;
+@@
+         ledgerService = mock(ManualPaymentTaskLedgerService.class);
+-        service = new ManualPaymentTaskReceiptIntegrationService(ledgerService);
++        contractorReservationService = mock(ManualPaymentTaskContractorReservationService.class);
++        service = new ManualPaymentTaskReceiptIntegrationService(ledgerService, contractorReservationService);
+@@
+     void staleTaskCandidateCannotReceiveMoney() {
+@@
+         );
+     }
++
++    @Test
++    void releaseDoesNotReinterpretShadowAllocationUsingCurrentPhase() {
++        PaymentLink link = taskLink();
++        link.setContractorAllocationId(91L);
++        ManualPaymentTaskRouteSnapshot snapshot = snapshot(
++                ManualPaymentTaskAccountingTargetKind.SPECIALIST,
++                77L
++        );
++        when(ledgerService.candidateForSource(snapshot.source())).thenReturn(Optional.of(snapshot));
++
++        service.release(link, "Перевод не поступил");
++
++        verify(contractorReservationService).releaseLocked(
++                91L,
++                ContractorAllocationSourceType.PAYMENT_LINK,
++                128L,
++                "source-generation",
++                ContractorAllocationStatus.RELEASED_UNPAID,
++                "Перевод не поступил"
++        );
++        verify(contractorReservationService, never()).lockAccountingMode();
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowServiceTest.java
+@@
+     private final ContractorActualPaymentAttributionRepository actualPaymentAttributionRepository =
+             mock(ContractorActualPaymentAttributionRepository.class);
++    private final ManualPaymentTaskContractorReturnBridge taskReturnBridge =
++            mock(ManualPaymentTaskContractorReturnBridge.class);
+@@
+     private final ContractorPaymentShadowService service = new ContractorPaymentShadowService(
+             actualPaymentAttributionRepository,
++            taskReturnBridge,
+             allocationRepository,
+@@
+         assertEquals(
+-                "Сумму возврата можно уточнить только для банковского платежа с возвратом",
++                "Сумму возврата можно уточнить только для подтвержденного поступления работнику",
+                 error.getMessage()
+         );
+*** End Patch
+

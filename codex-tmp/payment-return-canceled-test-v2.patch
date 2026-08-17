@@ -1,0 +1,21 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/PaymentLinkReturnOutboxServiceTest.java
+@@
+     void ordinaryNonReturnStatusDoesNotCreateWork() {
+@@
+         verify(repository, never()).enqueue(org.mockito.ArgumentMatchers.any(),
+                 org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any());
+     }
++
++    @Test
++    void bankCancellationIsQueuedAndRecoveryLaterChecksWhetherMoneyWasSettled() {
++        PaymentLinkReturnOutboxService service = new PaymentLinkReturnOutboxService(repository);
++        PaymentLink link = new PaymentLink();
++        link.setId(129L);
++        link.setRowVersion(3L);
++        link.setStatus(PaymentLinkStatus.CANCELED);
++
++        service.enqueue(link);
++
++        verify(repository).enqueue(129L, 3L, "CANCELED");
++    }

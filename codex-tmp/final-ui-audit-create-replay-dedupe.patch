@@ -1,0 +1,20 @@
+*** Begin Patch
+*** Update File: frontend/src/app/features/admin/tbank-payments/tbank-payments.component.ts
+@@
+       next: (task) => {
+-        this.manualTasks.update((tasks) => [task, ...tasks]);
++        this.manualTasks.update((tasks) => [task, ...tasks.filter((item) => item.id !== task.id)]);
+*** Update File: frontend/src/app/features/home/home.component.ts
+@@
+       next: (task) => {
+-        this.manualPaymentTasks.update((tasks) => [task, ...tasks]);
++        this.manualPaymentTasks.update((tasks) => [task, ...tasks.filter((item) => item.id !== task.id)]);
+*** Update File: mobile/src/app/features/tbank.page.ts
+@@
+-      this.manualTasks.update((tasks) => [task, ...tasks]);
++      this.manualTasks.update((tasks) => [task, ...tasks.filter((item) => item.id !== task.id)]);
+*** Update File: mobile/src/app/features/home.page.ts
+@@
+-      this.manualPaymentTasks.update((tasks) => [task, ...tasks]);
++      this.manualPaymentTasks.update((tasks) => [task, ...tasks.filter((item) => item.id !== task.id)]);
+*** End Patch

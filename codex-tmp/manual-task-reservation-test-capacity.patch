@@ -1,0 +1,56 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReservationServiceTest.java
+@@
+ import com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef;
++import com.hunt.otziv.payments.model.ManualPaymentTask;
+ import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
+@@
+ import com.hunt.otziv.payments.model.PaymentLink;
++import com.hunt.otziv.payments.repository.ManualPaymentTaskRepository;
++import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
+@@
+ import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.BeforeEach;
+@@
+     @Mock
+     private ContractorPaymentTargetAccessPolicy targetAccessPolicy;
++    @Mock
++    private ManualPaymentTaskRepository taskRepository;
++    @Mock
++    private ManualPaymentTaskContractorCapacityService capacityService;
+@@
+     @InjectMocks
+     private ManualPaymentTaskContractorReservationService service;
++
++    @BeforeEach
++    void setUpCapacity() {
++        org.mockito.Mockito.lenient().when(capacityService.validateProjectedReservation(
++                any(), any(), any(), org.mockito.ArgumentMatchers.anyLong()
++        )).thenReturn(new ManualPaymentTaskContractorCapacityService.ReservationCapacity(
++                10_000L, 0L, 0L, 0L, null, "", 0L));
++    }
+@@
+         when(profileRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(profile));
++        when(taskRepository.findByIdWithDetails(16L)).thenReturn(Optional.of(
++                persistedTask(profile, 3L)));
+@@
+         when(profileRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(profile));
++        when(taskRepository.findByIdWithDetails(16L)).thenReturn(Optional.of(
++                persistedTask(profile, 9L)));
+@@
+     private ContractorPaymentProfile profile(Long id) {
+@@
+         return profile;
+     }
++
++    private ManualPaymentTask persistedTask(ContractorPaymentProfile profile, long generation) {
++        ManualPaymentTask task = new ManualPaymentTask();
++        task.setId(16L);
++        task.setGeneration(generation);
++        task.setStatus(com.hunt.otziv.payments.model.ManualPaymentTaskStatus.ACTIVE);
++        task.setAccountingTargetKind(ManualPaymentTaskAccountingTargetKind.SPECIALIST);
++        task.setAccountingTargetProfile(profile);
++        return task;
++    }
+ }
+*** End Patch

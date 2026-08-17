@@ -4,6 +4,7 @@ package com.hunt.otziv.contractor_payments.model;
 public enum ContractorRoutingDecisionReason {
     SPECIALIST_SELECTED,
     MANAGER_SELECTED,
+    MANUAL_PAYMENT_TASK_SELECTED,
 
     SPECIALIST_NOT_ASSIGNED,
     MANAGER_NOT_ASSIGNED,

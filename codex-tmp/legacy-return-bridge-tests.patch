@@ -1,0 +1,107 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridgeTest.java
+@@
+     void externalPaymentLinkPartialRefundReopensTaskWithoutGuessingAmount() {
+@@
+         verify(taskLedgerService, never()).lockReturnSource(any(), any());
+     }
++
++    @Test
++    void legacyPaymentLinkFullRefundUsesExactUnverifiedSourceBaseline() {
++        PaymentLink link = paymentLink(128L);
++        link.setAmountKopecks(AMOUNT);
++        link.setStatus(PaymentLinkStatus.REFUNDED);
++        ManualPaymentTaskSourceRef source = new ManualPaymentTaskSourceRef(
++                ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 128L, "LEGACY-128");
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.PAYMENT_LINK, 128L)).thenReturn(List.of());
++        when(taskLedgerService.lockLegacyConfirmedReturnSource(
++                TASK_ID, ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 128L))
++                .thenReturn(new ManualPaymentTaskLedgerService.LockedLegacyReturnSource(
++                        source, TASK_GENERATION, AMOUNT, 25_000L));
++
++        service.recordAuthoritativePaymentLinkReturn(link);
++
++        ArgumentCaptor<ManualPaymentTaskReturnCommand> captor =
++                ArgumentCaptor.forClass(ManualPaymentTaskReturnCommand.class);
++        verify(taskLedgerService).recordReturn(captor.capture());
++        assertEquals(75_000L, captor.getValue().amountKopecks());
++        assertEquals(source, captor.getValue().source());
++        assertEquals(
++                "TASK:RETURN:PAYMENT_LINK:128:LEGACY:TOTAL:" + AMOUNT,
++                captor.getValue().operationKey());
++        verify(taskLedgerService, never()).lockReturnSource(any(), any());
++    }
++
++    @Test
++    void restoredLegacyPaymentLinkPartialRefundOnlyReopensExactTask() {
++        PaymentLink link = paymentLink(128L);
++        link.setManualTaskGeneration(null);
++        link.setManualTaskSourceGeneration(null);
++        link.setAmountKopecks(AMOUNT);
++        link.setStatus(PaymentLinkStatus.PARTIAL_REFUNDED);
++        ManualPaymentTaskSourceRef source = new ManualPaymentTaskSourceRef(
++                ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 128L, "LEGACY-128");
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.PAYMENT_LINK, 128L)).thenReturn(List.of());
++        when(taskLedgerService.lockLegacyConfirmedReturnSource(
++                TASK_ID, ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 128L))
++                .thenReturn(new ManualPaymentTaskLedgerService.LockedLegacyReturnSource(
++                        source, TASK_GENERATION, AMOUNT, 0L));
++
++        service.recordAuthoritativePaymentLinkReturn(link);
++
++        verify(taskLedgerService).markReturnNeedsAttention(TASK_ID, source);
++        verify(taskLedgerService, never()).recordReturn(any());
++        verify(taskLedgerService, never()).lockReturnSource(any(), any());
++    }
++
++    @Test
++    void legacyPaymentLinkFullRefundReplayIsNoOpAtCumulativeTotal() {
++        PaymentLink link = paymentLink(128L);
++        link.setAmountKopecks(AMOUNT);
++        link.setStatus(PaymentLinkStatus.REVERSED);
++        ManualPaymentTaskSourceRef source = new ManualPaymentTaskSourceRef(
++                ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 128L, "LEGACY-128");
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.PAYMENT_LINK, 128L)).thenReturn(List.of());
++        when(taskLedgerService.lockLegacyConfirmedReturnSource(
++                TASK_ID, ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 128L))
++                .thenReturn(new ManualPaymentTaskLedgerService.LockedLegacyReturnSource(
++                        source, TASK_GENERATION, AMOUNT, AMOUNT));
++
++        service.recordAuthoritativePaymentLinkReturn(link);
++
++        verify(taskLedgerService, never()).recordReturn(any());
++    }
++
++    @Test
++    void restoredTypedPaymentLinkRefundUsesAttributionAndDurableLedgerBinding() {
++        Scenario scenario = sourceScenario(ContractorActualPaymentSourceKind.PAYMENT_LINK);
++        scenario.link().setManualTaskGeneration(null);
++        scenario.link().setManualTaskSourceGeneration(null);
++        scenario.link().setAmountKopecks(AMOUNT);
++        scenario.link().setStatus(PaymentLinkStatus.REFUNDED);
++        when(taskLedgerService.lockArchivedReturnSource(
++                TASK_ID,
++                TASK_GENERATION,
++                ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK,
++                scenario.link().getId()
++        )).thenReturn(new ManualPaymentTaskLedgerService.LockedArchivedReturnSource(
++                scenario.source(), 20_000L));
++
++        service.recordAuthoritativePaymentLinkReturn(scenario.link());
++
++        assertReturn(ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 80_000L, AMOUNT);
++        verify(taskLedgerService).lockArchivedReturnSource(
++                TASK_ID,
++                TASK_GENERATION,
++                ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK,
++                scenario.link().getId()
++        );
++        verify(taskLedgerService, never()).lockReturnSource(any(), any());
++    }
+ 
+     @Test
+     void commonOwnerReturnWithoutAllocationIsNotSynthesized() {
+*** End Patch

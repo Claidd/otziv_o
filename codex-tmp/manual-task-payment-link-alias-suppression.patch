@@ -1,0 +1,40 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionService.java
+@@
+         addCandidate(
+                 values,
+                 new ClientRecipient(ContractorRecipientType.OWNER, null, null, "Владелец"),
+@@
+                 link.getAmountKopecks(),
+                 sameRecipient(client, ContractorRecipientType.OWNER, null)
+         );
++        taskCandidate.ifPresent(snapshot -> suppressOrdinaryAliasForTask(values, snapshot));
+         ManualCardPaymentRecipientResponse originalResponse = values.values().stream()
+@@
+     private void addTaskCandidate(
+@@
+         ));
+     }
++
++    private void suppressOrdinaryAliasForTask(
++            Map<String, ManualCardPaymentRecipientResponse> candidates,
++            ManualPaymentTaskRouteSnapshot task
++    ) {
++        if (task == null || task.accountingTargetKind() == null) {
++            return;
++        }
++        switch (task.accountingTargetKind()) {
++            case OWNER -> candidates.remove(recipientKey(ContractorRecipientType.OWNER, null));
++            case SPECIALIST -> candidates.remove(recipientKey(
++                    ContractorRecipientType.SPECIALIST, task.accountingTargetProfileId()));
++            case MANAGER -> candidates.remove(recipientKey(
++                    ContractorRecipientType.MANAGER, task.accountingTargetProfileId()));
++            case EXTERNAL_TASK, UNRESOLVED -> {
++                // EXTERNAL_TASK has no ordinary accounting alias. UNRESOLVED
++                // is rejected by addTaskCandidate before this point.
++            }
++        }
++    }
+ 
+     private ManualCardPaymentRecipientResponse selectRecipient(
+*** End Patch

@@ -10,6 +10,10 @@ public record CreateManualPaymentTaskRequest(
         String manualPaymentUrl,
         String manualPaymentButtonLabel,
         Long targetAmountKopecks,
-        String comment
+        String comment,
+        String accountingTargetKind,
+        Long accountingTargetProfileId,
+        Boolean accountingTargetOverrunAcknowledged,
+        String operationKey
 ) {
 }

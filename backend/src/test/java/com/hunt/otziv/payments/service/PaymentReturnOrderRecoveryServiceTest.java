@@ -1,0 +1,134 @@
+package com.hunt.otziv.payments.service;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
+import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
+@ExtendWith(MockitoExtension.class)
+class PaymentReturnOrderRecoveryServiceTest {
+
+    @Mock
+    private PaymentLinkRepository paymentLinkRepository;
+
+    @Mock
+    private OrderRepository orderRepository;
+
+    @Mock
+    private OrderStatusTransitionService orderStatusTransitionService;
+
+    @Mock
+    private PaymentLinkService paymentLinkService;
+
+    @Test
+    void fullRefundReopensOrderAndCreatesReplacementLink() throws Exception {
+        Order order = order(42L, "Оплачено");
+        PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
+        link.setConfirmedAmountKopecks(10_000L);
+        when(paymentLinkRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(link));
+
+        PaymentReturnOrderRecoveryService service = service();
+
+        assertEquals(
+                Optional.of(42L),
+                service.reopenAfterFullReturn(new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
+                        7L, PaymentLinkStatus.REFUNDED))
+        );
+
+        verify(orderStatusTransitionService).changeStatusForOrder(42L, "Напоминание");
+        verify(paymentLinkService).createForOrder(42L);
+    }
+
+    @Test
+    void disabledPaymentLinksStillCommitUnpaidStateAndLeaveReminderForRetry() throws Exception {
+        Order order = order(42L, "Оплачено");
+        PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
+        link.setConfirmedAmountKopecks(10_000L);
+        when(paymentLinkRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(link));
+        when(paymentLinkService.createForOrder(42L)).thenThrow(new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Платежные ссылки выключены"
+        ));
+        assertEquals(Optional.of(42L), service().reopenAfterFullReturn(
+                new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
+                        7L, PaymentLinkStatus.REFUNDED)));
+        verify(orderStatusTransitionService).changeStatusForOrder(42L, "Напоминание");
+        verify(paymentLinkService).createForOrder(42L);
+    }
+
+    @Test
+    void retryAfterOrderAlreadyReopenedIsIdempotent() throws Exception {
+        Order order = order(42L, "Напоминание");
+        PaymentLink link = link(7L, PaymentLinkStatus.REVERSED, order);
+        link.setPaidAt(java.time.LocalDateTime.now());
+        when(paymentLinkRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(link));
+
+        assertEquals(Optional.of(42L), service().reopenAfterFullReturn(
+                new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
+                        7L, PaymentLinkStatus.REVERSED)));
+
+        verify(orderStatusTransitionService, never()).changeStatusForOrder(42L, "Напоминание");
+        verify(paymentLinkService).createForOrder(42L);
+    }
+
+    @Test
+    void partialReturnDoesNotCreateAnotherPaymentCycle() {
+        assertEquals(Optional.empty(), service().reopenAfterFullReturn(
+                new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
+                        7L, PaymentLinkStatus.PARTIAL_REFUNDED)));
+        verify(paymentLinkRepository, never()).findByIdForUpdate(7L);
+        verify(paymentLinkService, never()).createForOrder(7L);
+    }
+
+    @Test
+    void cancellationWithoutSettledEvidenceDoesNotReopenOrder() throws Exception {
+        Order order = order(42L, "Выставлен счет");
+        PaymentLink link = link(7L, PaymentLinkStatus.CANCELED, order);
+        when(paymentLinkRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(link));
+
+        assertEquals(Optional.empty(), service().reopenAfterFullReturn(
+                new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
+                        7L, PaymentLinkStatus.CANCELED)));
+        verify(orderStatusTransitionService, never()).changeStatusForOrder(42L, "Не оплачено");
+        verify(paymentLinkService, never()).createForOrder(42L);
+    }
+
+    private PaymentReturnOrderRecoveryService service() {
+        return new PaymentReturnOrderRecoveryService(
+                paymentLinkRepository,
+                orderRepository,
+                orderStatusTransitionService,
+                paymentLinkService
+        );
+    }
+
+    private Order order(Long id, String statusTitle) {
+        Order order = new Order();
+        order.setId(id);
+        order.setStatus(OrderStatus.builder().title(statusTitle).build());
+        return order;
+    }
+
+    private PaymentLink link(Long id, PaymentLinkStatus status, Order order) {
+        PaymentLink link = new PaymentLink();
+        link.setId(id);
+        link.setStatus(status);
+        link.setOrder(order);
+        return link;
+    }
+}

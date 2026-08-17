@@ -1,0 +1,109 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/repository/ContractorActualPaymentAttributionRepository.java
+@@
+     List<ContractorActualPaymentAttribution> findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
+             ContractorActualPaymentSourceKind sourceKind,
+             Long sourceId
+     );
++
++    @Lock(LockModeType.PESSIMISTIC_WRITE)
++    @Query("""
++        SELECT a
++        FROM ContractorActualPaymentAttribution a
++        WHERE a.sourceKind = :sourceKind
++          AND a.sourceId = :sourceId
++        ORDER BY a.effectiveAt, a.id
++    """)
++    List<ContractorActualPaymentAttribution> findAllBySourceForUpdate(
++            @Param("sourceKind") ContractorActualPaymentSourceKind sourceKind,
++            @Param("sourceId") Long sourceId
++    );
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/repository/ManualPaymentTaskLedgerRepository.java
+@@
+     List<ManualPaymentTaskLedgerEntry> findSourceHistoryNewestFirst(
+@@
+     );
++
++    @Query("""
++        SELECT entry
++        FROM ManualPaymentTaskLedgerEntry entry
++        LEFT JOIN FETCH entry.accountingTargetProfile profile
++        LEFT JOIN FETCH profile.user
++        JOIN FETCH entry.task task
++        WHERE task.id = :taskId
++          AND entry.taskGeneration = :taskGeneration
++          AND entry.sourceKind = :sourceKind
++          AND entry.sourceId = :sourceId
++        ORDER BY entry.id DESC
++    """)
++    List<ManualPaymentTaskLedgerEntry> findArchivedSourceHistoryNewestFirst(
++            @Param("taskId") Long taskId,
++            @Param("taskGeneration") long taskGeneration,
++            @Param("sourceKind") ManualPaymentTaskLedgerSourceKind sourceKind,
++            @Param("sourceId") long sourceId
++    );
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskLedgerService.java
+@@
+     public long lockReturnSource(Long taskId, ManualPaymentTaskSourceRef sourceRef) {
+@@
+         return returned;
+     }
++
++    /**
++     * Reconstructs an archived source binding only from immutable ledger
++     * evidence. Exactly one source generation must exist for the attributed
++     * task generation; missing or ambiguous archive history fails closed.
++     */
++    @Transactional
++    public LockedArchivedReturnSource lockArchivedReturnSource(
++            Long taskId,
++            long taskGeneration,
++            ManualPaymentTaskLedgerSourceKind sourceKind,
++            Long sourceId
++    ) {
++        if (taskId == null || taskGeneration <= 0 || sourceKind == null
++                || sourceKind == ManualPaymentTaskLedgerSourceKind.LEGACY_TASK_BASELINE
++                || sourceId == null || sourceId <= 0) {
++            throw conflict("Архивный источник задания задан некорректно");
++        }
++        ManualPaymentTask task = lockTask(taskId);
++        List<ManualPaymentTaskLedgerEntry> history = ledgerRepository
++                .findArchivedSourceHistoryNewestFirst(
++                        taskId, taskGeneration, sourceKind, sourceId);
++        if (history.isEmpty()) {
++            throw conflict("Архивный источник не найден в журнале задания");
++        }
++        String sourceGeneration = normalize(history.getFirst().getSourceGeneration());
++        if (sourceGeneration.isBlank()) {
++            throw conflict("Архивный источник задания не имеет поколения");
++        }
++        long returned = 0L;
++        for (ManualPaymentTaskLedgerEntry entry : history) {
++            if (entry.getTask() == null
++                    || !Objects.equals(entry.getTask().getId(), task.getId())
++                    || entry.getTaskGeneration() != taskGeneration
++                    || entry.getSourceKind() != sourceKind
++                    || entry.getSourceId() != sourceId
++                    || !sourceGeneration.equals(normalize(entry.getSourceGeneration()))) {
++                throw conflict("Архивный источник задания неоднозначен");
++            }
++            if (entry.getEventType() == ManualPaymentTaskLedgerEventType.RETURNED) {
++                returned = addExact(returned, Math.negateExact(entry.getConfirmedDeltaKopecks()));
++            }
++        }
++        ManualPaymentTaskSourceRef source = new ManualPaymentTaskSourceRef(
++                sourceKind, sourceId, sourceGeneration);
++        requireSourceTask(history, task.getId());
++        return new LockedArchivedReturnSource(source, returned);
++    }
+@@
+     private String normalize(String value) {
+@@
+     }
++
++    public record LockedArchivedReturnSource(
++            ManualPaymentTaskSourceRef source,
++            long returnedKopecks
++    ) {
++    }
+*** End Patch

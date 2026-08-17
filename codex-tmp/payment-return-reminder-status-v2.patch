@@ -1,0 +1,46 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/PaymentReturnOrderRecoveryService.java
+@@
+     private static final String STATUS_PAID = "Оплачено";
+     private static final String STATUS_NOT_PAID = "Не оплачено";
++    private static final String STATUS_REMINDER = "Напоминание";
+@@
+-        if (!STATUS_NOT_PAID.equals(statusTitle(order))) {
++        if (!STATUS_REMINDER.equals(statusTitle(order))) {
+             try {
+-                orderStatusTransitionService.changeStatusForOrder(order.getId(), STATUS_NOT_PAID);
++                orderStatusTransitionService.changeStatusForOrder(order.getId(), STATUS_REMINDER);
+             } catch (Exception e) {
+                 throw new IllegalStateException(
+-                        "Не удалось вернуть заказ " + order.getId() + " в статус \"Не оплачено\"",
++                        "Не удалось вернуть заказ " + order.getId() + " в статус \"Напоминание\"",
+                         e
+                 );
+             }
+*** Update File: backend/src/main/java/com/hunt/otziv/client_messages/service/ScheduledClientMessageService.java
+@@
+-     * provider refund/reversal. The order intentionally remains "Не оплачено";
++     * provider refund/reversal. The order intentionally remains in "Напоминание";
+@@
+-        if (order == null || !STATUS_NOT_PAID.equals(statusTitle(order))) {
++        if (order == null || (!STATUS_REMINDER.equals(statusTitle(order))
++                && !STATUS_TO_PAY.equals(statusTitle(order))
++                && !STATUS_NOT_PAID.equals(statusTitle(order)))) {
+             return false;
+         }
+@@
+-        if (!expectedStatuses.contains(status)
+-                && !(paymentReturnReminder && STATUS_NOT_PAID.equals(status))) {
++        if (!expectedStatuses.contains(status)
++                && !(paymentReturnReminder && isPaymentReturnEligibleStatus(status))) {
+@@
+     private boolean isPaymentReturnReminder(ScheduledClientMessageState state) {
+@@
+     }
++
++    private boolean isPaymentReturnEligibleStatus(String status) {
++        return STATUS_REMINDER.equals(status)
++                || STATUS_TO_PAY.equals(status)
++                || STATUS_NOT_PAID.equals(status);
++    }
+*** End Patch

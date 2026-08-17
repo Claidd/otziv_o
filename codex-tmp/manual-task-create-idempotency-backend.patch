@@ -1,0 +1,125 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/dto/CreateManualPaymentTaskRequest.java
+@@
+         String accountingTargetKind,
+         Long accountingTargetProfileId,
+-        Boolean accountingTargetOverrunAcknowledged
++        Boolean accountingTargetOverrunAcknowledged,
++        String operationKey
+ ) {
+ }
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskService.java
+@@
+ import com.hunt.otziv.payments.model.ManualPaymentTask;
++import com.hunt.otziv.payments.model.ManualPaymentTaskCreationRequest;
+@@
++import com.hunt.otziv.payments.repository.ManualPaymentTaskCreationRequestRepository;
+ import com.hunt.otziv.payments.repository.ManualPaymentTaskRepository;
+@@
+ import java.math.BigDecimal;
++import java.nio.charset.StandardCharsets;
++import java.security.MessageDigest;
++import java.security.NoSuchAlgorithmException;
+@@
+ import java.util.Collection;
++import java.util.HexFormat;
+@@
+     private final ManualPaymentTaskRepository manualPaymentTaskRepository;
++    private final ManualPaymentTaskCreationRequestRepository taskCreationRequestRepository;
+@@
+     private ManualPaymentTaskResponse createTask(
+             Manager manager,
+             CreateManualPaymentTaskRequest request,
+             String actor,
+             boolean managerScoped
+     ) {
++        String operationKey = requiredCreationOperationKey(request == null ? null : request.operationKey());
++        String payloadHash = creationPayloadHash(manager, request, managerScoped);
++        taskCreationRequestRepository.insertIfAbsent(operationKey, payloadHash);
++        ManualPaymentTaskCreationRequest creation = taskCreationRequestRepository
++                .findByOperationKeyForUpdate(operationKey)
++                .orElseThrow(() -> new ResponseStatusException(
++                        HttpStatus.CONFLICT,
++                        "Ключ создания задания не удалось зафиксировать"
++                ));
++        if (!payloadHash.equals(creation.getPayloadHash())) {
++            throw new ResponseStatusException(
++                    HttpStatus.CONFLICT,
++                    "Ключ создания задания уже использован с другими данными"
++            );
++        }
++        if (creation.getTaskId() != null) {
++            ManualPaymentTask replay = manualPaymentTaskRepository
++                    .findByIdWithDetails(creation.getTaskId())
++                    .orElseThrow(() -> new ResponseStatusException(
++                            HttpStatus.CONFLICT,
++                            "Созданное ранее платёжное задание недоступно; нужна сверка"
++                    ));
++            return toResponse(replay);
++        }
+         PaymentProfile profile = paymentProfileService.selectForManager(manager);
+@@
+-        return toResponse(manualPaymentTaskRepository.save(task));
++        ManualPaymentTask saved = manualPaymentTaskRepository.save(task);
++        if (saved.getId() == null) {
++            throw new ResponseStatusException(
++                    HttpStatus.CONFLICT,
++                    "Не удалось зафиксировать созданное платёжное задание"
++            );
++        }
++        creation.setTaskId(saved.getId());
++        creation.setCompletedAt(LocalDateTime.now());
++        taskCreationRequestRepository.save(creation);
++        return toResponse(saved);
+     }
+@@
+     private long requiredPositive(Long value) {
+@@
+     }
++
++    private String requiredCreationOperationKey(String value) {
++        String clean = normalize(value);
++        if (clean.isBlank()
++                || clean.length() > 160
++                || !clean.matches("[A-Za-z0-9:._-]+")) {
++            throw new ResponseStatusException(
++                    HttpStatus.BAD_REQUEST,
++                    "Обновите приложение и повторите создание платёжного задания"
++            );
++        }
++        return clean;
++    }
++
++    private String creationPayloadHash(
++            Manager manager,
++            CreateManualPaymentTaskRequest request,
++            boolean managerScoped
++    ) {
++        try {
++            MessageDigest digest = MessageDigest.getInstance("SHA-256");
++            updateDigest(digest, managerScoped);
++            updateDigest(digest, manager == null ? null : manager.getId());
++            updateDigest(digest, request == null ? null : normalize(request.manualPaymentType()).toUpperCase(Locale.ROOT));
++            updateDigest(digest, request == null ? null : normalize(request.manualPhone()));
++            updateDigest(digest, request == null ? null : normalize(request.manualRecipientName()));
++            updateDigest(digest, request == null ? null : normalize(request.manualPaymentUrl()));
++            updateDigest(digest, request == null ? null : normalize(request.manualPaymentButtonLabel()));
++            updateDigest(digest, request == null ? null : request.targetAmountKopecks());
++            updateDigest(digest, request == null ? null : normalize(request.comment()));
++            updateDigest(digest, request == null ? null : normalize(request.accountingTargetKind()).toUpperCase(Locale.ROOT));
++            updateDigest(digest, request == null ? null : request.accountingTargetProfileId());
++            updateDigest(digest, request != null && Boolean.TRUE.equals(
++                    request.accountingTargetOverrunAcknowledged()));
++            return HexFormat.of().formatHex(digest.digest());
++        } catch (NoSuchAlgorithmException impossible) {
++            throw new IllegalStateException("SHA-256 недоступен", impossible);
++        }
++    }
++
++    private void updateDigest(MessageDigest digest, Object value) {
++        byte[] bytes = String.valueOf(value).getBytes(StandardCharsets.UTF_8);
++        digest.update(Integer.toString(bytes.length).getBytes(StandardCharsets.US_ASCII));
++        digest.update((byte) ':');
++        digest.update(bytes);
++    }
+*** End Patch

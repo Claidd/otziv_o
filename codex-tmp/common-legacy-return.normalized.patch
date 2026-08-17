@@ -1,0 +1,370 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/dto/CommonManualPaymentTaskReturnRequest.java
+@@
+-import jakarta.validation.constraints.NotNull;
+ import jakarta.validation.constraints.Positive;
+@@
+-        @NotNull @Positive Long attributionId,
++        @Positive Long attributionId,
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/repository/ManualPaymentTaskLedgerRepository.java
+@@
+     List<ManualPaymentTaskLedgerEntry> findTaskSourceHistoryNewestFirst(
+             @Param("taskId") Long taskId,
+             @Param("sourceKind") ManualPaymentTaskLedgerSourceKind sourceKind,
+             @Param("sourceId") long sourceId
+     );
++
++    @Query("""
++        SELECT DISTINCT task.id
++        FROM ManualPaymentTaskLedgerEntry entry
++        JOIN entry.task task
++        WHERE entry.sourceKind = :sourceKind
++          AND entry.sourceId = :sourceId
++        ORDER BY task.id
++    """)
++    List<Long> findTaskIdsBySource(
++            @Param("sourceKind") ManualPaymentTaskLedgerSourceKind sourceKind,
++            @Param("sourceId") long sourceId
++    );
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/repository/ManualPaymentTaskArchivedSourceRepository.java
+@@
+     public boolean lockCommonInvoice(Long sourceId) {
+@@
+         return !rows.isEmpty();
+     }
++
++    /** Locks an archived common invoice and returns its immutable task route identity. */
++    public ArchivedCommonTaskSource lockCommonTaskInvoice(Long sourceId) {
++        if (sourceId == null) {
++            return null;
++        }
++        List<ArchivedCommonTaskSource> rows = jdbc.query("""
++                SELECT payment_route_manual_task_id, payment_route_amount_kopecks
++                FROM archive_common_invoices
++                WHERE invoice_id = :sourceId
++                  AND restored_at IS NULL
++                  AND payment_route_manual_source = 'MANUAL_TASK'
++                  AND payment_route_manual_task_id IS NOT NULL
++                  AND payment_route_amount_kopecks > 0
++                FOR UPDATE
++                """, Map.of("sourceId", sourceId), (rs, rowNum) ->
++                new ArchivedCommonTaskSource(
++                        rs.getObject("payment_route_manual_task_id", Long.class),
++                        rs.getObject("payment_route_amount_kopecks", Long.class)
++                ));
++        return rows.size() == 1 ? rows.getFirst() : null;
++    }
++
++    public record ArchivedCommonTaskSource(Long taskId, Long routeAmountKopecks) {
++    }
+ }
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskLedgerService.java
+@@
+     @Transactional
++    public LockedLegacyReturnSource lockLegacyConfirmedReturnSource(
++            ManualPaymentTaskLedgerSourceKind sourceKind,
++            Long sourceId
++    ) {
++        if (sourceKind == null
++                || sourceKind == ManualPaymentTaskLedgerSourceKind.LEGACY_TASK_BASELINE
++                || sourceId == null || sourceId <= 0) {
++            throw conflict("Исторический источник возврата задан некорректно");
++        }
++        List<Long> taskIds = ledgerRepository.findTaskIdsBySource(sourceKind, sourceId);
++        if (taskIds.size() != 1 || taskIds.getFirst() == null) {
++            throw conflict("Для исторического возврата нет однозначной привязки задания; требуется сверка");
++        }
++        return lockLegacyConfirmedReturnSource(taskIds.getFirst(), sourceKind, sourceId);
++    }
++
++    @Transactional
+     public LockedLegacyReturnSource lockLegacyConfirmedReturnSource(
+@@
+         long confirmed = 0L;
+         long returned = 0L;
+         int baselines = 0;
++        String evidenceReference = null;
++        String expectedEvidence = "V251:BASELINE:" + sourceKind.name() + ":" + sourceId;
+         for (ManualPaymentTaskLedgerEntry entry : history) {
+@@
+-                    || entry.getSourceId() != sourceId
++                    || !Objects.equals(entry.getSourceId(), sourceId)
+@@
+             if (entry.getEventType() == ManualPaymentTaskLedgerEventType.LEGACY_BASELINE) {
+                 baselines++;
+                 if (entry.isVerified()
+@@
+-                        || entry.getAccountingTargetProfile() != null) {
++                        || entry.getAccountingTargetProfile() != null
++                        || !expectedEvidence.equals(normalize(entry.getOperationKey()))) {
+                     throw conflict("Историческая сумма источника повреждена; требуется сверка");
+                 }
++                evidenceReference = normalize(entry.getOperationKey());
+                 confirmed = addExact(confirmed, entry.getConfirmedDeltaKopecks());
+@@
+         return new LockedLegacyReturnSource(
+                 new ManualPaymentTaskSourceRef(sourceKind, sourceId, sourceGeneration),
++                task.getId(),
+                 taskGeneration,
+                 confirmed,
+-                returned
++                returned,
++                evidenceReference
+         );
+@@
+     public record LockedLegacyReturnSource(
+             ManualPaymentTaskSourceRef source,
++            Long taskId,
+             long taskGeneration,
+             long confirmedKopecks,
+-            long returnedKopecks
++            long returnedKopecks,
++            String evidenceReference
+     ) {
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridge.java
+@@
+-        if (legacy.confirmedKopecks() != lockedLink.getAmountKopecks()
++        if (!Objects.equals(legacy.taskId(), taskId)
++                || legacy.confirmedKopecks() != lockedLink.getAmountKopecks()
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/service/CommonManualPaymentTaskReturnService.java
+@@
+ import com.hunt.otziv.payments.repository.ManualPaymentTaskArchivedSourceRepository;
++import com.hunt.otziv.payments.repository.ManualPaymentTaskArchivedSourceRepository.ArchivedCommonTaskSource;
+@@
+         CommonInvoice live = invoiceRepository.findByIdForUpdate(invoiceId).orElse(null);
+-        if (live == null && !archivedSourceRepository.lockCommonInvoice(invoiceId)) {
++        ArchivedCommonTaskSource archived = live == null
++                ? archivedSourceRepository.lockCommonTaskInvoice(invoiceId)
++                : null;
++        if (live == null && archived == null) {
+             throw ManualPaymentTaskRouteErrors.stale();
+         }
+@@
+         List<ContractorActualPaymentAttribution> discoveredRows = attributionRepository
+                 .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
+                         ContractorActualPaymentSourceKind.COMMON_INVOICE, invoiceId);
++        if (request.attributionId() == null) {
++            return recordLegacy(
++                    invoiceId, live, archived, discoveredRows,
++                    request.cumulativeReturnedKopecks(), evidenceReference,
++                    reason, normalizedActor
++            );
++        }
++        if (request.attributionId() <= 0) {
++            throw badRequest("Некорректная атрибуция возврата");
++        }
+@@
+         LockedSource locked = live == null
+-                ? archivedSource(discovered)
++                ? archivedSource(discovered, archived)
+                 : liveSource(live, discovered);
+@@
+-        return archivedSource(row);
++        return archivedSource(row, null);
+     }
+ 
+-    private LockedSource archivedSource(ContractorActualPaymentAttribution row) {
++    private LockedSource archivedSource(
++            ContractorActualPaymentAttribution row,
++            ArchivedCommonTaskSource archived
++    ) {
++        if (archived != null
++                && !Objects.equals(archived.taskId(), row.getActualManualPaymentTaskId())) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
+         ManualPaymentTaskLedgerService.LockedArchivedReturnSource locked =
+@@
+         return new LockedSource(locked.source(), locked.returnedKopecks());
+     }
++
++    private CommonManualPaymentTaskReturnResponse recordLegacy(
++            Long invoiceId,
++            CommonInvoice live,
++            ArchivedCommonTaskSource archived,
++            List<ContractorActualPaymentAttribution> discoveredRows,
++            long requestedTotal,
++            String evidenceReference,
++            String reason,
++            String actor
++    ) {
++        if (discoveredRows != null && !discoveredRows.isEmpty()) {
++            throw conflict("У источника уже есть типизированная атрибуция; укажите её точно");
++        }
++        ManualPaymentTaskLedgerService.LockedLegacyReturnSource locked =
++                taskLedgerService.lockLegacyConfirmedReturnSource(
++                        ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE, invoiceId);
++        requireLegacySourceIdentity(invoiceId, live, archived, locked, evidenceReference);
++        if (requestedTotal < locked.returnedKopecks()
++                || requestedTotal > locked.confirmedKopecks()) {
++            throw conflict("Накопительный возврат не соответствует исторической сумме источника");
++        }
++        long delta = requestedTotal - locked.returnedKopecks();
++        if (delta > 0) {
++            taskLedgerService.recordReturn(new ManualPaymentTaskReturnCommand(
++                    locked.taskId(),
++                    locked.source(),
++                    delta,
++                    legacyOperationKey(invoiceId, requestedTotal),
++                    actor,
++                    reason
++            ));
++        }
++        return new CommonManualPaymentTaskReturnResponse(
++                invoiceId,
++                null,
++                locked.taskId(),
++                requestedTotal,
++                delta,
++                delta == 0
++        );
++    }
++
++    private void requireLegacySourceIdentity(
++            Long invoiceId,
++            CommonInvoice live,
++            ArchivedCommonTaskSource archived,
++            ManualPaymentTaskLedgerService.LockedLegacyReturnSource locked,
++            String evidenceReference
++    ) {
++        if (!Objects.equals(locked.source().sourceId(), invoiceId)
++                || locked.source().sourceKind() != ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE
++                || !Objects.equals(normalize(locked.evidenceReference()), evidenceReference)
++                || locked.confirmedKopecks() <= 0L) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        Long routeTaskId = live == null ? archived.taskId() : live.getPaymentRouteManualTaskId();
++        Long routeAmount = live == null
++                ? archived.routeAmountKopecks() : live.getPaymentRouteAmountKopecks();
++        if ((live != null && live.getPaymentRouteManualSource() != ManualPaymentSource.MANUAL_TASK)
++                || !Objects.equals(routeTaskId, locked.taskId())
++                || !Objects.equals(routeAmount, locked.confirmedKopecks())) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        if (live == null) {
++            return;
++        }
++        String sourceGeneration = normalize(live.getPaymentRouteManualTaskSourceGeneration());
++        boolean completeBinding = live.getPaymentRouteManualTaskGeneration() != null
++                && !sourceGeneration.isBlank();
++        boolean missingBinding = live.getPaymentRouteManualTaskGeneration() == null
++                && sourceGeneration.isBlank();
++        if ((!completeBinding && !missingBinding)
++                || (completeBinding
++                    && (!Objects.equals(live.getPaymentRouteManualTaskGeneration(), locked.taskGeneration())
++                        || !sourceGeneration.equals(locked.source().sourceGeneration())))) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++    }
+@@
+     private String operationKey(Long invoiceId, Long attributionId, long total) {
+         return OPERATION_PREFIX + invoiceId + ":ATTR:" + attributionId + ":TOTAL:" + total;
+     }
++
++    private String legacyOperationKey(Long invoiceId, long total) {
++        return OPERATION_PREFIX + invoiceId + ":LEGACY:TOTAL:" + total;
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskLedgerServiceTest.java
+@@
+         baseline.setSourceGeneration("LEGACY-83");
++        baseline.setOperationKey("V251:BASELINE:PAYMENT_LINK:83");
+@@
+         assertThat(locked.source()).isEqualTo(new ManualPaymentTaskSourceRef(
+@@
+         ));
++        assertThat(locked.taskId()).isEqualTo(21L);
+         assertThat(locked.taskGeneration()).isEqualTo(6L);
+@@
+         assertThat(locked.returnedKopecks()).isEqualTo(25_000L);
++        assertThat(locked.evidenceReference()).isEqualTo("V251:BASELINE:PAYMENT_LINK:83");
+@@
+             row.setSourceGeneration("LEGACY-84");
++            row.setOperationKey("V251:BASELINE:PAYMENT_LINK:84");
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridgeTest.java
+@@
+-                        source, TASK_GENERATION, AMOUNT, 25_000L));
++                        source, TASK_ID, TASK_GENERATION, AMOUNT, 25_000L,
++                        "V251:BASELINE:PAYMENT_LINK:128"));
+@@
+-                        source, TASK_GENERATION, AMOUNT, 0L));
++                        source, TASK_ID, TASK_GENERATION, AMOUNT, 0L,
++                        "V251:BASELINE:PAYMENT_LINK:128"));
+@@
+-                        source, TASK_GENERATION, AMOUNT, AMOUNT));
++                        source, TASK_ID, TASK_GENERATION, AMOUNT, AMOUNT,
++                        "V251:BASELINE:PAYMENT_LINK:128"));
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentTaskReturnServiceTest.java
+@@
+-        when(archivedSourceRepository.lockCommonInvoice(78L)).thenReturn(true);
++        when(archivedSourceRepository.lockCommonTaskInvoice(78L)).thenReturn(
++                new ManualPaymentTaskArchivedSourceRepository.ArchivedCommonTaskSource(10L, 90_000L));
+@@
+-        order.verify(archivedSourceRepository).lockCommonInvoice(78L);
++        order.verify(archivedSourceRepository).lockCommonTaskInvoice(78L);
+@@
+     void cumulativeAmountCannotMoveBackwardsOrExceedAttribution() {
+@@
+         verify(taskLedgerService, never()).recordReturn(any());
+     }
++
++    @Test
++    void legacyLiveReturnSupportsPartialFullAndReplayFromExactBaselineOnly() {
++        CommonInvoice invoice = liveInvoice(83L, 15L, 10L, "LEGACY-83");
++        invoice.setPaymentRouteAmountKopecks(100_000L);
++        when(invoiceRepository.findByIdForUpdate(83L)).thenReturn(Optional.of(invoice));
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.COMMON_INVOICE, 83L)).thenReturn(List.of());
++        ManualPaymentTaskSourceRef source = new ManualPaymentTaskSourceRef(
++                ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE, 83L, "LEGACY-83");
++        when(taskLedgerService.lockLegacyConfirmedReturnSource(
++                ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE, 83L))
++                .thenReturn(
++                        new ManualPaymentTaskLedgerService.LockedLegacyReturnSource(
++                                source, 15L, 10L, 100_000L, 0L,
++                                "V251:BASELINE:COMMON_INVOICE:83"),
++                        new ManualPaymentTaskLedgerService.LockedLegacyReturnSource(
++                                source, 15L, 10L, 100_000L, 40_000L,
++                                "V251:BASELINE:COMMON_INVOICE:83"),
++                        new ManualPaymentTaskLedgerService.LockedLegacyReturnSource(
++                                source, 15L, 10L, 100_000L, 100_000L,
++                                "V251:BASELINE:COMMON_INVOICE:83"));
++
++        var partial = service.record(83L,
++                request(null, "V251:BASELINE:COMMON_INVOICE:83", 40_000L), "owner-user");
++        var full = service.record(83L,
++                request(null, "V251:BASELINE:COMMON_INVOICE:83", 100_000L), "owner-user");
++        var replay = service.record(83L,
++                request(null, "V251:BASELINE:COMMON_INVOICE:83", 100_000L), "owner-user");
++
++        assertEquals(40_000L, partial.appliedDeltaKopecks());
++        assertEquals(60_000L, full.appliedDeltaKopecks());
++        assertTrue(replay.replay());
++        assertEquals(null, replay.attributionId());
++        ArgumentCaptor<ManualPaymentTaskReturnCommand> commands =
++                ArgumentCaptor.forClass(ManualPaymentTaskReturnCommand.class);
++        verify(taskLedgerService, org.mockito.Mockito.times(2)).recordReturn(commands.capture());
++        assertEquals(List.of(40_000L, 60_000L), commands.getAllValues().stream()
++                .map(ManualPaymentTaskReturnCommand::amountKopecks).toList());
++        assertEquals("TASK:RETURN:COMMON_INVOICE:83:LEGACY:TOTAL:40000",
++                commands.getAllValues().getFirst().operationKey());
++    }
++
++    @Test
++    void legacyArchivedReturnUsesArchiveTaskIdentityAndRejectsAmbiguousLedger() {
++        when(invoiceRepository.findByIdForUpdate(84L)).thenReturn(Optional.empty());
++        when(archivedSourceRepository.lockCommonTaskInvoice(84L)).thenReturn(
++                new ManualPaymentTaskArchivedSourceRepository.ArchivedCommonTaskSource(16L, 75_000L));
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.COMMON_INVOICE, 84L)).thenReturn(List.of());
++        when(taskLedgerService.lockLegacyConfirmedReturnSource(
++                ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE, 84L))
++                .thenThrow(new ResponseStatusException(
++                        org.springframework.http.HttpStatus.CONFLICT,
++                        "Для исторического возврата нет однозначной привязки задания; требуется сверка"));
++
++        assertThrows(ResponseStatusException.class, () -> service.record(
++                84L, request(null, "V251:BASELINE:COMMON_INVOICE:84", 75_000L), "admin-user"));
++
++        verify(taskLedgerService, never()).recordReturn(any());
++        verify(attributionRepository, never()).findAllBySourceForUpdate(any(), any());
++    }
+*** End Patch

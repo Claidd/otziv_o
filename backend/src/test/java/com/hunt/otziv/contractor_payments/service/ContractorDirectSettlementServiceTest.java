@@ -53,7 +53,7 @@ class ContractorDirectSettlementServiceTest {
     @Mock
     private ContractorDirectSettlementRepository settlementRepository;
     @Mock
-    private ContractorPaymentProfileService profileService;
+    private com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService taskCapacityService;
     @Mock
     private ContractorPaymentAccountingService accountingService;
     @Mock
@@ -151,7 +151,7 @@ class ContractorDirectSettlementServiceTest {
         assertThatThrownBy(() -> service.createPayment(42L, 7L, future))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("будущем");
-        verify(profileService, never()).available(any(), any());
+        verify(taskCapacityService, never()).ordinaryAvailable(any(), any());
     }
 
     @Test
@@ -159,12 +159,30 @@ class ContractorDirectSettlementServiceTest {
         when(settlementRepository.findByProfileIdAndIdempotencyKeyForUpdate(7L, "too-much"))
                 .thenReturn(Optional.empty());
         when(accountingPhaseService.lockCurrent()).thenReturn(ContractorAllocationMode.SHADOW);
-        when(profileService.available(profile, ContractorAllocationMode.SHADOW)).thenReturn(999L);
+        when(taskCapacityService.ordinaryAvailable(profile, ContractorAllocationMode.SHADOW)).thenReturn(999L);
 
         assertThatThrownBy(() -> service.createPayment(42L, 7L, request(1_000L, "too-much")))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("доступный остаток");
         verify(settlementRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void liveDirectPaymentCannotConsumeCapacityPromisedToTasksIncludingShadowCarry() {
+        // Canonical LIVE availability is 20k from a 100k position after an
+        // 80k task commitment/foreign SHADOW task exposure.
+        stubNewPayment(ContractorAllocationMode.LIVE, 20_000L);
+
+        assertThatThrownBy(() -> service.createPayment(
+                42L, 7L, request(30_000L, "task-priority-reject", ContractorAllocationMode.LIVE)
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("доступный остаток");
+
+        ContractorDirectSettlementResponse response = service.createPayment(
+                42L, 7L, request(20_000L, "task-priority-exact", ContractorAllocationMode.LIVE)
+        );
+        assertThat(response.amountKopecks()).isEqualTo(20_000L);
     }
 
     @Test
@@ -180,7 +198,7 @@ class ContractorDirectSettlementServiceTest {
         var locks = org.mockito.Mockito.inOrder(accountingPhaseService, profileRepository);
         locks.verify(accountingPhaseService).lockCurrent();
         locks.verify(profileRepository).findByIdForUpdate(7L);
-        verify(profileService, never()).available(any(), any());
+        verify(taskCapacityService, never()).ordinaryAvailable(any(), any());
     }
 
     @Test
@@ -190,7 +208,7 @@ class ContractorDirectSettlementServiceTest {
         assertThatThrownBy(() -> service.createPayment(42L, 7L, excessive))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("допустимый предел");
-        verify(profileService, never()).available(any(), any());
+        verify(taskCapacityService, never()).ordinaryAvailable(any(), any());
     }
 
     @Test
@@ -203,7 +221,7 @@ class ContractorDirectSettlementServiceTest {
                 42L, 7L, request(1_000L, "same", ContractorAllocationMode.LIVE)
         );
         assertThat(replay.id()).isEqualTo(20L);
-        verify(profileService, never()).available(any(), any());
+        verify(taskCapacityService, never()).ordinaryAvailable(any(), any());
 
         assertThatThrownBy(() -> service.createPayment(
                 42L, 7L, request(999L, "same", ContractorAllocationMode.LIVE)
@@ -284,7 +302,7 @@ class ContractorDirectSettlementServiceTest {
         when(settlementRepository.findByProfileIdAndIdempotencyKeyForUpdate(eq(7L), any()))
                 .thenReturn(Optional.empty());
         when(accountingPhaseService.lockCurrent()).thenReturn(mode);
-        when(profileService.available(profile, mode)).thenReturn(available);
+        when(taskCapacityService.ordinaryAvailable(profile, mode)).thenReturn(available);
         when(settlementRepository.saveAndFlush(any())).thenAnswer(invocation -> {
             ContractorDirectSettlement value = invocation.getArgument(0);
             if (value.getId() == null) {

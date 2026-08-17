@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 const diagnostics = readFileSync(new URL('../src/app/core/mobile-auth-diagnostics.service.ts', import.meta.url), 'utf8');
 const auth = readFileSync(new URL('../src/app/core/auth.service.ts', import.meta.url), 'utf8');
 const header = readFileSync(new URL('../src/app/shared/mobile-header.component.ts', import.meta.url), 'utf8');
+const confirmService = readFileSync(new URL('../src/app/shared/mobile-confirm.service.ts', import.meta.url), 'utf8');
+const confirmHost = readFileSync(new URL('../src/app/shared/mobile-confirm-host.component.ts', import.meta.url), 'utf8');
 const home = readFileSync(new URL('../src/app/features/home.page.ts', import.meta.url), 'utf8');
 const profile = readFileSync(new URL('../src/app/features/profile.page.ts', import.meta.url), 'utf8');
 const appDiagnosticsPlugin = readFileSync(new URL('../src/app/core/app-diagnostics.plugin.ts', import.meta.url), 'utf8');
@@ -37,7 +39,7 @@ test('diagnostics upload only after authentication and never persist raw tokens'
 });
 
 test('all logout buttons report an exact source before clearing the session', () => {
-  assert.match(header, /this\.auth\.logoutFrom\('header_menu'\)/);
+  assert.match(header, /this\.auth\.logoutFrom\('header_menu',/);
   assert.match(home, /this\.auth\.logoutFrom\('home_actions'\)/);
   assert.match(profile, /this\.auth\.logoutFrom\('profile'\)/);
 
@@ -55,11 +57,25 @@ test('header-menu logout requires an explicit destructive confirmation', () => {
   assert.match(header, /confirmText: 'Выйти'/);
   assert.match(header, /cancelText: 'Остаться'/);
   assert.match(header, /danger: true/);
+  assert.match(header, /confirmDelayMs: HEADER_LOGOUT_CONFIRM_GUARD_MS/);
+  assert.match(confirmService, /result && !this\.confirmArmed\(\)/);
+  assert.match(confirmHost, /\[disabled\]="!confirm\.confirmArmed\(\)"/);
 
-  const start = header.indexOf('async logout(): Promise<void>');
+  const start = header.indexOf('async logout(event: MouseEvent): Promise<void>');
   const logout = header.slice(start, header.indexOf('\n  }', start) + 4);
-  assert.ok(logout.indexOf('await this.confirm.confirm') < logout.indexOf("await this.auth.logoutFrom('header_menu')"));
+  assert.ok(logout.indexOf('await this.confirm.confirm') < logout.indexOf("await this.auth.logoutFrom('header_menu',"));
   assert.match(logout, /if \(!confirmed\) \{\s*return;/);
+});
+
+test('header logout records tap provenance and rejects an immediate or duplicate trigger', () => {
+  assert.match(header, /HEADER_LOGOUT_MENU_GUARD_MS = 600/);
+  assert.match(header, /menuOpenDurationMs < HEADER_LOGOUT_MENU_GUARD_MS/);
+  assert.match(header, /'ui\.logout_trigger_ignored'/);
+  assert.match(header, /'ui\.logout_prompt_opened'/);
+  assert.match(header, /'ui\.logout_prompt_result'/);
+  assert.match(header, /pointerType/);
+  assert.match(header, /isTrusted/);
+  assert.match(auth, /diagnosticDetails: Record<string, MobileAuthDiagnosticValue>/);
 });
 
 test('app transitions, network changes and every auth-clearing branch are classified', () => {
@@ -87,8 +103,11 @@ test('Android exit reasons are captured, deduplicated and attached to a bounded 
   assert.match(androidDiagnostics, /REASON_LOW_MEMORY/);
   assert.match(androidDiagnostics, /REASON_CRASH_NATIVE/);
   assert.match(androidDiagnostics, /REASON_ANR/);
+  assert.match(androidDiagnostics, /isOtzivProcessStateSummary/);
+  assert.match(androidDiagnostics, /androidStateSummaryRejected/);
   assert.match(appDiagnosticsPlugin, /getPreviousExits/);
   assert.match(diagnostics, /'app\.previous_exit'/);
+  assert.match(diagnostics, /androidStateSummaryRejected/);
   assert.match(diagnostics, /acknowledgePreviousExits/);
 });
 

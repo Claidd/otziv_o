@@ -20,6 +20,15 @@ public interface ContractorRewardLedgerRepository extends JpaRepository<Contract
     """, nativeQuery = true)
     long sumActiveForCapacityUpdate(@Param("profileId") Long profileId);
 
+    /** Reporting/preview snapshot; never use this method for a write decision. */
+    @Query(value = """
+        SELECT COALESCE(SUM(entry.amount_kopecks), 0)
+        FROM contractor_reward_ledger entry
+        WHERE entry.profile_id = :profileId
+          AND entry.active = TRUE
+    """, nativeQuery = true)
+    long sumActiveForCapacitySnapshot(@Param("profileId") Long profileId);
+
     Optional<ContractorRewardLedgerEntry> findBySourceZpIdAndProfileIdAndAttributionKey(
             Long sourceZpId,
             Long profileId,

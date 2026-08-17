@@ -1,0 +1,47 @@
+*** Begin Patch
+*** Update File: backend/src/main/resources/db/migration/V1_10_254__manual_payment_task_profile_capacity.sql
+@@
+-           SUM(GREATEST(
+-               0,
+-               task.target_amount_kopecks
+-                   - GREATEST(0, COALESCE(balance.confirmed_kopecks, 0))
+-                   - GREATEST(0, COALESCE(balance.pending_kopecks, 0))
+-           ) + GREATEST(
+-               0,
+-               COALESCE(balance.unbacked_confirmed_kopecks, 0)
+-           )) AS commitment_kopecks
++           SUM(CASE
++               WHEN task.status IN ('COMPLETED', 'CANCELED')
++               THEN GREATEST(0, COALESCE(balance.unbacked_confirmed_kopecks, 0))
++               ELSE GREATEST(
++                   0,
++                   task.target_amount_kopecks
++                       - GREATEST(0, COALESCE(balance.confirmed_kopecks, 0))
++                       - GREATEST(0, COALESCE(balance.pending_kopecks, 0))
++               ) + GREATEST(
++                   0,
++                   COALESCE(balance.unbacked_confirmed_kopecks, 0)
++               )
++           END) AS commitment_kopecks
+@@
+-      AND task.status IN ('ACTIVE', 'PAUSED', 'NEEDS_ATTENTION')
++      AND (
++          task.status IN ('ACTIVE', 'PAUSED', 'NEEDS_ATTENTION')
++          OR (
++              task.status IN ('COMPLETED', 'CANCELED')
++              AND GREATEST(0, COALESCE(balance.unbacked_confirmed_kopecks, 0)) > 0
++          )
++      )
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskCapacityMigrationContractTest.java
+@@
+-    void migrationBackfillsOnlyNonterminalContractorCommitmentsWithoutDoubleCountingPending() throws Exception {
++    void migrationBackfillsTaskCommitmentAndKeepsTerminalNetUnbackedExposure() throws Exception {
+@@
+             assertThat(sql).contains("task.status IN ('ACTIVE', 'PAUSED', 'NEEDS_ATTENTION')");
+-            assertThat(sql).doesNotContain("task.status IN ('ACTIVE', 'PAUSED', 'NEEDS_ATTENTION', 'COMPLETED'")
+-                    .doesNotContain("task.status IN ('ACTIVE', 'PAUSED', 'NEEDS_ATTENTION', 'CANCELED'");
++            assertThat(sql).contains("WHEN task.status IN ('COMPLETED', 'CANCELED')")
++                    .contains("task.status IN ('COMPLETED', 'CANCELED')")
++                    .contains("COALESCE(balance.unbacked_confirmed_kopecks, 0)) > 0");
+             assertThat(sql).contains("profile.manual_task_overrun_ack_kopecks = 0");
+*** End Patch

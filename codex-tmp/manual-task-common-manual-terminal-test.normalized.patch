@@ -1,0 +1,19 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonBillingServiceTest.java
+@@
+         assertEquals(PaymentLinkStatus.CANCELED, waitingManual.getStatus());
+         assertEquals("PAID", response.summary().status());
++        verify(taskReceiptIntegrationService).release(
++                localBankDraft,
++                "Отдельный маршрут отменен после ручной оплаты общего счета"
++        );
++        verify(taskReceiptIntegrationService).release(
++                expiredManual,
++                "Отдельный маршрут отменен после ручной оплаты общего счета"
++        );
++        verify(taskReceiptIntegrationService).release(
++                waitingManual,
++                "Отдельный маршрут отменен после ручной оплаты общего счета"
++        );
+         ArgumentCaptor<ManualCardPaymentReviewNotificationService.CommonInvoiceReviewRequest> notification =
+*** End Patch

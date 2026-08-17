@@ -1,0 +1,256 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/model/ManualPaymentTask.java
+@@
+-import com.hunt.otziv.u_users.model.Manager;
++import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
++import com.hunt.otziv.u_users.model.Manager;
+@@
+ import jakarta.persistence.Table;
++import jakarta.persistence.Version;
+@@
+     @GeneratedValue(strategy = GenerationType.IDENTITY)
+     private Long id;
++
++    @Version
++    @Column(name = "row_version", nullable = false)
++    private Long rowVersion;
+@@
+     @JoinColumn(name = "payment_profile_id", nullable = false)
+     private PaymentProfile paymentProfile;
++
++    @Enumerated(EnumType.STRING)
++    @Column(name = "accounting_target_kind", nullable = false, length = 32)
++    private ManualPaymentTaskAccountingTargetKind accountingTargetKind =
++            ManualPaymentTaskAccountingTargetKind.UNRESOLVED;
++
++    @ManyToOne(fetch = FetchType.LAZY)
++    @JoinColumn(name = "accounting_target_profile_id")
++    private ContractorPaymentProfile accountingTargetProfile;
++
++    @Column(nullable = false)
++    private long generation = 1;
++
++    @Column(name = "needs_reconciliation", nullable = false)
++    private boolean needsReconciliation;
++
++    @Column(name = "target_overrun_acknowledged_at")
++    private LocalDateTime targetOverrunAcknowledgedAt;
++
++    @Column(name = "target_overrun_acknowledged_by", length = 160)
++    private String targetOverrunAcknowledgedBy;
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/model/ManualPaymentTaskLedgerEntry.java
+@@
+     @Column(name = "manual_payment_button_snapshot", length = 80)
+     private String manualPaymentButtonSnapshot;
++
++    @Column(name = "selected_recipient_key", length = 160)
++    private String selectedRecipientKey;
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/model/ManualPaymentTaskStatus.java
+@@
+     ACTIVE,
+     PAUSED,
+     COMPLETED,
++    NEEDS_ATTENTION,
+     CANCELED
+ }
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/dto/ManualPaymentTaskBalance.java
+@@
+ public record ManualPaymentTaskBalance(
+         long pendingAmountKopecks,
+-        long confirmedAmountKopecks,
+-        long allocatedAmountKopecks,
++        /** Confirmed-to-task amount net of returns and corrections. */
++        long netConfirmedAmountKopecks,
++        /** Money occupying the task target: pending + net confirmed. */
++        long occupiedAmountKopecks,
+         long redirectedAmountKopecks,
++        long releasedAmountKopecks,
++        long returnedAmountKopecks,
+         long unverifiedConfirmedAmountKopecks,
+         long pendingCount,
++        long needsReconciliationCount,
+         boolean needsReconciliation
+ ) {
+     public static ManualPaymentTaskBalance empty(boolean needsReconciliation) {
+-        return new ManualPaymentTaskBalance(0, 0, 0, 0, 0, 0, needsReconciliation);
++        return new ManualPaymentTaskBalance(0, 0, 0, 0, 0, 0, 0, 0, 0, needsReconciliation);
+     }
+ }
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/dto/CreateManualPaymentTaskRequest.java
+@@
+         String manualPaymentButtonLabel,
+         Long targetAmountKopecks,
+-        String comment
++        String comment,
++        String accountingTargetKind,
++        Long accountingTargetProfileId,
++        Boolean accountingTargetOverrunAcknowledged
+ ) {
+ }
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/dto/UpdateManualPaymentTaskRequest.java
+@@
+         Long targetAmountKopecks,
+         String comment,
+-        Boolean manualPaymentUrlReplacementConfirmed
++        Boolean manualPaymentUrlReplacementConfirmed,
++        String accountingTargetKind,
++        Long accountingTargetProfileId,
++        Boolean accountingTargetOverrunAcknowledged,
++        Long expectedGeneration
+ ) {
+@@
+                 targetAmountKopecks,
+                 comment,
+-                false
++                false,
++                null,
++                null,
++                false,
++                null
+         );
+     }
+ }
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/dto/ManualPaymentTaskResponse.java
+@@
+         LocalDateTime updatedAt,
+         LocalDateTime completedAt,
+-        boolean routable
++        boolean routable,
++        String accountingTargetKind,
++        Long accountingTargetProfileId,
++        String accountingTargetLabel,
++        boolean accountingTargetResolved,
++        long generation,
++        Long rowVersion,
++        long redirectedAmountKopecks,
++        long releasedAmountKopecks,
++        long returnedAmountKopecks,
++        long unverifiedConfirmedAmountKopecks,
++        long needsReconciliationCount,
++        boolean needsReconciliation,
++        long targetCurrentAvailableKopecks,
++        long targetProjectedOverrunKopecks,
++        LocalDateTime targetOverrunAcknowledgedAt,
++        String targetOverrunAcknowledgedBy
+ ) {
+ }
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/repository/ManualPaymentTaskRepository.java
+@@
+         JOIN FETCH manager.user user
+         JOIN FETCH task.paymentProfile profile
++        LEFT JOIN FETCH task.accountingTargetProfile targetProfile
++        LEFT JOIN FETCH targetProfile.user
+         WHERE user.id = :userId
+@@
+         JOIN FETCH manager.user user
+         JOIN FETCH task.paymentProfile profile
++        LEFT JOIN FETCH task.accountingTargetProfile targetProfile
++        LEFT JOIN FETCH targetProfile.user
+         ORDER BY task.createdAt DESC, task.id DESC
+@@
+         JOIN FETCH manager.user user
+         JOIN FETCH task.paymentProfile profile
++        LEFT JOIN FETCH task.accountingTargetProfile targetProfile
++        LEFT JOIN FETCH targetProfile.user
+         WHERE task.id = :id
+@@
+         JOIN FETCH manager.user user
+         JOIN FETCH task.paymentProfile profile
++        LEFT JOIN FETCH task.accountingTargetProfile targetProfile
++        LEFT JOIN FETCH targetProfile.user
+         WHERE manager.id = :managerId
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/repository/ContractorPaymentProfileRepository.java
+@@
+ import java.util.Collection;
++import java.util.Set;
+@@
+     List<ContractorPaymentProfile> findAllByUserId(@Param("userId") Long userId);
++
++    @Query("""
++        SELECT p
++        FROM ContractorPaymentProfile p
++        JOIN FETCH p.user
++        WHERE p.enabled = true
++        ORDER BY p.role, p.user.fio, p.id
++    """)
++    List<ContractorPaymentProfile> findAllEnabledWithUser();
++
++    @Query("""
++        SELECT p
++        FROM ContractorPaymentProfile p
++        JOIN FETCH p.user
++        WHERE p.enabled = true AND p.user.id IN :userIds
++        ORDER BY p.role, p.user.fio, p.id
++    """)
++    List<ContractorPaymentProfile> findAllEnabledByUserIds(@Param("userIds") Set<Long> userIds);
+*** Update File: backend/src/main/java/com/hunt/otziv/admin/controller/ApiCabinetController.java
+@@
+ import com.hunt.otziv.payments.dto.ManagerManualPaymentSettingsResponse;
++import com.hunt.otziv.payments.dto.ManualPaymentTaskAccountingTargetOption;
+ import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
+@@
+     @GetMapping("/manual-payment-tasks")
+@@
+     public List<ManualPaymentTaskResponse> manualPaymentTasks(Principal principal) {
+@@
+     }
++
++    @GetMapping("/manual-payment-tasks/accounting-targets")
++    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
++    public List<ManualPaymentTaskAccountingTargetOption> manualPaymentTaskAccountingTargets(
++            Principal principal,
++            @RequestParam(required = false) Long targetAmountKopecks,
++            @RequestParam(required = false) Long taskId
++    ) {
++        User user = currentUser(principal);
++        return manualPaymentTaskService.managerAccountingTargetOptions(
++                user.getId(), targetAmountKopecks, taskId);
++    }
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/controller/AdminPaymentController.java
+@@
+ import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
++import com.hunt.otziv.payments.dto.ManualPaymentTaskAccountingTargetOption;
+ import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
+@@
+     @GetMapping("/api/admin/payments/manual-tasks")
+@@
+     public List<ManualPaymentTaskResponse> manualPaymentTasks() {
+@@
+     }
++
++    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
++    @GetMapping("/api/admin/payments/manual-tasks/accounting-targets")
++    public List<ManualPaymentTaskAccountingTargetOption> manualPaymentTaskAccountingTargets(
++            @RequestParam(required = false) Long managerId,
++            @RequestParam(required = false) Long targetAmountKopecks,
++            @RequestParam(required = false) Long taskId
++    ) {
++        return manualPaymentTaskService.managementAccountingTargetOptions(
++                managerId, targetAmountKopecks, taskId);
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskServiceTest.java
+@@
+ import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
++import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
+@@
+ import com.hunt.otziv.payments.service.ManualPaymentTaskService;
++import com.hunt.otziv.payments.service.ManualPaymentTaskAccountingTargetPolicy;
++import com.hunt.otziv.payments.service.ManualPaymentTaskLedgerService;
+@@
+     private PaymentProfileService paymentProfileService;
++    @Mock
++    private ManualPaymentTaskLedgerService ledgerService;
++    @Mock
++    private ManualPaymentTaskAccountingTargetPolicy accountingTargetPolicy;
++    @Mock
++    private ContractorPaymentProfileService contractorPaymentProfileService;
+@@
+                 commonInvoiceRepository,
+                 managerRepository,
+-                paymentProfileService
++                paymentProfileService,
++                ledgerService,
++                accountingTargetPolicy,
++                contractorPaymentProfileService
+         );
+*** End Patch

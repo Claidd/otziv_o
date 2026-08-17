@@ -31,7 +31,12 @@ import { MobileConfirmService } from './mobile-confirm.service';
             <button type="button" class="secondary" (click)="confirm.close(false)">
               {{ dialog.cancelText }}
             </button>
-            <button type="button" class="primary" (click)="confirm.close(true)">
+            <button
+              type="button"
+              class="primary"
+              [disabled]="!confirm.confirmArmed()"
+              (click)="confirm.close(true)"
+            >
               {{ dialog.confirmText }}
             </button>
           </footer>
@@ -136,6 +141,10 @@ import { MobileConfirmService } from './mobile-confirm.service';
       border-color: rgba(116, 154, 207, 0.35);
       background: var(--otziv-primary);
       color: #fff;
+    }
+
+    footer .primary:disabled {
+      opacity: 0.48;
     }
 
     .confirm-sheet.danger footer .primary {

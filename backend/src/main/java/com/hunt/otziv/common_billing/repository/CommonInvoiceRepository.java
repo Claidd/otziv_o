@@ -2,6 +2,8 @@ package com.hunt.otziv.common_billing.repository;
 
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
+import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
+import com.hunt.otziv.payments.repository.ManualPaymentLegacyMonthlySourceProjection;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.u_users.model.Manager;
 import jakarta.persistence.LockModeType;
@@ -169,6 +171,8 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         WHERE invoice.account.id = :accountId
           AND invoice.status IN :statuses
           AND invoice.invoicePurpose = 'STANDARD'
+          AND (invoice.paymentRouteSelectedAt IS NULL
+               OR COALESCE(TRIM(invoice.paymentRouteType), '') = '')
         ORDER BY invoice.id DESC
     """)
     List<CommonInvoice> findCurrentForAccount(
@@ -332,11 +336,41 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         FROM CommonInvoice invoice
         WHERE invoice.status IN :statuses
           AND invoice.invoicePurpose = 'STANDARD'
+          AND (invoice.paymentRouteSelectedAt IS NULL
+               OR COALESCE(TRIM(invoice.paymentRouteType), '') = '')
         GROUP BY invoice.account.id
         HAVING COUNT(invoice.id) > 1
         ORDER BY invoice.account.id ASC
     """)
     List<Long> findAccountIdsWithDuplicateCurrentInvoices(
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses
+    );
+
+    @Query("""
+        SELECT DISTINCT invoice.id
+        FROM CommonInvoice invoice
+        WHERE invoice.status IN :statuses
+          AND invoice.invoicePurpose = 'STANDARD'
+          AND invoice.paymentRouteSelectedAt IS NOT NULL
+          AND COALESCE(TRIM(invoice.paymentRouteType), '') <> ''
+          AND (
+            invoice.account.id = :targetAccountId
+            OR EXISTS (
+                SELECT item.id
+                FROM CommonInvoiceOrder item
+                JOIN item.order linkedOrder
+                WHERE item.invoice = invoice
+                  AND item.activeMembership = TRUE
+                  AND item.paid = FALSE
+                  AND item.unpaid = FALSE
+                  AND linkedOrder.company.id = :companyId
+            )
+          )
+        ORDER BY invoice.id ASC
+    """)
+    List<Long> findFrozenCompositionInvoiceIdsForCompanyReconcile(
+            @Param("companyId") Long companyId,
+            @Param("targetAccountId") Long targetAccountId,
             @Param("statuses") Collection<CommonInvoiceStatus> statuses
     );
 
@@ -547,5 +581,67 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("to") LocalDateTime to,
             @Param("activeStatuses") Collection<CommonInvoiceStatus> activeStatuses,
             @Param("paidStatus") CommonInvoiceStatus paidStatus
+    );
+
+    @Query(value = """
+        SELECT receipt.sourceId AS sourceId,
+               SUM(receipt.amountKopecks) AS amountKopecks,
+               MAX(receipt.effectiveAt) AS effectiveAt
+        FROM (
+            SELECT invoice.invoice_id AS sourceId,
+                   item.amount_kopecks AS amountKopecks,
+                   item.paid_at AS effectiveAt
+            FROM common_invoice_orders item
+            JOIN common_invoices invoice ON invoice.invoice_id = item.invoice_id
+            WHERE item.paid = 1
+              AND item.paid_at >= :from
+              AND item.paid_at < :to
+              AND item.source_payment_link_id IS NULL
+              AND item.actual_payment_evidence_reference IS NULL
+              AND (
+                  UPPER(COALESCE(item.payment_method, '')) IN ('MANUAL', 'MANUAL_LEGACY')
+                  OR COALESCE(item.manual_paid_by, '') <> ''
+                  OR COALESCE(item.manual_payment_comment, '') <> ''
+                  OR COALESCE(item.manual_payment_receipt_url, '') <> ''
+                  OR (
+                      COALESCE(item.payment_method, '') = ''
+                      AND UPPER(COALESCE(invoice.payment_method, '')) = 'MANUAL'
+                  )
+              )
+            UNION ALL
+            SELECT archived_invoice.invoice_id AS sourceId,
+                   archived_item.amount_kopecks AS amountKopecks,
+                   archived_item.paid_at AS effectiveAt
+            FROM archive_common_invoice_orders archived_item
+            JOIN archive_common_invoices archived_invoice
+              ON archived_invoice.invoice_id = archived_item.invoice_id
+            WHERE archived_invoice.restored_at IS NULL
+              AND archived_item.paid = 1
+              AND archived_item.paid_at >= :from
+              AND archived_item.paid_at < :to
+              AND archived_item.source_payment_link_id IS NULL
+              AND archived_item.actual_payment_evidence_reference IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM common_invoice_orders live_item
+                  WHERE live_item.invoice_order_id = archived_item.invoice_order_id
+              )
+              AND (
+                  UPPER(COALESCE(archived_item.payment_method, '')) IN ('MANUAL', 'MANUAL_LEGACY')
+                  OR COALESCE(archived_item.manual_paid_by, '') <> ''
+                  OR COALESCE(archived_item.manual_payment_comment, '') <> ''
+                  OR COALESCE(archived_item.manual_payment_receipt_url, '') <> ''
+                  OR (
+                      COALESCE(archived_item.payment_method, '') = ''
+                      AND UPPER(COALESCE(archived_invoice.payment_method, '')) = 'MANUAL'
+                  )
+              )
+        ) receipt
+        GROUP BY receipt.sourceId
+        ORDER BY MAX(receipt.effectiveAt), receipt.sourceId
+    """, nativeQuery = true)
+    List<ManualPaymentLegacyMonthlySourceProjection> findLegacyManualConfirmedForMonthlyRecipientSummary(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
     );
 }

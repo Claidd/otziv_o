@@ -84,6 +84,7 @@ import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
+import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
 import com.hunt.otziv.payments.service.PaymentUrlPolicy;
 import com.hunt.otziv.payments.service.TbankClient;
@@ -467,6 +468,7 @@ public class CommonBillingService {
     private final ContractorPaymentShadowService contractorPaymentShadowService;
     private final CommonManualPaymentAttributionCoordinator commonManualPaymentAttributionCoordinator;
     private final ContractorActualPaymentAttributionFlowPolicy actualPaymentAttributionFlowPolicy;
+    private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
     private final ContractorCompletionRewardService contractorCompletionRewardService;
     private final TbankRuntimeSettingsService runtimeSettingsService;
     private final PaymentProfileService paymentProfileService;
@@ -1106,6 +1108,14 @@ public class CommonBillingService {
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         refreshInvoiceAmounts(invoice, items);
         return invoiceDetails(invoice, items);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasFrozenManualTaskRoute(Long invoiceId) {
+        CommonInvoice invoice = invoiceRepository.findByIdWithAccount(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        return isFrozenManualTaskSource(invoice);
     }
 
     private CommonInvoiceDetailsResponse invoiceAfterOrderPrelude(Long invoiceId) {
@@ -1838,7 +1848,8 @@ public class CommonBillingService {
                 invoice.getId(),
                 DELETION_DETACH_BLOCKING_PAYMENT_REF_STATUSES
         );
-        if (itemHasPayment || invoiceHasInitOrBinding || !invoiceCanChange || activeRefs) {
+        if (itemHasPayment || invoiceHasInitOrBinding || !invoiceCanChange || activeRefs
+                || hasFrozenCommonPaymentRoute(invoice)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Заказ связан с общим счетом, который уже содержит платежные данные; нужна ручная проверка"
@@ -1923,6 +1934,13 @@ public class CommonBillingService {
                 principal
         );
         archiveAndClearCurrentPaymentRef(invoice, "manual_paid_actual_recipient");
+        markTypedManualPaymentItems(
+                items,
+                CommonManualPaymentAttributionCoordinator.evidenceReference(
+                        invoice.getId(),
+                        request.idempotencyKey()
+                )
+        );
         closePaidInvoiceWithFinalAttribution(invoice, items, () ->
                 commonManualPaymentAttributionCoordinator.recordFinalReceipt(
                         invoice,
@@ -2412,6 +2430,13 @@ public class CommonBillingService {
                 new ManualPaymentConfirmationRequest(reason, ""),
                 principal
         );
+        markTypedManualPaymentItems(
+                items,
+                CommonManualPaymentAttributionCoordinator.evidenceReference(
+                        invoice.getId(),
+                        request.idempotencyKey()
+                )
+        );
         closePaidInvoiceWithFinalAttribution(invoice, items, () ->
                 commonManualPaymentAttributionCoordinator.recordFinalReceipt(
                         invoice,
@@ -2680,6 +2705,7 @@ public class CommonBillingService {
             );
         }
         ensureBadReviewTasksForItems(changedItems);
+        taskReceiptIntegrationService.release(invoice, "Общий счет переведен в статус Не оплачено");
         changedItems.forEach(item -> item.setUnpaid(true));
         archiveAndClearCurrentPaymentRef(invoice, "manual_unpaid");
         invoice.setStatus(CommonInvoiceStatus.UNPAID);
@@ -2867,6 +2893,9 @@ public class CommonBillingService {
                 || !normalize(invoice.getTbankOrderId()).isBlank()
                 || !normalize(invoice.getTbankPaymentId()).isBlank()) {
             invoiceBlockers.add("по счету уже начат платежный процесс");
+        }
+        if (hasFrozenCommonPaymentRoute(invoice)) {
+            invoiceBlockers.add("платёжный маршрут уже выдан клиенту");
         }
         if (items.isEmpty()) {
             invoiceBlockers.add("в общем счете нет заказов");
@@ -4499,6 +4528,10 @@ public class CommonBillingService {
         LocalDateTime now = LocalDateTime.now();
         for (PaymentLink link : closable) {
             Long orderId = link.getOrder() == null ? null : link.getOrder().getId();
+            taskReceiptIntegrationService.release(
+                    link,
+                    "Отдельный маршрут отменен при создании общего счета"
+            );
             link.setStatus(PaymentLinkStatus.CANCELED);
             link.setExpiresAt(link.getExpiresAt() == null || link.getExpiresAt().isAfter(now)
                     ? now
@@ -4549,6 +4582,10 @@ public class CommonBillingService {
         LocalDateTime now = LocalDateTime.now();
         for (PaymentLink link : closable) {
             PaymentLinkStatus previousStatus = link.getStatus();
+            taskReceiptIntegrationService.release(
+                    link,
+                    "Отдельный маршрут отменен после ручной оплаты общего счета"
+            );
             link.setStatus(PaymentLinkStatus.CANCELED);
             link.setExpiresAt(link.getExpiresAt() == null || link.getExpiresAt().isAfter(now)
                     ? now
@@ -4864,12 +4901,19 @@ public class CommonBillingService {
     }
 
     private void ensureGenericConfirmationDoesNotUseContractorSource(CommonInvoice invoice) {
-        if (isFrozenLiveContractorSource(invoice)) {
+        if (isFrozenLiveContractorSource(invoice)
+                || isFrozenManualTaskSource(invoice)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Поступление по реквизитам специалиста или менеджера подтверждается только сверкой конкретного счета"
+                    "Поступление по зафиксированному получателю подтверждается только с указанием фактического получателя"
             );
         }
+    }
+
+    private boolean isFrozenManualTaskSource(CommonInvoice invoice) {
+        return invoice != null
+                && hasFrozenCommonPaymentRoute(invoice)
+                && invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK;
     }
 
     private boolean isFrozenLiveContractorSource(CommonInvoice invoice) {
@@ -5329,6 +5373,15 @@ public class CommonBillingService {
                         ATTACHABLE_INVOICE_STATUSES
                 )
         );
+        Set<Long> expectedFrozenInvoiceIds = new TreeSet<>(
+                invoiceRepository.findFrozenCompositionInvoiceIdsForCompanyReconcile(
+                        companyId,
+                        accountId,
+                        ATTACHABLE_INVOICE_STATUSES
+                )
+        );
+        Map<Long, InvoiceOrderBinding> expectedFrozenBindings =
+                invoiceBindings(expectedFrozenInvoiceIds);
         Set<Long> expectedBackfillOrderIds = new TreeSet<>(
                 orderRepository.findCommonBillingBackfillOrderIds(companyId, BACKFILL_STATUSES)
         );
@@ -5338,6 +5391,7 @@ public class CommonBillingService {
                 .map(InvoiceOrderBinding::invoiceId)
                 .filter(Objects::nonNull)
                 .forEach(invoiceIdsToLock::add);
+        invoiceIdsToLock.addAll(expectedFrozenInvoiceIds);
         Map<Long, CommonInvoice> invoiceSnapshots = loadInvoiceSnapshots(invoiceIdsToLock);
 
         Set<Long> accountIdsToLock = new TreeSet<>();
@@ -5346,16 +5400,23 @@ public class CommonBillingService {
                 .map(InvoiceOrderBinding::accountId)
                 .filter(Objects::nonNull)
                 .forEach(accountIdsToLock::add);
+        invoiceSnapshots.values().stream()
+                .filter(Objects::nonNull)
+                .map(CommonInvoice::getAccount)
+                .filter(Objects::nonNull)
+                .map(CommonBillingAccount::getId)
+                .filter(Objects::nonNull)
+                .forEach(accountIdsToLock::add);
         Map<Long, CommonBillingAccount> accountSnapshots = loadAccountSnapshots(accountIdsToLock);
         accountSnapshots.put(accountId, targetAccountSnapshot);
 
         Set<Long> orderIdsToLock = new TreeSet<>(expectedTargetBindings.keySet());
         orderIdsToLock.addAll(expectedMovableBindings.keySet());
+        orderIdsToLock.addAll(expectedFrozenBindings.keySet());
         orderIdsToLock.addAll(expectedBackfillOrderIds);
         Map<Long, Order> lockedOrders = lockOrderAggregatesWithEntities(orderIdsToLock);
         Map<Long, List<PaymentLink>> lockedBackfillPaymentLinks =
                 lockPaymentLinksForOrders(expectedBackfillOrderIds);
-        closeProvablyUnstartedStandaloneRoutesOrThrow(lockedBackfillPaymentLinks, null);
         Map<Long, CommonBillingAccount> lockedAccounts = lockAccountsInCanonicalOrder(accountSnapshots);
         Map<Long, CommonInvoice> lockedInvoices = lockInvoicesInCanonicalOrder(invoiceSnapshots);
 
@@ -5364,6 +5425,31 @@ public class CommonBillingService {
             throw invoiceMembershipChanged("связь компании с целевым плательщиком изменилась");
         }
         ensureCompanyNotEnabledInAnotherAccount(accountId, companyId);
+        CommonBillingAccountCompany reconcileLink = lockedCompanyReconcileLink(job);
+        Set<Long> lockedFrozenInvoiceIds = lockedInvoices.values().stream()
+                .filter(this::hasFrozenCommonPaymentRoute)
+                .map(CommonInvoice::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(TreeSet::new));
+        Set<Long> currentFrozenInvoiceIds = new TreeSet<>(
+                invoiceRepository.findFrozenCompositionInvoiceIdsForCompanyReconcile(
+                        companyId,
+                        accountId,
+                        ATTACHABLE_INVOICE_STATUSES
+                )
+        );
+        if (!lockedFrozenInvoiceIds.isEmpty() || !currentFrozenInvoiceIds.isEmpty()) {
+            deferCompanyReconcileForFrozenRoute(
+                    reconcileLink,
+                    job,
+                    lockedFrozenInvoiceIds.isEmpty()
+                            ? currentFrozenInvoiceIds : lockedFrozenInvoiceIds
+            );
+            return;
+        }
+        if (!currentFrozenInvoiceIds.equals(expectedFrozenInvoiceIds)) {
+            throw invoiceMembershipChanged("набор зафиксированных платежных маршрутов изменился");
+        }
 
         List<CommonInvoice> currentTargetSnapshots = currentInvoiceSnapshots(accountId);
         Set<Long> currentTargetInvoiceIds = invoiceIds(currentTargetSnapshots);
@@ -5388,7 +5474,7 @@ public class CommonBillingService {
         if (!currentBackfillOrderIds.equals(expectedBackfillOrderIds)) {
             throw invoiceMembershipChanged("состав непривязанных заказов компании изменился");
         }
-        CommonBillingAccountCompany reconcileLink = lockedCompanyReconcileLink(job);
+        closeProvablyUnstartedStandaloneRoutesOrThrow(lockedBackfillPaymentLinks, null);
         if (expectedTargetInvoiceIds.isEmpty()
                 && movableItems.isEmpty()
                 && expectedBackfillOrderIds.isEmpty()) {
@@ -5512,6 +5598,29 @@ public class CommonBillingService {
         link.setReconcileLeaseToken(null);
         link.setReconcileLeaseUntil(null);
         link.setReconcileLastError(null);
+    }
+
+    private void deferCompanyReconcileForFrozenRoute(
+            CommonBillingAccountCompany link,
+            PreparedCompanyReconcile job,
+            Collection<Long> frozenInvoiceIds
+    ) {
+        if (link == null) {
+            throw invoiceMembershipChanged("задача сверки компании исчезла");
+        }
+        link.setReconcilePending(true);
+        link.setReconcileAttempts(Math.max(0, link.getReconcileAttempts() - 1));
+        link.setReconcileNextAttemptAt(LocalDateTime.now().plus(companyReconcileBackoff(
+                Math.max(1, job == null ? 1 : job.attempt())
+        )));
+        link.setReconcileLeaseToken(null);
+        link.setReconcileLeaseUntil(null);
+        link.setReconcileLastError(limit(
+                "company_reconcile_deferred_frozen_route: invoices="
+                        + new TreeSet<>(frozenInvoiceIds == null ? List.of() : frozenInvoiceIds),
+                512
+        ));
+        accountCompanyRepository.save(link);
     }
 
     private CommonBillingAccountCompany lockedCompanyReconcileLink(PreparedCompanyReconcile job) {
@@ -5864,6 +5973,12 @@ public class CommonBillingService {
         lockOrderAggregatesWithEntities(expectedBindings.keySet());
         Map<Long, CommonBillingAccount> lockedAccounts = lockAccountsInCanonicalOrder(accountSnapshots);
         Map<Long, CommonInvoice> lockedInvoices = lockInvoicesInCanonicalOrder(invoiceSnapshots);
+        if (lockedInvoices.values().stream().anyMatch(this::hasFrozenCommonPaymentRoute)) {
+            // A route can be selected after discovery but before the invoice
+            // locks. Duplicate normalization is best-effort: skip the entire
+            // batch before its first item/invoice write.
+            return false;
+        }
 
         Set<Long> currentAllInvoiceIds = new TreeSet<>();
         for (Map.Entry<Long, Set<Long>> entry : expectedInvoiceIdsByAccount.entrySet()) {
@@ -5897,6 +6012,7 @@ public class CommonBillingService {
                 .filter(invoice -> invoice.getAccount() != null && invoice.getAccount().getId() != null)
                 .filter(invoice -> ATTACHABLE_INVOICE_STATUSES.contains(invoice.getStatus()))
                 .filter(this::isStandardInvoice)
+                .filter(invoice -> !hasFrozenCommonPaymentRoute(invoice))
                 .collect(Collectors.groupingBy(invoice -> invoice.getAccount().getId(), Collectors.counting()));
         return countsByAccount.values().stream().anyMatch(count -> count > 1);
     }
@@ -5905,6 +6021,7 @@ public class CommonBillingService {
         if (invoices == null || invoices.isEmpty()) {
             return createInvoice(account);
         }
+        invoices.forEach(this::ensureCommonPaymentRouteAllowsCompositionChange);
         CommonInvoice target = invoices.stream()
                 .min(Comparator.comparing(invoice -> invoice.getId() == null ? Long.MAX_VALUE : invoice.getId()))
                 .orElseGet(() -> createInvoice(account));
@@ -6834,6 +6951,32 @@ public class CommonBillingService {
 
     private void closePaidInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items, Set<Long> alreadyClosedOrderIds) {
         closePaidInvoice(invoice, items, alreadyClosedOrderIds, null);
+    }
+
+    private void markTypedManualPaymentItems(
+            List<CommonInvoiceOrder> items,
+            String evidenceReference
+    ) {
+        String expected = normalize(evidenceReference);
+        if (expected.isBlank() || expected.length() > 160) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Не удалось зафиксировать подтверждение фактического поступления"
+            );
+        }
+        for (CommonInvoiceOrder item : items) {
+            if (item == null || item.isPaid()) {
+                continue;
+            }
+            String recorded = normalize(item.getActualPaymentEvidenceReference());
+            if (!recorded.isBlank() && !recorded.equals(expected)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Позиция общего счета уже связана с другим подтверждением поступления"
+                );
+            }
+            item.setActualPaymentEvidenceReference(expected);
+        }
     }
 
     private void closePaidInvoiceWithFinalAttribution(
@@ -8416,8 +8559,14 @@ public class CommonBillingService {
 
         PaymentRouteSelection route;
         ContractorPaymentAllocation liveAllocation = null;
+        Optional<PaymentRouteSelection> taskRoute = hasCurrentCommonPaymentRoute(invoice)
+                ? Optional.empty()
+                : paymentLinkService().selectCommonInvoiceTaskRoute(
+                        invoice, routeManager, remainingKopecks);
         if (hasCurrentCommonPaymentRoute(invoice)) {
             route = legacyTbankRoute(invoice, remainingKopecks);
+        } else if (taskRoute.isPresent()) {
+            route = taskRoute.get();
         } else if (contractorPaymentLiveRoutingService.enabledForNewRoutes()
                 && invoice.isShadowRouteContractorEligible()) {
             liveAllocation = contractorPaymentLiveRoutingService.reserveForCommonInvoice(
@@ -8736,6 +8885,8 @@ public class CommonBillingService {
         invoice.setPaymentRouteTerminalKey(limit(route.paymentProfileTerminalKey(), 64));
         invoice.setPaymentRouteManualSource(enumValue(ManualPaymentSource.class, route.manualSource()));
         invoice.setPaymentRouteManualTaskId(route.manualTaskId());
+        invoice.setPaymentRouteManualTaskSourceGeneration(route.manualTaskSourceGeneration());
+        invoice.setPaymentRouteManualTaskGeneration(route.manualTaskGeneration());
         invoice.setPaymentRouteManualType(enumValue(ManualPaymentType.class, route.manualPaymentType()));
         invoice.setPaymentRouteManualPhone(limit(route.manualPhone(), 32));
         invoice.setPaymentRouteManualRecipient(limit(route.manualRecipientName(), 160));

@@ -1,0 +1,200 @@
+diff --git a/frontend/src/app/core/payments.api.ts b/frontend/src/app/core/payments.api.ts
+--- a/frontend/src/app/core/payments.api.ts
++++ b/frontend/src/app/core/payments.api.ts
+@@ -262,6 +262,24 @@
+ export type ManualPaymentSource = 'PROFILE_MONTHLY_LIMIT' | 'MANUAL_TASK' | 'CONTRACTOR_PAYMENT_PROFILE';
+ export type ManualPaymentType = 'MOBILE_BANK' | 'EXTERNAL_LINK';
+ export type ManualPaymentTaskStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELED';
++export type ManualPaymentTaskAccountingTargetKind =
++  | 'UNRESOLVED'
++  | 'EXTERNAL_TASK'
++  | 'OWNER'
++  | 'SPECIALIST'
++  | 'MANAGER';
++
++export interface ManualPaymentTaskAccountingTargetOption {
++  key: string;
++  kind: ManualPaymentTaskAccountingTargetKind;
++  profileId?: number | null;
++  userId?: number | null;
++  role?: 'SPECIALIST' | 'MANAGER' | null;
++  label: string;
++  enabled: boolean;
++  currentAvailableKopecks?: number | null;
++  projectedOverrunKopecks?: number | null;
++  overrunAcknowledgementRequired: boolean;
++}
+@@ -289,6 +307,17 @@
+   completedAt?: string | null;
+   routable: boolean;
++  accountingTargetKind?: ManualPaymentTaskAccountingTargetKind | null;
++  accountingTargetProfileId?: number | null;
++  accountingTargetLabel?: string | null;
++  accountingTargetResolved?: boolean;
++  generation?: number;
++  rowVersion?: number | null;
++  targetCurrentAvailableKopecks?: number | null;
++  targetProjectedOverrunKopecks?: number | null;
++  accountingTargetOverrunAcknowledged?: boolean;
++  accountingTargetOverrunAcknowledgedAt?: string | null;
++  accountingTargetOverrunAcknowledgedBy?: string | null;
+ }
+@@ -325,6 +354,9 @@
+   targetAmountKopecks: number;
+   comment?: string | null;
++  accountingTargetKind: ManualPaymentTaskAccountingTargetKind;
++  accountingTargetProfileId?: number | null;
++  accountingTargetOverrunAcknowledged: boolean;
+ }
+@@ -336,6 +368,10 @@
+   comment?: string | null;
+   manualPaymentUrlReplacementConfirmed?: boolean;
++  accountingTargetKind: ManualPaymentTaskAccountingTargetKind;
++  accountingTargetProfileId?: number | null;
++  accountingTargetOverrunAcknowledged: boolean;
++  expectedGeneration: number | null;
+ }
+@@ -644,6 +680,25 @@
+   getAdminManualPaymentTasks(): Observable<ManualPaymentTaskResponse[]> {
+@@
+   }
++
++  getAdminManualPaymentTaskAccountingTargets(
++    managerId: number,
++    targetAmountKopecks: number,
++    taskId?: number | null
++  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
++    let params = new HttpParams()
++      .set('managerId', managerId)
++      .set('targetAmountKopecks', targetAmountKopecks);
++    if (taskId != null) {
++      params = params.set('taskId', taskId);
++    }
++    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
++      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-tasks/accounting-targets`,
++      { params }
++    );
++  }
+diff --git a/frontend/src/app/core/cabinet.api.ts b/frontend/src/app/core/cabinet.api.ts
+--- a/frontend/src/app/core/cabinet.api.ts
++++ b/frontend/src/app/core/cabinet.api.ts
+@@ -8,6 +8,7 @@
+   CreateManualPaymentTaskRequest,
++  ManualPaymentTaskAccountingTargetOption,
+   ManualPaymentTaskResponse,
+@@ -16,6 +17,7 @@
+   CreateManualPaymentTaskRequest,
++  ManualPaymentTaskAccountingTargetOption,
+   ManualPaymentTaskResponse,
+@@ -454,6 +456,22 @@
+   }
++
++  getManagerManualPaymentTaskAccountingTargets(
++    targetAmountKopecks: number,
++    taskId?: number | null
++  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
++    let params = new HttpParams().set('targetAmountKopecks', targetAmountKopecks);
++    if (taskId != null) {
++      params = params.set('taskId', taskId);
++    }
++    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
++      `${appEnvironment.apiBaseUrl}/api/cabinet/manual-payment-tasks/accounting-targets`,
++      { params }
++    );
++  }
+ 
+   createManagerManualPaymentTask(
+diff --git a/mobile/src/app/core/api.service.ts b/mobile/src/app/core/api.service.ts
+--- a/mobile/src/app/core/api.service.ts
++++ b/mobile/src/app/core/api.service.ts
+@@ -32,6 +32,24 @@
+ export type ManualPaymentType = 'MOBILE_BANK' | 'EXTERNAL_LINK';
+ export type ManualPaymentTaskStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELED';
++export type ManualPaymentTaskAccountingTargetKind =
++  | 'UNRESOLVED'
++  | 'EXTERNAL_TASK'
++  | 'OWNER'
++  | 'SPECIALIST'
++  | 'MANAGER';
++
++export interface ManualPaymentTaskAccountingTargetOption {
++  key: string;
++  kind: ManualPaymentTaskAccountingTargetKind;
++  profileId?: number | null;
++  userId?: number | null;
++  role?: 'SPECIALIST' | 'MANAGER' | null;
++  label: string;
++  enabled: boolean;
++  currentAvailableKopecks?: number | null;
++  projectedOverrunKopecks?: number | null;
++  overrunAcknowledgementRequired: boolean;
++}
+@@ -202,6 +220,17 @@
+   completedAt?: string | null;
+   routable: boolean;
++  accountingTargetKind?: ManualPaymentTaskAccountingTargetKind | null;
++  accountingTargetProfileId?: number | null;
++  accountingTargetLabel?: string | null;
++  accountingTargetResolved?: boolean;
++  generation?: number;
++  rowVersion?: number | null;
++  targetCurrentAvailableKopecks?: number | null;
++  targetProjectedOverrunKopecks?: number | null;
++  accountingTargetOverrunAcknowledged?: boolean;
++  accountingTargetOverrunAcknowledgedAt?: string | null;
++  accountingTargetOverrunAcknowledgedBy?: string | null;
+ }
+@@ -238,6 +267,9 @@
+   targetAmountKopecks: number;
+   comment?: string | null;
++  accountingTargetKind: ManualPaymentTaskAccountingTargetKind;
++  accountingTargetProfileId?: number | null;
++  accountingTargetOverrunAcknowledged: boolean;
+ }
+@@ -249,6 +281,10 @@
+   comment?: string | null;
+   manualPaymentUrlReplacementConfirmed?: boolean;
++  accountingTargetKind: ManualPaymentTaskAccountingTargetKind;
++  accountingTargetProfileId?: number | null;
++  accountingTargetOverrunAcknowledged: boolean;
++  expectedGeneration: number | null;
+ }
+@@ -3276,6 +3312,22 @@
+   }
++
++  getManagerManualPaymentTaskAccountingTargets(
++    targetAmountKopecks: number,
++    taskId?: number | null
++  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
++    let params = new HttpParams().set('targetAmountKopecks', targetAmountKopecks);
++    if (taskId != null) {
++      params = params.set('taskId', taskId);
++    }
++    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
++      this.apiUrl('/api/cabinet/manual-payment-tasks/accounting-targets'),
++      { params }
++    );
++  }
+ 
+   createManagerManualPaymentTask(
+@@ -4933,6 +4985,25 @@
+   getAdminManualPaymentTasks(): Observable<ManualPaymentTaskResponse[]> {
+@@
+   }
++
++  getAdminManualPaymentTaskAccountingTargets(
++    managerId: number,
++    targetAmountKopecks: number,
++    taskId?: number | null
++  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
++    let params = new HttpParams()
++      .set('managerId', managerId)
++      .set('targetAmountKopecks', targetAmountKopecks);
++    if (taskId != null) {
++      params = params.set('taskId', taskId);
++    }
++    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
++      this.apiUrl('/api/admin/payments/manual-tasks/accounting-targets'),
++      { params }
++    );
++  }

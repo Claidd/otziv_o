@@ -1,0 +1,66 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/service/CommonManualPaymentTaskReturnService.java
+@@
+-        List<ContractorActualPaymentAttribution> rows = attributionRepository
+-                .findAllBySourceForUpdate(ContractorActualPaymentSourceKind.COMMON_INVOICE, invoiceId);
+-        if (rows.size() != 1) {
++        List<ContractorActualPaymentAttribution> discoveredRows = attributionRepository
++                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                        ContractorActualPaymentSourceKind.COMMON_INVOICE, invoiceId);
++        if (discoveredRows.size() != 1) {
+             // Even an explicitly supplied row id must not reinterpret a split
+             // receipt. A recipient-level reversal needs its own evidence/API.
+-            throw ManualPaymentTaskRouteErrors.stale();
++            throw conflict("Источник содержит неоднозначную разбивку; требуется ручная сверка");
+         }
+-        ContractorActualPaymentAttribution row = rows.getFirst();
+-        requireExactAttribution(invoiceId, request, evidenceReference, row);
++        ContractorActualPaymentAttribution discovered = discoveredRows.getFirst();
++        requireExactAttribution(invoiceId, request, evidenceReference, discovered);
+ 
+         LockedSource locked = live == null
+-                ? archivedSource(row)
+-                : liveSource(live, row);
++                ? archivedSource(discovered)
++                : liveSource(live, discovered);
++
++        // Preserve the financial lock order used by confirmation:
++        // source -> task/ledger -> immutable attribution. Discovery above is
++        // non-locking and is fully revalidated after the task lock is held.
++        List<ContractorActualPaymentAttribution> lockedRows = attributionRepository
++                .findAllBySourceForUpdate(ContractorActualPaymentSourceKind.COMMON_INVOICE, invoiceId);
++        if (lockedRows.size() != 1) {
++            throw conflict("Источник изменил разбивку; требуется ручная сверка");
++        }
++        ContractorActualPaymentAttribution row = lockedRows.getFirst();
++        requireExactAttribution(invoiceId, request, evidenceReference, row);
++        requireSameImmutableAttribution(discovered, row);
+@@
+     private void requireExactAttribution(
+@@
+         }
+     }
++
++    private void requireSameImmutableAttribution(
++            ContractorActualPaymentAttribution discovered,
++            ContractorActualPaymentAttribution locked
++    ) {
++        if (discovered == null || locked == null
++                || !Objects.equals(discovered.getId(), locked.getId())
++                || discovered.getSourceKind() != locked.getSourceKind()
++                || !Objects.equals(discovered.getSourceId(), locked.getSourceId())
++                || !Objects.equals(normalize(discovered.getEvidenceReference()),
++                        normalize(locked.getEvidenceReference()))
++                || discovered.getActualCashDestinationKind()
++                        != locked.getActualCashDestinationKind()
++                || !Objects.equals(discovered.getActualManualPaymentTaskId(),
++                        locked.getActualManualPaymentTaskId())
++                || !Objects.equals(discovered.getActualManualPaymentTaskGeneration(),
++                        locked.getActualManualPaymentTaskGeneration())
++                || discovered.getActualManualPaymentTaskTargetKind()
++                        != locked.getActualManualPaymentTaskTargetKind()
++                || discovered.getAmountKopecks() != locked.getAmountKopecks()) {
++            throw conflict("Атрибуция источника изменилась; требуется ручная сверка");
++        }
++    }
+*** End Patch

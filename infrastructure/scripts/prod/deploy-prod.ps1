@@ -592,6 +592,15 @@ if ($PreparedDeploySnapshot) {
     }
 } elseif (-not $AllowDirtyWorktree -and $dirtyDeployInputs.Count -gt 0) {
     Write-Host "Local deployment changes detected; creating an isolated automatic snapshot."
+    $snapshotMobileRelease = if ($SkipMobileApkUpload) {
+        $null
+    } else {
+        Get-MobileReleaseCandidate -RepoRoot $repoRoot -RequestedPath $MobileApkPath
+    }
+    if ($null -ne $snapshotMobileRelease) {
+        Write-Host "Pinned mobile APK for snapshot deployment: $($snapshotMobileRelease.File.FullName) (version $($snapshotMobileRelease.VersionName), code $($snapshotMobileRelease.VersionCode))"
+    }
+
     $snapshot = New-OtzivDeploySnapshot -Repository $repoRoot -InputPaths $deployInputPaths
     Write-Host "Deploy snapshot: $($snapshot.Commit)"
     Write-Host "Recovery ref: $($snapshot.Ref)"
@@ -641,12 +650,8 @@ if ($PreparedDeploySnapshot) {
         $forwardParameters['Tag'] = $Tag
         $forwardParameters['EnvFile'] = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot -AllowMissing:$SkipEnvUpload
 
-        if (-not [string]::IsNullOrWhiteSpace($MobileApkPath) -and
-            -not [IO.Path]::IsPathRooted($MobileApkPath)) {
-            $sourceMobileApk = Join-Path $repoRoot $MobileApkPath
-            if (Test-Path -LiteralPath $sourceMobileApk -PathType Leaf) {
-                $forwardParameters['MobileApkPath'] = (Resolve-Path -LiteralPath $sourceMobileApk).Path
-            }
+        if ($null -ne $snapshotMobileRelease) {
+            $forwardParameters['MobileApkPath'] = $snapshotMobileRelease.File.FullName
         }
 
         $preparedDeployScript = Join-Path $snapshotWorktree 'infrastructure\scripts\prod\deploy-prod.ps1'
@@ -867,6 +872,14 @@ incoming_code=$mobileCodeForCheck
 incoming_sha=$mobileShaForCheck
 metadata="`$remote_path/data/mobile-releases/release.json"
 if [ -f "`$metadata" ]; then
+  # The backend creates release.json through a private temporary file. If an
+  # admin-API publication left it unreadable to the SSH deploy user, include
+  # the APK in the bundle and let the locked publication step repair ownership
+  # before performing the authoritative version/SHA checks.
+  if [ ! -r "`$metadata" ]; then
+    printf 'MISSING'
+    exit 0
+  fi
   code="`$(grep -o '"versionCode":[[:space:]]*[0-9]*' "`$metadata" | grep -o '[0-9]*' | head -n 1 || true)"
   file_name="`$(grep -o '"fileName":"[^"]*"' "`$metadata" | cut -d '"' -f 4 | head -n 1 || true)"
   metadata_sha="`$(grep -o '"sha256":"[0-9A-Fa-f]*"' "`$metadata" | cut -d '"' -f 4 | head -n 1 || true)"
@@ -879,6 +892,10 @@ if [ -f "`$metadata" ]; then
         || [ ! -f "`$remote_path/data/mobile-releases/`$file_name" ]; then
       echo "Published mobile release metadata or APK is incomplete." >&2
       exit 1
+    fi
+    if [ ! -r "`$remote_path/data/mobile-releases/`$file_name" ]; then
+      printf 'MISSING'
+      exit 0
     fi
     metadata_sha="`$(printf '%s' "`$metadata_sha" | tr '[:lower:]' '[:upper:]')"
     actual_sha="`$(sha256sum "`$remote_path/data/mobile-releases/`$file_name" | awk '{print toupper(`$1)}')"
@@ -2121,22 +2138,28 @@ publish_bundled_mobile_release() {
   # Publication may need temporary ownership for the SSH deploy user. Every
   # success/skip/failure path restores UID/GID 10001 so MobileUpdateService can
   # continue publishing future releases through the authenticated admin API.
+  if [ -L "`$target_dir" ]; then
+    echo "Mobile release storage must not be a symlink: `$target_dir" >&2
+    exit 1
+  fi
   mobile_storage_owner_needs_restore="1"
-  if ! mkdir -p "`$target_dir" 2>/dev/null || [ ! -w "`$target_dir" ]; then
-    deploy_uid="`$(id -u)"
-    deploy_gid="`$(id -g)"
-    if sudo -n true >/dev/null 2>&1; then
-      sudo -n mkdir -p "`$target_dir"
-      sudo -n chown "`$deploy_uid:`$deploy_gid" "`$target_dir"
-    else
-      docker run --rm --user 0 --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --security-opt no-new-privileges \
-        -v "`$PWD/data:/host-data" \
-        --entrypoint sh "`$app_image" \
-        -c "mkdir -p /host-data/mobile-releases && chown `$deploy_uid:`$deploy_gid /host-data/mobile-releases"
-    fi
+  deploy_uid="`$(id -u)"
+  deploy_gid="`$(id -g)"
+  if sudo -n true >/dev/null 2>&1; then
+    sudo -n mkdir -p "`$target_dir"
+    sudo -n chown -R "`$deploy_uid:`$deploy_gid" "`$target_dir"
+  else
+    docker run --rm --user 0 --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --security-opt no-new-privileges \
+      -v "`$PWD/data:/host-data" \
+      --entrypoint sh "`$app_image" \
+      -c "mkdir -p /host-data/mobile-releases && chown -R `$deploy_uid:`$deploy_gid /host-data/mobile-releases"
   fi
   if [ ! -w "`$target_dir" ]; then
     echo "Mobile release storage is not writable after permission repair: `$target_dir" >&2
+    exit 1
+  fi
+  if [ -f "`$target_dir/release.json" ] && [ ! -r "`$target_dir/release.json" ]; then
+    echo "Mobile release metadata is not readable after permission repair: `$target_dir/release.json" >&2
     exit 1
   fi
   current_code="0"
@@ -2169,6 +2192,10 @@ publish_bundled_mobile_release() {
       echo "Refusing to reuse mobile versionCode `$incoming_code for a different APK SHA-256." >&2
       exit 1
     fi
+    if ! chmod 644 "`$target_dir/`$current_file_name" "`$target_dir/release.json"; then
+      echo "Unable to normalize published mobile release permissions." >&2
+      exit 1
+    fi
     if [ "`$current_code" -gt "`$incoming_code" ]; then
       echo "Mobile APK code `$incoming_code is older than verified published code `$current_code; skipping."
     else
@@ -2192,7 +2219,10 @@ publish_bundled_mobile_release() {
   mv -f "`$apk_temp" "`$target_dir/`$incoming_file_name"
   cp "`$metadata_file" "`$metadata_temp"
   mv -f "`$metadata_temp" "`$target_dir/release.json"
-  chmod 644 "`$target_dir/`$incoming_file_name" "`$target_dir/release.json" || true
+  if ! chmod 644 "`$target_dir/`$incoming_file_name" "`$target_dir/release.json"; then
+    echo "Unable to normalize published mobile release permissions." >&2
+    exit 1
+  fi
 
   find "`$target_dir" -maxdepth 1 -type f -name '*.apk' ! -name "`$incoming_file_name" -delete
   rm -rf "`$bundle_dir"

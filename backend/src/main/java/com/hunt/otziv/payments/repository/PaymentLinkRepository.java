@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.repository;
 
+import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
 import com.hunt.otziv.payments.dto.PaymentLinkAdminSummary;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
@@ -47,6 +48,19 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT link FROM PaymentLink link WHERE link.order.id = :orderId ORDER BY link.id")
     List<PaymentLink> findByOrderIdForUpdate(@Param("orderId") Long orderId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT link
+        FROM PaymentLink link
+        WHERE link.order.id = :orderId
+          AND link.status IN :statuses
+        ORDER BY link.id
+    """)
+    List<PaymentLink> findByOrderIdAndStatusInForUpdate(
+            @Param("orderId") Long orderId,
+            @Param("statuses") Collection<PaymentLinkStatus> statuses
+    );
 
     @Query(
             value = """
@@ -528,6 +542,65 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             @Param("to") LocalDateTime to
     );
 
+    @Query(value = """
+        SELECT receipt.sourceId AS sourceId,
+               receipt.amountKopecks AS amountKopecks,
+               receipt.effectiveAt AS effectiveAt
+        FROM (
+            SELECT link.id AS sourceId,
+                   COALESCE(
+                       link.confirmed_amount_kopecks,
+                       link.reserved_amount_kopecks,
+                       link.amount_kopecks
+                   ) AS amountKopecks,
+                   COALESCE(link.manual_confirmed_at, link.paid_at) AS effectiveAt
+            FROM payment_links link
+            WHERE link.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
+              AND (
+                  link.manual_confirmed_at IS NOT NULL
+                  OR (link.status = 'CONFIRMED' AND link.paid_at IS NOT NULL)
+              )
+              AND COALESCE(link.manual_confirmed_at, link.paid_at) >= :from
+              AND COALESCE(link.manual_confirmed_at, link.paid_at) < :to
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM contractor_actual_payment_attributions attribution
+                  WHERE (attribution.source_kind = 'PAYMENT_LINK' AND attribution.source_id = link.id)
+                     OR attribution.evidence_id = link.id
+              )
+            UNION ALL
+            SELECT archived.id AS sourceId,
+                   COALESCE(
+                       archived.confirmed_amount_kopecks,
+                       archived.reserved_amount_kopecks,
+                       archived.amount_kopecks
+                   ) AS amountKopecks,
+                   COALESCE(archived.manual_confirmed_at, archived.paid_at) AS effectiveAt
+            FROM archive_payment_links archived
+            WHERE archived.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
+              AND (
+                  archived.manual_confirmed_at IS NOT NULL
+                  OR (archived.status = 'CONFIRMED' AND archived.paid_at IS NOT NULL)
+              )
+              AND COALESCE(archived.manual_confirmed_at, archived.paid_at) >= :from
+              AND COALESCE(archived.manual_confirmed_at, archived.paid_at) < :to
+              AND NOT EXISTS (
+                  SELECT 1 FROM payment_links live WHERE live.id = archived.id
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM contractor_actual_payment_attributions attribution
+                  WHERE (attribution.source_kind = 'PAYMENT_LINK' AND attribution.source_id = archived.id)
+                     OR attribution.evidence_id = archived.id
+              )
+        ) receipt
+        ORDER BY receipt.effectiveAt, receipt.sourceId
+    """, nativeQuery = true)
+    List<ManualPaymentLegacyMonthlySourceProjection> findLegacyManualConfirmedForMonthlyRecipientSummary(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE PaymentLink link
@@ -543,6 +616,20 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             @Param("statuses") Collection<PaymentLinkStatus> statuses,
             @Param("expiredStatus") PaymentLinkStatus expiredStatus,
             @Param("reason") String reason,
+            @Param("now") LocalDateTime now
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT link FROM PaymentLink link
+        WHERE link.paymentMethod IN :paymentMethods
+          AND link.status IN :statuses
+          AND link.expiresAt <= :now
+        ORDER BY link.id
+    """)
+    List<PaymentLink> findExpiredManualLinksForUpdate(
+            @Param("paymentMethods") Collection<PaymentMethod> paymentMethods,
+            @Param("statuses") Collection<PaymentLinkStatus> statuses,
             @Param("now") LocalDateTime now
     );
 

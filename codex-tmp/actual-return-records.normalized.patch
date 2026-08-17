@@ -1,0 +1,30 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowService.java
+@@
+     private String limit(String value) {
+         String normalized = normalize(value);
+         return normalized.length() <= 255 ? normalized : normalized.substring(0, 255);
+     }
++
++    private record AllocationBefore(
++            ContractorAllocationStatus status,
++            long returnedKopecks
++    ) {
++    }
++
++    private record PaymentLinkActualReturnPlan(
++            boolean attributionPresent,
++            List<ContractorPaymentAllocation> actualSnapshots,
++            Map<Long, ContractorActualPaymentAttribution> actualRowsByAllocationId,
++            Set<Long> reusedSourceAllocationIds,
++            Set<Long> supersededSourceAllocationIds
++    ) {
++        private static PaymentLinkActualReturnPlan none() {
++            return new PaymentLinkActualReturnPlan(
++                    false, List.of(), Map.of(), Set.of(), Set.of()
++            );
++        }
++    }
+ 
+     private record PaymentSourcePrelude(PaymentLink link, Order order) {
+*** End Patch

@@ -1,0 +1,2996 @@
+diff --git a/frontend/src/app/core/cabinet.api.ts b/frontend/src/app/core/cabinet.api.ts
+index 92f3e9fe..7b53d03e 100644
+--- a/frontend/src/app/core/cabinet.api.ts
++++ b/frontend/src/app/core/cabinet.api.ts
+@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
+ import { DailyWorkProgress } from './daily-progress';
+ import type {
+   CreateManualPaymentTaskRequest,
++  ManualPaymentTaskAccountingTargetOption,
+   ManualPaymentTaskResponse,
+   ManualPaymentType,
+   ManualPaymentTaskStatus,
+@@ -15,6 +16,7 @@ import type {
+ 
+ export type {
+   CreateManualPaymentTaskRequest,
++  ManualPaymentTaskAccountingTargetOption,
+   ManualPaymentTaskResponse,
+   ManualPaymentType,
+   ManualPaymentTaskStatus,
+@@ -452,6 +454,20 @@ export class CabinetApi {
+     );
+   }
+ 
++  getManagerManualPaymentTaskAccountingTargets(
++    targetAmountKopecks: number,
++    taskId?: number | null
++  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
++    let params = new HttpParams().set('targetAmountKopecks', targetAmountKopecks);
++    if (taskId != null) {
++      params = params.set('taskId', taskId);
++    }
++    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
++      `${appEnvironment.apiBaseUrl}/api/cabinet/manual-payment-tasks/accounting-targets`,
++      { params }
++    );
++  }
++
+   createManagerManualPaymentTask(
+     request: CreateManualPaymentTaskRequest
+   ): Observable<ManualPaymentTaskResponse> {
+diff --git a/frontend/src/app/core/common-manual-payment-attribution.api.ts b/frontend/src/app/core/common-manual-payment-attribution.api.ts
+index d3106b77..267ad44e 100644
+--- a/frontend/src/app/core/common-manual-payment-attribution.api.ts
++++ b/frontend/src/app/core/common-manual-payment-attribution.api.ts
+@@ -10,10 +10,13 @@ export interface CommonManualPaymentAttributionModeResponse {
+ 
+ export type CommonActualRecipientType = 'SPECIALIST' | 'MANAGER' | 'OWNER';
+ export type CommonManualPaymentMode = 'STANDARD' | 'TBANK_FALLBACK';
++export type CommonPaymentCashDestinationKind = 'OWNER' | 'CONTRACTOR_PROFILE' | 'MANUAL_PAYMENT_TASK';
++export type CommonManualPaymentTaskTargetKind = 'EXTERNAL_TASK' | 'OWNER' | 'SPECIALIST' | 'MANAGER';
+ 
+ export interface CommonManualPaymentRecipientCandidate {
+   key: string;
+-  recipientType: CommonActualRecipientType;
++  cashDestinationKind?: CommonPaymentCashDestinationKind | null;
++  recipientType?: CommonActualRecipientType | null;
+   recipientProfileId?: number | null;
+   recipientUserId?: number | null;
+   label: string;
+@@ -21,6 +24,12 @@ export interface CommonManualPaymentRecipientCandidate {
+   currentParticipant: boolean;
+   profileEnabled: boolean;
+   availableKopecks?: number | null;
++  manualPaymentTaskId?: number | null;
++  manualPaymentTaskGeneration?: number | null;
++  taskTargetKind?: CommonManualPaymentTaskTargetKind | null;
++  taskRecipientName?: string | null;
++  accountingTargetLabel?: string | null;
++  effectText?: string | null;
+ }
+ 
+ export interface CommonManualPaymentAttributionHistoryItem {
+@@ -47,13 +56,16 @@ export interface CommonManualPaymentOptions {
+   invoiceId: number;
+   remainingKopecks: number;
+   defaultRecipientKey: string;
++  contractVersion?: 'TASK_RECIPIENT_V1' | string | null;
++  routeRevision?: string | null;
+   candidates: CommonManualPaymentRecipientCandidate[];
+   history: CommonManualPaymentAttributionHistoryItem[];
+ }
+ 
+ export interface CommonManualPaymentAttributionRowRequest {
+   rowKey: string;
+-  recipientType: CommonActualRecipientType;
++  recipientKey: string;
++  recipientType: CommonActualRecipientType | null;
+   recipientProfileId: number | null;
+   amountKopecks: number;
+ }
+diff --git a/frontend/src/app/core/manager.api.ts b/frontend/src/app/core/manager.api.ts
+index 8d86f830..4739aebd 100644
+--- a/frontend/src/app/core/manager.api.ts
++++ b/frontend/src/app/core/manager.api.ts
+@@ -346,20 +346,32 @@ export interface CompanyFilialEditItem {
+ }
+ 
+ export type ManualCardPaymentRecipientType = 'OWNER' | 'MANAGER' | 'SPECIALIST';
++export type ManualPaymentCashDestinationKind = 'OWNER' | 'CONTRACTOR_PROFILE' | 'MANUAL_PAYMENT_TASK';
++export type ManualPaymentTaskTargetKind = 'EXTERNAL_TASK' | 'OWNER' | 'SPECIALIST' | 'MANAGER';
+ 
+ export interface ManualCardPaymentRecipientOption {
+-  recipientType: ManualCardPaymentRecipientType;
++  key?: string | null;
++  cashDestinationKind?: ManualPaymentCashDestinationKind | null;
++  recipientType?: ManualCardPaymentRecipientType | null;
+   recipientProfileId?: number | null;
+   recipientUserId?: number | null;
+   displayName: string;
+   availableKopecks?: number | null;
+   projectedOverrunKopecks?: number | null;
+   anomalyWarning?: string | null;
++  manualPaymentTaskId?: number | null;
++  manualPaymentTaskGeneration?: number | null;
++  taskTargetKind?: ManualPaymentTaskTargetKind | null;
++  taskRecipientName?: string | null;
++  accountingTargetLabel?: string | null;
++  effectText?: string | null;
+ }
+ 
+ export interface ManualCardPaymentContext {
+   orderId: number;
+   amountKopecks: number;
++  contractVersion?: 'TASK_RECIPIENT_V1' | string | null;
++  routeRevision?: string | null;
+   originalRecipient: ManualCardPaymentRecipientOption;
+   candidates: ManualCardPaymentRecipientOption[];
+   anomalyWarning?: string | null;
+@@ -372,7 +384,8 @@ export interface ManualCardPaymentContext {
+ export interface ManualCardPaymentConfirmationRequest {
+   reason: string;
+   receiptUrl?: string | null;
+-  recipientType: ManualCardPaymentRecipientType;
++  recipientKey: string;
++  recipientType?: ManualCardPaymentRecipientType | null;
+   recipientProfileId?: number | null;
+ }
+ 
+diff --git a/frontend/src/app/core/payments.api.ts b/frontend/src/app/core/payments.api.ts
+index 72331f2e..ac0828b8 100644
+--- a/frontend/src/app/core/payments.api.ts
++++ b/frontend/src/app/core/payments.api.ts
+@@ -262,6 +262,25 @@ export type PaymentReceiptStatus = 'PENDING' | 'MARKED' | 'LEGACY_NOT_REQUIRED';
+ export type ManualPaymentSource = 'PROFILE_MONTHLY_LIMIT' | 'MANUAL_TASK' | 'CONTRACTOR_PAYMENT_PROFILE';
+ export type ManualPaymentType = 'MOBILE_BANK' | 'EXTERNAL_LINK';
+ export type ManualPaymentTaskStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELED';
++export type ManualPaymentTaskAccountingTargetKind =
++  | 'UNRESOLVED'
++  | 'EXTERNAL_TASK'
++  | 'OWNER'
++  | 'SPECIALIST'
++  | 'MANAGER';
++
++export interface ManualPaymentTaskAccountingTargetOption {
++  key: string;
++  kind: ManualPaymentTaskAccountingTargetKind;
++  profileId?: number | null;
++  userId?: number | null;
++  role?: 'SPECIALIST' | 'MANAGER' | null;
++  label: string;
++  enabled: boolean;
++  currentAvailableKopecks?: number | null;
++  projectedOverrunKopecks?: number | null;
++  overrunAcknowledgementRequired: boolean;
++}
+ 
+ export interface ManualPaymentTaskResponse {
+   id: number;
+@@ -287,6 +306,17 @@ export interface ManualPaymentTaskResponse {
+   updatedAt?: string | null;
+   completedAt?: string | null;
+   routable: boolean;
++  accountingTargetKind?: ManualPaymentTaskAccountingTargetKind | null;
++  accountingTargetProfileId?: number | null;
++  accountingTargetLabel?: string | null;
++  accountingTargetResolved?: boolean;
++  generation?: number;
++  rowVersion?: number | null;
++  targetCurrentAvailableKopecks?: number | null;
++  targetProjectedOverrunKopecks?: number | null;
++  accountingTargetOverrunAcknowledged?: boolean;
++  accountingTargetOverrunAcknowledgedAt?: string | null;
++  accountingTargetOverrunAcknowledgedBy?: string | null;
+ }
+ 
+ export interface ManualPaymentRecipientMonthlySummaryItem {
+@@ -323,6 +353,9 @@ export interface CreateManualPaymentTaskRequest {
+   manualPaymentButtonLabel?: string | null;
+   targetAmountKopecks: number;
+   comment?: string | null;
++  accountingTargetKind: ManualPaymentTaskAccountingTargetKind;
++  accountingTargetProfileId?: number | null;
++  accountingTargetOverrunAcknowledged: boolean;
+ }
+ 
+ export interface UpdateManualPaymentTaskRequest {
+@@ -334,6 +367,10 @@ export interface UpdateManualPaymentTaskRequest {
+   targetAmountKopecks: number;
+   comment?: string | null;
+   manualPaymentUrlReplacementConfirmed?: boolean;
++  accountingTargetKind: ManualPaymentTaskAccountingTargetKind;
++  accountingTargetProfileId?: number | null;
++  accountingTargetOverrunAcknowledged: boolean;
++  expectedGeneration: number | null;
+ }
+ 
+ export interface UpdateManualPaymentTaskStatusRequest {
+@@ -644,6 +681,23 @@ export class PaymentsApi {
+     );
+   }
+ 
++  getAdminManualPaymentTaskAccountingTargets(
++    managerId: number,
++    targetAmountKopecks: number,
++    taskId?: number | null
++  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
++    let params = new HttpParams()
++      .set('managerId', managerId)
++      .set('targetAmountKopecks', targetAmountKopecks);
++    if (taskId != null) {
++      params = params.set('taskId', taskId);
++    }
++    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
++      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-tasks/accounting-targets`,
++      { params }
++    );
++  }
++
+   getAdminManualRecipientMonthlySummary(month: string): Observable<ManualPaymentRecipientMonthlySummaryResponse> {
+     const params = month ? new HttpParams().set('month', month) : new HttpParams();
+     return this.http.get<ManualPaymentRecipientMonthlySummaryResponse>(
+diff --git a/frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.html b/frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.html
+index 552df6aa..9192e45f 100644
+--- a/frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.html
++++ b/frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.html
+@@ -64,6 +64,14 @@
+                 />
+               </label>
+               @if (candidate(row.recipientKey); as selected) {
++                @if (isTaskRecipient(selected)) {
++                  <div class="recipient-meta">
++                    <strong>Платёжное задание №{{ selected.manualPaymentTaskId }}</strong>
++                    <span>Получатель в банке: {{ selected.taskRecipientName || selected.label }}</span>
++                    <span>Учёт: {{ selected.accountingTargetLabel || 'не привязан' }}</span>
++                    <span>{{ recipientEffect(selected) }}</span>
++                  </div>
++                }
+                 <div class="recipient-meta">
+                   @if (selected.recipientType === 'OWNER') {
+                     <span>Лимит распределения не применяется.</span>
+diff --git a/frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.ts b/frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.ts
+index 1d10dbdd..55bc7106 100644
+--- a/frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.ts
++++ b/frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.ts
+@@ -10,6 +10,12 @@ import {
+   type CommonManualPaymentOptions,
+   type CommonManualPaymentRecipientCandidate
+ } from '../../../core/common-manual-payment-attribution.api';
++import {
++  isManualPaymentTaskRecipient,
++  isRetryablePaymentRouteError,
++  manualPaymentRecipientEffect,
++  manualPaymentRouteErrorMessage
++} from '../../../shared/manual-payment-routing';
+ 
+ export interface CommonManualPaymentDraftRow {
+   rowKey: string;
+@@ -68,8 +74,10 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
+   readonly saving = signal(false);
+   readonly error = signal('');
+ 
+-  private readonly idempotencyKey = this.newKey();
++  private idempotencyKey = this.newKey();
+   private readonly effectiveAt = this.localDateTime(new Date());
++  readonly isTaskRecipient = isManualPaymentTaskRecipient;
++  readonly recipientEffect = manualPaymentRecipientEffect;
+ 
+   readonly title = computed(() => this.mode === 'TBANK_FALLBACK'
+     ? 'Фактическое получение оплаты общего счёта'
+@@ -96,7 +104,9 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
+     void this.load();
+   }
+ 
+-  async load(): Promise<void> {
++  async load(preserveDraft = false): Promise<void> {
++    const draftReason = this.reason();
++    const draftReceiptUrl = this.receiptUrl();
+     this.loading.set(true);
+     this.error.set('');
+     try {
+@@ -115,6 +125,10 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
+         recipientKey: defaultRecipient.key,
+         amountRubles: this.rublesInput(options.remainingKopecks)
+       }] : []);
++      this.reason.set(preserveDraft ? draftReason : '');
++      this.receiptUrl.set(preserveDraft ? draftReceiptUrl : '');
++      this.paymentReceived.set(false);
++      this.finalAcknowledged.set(false);
+     } catch (error) {
+       this.options.set(null);
+       this.error.set(this.errorMessage(error, 'Не удалось загрузить получателей общего счёта.'));
+@@ -210,6 +224,7 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
+       receiptUrl,
+       attributions: selected.map(({ row, candidate }) => ({
+         rowKey: row.rowKey,
++        recipientKey: candidate!.key,
+         recipientType: candidate!.recipientType,
+         recipientProfileId: candidate!.recipientProfileId ?? null,
+         amountKopecks: commonManualPaymentRublesToKopecks(row.amountRubles)!
+@@ -222,7 +237,15 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
+       const details = await firstValueFrom(this.api.confirm(this.invoiceId, this.mode, request));
+       this.completed.emit(details);
+     } catch (error) {
+-      this.error.set(this.errorMessage(error, 'Не удалось подтвердить фактическое поступление.'));
++      if (isRetryablePaymentRouteError(error)) {
++        this.idempotencyKey = this.newKey();
++        await this.load(true);
++        if (this.options()) {
++          this.error.set(manualPaymentRouteErrorMessage(error, 'Маршрут оплаты изменился. Проверьте распределение ещё раз.'));
++        }
++      } else {
++        this.error.set(manualPaymentRouteErrorMessage(error, 'Не удалось подтвердить фактическое поступление.'));
++      }
+     } finally {
+       this.saving.set(false);
+     }
+diff --git a/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.html b/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.html
+index bc07a71e..36976665 100644
+--- a/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.html
++++ b/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.html
+@@ -839,7 +839,7 @@
+               />
+             </label>
+             <label class="profile-field">
+-              <span>Получатель</span>
++              <span>Получатель в банке</span>
+               <input
+                 type="text"
+                 [ngModel]="adminTaskRecipient()"
+@@ -858,7 +858,7 @@
+             />
+           </label>
+           <label class="profile-field">
+-            <span>Получатель</span>
++            <span>Получатель в банке</span>
+             <input
+               type="text"
+               [ngModel]="adminTaskRecipient()"
+@@ -866,6 +866,35 @@
+               placeholder="ФИО получателя"
+             />
+           </label>
++          <label class="profile-field manual-task-accounting-field">
++            <span>Кому учитывать оплату</span>
++            <select [ngModel]="adminTaskAccountingTargetKey()" (ngModelChange)="setAdminTaskAccountingTarget($event)" [disabled]="adminTaskAccountingTargetsLoading() || !adminTaskAmountRubles() || adminTaskManagerId() == null">
++              <option value="">Выберите получателя</option>
++              @for (target of adminTaskAccountingTargets(); track target.key) {
++                <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">{{ target.label }}</option>
++              }
++            </select>
++          </label>
++          @if (adminTaskAccountingTargetsLoading()) {
++            <small class="manual-task-accounting-note">Проверяем лимиты и резервы…</small>
++          } @else if (adminTaskAccountingTargetError()) {
++            <small class="manual-task-accounting-warning" role="alert">{{ adminTaskAccountingTargetError() }}</small>
++          } @else if (selectedAdminTaskAccountingTarget(); as target) {
++            <div class="manual-task-accounting-preview">
++              <strong>{{ target.label }}</strong>
++              <small>{{ manualTaskTargetEffect(target) }}</small>
++              @if (target.currentAvailableKopecks != null) {
++                <small>Доступно сейчас: {{ formatKopecks(target.currentAvailableKopecks) }}</small>
++              }
++              @if ((target.projectedOverrunKopecks || 0) > 0) {
++                <small class="manual-task-accounting-warning">Превышение {{ formatKopecks(target.projectedOverrunKopecks) }} будет сохранено как аномалия; сумма не уменьшится и не уйдёт владельцу.</small>
++                <label class="manual-task-accounting-ack">
++                  <input type="checkbox" [ngModel]="adminTaskAccountingTargetAcknowledged()" (ngModelChange)="setAdminTaskAccountingTargetAcknowledged($event)">
++                  <span>Подтверждаю создание задания с этим превышением.</span>
++                </label>
++              }
++            </div>
++          }
+           }
+           <label class="profile-field limit-field">
+             <span>Сумма, руб.</span>
+@@ -909,6 +938,7 @@
+                 <div>
+                   <strong>{{ manualTaskTitle(task) }}</strong>
+                   <small>{{ manualTaskTargetLine(task) }}</small>
++                  <small>Учёт: {{ task.accountingTargetResolved === false ? 'получатель задания не привязан' : (task.accountingTargetLabel || 'не указан') }}</small>
+                 </div>
+                 <span class="status-pill manual">{{ manualTaskStatusLabel(task.status) }}</span>
+               </header>
+@@ -935,6 +965,9 @@
+                 </div>
+               </div>
+               <small class="profile-terminal">{{ task.paymentProfileName }}</small>
++              @if (task.accountingTargetResolved === false) {
++                <small class="manual-task-accounting-warning" role="alert">Маршрутизация новых счетов заблокирована до привязки получателя.</small>
++              }
+               @if (task.comment) {
+                 <small class="profile-terminal">{{ task.comment }}</small>
+               }
+@@ -960,7 +993,7 @@
+                       <input type="text" [ngModel]="editTaskPaymentButtonLabel()" (ngModelChange)="setEditTaskPaymentButtonLabel($event)" />
+                     </label>
+                     <label class="profile-field">
+-                      <span>Получатель</span>
++                      <span>Получатель в банке</span>
+                       <input type="text" [ngModel]="editTaskRecipient()" (ngModelChange)="setEditTaskRecipient($event)" />
+                     </label>
+                   } @else {
+@@ -969,7 +1002,7 @@
+                       <input type="tel" [ngModel]="editTaskPhone()" (ngModelChange)="setEditTaskPhone($event)" placeholder="+7..." />
+                     </label>
+                     <label class="profile-field">
+-                      <span>Получатель</span>
++                      <span>Получатель в банке</span>
+                       <input type="text" [ngModel]="editTaskRecipient()" (ngModelChange)="setEditTaskRecipient($event)" />
+                     </label>
+                   }
+@@ -977,6 +1010,35 @@
+                     <span>Сумма, руб.</span>
+                     <input type="number" min="1" step="1" inputmode="numeric" [ngModel]="editTaskAmountRubles()" (ngModelChange)="setEditTaskAmountRubles($event)" />
+                   </label>
++                  <label class="profile-field manual-task-accounting-field">
++                    <span>Кому учитывать оплату</span>
++                    <select [ngModel]="editTaskAccountingTargetKey()" (ngModelChange)="setEditTaskAccountingTarget($event)" [disabled]="editTaskAccountingTargetsLoading()">
++                      <option value="">Выберите получателя</option>
++                      @for (target of editTaskAccountingTargets(); track target.key) {
++                        <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">{{ target.label }}</option>
++                      }
++                    </select>
++                  </label>
++                  @if (editTaskAccountingTargetsLoading()) {
++                    <small class="manual-task-accounting-note">Пересчитываем лимит…</small>
++                  } @else if (editTaskAccountingTargetError()) {
++                    <small class="manual-task-accounting-warning" role="alert">{{ editTaskAccountingTargetError() }}</small>
++                  } @else if (selectedEditTaskAccountingTarget(); as target) {
++                    <div class="manual-task-accounting-preview">
++                      <strong>{{ target.label }}</strong>
++                      <small>{{ manualTaskTargetEffect(target) }}</small>
++                      @if (target.currentAvailableKopecks != null) {
++                        <small>Доступно сейчас: {{ formatKopecks(target.currentAvailableKopecks) }}</small>
++                      }
++                      @if ((target.projectedOverrunKopecks || 0) > 0) {
++                        <small class="manual-task-accounting-warning">Превышение {{ formatKopecks(target.projectedOverrunKopecks) }} будет сохранено как аномалия.</small>
++                        <label class="manual-task-accounting-ack">
++                          <input type="checkbox" [ngModel]="editTaskAccountingTargetAcknowledged()" (ngModelChange)="setEditTaskAccountingTargetAcknowledged($event)">
++                          <span>Подтверждаю сохранение задания с превышением.</span>
++                        </label>
++                      }
++                    </div>
++                  }
+                   <label class="profile-field">
+                     <span>Комментарий</span>
+                     <input type="text" [ngModel]="editTaskComment()" (ngModelChange)="setEditTaskComment($event)" />
+diff --git a/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.scss b/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.scss
+index 8d2fe457..15b95f88 100644
+--- a/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.scss
++++ b/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.scss
+@@ -1058,6 +1058,45 @@ input[type='search']::placeholder {
+   font-size: 0.58rem;
+ }
+ 
++.manual-task-accounting-field,
++.manual-task-accounting-preview,
++.manual-task-accounting-note,
++.manual-task-accounting-warning {
++  grid-column: 1 / -1;
++}
++
++.manual-task-accounting-preview {
++  display: grid;
++  gap: 0.3rem;
++  border: 1px solid rgba(69, 158, 133, 0.25);
++  border-radius: 0.75rem;
++  padding: 0.7rem;
++  background: rgba(69, 158, 133, 0.07);
++}
++
++.manual-task-accounting-note,
++.manual-task-accounting-preview small {
++  color: var(--otziv-info);
++  font-weight: 800;
++}
++
++.manual-task-accounting-warning {
++  color: #a83f47 !important;
++  font-weight: 900 !important;
++}
++
++.manual-task-accounting-ack {
++  display: flex !important;
++  align-items: flex-start;
++  gap: 0.55rem !important;
++}
++
++.manual-task-accounting-ack input {
++  flex: 0 0 auto;
++  width: 1.05rem !important;
++  min-height: 1.05rem !important;
++}
++
+ .manual-task-admin-card strong {
+   overflow-wrap: anywhere;
+   color: var(--otziv-dark);
+diff --git a/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.ts b/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.ts
+index 9d88b388..4a4311f0 100644
+--- a/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.ts
++++ b/frontend/src/app/features/admin/tbank-payments/tbank-payments.component.ts
+@@ -10,6 +10,7 @@ import type {
+   AdminPaymentLinksPageResponse,
+   ManualPaymentRecipientMonthlySummaryItem,
+   ManualPaymentRecipientMonthlySummaryResponse,
++  ManualPaymentTaskAccountingTargetOption,
+   ManualPaymentTaskResponse,
+   ManualPaymentTaskStatus,
+   ManualPaymentType,
+@@ -41,6 +42,12 @@ import {
+   manualPaymentUnpaidCloseConfirmation,
+   manualPaymentUnpaidCloseNotePrompt
+ } from './manual-payment-unpaid-close';
++import {
++  manualPaymentTaskSelectedTarget,
++  manualPaymentTaskTargetEffect,
++  manualPaymentTaskTargetForSnapshot,
++  manualPaymentTaskTargetValid
++} from '../../../shared/manual-payment-task-target';
+ 
+ type PaymentMetric = {
+   label: string;
+@@ -98,6 +105,11 @@ export class TbankPaymentsComponent implements OnDestroy {
+   readonly adminTaskPaymentButtonLabel = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+   readonly adminTaskAmountRubles = signal('');
+   readonly adminTaskComment = signal('');
++  readonly adminTaskAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
++  readonly adminTaskAccountingTargetKey = signal('');
++  readonly adminTaskAccountingTargetAcknowledged = signal(false);
++  readonly adminTaskAccountingTargetsLoading = signal(false);
++  readonly adminTaskAccountingTargetError = signal<string | null>(null);
+   readonly profileAssignments = signal<Record<number, number | null>>({});
+   readonly profilePolicies = signal<Record<number, ProfilePolicyDraft>>({});
+   readonly runtimeSettings = signal<TbankRuntimeSettings | null>(null);
+@@ -113,6 +125,13 @@ export class TbankPaymentsComponent implements OnDestroy {
+   readonly editTaskPaymentButtonLabel = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+   readonly editTaskAmountRubles = signal('');
+   readonly editTaskComment = signal('');
++  readonly editTaskAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
++  readonly editTaskAccountingTargetKey = signal('');
++  readonly editTaskAccountingTargetAcknowledged = signal(false);
++  readonly editTaskAccountingTargetsLoading = signal(false);
++  readonly editTaskAccountingTargetError = signal<string | null>(null);
++  private adminTaskAccountingPreviewEpoch = 0;
++  private editTaskAccountingPreviewEpoch = 0;
+   readonly savingManualTask = signal(false);
+   readonly savingProfiles = signal(false);
+   readonly savingProfilePolicies = signal(false);
+@@ -168,6 +187,13 @@ export class TbankPaymentsComponent implements OnDestroy {
+   readonly receiptOverdueCount = computed(() => this.paymentSummary()?.receiptOverdue ?? 0);
+ 
+   readonly recipientSummaryItems = computed(() => this.recipientMonthlySummary()?.items ?? []);
++  readonly selectedAdminTaskAccountingTarget = computed(() => manualPaymentTaskSelectedTarget(
++    this.adminTaskAccountingTargets(), this.adminTaskAccountingTargetKey()
++  ));
++  readonly selectedEditTaskAccountingTarget = computed(() => manualPaymentTaskSelectedTarget(
++    this.editTaskAccountingTargets(), this.editTaskAccountingTargetKey()
++  ));
++  readonly manualTaskTargetEffect = manualPaymentTaskTargetEffect;
+ 
+   readonly paymentPageLabel = computed(() => {
+     const totalPages = this.paymentTotalPages();
+@@ -184,7 +210,11 @@ export class TbankPaymentsComponent implements OnDestroy {
+     return !this.savingManualTask()
+       && this.adminTaskManagerId() != null
+       && hasTarget
+-      && this.adminTaskTargetKopecks() > 0;
++      && this.adminTaskTargetKopecks() > 0
++      && !this.adminTaskAccountingTargetsLoading()
++      && manualPaymentTaskTargetValid(
++        this.selectedAdminTaskAccountingTarget(), this.adminTaskAccountingTargetAcknowledged()
++      );
+   });
+ 
+   readonly tbankClientPaymentEnabled = computed(() => {
+@@ -1022,10 +1052,18 @@ export class TbankPaymentsComponent implements OnDestroy {
+     this.editTaskPaymentButtonLabel.set(task.manualPaymentButtonLabel || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+     this.editTaskAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
+     this.editTaskComment.set(task.comment ?? '');
++    this.editTaskAccountingTargetKey.set('');
++    this.editTaskAccountingTargetAcknowledged.set(false);
++    this.loadEditTaskAccountingTargets(task);
+   }
+ 
+   cancelManualTaskEdit(): void {
+     this.editingTaskId.set(null);
++    this.editTaskAccountingTargets.set([]);
++    this.editTaskAccountingTargetKey.set('');
++    this.editTaskAccountingTargetAcknowledged.set(false);
++    this.editTaskAccountingTargetError.set(null);
++    this.editTaskAccountingPreviewEpoch += 1;
+   }
+ 
+   setEditTaskPaymentType(value: ManualPaymentType): void {
+@@ -1053,6 +1091,16 @@ export class TbankPaymentsComponent implements OnDestroy {
+ 
+   setEditTaskAmountRubles(value: string | number | null): void {
+     this.editTaskAmountRubles.set(value == null ? '' : String(value));
++    this.loadEditTaskAccountingTargets();
++  }
++
++  setEditTaskAccountingTarget(value: string | null): void {
++    this.editTaskAccountingTargetKey.set(value?.trim() ?? '');
++    this.editTaskAccountingTargetAcknowledged.set(false);
++  }
++
++  setEditTaskAccountingTargetAcknowledged(value: boolean): void {
++    this.editTaskAccountingTargetAcknowledged.set(Boolean(value));
+   }
+ 
+   setEditTaskComment(value: string | null): void {
+@@ -1068,13 +1116,21 @@ export class TbankPaymentsComponent implements OnDestroy {
+       && task.status !== 'COMPLETED'
+       && task.status !== 'CANCELED'
+       && hasTarget
+-      && this.editTaskTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0);
++      && this.editTaskTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0)
++      && !this.editTaskAccountingTargetsLoading()
++      && manualPaymentTaskTargetValid(
++        this.selectedEditTaskAccountingTarget(), this.editTaskAccountingTargetAcknowledged()
++      );
+   }
+ 
+   saveManualTaskEdit(task: ManualPaymentTaskResponse): void {
+     if (!task?.id || !this.canSaveManualTaskEdit(task)) {
+       return;
+     }
++    const accountingTarget = this.selectedEditTaskAccountingTarget();
++    if (!accountingTarget) {
++      return;
++    }
+     this.mutatingTaskId.set(task.id);
+     this.paymentsApi.updateAdminManualPaymentTask(task.id, {
+       manualPaymentType: this.editTaskPaymentType(),
+@@ -1086,7 +1142,11 @@ export class TbankPaymentsComponent implements OnDestroy {
+       comment: this.editTaskComment().trim() || null,
+       manualPaymentUrlReplacementConfirmed: this.editTaskPaymentType() === 'EXTERNAL_LINK'
+         && !Boolean(task.manualPaymentUrl?.trim())
+-        && Boolean(this.editTaskPaymentUrl().trim())
++        && Boolean(this.editTaskPaymentUrl().trim()),
++      accountingTargetKind: accountingTarget.kind,
++      accountingTargetProfileId: accountingTarget.profileId ?? null,
++      accountingTargetOverrunAcknowledged: this.editTaskAccountingTargetAcknowledged(),
++      expectedGeneration: task.generation ?? null
+     }).subscribe({
+       next: (updated) => {
+         this.manualTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
+@@ -1105,6 +1165,7 @@ export class TbankPaymentsComponent implements OnDestroy {
+   setAdminTaskManagerId(value: number | string | null): void {
+     const id = value == null || value === '' ? NaN : Number(value);
+     this.adminTaskManagerId.set(Number.isFinite(id) && id > 0 ? id : null);
++    this.loadAdminTaskAccountingTargets();
+   }
+ 
+   setAdminTaskPaymentType(value: ManualPaymentType): void {
+@@ -1132,6 +1193,16 @@ export class TbankPaymentsComponent implements OnDestroy {
+ 
+   setAdminTaskAmountRubles(value: string | number | null): void {
+     this.adminTaskAmountRubles.set(value == null ? '' : String(value));
++    this.loadAdminTaskAccountingTargets();
++  }
++
++  setAdminTaskAccountingTarget(value: string | null): void {
++    this.adminTaskAccountingTargetKey.set(value?.trim() ?? '');
++    this.adminTaskAccountingTargetAcknowledged.set(false);
++  }
++
++  setAdminTaskAccountingTargetAcknowledged(value: boolean): void {
++    this.adminTaskAccountingTargetAcknowledged.set(Boolean(value));
+   }
+ 
+   setAdminTaskComment(value: string | null): void {
+@@ -1142,6 +1213,10 @@ export class TbankPaymentsComponent implements OnDestroy {
+     if (!this.canCreateManualTask()) {
+       return;
+     }
++    const accountingTarget = this.selectedAdminTaskAccountingTarget();
++    if (!accountingTarget) {
++      return;
++    }
+     this.savingManualTask.set(true);
+     this.paymentsApi.createAdminManualPaymentTask({
+       managerId: this.adminTaskManagerId(),
+@@ -1151,7 +1226,10 @@ export class TbankPaymentsComponent implements OnDestroy {
+       manualPaymentUrl: this.adminTaskPaymentUrl().trim(),
+       manualPaymentButtonLabel: this.adminTaskPaymentButtonLabel().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+       targetAmountKopecks: this.adminTaskTargetKopecks(),
+-      comment: this.adminTaskComment().trim() || null
++      comment: this.adminTaskComment().trim() || null,
++      accountingTargetKind: accountingTarget.kind,
++      accountingTargetProfileId: accountingTarget.profileId ?? null,
++      accountingTargetOverrunAcknowledged: this.adminTaskAccountingTargetAcknowledged()
+     }).subscribe({
+       next: (task) => {
+         this.manualTasks.update((tasks) => [task, ...tasks]);
+@@ -1162,6 +1240,11 @@ export class TbankPaymentsComponent implements OnDestroy {
+         this.adminTaskPaymentButtonLabel.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+         this.adminTaskAmountRubles.set('');
+         this.adminTaskComment.set('');
++        this.adminTaskAccountingTargets.set([]);
++        this.adminTaskAccountingTargetKey.set('');
++        this.adminTaskAccountingTargetAcknowledged.set(false);
++        this.adminTaskAccountingTargetError.set(null);
++        this.adminTaskAccountingPreviewEpoch += 1;
+         this.savingManualTask.set(false);
+         this.toastService.success('Ручное задание создано');
+       },
+@@ -1482,6 +1565,85 @@ export class TbankPaymentsComponent implements OnDestroy {
+     return task.id;
+   }
+ 
++  private loadAdminTaskAccountingTargets(): void {
++    const managerId = this.adminTaskManagerId();
++    const amount = this.adminTaskTargetKopecks();
++    const previousKey = this.adminTaskAccountingTargetKey();
++    const epoch = ++this.adminTaskAccountingPreviewEpoch;
++    this.adminTaskAccountingTargetAcknowledged.set(false);
++    this.adminTaskAccountingTargetError.set(null);
++    if (managerId == null || amount <= 0) {
++      this.adminTaskAccountingTargets.set([]);
++      this.adminTaskAccountingTargetKey.set('');
++      this.adminTaskAccountingTargetsLoading.set(false);
++      return;
++    }
++    this.adminTaskAccountingTargetsLoading.set(true);
++    this.paymentsApi.getAdminManualPaymentTaskAccountingTargets(managerId, amount).subscribe({
++      next: (options) => {
++        if (epoch !== this.adminTaskAccountingPreviewEpoch) {
++          return;
++        }
++        const normalized = options ?? [];
++        this.adminTaskAccountingTargets.set(normalized);
++        this.adminTaskAccountingTargetKey.set(
++          normalized.some(option => option.key === previousKey) ? previousKey : ''
++        );
++        this.adminTaskAccountingTargetsLoading.set(false);
++      },
++      error: (error) => {
++        if (epoch !== this.adminTaskAccountingPreviewEpoch) {
++          return;
++        }
++        this.adminTaskAccountingTargets.set([]);
++        this.adminTaskAccountingTargetKey.set('');
++        this.adminTaskAccountingTargetsLoading.set(false);
++        this.adminTaskAccountingTargetError.set(apiErrorDetail(
++          error, 'Не удалось рассчитать получателя и возможное превышение.'
++        ));
++      }
++    });
++  }
++
++  private loadEditTaskAccountingTargets(sourceTask?: ManualPaymentTaskResponse): void {
++    const task = sourceTask ?? this.manualTasks().find(item => item.id === this.editingTaskId());
++    const amount = this.editTaskTargetKopecks();
++    const previousKey = this.editTaskAccountingTargetKey();
++    const epoch = ++this.editTaskAccountingPreviewEpoch;
++    this.editTaskAccountingTargetAcknowledged.set(false);
++    this.editTaskAccountingTargetError.set(null);
++    if (!task?.managerId || amount <= 0) {
++      this.editTaskAccountingTargets.set([]);
++      this.editTaskAccountingTargetKey.set('');
++      this.editTaskAccountingTargetsLoading.set(false);
++      this.editTaskAccountingTargetError.set(task?.managerId ? null : 'У задания не найден менеджер. Сохранение заблокировано.');
++      return;
++    }
++    this.editTaskAccountingTargetsLoading.set(true);
++    this.paymentsApi.getAdminManualPaymentTaskAccountingTargets(task.managerId, amount, task.id).subscribe({
++      next: (options) => {
++        if (epoch !== this.editTaskAccountingPreviewEpoch) {
++          return;
++        }
++        const normalized = options ?? [];
++        const restored = normalized.find(option => option.key === previousKey)
++          ?? manualPaymentTaskTargetForSnapshot(normalized, task);
++        this.editTaskAccountingTargets.set(normalized);
++        this.editTaskAccountingTargetKey.set(restored?.key ?? '');
++        this.editTaskAccountingTargetsLoading.set(false);
++      },
++      error: (error) => {
++        if (epoch !== this.editTaskAccountingPreviewEpoch) {
++          return;
++        }
++        this.editTaskAccountingTargets.set([]);
++        this.editTaskAccountingTargetKey.set('');
++        this.editTaskAccountingTargetsLoading.set(false);
++        this.editTaskAccountingTargetError.set(apiErrorDetail(error, 'Не удалось пересчитать получателя задания.'));
++      }
++    });
++  }
++
+   totalAmount(links: AdminPaymentLinkResponse[]): number {
+     return links.reduce((sum, link) => sum + Number(link.amount || 0), 0);
+   }
+diff --git a/frontend/src/app/features/home/home.component.html b/frontend/src/app/features/home/home.component.html
+index eacc3c7e..986a91b7 100644
+--- a/frontend/src/app/features/home/home.component.html
++++ b/frontend/src/app/features/home/home.component.html
+@@ -439,7 +439,7 @@
+                 >
+               </label>
+               <label>
+-                <span>Получатель</span>
++                <span>Получатель в банке</span>
+                 <input
+                   type="text"
+                   autocomplete="name"
+@@ -458,7 +458,7 @@
+                 >
+               </label>
+               <label>
+-                <span>Получатель</span>
++                <span>Получатель в банке</span>
+                 <input
+                   type="text"
+                   autocomplete="name"
+@@ -585,6 +585,43 @@
+                 (ngModelChange)="setManualTaskAmount($event)"
+               >
+             </label>
++            <label class="manual-task-accounting-field">
++              <span>Кому учитывать оплату</span>
++              <select
++                [ngModel]="manualTaskAccountingTargetKey()"
++                (ngModelChange)="setManualTaskAccountingTarget($event)"
++                [disabled]="manualTaskAccountingTargetsLoading() || !manualTaskAmountRubles()"
++              >
++                <option value="">Выберите получателя</option>
++                @for (target of manualTaskAccountingTargets(); track target.key) {
++                  <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">
++                    {{ target.label }}
++                  </option>
++                }
++              </select>
++            </label>
++            @if (manualTaskAccountingTargetsLoading()) {
++              <small class="manual-task-accounting-note">Проверяем доступный лимит…</small>
++            } @else if (manualTaskAccountingTargetError()) {
++              <small class="manual-task-accounting-warning" role="alert">{{ manualTaskAccountingTargetError() }}</small>
++            } @else if (selectedManualTaskAccountingTarget(); as target) {
++              <div class="manual-task-accounting-preview">
++                <strong>{{ target.label }}</strong>
++                <small>{{ manualTaskTargetEffect(target) }}</small>
++                @if (target.currentAvailableKopecks != null) {
++                  <small>Доступно сейчас: {{ formatKopecks(target.currentAvailableKopecks) }}</small>
++                }
++                @if ((target.projectedOverrunKopecks || 0) > 0) {
++                  <small class="manual-task-accounting-warning">
++                    Превышение: {{ formatKopecks(target.projectedOverrunKopecks) }}. Оно будет записано как аномалия, сумма не будет уменьшена или перенаправлена владельцу.
++                  </small>
++                  <label class="manual-task-accounting-ack">
++                    <input type="checkbox" [ngModel]="manualTaskAccountingTargetAcknowledged()" (ngModelChange)="setManualTaskAccountingTargetAcknowledged($event)">
++                    <span>Подтверждаю создание задания с этим превышением.</span>
++                  </label>
++                }
++              </div>
++            }
+             <label>
+               <span>Комментарий</span>
+               <input
+@@ -611,6 +648,9 @@
+                   <div>
+                     <strong>{{ manualTaskTitle(task) }}</strong>
+                     <small>{{ manualTaskSubtitle(task) }}</small>
++                    <small>
++                      Учёт: {{ task.accountingTargetResolved === false ? 'получатель задания не привязан' : (task.accountingTargetLabel || 'не указан') }}
++                    </small>
+                   </div>
+                   <span class="task-status">{{ manualTaskStatusLabel(task.status) }}</span>
+                 </header>
+@@ -636,6 +676,9 @@
+                 @if (task.comment) {
+                   <p>{{ task.comment }}</p>
+                 }
++                @if (task.accountingTargetResolved === false) {
++                  <p class="manual-task-accounting-warning" role="alert">Новые счета по заданию заблокированы, пока получатель не будет привязан.</p>
++                }
+                 @if (manualTaskEditingId() === task.id) {
+                   <div class="manual-task-edit-form">
+                     <div class="manual-mode-toggle" aria-label="Способ задания">
+@@ -651,12 +694,43 @@
+                     @if (manualTaskEditPaymentType() === 'EXTERNAL_LINK') {
+                       <label><span>Ссылка оплаты</span><input type="url" [ngModel]="manualTaskEditPaymentUrl()" (ngModelChange)="setManualTaskEditPaymentUrl($event)"></label>
+                       <label><span>Текст кнопки</span><input [ngModel]="manualTaskEditPaymentButtonLabel()" (ngModelChange)="setManualTaskEditPaymentButtonLabel($event)"></label>
+-                      <label><span>Получатель</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
++                      <label><span>Получатель в банке</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                     } @else {
+                       <label><span>Телефон</span><input autocomplete="tel" [ngModel]="manualTaskEditPhone()" (ngModelChange)="setManualTaskEditPhone($event)" placeholder="+7..."></label>
+-                      <label><span>Получатель</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
++                      <label><span>Получатель в банке</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                     }
+                     <label><span>Цель, руб.</span><input type="number" min="1" step="100" [ngModel]="manualTaskEditAmountRubles()" (ngModelChange)="setManualTaskEditAmount($event)"></label>
++                    <label>
++                      <span>Кому учитывать оплату</span>
++                      <select [ngModel]="manualTaskEditAccountingTargetKey()" (ngModelChange)="setManualTaskEditAccountingTarget($event)" [disabled]="manualTaskEditAccountingTargetsLoading()">
++                        <option value="">Выберите получателя</option>
++                        @for (target of manualTaskEditAccountingTargets(); track target.key) {
++                          <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">{{ target.label }}</option>
++                        }
++                      </select>
++                    </label>
++                    @if (manualTaskEditAccountingTargetsLoading()) {
++                      <small class="manual-task-accounting-note">Пересчитываем лимит…</small>
++                    } @else if (manualTaskEditAccountingTargetError()) {
++                      <small class="manual-task-accounting-warning" role="alert">{{ manualTaskEditAccountingTargetError() }}</small>
++                    } @else if (selectedManualTaskEditAccountingTarget(); as target) {
++                      <div class="manual-task-accounting-preview">
++                        <strong>{{ target.label }}</strong>
++                        <small>{{ manualTaskTargetEffect(target) }}</small>
++                        @if (target.currentAvailableKopecks != null) {
++                          <small>Доступно сейчас: {{ formatKopecks(target.currentAvailableKopecks) }}</small>
++                        }
++                        @if ((target.projectedOverrunKopecks || 0) > 0) {
++                          <small class="manual-task-accounting-warning">
++                            Превышение: {{ formatKopecks(target.projectedOverrunKopecks) }}. Система сохранит его как аномалию.
++                          </small>
++                          <label class="manual-task-accounting-ack">
++                            <input type="checkbox" [ngModel]="manualTaskEditAccountingTargetAcknowledged()" (ngModelChange)="setManualTaskEditAccountingTargetAcknowledged($event)">
++                            <span>Подтверждаю сохранение задания с этим превышением.</span>
++                          </label>
++                        }
++                      </div>
++                    }
+                     <label><span>Комментарий</span><input [ngModel]="manualTaskEditComment()" (ngModelChange)="setManualTaskEditComment($event)"></label>
+                   </div>
+                   <footer>
+diff --git a/frontend/src/app/features/home/home.component.scss b/frontend/src/app/features/home/home.component.scss
+index 393163ad..e4786788 100644
+--- a/frontend/src/app/features/home/home.component.scss
++++ b/frontend/src/app/features/home/home.component.scss
+@@ -741,7 +741,8 @@ small {
+   font-size: 0.82rem;
+ }
+ 
+-.manual-task-form input {
++.manual-task-form input:not([type='checkbox']),
++.manual-task-form select {
+   width: 100%;
+   min-height: 2.55rem;
+   border: 1px solid rgba(103, 116, 131, 0.25);
+@@ -821,7 +822,8 @@ small {
+   text-transform: uppercase;
+ }
+ 
+-.manual-task-edit-form input {
++.manual-task-edit-form input:not([type='checkbox']),
++.manual-task-edit-form select {
+   width: 100%;
+   min-width: 0;
+   min-height: 2.55rem;
+@@ -834,6 +836,50 @@ small {
+   box-sizing: border-box;
+ }
+ 
++.manual-task-accounting-field,
++.manual-task-accounting-preview,
++.manual-task-accounting-note,
++.manual-task-accounting-warning {
++  grid-column: 1 / -1;
++}
++
++.manual-task-accounting-preview {
++  display: grid;
++  gap: 0.3rem;
++  border: 1px solid rgba(69, 158, 133, 0.24);
++  border-radius: var(--otziv-small-radius);
++  padding: 0.7rem;
++  background: rgba(69, 158, 133, 0.07);
++}
++
++.manual-task-accounting-preview small,
++.manual-task-accounting-note {
++  color: var(--otziv-info);
++  font-weight: 800;
++}
++
++.manual-task-accounting-warning {
++  color: #a83f47 !important;
++  font-weight: 900 !important;
++}
++
++.manual-task-form .manual-task-accounting-ack,
++.manual-task-edit-form .manual-task-accounting-ack {
++  display: flex;
++  grid-column: 1 / -1;
++  grid-template-columns: auto minmax(0, 1fr);
++  align-items: flex-start;
++  gap: 0.55rem;
++  color: #8f3b43;
++}
++
++.manual-task-accounting-ack input {
++  width: 1.1rem;
++  height: 1.1rem;
++  min-height: 0;
++  margin-top: 0.1rem;
++}
++
+ .task-status {
+   flex: 0 0 auto;
+   border-radius: 999px;
+diff --git a/frontend/src/app/features/home/home.component.ts b/frontend/src/app/features/home/home.component.ts
+index 94b7231d..28764796 100644
+--- a/frontend/src/app/features/home/home.component.ts
++++ b/frontend/src/app/features/home/home.component.ts
+@@ -6,6 +6,7 @@ import {
+   CabinetApi,
+   CabinetProfile,
+   ManagerManualPaymentSettings,
++  ManualPaymentTaskAccountingTargetOption,
+   ManualPaymentTaskResponse,
+   ManualPaymentType,
+   ManualPaymentTaskStatus
+@@ -43,6 +44,12 @@ import {
+   shouldShowLegacyCabinetMetrics
+ } from './contractor-payment-coverage';
+ import { ContractorPaymentMetricHelpComponent } from './contractor-payment-metric-help.component';
++import {
++  manualPaymentTaskSelectedTarget,
++  manualPaymentTaskTargetEffect,
++  manualPaymentTaskTargetForSnapshot,
++  manualPaymentTaskTargetValid
++} from '../../shared/manual-payment-task-target';
+ 
+ type DashboardAction = {
+   label: string;
+@@ -135,6 +142,11 @@ export class HomeComponent {
+   readonly manualTaskPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+   readonly manualTaskAmountRubles = signal('');
+   readonly manualTaskComment = signal('');
++  readonly manualTaskAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
++  readonly manualTaskAccountingTargetKey = signal('');
++  readonly manualTaskAccountingTargetAcknowledged = signal(false);
++  readonly manualTaskAccountingTargetsLoading = signal(false);
++  readonly manualTaskAccountingTargetError = signal<string | null>(null);
+   readonly manualTaskEditPaymentType = signal<ManualPaymentType>(DEFAULT_MANUAL_PAYMENT_TYPE);
+   readonly manualTaskEditPhone = signal('');
+   readonly manualTaskEditRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
+@@ -142,6 +154,13 @@ export class HomeComponent {
+   readonly manualTaskEditPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+   readonly manualTaskEditAmountRubles = signal('');
+   readonly manualTaskEditComment = signal('');
++  readonly manualTaskEditAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
++  readonly manualTaskEditAccountingTargetKey = signal('');
++  readonly manualTaskEditAccountingTargetAcknowledged = signal(false);
++  readonly manualTaskEditAccountingTargetsLoading = signal(false);
++  readonly manualTaskEditAccountingTargetError = signal<string | null>(null);
++  private manualTaskAccountingPreviewEpoch = 0;
++  private manualTaskEditAccountingPreviewEpoch = 0;
+   readonly error = signal<DashboardWarning | null>(null);
+   readonly healthError = signal<DashboardWarning | null>(null);
+   readonly cabinetError = signal<DashboardWarning | null>(null);
+@@ -340,6 +359,15 @@ export class HomeComponent {
+   readonly showManagerTeamProgress = computed(() =>
+     this.isManagerUser() && !this.reportReviewAccess.state()?.restricted
+   );
++  readonly selectedManualTaskAccountingTarget = computed(() => manualPaymentTaskSelectedTarget(
++    this.manualTaskAccountingTargets(),
++    this.manualTaskAccountingTargetKey()
++  ));
++  readonly selectedManualTaskEditAccountingTarget = computed(() => manualPaymentTaskSelectedTarget(
++    this.manualTaskEditAccountingTargets(),
++    this.manualTaskEditAccountingTargetKey()
++  ));
++  readonly manualTaskTargetEffect = manualPaymentTaskTargetEffect;
+ 
+   readonly canCreateManualTask = computed(() => {
+     const hasTarget = this.manualTaskPaymentType() === 'MOBILE_BANK'
+@@ -347,7 +375,11 @@ export class HomeComponent {
+       : Boolean(this.manualTaskPaymentUrl().trim()) && Boolean(this.manualTaskRecipient().trim());
+     return !this.manualTaskSaving()
+       && hasTarget
+-      && this.manualTaskTargetKopecks() > 0;
++      && this.manualTaskTargetKopecks() > 0
++      && !this.manualTaskAccountingTargetsLoading()
++      && manualPaymentTaskTargetValid(
++        this.selectedManualTaskAccountingTarget(), this.manualTaskAccountingTargetAcknowledged()
++      );
+   });
+ 
+   readonly cabinetMetrics = computed(() => {
+@@ -789,6 +821,16 @@ export class HomeComponent {
+ 
+   setManualTaskAmount(value: string | number | null): void {
+     this.manualTaskAmountRubles.set(value == null ? '' : String(value));
++    this.loadManualTaskAccountingTargets();
++  }
++
++  setManualTaskAccountingTarget(value: string | null): void {
++    this.manualTaskAccountingTargetKey.set(value?.trim() ?? '');
++    this.manualTaskAccountingTargetAcknowledged.set(false);
++  }
++
++  setManualTaskAccountingTargetAcknowledged(value: boolean): void {
++    this.manualTaskAccountingTargetAcknowledged.set(Boolean(value));
+   }
+ 
+   setManualTaskComment(value: string): void {
+@@ -820,6 +862,16 @@ export class HomeComponent {
+ 
+   setManualTaskEditAmount(value: string | number | null): void {
+     this.manualTaskEditAmountRubles.set(value == null ? '' : String(value));
++    this.loadManualTaskEditAccountingTargets();
++  }
++
++  setManualTaskEditAccountingTarget(value: string | null): void {
++    this.manualTaskEditAccountingTargetKey.set(value?.trim() ?? '');
++    this.manualTaskEditAccountingTargetAcknowledged.set(false);
++  }
++
++  setManualTaskEditAccountingTargetAcknowledged(value: boolean): void {
++    this.manualTaskEditAccountingTargetAcknowledged.set(Boolean(value));
+   }
+ 
+   setManualTaskEditComment(value: string): void {
+@@ -838,10 +890,18 @@ export class HomeComponent {
+     this.manualTaskEditPaymentButtonLabel.set(this.manualPaymentButtonLabelOrDefault(task.manualPaymentButtonLabel));
+     this.manualTaskEditAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
+     this.manualTaskEditComment.set(task.comment ?? '');
++    this.manualTaskEditAccountingTargetKey.set('');
++    this.manualTaskEditAccountingTargetAcknowledged.set(false);
++    this.loadManualTaskEditAccountingTargets(task);
+   }
+ 
+   cancelManualTaskEdit(): void {
+     this.manualTaskEditingId.set(null);
++    this.manualTaskEditAccountingTargets.set([]);
++    this.manualTaskEditAccountingTargetKey.set('');
++    this.manualTaskEditAccountingTargetAcknowledged.set(false);
++    this.manualTaskEditAccountingTargetError.set(null);
++    this.manualTaskEditAccountingPreviewEpoch += 1;
+   }
+ 
+   canSaveManualTaskEdit(task: ManualPaymentTaskResponse): boolean {
+@@ -853,13 +913,21 @@ export class HomeComponent {
+       && task.status !== 'COMPLETED'
+       && task.status !== 'CANCELED'
+       && hasTarget
+-      && this.manualTaskEditTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0);
++      && this.manualTaskEditTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0)
++      && !this.manualTaskEditAccountingTargetsLoading()
++      && manualPaymentTaskTargetValid(
++        this.selectedManualTaskEditAccountingTarget(), this.manualTaskEditAccountingTargetAcknowledged()
++      );
+   }
+ 
+   createManualPaymentTask(): void {
+     if (!this.canCreateManualTask()) {
+       return;
+     }
++    const accountingTarget = this.selectedManualTaskAccountingTarget();
++    if (!accountingTarget) {
++      return;
++    }
+ 
+     this.manualTaskSaving.set(true);
+     this.manualTaskError.set(null);
+@@ -870,7 +938,10 @@ export class HomeComponent {
+       manualPaymentUrl: this.manualTaskPaymentUrl().trim(),
+       manualPaymentButtonLabel: this.manualTaskPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+       targetAmountKopecks: this.manualTaskTargetKopecks(),
+-      comment: this.manualTaskComment().trim() || null
++      comment: this.manualTaskComment().trim() || null,
++      accountingTargetKind: accountingTarget.kind,
++      accountingTargetProfileId: accountingTarget.profileId ?? null,
++      accountingTargetOverrunAcknowledged: this.manualTaskAccountingTargetAcknowledged()
+     }).subscribe({
+       next: (task) => {
+         this.manualPaymentTasks.update((tasks) => [task, ...tasks]);
+@@ -881,6 +952,11 @@ export class HomeComponent {
+         this.manualTaskPaymentButtonLabel.set(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+         this.manualTaskAmountRubles.set('');
+         this.manualTaskComment.set('');
++        this.manualTaskAccountingTargets.set([]);
++        this.manualTaskAccountingTargetKey.set('');
++        this.manualTaskAccountingTargetAcknowledged.set(false);
++        this.manualTaskAccountingTargetError.set(null);
++        this.manualTaskAccountingPreviewEpoch += 1;
+         this.manualTaskSaving.set(false);
+         this.toastService.success('Платежное задание создано', 'Новые ссылки сначала будут проверять это задание.');
+       },
+@@ -919,6 +995,10 @@ export class HomeComponent {
+     if (!task?.id || !this.canSaveManualTaskEdit(task)) {
+       return;
+     }
++    const accountingTarget = this.selectedManualTaskEditAccountingTarget();
++    if (!accountingTarget) {
++      return;
++    }
+     this.manualTaskMutatingId.set(task.id);
+     this.cabinetApi.updateManagerManualPaymentTask(task.id, {
+       manualPaymentType: this.manualTaskEditPaymentType(),
+@@ -930,7 +1010,11 @@ export class HomeComponent {
+       comment: this.manualTaskEditComment().trim() || null,
+       manualPaymentUrlReplacementConfirmed: this.manualTaskEditPaymentType() === 'EXTERNAL_LINK'
+         && !Boolean(task.manualPaymentUrl?.trim())
+-        && Boolean(this.manualTaskEditPaymentUrl().trim())
++        && Boolean(this.manualTaskEditPaymentUrl().trim()),
++      accountingTargetKind: accountingTarget.kind,
++      accountingTargetProfileId: accountingTarget.profileId ?? null,
++      accountingTargetOverrunAcknowledged: this.manualTaskEditAccountingTargetAcknowledged(),
++      expectedGeneration: task.generation ?? null
+     }).subscribe({
+       next: (updated) => {
+         this.replaceManualTask(updated);
+@@ -1026,6 +1110,85 @@ export class HomeComponent {
+     return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
+   }
+ 
++  private loadManualTaskAccountingTargets(): void {
++    const amount = this.manualTaskTargetKopecks();
++    const previousKey = this.manualTaskAccountingTargetKey();
++    const epoch = ++this.manualTaskAccountingPreviewEpoch;
++    this.manualTaskAccountingTargetAcknowledged.set(false);
++    this.manualTaskAccountingTargetError.set(null);
++    if (amount <= 0) {
++      this.manualTaskAccountingTargets.set([]);
++      this.manualTaskAccountingTargetKey.set('');
++      this.manualTaskAccountingTargetsLoading.set(false);
++      return;
++    }
++    this.manualTaskAccountingTargetsLoading.set(true);
++    this.cabinetApi.getManagerManualPaymentTaskAccountingTargets(amount).subscribe({
++      next: (options) => {
++        if (epoch !== this.manualTaskAccountingPreviewEpoch) {
++          return;
++        }
++        const normalized = options ?? [];
++        this.manualTaskAccountingTargets.set(normalized);
++        this.manualTaskAccountingTargetKey.set(
++          normalized.some(option => option.key === previousKey) ? previousKey : ''
++        );
++        this.manualTaskAccountingTargetsLoading.set(false);
++      },
++      error: (error) => {
++        if (epoch !== this.manualTaskAccountingPreviewEpoch) {
++          return;
++        }
++        this.manualTaskAccountingTargets.set([]);
++        this.manualTaskAccountingTargetKey.set('');
++        this.manualTaskAccountingTargetsLoading.set(false);
++        this.manualTaskAccountingTargetError.set(apiErrorDetail(
++          error, 'Не удалось рассчитать получателя и возможное превышение.'
++        ));
++      }
++    });
++  }
++
++  private loadManualTaskEditAccountingTargets(sourceTask?: ManualPaymentTaskResponse): void {
++    const task = sourceTask ?? this.manualPaymentTasks().find(item => item.id === this.manualTaskEditingId());
++    const amount = this.manualTaskEditTargetKopecks();
++    const previousKey = this.manualTaskEditAccountingTargetKey();
++    const epoch = ++this.manualTaskEditAccountingPreviewEpoch;
++    this.manualTaskEditAccountingTargetAcknowledged.set(false);
++    this.manualTaskEditAccountingTargetError.set(null);
++    if (!task || amount <= 0) {
++      this.manualTaskEditAccountingTargets.set([]);
++      this.manualTaskEditAccountingTargetKey.set('');
++      this.manualTaskEditAccountingTargetsLoading.set(false);
++      return;
++    }
++    this.manualTaskEditAccountingTargetsLoading.set(true);
++    this.cabinetApi.getManagerManualPaymentTaskAccountingTargets(amount, task.id).subscribe({
++      next: (options) => {
++        if (epoch !== this.manualTaskEditAccountingPreviewEpoch) {
++          return;
++        }
++        const normalized = options ?? [];
++        const restored = normalized.find(option => option.key === previousKey)
++          ?? manualPaymentTaskTargetForSnapshot(normalized, task);
++        this.manualTaskEditAccountingTargets.set(normalized);
++        this.manualTaskEditAccountingTargetKey.set(restored?.key ?? '');
++        this.manualTaskEditAccountingTargetsLoading.set(false);
++      },
++      error: (error) => {
++        if (epoch !== this.manualTaskEditAccountingPreviewEpoch) {
++          return;
++        }
++        this.manualTaskEditAccountingTargets.set([]);
++        this.manualTaskEditAccountingTargetKey.set('');
++        this.manualTaskEditAccountingTargetsLoading.set(false);
++        this.manualTaskEditAccountingTargetError.set(apiErrorDetail(
++          error, 'Не удалось пересчитать получателя задания.'
++        ));
++      }
++    });
++  }
++
+   private normalizeManualPaymentType(value?: string | null): ManualPaymentType {
+     return value === 'EXTERNAL_LINK' ? 'EXTERNAL_LINK' : DEFAULT_MANUAL_PAYMENT_TYPE;
+   }
+diff --git a/frontend/src/app/features/manager/manager-board-action.facade.ts b/frontend/src/app/features/manager/manager-board-action.facade.ts
+index c04d5d81..64181279 100644
+--- a/frontend/src/app/features/manager/manager-board-action.facade.ts
++++ b/frontend/src/app/features/manager/manager-board-action.facade.ts
+@@ -1,6 +1,7 @@
+ import type { WritableSignal } from '@angular/core';
+ import type { CompanyCardItem, ManagerApi, ManagerBoard, OrderCardItem } from '../../core/manager.api';
+ import type { ToastService } from '../../shared/toast.service';
++import { manualPaymentRouteErrorCode } from '../../shared/manual-payment-routing';
+ import type { StatusAction } from './manager-board.config';
+ 
+ type ManagerBoardActionApi = Pick<
+@@ -82,6 +83,9 @@ export class ManagerBoardActionFacade {
+     if (!err || typeof err !== 'object' || !('status' in err) || err.status !== 409 || !('error' in err)) {
+       return false;
+     }
++    if (manualPaymentRouteErrorCode(err) === 'ACTUAL_RECIPIENT_REQUIRED') {
++      return true;
++    }
+     const payload = err.error;
+     const message = typeof payload === 'string'
+       ? payload
+diff --git a/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.html b/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.html
+index e4920047..a2916617 100644
+--- a/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.html
++++ b/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.html
+@@ -31,10 +31,17 @@
+           <dd>{{ money(paymentContext.amountKopecks) }}</dd>
+         </div>
+         <div>
+-          <dt>Изначально в счёте</dt>
++          <dt>Изначальный маршрут</dt>
+           <dd>{{ recipientLabel(paymentContext.originalRecipient) }}</dd>
+         </div>
+       </dl>
++      @if (isTaskRecipient(paymentContext.originalRecipient)) {
++        <p class="manual-payment-warning recipient-change" role="status">
++          Реквизиты в банке: {{ paymentContext.originalRecipient.taskRecipientName || paymentContext.originalRecipient.displayName }}.
++          Учёт: {{ paymentContext.originalRecipient.accountingTargetLabel || 'получатель задания не привязан' }}.
++          {{ recipientEffect(paymentContext.originalRecipient) }}
++        </p>
++      }
+       @if (paymentContext.recipientSelectionFrozen) {
+         <p class="manual-payment-warning recipient-change" role="status">
+           Восстанавливаем ранее подготовленное подтверждение. Получатель, причина и чек уже зафиксированы сервером и недоступны для изменения; повтор отправит те же данные.
+@@ -59,7 +66,7 @@
+         </label>
+ 
+         @if (selectedRecipient(); as selected) {
+-          @if (selected.recipientType !== 'OWNER') {
++          @if (selected.availableKopecks != null || selected.projectedOverrunKopecks != null) {
+             <dl class="recipient-capacity" aria-label="Расчёт выбранного получателя">
+               <div>
+                 <dt>Доступно до оплаты</dt>
+@@ -71,6 +78,9 @@
+               </div>
+             </dl>
+           }
++          <p class="manual-payment-warning recipient-change" role="status">
++            {{ recipientEffect(selected) }}
++          </p>
+         }
+ 
+         @if (recipientChanged()) {
+diff --git a/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.spec.ts b/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.spec.ts
+index fffc8ece..d26150b5 100644
+--- a/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.spec.ts
++++ b/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.spec.ts
+@@ -80,4 +80,24 @@ describe('manager manual card payment recipient selection', () => {
+       preparedReason: 'сохранено'
+     }))).toBeNull();
+   });
++
++  it('uses the exact frozen task key instead of collapsing the task into its contractor profile', () => {
++    const taskRecipient: ManualCardPaymentRecipientOption = {
++      key: 'TASK:16:4',
++      cashDestinationKind: 'MANUAL_PAYMENT_TASK',
++      recipientType: 'SPECIALIST',
++      recipientProfileId: 25,
++      displayName: 'Наталья',
++      manualPaymentTaskId: 16,
++      manualPaymentTaskGeneration: 4,
++      taskTargetKind: 'SPECIALIST',
++      taskRecipientName: 'Наталья',
++      accountingTargetLabel: 'Специалист · Наталья'
++    };
++    const fixture = context({ originalRecipient: taskRecipient, candidates: [owner, specialist, taskRecipient] });
++
++    expect(manualCardRecipientKey(taskRecipient)).toBe('TASK:16:4');
++    expect(manualCardPaymentSelectionRecipient(fixture)).toBe(taskRecipient);
++    expect(manualCardRecipientKey(taskRecipient)).not.toBe(manualCardRecipientKey(specialist));
++  });
+ });
+diff --git a/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.ts b/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.ts
+index 8d5e43b4..7d7aa2a7 100644
+--- a/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.ts
++++ b/frontend/src/app/features/manager/manager-manual-card-payment-modal.component.ts
+@@ -9,6 +9,14 @@ import {
+   type ManualCardPaymentRecipientOption,
+   type OrderCardItem
+ } from '../../core/manager.api';
++import {
++  isManualPaymentTaskRecipient,
++  isRetryablePaymentRouteError,
++  manualPaymentRecipientEffect,
++  manualPaymentRecipientKey as taskAwareRecipientKey,
++  manualPaymentRecipientLabel,
++  manualPaymentRouteErrorMessage
++} from '../../shared/manual-payment-routing';
+ 
+ export interface ManagerManualCardPaymentCompleted {
+   context: ManualCardPaymentContext;
+@@ -16,7 +24,7 @@ export interface ManagerManualCardPaymentCompleted {
+ }
+ 
+ export function manualCardRecipientKey(candidate: ManualCardPaymentRecipientOption): string {
+-  return `${candidate.recipientType}:${candidate.recipientProfileId ?? ''}`;
++  return taskAwareRecipientKey(candidate);
+ }
+ 
+ function matchingManualCardRecipient(
+@@ -27,6 +35,9 @@ function matchingManualCardRecipient(
+     return null;
+   }
+   const expectedKey = manualCardRecipientKey(expectedRecipient);
++  if (!expectedKey) {
++    return null;
++  }
+   return candidates.find((candidate) => manualCardRecipientKey(candidate) === expectedKey) ?? null;
+ }
+ 
+@@ -78,6 +89,8 @@ export class ManagerManualCardPaymentModalComponent implements OnInit {
+   @Output() readonly closed = new EventEmitter<void>();
+   @Output() readonly completed = new EventEmitter<ManagerManualCardPaymentCompleted>();
+   readonly recipientKey = manualCardRecipientKey;
++  readonly recipientEffect = manualPaymentRecipientEffect;
++  readonly isTaskRecipient = isManualPaymentTaskRecipient;
+ 
+   readonly context = signal<ManualCardPaymentContext | null>(null);
+   readonly loading = signal(true);
+@@ -127,7 +140,9 @@ export class ManagerManualCardPaymentModalComponent implements OnInit {
+     void this.loadContext();
+   }
+ 
+-  async loadContext(): Promise<void> {
++  async loadContext(preserveDraft = false): Promise<void> {
++    const draftReason = this.reason();
++    const draftReceiptUrl = this.receiptUrl();
+     this.loading.set(true);
+     this.error.set(null);
+     try {
+@@ -136,6 +151,9 @@ export class ManagerManualCardPaymentModalComponent implements OnInit {
+       if (!candidates.length) {
+         throw new Error('Сервер не вернул доступных получателей оплаты.');
+       }
++      if (candidates.some(candidate => !manualCardRecipientKey(candidate))) {
++        throw new Error('Сервер вернул получателя без безопасного ключа маршрута. Оплата не изменена.');
++      }
+       const normalizedContext = { ...context, candidates };
+       const defaultRecipient = manualCardPaymentSelectionRecipient(normalizedContext);
+       if (!defaultRecipient) {
+@@ -152,8 +170,8 @@ export class ManagerManualCardPaymentModalComponent implements OnInit {
+         this.reason.set(preparedReason);
+         this.receiptUrl.set(preparedReceiptUrl);
+       } else {
+-        this.reason.set('');
+-        this.receiptUrl.set('');
++        this.reason.set(preserveDraft ? draftReason : '');
++        this.receiptUrl.set(preserveDraft ? draftReceiptUrl : '');
+       }
+       this.context.set(normalizedContext);
+       this.selectedRecipientKey.set(manualCardRecipientKey(defaultRecipient));
+@@ -202,6 +220,7 @@ export class ManagerManualCardPaymentModalComponent implements OnInit {
+     const request: ManualCardPaymentConfirmationRequest = {
+       reason: submission.reason,
+       receiptUrl: submission.receiptUrl,
++      recipientKey: manualCardRecipientKey(submission.recipient),
+       recipientType: submission.recipient.recipientType,
+       recipientProfileId: submission.recipient.recipientProfileId ?? null
+     };
+@@ -211,20 +230,21 @@ export class ManagerManualCardPaymentModalComponent implements OnInit {
+       await firstValueFrom(this.managerApi.confirmManualCardPayment(this.order.id, request));
+       this.completed.emit({ context, recipient: submission.recipient });
+     } catch (error) {
+-      this.error.set(this.errorMessage(error, 'Не удалось безопасно подтвердить перевод.'));
++      if (isRetryablePaymentRouteError(error)) {
++        await this.loadContext(true);
++        if (this.context()) {
++          this.error.set(manualPaymentRouteErrorMessage(error, 'Маршрут оплаты изменился. Проверьте выбор ещё раз.'));
++        }
++      } else {
++        this.error.set(manualPaymentRouteErrorMessage(error, 'Не удалось безопасно подтвердить перевод.'));
++      }
+     } finally {
+       this.saving.set(false);
+     }
+   }
+ 
+   recipientLabel(candidate: ManualCardPaymentRecipientOption): string {
+-    const role = candidate.recipientType === 'OWNER'
+-      ? 'Владелец'
+-      : candidate.recipientType === 'MANAGER'
+-        ? 'Менеджер'
+-        : 'Специалист';
+-    const name = candidate.displayName?.trim();
+-    return name ? `${role} · ${name}` : role;
++    return manualPaymentRecipientLabel(candidate);
+   }
+ 
+   money(kopecks: number | null | undefined): string {
+diff --git a/mobile/src/app/core/api.service.ts b/mobile/src/app/core/api.service.ts
+index fb2c914c..b2329603 100644
+--- a/mobile/src/app/core/api.service.ts
++++ b/mobile/src/app/core/api.service.ts
+@@ -31,6 +31,25 @@ export type PaymentReceiptStatus = 'PENDING' | 'MARKED';
+ export type ManualPaymentSource = 'PROFILE_MONTHLY_LIMIT' | 'MANUAL_TASK';
+ export type ManualPaymentType = 'MOBILE_BANK' | 'EXTERNAL_LINK';
+ export type ManualPaymentTaskStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELED';
++export type ManualPaymentTaskAccountingTargetKind =
++  | 'UNRESOLVED'
++  | 'EXTERNAL_TASK'
++  | 'OWNER'
++  | 'SPECIALIST'
++  | 'MANAGER';
++
++export interface ManualPaymentTaskAccountingTargetOption {
++  key: string;
++  kind: ManualPaymentTaskAccountingTargetKind;
++  profileId?: number | null;
++  userId?: number | null;
++  role?: 'SPECIALIST' | 'MANAGER' | null;
++  label: string;
++  enabled: boolean;
++  currentAvailableKopecks?: number | null;
++  projectedOverrunKopecks?: number | null;
++  overrunAcknowledgementRequired: boolean;
++}
+ export type PaymentLinkListSource = 'LIVE' | 'ARCHIVE';
+ 
+ export interface AdminPaymentLinkResponse {
+@@ -200,6 +219,17 @@ export interface ManualPaymentTaskResponse {
+   updatedAt?: string | null;
+   completedAt?: string | null;
+   routable: boolean;
++  accountingTargetKind?: ManualPaymentTaskAccountingTargetKind | null;
++  accountingTargetProfileId?: number | null;
++  accountingTargetLabel?: string | null;
++  accountingTargetResolved?: boolean;
++  generation?: number;
++  rowVersion?: number | null;
++  targetCurrentAvailableKopecks?: number | null;
++  targetProjectedOverrunKopecks?: number | null;
++  accountingTargetOverrunAcknowledged?: boolean;
++  accountingTargetOverrunAcknowledgedAt?: string | null;
++  accountingTargetOverrunAcknowledgedBy?: string | null;
+ }
+ 
+ export interface ManualPaymentRecipientMonthlySummaryItem {
+@@ -236,6 +266,9 @@ export interface CreateManualPaymentTaskRequest {
+   manualPaymentButtonLabel?: string | null;
+   targetAmountKopecks: number;
+   comment?: string | null;
++  accountingTargetKind: ManualPaymentTaskAccountingTargetKind;
++  accountingTargetProfileId?: number | null;
++  accountingTargetOverrunAcknowledged: boolean;
+ }
+ 
+ export interface UpdateManualPaymentTaskRequest {
+@@ -247,6 +280,10 @@ export interface UpdateManualPaymentTaskRequest {
+   targetAmountKopecks: number;
+   comment?: string | null;
+   manualPaymentUrlReplacementConfirmed?: boolean;
++  accountingTargetKind: ManualPaymentTaskAccountingTargetKind;
++  accountingTargetProfileId?: number | null;
++  accountingTargetOverrunAcknowledged: boolean;
++  expectedGeneration: number | null;
+ }
+ 
+ export interface ManagerPaymentLinkResponse {
+@@ -1078,20 +1115,32 @@ export interface ManualPaymentConfirmationRequest {
+ }
+ 
+ export type ManualCardPaymentRecipientType = 'OWNER' | 'MANAGER' | 'SPECIALIST';
++export type ManualPaymentCashDestinationKind = 'OWNER' | 'CONTRACTOR_PROFILE' | 'MANUAL_PAYMENT_TASK';
++export type ManualPaymentTaskTargetKind = 'EXTERNAL_TASK' | 'OWNER' | 'SPECIALIST' | 'MANAGER';
+ 
+ export interface ManualCardPaymentRecipientOption {
+-  recipientType: ManualCardPaymentRecipientType;
++  key?: string | null;
++  cashDestinationKind?: ManualPaymentCashDestinationKind | null;
++  recipientType?: ManualCardPaymentRecipientType | null;
+   recipientProfileId?: number | null;
+   recipientUserId?: number | null;
+   displayName: string;
+   availableKopecks?: number | null;
+   projectedOverrunKopecks?: number | null;
+   anomalyWarning?: string | null;
++  manualPaymentTaskId?: number | null;
++  manualPaymentTaskGeneration?: number | null;
++  taskTargetKind?: ManualPaymentTaskTargetKind | null;
++  taskRecipientName?: string | null;
++  accountingTargetLabel?: string | null;
++  effectText?: string | null;
+ }
+ 
+ export interface ManualCardPaymentContext {
+   orderId: number;
+   amountKopecks: number;
++  contractVersion?: 'TASK_RECIPIENT_V1' | string | null;
++  routeRevision?: string | null;
+   originalRecipient: ManualCardPaymentRecipientOption;
+   candidates: ManualCardPaymentRecipientOption[];
+   anomalyWarning?: string | null;
+@@ -1104,7 +1153,8 @@ export interface ManualCardPaymentContext {
+ export interface ManualCardPaymentConfirmationRequest {
+   reason: string;
+   receiptUrl?: string | null;
+-  recipientType: ManualCardPaymentRecipientType;
++  recipientKey: string;
++  recipientType?: ManualCardPaymentRecipientType | null;
+   recipientProfileId?: number | null;
+ }
+ 
+@@ -1114,10 +1164,13 @@ export interface CommonManualPaymentAttributionModeResponse {
+ 
+ export type CommonActualRecipientType = 'SPECIALIST' | 'MANAGER' | 'OWNER';
+ export type CommonManualPaymentMode = 'STANDARD' | 'TBANK_FALLBACK';
++export type CommonPaymentCashDestinationKind = 'OWNER' | 'CONTRACTOR_PROFILE' | 'MANUAL_PAYMENT_TASK';
++export type CommonManualPaymentTaskTargetKind = 'EXTERNAL_TASK' | 'OWNER' | 'SPECIALIST' | 'MANAGER';
+ 
+ export interface CommonManualPaymentRecipientCandidate {
+   key: string;
+-  recipientType: CommonActualRecipientType;
++  cashDestinationKind?: CommonPaymentCashDestinationKind | null;
++  recipientType?: CommonActualRecipientType | null;
+   recipientProfileId?: number | null;
+   recipientUserId?: number | null;
+   label: string;
+@@ -1125,6 +1178,12 @@ export interface CommonManualPaymentRecipientCandidate {
+   currentParticipant: boolean;
+   profileEnabled: boolean;
+   availableKopecks?: number | null;
++  manualPaymentTaskId?: number | null;
++  manualPaymentTaskGeneration?: number | null;
++  taskTargetKind?: CommonManualPaymentTaskTargetKind | null;
++  taskRecipientName?: string | null;
++  accountingTargetLabel?: string | null;
++  effectText?: string | null;
+ }
+ 
+ export interface CommonManualPaymentAttributionHistoryItem {
+@@ -1151,13 +1210,16 @@ export interface CommonManualPaymentOptions {
+   invoiceId: number;
+   remainingKopecks: number;
+   defaultRecipientKey: string;
++  contractVersion?: 'TASK_RECIPIENT_V1' | string | null;
++  routeRevision?: string | null;
+   candidates: CommonManualPaymentRecipientCandidate[];
+   history: CommonManualPaymentAttributionHistoryItem[];
+ }
+ 
+ export interface CommonManualPaymentAttributionRowRequest {
+   rowKey: string;
+-  recipientType: CommonActualRecipientType;
++  recipientKey: string;
++  recipientType: CommonActualRecipientType | null;
+   recipientProfileId: number | null;
+   amountKopecks: number;
+ }
+@@ -3273,6 +3335,20 @@ export class ApiService {
+     );
+   }
+ 
++  getManagerManualPaymentTaskAccountingTargets(
++    targetAmountKopecks: number,
++    taskId?: number | null
++  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
++    let params = new HttpParams().set('targetAmountKopecks', targetAmountKopecks);
++    if (taskId != null) {
++      params = params.set('taskId', taskId);
++    }
++    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
++      this.apiUrl('/api/cabinet/manual-payment-tasks/accounting-targets'),
++      { params }
++    );
++  }
++
+   createManagerManualPaymentTask(
+     request: CreateManualPaymentTaskRequest
+   ): Observable<ManualPaymentTaskResponse> {
+@@ -4931,6 +5007,23 @@ export class ApiService {
+     return this.http.get<ManualPaymentTaskResponse[]>(this.apiUrl('/api/admin/payments/manual-tasks'));
+   }
+ 
++  getAdminManualPaymentTaskAccountingTargets(
++    managerId: number,
++    targetAmountKopecks: number,
++    taskId?: number | null
++  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
++    let params = new HttpParams()
++      .set('managerId', managerId)
++      .set('targetAmountKopecks', targetAmountKopecks);
++    if (taskId != null) {
++      params = params.set('taskId', taskId);
++    }
++    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
++      this.apiUrl('/api/admin/payments/manual-tasks/accounting-targets'),
++      { params }
++    );
++  }
++
+   getAdminManualRecipientMonthlySummary(month: string): Observable<ManualPaymentRecipientMonthlySummaryResponse> {
+     const params = month ? new HttpParams().set('month', month) : new HttpParams();
+     return this.http.get<ManualPaymentRecipientMonthlySummaryResponse>(
+diff --git a/mobile/src/app/features/home.page.ts b/mobile/src/app/features/home.page.ts
+index 27683767..dff1290c 100644
+--- a/mobile/src/app/features/home.page.ts
++++ b/mobile/src/app/features/home.page.ts
+@@ -11,6 +11,7 @@ import {
+   DictionarySummary,
+   DictionarySummaryItem,
+   ManagerManualPaymentSettings,
++  ManualPaymentTaskAccountingTargetOption,
+   ManualPaymentTaskResponse,
+   ManualPaymentTaskStatus,
+   ManualPaymentType,
+@@ -52,6 +53,12 @@ import { MobileContractorPaymentSummaryComponent } from '../shared/mobile-contra
+ import {
+   shouldShowLegacyContractorMetrics
+ } from '../shared/contractor-payment-summary';
++import {
++  mobileManualTaskSelectedTarget,
++  mobileManualTaskTargetEffect,
++  mobileManualTaskTargetForSnapshot,
++  mobileManualTaskTargetValid
++} from '../shared/manual-payment-task-target';
+ 
+ type HomeSectionKey = 'profile' | 'analytics' | 'team' | 'score' | 'dictionaries';
+ type HomeTone = 'blue' | 'green' | 'teal' | 'violet' | 'yellow';
+@@ -296,12 +303,41 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль
+                       @if (manualTaskPaymentType() === 'EXTERNAL_LINK') {
+                         <label><span>Ссылка оплаты</span><input type="url" [ngModel]="manualTaskPaymentUrl()" (ngModelChange)="setManualTaskPaymentUrl($event)"></label>
+                         <label><span>Текст кнопки</span><input [ngModel]="manualTaskPaymentButtonLabel()" (ngModelChange)="setManualTaskPaymentButtonLabel($event)"></label>
+-                        <label><span>Получатель</span><input [ngModel]="manualTaskRecipient()" (ngModelChange)="setManualTaskRecipient($event)"></label>
++                        <label><span>Получатель в банке</span><input [ngModel]="manualTaskRecipient()" (ngModelChange)="setManualTaskRecipient($event)"></label>
+                       } @else {
+                         <label><span>Телефон</span><input autocomplete="tel" [ngModel]="manualTaskPhone()" (ngModelChange)="setManualTaskPhone($event)" placeholder="+7..."></label>
+-                        <label><span>Получатель</span><input [ngModel]="manualTaskRecipient()" (ngModelChange)="setManualTaskRecipient($event)"></label>
++                        <label><span>Получатель в банке</span><input [ngModel]="manualTaskRecipient()" (ngModelChange)="setManualTaskRecipient($event)"></label>
+                       }
+                       <label><span>Цель, руб.</span><input type="number" min="1" step="100" [ngModel]="manualTaskAmountRubles()" (ngModelChange)="setManualTaskAmount($event)"></label>
++                      <label>
++                        <span>Кому учитывать оплату</span>
++                        <select [ngModel]="manualTaskAccountingTargetKey()" (ngModelChange)="setManualTaskAccountingTarget($event)" [disabled]="manualTaskAccountingTargetsLoading() || !manualTaskAmountRubles()">
++                          <option value="">Выберите получателя</option>
++                          @for (target of manualTaskAccountingTargets(); track target.key) {
++                            <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">{{ target.label }}</option>
++                          }
++                        </select>
++                      </label>
++                      @if (manualTaskAccountingTargetsLoading()) {
++                        <small class="manual-task-accounting-note">Проверяем лимиты и резервы…</small>
++                      } @else if (manualTaskAccountingTargetError()) {
++                        <small class="manual-task-accounting-warning" role="alert">{{ manualTaskAccountingTargetError() }}</small>
++                      } @else if (selectedManualTaskAccountingTarget(); as target) {
++                        <div class="manual-task-accounting-preview">
++                          <strong>{{ target.label }}</strong>
++                          <small>{{ manualTaskTargetEffect(target) }}</small>
++                          @if (target.currentAvailableKopecks != null) {
++                            <small>Доступно сейчас: {{ formatKopecks(target.currentAvailableKopecks) }}</small>
++                          }
++                          @if ((target.projectedOverrunKopecks || 0) > 0) {
++                            <small class="manual-task-accounting-warning">Превышение {{ formatKopecks(target.projectedOverrunKopecks) }} будет записано как аномалия. Сумма не уменьшится и не уйдёт владельцу.</small>
++                            <label class="manual-task-accounting-ack">
++                              <input type="checkbox" [ngModel]="manualTaskAccountingTargetAcknowledged()" (ngModelChange)="setManualTaskAccountingTargetAcknowledged($event)">
++                              <span>Подтверждаю создание задания с превышением.</span>
++                            </label>
++                          }
++                        </div>
++                      }
+                       <label><span>Комментарий</span><input [ngModel]="manualTaskComment()" (ngModelChange)="setManualTaskComment($event)"></label>
+ 
+                       @if (manualTaskMessage()) {
+@@ -320,6 +356,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль
+                               <div>
+                                 <strong>{{ manualTaskTitle(task) }}</strong>
+                                 <small>{{ manualTaskSubtitle(task) }}</small>
++                                <small>Учёт: {{ task.accountingTargetResolved === false ? 'получатель не привязан' : (task.accountingTargetLabel || 'не указан') }}</small>
+                               </div>
+                               <b>{{ manualTaskStatusLabel(task.status) }}</b>
+                             </header>
+@@ -338,12 +375,38 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль
+                                 @if (manualTaskEditPaymentType() === 'EXTERNAL_LINK') {
+                                   <label><span>Ссылка оплаты</span><input type="url" [ngModel]="manualTaskEditPaymentUrl()" (ngModelChange)="setManualTaskEditPaymentUrl($event)"></label>
+                                   <label><span>Текст кнопки</span><input [ngModel]="manualTaskEditPaymentButtonLabel()" (ngModelChange)="setManualTaskEditPaymentButtonLabel($event)"></label>
+-                                  <label><span>Получатель</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
++                                  <label><span>Получатель в банке</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                                 } @else {
+                                   <label><span>Телефон</span><input autocomplete="tel" [ngModel]="manualTaskEditPhone()" (ngModelChange)="setManualTaskEditPhone($event)" placeholder="+7..."></label>
+-                                  <label><span>Получатель</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
++                                  <label><span>Получатель в банке</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                                 }
+                                 <label><span>Цель, руб.</span><input type="number" min="1" step="100" [ngModel]="manualTaskEditAmountRubles()" (ngModelChange)="setManualTaskEditAmount($event)"></label>
++                                <label>
++                                  <span>Кому учитывать оплату</span>
++                                  <select [ngModel]="manualTaskEditAccountingTargetKey()" (ngModelChange)="setManualTaskEditAccountingTarget($event)" [disabled]="manualTaskEditAccountingTargetsLoading()">
++                                    <option value="">Выберите получателя</option>
++                                    @for (target of manualTaskEditAccountingTargets(); track target.key) {
++                                      <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">{{ target.label }}</option>
++                                    }
++                                  </select>
++                                </label>
++                                @if (manualTaskEditAccountingTargetsLoading()) {
++                                  <small class="manual-task-accounting-note">Пересчитываем лимит…</small>
++                                } @else if (manualTaskEditAccountingTargetError()) {
++                                  <small class="manual-task-accounting-warning" role="alert">{{ manualTaskEditAccountingTargetError() }}</small>
++                                } @else if (selectedManualTaskEditAccountingTarget(); as target) {
++                                  <div class="manual-task-accounting-preview">
++                                    <strong>{{ target.label }}</strong>
++                                    <small>{{ manualTaskTargetEffect(target) }}</small>
++                                    @if ((target.projectedOverrunKopecks || 0) > 0) {
++                                      <small class="manual-task-accounting-warning">Превышение {{ formatKopecks(target.projectedOverrunKopecks) }} будет сохранено как аномалия.</small>
++                                      <label class="manual-task-accounting-ack">
++                                        <input type="checkbox" [ngModel]="manualTaskEditAccountingTargetAcknowledged()" (ngModelChange)="setManualTaskEditAccountingTargetAcknowledged($event)">
++                                        <span>Подтверждаю сохранение с превышением.</span>
++                                      </label>
++                                    }
++                                  </div>
++                                }
+                                 <label><span>Комментарий</span><input [ngModel]="manualTaskEditComment()" (ngModelChange)="setManualTaskEditComment($event)"></label>
+                               </div>
+                               <footer>
+@@ -1316,7 +1379,8 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль
+       font-weight: 900;
+     }
+ 
+-    .manual-payment-card input {
++    .manual-payment-card input:not([type='checkbox']),
++    .manual-payment-card select {
+       width: 100%;
+       min-width: 0;
+       min-height: 2.25rem;
+@@ -1452,6 +1516,41 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль
+       gap: 0.42rem;
+     }
+ 
++    .manual-task-accounting-preview {
++      display: grid;
++      gap: .3rem;
++      border: 1px solid rgba(69, 158, 133, .25);
++      border-radius: .75rem;
++      padding: .7rem;
++      background: rgba(69, 158, 133, .07);
++    }
++
++    .manual-task-accounting-note,
++    .manual-task-accounting-preview small {
++      color: var(--otziv-info);
++      font-weight: 800;
++    }
++
++    .manual-task-accounting-warning {
++      color: #a83f47 !important;
++      font-weight: 900 !important;
++    }
++
++    .manual-payment-card .manual-task-accounting-ack {
++      display: grid;
++      grid-template-columns: auto minmax(0, 1fr);
++      align-items: flex-start;
++      gap: .5rem;
++      color: #8f3b43;
++    }
++
++    .manual-task-accounting-ack input {
++      width: 1.1rem;
++      height: 1.1rem;
++      min-height: 0;
++      margin-top: .1rem;
++    }
++
+     .manual-task-edit-form label {
+       display: grid;
+       gap: 0.22rem;
+@@ -2432,6 +2531,11 @@ export class HomePage implements OnInit, OnDestroy {
+   readonly manualTaskPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+   readonly manualTaskAmountRubles = signal('');
+   readonly manualTaskComment = signal('');
++  readonly manualTaskAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
++  readonly manualTaskAccountingTargetKey = signal('');
++  readonly manualTaskAccountingTargetAcknowledged = signal(false);
++  readonly manualTaskAccountingTargetsLoading = signal(false);
++  readonly manualTaskAccountingTargetError = signal<string | null>(null);
+   readonly manualTaskEditPaymentType = signal<ManualPaymentType>(DEFAULT_MANUAL_PAYMENT_TYPE);
+   readonly manualTaskEditPhone = signal('');
+   readonly manualTaskEditRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
+@@ -2439,6 +2543,13 @@ export class HomePage implements OnInit, OnDestroy {
+   readonly manualTaskEditPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+   readonly manualTaskEditAmountRubles = signal('');
+   readonly manualTaskEditComment = signal('');
++  readonly manualTaskEditAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
++  readonly manualTaskEditAccountingTargetKey = signal('');
++  readonly manualTaskEditAccountingTargetAcknowledged = signal(false);
++  readonly manualTaskEditAccountingTargetsLoading = signal(false);
++  readonly manualTaskEditAccountingTargetError = signal<string | null>(null);
++  private manualTaskAccountingPreviewEpoch = 0;
++  private manualTaskEditAccountingPreviewEpoch = 0;
+   readonly manualTaskMessage = signal<string | null>(null);
+ 
+   readonly teamSections = TEAM_SECTIONS;
+@@ -2850,9 +2961,23 @@ export class HomePage implements OnInit, OnDestroy {
+       : Boolean(this.manualTaskPaymentUrl().trim()) && Boolean(this.manualTaskRecipient().trim());
+     return !this.manualTaskSaving()
+       && hasTarget
+-      && this.manualTaskTargetKopecks() > 0;
++      && this.manualTaskTargetKopecks() > 0
++      && !this.manualTaskAccountingTargetsLoading()
++      && mobileManualTaskTargetValid(
++        this.selectedManualTaskAccountingTarget(), this.manualTaskAccountingTargetAcknowledged()
++      );
++  }
++
++  selectedManualTaskAccountingTarget(): ManualPaymentTaskAccountingTargetOption | null {
++    return mobileManualTaskSelectedTarget(this.manualTaskAccountingTargets(), this.manualTaskAccountingTargetKey());
++  }
++
++  selectedManualTaskEditAccountingTarget(): ManualPaymentTaskAccountingTargetOption | null {
++    return mobileManualTaskSelectedTarget(this.manualTaskEditAccountingTargets(), this.manualTaskEditAccountingTargetKey());
+   }
+ 
++  readonly manualTaskTargetEffect = mobileManualTaskTargetEffect;
++
+   setManualPaymentType(value: ManualPaymentType): void {
+     this.manualPaymentType.set(value);
+     if (!this.manualPaymentRecipient().trim()) {
+@@ -2952,6 +3077,16 @@ export class HomePage implements OnInit, OnDestroy {
+   setManualTaskAmount(value: string | number | null): void {
+     this.manualTaskAmountRubles.set(value == null ? '' : String(value));
+     this.manualTaskMessage.set(null);
++    void this.loadManualTaskAccountingTargets();
++  }
++
++  setManualTaskAccountingTarget(value: string | null): void {
++    this.manualTaskAccountingTargetKey.set(value?.trim() ?? '');
++    this.manualTaskAccountingTargetAcknowledged.set(false);
++  }
++
++  setManualTaskAccountingTargetAcknowledged(value: boolean): void {
++    this.manualTaskAccountingTargetAcknowledged.set(Boolean(value));
+   }
+ 
+   setManualTaskComment(value: string): void {
+@@ -2989,6 +3124,16 @@ export class HomePage implements OnInit, OnDestroy {
+   setManualTaskEditAmount(value: string | number | null): void {
+     this.manualTaskEditAmountRubles.set(value == null ? '' : String(value));
+     this.manualTaskMessage.set(null);
++    void this.loadManualTaskEditAccountingTargets();
++  }
++
++  setManualTaskEditAccountingTarget(value: string | null): void {
++    this.manualTaskEditAccountingTargetKey.set(value?.trim() ?? '');
++    this.manualTaskEditAccountingTargetAcknowledged.set(false);
++  }
++
++  setManualTaskEditAccountingTargetAcknowledged(value: boolean): void {
++    this.manualTaskEditAccountingTargetAcknowledged.set(Boolean(value));
+   }
+ 
+   setManualTaskEditComment(value: string): void {
+@@ -3008,11 +3153,19 @@ export class HomePage implements OnInit, OnDestroy {
+     this.manualTaskEditAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
+     this.manualTaskEditComment.set(task.comment ?? '');
+     this.manualTaskMessage.set(null);
++    this.manualTaskEditAccountingTargetKey.set('');
++    this.manualTaskEditAccountingTargetAcknowledged.set(false);
++    void this.loadManualTaskEditAccountingTargets(task);
+   }
+ 
+   cancelManualTaskEdit(): void {
+     this.manualTaskEditingId.set(null);
+     this.manualTaskMessage.set(null);
++    this.manualTaskEditAccountingTargets.set([]);
++    this.manualTaskEditAccountingTargetKey.set('');
++    this.manualTaskEditAccountingTargetAcknowledged.set(false);
++    this.manualTaskEditAccountingTargetError.set(null);
++    this.manualTaskEditAccountingPreviewEpoch += 1;
+   }
+ 
+   canSaveManualTaskEdit(task: ManualPaymentTaskResponse): boolean {
+@@ -3024,13 +3177,21 @@ export class HomePage implements OnInit, OnDestroy {
+       && task.status !== 'COMPLETED'
+       && task.status !== 'CANCELED'
+       && hasTarget
+-      && this.manualTaskEditTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0);
++      && this.manualTaskEditTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0)
++      && !this.manualTaskEditAccountingTargetsLoading()
++      && mobileManualTaskTargetValid(
++        this.selectedManualTaskEditAccountingTarget(), this.manualTaskEditAccountingTargetAcknowledged()
++      );
+   }
+ 
+   async createManualPaymentTask(): Promise<void> {
+     if (!this.canCreateManualTask()) {
+       return;
+     }
++    const accountingTarget = this.selectedManualTaskAccountingTarget();
++    if (!accountingTarget) {
++      return;
++    }
+ 
+     this.manualTaskSaving.set(true);
+     this.manualTaskMessage.set(null);
+@@ -3042,7 +3203,10 @@ export class HomePage implements OnInit, OnDestroy {
+         manualPaymentUrl: this.manualTaskPaymentUrl().trim(),
+         manualPaymentButtonLabel: this.manualTaskPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+         targetAmountKopecks: this.manualTaskTargetKopecks(),
+-        comment: this.manualTaskComment().trim() || null
++        comment: this.manualTaskComment().trim() || null,
++        accountingTargetKind: accountingTarget.kind,
++        accountingTargetProfileId: accountingTarget.profileId ?? null,
++        accountingTargetOverrunAcknowledged: this.manualTaskAccountingTargetAcknowledged()
+       }));
+       this.manualPaymentTasks.update((tasks) => [task, ...tasks]);
+       this.manualTaskPaymentType.set(DEFAULT_MANUAL_PAYMENT_TYPE);
+@@ -3052,6 +3216,11 @@ export class HomePage implements OnInit, OnDestroy {
+       this.manualTaskPaymentButtonLabel.set(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+       this.manualTaskAmountRubles.set('');
+       this.manualTaskComment.set('');
++      this.manualTaskAccountingTargets.set([]);
++      this.manualTaskAccountingTargetKey.set('');
++      this.manualTaskAccountingTargetAcknowledged.set(false);
++      this.manualTaskAccountingTargetError.set(null);
++      this.manualTaskAccountingPreviewEpoch += 1;
+       this.manualTaskMessage.set('Задание создано.');
+     } catch (error) {
+       const message = this.errorMessage(error);
+@@ -3084,6 +3253,10 @@ export class HomePage implements OnInit, OnDestroy {
+     if (!task?.id || !this.canSaveManualTaskEdit(task)) {
+       return;
+     }
++    const accountingTarget = this.selectedManualTaskEditAccountingTarget();
++    if (!accountingTarget) {
++      return;
++    }
+     this.manualTaskMutatingId.set(task.id);
+     this.manualTaskMessage.set(null);
+     try {
+@@ -3097,7 +3270,11 @@ export class HomePage implements OnInit, OnDestroy {
+         comment: this.manualTaskEditComment().trim() || null,
+         manualPaymentUrlReplacementConfirmed: this.manualTaskEditPaymentType() === 'EXTERNAL_LINK'
+           && !Boolean(task.manualPaymentUrl?.trim())
+-          && Boolean(this.manualTaskEditPaymentUrl().trim())
++          && Boolean(this.manualTaskEditPaymentUrl().trim()),
++        accountingTargetKind: accountingTarget.kind,
++        accountingTargetProfileId: accountingTarget.profileId ?? null,
++        accountingTargetOverrunAcknowledged: this.manualTaskEditAccountingTargetAcknowledged(),
++        expectedGeneration: task.generation ?? null
+       }));
+       this.manualPaymentTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
+       this.manualTaskEditingId.set(null);
+@@ -3677,6 +3854,11 @@ export class HomePage implements OnInit, OnDestroy {
+     this.manualTaskPaymentButtonLabel.set(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+     this.manualTaskAmountRubles.set('');
+     this.manualTaskComment.set('');
++    this.manualTaskAccountingTargets.set([]);
++    this.manualTaskAccountingTargetKey.set('');
++    this.manualTaskAccountingTargetAcknowledged.set(false);
++    this.manualTaskAccountingTargetError.set(null);
++    this.manualTaskAccountingPreviewEpoch += 1;
+     this.manualTaskMessage.set(null);
+   }
+ 
+@@ -3690,6 +3872,67 @@ export class HomePage implements OnInit, OnDestroy {
+     return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
+   }
+ 
++  private async loadManualTaskAccountingTargets(): Promise<void> {
++    const amount = this.manualTaskTargetKopecks();
++    const previousKey = this.manualTaskAccountingTargetKey();
++    const epoch = ++this.manualTaskAccountingPreviewEpoch;
++    this.manualTaskAccountingTargetAcknowledged.set(false);
++    this.manualTaskAccountingTargetError.set(null);
++    if (amount <= 0) {
++      this.manualTaskAccountingTargets.set([]);
++      this.manualTaskAccountingTargetKey.set('');
++      this.manualTaskAccountingTargetsLoading.set(false);
++      return;
++    }
++    this.manualTaskAccountingTargetsLoading.set(true);
++    try {
++      const options = await firstValueFrom(this.api.getManagerManualPaymentTaskAccountingTargets(amount));
++      if (epoch !== this.manualTaskAccountingPreviewEpoch) return;
++      const normalized = options ?? [];
++      this.manualTaskAccountingTargets.set(normalized);
++      this.manualTaskAccountingTargetKey.set(normalized.some(option => option.key === previousKey) ? previousKey : '');
++    } catch (error) {
++      if (epoch !== this.manualTaskAccountingPreviewEpoch) return;
++      this.manualTaskAccountingTargets.set([]);
++      this.manualTaskAccountingTargetKey.set('');
++      this.manualTaskAccountingTargetError.set(this.errorMessage(error));
++    } finally {
++      if (epoch === this.manualTaskAccountingPreviewEpoch) this.manualTaskAccountingTargetsLoading.set(false);
++    }
++  }
++
++  private async loadManualTaskEditAccountingTargets(sourceTask?: ManualPaymentTaskResponse): Promise<void> {
++    const task = sourceTask ?? this.manualPaymentTasks().find(item => item.id === this.manualTaskEditingId());
++    const amount = this.manualTaskEditTargetKopecks();
++    const previousKey = this.manualTaskEditAccountingTargetKey();
++    const epoch = ++this.manualTaskEditAccountingPreviewEpoch;
++    this.manualTaskEditAccountingTargetAcknowledged.set(false);
++    this.manualTaskEditAccountingTargetError.set(null);
++    if (!task || amount <= 0) {
++      this.manualTaskEditAccountingTargets.set([]);
++      this.manualTaskEditAccountingTargetKey.set('');
++      this.manualTaskEditAccountingTargetsLoading.set(false);
++      return;
++    }
++    this.manualTaskEditAccountingTargetsLoading.set(true);
++    try {
++      const options = await firstValueFrom(this.api.getManagerManualPaymentTaskAccountingTargets(amount, task.id));
++      if (epoch !== this.manualTaskEditAccountingPreviewEpoch) return;
++      const normalized = options ?? [];
++      const restored = normalized.find(option => option.key === previousKey)
++        ?? mobileManualTaskTargetForSnapshot(normalized, task);
++      this.manualTaskEditAccountingTargets.set(normalized);
++      this.manualTaskEditAccountingTargetKey.set(restored?.key ?? '');
++    } catch (error) {
++      if (epoch !== this.manualTaskEditAccountingPreviewEpoch) return;
++      this.manualTaskEditAccountingTargets.set([]);
++      this.manualTaskEditAccountingTargetKey.set('');
++      this.manualTaskEditAccountingTargetError.set(this.errorMessage(error));
++    } finally {
++      if (epoch === this.manualTaskEditAccountingPreviewEpoch) this.manualTaskEditAccountingTargetsLoading.set(false);
++    }
++  }
++
+   private normalizeManualPaymentType(value?: string | null): ManualPaymentType {
+     return value === 'EXTERNAL_LINK' ? 'EXTERNAL_LINK' : DEFAULT_MANUAL_PAYMENT_TYPE;
+   }
+diff --git a/mobile/src/app/features/manager.page.ts b/mobile/src/app/features/manager.page.ts
+index 90e8bd98..1cf4595e 100644
+--- a/mobile/src/app/features/manager.page.ts
++++ b/mobile/src/app/features/manager.page.ts
+@@ -56,7 +56,10 @@ import {
+ import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-format';
+ import { safeExternalSchemeUrl, safeHttpsExternalUrl } from '../shared/external-navigation';
+ import { orderReviewCopyText } from '../shared/order-review-copy-text';
+-import { buildManualPaymentConfirmationRequest } from '../shared/manual-payment-confirmation';
++import {
++  buildManualPaymentConfirmationRequest,
++  isManualCardPaymentFallbackConflict
++} from '../shared/manual-payment-confirmation';
+ import { MobileManualCardPaymentFlowService } from '../shared/mobile-manual-card-payment-flow.service';
+ import { MobileCommonManualPaymentFlowService } from '../shared/mobile-common-manual-payment-flow.service';
+ import {
+@@ -92,8 +95,6 @@ type ManagerListState = {
+ type CompanyFilialEditDraft = CompanyFilialUpdateRequest & { filialId: number };
+ type CompanyNoteSaveState = ManagerNoteSaveState;
+ type OrderNoteSaveState = CompanyNoteSaveState;
+-const UNFINISHED_PROVIDER_PAYMENT_MESSAGE =
+-  'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.';
+ type CompanyCreateDraft = {
+   source: CompanyCreateSource;
+   leadId: number | null;
+@@ -3276,9 +3277,7 @@ export class ManagerPage implements OnInit, OnDestroy {
+   }
+ 
+   private isUnfinishedProviderPaymentConflict(error: unknown): boolean {
+-    return error instanceof HttpErrorResponse
+-      && error.status === 409
+-      && this.apiErrorMessage(error, '') === UNFINISHED_PROVIDER_PAYMENT_MESSAGE;
++    return error instanceof HttpErrorResponse && isManualCardPaymentFallbackConflict(error);
+   }
+ 
+   private async applyCommonInvoiceStatus(order: OrderItem, status: string): Promise<boolean> {
+diff --git a/mobile/src/app/features/tbank.page.ts b/mobile/src/app/features/tbank.page.ts
+index 6cdc22e1..3e23dedb 100644
+--- a/mobile/src/app/features/tbank.page.ts
++++ b/mobile/src/app/features/tbank.page.ts
+@@ -15,6 +15,7 @@ import {
+   ApiService,
+   ManualPaymentRecipientMonthlySummaryItem,
+   ManualPaymentRecipientMonthlySummaryResponse,
++  ManualPaymentTaskAccountingTargetOption,
+   ManualPaymentTaskResponse,
+   ManualPaymentTaskStatus,
+   ManualPaymentType,
+@@ -39,6 +40,12 @@ import { paymentTargetForUpdate } from '../shared/payment-navigation';
+ import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
+ import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
+ import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
++import {
++  mobileManualTaskSelectedTarget,
++  mobileManualTaskTargetEffect,
++  mobileManualTaskTargetForSnapshot,
++  mobileManualTaskTargetValid
++} from '../shared/manual-payment-task-target';
+ 
+ type TbankMode = 'payments' | 'recipients' | 'launch' | 'tasks' | 'profiles' | 'managers';
+ type PaymentStatusFilter = 'all' | 'active' | 'paid' | 'refunded' | 'failed' | 'created' | 'manual';
+@@ -634,7 +641,7 @@ function currentMonthInput(): string {
+                 }
+ 
+                 <label class="profile-field">
+-                  <span>Получатель</span>
++                  <span>Получатель в банке</span>
+                   <input
+                     type="text"
+                     [ngModel]="adminTaskRecipient()"
+@@ -666,6 +673,35 @@ function currentMonthInput(): string {
+                     >
+                   </label>
+                 </div>
++                <label class="profile-field manual-task-accounting-field">
++                  <span>Кому учитывать оплату</span>
++                  <select [ngModel]="adminTaskAccountingTargetKey()" (ngModelChange)="setAdminTaskAccountingTarget($event)" [disabled]="adminTaskAccountingTargetsLoading() || adminTaskManagerId() == null || !adminTaskAmountRubles()">
++                    <option value="">Выберите получателя</option>
++                    @for (target of adminTaskAccountingTargets(); track target.key) {
++                      <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">{{ target.label }}</option>
++                    }
++                  </select>
++                </label>
++                @if (adminTaskAccountingTargetsLoading()) {
++                  <small class="manual-task-accounting-note">Проверяем лимиты и резервы…</small>
++                } @else if (adminTaskAccountingTargetError()) {
++                  <small class="manual-task-accounting-warning" role="alert">{{ adminTaskAccountingTargetError() }}</small>
++                } @else if (selectedAdminTaskAccountingTarget(); as target) {
++                  <div class="manual-task-accounting-preview">
++                    <strong>{{ target.label }}</strong>
++                    <small>{{ manualTaskTargetEffect(target) }}</small>
++                    @if (target.currentAvailableKopecks != null) {
++                      <small>Доступно сейчас: {{ formatKopecks(target.currentAvailableKopecks) }}</small>
++                    }
++                    @if ((target.projectedOverrunKopecks || 0) > 0) {
++                      <small class="manual-task-accounting-warning">Превышение {{ formatKopecks(target.projectedOverrunKopecks) }} будет сохранено как аномалия; сумма не уменьшится и не уйдёт владельцу.</small>
++                      <label class="manual-task-accounting-ack">
++                        <input type="checkbox" [ngModel]="adminTaskAccountingTargetAcknowledged()" (ngModelChange)="setAdminTaskAccountingTargetAcknowledged($event)">
++                        <span>Подтверждаю создание задания с превышением.</span>
++                      </label>
++                    }
++                  </div>
++                }
+ 
+                 <footer class="task-actions">
+                   <button type="button" class="confirm" (click)="createManualTask()" [disabled]="!canCreateManualTask()">
+@@ -682,6 +718,7 @@ function currentMonthInput(): string {
+                     <div>
+                       <h2>{{ manualTaskTitle(task) }}</h2>
+                       <small>{{ manualTaskTargetLine(task) }}</small>
++                      <small>Учёт: {{ task.accountingTargetResolved === false ? 'получатель не привязан' : (task.accountingTargetLabel || 'не указан') }}</small>
+                     </div>
+                     <span class="status-pill {{ task.status === 'ACTIVE' ? 'manual' : 'neutral' }}">
+                       {{ manualTaskStatusLabel(task.status) }}
+@@ -720,7 +757,65 @@ function currentMonthInput(): string {
+                     </div>
+                   }
+ 
++                  @if (task.accountingTargetResolved === false) {
++                    <div class="manual-note manual-task-accounting-warning">
++                      <strong>Нужна привязка получателя</strong>
++                      <small>Новые счета и подтверждение оплаты заблокированы, пока вы явно не выберете учёт.</small>
++                    </div>
++                  }
++
++                  @if (editingTaskId() === task.id) {
++                    <div class="manual-task-edit-card">
++                      <div class="segmented two profile-policy-segment">
++                        <button type="button" [class.active]="editTaskPaymentType() === 'MOBILE_BANK'" (click)="setEditTaskPaymentType('MOBILE_BANK')">Телефон</button>
++                        <button type="button" [class.active]="editTaskPaymentType() === 'EXTERNAL_LINK'" (click)="setEditTaskPaymentType('EXTERNAL_LINK')">Ссылка</button>
++                      </div>
++                      @if (editTaskPaymentType() === 'EXTERNAL_LINK') {
++                        <label class="profile-field"><span>Ссылка оплаты</span><input type="url" [ngModel]="editTaskPaymentUrl()" (ngModelChange)="editTaskPaymentUrl.set($event || '')"></label>
++                        <label class="profile-field"><span>Текст кнопки</span><input [ngModel]="editTaskPaymentButtonLabel()" (ngModelChange)="editTaskPaymentButtonLabel.set($event || '')"></label>
++                      } @else {
++                        <label class="profile-field"><span>Телефон</span><input type="tel" [ngModel]="editTaskPhone()" (ngModelChange)="editTaskPhone.set($event || '')"></label>
++                      }
++                      <label class="profile-field"><span>Получатель в банке</span><input [ngModel]="editTaskRecipient()" (ngModelChange)="editTaskRecipient.set($event || '')"></label>
++                      <label class="profile-field"><span>Цель, руб.</span><input type="number" min="1" [ngModel]="editTaskAmountRubles()" (ngModelChange)="setEditTaskAmountRubles($event)"></label>
++                      <label class="profile-field"><span>Комментарий</span><input [ngModel]="editTaskComment()" (ngModelChange)="editTaskComment.set($event || '')"></label>
++                      <label class="profile-field">
++                        <span>Кому учитывать оплату</span>
++                        <select [ngModel]="editTaskAccountingTargetKey()" (ngModelChange)="setEditTaskAccountingTarget($event)" [disabled]="editTaskAccountingTargetsLoading()">
++                          <option value="">Выберите получателя</option>
++                          @for (target of editTaskAccountingTargets(); track target.key) {
++                            <option [value]="target.key" [disabled]="!target.enabled || target.kind === 'UNRESOLVED'">{{ target.label }}</option>
++                          }
++                        </select>
++                      </label>
++                      @if (editTaskAccountingTargetsLoading()) {
++                        <small class="manual-task-accounting-note">Пересчитываем лимит…</small>
++                      } @else if (editTaskAccountingTargetError()) {
++                        <small class="manual-task-accounting-warning" role="alert">{{ editTaskAccountingTargetError() }}</small>
++                      } @else if (selectedEditTaskAccountingTarget(); as target) {
++                        <div class="manual-task-accounting-preview">
++                          <strong>{{ target.label }}</strong>
++                          <small>{{ manualTaskTargetEffect(target) }}</small>
++                          @if ((target.projectedOverrunKopecks || 0) > 0) {
++                            <small class="manual-task-accounting-warning">Превышение {{ formatKopecks(target.projectedOverrunKopecks) }} будет сохранено как аномалия.</small>
++                            <label class="manual-task-accounting-ack">
++                              <input type="checkbox" [ngModel]="editTaskAccountingTargetAcknowledged()" (ngModelChange)="setEditTaskAccountingTargetAcknowledged($event)">
++                              <span>Подтверждаю сохранение с превышением.</span>
++                            </label>
++                          }
++                        </div>
++                      }
++                    </div>
++                  }
++
+                   <footer class="task-actions">
++                    @if (editingTaskId() === task.id) {
++                      <button type="button" class="confirm" (click)="saveManualTaskEdit(task)" [disabled]="!canSaveManualTaskEdit(task)"><span class="material-icons-sharp">save</span>сохранить</button>
++                      <button type="button" (click)="cancelManualTaskEdit()" [disabled]="mutatingTaskId() === task.id"><span class="material-icons-sharp">close</span>закрыть</button>
++                    } @else {
++                    @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
++                      <button type="button" (click)="startManualTaskEdit(task)" [disabled]="mutatingTaskId() === task.id"><span class="material-icons-sharp">edit</span>ред.</button>
++                    }
+                     @if (task.status === 'ACTIVE') {
+                       <button type="button" (click)="updateManualTaskStatus(task, 'PAUSED')" [disabled]="mutatingTaskId() === task.id">
+                         <span class="material-icons-sharp">pause</span>
+@@ -738,6 +833,7 @@ function currentMonthInput(): string {
+                         отменить
+                       </button>
+                     }
++                    }
+                   </footer>
+                 </article>
+               } @empty {
+@@ -1813,6 +1909,40 @@ function currentMonthInput(): string {
+       opacity: 0.72;
+     }
+ 
++    .manual-task-edit-card,
++    .manual-task-accounting-preview {
++      display: grid;
++      gap: .55rem;
++      border: 1px solid rgba(69, 158, 133, .22);
++      border-radius: .8rem;
++      padding: .7rem;
++      background: rgba(69, 158, 133, .06);
++    }
++
++    .manual-task-accounting-note,
++    .manual-task-accounting-preview small {
++      color: var(--otziv-info);
++      font-weight: 800;
++    }
++
++    .manual-task-accounting-warning {
++      color: #a83f47 !important;
++      font-weight: 900 !important;
++    }
++
++    .manual-task-accounting-ack {
++      display: grid !important;
++      grid-template-columns: auto minmax(0, 1fr);
++      align-items: flex-start;
++      gap: .5rem !important;
++    }
++
++    .manual-task-accounting-ack input {
++      width: 1.1rem !important;
++      height: 1.1rem;
++      min-height: 0 !important;
++    }
++
+     .profile-card header {
+       grid-template-columns: auto minmax(0, 1fr) auto;
+     }
+@@ -2025,6 +2155,7 @@ export class TbankPage implements OnInit {
+   readonly profiles = signal<PaymentProfileResponse[]>([]);
+   readonly managerProfiles = signal<ManagerPaymentProfileResponse[]>([]);
+   readonly manualTasks = signal<ManualPaymentTaskResponse[]>([]);
++  readonly editingTaskId = signal<number | null>(null);
+   readonly recipientSummaryMonth = signal(currentMonthInput());
+   readonly recipientMonthlySummary = signal<ManualPaymentRecipientMonthlySummaryResponse | null>(null);
+   readonly profileAssignments = signal<Record<number, number | null>>({});
+@@ -2065,6 +2196,25 @@ export class TbankPage implements OnInit {
+   readonly adminTaskPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+   readonly adminTaskAmountRubles = signal('');
+   readonly adminTaskComment = signal('');
++  readonly adminTaskAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
++  readonly adminTaskAccountingTargetKey = signal('');
++  readonly adminTaskAccountingTargetAcknowledged = signal(false);
++  readonly adminTaskAccountingTargetsLoading = signal(false);
++  readonly adminTaskAccountingTargetError = signal<string | null>(null);
++  readonly editTaskPaymentType = signal<ManualPaymentType>('MOBILE_BANK');
++  readonly editTaskPhone = signal('');
++  readonly editTaskRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
++  readonly editTaskPaymentUrl = signal(DEFAULT_MANUAL_PAYMENT_URL);
++  readonly editTaskPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
++  readonly editTaskAmountRubles = signal('');
++  readonly editTaskComment = signal('');
++  readonly editTaskAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
++  readonly editTaskAccountingTargetKey = signal('');
++  readonly editTaskAccountingTargetAcknowledged = signal(false);
++  readonly editTaskAccountingTargetsLoading = signal(false);
++  readonly editTaskAccountingTargetError = signal<string | null>(null);
++  private adminTaskAccountingPreviewEpoch = 0;
++  private editTaskAccountingPreviewEpoch = 0;
+   readonly modeItems = computed<MobileStatusItem[]>(() => [
+     {
+       key: 'payments',
+@@ -2170,6 +2320,13 @@ export class TbankPage implements OnInit {
+   readonly activeManualTaskCount = computed(() => {
+     return this.manualTasks().filter((task) => task.status === 'ACTIVE').length;
+   });
++  readonly selectedAdminTaskAccountingTarget = computed(() => mobileManualTaskSelectedTarget(
++    this.adminTaskAccountingTargets(), this.adminTaskAccountingTargetKey()
++  ));
++  readonly selectedEditTaskAccountingTarget = computed(() => mobileManualTaskSelectedTarget(
++    this.editTaskAccountingTargets(), this.editTaskAccountingTargetKey()
++  ));
++  readonly manualTaskTargetEffect = mobileManualTaskTargetEffect;
+ 
+   readonly canCreateManualTask = computed(() => {
+     const hasTarget = this.adminTaskPaymentType() === 'EXTERNAL_LINK'
+@@ -2178,7 +2335,11 @@ export class TbankPage implements OnInit {
+     return !this.savingManualTask()
+       && this.adminTaskManagerId() != null
+       && hasTarget
+-      && this.adminTaskTargetKopecks() > 0;
++      && this.adminTaskTargetKopecks() > 0
++      && !this.adminTaskAccountingTargetsLoading()
++      && mobileManualTaskTargetValid(
++        this.selectedAdminTaskAccountingTarget(), this.adminTaskAccountingTargetAcknowledged()
++      );
+   });
+ 
+   readonly tbankReadyForClientPayments = computed(() => {
+@@ -2612,6 +2773,7 @@ export class TbankPage implements OnInit {
+   setAdminTaskManagerId(value: number | string | null): void {
+     const id = value == null || value === '' ? NaN : Number(value);
+     this.adminTaskManagerId.set(Number.isFinite(id) && id > 0 ? id : null);
++    void this.loadAdminTaskAccountingTargets();
+   }
+ 
+   setAdminTaskPaymentType(value: ManualPaymentType): void {
+@@ -2639,6 +2801,16 @@ export class TbankPage implements OnInit {
+ 
+   setAdminTaskAmountRubles(value: string | number | null): void {
+     this.adminTaskAmountRubles.set(value == null ? '' : String(value));
++    void this.loadAdminTaskAccountingTargets();
++  }
++
++  setAdminTaskAccountingTarget(value: string | null): void {
++    this.adminTaskAccountingTargetKey.set(value?.trim() ?? '');
++    this.adminTaskAccountingTargetAcknowledged.set(false);
++  }
++
++  setAdminTaskAccountingTargetAcknowledged(value: boolean): void {
++    this.adminTaskAccountingTargetAcknowledged.set(Boolean(value));
+   }
+ 
+   setAdminTaskComment(value: string | null): void {
+@@ -2649,6 +2821,10 @@ export class TbankPage implements OnInit {
+     if (!this.canCreateManualTask()) {
+       return;
+     }
++    const accountingTarget = this.selectedAdminTaskAccountingTarget();
++    if (!accountingTarget) {
++      return;
++    }
+ 
+     this.savingManualTask.set(true);
+     this.error.set(null);
+@@ -2661,7 +2837,10 @@ export class TbankPage implements OnInit {
+         manualPaymentUrl: this.adminTaskPaymentUrl().trim(),
+         manualPaymentButtonLabel: this.adminTaskPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+         targetAmountKopecks: this.adminTaskTargetKopecks(),
+-        comment: this.adminTaskComment().trim() || null
++        comment: this.adminTaskComment().trim() || null,
++        accountingTargetKind: accountingTarget.kind,
++        accountingTargetProfileId: accountingTarget.profileId ?? null,
++        accountingTargetOverrunAcknowledged: this.adminTaskAccountingTargetAcknowledged()
+       }));
+       this.manualTasks.update((tasks) => [task, ...tasks]);
+       this.adminTaskPhone.set('');
+@@ -2671,6 +2850,11 @@ export class TbankPage implements OnInit {
+       this.adminTaskPaymentButtonLabel.set(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+       this.adminTaskAmountRubles.set('');
+       this.adminTaskComment.set('');
++      this.adminTaskAccountingTargets.set([]);
++      this.adminTaskAccountingTargetKey.set('');
++      this.adminTaskAccountingTargetAcknowledged.set(false);
++      this.adminTaskAccountingTargetError.set(null);
++      this.adminTaskAccountingPreviewEpoch += 1;
+     } catch (error) {
+       this.error.set(this.errorMessage(error, 'Не удалось создать ручное задание.'));
+     } finally {
+@@ -2839,6 +3023,81 @@ export class TbankPage implements OnInit {
+     }
+   }
+ 
++  startManualTaskEdit(task: ManualPaymentTaskResponse): void {
++    if (!task?.id || task.status === 'COMPLETED' || task.status === 'CANCELED') return;
++    this.editingTaskId.set(task.id);
++    this.editTaskPaymentType.set(task.manualPaymentType === 'EXTERNAL_LINK' ? 'EXTERNAL_LINK' : 'MOBILE_BANK');
++    this.editTaskPhone.set(task.manualPhone ?? '');
++    this.editTaskRecipient.set(task.manualRecipientName || DEFAULT_MANUAL_RECIPIENT_NAME);
++    this.editTaskPaymentUrl.set(task.manualPaymentUrl ?? '');
++    this.editTaskPaymentButtonLabel.set(task.manualPaymentButtonLabel || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
++    this.editTaskAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
++    this.editTaskComment.set(task.comment ?? '');
++    this.editTaskAccountingTargetKey.set('');
++    this.editTaskAccountingTargetAcknowledged.set(false);
++    void this.loadEditTaskAccountingTargets(task);
++  }
++
++  cancelManualTaskEdit(): void {
++    this.editingTaskId.set(null);
++    this.editTaskAccountingTargets.set([]);
++    this.editTaskAccountingTargetKey.set('');
++    this.editTaskAccountingTargetAcknowledged.set(false);
++    this.editTaskAccountingTargetError.set(null);
++    this.editTaskAccountingPreviewEpoch += 1;
++  }
++
++  setEditTaskPaymentType(value: ManualPaymentType): void {
++    this.editTaskPaymentType.set(value);
++  }
++
++  setEditTaskAmountRubles(value: string | number | null): void {
++    this.editTaskAmountRubles.set(value == null ? '' : String(value));
++    void this.loadEditTaskAccountingTargets();
++  }
++
++  setEditTaskAccountingTarget(value: string | null): void {
++    this.editTaskAccountingTargetKey.set(value?.trim() ?? '');
++    this.editTaskAccountingTargetAcknowledged.set(false);
++  }
++
++  setEditTaskAccountingTargetAcknowledged(value: boolean): void {
++    this.editTaskAccountingTargetAcknowledged.set(Boolean(value));
++  }
++
++  canSaveManualTaskEdit(task: ManualPaymentTaskResponse): boolean {
++    const hasBankTarget = this.editTaskPaymentType() === 'EXTERNAL_LINK'
++      ? Boolean(this.editTaskPaymentUrl().trim()) && Boolean(this.editTaskRecipient().trim())
++      : Boolean(this.editTaskPhone().trim()) && Boolean(this.editTaskRecipient().trim());
++    return this.editingTaskId() === task.id && this.mutatingTaskId() !== task.id
++      && this.editTaskTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0)
++      && hasBankTarget && !this.editTaskAccountingTargetsLoading()
++      && mobileManualTaskTargetValid(this.selectedEditTaskAccountingTarget(), this.editTaskAccountingTargetAcknowledged());
++  }
++
++  async saveManualTaskEdit(task: ManualPaymentTaskResponse): Promise<void> {
++    const accountingTarget = this.selectedEditTaskAccountingTarget();
++    if (!this.canSaveManualTaskEdit(task) || !accountingTarget) return;
++    this.mutatingTaskId.set(task.id);
++    try {
++      const updated = await firstValueFrom(this.api.updateAdminManualPaymentTask(task.id, {
++        manualPaymentType: this.editTaskPaymentType(), manualPhone: this.editTaskPhone().trim(),
++        manualRecipientName: this.editTaskRecipient().trim(), manualPaymentUrl: this.editTaskPaymentUrl().trim(),
++        manualPaymentButtonLabel: this.editTaskPaymentButtonLabel().trim(), targetAmountKopecks: this.editTaskTargetKopecks(),
++        comment: this.editTaskComment().trim() || null,
++        manualPaymentUrlReplacementConfirmed: this.editTaskPaymentType() === 'EXTERNAL_LINK' && !task.manualPaymentUrl?.trim() && Boolean(this.editTaskPaymentUrl().trim()),
++        accountingTargetKind: accountingTarget.kind, accountingTargetProfileId: accountingTarget.profileId ?? null,
++        accountingTargetOverrunAcknowledged: this.editTaskAccountingTargetAcknowledged(), expectedGeneration: task.generation ?? null
++      }));
++      this.manualTasks.update(tasks => tasks.map(item => item.id === updated.id ? updated : item));
++      this.cancelManualTaskEdit();
++    } catch (error) {
++      this.error.set(this.errorMessage(error, 'Не удалось сохранить ручное задание.'));
++    } finally {
++      this.mutatingTaskId.set(null);
++    }
++  }
++
+   copy(value: string | null | undefined, key: string): void {
+     const text = value?.trim();
+     if (!text) {
+@@ -3316,6 +3575,69 @@ export class TbankPage implements OnInit {
+     return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
+   }
+ 
++  private editTaskTargetKopecks(): number {
++    const value = Number(this.editTaskAmountRubles());
++    return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
++  }
++
++  private async loadAdminTaskAccountingTargets(): Promise<void> {
++    const managerId = this.adminTaskManagerId();
++    const amount = this.adminTaskTargetKopecks();
++    const previousKey = this.adminTaskAccountingTargetKey();
++    const epoch = ++this.adminTaskAccountingPreviewEpoch;
++    this.adminTaskAccountingTargetAcknowledged.set(false);
++    this.adminTaskAccountingTargetError.set(null);
++    if (managerId == null || amount <= 0) {
++      this.adminTaskAccountingTargets.set([]); this.adminTaskAccountingTargetKey.set('');
++      this.adminTaskAccountingTargetsLoading.set(false); return;
++    }
++    this.adminTaskAccountingTargetsLoading.set(true);
++    try {
++      const options = await firstValueFrom(this.api.getAdminManualPaymentTaskAccountingTargets(managerId, amount));
++      if (epoch !== this.adminTaskAccountingPreviewEpoch) return;
++      const normalized = options ?? [];
++      this.adminTaskAccountingTargets.set(normalized);
++      this.adminTaskAccountingTargetKey.set(normalized.some(option => option.key === previousKey) ? previousKey : '');
++    } catch (error) {
++      if (epoch !== this.adminTaskAccountingPreviewEpoch) return;
++      this.adminTaskAccountingTargets.set([]); this.adminTaskAccountingTargetKey.set('');
++      this.adminTaskAccountingTargetError.set(this.errorMessage(error, 'Не удалось рассчитать получателя.'));
++    } finally {
++      if (epoch === this.adminTaskAccountingPreviewEpoch) this.adminTaskAccountingTargetsLoading.set(false);
++    }
++  }
++
++  private async loadEditTaskAccountingTargets(sourceTask?: ManualPaymentTaskResponse): Promise<void> {
++    const task = sourceTask ?? this.manualTasks().find(item => item.id === this.editingTaskId());
++    const amount = this.editTaskTargetKopecks();
++    const previousKey = this.editTaskAccountingTargetKey();
++    const epoch = ++this.editTaskAccountingPreviewEpoch;
++    this.editTaskAccountingTargetAcknowledged.set(false);
++    this.editTaskAccountingTargetError.set(null);
++    if (!task?.managerId || amount <= 0) {
++      this.editTaskAccountingTargets.set([]); this.editTaskAccountingTargetKey.set('');
++      this.editTaskAccountingTargetsLoading.set(false);
++      this.editTaskAccountingTargetError.set(task?.managerId ? null : 'У задания не найден менеджер.');
++      return;
++    }
++    this.editTaskAccountingTargetsLoading.set(true);
++    try {
++      const options = await firstValueFrom(this.api.getAdminManualPaymentTaskAccountingTargets(task.managerId, amount, task.id));
++      if (epoch !== this.editTaskAccountingPreviewEpoch) return;
++      const normalized = options ?? [];
++      const restored = normalized.find(option => option.key === previousKey)
++        ?? mobileManualTaskTargetForSnapshot(normalized, task);
++      this.editTaskAccountingTargets.set(normalized);
++      this.editTaskAccountingTargetKey.set(restored?.key ?? '');
++    } catch (error) {
++      if (epoch !== this.editTaskAccountingPreviewEpoch) return;
++      this.editTaskAccountingTargets.set([]); this.editTaskAccountingTargetKey.set('');
++      this.editTaskAccountingTargetError.set(this.errorMessage(error, 'Не удалось пересчитать получателя.'));
++    } finally {
++      if (epoch === this.editTaskAccountingPreviewEpoch) this.editTaskAccountingTargetsLoading.set(false);
++    }
++  }
++
+   private manualLimitKopecksFromDraft(value: string): number {
+     const numeric = Number(value);
+     return this.rublesToKopecks(Number.isFinite(numeric) ? numeric : null)
+diff --git a/mobile/src/app/shared/manual-payment-confirmation.ts b/mobile/src/app/shared/manual-payment-confirmation.ts
+index ae4d2ad0..e7ddee79 100644
+--- a/mobile/src/app/shared/manual-payment-confirmation.ts
++++ b/mobile/src/app/shared/manual-payment-confirmation.ts
+@@ -1,3 +1,5 @@
++import { mobilePaymentRouteErrorCode } from './manual-payment-routing';
++
+ export interface ManualPaymentConfirmationEvidence {
+   comment: string;
+   receiptUrl: string;
+@@ -105,8 +107,7 @@ export function manualCardPaymentFallbackAccessDecision(
+   roles: readonly string[] | null | undefined,
+   orderId: number | null | undefined
+ ): ManualCardPaymentFallbackDecision {
+-  const exactConflict = apiErrorStatus(error) === 409
+-    && apiErrorMessage(error) === UNFINISHED_PROVIDER_PAYMENT_MESSAGE;
++  const exactConflict = isManualCardPaymentFallbackConflict(error);
+   if (!exactConflict) {
+     return decision(false, false, 'not-exact-conflict');
+   }
+@@ -126,6 +127,13 @@ export function manualCardPaymentFallbackAccessDecision(
+   return decision(true, true, 'allowed');
+ }
+ 
++export function isManualCardPaymentFallbackConflict(error: unknown): boolean {
++  return apiErrorStatus(error) === 409 && (
++    mobilePaymentRouteErrorCode(error) === 'ACTUAL_RECIPIENT_REQUIRED'
++      || apiErrorMessage(error) === UNFINISHED_PROVIDER_PAYMENT_MESSAGE
++  );
++}
++
+ export function shouldSubmitManualCardPaymentFallback(
+   fallbackDecision: ManualCardPaymentFallbackDecision,
+   explicitlyConfirmed: boolean
+diff --git a/mobile/src/app/shared/mobile-common-manual-payment-dialog.component.html b/mobile/src/app/shared/mobile-common-manual-payment-dialog.component.html
+index 36b070f5..1e96b48a 100644
+--- a/mobile/src/app/shared/mobile-common-manual-payment-dialog.component.html
++++ b/mobile/src/app/shared/mobile-common-manual-payment-dialog.component.html
+@@ -53,6 +53,14 @@
+             >
+           </label>
+           @if (candidate(row.recipientKey); as selected) {
++            @if (isTaskRecipient(selected)) {
++              <div class="manual-note">
++                <strong>Платёжное задание №{{ selected.manualPaymentTaskId }}</strong>
++                <small>Получатель в банке: {{ selected.taskRecipientName || selected.label }}</small>
++                <small>Учёт: {{ selected.accountingTargetLabel || 'не привязан' }}</small>
++                <small>{{ recipientEffect(selected) }}</small>
++              </div>
++            }
+             @if (selected.recipientType === 'OWNER') {
+               <small>Для владельца лимит распределения не применяется.</small>
+             } @else {
+diff --git a/mobile/src/app/shared/mobile-common-manual-payment-dialog.component.ts b/mobile/src/app/shared/mobile-common-manual-payment-dialog.component.ts
+index 4fe7cd04..2419ad98 100644
+--- a/mobile/src/app/shared/mobile-common-manual-payment-dialog.component.ts
++++ b/mobile/src/app/shared/mobile-common-manual-payment-dialog.component.ts
+@@ -21,6 +21,12 @@ import {
+   type CommonManualPaymentOptions,
+   type CommonManualPaymentRecipientCandidate
+ } from '../core/api.service';
++import {
++  mobileIsTaskRecipient,
++  mobilePaymentRouteErrorMessage,
++  mobileRetryablePaymentRouteError,
++  mobileTaskAwareRecipientEffect
++} from './manual-payment-routing';
+ 
+ interface CommonManualPaymentDraftRow {
+   rowKey: string;
+@@ -72,8 +78,10 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
+   readonly saving = signal(false);
+   readonly error = signal('');
+ 
+-  private readonly idempotencyKey = this.newKey();
++  private idempotencyKey = this.newKey();
+   private readonly effectiveAt = this.localDateTime(new Date());
++  readonly isTaskRecipient = mobileIsTaskRecipient;
++  readonly recipientEffect = mobileTaskAwareRecipientEffect;
+ 
+   readonly title = computed(() => this.mode === 'TBANK_FALLBACK'
+     ? 'Оплата переводом вместо T‑Bank'
+@@ -118,7 +126,9 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
+     void this.load();
+   }
+ 
+-  async load(): Promise<void> {
++  async load(preserveDraft = false): Promise<void> {
++    const draftReason = this.reason();
++    const draftReceiptUrl = this.receiptUrl();
+     this.loading.set(true);
+     this.error.set('');
+     try {
+@@ -138,6 +148,10 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
+         recipientKey: original.key,
+         amountRubles: this.rublesInput(normalized.remainingKopecks)
+       }] : []);
++      this.reason.set(preserveDraft ? draftReason : '');
++      this.receiptUrl.set(preserveDraft ? draftReceiptUrl : '');
++      this.paymentReceived.set(false);
++      this.finalAcknowledged.set(false);
+     } catch (error) {
+       this.options.set(null);
+       this.rows.set([]);
+@@ -233,6 +247,7 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
+       receiptUrl,
+       attributions: selected.map(({ row, candidate }) => ({
+         rowKey: row.rowKey,
++        recipientKey: candidate!.key,
+         recipientType: candidate!.recipientType,
+         recipientProfileId: candidate!.recipientProfileId ?? null,
+         amountKopecks: mobileCommonPaymentRublesToKopecks(row.amountRubles)!
+@@ -248,7 +263,15 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
+       const result: MobileCommonManualPaymentCompleted = { details };
+       await this.modalController.dismiss(result, 'completed');
+     } catch (error) {
+-      this.error.set(this.errorMessage(error, 'Не удалось учесть фактическое поступление.'));
++      if (mobileRetryablePaymentRouteError(error)) {
++        this.idempotencyKey = this.newKey();
++        await this.load(true);
++        if (this.options()) {
++          this.error.set(mobilePaymentRouteErrorMessage(error, 'Маршрут оплаты изменился. Проверьте распределение ещё раз.'));
++        }
++      } else {
++        this.error.set(mobilePaymentRouteErrorMessage(error, 'Не удалось учесть фактическое поступление.'));
++      }
+     } finally {
+       this.saving.set(false);
+     }
+diff --git a/mobile/src/app/shared/mobile-manual-card-payment-dialog.component.html b/mobile/src/app/shared/mobile-manual-card-payment-dialog.component.html
+index f7d541da..fb8a1fab 100644
+--- a/mobile/src/app/shared/mobile-manual-card-payment-dialog.component.html
++++ b/mobile/src/app/shared/mobile-manual-card-payment-dialog.component.html
+@@ -19,10 +19,17 @@
+         <strong>{{ money(context.amountKopecks) }}</strong>
+       </div>
+       <div class="wide">
+-        <span>Изначально в счёте</span>
++        <span>Изначальный маршрут</span>
+         <strong>{{ recipientLabel(context.originalRecipient) }}</strong>
+       </div>
+     </section>
++    @if (isTaskRecipient(context.originalRecipient)) {
++      <p class="notice recipient-change" role="status">
++        Реквизиты в банке: {{ context.originalRecipient.taskRecipientName || context.originalRecipient.displayName }}.
++        Учёт: {{ context.originalRecipient.accountingTargetLabel || 'получатель задания не привязан' }}.
++        {{ recipientEffect(context.originalRecipient) }}
++      </p>
++    }
+     @if (context.recipientSelectionFrozen) {
+       <p class="notice recipient-change" role="status">
+         Восстанавливаем ранее подготовленное подтверждение. Получатель, причина и чек уже зафиксированы сервером и недоступны для изменения; повтор отправит те же данные.
+@@ -47,7 +54,7 @@
+       </label>
+ 
+       @if (selectedRecipient(); as selected) {
+-        @if (selected.recipientType !== 'OWNER') {
++        @if (selected.availableKopecks != null || selected.projectedOverrunKopecks != null) {
+           <dl class="recipient-capacity" aria-label="Расчёт выбранного получателя">
+             <div>
+               <dt>Доступно до оплаты</dt>
+@@ -59,6 +66,7 @@
+             </div>
+           </dl>
+         }
++        <p class="notice recipient-change" role="status">{{ recipientEffect(selected) }}</p>
+       }
+ 
+       @if (recipientChanged()) {
+diff --git a/mobile/src/app/shared/mobile-manual-card-payment-dialog.component.ts b/mobile/src/app/shared/mobile-manual-card-payment-dialog.component.ts
+index 3238b8be..00a95e8e 100644
+--- a/mobile/src/app/shared/mobile-manual-card-payment-dialog.component.ts
++++ b/mobile/src/app/shared/mobile-manual-card-payment-dialog.component.ts
+@@ -25,6 +25,12 @@ import {
+   mobileManualCardRecipientKey,
+   mobileManualCardRecipientLabel
+ } from './mobile-manual-card-payment';
++import {
++  mobileIsTaskRecipient,
++  mobilePaymentRouteErrorMessage,
++  mobileRetryablePaymentRouteError,
++  mobileTaskAwareRecipientEffect
++} from './manual-payment-routing';
+ 
+ export interface MobileManualCardPaymentCompleted {
+   context: ManualCardPaymentContext;
+@@ -59,6 +65,8 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
+   readonly recipientKey = mobileManualCardRecipientKey;
+   readonly recipientLabel = mobileManualCardRecipientLabel;
+   readonly money = mobileManualCardMoney;
++  readonly isTaskRecipient = mobileIsTaskRecipient;
++  readonly recipientEffect = mobileTaskAwareRecipientEffect;
+ 
+   readonly selectedRecipient = computed(() => {
+     const key = this.selectedRecipientKey();
+@@ -148,6 +156,7 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
+     const request: ManualCardPaymentConfirmationRequest = {
+       reason: submission.reason,
+       receiptUrl: submission.receiptUrl,
++      recipientKey: mobileManualCardRecipientKey(submission.recipient),
+       recipientType: submission.recipient.recipientType,
+       recipientProfileId: submission.recipient.recipientProfileId ?? null
+     };
+@@ -158,12 +167,50 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
+       const result: MobileManualCardPaymentCompleted = { context: this.context, recipient: submission.recipient };
+       await this.modalController.dismiss(result, 'completed');
+     } catch (error) {
+-      this.error.set(this.apiErrorMessage(error));
++      if (mobileRetryablePaymentRouteError(error)) {
++        await this.reloadContextAfterConflict(error);
++      } else {
++        this.error.set(mobilePaymentRouteErrorMessage(error, 'Не удалось безопасно подтвердить перевод.'));
++      }
+     } finally {
+       this.saving.set(false);
+     }
+   }
+ 
++  private async reloadContextAfterConflict(sourceError: unknown): Promise<void> {
++    const draftReason = this.reason();
++    const draftReceiptUrl = this.receiptUrl();
++    try {
++      const context = await firstValueFrom(this.api.getManagerManualCardPaymentContext(this.context.orderId));
++      const candidates = context.candidates ?? [];
++      if (!candidates.length || candidates.some(candidate => !mobileManualCardRecipientKey(candidate))) {
++        throw new Error('Сервер не вернул безопасный список получателей. Оплата не изменена.');
++      }
++      this.context = { ...context, candidates };
++      const defaultRecipient = mobileManualCardPaymentSelectionRecipient(this.context);
++      if (!defaultRecipient) {
++        throw new Error('Актуальный исходный получатель отсутствует в списке. Оплата не изменена.');
++      }
++      this.selectedRecipientKey.set(mobileManualCardRecipientKey(defaultRecipient));
++      if (context.recipientSelectionFrozen) {
++        this.reason.set(context.preparedReason ?? '');
++        this.receiptUrl.set(context.preparedReceiptUrl ?? '');
++      } else {
++        this.reason.set(draftReason);
++        this.receiptUrl.set(draftReceiptUrl);
++      }
++      this.error.set(mobilePaymentRouteErrorMessage(
++        sourceError,
++        'Маршрут оплаты изменился. Проверьте выбор и подтвердите ещё раз.'
++      ));
++    } catch (reloadError) {
++      this.error.set(mobilePaymentRouteErrorMessage(
++        reloadError,
++        'Маршрут оплаты изменился, но актуальный список не загрузился. Закройте окно и повторите.'
++      ));
++    }
++  }
++
+   private apiErrorMessage(error: unknown): string {
+     if (error && typeof error === 'object' && 'error' in error) {
+       const payload = error.error;
+diff --git a/mobile/src/app/shared/mobile-manual-card-payment.ts b/mobile/src/app/shared/mobile-manual-card-payment.ts
+index 5abb0b8d..293ad2fa 100644
+--- a/mobile/src/app/shared/mobile-manual-card-payment.ts
++++ b/mobile/src/app/shared/mobile-manual-card-payment.ts
+@@ -2,6 +2,10 @@ import type {
+   ManualCardPaymentContext,
+   ManualCardPaymentRecipientOption
+ } from '../core/api.service';
++import {
++  mobileTaskAwareRecipientKey,
++  mobileTaskAwareRecipientLabel
++} from './manual-payment-routing';
+ 
+ function mobileMatchingManualCardRecipient(
+   candidates: readonly ManualCardPaymentRecipientOption[],
+@@ -11,11 +15,14 @@ function mobileMatchingManualCardRecipient(
+     return null;
+   }
+   const expectedKey = mobileManualCardRecipientKey(expectedRecipient);
++  if (!expectedKey) {
++    return null;
++  }
+   return candidates.find((candidate) => mobileManualCardRecipientKey(candidate) === expectedKey) ?? null;
+ }
+ 
+ export function mobileManualCardRecipientKey(candidate: ManualCardPaymentRecipientOption): string {
+-  return `${candidate.recipientType}:${candidate.recipientProfileId ?? ''}`;
++  return mobileTaskAwareRecipientKey(candidate);
+ }
+ 
+ export function mobileOriginalManualCardRecipient(
+@@ -57,13 +64,7 @@ export function mobileManualCardPaymentSubmission(
+ }
+ 
+ export function mobileManualCardRecipientLabel(candidate: ManualCardPaymentRecipientOption): string {
+-  const role = candidate.recipientType === 'OWNER'
+-    ? 'Владелец'
+-    : candidate.recipientType === 'MANAGER'
+-      ? 'Менеджер'
+-      : 'Специалист';
+-  const name = candidate.displayName?.trim();
+-  return name ? `${role} · ${name}` : role;
++  return mobileTaskAwareRecipientLabel(candidate);
+ }
+ 
+ export function mobileManualCardMoney(kopecks: number | null | undefined): string {
+diff --git a/mobile/test/manual-payment-confirmation.test.mjs b/mobile/test/manual-payment-confirmation.test.mjs
+index 75d5e455..9537c1fc 100644
+--- a/mobile/test/manual-payment-confirmation.test.mjs
++++ b/mobile/test/manual-payment-confirmation.test.mjs
+@@ -86,6 +86,17 @@ test('does not treat another 409 or another backend message as the privileged co
+   assert.equal(otherStatus.exactConflict, false);
+ });
+ 
++test('accepts the structured actual-recipient-required conflict without matching localized text', () => {
++  const error = {
++    status: 409,
++    error: { code: 'ACTUAL_RECIPIENT_REQUIRED', detail: 'Текст может меняться' }
++  };
++  const decision = manualCardPaymentFallbackDecision(error, ['OWNER'], 25047, 100000);
++  assert.equal(decision.allowed, true);
++  assert.equal(decision.exactConflict, true);
++  assert.equal(decision.reason, 'allowed');
++});
++
+ test('rejects missing order id or non-positive/non-exact amount with an explicit safe error', () => {
+   const missingOrder = manualCardPaymentFallbackDecision(exactConflict(), ['OWNER'], null, 100000);
+   assert.equal(missingOrder.allowed, false);
+diff --git a/mobile/test/mobile-manual-card-payment.test.mjs b/mobile/test/mobile-manual-card-payment.test.mjs
+index c5d2a61a..2d510c1d 100644
+--- a/mobile/test/mobile-manual-card-payment.test.mjs
++++ b/mobile/test/mobile-manual-card-payment.test.mjs
+@@ -79,3 +79,26 @@ test('frozen retry fails closed when prepared recipient is missing from candidat
+ 
+   assert.equal(mobileManualCardPaymentSelectionRecipient(frozen), null);
+ });
++
++test('task source keeps its frozen key even when accounting maps to a specialist profile', () => {
++  const taskRecipient = {
++    key: 'TASK:16:4',
++    cashDestinationKind: 'MANUAL_PAYMENT_TASK',
++    recipientType: 'SPECIALIST',
++    recipientProfileId: 25,
++    displayName: 'Наталья',
++    manualPaymentTaskId: 16,
++    manualPaymentTaskGeneration: 4,
++    taskTargetKind: 'SPECIALIST',
++    taskRecipientName: 'Наталья',
++    accountingTargetLabel: 'Специалист · Наталья'
++  };
++  const fixture = context({
++    originalRecipient: taskRecipient,
++    candidates: [owner, specialist, taskRecipient]
++  });
++
++  assert.equal(mobileManualCardRecipientKey(taskRecipient), 'TASK:16:4');
++  assert.equal(mobileManualCardPaymentSelectionRecipient(fixture), taskRecipient);
++  assert.notEqual(mobileManualCardRecipientKey(taskRecipient), mobileManualCardRecipientKey(specialist));
++});

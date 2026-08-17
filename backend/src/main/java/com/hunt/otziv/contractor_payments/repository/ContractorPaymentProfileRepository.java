@@ -6,6 +6,7 @@ import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Collection;
+import java.util.Set;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,6 +32,41 @@ public interface ContractorPaymentProfileRepository extends JpaRepository<Contra
         ORDER BY p.role
     """)
     List<ContractorPaymentProfile> findAllByUserId(@Param("userId") Long userId);
+
+    @Query("""
+        SELECT p
+        FROM ContractorPaymentProfile p
+        JOIN FETCH p.user
+        WHERE p.enabled = true
+        ORDER BY p.role, p.user.fio, p.id
+    """)
+    List<ContractorPaymentProfile> findAllEnabledWithUser();
+
+    @Query("""
+        SELECT p
+        FROM ContractorPaymentProfile p
+        JOIN FETCH p.user
+        ORDER BY p.role, p.user.fio, p.id
+    """)
+    List<ContractorPaymentProfile> findAllWithUser();
+
+    @Query("""
+        SELECT p
+        FROM ContractorPaymentProfile p
+        JOIN FETCH p.user
+        WHERE p.enabled = true AND p.user.id IN :userIds
+        ORDER BY p.role, p.user.fio, p.id
+    """)
+    List<ContractorPaymentProfile> findAllEnabledByUserIds(@Param("userIds") Set<Long> userIds);
+
+    @Query("""
+        SELECT p
+        FROM ContractorPaymentProfile p
+        JOIN FETCH p.user
+        WHERE p.user.id IN :userIds
+        ORDER BY p.role, p.user.fio, p.id
+    """)
+    List<ContractorPaymentProfile> findAllByUserIds(@Param("userIds") Set<Long> userIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

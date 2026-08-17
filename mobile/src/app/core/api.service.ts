@@ -31,6 +31,25 @@ export type PaymentReceiptStatus = 'PENDING' | 'MARKED';
 export type ManualPaymentSource = 'PROFILE_MONTHLY_LIMIT' | 'MANUAL_TASK';
 export type ManualPaymentType = 'MOBILE_BANK' | 'EXTERNAL_LINK';
 export type ManualPaymentTaskStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELED';
+export type ManualPaymentTaskAccountingTargetKind =
+  | 'UNRESOLVED'
+  | 'EXTERNAL_TASK'
+  | 'OWNER'
+  | 'SPECIALIST'
+  | 'MANAGER';
+
+export interface ManualPaymentTaskAccountingTargetOption {
+  key: string;
+  kind: ManualPaymentTaskAccountingTargetKind;
+  profileId?: number | null;
+  userId?: number | null;
+  role?: 'SPECIALIST' | 'MANAGER' | null;
+  label: string;
+  enabled: boolean;
+  currentAvailableKopecks?: number | null;
+  projectedOverrunKopecks?: number | null;
+  overrunAcknowledgementRequired: boolean;
+}
 export type PaymentLinkListSource = 'LIVE' | 'ARCHIVE';
 
 export interface AdminPaymentLinkResponse {
@@ -200,6 +219,17 @@ export interface ManualPaymentTaskResponse {
   updatedAt?: string | null;
   completedAt?: string | null;
   routable: boolean;
+  accountingTargetKind?: ManualPaymentTaskAccountingTargetKind | null;
+  accountingTargetProfileId?: number | null;
+  accountingTargetLabel?: string | null;
+  accountingTargetResolved?: boolean;
+  generation?: number;
+  rowVersion?: number | null;
+  targetCurrentAvailableKopecks?: number | null;
+  targetProjectedOverrunKopecks?: number | null;
+  accountingTargetOverrunAcknowledged?: boolean;
+  accountingTargetOverrunAcknowledgedAt?: string | null;
+  accountingTargetOverrunAcknowledgedBy?: string | null;
 }
 
 export interface ManualPaymentRecipientMonthlySummaryItem {
@@ -210,6 +240,15 @@ export interface ManualPaymentRecipientMonthlySummaryItem {
   paymentProfileName?: string | null;
   manualSource?: ManualPaymentSource | string | null;
   manualPaymentType?: ManualPaymentType | string | null;
+  accountingRecipientKey?: string | null;
+  accountingRecipientLabel?: string | null;
+  accountingDestinationKind?: 'OWNER' | 'CONTRACTOR_PROFILE' | 'MANUAL_PAYMENT_TASK' | string | null;
+  accountingRecipientType?: 'SPECIALIST' | 'MANAGER' | 'OWNER' | string | null;
+  accountingRecipientProfileId?: number | null;
+  manualPaymentTaskId?: number | null;
+  manualPaymentTaskGeneration?: number | null;
+  manualPaymentTaskTargetKind?: ManualPaymentTaskAccountingTargetKind | string | null;
+  attributionKnown?: boolean;
   paymentCount: number;
   amountKopecks: number;
   firstConfirmedAt?: string | null;
@@ -228,6 +267,7 @@ export interface ManualPaymentRecipientMonthlySummaryResponse {
 }
 
 export interface CreateManualPaymentTaskRequest {
+  operationKey: string;
   managerId?: number | null;
   manualPaymentType?: ManualPaymentType | string | null;
   manualPhone?: string | null;
@@ -236,6 +276,9 @@ export interface CreateManualPaymentTaskRequest {
   manualPaymentButtonLabel?: string | null;
   targetAmountKopecks: number;
   comment?: string | null;
+  accountingTargetKind: ManualPaymentTaskAccountingTargetKind;
+  accountingTargetProfileId?: number | null;
+  accountingTargetOverrunAcknowledged: boolean;
 }
 
 export interface UpdateManualPaymentTaskRequest {
@@ -247,6 +290,10 @@ export interface UpdateManualPaymentTaskRequest {
   targetAmountKopecks: number;
   comment?: string | null;
   manualPaymentUrlReplacementConfirmed?: boolean;
+  accountingTargetKind: ManualPaymentTaskAccountingTargetKind;
+  accountingTargetProfileId?: number | null;
+  accountingTargetOverrunAcknowledged: boolean;
+  expectedGeneration: number | null;
 }
 
 export interface ManagerPaymentLinkResponse {
@@ -1078,20 +1125,32 @@ export interface ManualPaymentConfirmationRequest {
 }
 
 export type ManualCardPaymentRecipientType = 'OWNER' | 'MANAGER' | 'SPECIALIST';
+export type ManualPaymentCashDestinationKind = 'OWNER' | 'CONTRACTOR_PROFILE' | 'MANUAL_PAYMENT_TASK';
+export type ManualPaymentTaskTargetKind = 'EXTERNAL_TASK' | 'OWNER' | 'SPECIALIST' | 'MANAGER';
 
 export interface ManualCardPaymentRecipientOption {
-  recipientType: ManualCardPaymentRecipientType;
+  key?: string | null;
+  cashDestinationKind?: ManualPaymentCashDestinationKind | null;
+  recipientType?: ManualCardPaymentRecipientType | null;
   recipientProfileId?: number | null;
   recipientUserId?: number | null;
   displayName: string;
   availableKopecks?: number | null;
   projectedOverrunKopecks?: number | null;
   anomalyWarning?: string | null;
+  manualPaymentTaskId?: number | null;
+  manualPaymentTaskGeneration?: number | null;
+  taskTargetKind?: ManualPaymentTaskTargetKind | null;
+  taskRecipientName?: string | null;
+  accountingTargetLabel?: string | null;
+  effectText?: string | null;
 }
 
 export interface ManualCardPaymentContext {
   orderId: number;
   amountKopecks: number;
+  contractVersion?: 'TASK_RECIPIENT_V1' | string | null;
+  routeRevision?: string | null;
   originalRecipient: ManualCardPaymentRecipientOption;
   candidates: ManualCardPaymentRecipientOption[];
   anomalyWarning?: string | null;
@@ -1104,7 +1163,8 @@ export interface ManualCardPaymentContext {
 export interface ManualCardPaymentConfirmationRequest {
   reason: string;
   receiptUrl?: string | null;
-  recipientType: ManualCardPaymentRecipientType;
+  recipientKey: string;
+  recipientType?: ManualCardPaymentRecipientType | null;
   recipientProfileId?: number | null;
 }
 
@@ -1114,10 +1174,13 @@ export interface CommonManualPaymentAttributionModeResponse {
 
 export type CommonActualRecipientType = 'SPECIALIST' | 'MANAGER' | 'OWNER';
 export type CommonManualPaymentMode = 'STANDARD' | 'TBANK_FALLBACK';
+export type CommonPaymentCashDestinationKind = 'OWNER' | 'CONTRACTOR_PROFILE' | 'MANUAL_PAYMENT_TASK';
+export type CommonManualPaymentTaskTargetKind = 'EXTERNAL_TASK' | 'OWNER' | 'SPECIALIST' | 'MANAGER';
 
 export interface CommonManualPaymentRecipientCandidate {
   key: string;
-  recipientType: CommonActualRecipientType;
+  cashDestinationKind?: CommonPaymentCashDestinationKind | null;
+  recipientType?: CommonActualRecipientType | null;
   recipientProfileId?: number | null;
   recipientUserId?: number | null;
   label: string;
@@ -1125,16 +1188,22 @@ export interface CommonManualPaymentRecipientCandidate {
   currentParticipant: boolean;
   profileEnabled: boolean;
   availableKopecks?: number | null;
+  manualPaymentTaskId?: number | null;
+  manualPaymentTaskGeneration?: number | null;
+  taskTargetKind?: CommonManualPaymentTaskTargetKind | null;
+  taskRecipientName?: string | null;
+  accountingTargetLabel?: string | null;
+  effectText?: string | null;
 }
 
 export interface CommonManualPaymentAttributionHistoryItem {
   id: number;
   attributionKey: string;
   accountingMode: 'SHADOW' | 'LIVE';
-  originalRecipientType: CommonActualRecipientType;
+  originalRecipientType: CommonActualRecipientType | null;
   originalRecipientProfileId?: number | null;
   originalRecipientLabel: string;
-  actualRecipientType: CommonActualRecipientType;
+  actualRecipientType: CommonActualRecipientType | null;
   actualRecipientProfileId?: number | null;
   actualRecipientLabel: string;
   amountKopecks: number;
@@ -1145,19 +1214,30 @@ export interface CommonManualPaymentAttributionHistoryItem {
   evidenceReference: string;
   actor: string;
   createdAt: string;
+  originalCashDestinationKind?: CommonPaymentCashDestinationKind | null;
+  originalManualPaymentTaskId?: number | null;
+  originalManualPaymentTaskGeneration?: number | null;
+  originalTaskTargetKind?: CommonManualPaymentTaskTargetKind | null;
+  actualCashDestinationKind?: CommonPaymentCashDestinationKind | null;
+  actualManualPaymentTaskId?: number | null;
+  actualManualPaymentTaskGeneration?: number | null;
+  actualTaskTargetKind?: CommonManualPaymentTaskTargetKind | null;
 }
 
 export interface CommonManualPaymentOptions {
   invoiceId: number;
   remainingKopecks: number;
   defaultRecipientKey: string;
+  contractVersion?: 'TASK_RECIPIENT_V1' | string | null;
+  routeRevision?: string | null;
   candidates: CommonManualPaymentRecipientCandidate[];
   history: CommonManualPaymentAttributionHistoryItem[];
 }
 
 export interface CommonManualPaymentAttributionRowRequest {
   rowKey: string;
-  recipientType: CommonActualRecipientType;
+  recipientKey: string;
+  recipientType: CommonActualRecipientType | null;
   recipientProfileId: number | null;
   amountKopecks: number;
 }
@@ -3273,6 +3353,20 @@ export class ApiService {
     );
   }
 
+  getManagerManualPaymentTaskAccountingTargets(
+    targetAmountKopecks: number,
+    taskId?: number | null
+  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
+    let params = new HttpParams().set('targetAmountKopecks', targetAmountKopecks);
+    if (taskId != null) {
+      params = params.set('taskId', taskId);
+    }
+    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
+      this.apiUrl('/api/cabinet/manual-payment-tasks/accounting-targets'),
+      { params }
+    );
+  }
+
   createManagerManualPaymentTask(
     request: CreateManualPaymentTaskRequest
   ): Observable<ManualPaymentTaskResponse> {
@@ -4929,6 +5023,23 @@ export class ApiService {
 
   getAdminManualPaymentTasks(): Observable<ManualPaymentTaskResponse[]> {
     return this.http.get<ManualPaymentTaskResponse[]>(this.apiUrl('/api/admin/payments/manual-tasks'));
+  }
+
+  getAdminManualPaymentTaskAccountingTargets(
+    managerId: number,
+    targetAmountKopecks: number,
+    taskId?: number | null
+  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
+    let params = new HttpParams()
+      .set('managerId', managerId)
+      .set('targetAmountKopecks', targetAmountKopecks);
+    if (taskId != null) {
+      params = params.set('taskId', taskId);
+    }
+    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
+      this.apiUrl('/api/admin/payments/manual-tasks/accounting-targets'),
+      { params }
+    );
   }
 
   getAdminManualRecipientMonthlySummary(month: string): Observable<ManualPaymentRecipientMonthlySummaryResponse> {

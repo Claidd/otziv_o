@@ -3,6 +3,7 @@ package com.hunt.otziv.contractor_payments.repository;
 import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentAttribution;
 import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -35,6 +36,25 @@ public interface ContractorActualPaymentAttributionRepository
             ContractorActualPaymentSourceKind sourceKind,
             Long sourceId
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT a
+        FROM ContractorActualPaymentAttribution a
+        WHERE a.sourceKind = :sourceKind
+          AND a.sourceId = :sourceId
+        ORDER BY a.effectiveAt, a.id
+    """)
+    List<ContractorActualPaymentAttribution> findAllBySourceForUpdate(
+            @Param("sourceKind") ContractorActualPaymentSourceKind sourceKind,
+            @Param("sourceId") Long sourceId
+    );
+
+    List<ContractorActualPaymentAttribution>
+            findAllByEffectiveAtGreaterThanEqualAndEffectiveAtLessThanOrderByEffectiveAtAscIdAsc(
+                    LocalDateTime from,
+                    LocalDateTime to
+            );
 
 
 }

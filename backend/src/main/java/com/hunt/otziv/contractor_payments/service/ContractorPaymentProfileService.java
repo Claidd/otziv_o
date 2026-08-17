@@ -287,6 +287,15 @@ public class ContractorPaymentProfileService {
     }
 
     public long available(ContractorPaymentProfile profile, ContractorAllocationMode mode) {
+        return Math.max(0L, capacityPosition(profile, mode));
+    }
+
+    /**
+     * Signed capacity position used by acknowledged task overruns. Unlike the
+     * public available amount it keeps an existing deficit visible, so a
+     * second reservation cannot reuse the same acknowledgement indefinitely.
+     */
+    public long capacityPosition(ContractorPaymentProfile profile, ContractorAllocationMode mode) {
         if (profile == null || profile.getId() == null || mode == null) {
             return 0L;
         }
@@ -306,8 +315,28 @@ public class ContractorPaymentProfileService {
         long returned = totals == null ? 0L : totals.safeReturnedKopecks();
         long outstanding = totals == null ? 0L : totals.safeOutstandingKopecks();
         long paid = Math.max(0L, Math.subtractExact(confirmed, returned));
-        long debt = Math.max(0L, Math.subtractExact(accrued, paid));
-        return Math.max(0L, Math.subtractExact(debt, outstanding));
+        return Math.subtractExact(Math.subtractExact(accrued, paid), outstanding);
+    }
+
+    /** Non-locking display snapshot. Never use it to authorize a financial write. */
+    public long capacityPositionSnapshot(
+            ContractorPaymentProfile profile,
+            ContractorAllocationMode mode
+    ) {
+        if (profile == null || profile.getId() == null || mode == null) {
+            return 0L;
+        }
+        long accrued = Math.addExact(
+                profile.getOpeningBalanceKopecks(),
+                rewardLedgerRepository.sumActiveForCapacitySnapshot(profile.getId())
+        );
+        ContractorPaymentAllocationRepository.CapacityTotals totals = allocationRepository
+                .capacityTotalsSnapshot(profile.getId(), mode.name());
+        long confirmed = totals == null ? 0L : totals.safeConfirmedKopecks();
+        long returned = totals == null ? 0L : totals.safeReturnedKopecks();
+        long outstanding = totals == null ? 0L : totals.safeOutstandingKopecks();
+        long paid = Math.max(0L, Math.subtractExact(confirmed, returned));
+        return Math.subtractExact(Math.subtractExact(accrued, paid), outstanding);
     }
 
     private ContractorPaymentProfileResponse toResponse(ContractorPaymentProfile profile) {

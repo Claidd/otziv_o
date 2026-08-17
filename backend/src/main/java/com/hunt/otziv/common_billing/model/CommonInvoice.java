@@ -1,5 +1,6 @@
 package com.hunt.otziv.common_billing.model;
 
+import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.ManualPaymentType;
 import jakarta.persistence.Column;
@@ -178,6 +179,16 @@ public class CommonInvoice {
 
     @Column(name = "payment_route_manual_task_id")
     private Long paymentRouteManualTaskId;
+
+    @Column(name = "payment_route_manual_task_source_generation", length = 36)
+    private String paymentRouteManualTaskSourceGeneration;
+
+    @Column(name = "payment_route_manual_task_generation")
+    private Long paymentRouteManualTaskGeneration;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_route_manual_task_accounting_mode", length = 16)
+    private ContractorAllocationMode paymentRouteManualTaskAccountingMode;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_route_manual_type", length = 32)

@@ -13,9 +13,11 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,11 +29,13 @@ import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentAttribution;
 import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationEventType;
+import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocationEvent;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
@@ -49,6 +53,7 @@ import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
@@ -73,9 +78,13 @@ class ContractorPaymentShadowServiceTest {
 
     private final ContractorActualPaymentAttributionRepository actualPaymentAttributionRepository =
             mock(ContractorActualPaymentAttributionRepository.class);
+    private final ManualPaymentTaskContractorReturnBridge taskReturnBridge =
+            mock(ManualPaymentTaskContractorReturnBridge.class);
     private final ContractorPaymentAllocationRepository allocationRepository = mock(ContractorPaymentAllocationRepository.class);
     private final ContractorPaymentProfileRepository profileRepository = mock(ContractorPaymentProfileRepository.class);
     private final ContractorPaymentProfileService profileService = mock(ContractorPaymentProfileService.class);
+    private final ManualPaymentTaskContractorCapacityService taskCapacityService =
+            mock(ManualPaymentTaskContractorCapacityService.class);
     private final ContractorPaymentRoutingLimitService routingLimitService =
             mock(ContractorPaymentRoutingLimitService.class);
     private final ContractorPaymentAllocationEventRepository eventRepository = mock(ContractorPaymentAllocationEventRepository.class);
@@ -94,9 +103,11 @@ class ContractorPaymentShadowServiceTest {
     private final Map<Long, ContractorPaymentProfile> discoveredProfiles = new HashMap<>();
     private final ContractorPaymentShadowService service = new ContractorPaymentShadowService(
             actualPaymentAttributionRepository,
+            taskReturnBridge,
             allocationRepository,
             profileRepository,
             profileService,
+            taskCapacityService,
             routingLimitService,
             accountingService,
             paymentLinkRepository,
@@ -112,6 +123,9 @@ class ContractorPaymentShadowServiceTest {
 
     @BeforeEach
     void enableShadowMode() {
+        lenient().when(taskCapacityService.ordinaryAvailable(any(), any()))
+                .thenAnswer(invocation -> profileService.available(
+                        invocation.getArgument(0), invocation.getArgument(1)));
         when(allocationRepository.currentDatabaseTime())
                 .thenReturn(LocalDateTime.of(2026, 8, 7, 12, 0));
         when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
@@ -228,6 +242,17 @@ class ContractorPaymentShadowServiceTest {
         verify(commonInvoiceOrderRepository, never()).findOrderIdsByInvoiceId(anyLong());
         verify(commonInvoiceRepository, never()).findByIdForUpdate(anyLong());
         verify(commonInvoiceRepository, never()).existsById(anyLong());
+    }
+
+    @Test
+    void paymentLinkReconcileChecksTaskReturnEvenWithoutContractorAllocation() {
+        PaymentLink link = new PaymentLink();
+        link.setId(9_105L);
+        when(paymentLinkRepository.findByIdForUpdate(9_105L)).thenReturn(Optional.of(link));
+
+        assertEquals(0, service.reconcilePaymentLinkId(9_105L));
+
+        verify(taskReturnBridge).recordAuthoritativePaymentLinkReturn(link);
     }
 
     @Test
@@ -631,6 +656,8 @@ class ContractorPaymentShadowServiceTest {
 
     @Test
     void unpaidOrderReleasesClientReportedReservation() {
+        when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
+                .thenReturn(false);
         ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
         allocation.setId(89L);
         allocation.setMode(ContractorAllocationMode.SHADOW);
@@ -957,7 +984,7 @@ class ContractorPaymentShadowServiceTest {
     }
 
     @Test
-    void confirmedLiveAllocationRemainsReconciledForFullReturn() {
+    void confirmedShadowAllocationRemainsReconciledForFullReturnAfterToggleOff() {
         when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
                 .thenReturn(false);
         LocalDateTime paidAt = LocalDateTime.of(2026, 8, 7, 10, 0);
@@ -968,7 +995,7 @@ class ContractorPaymentShadowServiceTest {
         link.setUpdatedAt(paidAt.plusHours(2));
         ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
         allocation.setId(62L);
-        allocation.setMode(ContractorAllocationMode.LIVE);
+        allocation.setMode(ContractorAllocationMode.SHADOW);
         allocation.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
         allocation.setSourceId(61L);
         allocation.setAmountKopecks(120_000L);
@@ -976,7 +1003,7 @@ class ContractorPaymentShadowServiceTest {
         allocation.setConfirmedAt(paidAt);
         allocation.setStatus(ContractorAllocationStatus.CONFIRMED);
         when(allocationRepository.findPaymentLinksForReconciliation(
-                eq(ContractorAllocationMode.LIVE),
+                eq(ContractorAllocationMode.SHADOW),
                 anyCollection(),
                 anyCollection(),
                 any(),
@@ -985,6 +1012,9 @@ class ContractorPaymentShadowServiceTest {
         )).thenReturn(List.of(allocation));
         when(allocationRepository.findByIdForUpdate(62L)).thenReturn(Optional.of(allocation));
         when(paymentLinkRepository.findByIdWithOrder(61L)).thenReturn(Optional.of(link));
+        ManualPaymentTaskContractorReturnBridge.Binding taskReturnBinding =
+                mock(ManualPaymentTaskContractorReturnBridge.Binding.class);
+        when(taskReturnBridge.lockPaymentLinkBinding(allocation, link)).thenReturn(taskReturnBinding);
         registerReconciliation(allocation);
 
         service.reconcilePaymentLinks();
@@ -993,6 +1023,188 @@ class ContractorPaymentShadowServiceTest {
         assertEquals(120_000L, allocation.getReturnedKopecks());
         assertEquals(paidAt, allocation.getConfirmedAt());
         assertEquals(LocalDateTime.of(2026, 8, 7, 12, 0), allocation.getLastReconciledAt());
+        verify(taskReturnBridge).recordReturn(taskReturnBinding, allocation);
+    }
+
+    @Test
+    void fullProviderRefundReturnsOnlyReallocatedActualRecipientAndReplayIsNoOp() {
+        LocalDateTime paidAt = LocalDateTime.of(2026, 8, 7, 10, 0);
+        Order order = order(60_001L, null, null);
+        PaymentLink link = paymentLink(60_002L, order, 100_000L);
+        link.setStatus(PaymentLinkStatus.REFUNDED);
+        link.setPaidAt(paidAt);
+        link.setUpdatedAt(paidAt.plusHours(1));
+        link.setConfirmedAmountKopecks(100_000L);
+
+        ContractorPaymentProfile originalProfile = profile(
+                60_003L, user(60_004L), ContractorRole.SPECIALIST);
+        ContractorPaymentProfile actualProfile = profile(
+                60_005L, user(60_006L), ContractorRole.MANAGER);
+        ContractorPaymentAllocation original = new ContractorPaymentAllocation();
+        original.setId(60_007L);
+        original.setMode(ContractorAllocationMode.LIVE);
+        original.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        original.setSourceId(link.getId());
+        original.setOrderId(order.getId());
+        original.setAttemptNo(1);
+        original.setRecipientType(ContractorRecipientType.SPECIALIST);
+        original.setRecipientProfile(originalProfile);
+        original.setAmountKopecks(100_000L);
+        original.setStatus(ContractorAllocationStatus.CANCELED);
+
+        ContractorPaymentAllocation actual = new ContractorPaymentAllocation();
+        actual.setId(60_008L);
+        actual.setMode(ContractorAllocationMode.LIVE);
+        actual.setSourceType(ContractorAllocationSourceType.ACTUAL_PAYMENT);
+        actual.setSourceId(60_009L);
+        actual.setOrderId(order.getId());
+        actual.setAttemptNo(1);
+        actual.setRecipientType(ContractorRecipientType.MANAGER);
+        actual.setRecipientProfile(actualProfile);
+        actual.setAmountKopecks(100_000L);
+        actual.setConfirmedKopecks(100_000L);
+        actual.setConfirmedAt(paidAt);
+        actual.setStatus(ContractorAllocationStatus.CONFIRMED);
+
+        ContractorActualPaymentAttribution row = paymentLinkAttribution(
+                60_009L, link, original, actualProfile, ContractorRecipientType.MANAGER,
+                ContractorCashDestinationKind.CONTRACTOR_PROFILE, null, 100_000L
+        );
+        when(actualPaymentAttributionRepository
+                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
+                        ContractorActualPaymentSourceKind.PAYMENT_LINK, link.getId()))
+                .thenReturn(List.of(row));
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE, ContractorAllocationSourceType.PAYMENT_LINK, link.getId()))
+                .thenReturn(Optional.of(original));
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE, ContractorAllocationSourceType.ACTUAL_PAYMENT, row.getId()))
+                .thenReturn(Optional.of(actual));
+        when(profileRepository.findByIdForUpdate(originalProfile.getId())).thenReturn(Optional.of(originalProfile));
+        when(profileRepository.findByIdForUpdate(actualProfile.getId())).thenReturn(Optional.of(actualProfile));
+        registerReconciliation(original);
+        registerReconciliation(actual);
+
+        assertEquals(1, service.reconcilePaymentLinkId(link.getId()));
+        assertEquals(0, service.reconcilePaymentLinkId(link.getId()));
+
+        assertEquals(ContractorAllocationStatus.CANCELED, original.getStatus());
+        assertEquals(0L, original.getConfirmedKopecks());
+        assertEquals(0L, original.getReturnedKopecks());
+        assertEquals(ContractorAllocationStatus.RETURNED, actual.getStatus());
+        assertEquals(100_000L, actual.getReturnedKopecks());
+        verify(taskReturnBridge, never()).lockPaymentLinkBinding(original, link);
+        verify(taskReturnBridge, times(2)).recordAuthoritativePaymentLinkReturn(link);
+    }
+
+    @Test
+    void taskRedirectedProfilePartialRefundMarksOnlyActualAllocationPendingViaDurableRetry() {
+        LocalDateTime paidAt = LocalDateTime.of(2026, 8, 7, 10, 0);
+        Order order = order(61_001L, null, null);
+        PaymentLink link = paymentLink(61_002L, order, 75_000L);
+        link.setStatus(PaymentLinkStatus.PARTIAL_REVERSED);
+        link.setPaidAt(paidAt);
+        link.setUpdatedAt(paidAt.plusHours(1));
+        link.setConfirmedAmountKopecks(75_000L);
+
+        ContractorPaymentProfile originalProfile = profile(
+                61_003L, user(61_004L), ContractorRole.SPECIALIST);
+        ContractorPaymentProfile redirectedProfile = profile(
+                61_005L, user(61_006L), ContractorRole.MANAGER);
+        ContractorPaymentAllocation original = new ContractorPaymentAllocation();
+        original.setId(61_007L);
+        original.setMode(ContractorAllocationMode.SHADOW);
+        original.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        original.setSourceId(link.getId());
+        original.setOrderId(order.getId());
+        original.setAttemptNo(1);
+        original.setRecipientType(ContractorRecipientType.SPECIALIST);
+        original.setRecipientProfile(originalProfile);
+        original.setAmountKopecks(75_000L);
+        original.setStatus(ContractorAllocationStatus.CANCELED);
+
+        ContractorPaymentAllocation actual = new ContractorPaymentAllocation();
+        actual.setId(61_008L);
+        actual.setMode(ContractorAllocationMode.SHADOW);
+        actual.setSourceType(ContractorAllocationSourceType.ACTUAL_PAYMENT);
+        actual.setSourceId(61_009L);
+        actual.setOrderId(order.getId());
+        actual.setAttemptNo(1);
+        actual.setRecipientType(ContractorRecipientType.MANAGER);
+        actual.setRecipientProfile(redirectedProfile);
+        actual.setAmountKopecks(75_000L);
+        actual.setConfirmedKopecks(75_000L);
+        actual.setConfirmedAt(paidAt);
+        actual.setStatus(ContractorAllocationStatus.CONFIRMED);
+
+        ContractorActualPaymentAttribution row = paymentLinkAttribution(
+                61_009L, link, original, redirectedProfile, ContractorRecipientType.MANAGER,
+                ContractorCashDestinationKind.CONTRACTOR_PROFILE, null, 75_000L
+        );
+        when(actualPaymentAttributionRepository.findById(row.getId())).thenReturn(Optional.of(row));
+        when(actualPaymentAttributionRepository
+                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
+                        ContractorActualPaymentSourceKind.PAYMENT_LINK, link.getId()))
+                .thenReturn(List.of(row));
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.SHADOW, ContractorAllocationSourceType.PAYMENT_LINK, link.getId()))
+                .thenReturn(Optional.of(original));
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.SHADOW, ContractorAllocationSourceType.ACTUAL_PAYMENT, row.getId()))
+                .thenReturn(Optional.of(actual));
+        when(profileRepository.findByIdForUpdate(originalProfile.getId())).thenReturn(Optional.of(originalProfile));
+        when(profileRepository.findByIdForUpdate(redirectedProfile.getId())).thenReturn(Optional.of(redirectedProfile));
+        registerReconciliation(original);
+        registerReconciliation(actual);
+
+        ContractorPaymentAllocation reconciled = service.reconcileAllocationId(actual.getId());
+
+        assertEquals(actual, reconciled);
+        assertEquals(ContractorAllocationStatus.RETURN_AMOUNT_PENDING, actual.getStatus());
+        assertEquals(0L, actual.getReturnedKopecks());
+        assertEquals(ContractorAllocationStatus.CANCELED, original.getStatus());
+        assertEquals(0L, original.getReturnedKopecks());
+        verify(taskReturnBridge).recordAuthoritativePaymentLinkReturn(link);
+    }
+
+    @Test
+    void commonInvoicePaidDecreaseSynchronizesManualTaskReturn() {
+        when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
+                .thenReturn(false);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(63L);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaidKopecks(60_000L);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(64L);
+        allocation.setMode(ContractorAllocationMode.SHADOW);
+        allocation.setSourceType(ContractorAllocationSourceType.COMMON_INVOICE);
+        allocation.setSourceId(63L);
+        allocation.setCommonInvoiceId(63L);
+        allocation.setAmountKopecks(100_000L);
+        allocation.setConfirmedKopecks(100_000L);
+        allocation.setStatus(ContractorAllocationStatus.CONFIRMED);
+        when(allocationRepository.findCommonInvoicesForReconciliation(
+                eq(ContractorAllocationMode.SHADOW),
+                anyCollection(),
+                anyCollection(),
+                any(),
+                any(),
+                any()
+        )).thenReturn(List.of(allocation));
+        when(commonInvoiceRepository.findByIdForUpdate(63L)).thenReturn(Optional.of(invoice));
+        ManualPaymentTaskContractorReturnBridge.Binding taskReturnBinding =
+                mock(ManualPaymentTaskContractorReturnBridge.Binding.class);
+        when(taskReturnBridge.lockCommonInvoiceBinding(allocation, invoice))
+                .thenReturn(taskReturnBinding);
+        registerReconciliation(allocation);
+
+        service.reconcilePaymentLinks();
+
+        assertEquals(40_000L, allocation.getReturnedKopecks());
+        assertEquals(ContractorAllocationStatus.PARTIALLY_RETURNED, allocation.getStatus());
+        verify(taskReturnBridge).recordReturn(taskReturnBinding, allocation);
     }
 
     @Test
@@ -1085,6 +1297,8 @@ class ContractorPaymentShadowServiceTest {
 
     @Test
     void schedulerRepairsMissedUnpaidReleaseFromDurableOrderStatus() {
+        when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
+                .thenReturn(false);
         Order order = order(81L, null, null);
         OrderStatus unpaid = new OrderStatus();
         unpaid.setTitle("Не оплачено");
@@ -1204,6 +1418,8 @@ class ContractorPaymentShadowServiceTest {
 
     @Test
     void forcedEarlyExpiryUsesObservationTimeInsteadOfFutureDeadline() {
+        when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
+                .thenReturn(false);
         LocalDateTime observedAt = LocalDateTime.of(2026, 8, 7, 12, 0);
         PaymentLink link = paymentLink(84L, order(85L, null, null), 40_000L);
         link.setStatus(PaymentLinkStatus.EXPIRED);
@@ -1435,6 +1651,11 @@ class ContractorPaymentShadowServiceTest {
         live.setAmountKopecks(75_000L);
         live.setStatus(ContractorAllocationStatus.RESERVED);
         when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.SHADOW,
+                ContractorAllocationSourceType.PAYMENT_LINK,
+                103L
+        )).thenReturn(Optional.empty());
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
                 ContractorAllocationMode.LIVE,
                 ContractorAllocationSourceType.PAYMENT_LINK,
                 103L
@@ -1465,7 +1686,7 @@ class ContractorPaymentShadowServiceTest {
         mutexOrder.verify(profileRepository).findByIdForUpdate(20L);
         mutexOrder.verify(allocationRepository).findByIdForUpdate(102L);
         mutexOrder.verify(eventRepository).save(any());
-        verify(allocationRepository, never())
+        verify(allocationRepository)
                 .findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
                         ContractorAllocationMode.SHADOW,
                         ContractorAllocationSourceType.PAYMENT_LINK,
@@ -1539,7 +1760,11 @@ class ContractorPaymentShadowServiceTest {
         when(allocationRepository.findByIdForUpdate(107L)).thenReturn(Optional.of(allocation));
         when(allocationRepository.findLatestIdForUpdate("LIVE", "PAYMENT_LINK", 108L))
                 .thenReturn(Optional.of(107L));
-        when(paymentLinkRepository.findByIdForUpdate(108L)).thenReturn(Optional.of(new PaymentLink()));
+        PaymentLink lockedLink = new PaymentLink();
+        lockedLink.setId(108L);
+        when(paymentLinkRepository.findByIdForUpdate(108L)).thenReturn(Optional.of(lockedLink));
+        when(taskReturnBridge.lockPaymentLinkBinding(allocation, lockedLink))
+                .thenReturn(ManualPaymentTaskContractorReturnBridge.Binding.none(allocation));
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
@@ -1571,7 +1796,11 @@ class ContractorPaymentShadowServiceTest {
         when(allocationRepository.findByIdForUpdate(1_070L)).thenReturn(Optional.of(allocation));
         when(allocationRepository.findLatestIdForUpdate("LIVE", "PAYMENT_LINK", 1_080L))
                 .thenReturn(Optional.of(1_070L));
-        when(paymentLinkRepository.findByIdForUpdate(1_080L)).thenReturn(Optional.of(new PaymentLink()));
+        PaymentLink lockedLink = new PaymentLink();
+        lockedLink.setId(1_080L);
+        when(paymentLinkRepository.findByIdForUpdate(1_080L)).thenReturn(Optional.of(lockedLink));
+        when(taskReturnBridge.lockPaymentLinkBinding(allocation, lockedLink))
+                .thenReturn(ManualPaymentTaskContractorReturnBridge.Binding.none(allocation));
 
         service.recordObservedReturnAmount(
                 1_070L,
@@ -1586,14 +1815,136 @@ class ContractorPaymentShadowServiceTest {
     }
 
     @Test
-    void manualReturnIsRejectedForCommonInvoiceSoReconciliationCannotUndoIt() {
+    void actualPaymentReturnSynchronizesItsManualTaskBinding() {
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(1_071L);
+        allocation.setMode(ContractorAllocationMode.LIVE);
+        allocation.setAmountKopecks(100_000L);
+        allocation.setConfirmedKopecks(100_000L);
+        allocation.setSourceType(ContractorAllocationSourceType.ACTUAL_PAYMENT);
+        allocation.setSourceId(501L);
+        allocation.setStatus(ContractorAllocationStatus.CONFIRMED);
+        ManualPaymentTaskContractorReturnBridge.Binding binding =
+                mock(ManualPaymentTaskContractorReturnBridge.Binding.class);
+        when(allocationRepository.findById(1_071L)).thenReturn(Optional.of(allocation));
+        when(allocationRepository.findByIdForUpdate(1_071L)).thenReturn(Optional.of(allocation));
+        when(allocationRepository.findLatestIdForUpdate("LIVE", "ACTUAL_PAYMENT", 501L))
+                .thenReturn(Optional.of(1_071L));
+        when(taskReturnBridge.lockActualPaymentBinding(allocation)).thenReturn(binding);
+
+        service.recordObservedReturnAmount(
+                1_071L,
+                25_000L,
+                LocalDateTime.now().minusMinutes(1),
+                "MANUAL_RETURN_TOTAL:25000",
+                "Частичный возврат фактического поступления"
+        );
+
+        assertEquals(25_000L, allocation.getReturnedKopecks());
+        assertEquals(ContractorAllocationStatus.PARTIALLY_RETURNED, allocation.getStatus());
+        verify(taskReturnBridge).recordReturn(binding, allocation);
+    }
+
+    @Test
+    void confirmedTaskPaymentLinkSupportsPartialFullAndReplayOnReusedAllocation() {
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(1_072L);
+        allocation.setMode(ContractorAllocationMode.LIVE);
+        allocation.setAmountKopecks(100_000L);
+        allocation.setConfirmedKopecks(100_000L);
+        allocation.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        allocation.setSourceId(1_082L);
+        allocation.setStatus(ContractorAllocationStatus.CONFIRMED);
+        PaymentLink link = new PaymentLink();
+        link.setId(1_082L);
+        ManualPaymentTaskContractorReturnBridge.Binding binding =
+                mock(ManualPaymentTaskContractorReturnBridge.Binding.class);
+        when(binding.taskBound()).thenReturn(true);
+        when(allocationRepository.findById(1_072L)).thenReturn(Optional.of(allocation));
+        when(allocationRepository.findByIdForUpdate(1_072L)).thenReturn(Optional.of(allocation));
+        when(allocationRepository.findLatestIdForUpdate("LIVE", "PAYMENT_LINK", 1_082L))
+                .thenReturn(Optional.of(1_072L));
+        when(paymentLinkRepository.findByIdForUpdate(1_082L)).thenReturn(Optional.of(link));
+        when(taskReturnBridge.lockPaymentLinkBinding(allocation, link)).thenReturn(binding);
+
+        service.recordObservedReturnAmount(
+                1_072L, 40_000L, LocalDateTime.now().minusMinutes(2),
+                "TASK_PAYMENT_LINK_RETURN:40000", "Частичный возврат");
+        service.recordObservedReturnAmount(
+                1_072L, 100_000L, LocalDateTime.now().minusMinutes(1),
+                "TASK_PAYMENT_LINK_RETURN:100000", "Полный возврат");
+        service.recordObservedReturnAmount(
+                1_072L, 100_000L, LocalDateTime.now().minusMinutes(1),
+                "TASK_PAYMENT_LINK_RETURN:100000:REPLAY", "Повтор полного возврата");
+
+        assertEquals(100_000L, allocation.getReturnedKopecks());
+        assertEquals(ContractorAllocationStatus.RETURNED, allocation.getStatus());
+        verify(taskReturnBridge, times(3)).recordReturn(binding, allocation);
+    }
+
+    @Test
+    void restoredConfirmedTaskCommonInvoiceSupportsPartialFullAndReplayInLockOrder() {
+        ContractorPaymentProfile profile = new ContractorPaymentProfile();
+        profile.setId(1_090L);
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(1_073L);
+        allocation.setMode(ContractorAllocationMode.LIVE);
+        allocation.setRecipientProfile(profile);
+        allocation.setAmountKopecks(100_000L);
+        allocation.setConfirmedKopecks(100_000L);
+        allocation.setSourceType(ContractorAllocationSourceType.COMMON_INVOICE);
+        allocation.setSourceId(1_083L);
+        allocation.setStatus(ContractorAllocationStatus.CONFIRMED);
+        CommonInvoice restoredInvoice = new CommonInvoice();
+        restoredInvoice.setId(1_083L);
+        restoredInvoice.setPaymentRouteManualSource(com.hunt.otziv.payments.model.ManualPaymentSource.MANUAL_TASK);
+        restoredInvoice.setPaymentRouteManualTaskId(16L);
+        ManualPaymentTaskContractorReturnBridge.Binding binding =
+                mock(ManualPaymentTaskContractorReturnBridge.Binding.class);
+        when(binding.taskBound()).thenReturn(true);
+        when(allocationRepository.findById(1_073L)).thenReturn(Optional.of(allocation));
+        when(allocationRepository.findByIdForUpdate(1_073L)).thenReturn(Optional.of(allocation));
+        when(allocationRepository.findLatestIdForUpdate("LIVE", "COMMON_INVOICE", 1_083L))
+                .thenReturn(Optional.of(1_073L));
+        when(profileRepository.findByIdForUpdate(1_090L)).thenReturn(Optional.of(profile));
+        when(commonInvoiceRepository.findByIdForUpdate(1_083L)).thenReturn(Optional.of(restoredInvoice));
+        when(taskReturnBridge.lockCommonInvoiceBinding(allocation, restoredInvoice)).thenReturn(binding);
+
+        service.recordObservedReturnAmount(
+                1_073L, 25_000L, LocalDateTime.now().minusMinutes(2),
+                "TASK_COMMON_RETURN:25000", "Частичный возврат");
+        service.recordObservedReturnAmount(
+                1_073L, 100_000L, LocalDateTime.now().minusMinutes(1),
+                "TASK_COMMON_RETURN:100000", "Полный возврат");
+        service.recordObservedReturnAmount(
+                1_073L, 100_000L, LocalDateTime.now().minusMinutes(1),
+                "TASK_COMMON_RETURN:100000:REPLAY", "Повтор полного возврата");
+
+        assertEquals(100_000L, allocation.getReturnedKopecks());
+        assertEquals(ContractorAllocationStatus.RETURNED, allocation.getStatus());
+        verify(taskReturnBridge, times(3)).recordReturn(binding, allocation);
+        InOrder locks = inOrder(taskReturnBridge, profileRepository, allocationRepository);
+        locks.verify(taskReturnBridge).lockCommonInvoiceBinding(allocation, restoredInvoice);
+        locks.verify(profileRepository).findByIdForUpdate(1_090L);
+        locks.verify(allocationRepository).findByIdForUpdate(1_073L);
+    }
+
+    @Test
+    void manualReturnIsRejectedForCommonInvoiceWithoutExactTaskAttribution() {
         ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
         allocation.setId(109L);
+        allocation.setMode(ContractorAllocationMode.LIVE);
         allocation.setSourceType(ContractorAllocationSourceType.COMMON_INVOICE);
         allocation.setSourceId(110L);
         allocation.setConfirmedKopecks(100_000L);
         allocation.setStatus(ContractorAllocationStatus.RETURN_AMOUNT_PENDING);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(110L);
+        ManualPaymentTaskContractorReturnBridge.Binding binding =
+                mock(ManualPaymentTaskContractorReturnBridge.Binding.class);
         when(allocationRepository.findById(109L)).thenReturn(Optional.of(allocation));
+        when(commonInvoiceRepository.findByIdForUpdate(110L)).thenReturn(Optional.of(invoice));
+        when(taskReturnBridge.lockCommonInvoiceBinding(allocation, invoice)).thenReturn(binding);
 
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
@@ -1603,7 +1954,7 @@ class ContractorPaymentShadowServiceTest {
         );
 
         assertEquals(
-                "Сумму возврата можно уточнить только для банковского платежа с возвратом",
+                "Возврат подтвержденного назначения разрешен только для точного получателя платежного задания",
                 error.getMessage()
         );
         assertEquals(0L, allocation.getReturnedKopecks());
@@ -1690,6 +2041,33 @@ class ContractorPaymentShadowServiceTest {
                 allocation.getSourceType().name(),
                 allocation.getSourceId()
         )).thenReturn(Optional.of(allocation.getId()));
+    }
+
+    private ContractorActualPaymentAttribution paymentLinkAttribution(
+            Long id,
+            PaymentLink link,
+            ContractorPaymentAllocation original,
+            ContractorPaymentProfile actualProfile,
+            ContractorRecipientType actualType,
+            ContractorCashDestinationKind destination,
+            Long taskId,
+            long amountKopecks
+    ) {
+        ContractorActualPaymentAttribution row = mock(ContractorActualPaymentAttribution.class);
+        when(row.getId()).thenReturn(id);
+        when(row.getSourceKind()).thenReturn(ContractorActualPaymentSourceKind.PAYMENT_LINK);
+        when(row.getSourceId()).thenReturn(link.getId());
+        when(row.getOrderId()).thenReturn(link.getOrder() == null ? null : link.getOrder().getId());
+        when(row.getOriginalAllocationId()).thenReturn(original == null ? null : original.getId());
+        when(row.getAccountingMode()).thenReturn(original == null
+                ? ContractorAllocationMode.LIVE : original.getMode());
+        when(row.getActualCashDestinationKind()).thenReturn(destination);
+        when(row.getActualRecipientType()).thenReturn(actualType);
+        when(row.getActualRecipientProfileId()).thenReturn(
+                actualProfile == null ? null : actualProfile.getId());
+        when(row.getActualManualPaymentTaskId()).thenReturn(taskId);
+        when(row.getAmountKopecks()).thenReturn(amountKopecks);
+        return row;
     }
 
     private Order order(Long id, Worker worker, Manager manager) {

@@ -1,0 +1,175 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridge.java
+@@
+-        if (rows.size() != 1 || !anyTaskDestination(rows.getFirst())) {
++        if (rows.size() != 1) {
+             // A PaymentLink refund has no recipient-level amount. Never guess
+             // when final attribution contains multiple rows.
+             throw ManualPaymentTaskRouteErrors.stale();
+         }
+         ContractorActualPaymentAttribution row = rows.getFirst();
+-        if (row.getAmountKopecks() <= 0L
++        requireSourceRow(row, ContractorActualPaymentSourceKind.PAYMENT_LINK, lockedLink.getId());
++        if (row.getAmountKopecks() <= 0L
+                 || row.getAmountKopecks() != lockedLink.getAmountKopecks()) {
+             throw ManualPaymentTaskRouteErrors.stale();
+         }
++        if (!anyTaskDestination(row)) {
++            // The task receipt was atomically settled as REDIRECTED. Its task
++            // confirmed delta is zero, so the provider return belongs only to
++            // the explicit OWNER/profile destination and must not debit the task.
++            if (!ordinaryRedirectDestination(row)) {
++                throw ManualPaymentTaskRouteErrors.stale();
++            }
++            return;
++        }
+@@
+     private boolean anyTaskDestination(ContractorActualPaymentAttribution row) {
+@@
+                         != ManualPaymentTaskAccountingTargetKind.UNRESOLVED;
+     }
++
++    private boolean ordinaryRedirectDestination(ContractorActualPaymentAttribution row) {
++        if (row == null
++                || row.getActualManualPaymentTaskId() != null
++                || row.getActualManualPaymentTaskGeneration() != null
++                || row.getActualManualPaymentTaskTargetKind() != null) {
++            return false;
++        }
++        if (row.getActualCashDestinationKind() == ContractorCashDestinationKind.OWNER) {
++            return row.getActualRecipientType() == ContractorRecipientType.OWNER
++                    && row.getActualRecipientProfileId() == null;
++        }
++        return row.getActualCashDestinationKind() == ContractorCashDestinationKind.CONTRACTOR_PROFILE
++                && (row.getActualRecipientType() == ContractorRecipientType.SPECIALIST
++                    || row.getActualRecipientType() == ContractorRecipientType.MANAGER)
++                && row.getActualRecipientProfileId() != null;
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowServiceTest.java
+@@
+     void unpaidOrderReleasesClientReportedReservation() {
++        when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
++                .thenReturn(false);
+@@
+-    void confirmedLiveAllocationRemainsReconciledForFullReturn() {
++    void confirmedShadowAllocationRemainsReconciledForFullReturnAfterToggleOff() {
+@@
+-        allocation.setMode(ContractorAllocationMode.LIVE);
++        allocation.setMode(ContractorAllocationMode.SHADOW);
+@@
+-                eq(ContractorAllocationMode.LIVE),
++                eq(ContractorAllocationMode.SHADOW),
+@@
+-        allocation.setMode(ContractorAllocationMode.LIVE);
++        allocation.setMode(ContractorAllocationMode.SHADOW);
+@@
+-                eq(ContractorAllocationMode.LIVE),
++                eq(ContractorAllocationMode.SHADOW),
+@@
+     void schedulerRepairsMissedUnpaidReleaseFromDurableOrderStatus() {
++        when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
++                .thenReturn(false);
+@@
+     void forcedEarlyExpiryUsesObservationTimeInsteadOfFutureDeadline() {
++        when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
++                .thenReturn(false);
+@@
+         when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
++                ContractorAllocationMode.SHADOW,
++                ContractorAllocationSourceType.PAYMENT_LINK,
++                103L
++        )).thenReturn(Optional.empty());
++        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                 ContractorAllocationMode.LIVE,
+@@
+-        verify(allocationRepository, never())
++        verify(allocationRepository)
+                 .findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentReconciliationDispatcherTest.java
+@@
+     void allocationWithActiveLeaseIsSkippedWhenAtomicClaimLoses() {
+@@
+         org.mockito.Mockito.verifyNoInteractions(shadowService);
+     }
++
++    @Test
++    void disabledCreationToggleStillDispatchesExistingShadowAllocation() {
++        ContractorPaymentAllocation shadow = allocation(4L);
++        when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
++                .thenReturn(false);
++        when(repository.findPaymentLinksForReconciliation(
++                eq(ContractorAllocationMode.SHADOW), anyCollection(), anyCollection(),
++                any(LocalDateTime.class), any(LocalDateTime.class), any(Pageable.class)
++        )).thenReturn(List.of(shadow));
++        when(repository.findCommonInvoicesForReconciliation(
++                eq(ContractorAllocationMode.SHADOW), anyCollection(), anyCollection(),
++                any(LocalDateTime.class), any(LocalDateTime.class), any(Pageable.class)
++        )).thenReturn(List.of());
++        when(repository.findPaymentLinksForReconciliation(
++                eq(ContractorAllocationMode.LIVE), anyCollection(), anyCollection(),
++                any(LocalDateTime.class), any(LocalDateTime.class), any(Pageable.class)
++        )).thenReturn(List.of());
++        when(repository.findCommonInvoicesForReconciliation(
++                eq(ContractorAllocationMode.LIVE), anyCollection(), anyCollection(),
++                any(LocalDateTime.class), any(LocalDateTime.class), any(Pageable.class)
++        )).thenReturn(List.of());
++        when(claimService.tryClaim(eq(4L), any(LocalDateTime.class)))
++                .thenReturn(Optional.of("claim-4"));
++
++        dispatcher.reconcile();
++
++        verify(shadowService).reconcileAllocationId(4L);
++        verify(claimService).succeeded(4L, "claim-4");
++    }
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ContractorShadowRouteBackfillServiceTest.java
+@@
+-    void capsBatchAndStillRepairsLiveEvidenceWhenShadowIsDisabled() {
++    void capsBatchAndStillScansExistingShadowEvidenceWhenCreationIsDisabled() {
+@@
+-                eq(false),
++                eq(true),
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridgeTest.java
+@@
+     void externalPaymentLinkPartialRefundReopensTaskWithoutGuessingAmount() {
+@@
+         verify(taskLedgerService, never()).lockReturnSource(any(), any());
+     }
++
++    @Test
++    void redirectedProfilePaymentLinkFullRefundDoesNotDebitTaskLedger() {
++        PaymentLink link = paymentLink(129L);
++        link.setAmountKopecks(AMOUNT);
++        link.setStatus(PaymentLinkStatus.REFUNDED);
++        ContractorActualPaymentAttribution profile = attribution(
++                ContractorActualPaymentSourceKind.PAYMENT_LINK, 129L, false, null);
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.PAYMENT_LINK, 129L))
++                .thenReturn(List.of(profile));
++
++        service.recordAuthoritativePaymentLinkReturn(link);
++        service.recordAuthoritativePaymentLinkReturn(link);
++
++        verifyNoInteractions(taskLedgerService);
++    }
++
++    @Test
++    void redirectedOwnerPaymentLinkPartialRefundDoesNotReopenOrDebitTask() {
++        PaymentLink link = paymentLink(130L);
++        link.setAmountKopecks(AMOUNT);
++        link.setStatus(PaymentLinkStatus.PARTIAL_REFUNDED);
++        ContractorActualPaymentAttribution owner = mock(ContractorActualPaymentAttribution.class);
++        when(owner.getId()).thenReturn(502L);
++        when(owner.getSourceKind()).thenReturn(ContractorActualPaymentSourceKind.PAYMENT_LINK);
++        when(owner.getSourceId()).thenReturn(130L);
++        when(owner.getAmountKopecks()).thenReturn(AMOUNT);
++        when(owner.getActualCashDestinationKind()).thenReturn(ContractorCashDestinationKind.OWNER);
++        when(owner.getActualRecipientType()).thenReturn(ContractorRecipientType.OWNER);
++        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                ContractorActualPaymentSourceKind.PAYMENT_LINK, 130L))
++                .thenReturn(List.of(owner));
++
++        service.recordAuthoritativePaymentLinkReturn(link);
++
++        verifyNoInteractions(taskLedgerService);
++    }
+*** End Patch

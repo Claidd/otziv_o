@@ -1,0 +1,10 @@
+*** Begin Patch
+*** Update File: frontend/src/app/features/admin/tbank-payments/tbank-payments.component.ts
+@@
+       next: (task) => {
+         this.manualTasks.update((tasks) => [task, ...tasks]);
+-        this.resetAdminTaskDraft();
+         this.savingManualTask.set(false);
++        this.resetAdminTaskDraft();
+         this.toastService.success('Ручное задание создано');
+*** End Patch

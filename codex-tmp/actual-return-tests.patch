@@ -1,0 +1,190 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowServiceTest.java
+@@
+-import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
++import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentAttribution;
++import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
+@@
+ import com.hunt.otziv.contractor_payments.model.ContractorAllocationEventType;
++import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
+@@
+     void confirmedShadowAllocationRemainsReconciledForFullReturnAfterToggleOff() {
+@@
+         verify(taskReturnBridge).recordReturn(taskReturnBinding, allocation);
+     }
++
++    @Test
++    void fullProviderRefundReturnsOnlyReallocatedActualRecipientAndReplayIsNoOp() {
++        LocalDateTime paidAt = LocalDateTime.of(2026, 8, 7, 10, 0);
++        Order order = order(60_001L, null, null);
++        PaymentLink link = paymentLink(60_002L, order, 100_000L);
++        link.setStatus(PaymentLinkStatus.REFUNDED);
++        link.setPaidAt(paidAt);
++        link.setUpdatedAt(paidAt.plusHours(1));
++        link.setConfirmedAmountKopecks(100_000L);
++
++        ContractorPaymentProfile originalProfile = profile(
++                60_003L, user(60_004L), ContractorRole.SPECIALIST);
++        ContractorPaymentProfile actualProfile = profile(
++                60_005L, user(60_006L), ContractorRole.MANAGER);
++        ContractorPaymentAllocation original = new ContractorPaymentAllocation();
++        original.setId(60_007L);
++        original.setMode(ContractorAllocationMode.LIVE);
++        original.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
++        original.setSourceId(link.getId());
++        original.setOrderId(order.getId());
++        original.setAttemptNo(1);
++        original.setRecipientType(ContractorRecipientType.SPECIALIST);
++        original.setRecipientProfile(originalProfile);
++        original.setAmountKopecks(100_000L);
++        original.setStatus(ContractorAllocationStatus.CANCELED);
++
++        ContractorPaymentAllocation actual = new ContractorPaymentAllocation();
++        actual.setId(60_008L);
++        actual.setMode(ContractorAllocationMode.LIVE);
++        actual.setSourceType(ContractorAllocationSourceType.ACTUAL_PAYMENT);
++        actual.setSourceId(60_009L);
++        actual.setOrderId(order.getId());
++        actual.setAttemptNo(1);
++        actual.setRecipientType(ContractorRecipientType.MANAGER);
++        actual.setRecipientProfile(actualProfile);
++        actual.setAmountKopecks(100_000L);
++        actual.setConfirmedKopecks(100_000L);
++        actual.setConfirmedAt(paidAt);
++        actual.setStatus(ContractorAllocationStatus.CONFIRMED);
++
++        ContractorActualPaymentAttribution row = paymentLinkAttribution(
++                60_009L, link, original, actualProfile, ContractorRecipientType.MANAGER,
++                ContractorCashDestinationKind.CONTRACTOR_PROFILE, null, 100_000L
++        );
++        when(actualPaymentAttributionRepository
++                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                        ContractorActualPaymentSourceKind.PAYMENT_LINK, link.getId()))
++                .thenReturn(List.of(row));
++        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
++                ContractorAllocationMode.LIVE, ContractorAllocationSourceType.PAYMENT_LINK, link.getId()))
++                .thenReturn(Optional.of(original));
++        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
++                ContractorAllocationMode.LIVE, ContractorAllocationSourceType.ACTUAL_PAYMENT, row.getId()))
++                .thenReturn(Optional.of(actual));
++        when(profileRepository.findByIdForUpdate(originalProfile.getId())).thenReturn(Optional.of(originalProfile));
++        when(profileRepository.findByIdForUpdate(actualProfile.getId())).thenReturn(Optional.of(actualProfile));
++        registerReconciliation(original);
++        registerReconciliation(actual);
++
++        assertEquals(1, service.reconcilePaymentLinkId(link.getId()));
++        assertEquals(0, service.reconcilePaymentLinkId(link.getId()));
++
++        assertEquals(ContractorAllocationStatus.CANCELED, original.getStatus());
++        assertEquals(0L, original.getConfirmedKopecks());
++        assertEquals(0L, original.getReturnedKopecks());
++        assertEquals(ContractorAllocationStatus.RETURNED, actual.getStatus());
++        assertEquals(100_000L, actual.getReturnedKopecks());
++        verify(taskReturnBridge, never()).lockPaymentLinkBinding(original, link);
++        verify(taskReturnBridge, times(2)).recordAuthoritativePaymentLinkReturn(link);
++    }
++
++    @Test
++    void taskRedirectedProfilePartialRefundMarksOnlyActualAllocationPendingViaDurableRetry() {
++        LocalDateTime paidAt = LocalDateTime.of(2026, 8, 7, 10, 0);
++        Order order = order(61_001L, null, null);
++        PaymentLink link = paymentLink(61_002L, order, 75_000L);
++        link.setStatus(PaymentLinkStatus.PARTIAL_REVERSED);
++        link.setPaidAt(paidAt);
++        link.setUpdatedAt(paidAt.plusHours(1));
++        link.setConfirmedAmountKopecks(75_000L);
++
++        ContractorPaymentProfile originalProfile = profile(
++                61_003L, user(61_004L), ContractorRole.SPECIALIST);
++        ContractorPaymentProfile redirectedProfile = profile(
++                61_005L, user(61_006L), ContractorRole.MANAGER);
++        ContractorPaymentAllocation original = new ContractorPaymentAllocation();
++        original.setId(61_007L);
++        original.setMode(ContractorAllocationMode.SHADOW);
++        original.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
++        original.setSourceId(link.getId());
++        original.setOrderId(order.getId());
++        original.setAttemptNo(1);
++        original.setRecipientType(ContractorRecipientType.SPECIALIST);
++        original.setRecipientProfile(originalProfile);
++        original.setAmountKopecks(75_000L);
++        original.setStatus(ContractorAllocationStatus.CANCELED);
++
++        ContractorPaymentAllocation actual = new ContractorPaymentAllocation();
++        actual.setId(61_008L);
++        actual.setMode(ContractorAllocationMode.SHADOW);
++        actual.setSourceType(ContractorAllocationSourceType.ACTUAL_PAYMENT);
++        actual.setSourceId(61_009L);
++        actual.setOrderId(order.getId());
++        actual.setAttemptNo(1);
++        actual.setRecipientType(ContractorRecipientType.MANAGER);
++        actual.setRecipientProfile(redirectedProfile);
++        actual.setAmountKopecks(75_000L);
++        actual.setConfirmedKopecks(75_000L);
++        actual.setConfirmedAt(paidAt);
++        actual.setStatus(ContractorAllocationStatus.CONFIRMED);
++
++        ContractorActualPaymentAttribution row = paymentLinkAttribution(
++                61_009L, link, original, redirectedProfile, ContractorRecipientType.MANAGER,
++                ContractorCashDestinationKind.CONTRACTOR_PROFILE, null, 75_000L
++        );
++        when(actualPaymentAttributionRepository.findById(row.getId())).thenReturn(Optional.of(row));
++        when(actualPaymentAttributionRepository
++                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                        ContractorActualPaymentSourceKind.PAYMENT_LINK, link.getId()))
++                .thenReturn(List.of(row));
++        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
++                ContractorAllocationMode.SHADOW, ContractorAllocationSourceType.PAYMENT_LINK, link.getId()))
++                .thenReturn(Optional.of(original));
++        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
++                ContractorAllocationMode.SHADOW, ContractorAllocationSourceType.ACTUAL_PAYMENT, row.getId()))
++                .thenReturn(Optional.of(actual));
++        when(profileRepository.findByIdForUpdate(originalProfile.getId())).thenReturn(Optional.of(originalProfile));
++        when(profileRepository.findByIdForUpdate(redirectedProfile.getId())).thenReturn(Optional.of(redirectedProfile));
++        registerReconciliation(original);
++        registerReconciliation(actual);
++
++        ContractorPaymentAllocation reconciled = service.reconcileAllocationId(actual.getId());
++
++        assertEquals(actual, reconciled);
++        assertEquals(ContractorAllocationStatus.RETURN_AMOUNT_PENDING, actual.getStatus());
++        assertEquals(0L, actual.getReturnedKopecks());
++        assertEquals(ContractorAllocationStatus.CANCELED, original.getStatus());
++        assertEquals(0L, original.getReturnedKopecks());
++        verify(taskReturnBridge).recordAuthoritativePaymentLinkReturn(link);
++    }
+@@
+     private void registerReconciliation(ContractorPaymentAllocation allocation) {
+@@
+                 )).thenReturn(Optional.of(allocation.getId()));
+     }
++
++    private ContractorActualPaymentAttribution paymentLinkAttribution(
++            Long id,
++            PaymentLink link,
++            ContractorPaymentAllocation original,
++            ContractorPaymentProfile actualProfile,
++            ContractorRecipientType actualType,
++            ContractorCashDestinationKind destination,
++            Long taskId,
++            long amountKopecks
++    ) {
++        ContractorActualPaymentAttribution row = mock(ContractorActualPaymentAttribution.class);
++        when(row.getId()).thenReturn(id);
++        when(row.getSourceKind()).thenReturn(ContractorActualPaymentSourceKind.PAYMENT_LINK);
++        when(row.getSourceId()).thenReturn(link.getId());
++        when(row.getOrderId()).thenReturn(link.getOrder() == null ? null : link.getOrder().getId());
++        when(row.getOriginalAllocationId()).thenReturn(original == null ? null : original.getId());
++        when(row.getAccountingMode()).thenReturn(original == null
++                ? ContractorAllocationMode.LIVE : original.getMode());
++        when(row.getActualCashDestinationKind()).thenReturn(destination);
++        when(row.getActualRecipientType()).thenReturn(actualType);
++        when(row.getActualRecipientProfileId()).thenReturn(
++                actualProfile == null ? null : actualProfile.getId());
++        when(row.getActualManualPaymentTaskId()).thenReturn(taskId);
++        when(row.getAmountKopecks()).thenReturn(amountKopecks);
++        return row;
++    }
+ 
+     private Order order(Long id, Worker worker, Manager manager) {
+*** End Patch

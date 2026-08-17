@@ -1,0 +1,88 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinator.java
+@@
+             if (validateCandidates && candidate == null) {
+                 throw new ResponseStatusException(
+                         HttpStatus.FORBIDDEN,
+                         "Выбранный получатель не относится к текущему общему счету"
+                 );
+             }
++            if (candidate != null
++                    && (!Objects.equals(candidate.recipientType(), row.recipientType())
++                    || !Objects.equals(candidate.recipientProfileId(), row.recipientProfileId()))) {
++                throw ManualPaymentTaskRouteErrors.stale();
++            }
+             if (candidate != null && candidate.recipientUserId() != null) {
+                 targetAccessPolicy.requireCanManageUser(candidate.recipientUserId());
+             }
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinatorTest.java
+@@
+     void rejectsNonHttpReceiptBeforeAnyAccountingMutation() {
+@@
+     }
++
++    @Test
++    void rejectsTaskKeyThatClaimsAnotherContractorProfile() {
++        when(attributionService.lockEnabledAccountingMode()).thenReturn(ContractorAllocationMode.SHADOW);
++        CommonInvoice invoice = new CommonInvoice();
++        invoice.setId(91L);
++        invoice.setPaymentRouteManualSource(com.hunt.otziv.payments.model.ManualPaymentSource.MANUAL_TASK);
++
++        com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot snapshot =
++                mock(com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot.class);
++        when(snapshot.candidateKey()).thenReturn("TASK:16:2");
++        when(snapshot.taskId()).thenReturn(16L);
++        when(snapshot.taskGeneration()).thenReturn(2L);
++        when(snapshot.accountingTargetKind()).thenReturn(
++                com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.SPECIALIST);
++        when(snapshot.bankRecipientName()).thenReturn("Наталья П.");
++        when(snapshot.accountingTargetLabel()).thenReturn("Специалист · Наталья Ш.");
++        when(snapshot.reservedAmountKopecks()).thenReturn(10_000L);
++        when(taskReceiptIntegrationService.candidate(invoice)).thenReturn(java.util.Optional.of(snapshot));
++        when(taskReceiptIntegrationService.destination(snapshot)).thenReturn(
++                new ManualPaymentTaskReceiptIntegrationService.Destination(
++                        "TASK:16:2",
++                        com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind.MANUAL_PAYMENT_TASK,
++                        ContractorRecipientType.SPECIALIST,
++                        32L,
++                        16L,
++                        2L,
++                        com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.SPECIALIST,
++                        "Наталья П.",
++                        "Специалист · Наталья Ш."
++                ));
++        com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile profile =
++                mock(com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile.class);
++        com.hunt.otziv.u_users.model.User user = mock(com.hunt.otziv.u_users.model.User.class);
++        when(profileRepository.findById(32L)).thenReturn(java.util.Optional.of(profile));
++        when(profile.getRole()).thenReturn(com.hunt.otziv.contractor_payments.model.ContractorRole.SPECIALIST);
++        when(profile.getUser()).thenReturn(user);
++        when(user.getId()).thenReturn(13L);
++        when(targetAccessPolicy.canManageUser(13L)).thenReturn(true);
++
++        CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
++                "batch-91",
++                true,
++                true,
++                LocalDateTime.of(2026, 8, 15, 10, 0),
++                "Ручная сверка",
++                "",
++                List.of(new CommonManualPaymentAttributionRowRequest(
++                        "task-row",
++                        "TASK:16:2",
++                        ContractorRecipientType.SPECIALIST,
++                        999L,
++                        10_000L
++                ))
++        );
++
++        ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
++                coordinator.recordFinalReceipt(invoice, List.of(), 10_000L, request, () -> "manager"));
++
++        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
++        verify(attributionService, never()).recordFinalAttributions(
++                org.mockito.ArgumentMatchers.any(),
++                org.mockito.ArgumentMatchers.anyList()
++        );
++    }
+*** End Patch

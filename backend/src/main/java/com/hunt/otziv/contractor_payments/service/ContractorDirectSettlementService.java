@@ -15,6 +15,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorDirectSettlementRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
+import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
@@ -37,7 +38,7 @@ public class ContractorDirectSettlementService {
     private final ContractorPaymentProfileRepository profileRepository;
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorDirectSettlementRepository settlementRepository;
-    private final ContractorPaymentProfileService profileService;
+    private final ManualPaymentTaskContractorCapacityService taskCapacityService;
     private final ContractorPaymentAccountingService accountingService;
     private final ContractorPaymentAccountingPhaseService accountingPhaseService;
     private final EntityManager entityManager;
@@ -65,7 +66,7 @@ public class ContractorDirectSettlementService {
         if (request.expectedMode() != mode) {
             throw conflict("Режим учёта изменился. Обновите данные и повторите операцию");
         }
-        long available = profileService.available(profile, mode);
+        long available = taskCapacityService.ordinaryAvailable(profile, mode);
         if (request.amountKopecks() > available) {
             throw conflict("Сумма выплаты превышает доступный остаток");
         }

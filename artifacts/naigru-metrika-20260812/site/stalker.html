@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ru">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Квест Сталкер в Ангарске - архив | IQuest</title>
+
+		<link rel="canonical" href="https://naigru.ru/stalker">
+		    <link rel="preload" href="css/fonts/rusboycott.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="css/fonts/russo-one.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="images/Stalker2.avif" as="image" type="image/avif" fetchpriority="high">
+<link rel="stylesheet" href="lib/owlcarousel/owl.carousel.min.css">
+        <link rel="stylesheet" href="style-site.css?v=20260620-mobile-logo2">
+<!-- favicon -->
+		<link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
+		<link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png">
+		<link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png">
+		<link rel="manifest" href="favicon_io/site.webmanifest">
+		<!-- favicon -->
+
+				<!-- keywords-->
+<meta name="keywords" content="Хоррор Квест Сталкер Ангарск">
+<!-- keywords-->
+
+<!-- description-->
+<meta name="description" content="Архивная страница квеста Сталкер в Ангарске: сейчас сценарий недоступен для записи. Выберите актуальный хоррор-квест IQuest.">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="ru_RU">
+    <meta property="og:url" content="https://naigru.ru/stalker">
+    <meta property="og:title" content="Квест Сталкер в Ангарске - архив | IQuest">
+    <meta property="og:description" content="Архивная страница квеста Сталкер в Ангарске: сейчас сценарий недоступен для записи. Выберите актуальный хоррор-квест IQuest.">
+        <meta property="og:image" content="https://naigru.ru/images/home-hero-kids-quests-2026.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+<!-- description-->
+
+
+<!-- /Yandex.Metrika counter -->
+<noscript id="yandex-pixel"></noscript>
+
+<script async type="text/javascript">
+   // Функция для добавления пикселя Яндекс.Метрики
+   function addYandexPixel() {
+	   if (window.yaParams && Object.keys(window.yaParams).length > 0) {
+		   const noscriptElement = document.getElementById("yandex-pixel");
+		   if (noscriptElement) {
+			   noscriptElement.innerHTML = `
+				   <div>
+					   <img src="https://mc.yandex.ru/watch/74893675" style="position:absolute; left:-9999px;" alt="" />
+				   </div>
+			   `;
+		   }
+	   } else {
+		   console.log("Параметр yaParams пустой, пиксель не добавлен.");
+	   }
+   }
+
+
+   // Функция для инициализации Яндекс.Метрики
+   function initYandexMetrika(ip) {
+	   // Если IP не передан, yaParams остаётся пустым
+	   if (ip) {
+		   window.yaParams = { addres: ip };
+	   } else {
+		   window.yaParams = {};
+	   }
+
+	   // Проверяем, есть ли данные в yaParams
+	   if (Object.keys(window.yaParams).length === 0) {
+		   console.log("Метрика не запущена, так как yaParams пустой");
+		   return;
+	   }
+
+	   // Подключаем Яндекс.Метрику
+	   (function(m, e, t, r, i, k, a) {
+		   m[i] = m[i] || function() {
+			   (m[i].a = m[i].a || []).push(arguments);
+		   };
+		   m[i].l = 1 * new Date();
+		   for (var j = 0; j < document.scripts.length; j++) {
+			   if (document.scripts[j].src === r) {
+				   return;
+			   }
+		   }
+		   k = e.createElement(t), a = e.getElementsByTagName(t)[0];
+		   k.async = 1;
+		   k.src = r;
+		   a.parentNode.insertBefore(k, a);
+	   })(window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+
+	   // Инициализируем Яндекс.Метрику с параметрами
+	   ym(74893675, "init", {
+		   params: window.yaParams,
+		   clickmap: true,
+		   trackLinks: true,
+		   accurateTrackBounce: true,
+		   webvisor: true
+	   });
+
+	   // Добавляем пиксель
+	   addYandexPixel();
+
+	   // Если Яндекс.Метрика инициализирована, запускаем Google Analytics
+	   initGoogleAnalytics();
+   }
+
+   // Функция для инициализации Google Analytics
+   function initGoogleAnalytics() {
+	   console.log("Инициализация Google Analytics...");
+
+	   // Подключаем Google Analytics
+	   (function(e, t, g, a, i, n) {
+		   i = e.createElement(t);
+		   i.async = 1;
+		   i.src = g;
+		   n = e.getElementsByTagName(t)[0];
+		   n.parentNode.insertBefore(i, n);
+	   })(document, "script", "https://www.googletagmanager.com/gtag/js?id=G-1GZ7KGNNKD");
+
+	   // Инициализируем Google Analytics
+	   window.dataLayer = window.dataLayer || [];
+	   function gtag() {
+		   dataLayer.push(arguments);
+	   }
+	   gtag("js", new Date());
+	   gtag("config", "G-1GZ7KGNNKD");
+
+	   console.log("Google Analytics запущен");
+   }
+
+   // Получение IP-адреса через fetch
+   fetch("https://api.ipify.org?format=json")
+	   .then(response => response.json())
+	   .then(data => {
+		   console.log("IP fetched:", data.ip);
+
+		   // Вызываем инициализацию Метрики после получения IP
+		   initYandexMetrika(data.ip);
+
+		   // Если нужно отобразить IP на странице
+		   const ipElement = document.getElementById("ip");
+		   if (ipElement) {
+			   ipElement.textContent = data.ip;
+		   }
+	   })
+	   .catch(error => {
+		   console.error("Error fetching IP:", error);
+
+		   // Не инициализируем Метрику без IP
+		   const ipElement = document.getElementById("ip");
+		   if (ipElement) {
+			   ipElement.textContent = "Error retrieving IP address";
+		   }
+	   });
+</script>
+<!-- /Yandex.Metrika counter -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://naigru.ru/stalker#breadcrumbs",
+      "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Главная", "item": "https://naigru.ru/"},
+        {"@type": "ListItem", "position": 2, "name": "Страшные квесты в Ангарске", "item": "https://naigru.ru/angarsk_horror"},
+        {"@type": "ListItem", "position": 3, "name": "Сталкер", "item": "https://naigru.ru/stalker"}
+      ]
+    },
+    {
+      "@type": "Service",
+      "@id": "https://naigru.ru/stalker#service",
+      "name": "Квест Сталкер в Ангарске",
+      "url": "https://naigru.ru/stalker",
+      "image": "https://naigru.ru/images/Stalker2.webp",
+      "description": "Постапокалиптический квест Сталкер в Ангарске с актерами, загадками и атмосферой опасной зоны.",
+      "serviceType": "Хоррор-квест с актерами",
+      "areaServed": [
+        {"@type": "City", "name": "Ангарск"}
+      ],
+      "provider": {
+        "@type": "LocalBusiness",
+        "name": "IQuest Ангарск",
+        "telephone": "+79016668881",
+        "priceRange": "1500 руб./чел.",
+        "address": {
+          "@type": "PostalAddress",
+          "addressCountry": "RU",
+          "addressRegion": "Иркутская область",
+          "addressLocality": "Ангарск",
+          "streetAddress": "ул. Восточная, 10А"
+        }
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "1500",
+        "priceCurrency": "RUB",
+        "availability": "https://schema.org/Discontinued",
+        "url": "https://naigru.ru/stalker"
+      }
+    }
+  ]
+}
+</script>
+
+	</head>
+		
+	<body class="page">
+		<div class="page__row">
+			<div class="page__cell">
+				<header class="header">
+					<div class="header__logo">
+						<a href="/" class="logo">
+						<picture><source type="image/avif" srcset="images/logo.avif" width="350" height="50"><source type="image/webp" srcset="images/logo.webp" width="350" height="50"><img class="logo__picture" src="images/logo.png" width="350" height="50" alt="IQuest" decoding="async"></picture>
+						</a>
+					</div>
+
+					<div class="header__contact">
+						<div class="header__phone-number">
+						<a href="tel:+79016668881" class="phone-number">8 (901) 666-888-1</a><a href="tel:+79016668881" class="phone-call-button">Позвонить</a>
+						</div>
+					<div class="header__email-adress">
+						<a href="mailto:iquest38@mail.ru" class="email-address">iquest38@mail.ru</a>
+					</div>
+				</header>
+					<div class="zagolovok">	
+						<h1>Квест Сталкер в Ангарске</h1>
+					</div>
+			</div>
+		</div>
+		<div class="page__row">
+			<div class="page__cell">
+				<nav class="nav">	
+					<div class="nav__btn">
+						<button data-target="#nav-main" type="button" class="btn-nav">
+							<span class="btn-nav__line"></span>
+							<span class="btn-nav__line"></span>
+							<span class="btn-nav__line"></span>
+						</button>
+					</div>
+					<ul class="nav__list" id="nav-main">
+						<li class="mev__item">
+							<a href="/" class="nav__link link">
+								Главная
+							</a>
+						</li>
+						<li class="mev__item">
+							<a href="dr-pod-kluch" class="nav__link link">
+								День рождения под ключ
+							</a>
+						</li>
+						<li class="mev__item">
+							<a href="gorod" class="nav__link  link">
+								Квесты
+							</a>
+						</li>
+						<li class="mev__item">
+							<a href="lasertag" class="nav__link  link">
+								Лазертаг
+							</a>
+						</li>
+						<li class="mev__item">
+							<a href="#" class="nav__link  link">
+								Нерф
+							</a>
+						</li>
+						<li class="mev__item">
+							<a href="among" class="nav__link  link">
+								Амонг Ас
+							</a>
+						</li>
+						<li class="mev__item">
+							<a href="karting" class="nav__link  link">
+								Картинг
+							</a>
+						</li>
+					</ul>
+				</nav>
+			</div>
+		</div>
+		<main id="main-content">
+<section class="quest-section quest-section--soft archive-notice" aria-labelledby="archive-stalker-title">
+  <div class="quest-section__inner quest-section__inner--wide">
+    <h2 id="archive-stalker-title" class="quest-section__title">Архивный сценарий</h2>
+    <p class="quest-section__lead">Квест «Сталкер» в Ангарске сейчас не проводится и недоступен для записи. Страница сохранена как архив; для актуального хоррор-формата выберите другой сценарий.</p>
+    <div class="quest-links">
+      <a class="quest-link-card" href="tyurma"><span>Актуальный сценарий</span><strong>Тюрьма в Ангарске</strong><p>Командный квест для подростков и компаний.</p></a>
+      <a class="quest-link-card" href="ono-angarsk"><span>Хоррор</span><strong>Оно в Ангарске</strong><p>Страшный квест по возрасту и уровню контакта.</p></a>
+      <a class="quest-link-card" href="psychosis"><span>Хоррор</span><strong>Психоз</strong><p>Актуальный страшный сценарий для любителей напряжения.</p></a>
+      <a class="quest-link-card" href="angarsk_horror"><span>Все варианты</span><strong>Страшные квесты в Ангарске</strong><p>Подборка актуальных хоррор-сценариев.</p></a>
+    </div>
+  </div>
+</section>
+
+
+
+  		<div class="slider__item" style="background-image: -webkit-image-set(url('images/Stalker2.avif') type('image/avif'), url('images/Stalker2.webp') type('image/webp')); background-image: image-set(url('images/Stalker2.avif') type('image/avif'), url('images/Stalker2.webp') type('image/webp'))" alt="Квест Сталкер Ангарск"></div>
+  						
+
+  		<div class="page__row">
+
+  			<section class="section">
+  					<h2 class="headline">Квест Сталкер</h2>
+  				
+  					<p class="text"><br> Квест "Сталкер" - это настоящее приключение для поклонников постапокалиптической тематики и мира "Сталкер". Можете ли вы столкнуться со всей опасностью и найти документ или остаетесь жертвой в этой опасной зоне? Ваша смелость и интеллект будут ключами к успеху в этом уникальном квесте.<br>
+⠀
+<p class="text"><b>ГЛАВНЫЕ ОСОБЕННОСТИ:</b> <br><br>
+1. <b>Постапокалиптическая атмосфера.</b> Комната полностью находится в мрачной и опасной атмосфере постапокалипсиса, с разрушенными структурами, мутантами и аномалиями.<br><br>
+⠀
+2. <b>Реалистичные мутанты и зомби</b> в комнате есть актеры, играющие роли мутантов и зомби, что создает дополнительную атмосферу напряжения. <br><br>
+⠀
+3. Интересные <b>Загадки</b>, где каждая комната хранит в себе новые тайны.
+<br><br>
+4. Возможен <b>Физический контакт</b> 🔫 для тех кто ищет более острые впечатления</b>.
+<br><br>
+(и многое-многое другое)
+<br><br>
+</section>
+
+
+<section class="section">
+  					<h2 class="headline">ОБЩИЕ УСЛОВИЯ
+  					</h2>
+  					<div class="advantage">
+  						<div class="advantage__item">
+  							<span class="icon-circle advantage__icon">
+  								<picture><source type="image/avif" srcset="images/icon 1.avif" width="64" height="64"><source type="image/webp" srcset="images/icon 1.webp" width="64" height="64"><img src="images/icon 1.png" alt="почта" class="icon-circle_picture" decoding="async" loading="lazy" width="64" height="64"></picture>
+  							</span>
+  							<h3 class="advantage__headline">Стоимость</h3>
+  							<div class="advantage__description">
+  								1500 руб./чел.<br> за 1 час игры с актером + чайная зона после игры.
+  							</div>
+  						</div>
+  					
+  						<div class="advantage__item">
+  							<span class="icon-circle advantage__icon">
+  								<picture><source type="image/avif" srcset="images/icon 2.avif" width="64" height="64"><source type="image/webp" srcset="images/icon 2.webp" width="64" height="64"><img src="images/icon 2.png" alt="почта" class="icon-circle_picture" decoding="async" loading="lazy" width="64" height="64"></picture>
+  							</span>
+  							<h3 class="advantage__headline">Возраст и количество игроков</h3>
+  							<div class="advantage__description">
+  								С 12+ лет.<br> От 4-х до 20-ти человек.
+  							</div>
+  						</div>
+  						<div class="advantage__item">
+  							<span class="icon-circle advantage__icon">
+  								<picture><source type="image/avif" srcset="images/icon 3.avif" width="64" height="64"><source type="image/webp" srcset="images/icon 3.webp" width="64" height="64"><img src="images/icon 3.png" alt="почта" class="icon-circle_picture" decoding="async" loading="lazy" width="64" height="64"></picture>
+  							</span>
+  							<h3 class="advantage__headline">Адрес</h3>
+  							<div class="advantage__description">
+						
+  								г. Ангарск, ул. Восточная, 10А.<br>
+  							</div>
+  						</div>
+  					</div>	
+  					</div>
+  					
+  	</section>
+
+	  <!-- <section class="section">
+		<h2 class="headline">Фото</h2>
+		<div class="grid">
+			<div class="grid__item">
+				<a class="grid__link">
+					<picture><source type="image/avif" srcset="images/lobotomia/lobotomia2.avif" width="600" height="360"><source type="image/webp" srcset="images/lobotomia/lobotomia2.webp" width="600" height="360"><img src="images/lobotomia/lobotomia2.webp" alt="праздник под ключ иркутск" class="grid__picture" decoding="async" loading="lazy" width="600" height="360"></picture>
+				</a>
+			</div>
+			<div class="grid__item">
+				<a class="grid__link">
+					<picture><source type="image/avif" srcset="images/lobotomia/lobotomia3.avif" width="600" height="360"><source type="image/webp" srcset="images/lobotomia/lobotomia3.webp" width="600" height="360"><img src="images/lobotomia/lobotomia3.webp" alt="новый год и выпускной иркутск" class="grid__picture" decoding="async" loading="lazy" width="600" height="360"></picture>
+				</a>
+			</div>
+			<div class="grid__item">
+				<a class="grid__link">
+					<picture><source type="image/avif" srcset="images/lobotomia/lobotomia10.avif" width="600" height="360"><source type="image/webp" srcset="images/lobotomia/lobotomia10.webp" width="600" height="360"><img src="images/lobotomia/lobotomia10.webp" alt="Квесты иркутск" class="grid__picture" decoding="async" loading="lazy" width="600" height="360"></picture>
+				</a>
+			</div>
+			<div class="grid__item">
+				<a class="grid__link">
+					<picture><source type="image/avif" srcset="images/lobotomia/lobotomia5.avif" width="600" height="360"><source type="image/webp" srcset="images/lobotomia/lobotomia5.webp" width="600" height="360"><img src="images/lobotomia/lobotomia5.webp" alt="Квесты иркутск" class="grid__picture" decoding="async" loading="lazy" width="600" height="360"></picture>
+				</a>
+			</div>
+			<div class="grid__item">
+				<a class="grid__link">
+					<picture><source type="image/avif" srcset="images/lobotomia/lobotomia4.avif" width="600" height="360"><source type="image/webp" srcset="images/lobotomia/lobotomia4.webp" width="600" height="360"><img src="images/lobotomia/lobotomia4.webp" alt="Квесты иркутск" class="grid__picture" decoding="async" loading="lazy" width="600" height="360"></picture>
+				</a>
+			</div>
+			<div class="grid__item">
+				<a class="grid__link">
+					<picture><source type="image/avif" srcset="images/lobotomia/lobotomia7.avif" width="600" height="360"><source type="image/webp" srcset="images/lobotomia/lobotomia7.webp" width="600" height="360"><img src="images/lobotomia/lobotomia7.webp" alt="Квесты иркутск" class="grid__picture" decoding="async" loading="lazy" width="600" height="360"></picture>
+				</a>
+			</div>
+			<div class="grid__item">
+				<a class="grid__link">
+					<picture><source type="image/avif" srcset="images/lobotomia/lobotomia8.avif" width="600" height="360"><source type="image/webp" srcset="images/lobotomia/lobotomia8.webp" width="600" height="360"><img src="images/lobotomia/lobotomia8.webp" alt="Квесты иркутск" class="grid__picture" decoding="async" loading="lazy" width="600" height="360"></picture>
+				</a>
+			</div>
+			<div class="grid__item">
+				<a class="grid__link">
+					<picture><source type="image/avif" srcset="images/lobotomia/lobotomia9.avif" width="600" height="360"><source type="image/webp" srcset="images/lobotomia/lobotomia9.webp" width="600" height="360"><img src="images/lobotomia/lobotomia9.webp" alt="Квесты иркутск" class="grid__picture" decoding="async" loading="lazy" width="600" height="360"></picture>
+				</a>
+			</div>
+			<div class="grid__item">
+				<a class="grid__link">
+					<picture><source type="image/avif" srcset="images/lobotomia/lobotomia6.avif" width="600" height="360"><source type="image/webp" srcset="images/lobotomia/lobotomia6.webp" width="600" height="360"><img src="images/lobotomia/lobotomia6.webp" alt="Квесты иркутск" class="grid__picture" decoding="async" loading="lazy" width="600" height="360"></picture>
+				</a>
+			</div> 
+		</div>
+	</section> -->
+
+		
+  				
+
+	<section class="section">
+		<h2 class="headline">Другие развлечения</h2>
+		<div class="grid">
+			<div class="grid__item">
+				<a href="lobotomia" class="grid__link">
+					<picture><source type="image/avif" srcset="images/lobot.avif" width="580" height="350"><source type="image/webp" srcset="images/lobot.webp" width="580" height="350"><img src="images/lobot.webp" alt="Хоррор Квест лоботомия Иркутск" class="grid__picture" decoding="async" loading="lazy" width="580" height="350"></picture>
+					<div class="grid__overlay">
+						<div class="grid__text">
+							
+						</div>
+					</div>
+				</a>
+			</div>
+			<div class="grid__item">
+				<a href="ono" class="grid__link">
+					<picture><source type="image/avif" srcset="images/ono0.avif" width="580" height="350"><source type="image/webp" srcset="images/ono0.webp" width="580" height="350"><img src="images/ono0.webp" alt="Хоррор Квест Оно Иркутск, Ангарск" class="grid__picture" decoding="async" loading="lazy" width="580" height="350"></picture>
+					<div class="grid__overlay">
+						<div class="grid__text">
+							
+						</div>
+					</div>
+				</a>
+			</div>
+			<div class="grid__item">
+				<a href="stalker" class="grid__link">
+					<picture><source type="image/avif" srcset="images/stalker.avif" width="580" height="350"><source type="image/webp" srcset="images/stalker.webp" width="580" height="350"><img src="images/stalker.webp" alt="Хоррор Квесты Сталкер Ангарск" class="grid__picture" decoding="async" loading="lazy" width="580" height="350"></picture>
+					<div class="grid__overlay">
+						<div class="grid__text">
+							
+						</div>
+					</div>
+				</a>
+			</div>
+		
+		</div>
+	</section>
+  				
+
+
+		<div class="page__row">
+  			<div class="page__cell">
+  				<section class="section">
+  					<h2 class="headline"><a href="tel:+79016668881" class="phone-number">8 (901) 666-888-1</a></h2>
+					
+  					<p class="text"><b>Кликайте по номеру и звоните в любое время с 11-00 до 22-00</b> 
+
+<br><br> И помните, не тратьтесь на аренду кафе и весело отпразднуйте день рождения в наших помещениях на 20 чел. Пока дети играют, мы предложим вам фильмы, чай и настольные игры.<br><br>
+  				</section>
+		
+		</main>
+<div class="page__row- page__row-footer">
+			<footer class="footer">
+				<div class="footer__copyright">
+					Ivan Hunt & copy 2015 <br>
+					<a class="footer__link" href="https://naigru.ru/">naigru.ru</a>
+				</div>
+			</footer>
+		</div>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+		<script src="lib/owlcarousel/owl.carousel.min.js"></script>
+		<script src="js/script.js"></script>	<script src="js/mobile-header-phone-link.js" defer></script><script src="js/local-clean-urls.js" defer></script>
+
+	</body>
+</html>
+
+	

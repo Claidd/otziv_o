@@ -1,0 +1,23 @@
+*** Begin Patch
+*** Update File: mobile/src/app/shared/manual-payment-task-target.ts
+@@
+-export function mobileManualTaskSelectedTarget(
+-  options: readonly MobileManualPaymentTaskAccountingTargetOptionLike[],
++export function mobileManualTaskSelectedTarget<T extends MobileManualPaymentTaskAccountingTargetOptionLike>(
++  options: readonly T[],
+   key: string | null | undefined
+-): MobileManualPaymentTaskAccountingTargetOptionLike | null {
++): T | null {
+@@
+-export function mobileManualTaskTargetForSnapshot(
+-  options: readonly MobileManualPaymentTaskAccountingTargetOptionLike[],
++export function mobileManualTaskTargetForSnapshot<T extends MobileManualPaymentTaskAccountingTargetOptionLike>(
++  options: readonly T[],
+   task: MobileManualPaymentTaskTargetSnapshotLike
+-): MobileManualPaymentTaskAccountingTargetOptionLike | null {
++): T | null {
+*** Update File: mobile/src/app/shared/mobile-common-manual-payment-dialog.component.ts
+@@
+-        recipientType: candidate!.recipientType,
++        recipientType: candidate!.recipientType ?? null,
+*** End Patch

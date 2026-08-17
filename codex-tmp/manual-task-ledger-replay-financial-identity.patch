@@ -1,0 +1,61 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskLedgerService.java
+@@
+         if (!replay.isEmpty()) {
+             assertSingleReplay(replay, command.source(), ManualPaymentTaskLedgerEventType.RELEASED,
+-                    -command.amountKopecks(), 0, command.actor(), command.reason(), null);
++                    -command.amountKopecks(), 0, command.taskId(), null);
+             return balance(task.getId());
+@@
+         if (!replay.isEmpty()) {
+             assertSingleReplay(replay, command.source(), ManualPaymentTaskLedgerEventType.RETURNED,
+-                    0, -command.amountKopecks(), command.actor(), command.reason(), null);
++                    0, -command.amountKopecks(), command.taskId(), null);
+             return balance(task.getId());
+@@
+         if (!replay.isEmpty()) {
+             assertSingleReplay(replay, command.source(), ManualPaymentTaskLedgerEventType.CORRECTION,
+                     command.reservedDeltaKopecks(), command.confirmedDeltaKopecks(),
+-                    command.actor(), command.reason(), command.correctionOfEntryId());
++                    command.taskId(), command.correctionOfEntryId());
+             return balance(task.getId());
+@@
+         if (entry.getEventType() != ManualPaymentTaskLedgerEventType.RESERVED
+                 || entry.getReservedDeltaKopecks() != command.amountKopecks()
+                 || !entry.getOperationKey().equals(normalize(command.operationKey()))
+-                || !sameSource(entry, command.source())
+-                || !normalize(entry.getActor()).equals(defaultActor(command.actor()))) {
++                || !sameSource(entry, command.source())) {
+             throw conflict("Ключ резерва задания уже использован с другими данными");
+@@
+         for (ManualPaymentTaskLedgerEntry row : rows) {
+-            if (!sameSource(row, command.source()) || !row.getTask().getId().equals(command.taskId())) {
++            if (!sameSource(row, command.source())
++                    || !row.getTask().getId().equals(command.taskId())
++                    || row.getTaskGeneration() != command.taskGeneration()) {
+                 throw conflict("Ключ закрытия задания уже использован с другими данными");
+@@
+             if (!normalize(row.getSelectedRecipientKey()).equals(expectedRecipient)
+-                    || !normalize(row.getReason()).equals(limit(command.reason(), MAX_REASON))
+-                    || !normalize(row.getActor()).equals(defaultActor(command.actor()))) {
++                    ) {
+                 throw conflict("Ключ закрытия задания уже использован с другими данными");
+@@
+             ManualPaymentTaskLedgerEventType type,
+             long reservedDelta,
+             long confirmedDelta,
+-            String actor,
+-            String reason,
++            Long taskId,
+             Long correctionOfEntryId
+@@
+         if (!sameSource(row, source)
++                || row.getTask() == null
++                || !Objects.equals(row.getTask().getId(), taskId)
+                 || row.getEventType() != type
+                 || row.getReservedDeltaKopecks() != reservedDelta
+                 || row.getConfirmedDeltaKopecks() != confirmedDelta
+-                || !normalize(row.getActor()).equals(defaultActor(actor))
+-                || !normalize(row.getReason()).equals(limit(reason, MAX_REASON))
+                 || !java.util.Objects.equals(
+*** End Patch

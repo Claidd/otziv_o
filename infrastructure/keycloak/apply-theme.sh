@@ -7,6 +7,8 @@ THEME="${THEME:-otziv}"
 ACCESS_TOKEN_LIFESPAN="${ACCESS_TOKEN_LIFESPAN:-600}"
 SSO_SESSION_IDLE_TIMEOUT="${SSO_SESSION_IDLE_TIMEOUT:-28800}"
 SSO_SESSION_MAX_LIFESPAN="${SSO_SESSION_MAX_LIFESPAN:-86400}"
+SSO_SESSION_IDLE_TIMEOUT_REMEMBER_ME="${SSO_SESSION_IDLE_TIMEOUT_REMEMBER_ME:-86400}"
+SSO_SESSION_MAX_LIFESPAN_REMEMBER_ME="${SSO_SESSION_MAX_LIFESPAN_REMEMBER_ME:-86400}"
 SERVER="${KEYCLOAK_KCADM_SERVER:-http://localhost:8080/keycloak}"
 ADMIN_USER="${KEYCLOAK_ADMIN:-admin}"
 ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
@@ -23,7 +25,10 @@ docker exec "$CONTAINER" /opt/keycloak/bin/kcadm.sh update "realms/$REALM" \
   -s "defaultLocale=ru" \
   -s 'supportedLocales=["ru","en"]' \
   -s "accessTokenLifespan=$ACCESS_TOKEN_LIFESPAN" \
+  -s "rememberMe=true" \
   -s "ssoSessionIdleTimeout=$SSO_SESSION_IDLE_TIMEOUT" \
-  -s "ssoSessionMaxLifespan=$SSO_SESSION_MAX_LIFESPAN"
+  -s "ssoSessionMaxLifespan=$SSO_SESSION_MAX_LIFESPAN" \
+  -s "ssoSessionIdleTimeoutRememberMe=$SSO_SESSION_IDLE_TIMEOUT_REMEMBER_ME" \
+  -s "ssoSessionMaxLifespanRememberMe=$SSO_SESSION_MAX_LIFESPAN_REMEMBER_ME"
 
 echo "Keycloak realm settings applied to realm '$REALM'."

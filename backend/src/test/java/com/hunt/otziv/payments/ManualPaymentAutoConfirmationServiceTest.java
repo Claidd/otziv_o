@@ -11,6 +11,7 @@ import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
+import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import com.hunt.otziv.payments.service.PaymentSuccessNotificationDeliveryService;
 import java.util.Collection;
 import java.util.List;
@@ -44,6 +45,8 @@ class ManualPaymentAutoConfirmationServiceTest {
     private PaymentSuccessNotificationDeliveryService paymentSuccessNotificationDeliveryService;
     @Mock
     private ContractorPaymentShadowService contractorPaymentShadowService;
+    @Mock
+    private ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
 
     @Test
     void confirmsLatestManualPaymentLinkForPaidOrder() {
@@ -112,7 +115,7 @@ class ManualPaymentAutoConfirmationServiceTest {
         manualLink.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
         manualLink.setPaymentMethod(PaymentMethod.MANUAL_EXTERNAL_LINK);
 
-        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(44L), any(Collection.class)))
+        when(paymentLinkRepository.findByOrderIdAndStatusInForUpdate(eq(44L), any(Collection.class)))
                 .thenReturn(List.of(bankLink, manualLink));
 
         assertEquals(2, service.retireOpenLinksForPaidOrder(order));
@@ -122,6 +125,8 @@ class ManualPaymentAutoConfirmationServiceTest {
         assertEquals("Заказ отмечен оплаченным вручную; старая ссылка закрыта", bankLink.getLastError());
         assertEquals("Заказ отмечен оплаченным вручную; старая ссылка закрыта", manualLink.getLastError());
         verify(paymentLinkRepository).saveAll(List.of(bankLink, manualLink));
+        verify(taskReceiptIntegrationService).release(manualLink,
+                "Заказ отмечен оплаченным вручную; старая ссылка закрыта");
     }
 
     @Test
@@ -496,7 +501,7 @@ class ManualPaymentAutoConfirmationServiceTest {
         bankLink.setStatus(PaymentLinkStatus.INITIATED);
         bankLink.setPaymentMethod(PaymentMethod.SBP_QR);
         bankLink.setTbankPaymentId("8634010701");
-        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(48L), any(Collection.class)))
+        when(paymentLinkRepository.findByOrderIdAndStatusInForUpdate(eq(48L), any(Collection.class)))
                 .thenReturn(List.of(bankLink));
 
         assertEquals(0, service.retireOpenLinksForPaidOrder(order));
@@ -510,7 +515,8 @@ class ManualPaymentAutoConfirmationServiceTest {
                 paymentLinkRepository,
                 manualPaymentTaskService,
                 paymentSuccessNotificationDeliveryService,
-                contractorPaymentShadowService
+                contractorPaymentShadowService,
+                taskReceiptIntegrationService
         );
     }
 }

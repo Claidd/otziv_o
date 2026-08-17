@@ -1,0 +1,44 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionService.java
+@@
+     private ManualCardPaymentRecipientResponse selectRecipient(
+             ManualCardPaymentContextResponse context,
+             String requestedRecipientKey,
+             ContractorRecipientType requestedType,
++            Long requestedProfileId
++    ) {
+         String key = normalize(requestedRecipientKey);
+         if (!key.isBlank()) {
+             return context.candidates().stream().filter(value -> value.key().equals(key)).findFirst()
+                     .orElseThrow(ManualPaymentTaskRouteErrors::stale);
+@@
+         if (context.originalRecipient().cashDestinationKind()
+                 == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK) {
+             throw ManualPaymentTaskRouteErrors.actualRecipientRequired();
+         }
+-            Long requestedProfileId
+-    ) {
+         if (requestedType == null && requestedProfileId == null) {
+             return context.originalRecipient();
+         }
+@@
+     private void requireFrozenReplay(
+             PaymentLink link,
+             String requestedRecipientKey,
+             ContractorRecipientType requestedType,
++            Long requestedProfileId,
++            String reason,
++            String receiptUrl
++    ) {
+         if (!normalize(requestedRecipientKey).isBlank()
+                 && !frozenRecipientKey(link).equals(normalize(requestedRecipientKey))) {
+             throw conflict("Параметры ручной оплаты уже зафиксированы и не могут быть изменены");
+         }
+-            Long requestedProfileId,
+-            String reason,
+-            String receiptUrl
+-    ) {
+         if (requestedType == null && requestedProfileId == null) {
+             throw conflict("Повтор операции должен явно указать ранее выбранного получателя");
+         }
+*** End Patch

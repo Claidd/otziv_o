@@ -125,6 +125,10 @@ class AdminPaymentControllerTest {
         verify(paymentLinkService).reportPaidByManualCardTransferForOrder(
                 25047L,
                 request.reason(),
+                null,
+                null,
+                null,
+                null,
                 "manager@example.ru",
                 authentication
         );

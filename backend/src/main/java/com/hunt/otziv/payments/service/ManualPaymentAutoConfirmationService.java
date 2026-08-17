@@ -53,6 +53,7 @@ public class ManualPaymentAutoConfirmationService {
     private final ManualPaymentTaskService manualPaymentTaskService;
     private final PaymentSuccessNotificationDeliveryService paymentSuccessNotificationDeliveryService;
     private final ContractorPaymentShadowService contractorPaymentShadowService;
+    private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
 
     @Transactional(readOnly = true)
     public void ensureCanCloseOrderManually(Order order) {
@@ -72,13 +73,12 @@ public class ManualPaymentAutoConfirmationService {
         boolean hasBankPaymentInProgress = links.stream()
                 .anyMatch(link -> requiresPrivilegedBankRouteReconciliation(link, hasOrdinaryManualPayment));
 
-        boolean hasFrozenLiveContractorSource = links.stream().anyMatch(this::isFrozenLiveContractorSource);
+        boolean hasFrozenLiveContractorSource = links.stream().anyMatch(link ->
+                isFrozenLiveContractorSource(link)
+                        || (link != null && link.getManualSource() == ManualPaymentSource.MANUAL_TASK));
 
         if (hasFrozenLiveContractorSource) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Поступление по реквизитам специалиста или менеджера подтверждается только сверкой конкретного счета."
-            );
+            throw ManualPaymentTaskRouteErrors.actualRecipientRequired();
         }
 
         if (hasBankPaymentInProgress) {
@@ -154,11 +154,9 @@ public class ManualPaymentAutoConfirmationService {
         if (source == null) {
             return;
         }
-        if (isFrozenLiveContractorSource(source)) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Поступление по реквизитам специалиста или менеджера подтверждается только сверкой конкретного счета."
-            );
+        if (isFrozenLiveContractorSource(source)
+                || source.getManualSource() == ManualPaymentSource.MANUAL_TASK) {
+            throw ManualPaymentTaskRouteErrors.actualRecipientRequired();
         }
         confirm(source);
     }
@@ -169,7 +167,8 @@ public class ManualPaymentAutoConfirmationService {
             return 0;
         }
 
-        List<PaymentLink> links = paymentLinkRepository.findByOrder_IdAndStatusIn(order.getId(), RETIRABLE_STATUSES);
+        List<PaymentLink> links = paymentLinkRepository.findByOrderIdAndStatusInForUpdate(
+                order.getId(), RETIRABLE_STATUSES);
         LocalDateTime now = LocalDateTime.now();
         int retired = 0;
         List<PaymentLink> retiredLinks = new java.util.ArrayList<>();
@@ -177,6 +176,7 @@ public class ManualPaymentAutoConfirmationService {
             if (link.getStatus() == PaymentLinkStatus.CONFIRMED || hasStartedBankPayment(link)) {
                 continue;
             }
+            taskReceiptIntegrationService.release(link, RETIRED_REASON);
             link.setStatus(PaymentLinkStatus.CANCELED);
             link.setLastError(RETIRED_REASON);
             if (link.getPaymentMethod() == PaymentMethod.MANUAL_MOBILE_BANK

@@ -1,0 +1,183 @@
+<div class="actual-payment-backdrop" role="presentation" (click)="close()">
+  <section
+    class="actual-payment-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="common-actual-payment-title"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="actual-payment-header">
+      <div>
+        <span class="actual-payment-kicker">Фактическое поступление</span>
+        <h2 id="common-actual-payment-title">{{ title() }}</h2>
+        <p>Счёт №{{ invoiceId }} @if (invoiceTitle) { · {{ invoiceTitle }} }</p>
+      </div>
+      <button type="button" class="icon-button" aria-label="Закрыть" [disabled]="saving()" (click)="close()">×</button>
+    </header>
+
+    @if (loading()) {
+      <div class="actual-payment-state">Загружаем безопасный список получателей…</div>
+    } @else if (!options()) {
+      <div class="actual-payment-error" role="alert">{{ error() }}</div>
+      <div class="actual-payment-actions">
+        <button type="button" class="secondary" (click)="load()">Повторить</button>
+        <button type="button" class="secondary" (click)="close()">Закрыть</button>
+      </div>
+    } @else {
+      <div class="actual-payment-summary">
+        <span>Нужно распределить</span>
+        <strong>{{ money(options()!.remainingKopecks) }}</strong>
+      </div>
+
+      @if (options()!.remainingKopecks > 0) {
+        <p class="actual-payment-explanation">
+          По умолчанию выбран получатель, чьи реквизиты были зафиксированы в счёте. Если клиент перевёл
+          другому участнику, укажите его здесь. Изменение сразу попадёт в расчёты и последующую сверку.
+        </p>
+
+        <div class="actual-payment-rows">
+          @for (row of rows(); track row.rowKey; let index = $index) {
+            <article class="actual-payment-row">
+              <label>
+                <span>Фактический получатель</span>
+                <select
+                  [ngModel]="row.recipientKey"
+                  [disabled]="saving()"
+                  (ngModelChange)="updateRecipient(index, $event)"
+                >
+                  @for (candidate of options()!.candidates; track candidate.key) {
+                    <option [value]="candidate.key">
+                      {{ candidate.label }}{{ candidate.originalRecipient ? ' · изначально в счёте' : '' }}
+                    </option>
+                  }
+                </select>
+              </label>
+              <label>
+                <span>Сумма, ₽</span>
+                <input
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  [ngModel]="row.amountRubles"
+                  [disabled]="saving()"
+                  (ngModelChange)="updateAmount(index, $event)"
+                />
+              </label>
+              @if (candidate(row.recipientKey); as selected) {
+                <div class="recipient-meta">
+                  @if (selected.recipientType === 'OWNER') {
+                    <span>Лимит распределения не применяется.</span>
+                  } @else {
+                    <span>Доступно с учётом резерва этого счёта: {{ money(selected.availableKopecks) }}</span>
+                    @if (!selected.profileEnabled) {
+                      <span class="warning">Профиль сейчас выключен, но фактическое поступление можно учесть.</span>
+                    }
+                  }
+                </div>
+              }
+              @if (projectedOverrun(row) > 0) {
+                <div class="actual-payment-warning">
+                  Поступление будет учтено полностью. Превышение {{ money(projectedOverrun(row)) }} сохранится
+                  как аномалия для сверки и не будет автоматически перенесено владельцу.
+                </div>
+              }
+              <button
+                type="button"
+                class="remove-row"
+                [disabled]="rows().length <= 1 || saving()"
+                (click)="removeRow(index)"
+              >Удалить строку</button>
+            </article>
+          }
+        </div>
+
+        <button
+          type="button"
+          class="add-row"
+          [disabled]="saving() || rows().length >= options()!.candidates.length || rows().length >= 20"
+          (click)="addRow()"
+        >+ Разделить между получателями</button>
+
+        <div class="actual-payment-total" [class.invalid]="differenceKopecks() !== 0">
+          <span>Распределено</span>
+          <strong>{{ money(totalKopecks()) }}</strong>
+          @if (differenceKopecks() !== 0) {
+            <small>Итог должен точно совпадать с остатком счёта.</small>
+          }
+        </div>
+
+        <label class="wide-field">
+          <span>Пояснение</span>
+          <textarea
+            rows="3"
+            maxlength="500"
+            [ngModel]="reason()"
+            [disabled]="saving()"
+            (ngModelChange)="reason.set($event)"
+            placeholder="Например: клиент отказался платить по ссылке и перевёл менеджеру"
+          ></textarea>
+        </label>
+        <label class="wide-field">
+          <span>Ссылка на чек или документ (необязательно)</span>
+          <input
+            type="url"
+            maxlength="1024"
+            [ngModel]="receiptUrl()"
+            [disabled]="saving()"
+            (ngModelChange)="receiptUrl.set($event)"
+          />
+        </label>
+
+        <label class="confirmation-check">
+          <input
+            type="checkbox"
+            [ngModel]="paymentReceived()"
+            [disabled]="saving()"
+            (ngModelChange)="paymentReceived.set($event)"
+          />
+          <span>Подтверждаю, что эту оплату нужно зафиксировать как фактически полученную указанными лицами.</span>
+        </label>
+        <label class="confirmation-check">
+          <input
+            type="checkbox"
+            [ngModel]="finalAcknowledged()"
+            [disabled]="saving()"
+            (ngModelChange)="finalAcknowledged.set($event)"
+          />
+          <span>Понимаю: выбор сразу изменит резервы и лимиты; второго подтверждения владельцем не будет.</span>
+        </label>
+
+        @if (error()) {
+          <div class="actual-payment-error" role="alert">{{ error() }}</div>
+        }
+        <div class="actual-payment-actions">
+          <button type="button" class="secondary" [disabled]="saving()" (click)="close()">Отмена</button>
+          <button type="button" class="primary" [disabled]="!canSubmit()" (click)="submit()">
+            {{ saving() ? 'Сохраняем…' : 'Учесть оплату и закрыть счёт' }}
+          </button>
+        </div>
+      } @else {
+        <div class="actual-payment-state">У счёта нет непогашенного остатка.</div>
+      }
+
+      @if (options()!.history.length) {
+        <section class="actual-payment-history" aria-labelledby="common-actual-payment-history-title">
+          <h3 id="common-actual-payment-history-title">История фактических получателей</h3>
+          @for (item of options()!.history; track item.id) {
+            <article>
+              <div>
+                <strong>{{ item.actualRecipientLabel }}</strong>
+                <span>{{ money(item.amountKopecks) }}</span>
+              </div>
+              <p>Изначально в счёте: {{ item.originalRecipientLabel }}</p>
+              <p>{{ historyDate(item.effectiveAt) }} · {{ item.actor }} · {{ item.reason }}</p>
+              @if (item.projectedOverrunKopecks > 0) {
+                <p class="warning">Превышение для сверки: {{ money(item.projectedOverrunKopecks) }}</p>
+              }
+            </article>
+          }
+        </section>
+      }
+    }
+  </section>
+</div>

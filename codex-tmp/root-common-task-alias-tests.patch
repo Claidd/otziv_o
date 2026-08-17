@@ -1,0 +1,100 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinatorTest.java
+@@
+         order.verify(attributionService).requireFinalAttributionsAccountingApplied(
+                 ContractorActualPaymentSourceKind.COMMON_INVOICE, 91L);
+     }
++
++    @Test
++    void taskOwnerSuppressesOrdinaryOwnerAlias() {
++        when(attributionService.lockEnabledAccountingMode()).thenReturn(ContractorAllocationMode.SHADOW);
++        CommonInvoice invoice = new CommonInvoice();
++        invoice.setId(91L);
++        invoice.setPaymentRouteManualSource(com.hunt.otziv.payments.model.ManualPaymentSource.MANUAL_TASK);
++        var snapshot = mock(com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot.class);
++        when(snapshot.candidateKey()).thenReturn("TASK:16:2");
++        when(snapshot.taskId()).thenReturn(16L);
++        when(snapshot.taskGeneration()).thenReturn(2L);
++        when(snapshot.accountingTargetKind()).thenReturn(
++                com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.OWNER);
++        when(snapshot.bankRecipientName()).thenReturn("Наталья П.");
++        when(snapshot.accountingTargetLabel()).thenReturn("Владелец");
++        when(taskReceiptIntegrationService.candidate(invoice)).thenReturn(java.util.Optional.of(snapshot));
++        when(taskReceiptIntegrationService.destination(snapshot)).thenReturn(
++                new ManualPaymentTaskReceiptIntegrationService.Destination(
++                        "TASK:16:2",
++                        com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind.MANUAL_PAYMENT_TASK,
++                        ContractorRecipientType.OWNER,
++                        null,
++                        16L,
++                        2L,
++                        com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.OWNER,
++                        "Наталья П.",
++                        "Владелец"
++                ));
++
++        var options = coordinator.options(invoice, List.of(), 10_000L);
++
++        assertEquals("TASK:16:2", options.defaultRecipientKey());
++        assertTrue(options.candidates().stream().anyMatch(row -> row.key().equals("TASK:16:2")));
++        assertFalse(options.candidates().stream().anyMatch(row -> row.key().equals("OWNER")));
++    }
++
++    @Test
++    void taskProfileSuppressesOrdinaryAliasForTheSameProfile() {
++        when(attributionService.lockEnabledAccountingMode()).thenReturn(ContractorAllocationMode.SHADOW);
++        CommonInvoice invoice = new CommonInvoice();
++        invoice.setId(91L);
++        invoice.setPaymentRouteManualSource(com.hunt.otziv.payments.model.ManualPaymentSource.MANUAL_TASK);
++        var snapshot = mock(com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot.class);
++        when(snapshot.candidateKey()).thenReturn("TASK:16:2");
++        when(snapshot.taskId()).thenReturn(16L);
++        when(snapshot.taskGeneration()).thenReturn(2L);
++        when(snapshot.accountingTargetKind()).thenReturn(
++                com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.SPECIALIST);
++        when(snapshot.bankRecipientName()).thenReturn("Наталья П.");
++        when(snapshot.accountingTargetLabel()).thenReturn("Специалист · Наталья Ш.");
++        when(taskReceiptIntegrationService.candidate(invoice)).thenReturn(java.util.Optional.of(snapshot));
++        when(taskReceiptIntegrationService.destination(snapshot)).thenReturn(
++                new ManualPaymentTaskReceiptIntegrationService.Destination(
++                        "TASK:16:2",
++                        com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind.MANUAL_PAYMENT_TASK,
++                        ContractorRecipientType.SPECIALIST,
++                        32L,
++                        16L,
++                        2L,
++                        com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.SPECIALIST,
++                        "Наталья П.",
++                        "Специалист · Наталья Ш."
++                ));
++        var profile = mock(com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile.class);
++        var user = mock(com.hunt.otziv.u_users.model.User.class);
++        when(profile.getId()).thenReturn(32L);
++        when(profile.getRole()).thenReturn(com.hunt.otziv.contractor_payments.model.ContractorRole.SPECIALIST);
++        when(profile.getUser()).thenReturn(user);
++        when(profile.isEnabled()).thenReturn(true);
++        when(user.getId()).thenReturn(13L);
++        when(user.getFio()).thenReturn("Наталья Ш.");
++        when(profileRepository.findById(32L)).thenReturn(java.util.Optional.of(profile));
++        when(profileRepository.findByUserIdAndRole(
++                13L,
++                com.hunt.otziv.contractor_payments.model.ContractorRole.SPECIALIST
++        )).thenReturn(java.util.Optional.of(profile));
++        when(targetAccessPolicy.canManageUser(13L)).thenReturn(true);
++        var item = mock(com.hunt.otziv.common_billing.model.CommonInvoiceOrder.class);
++        var order = mock(com.hunt.otziv.p_products.model.Order.class);
++        var worker = mock(com.hunt.otziv.u_users.model.Worker.class);
++        when(item.isActiveMembership()).thenReturn(true);
++        when(item.getOrder()).thenReturn(order);
++        when(order.getWorker()).thenReturn(worker);
++        when(worker.getId()).thenReturn(5L);
++        when(worker.getUser()).thenReturn(user);
++
++        var options = coordinator.options(invoice, List.of(item), 10_000L);
++
++        assertEquals("TASK:16:2", options.defaultRecipientKey());
++        assertTrue(options.candidates().stream().anyMatch(row -> row.key().equals("TASK:16:2")));
++        assertFalse(options.candidates().stream().anyMatch(row -> row.key().equals("PROFILE:32")));
++    }
+ }
+*** End Patch

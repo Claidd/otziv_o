@@ -1,0 +1,67 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/PaymentLinkService.java
+@@
+         link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+         link.setManualPhone(limit(task.getManualPhone(), 32));
+         link.setManualRecipientName(manualRecipientName(task.getManualRecipientName()));
+-        link.setManualPaymentUrl(manualPaymentUrl(task.getManualPaymentUrl()));
++        link.setManualPaymentUrl(type == ManualPaymentType.EXTERNAL_LINK
++                ? manualPaymentUrl(task.getManualPaymentUrl())
++                : null);
+@@
+-        link.setManualPaymentUrl(manualPaymentUrl(snapshot.manualPaymentUrl()));
++        link.setManualPaymentUrl(snapshot.manualPaymentType() == ManualPaymentType.EXTERNAL_LINK
++                ? manualPaymentUrl(snapshot.manualPaymentUrl())
++                : null);
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+     void paymentInstructionCreationRollsBackEveryWriteOnUnsafeTaskRouteFailure() throws Exception {
+@@
+     }
++
++    @Test
++    void mobileTaskRouteNeverValidatesOrPublishesQuarantinedExternalUrl() {
++        PaymentLinkService service = service(properties());
++        ManualPaymentTask task = new ManualPaymentTask();
++        task.setId(7_701L);
++        task.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
++        task.setManualPhone("+79990001122");
++        task.setManualRecipientName("Получатель мобильного перевода");
++        task.setManualPaymentUrl("javascript:alert(document.cookie)");
++        task.setManualPaymentButtonLabel("Перевести по номеру");
++        when(manualPaymentTaskRepository.findByIdForUpdate(7_701L))
++                .thenReturn(Optional.of(task));
++        ManualPaymentTaskRouteSnapshot snapshot = new ManualPaymentTaskRouteSnapshot(
++                7_701L,
++                3L,
++                new com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef(
++                        com.hunt.otziv.payments.model.ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK,
++                        8_801L,
++                        "task-source-generation"),
++                "TASK:7701:3",
++                com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.OWNER,
++                null,
++                "Владелец",
++                ManualPaymentType.MOBILE_BANK,
++                "+79990001122",
++                "Получатель мобильного перевода",
++                "javascript:alert(document.cookie)",
++                "Перевести по номеру",
++                50_000L,
++                null,
++                ""
++        );
++        PaymentLink link = new PaymentLink();
++        link.setId(8_801L);
++        link.setOrder(order(8_801L, "ООО Мобильный маршрут", BigDecimal.valueOf(500)));
++
++        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
++                service, "applyManualTaskPayment", link, snapshot));
++
++        assertEquals(PaymentMethod.MANUAL_MOBILE_BANK, link.getPaymentMethod());
++        assertEquals(ManualPaymentSource.MANUAL_TASK, link.getManualSource());
++        assertEquals("+79990001122", link.getManualPhone());
++        assertNull(link.getManualPaymentUrl());
++        assertEquals("task-source-generation", link.getManualTaskSourceGeneration());
++    }
+*** End Patch

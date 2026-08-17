@@ -11,6 +11,18 @@ public record ManualCardPaymentContextResponse(
         boolean recipientSelectionFrozen,
         ManualCardPaymentRecipientResponse preparedRecipient,
         String preparedReason,
-        String preparedReceiptUrl
+        String preparedReceiptUrl,
+        String contractVersion,
+        String routeRevision
 ) {
+    public ManualCardPaymentContextResponse(
+            Long orderId, long amountKopecks, ManualCardPaymentRecipientResponse originalRecipient,
+            List<ManualCardPaymentRecipientResponse> candidates, String anomalyWarning,
+            boolean recipientSelectionFrozen, ManualCardPaymentRecipientResponse preparedRecipient,
+            String preparedReason, String preparedReceiptUrl
+    ) {
+        this(orderId, amountKopecks, originalRecipient, candidates, anomalyWarning,
+                recipientSelectionFrozen, preparedRecipient, preparedReason, preparedReceiptUrl,
+                "TASK_RECIPIENT_V1", null);
+    }
 }

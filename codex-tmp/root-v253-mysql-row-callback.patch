@@ -1,0 +1,9 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/repository/ManualPaymentRecipientMonthlyArchiveMySqlIntegrationTest.java
+@@
+-        namedJdbc.query(sql, params, rs -> result.put(rs.getLong("sourceId"), rs.getLong("amountKopecks")));
++        namedJdbc.query(sql, params, rs -> {
++            result.put(rs.getLong("sourceId"), rs.getLong("amountKopecks"));
++        });
+         return result;
+*** End Patch

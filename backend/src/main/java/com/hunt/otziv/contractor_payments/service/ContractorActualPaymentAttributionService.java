@@ -8,6 +8,7 @@ import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse;
 import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentRecipientResponse;
 import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentAttribution;
 import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
+import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
@@ -22,6 +23,11 @@ import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRep
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot;
+import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
+import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
+import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
+import com.hunt.otziv.payments.service.ManualPaymentTaskRouteErrors;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -34,6 +40,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -86,6 +93,8 @@ public class ContractorActualPaymentAttributionService {
     private final BusinessAuditService businessAuditService;
     private final ContractorPaymentTargetAccessPolicy targetAccessPolicy;
     private final AppSettingService appSettingService;
+    private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
+    private final ManualPaymentTaskContractorCapacityService taskCapacityService;
 
     /** Authoritative non-mutating UI/controller gate using the same rules as the locked path. */
     @Transactional(readOnly = true)
@@ -149,16 +158,45 @@ public class ContractorActualPaymentAttributionService {
         return recordFinalAttributionsInternal(rawSource, rawCommands, false);
     }
 
+    /**
+     * Finishes an already issued source in the accounting mode persisted when
+     * its route was frozen. The current phase remains the first financial
+     * mutex, but a later SHADOW-to-LIVE promotion must not reinterpret the
+     * immutable client-facing receipt.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<ContractorActualPaymentAttribution> recordFinalAttributionsForFrozenSource(
+            ContractorActualPaymentSource rawSource,
+            List<ContractorActualPaymentRecipientCommand> rawCommands,
+            ContractorAllocationMode persistedMode
+    ) {
+        return recordFinalAttributionsInternal(
+                rawSource, rawCommands, true, requireFrozenMode(persistedMode));
+    }
+
     private List<ContractorActualPaymentAttribution> recordFinalAttributionsInternal(
             ContractorActualPaymentSource rawSource,
             List<ContractorActualPaymentRecipientCommand> rawCommands,
             boolean committedOrFrozen
     ) {
+        return recordFinalAttributionsInternal(
+                rawSource, rawCommands, committedOrFrozen, null);
+    }
+
+    private List<ContractorActualPaymentAttribution> recordFinalAttributionsInternal(
+            ContractorActualPaymentSource rawSource,
+            List<ContractorActualPaymentRecipientCommand> rawCommands,
+            boolean committedOrFrozen,
+            ContractorAllocationMode frozenMode
+    ) {
         ContractorActualPaymentSource source = validateSource(rawSource);
         List<ContractorActualPaymentRecipientCommand> commands = validateCommands(rawCommands);
-        ContractorAllocationMode mode = committedOrFrozen
+        ContractorAllocationMode current = committedOrFrozen || frozenMode != null
                 ? accountingPhaseService.lockCurrent()
-                : lockEnabledAccountingMode();
+                : null;
+        ContractorAllocationMode mode = frozenMode != null
+                ? frozenMode
+                : committedOrFrozen ? current : lockEnabledAccountingMode();
 
         Map<String, ContractorActualPaymentAttribution> discovered = commands.stream()
                 .map(ContractorActualPaymentRecipientCommand::attributionKey)
@@ -170,6 +208,10 @@ public class ContractorActualPaymentAttributionService {
                 ));
         if (!discovered.isEmpty() && discovered.size() != commands.size()) {
             throw conflict("Неполный повтор фиксации получателя; требуется сверка");
+        }
+        if (frozenMode != null && discovered.values().stream()
+                .anyMatch(row -> row.getAccountingMode() != frozenMode)) {
+            throw conflict("Режим учёта выданного платежа изменился; требуется сверка");
         }
 
         Long originalAllocationId = effectiveOriginalAllocationId(source, mode, discovered.values());
@@ -226,7 +268,8 @@ public class ContractorActualPaymentAttributionService {
         );
         Long originalProfileId = profileId(original);
         boolean reallocate = commands.stream().anyMatch(command ->
-                command.actualRecipientType() == ContractorRecipientType.OWNER
+                command.actualRecipientType() == null
+                        || command.actualRecipientType() == ContractorRecipientType.OWNER
                         || !Objects.equals(command.actualRecipientProfileId(), originalProfileId)
         );
         sourceAllocations(source, allocations.values()).stream()
@@ -244,8 +287,8 @@ public class ContractorActualPaymentAttributionService {
             }
             long available = actualProfile == null
                     ? 0L
-                    : capacity(actualProfile, mode, reallocate ? null : original);
-            ContractorActualPaymentAttribution row = ContractorActualPaymentAttribution.create(
+                    : capacity(actualProfile, mode, reallocate ? null : original, false);
+            ContractorActualPaymentAttribution row = ContractorActualPaymentAttribution.createWithDestinations(
                     command.attributionKey(),
                     source.sourceKind(),
                     source.sourceId(),
@@ -273,7 +316,15 @@ public class ContractorActualPaymentAttributionService {
                     source.evidenceReference(),
                     source.receiptUrl(),
                     source.actor(),
-                    null
+                    null,
+                    source.clientFacingCashDestinationKind(),
+                    source.clientFacingManualPaymentTaskId(),
+                    source.clientFacingManualPaymentTaskGeneration(),
+                    source.clientFacingManualPaymentTaskTargetKind(),
+                    command.cashDestinationKind(),
+                    command.manualPaymentTaskId(),
+                    command.manualPaymentTaskGeneration(),
+                    command.manualPaymentTaskTargetKind()
             );
             row = attributionRepository.saveAndFlush(row);
             applyNew(row, actualProfile, original, !reallocate, available);
@@ -306,6 +357,54 @@ public class ContractorActualPaymentAttributionService {
         return recordFinalAttributionsInternal(source, commands, true);
     }
 
+    /** Strict replay verifier for a source whose accounting mode was frozen. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<ContractorActualPaymentAttribution>
+    requireFinalAttributionsAccountingAppliedForFrozenSource(
+            ContractorActualPaymentSourceKind sourceKind,
+            Long sourceId,
+            ContractorAllocationMode persistedMode
+    ) {
+        ContractorAllocationMode mode = requireFrozenMode(persistedMode);
+        if (sourceKind == null || sourceId == null || sourceId <= 0) {
+            throw badRequest("Некорректный источник атрибуции");
+        }
+        List<ContractorActualPaymentAttribution> rows = attributionRepository
+                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(sourceKind, sourceId);
+        if (rows.isEmpty()) {
+            throw conflict("У завершённой оплаты отсутствует атрибуция; требуется сверка");
+        }
+        if (rows.stream().anyMatch(row -> row.getAccountingMode() != mode)) {
+            throw conflict("Режим учёта выданного платежа изменился; требуется сверка");
+        }
+        ContractorActualPaymentSource source = sourceFrom(rows.getFirst());
+        List<ContractorActualPaymentRecipientCommand> commands = rows.stream()
+                .map(this::commandFrom)
+                .toList();
+        return recordFinalAttributionsInternal(source, commands, true, mode);
+    }
+
+    private ContractorAllocationMode requireFrozenMode(ContractorAllocationMode mode) {
+        if (mode != ContractorAllocationMode.SHADOW && mode != ContractorAllocationMode.LIVE) {
+            throw conflict("У выданного платежа отсутствует режим учёта; требуется сверка");
+        }
+        return mode;
+    }
+
+    private ContractorAllocationMode issuedTaskAccountingMode(PaymentLink link) {
+        if (link == null
+                || link.getManualSource() != ManualPaymentSource.MANUAL_TASK
+                || link.getManualPaymentTask() == null
+                || link.getManualPaymentTask().getId() == null
+                || link.getManualTaskGeneration() == null
+                || link.getManualTaskGeneration() <= 0L
+                || normalize(link.getManualTaskSourceGeneration()).isBlank()) {
+            return null;
+        }
+        return link.getManualActualAccountingMode() == null
+                ? null : requireFrozenMode(link.getManualActualAccountingMode());
+    }
+
     private ContractorActualPaymentSource sourceFrom(ContractorActualPaymentAttribution row) {
         return new ContractorActualPaymentSource(
                 row.getSourceKind(),
@@ -324,7 +423,11 @@ public class ContractorActualPaymentAttributionService {
                 row.getReason(),
                 row.getEvidenceReference(),
                 row.getReceiptUrl(),
-                row.getActor()
+                row.getActor(),
+                row.getOriginalCashDestinationKind(),
+                row.getOriginalManualPaymentTaskId(),
+                row.getOriginalManualPaymentTaskGeneration(),
+                row.getOriginalManualPaymentTaskTargetKind()
         );
     }
 
@@ -334,28 +437,51 @@ public class ContractorActualPaymentAttributionService {
                 row.getActualRecipientType(),
                 row.getActualRecipientProfileId(),
                 row.getAmountKopecks(),
-                row.getActualRecipientNameSnapshot()
+                row.getActualRecipientNameSnapshot(),
+                row.getActualCashDestinationKind() == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK
+                        ? com.hunt.otziv.payments.service.ManualPaymentTaskLedgerService.candidateKey(
+                                row.getActualManualPaymentTaskId(), row.getActualManualPaymentTaskGeneration())
+                        : recipientKey(row.getActualRecipientType(), row.getActualRecipientProfileId()),
+                row.getActualCashDestinationKind(),
+                row.getActualManualPaymentTaskId(),
+                row.getActualManualPaymentTaskGeneration(),
+                row.getActualManualPaymentTaskTargetKind()
         );
     }
     /** Preview only. Submit repeats every identity and capacity check under locks. */
     @Transactional(propagation = Propagation.MANDATORY)
     public ManualCardPaymentContextResponse manualCardPaymentContext(Order order, PaymentLink link) {
         requireOrdinarySource(order, link);
-        ContractorAllocationMode mode = accountingPhaseService.lockCurrent();
-        if (!accountingEnabled(mode) && link.getManualActualRecipientFrozenAt() == null) {
+        ContractorAllocationMode currentMode = accountingPhaseService.lockCurrent();
+        ContractorAllocationMode issuedTaskMode = issuedTaskAccountingMode(link);
+        ContractorAllocationMode frozenMode = link.getManualActualRecipientFrozenAt() == null
+                ? null : requireFrozenMode(link.getManualActualAccountingMode());
+        if (!accountingEnabled(currentMode) && frozenMode == null && issuedTaskMode == null) {
             return legacyManualCardPaymentContext(order, link);
         }
+        ContractorAllocationMode mode = frozenMode != null
+                ? frozenMode : issuedTaskMode != null ? issuedTaskMode : currentMode;
         Long accountingAllocationId = currentAccountingAllocationId(link, mode);
         Long clientFacingAllocationId = link.getContractorAllocationId();
-        Map<Long, ContractorPaymentProfile> profiles = lockProfiles(
-                ordinaryCandidateProfileIds(order, link, accountingAllocationId, clientFacingAllocationId)
-        );
+        Optional<ManualPaymentTaskRouteSnapshot> taskCandidate = taskReceiptIntegrationService.candidate(link);
+        if (issuedTaskMode != null && taskCandidate.isEmpty()) {
+            throw ManualPaymentTaskRouteErrors.stale();
+        }
+        Set<Long> profileIds = ordinaryCandidateProfileIds(
+                order, link, accountingAllocationId, clientFacingAllocationId);
+        taskCandidate.map(ManualPaymentTaskRouteSnapshot::accountingTargetProfileId)
+                .filter(Objects::nonNull).ifPresent(profileIds::add);
+        Map<Long, ContractorPaymentProfile> profiles = lockProfiles(profileIds);
         Set<Long> allocationIds = new LinkedHashSet<>();
         addId(allocationIds, accountingAllocationId);
         addId(allocationIds, clientFacingAllocationId);
         Map<Long, ContractorPaymentAllocation> allocations = lockAllocations(allocationIds);
-        ContractorPaymentAllocation accountingAllocation = allocations.get(accountingAllocationId);
-        ContractorPaymentAllocation clientFacingAllocation = allocations.get(clientFacingAllocationId);
+        ContractorPaymentAllocation accountingAllocation = accountingAllocationId == null
+                ? null
+                : allocations.get(accountingAllocationId);
+        ContractorPaymentAllocation clientFacingAllocation = clientFacingAllocationId == null
+                ? null
+                : allocations.get(clientFacingAllocationId);
         requireOriginalBinding(
                 paymentLinkSource(order, link, accountingAllocationId), mode, accountingAllocation, profiles
         );
@@ -367,7 +493,12 @@ public class ContractorActualPaymentAttributionService {
             client = clientRecipientForPaymentLink(link, clientFacingAllocation, profiles);
         }
         LinkedHashMap<String, ManualCardPaymentRecipientResponse> values = new LinkedHashMap<>();
-        addCandidate(values, client, profiles, mode, accountingAllocation, link.getAmountKopecks(), true);
+        if (taskCandidate.isPresent()) {
+            addTaskCandidate(values, taskCandidate.get(), profiles, mode, accountingAllocation,
+                    link.getAmountKopecks(), true);
+        } else {
+            addCandidate(values, client, profiles, mode, accountingAllocation, link.getAmountKopecks(), true);
+        }
         addAssignedCandidates(values, order, profiles, mode, accountingAllocation, link.getAmountKopecks(), client);
         addProfileCandidate(values, profileId(accountingAllocation), profiles, mode, accountingAllocation,
                 link.getAmountKopecks(), client);
@@ -389,6 +520,7 @@ public class ContractorActualPaymentAttributionService {
                 link.getAmountKopecks(),
                 sameRecipient(client, ContractorRecipientType.OWNER, null)
         );
+        taskCandidate.ifPresent(snapshot -> suppressOrdinaryAliasForTask(values, snapshot));
         ManualCardPaymentRecipientResponse originalResponse = values.values().stream()
                 .filter(ManualCardPaymentRecipientResponse::original)
                 .findFirst()
@@ -399,10 +531,7 @@ public class ContractorActualPaymentAttributionService {
         ManualCardPaymentRecipientResponse preparedRecipient = link.getManualActualRecipientFrozenAt() == null
                 ? null
                 : values.values().stream()
-                        .filter(value -> value.recipientType() == link.getManualActualRecipientType())
-                        .filter(value -> Objects.equals(
-                                value.recipientProfileId(), link.getManualActualRecipientProfileId()
-                        ))
+                        .filter(value -> value.key().equals(frozenRecipientKey(link)))
                         .findFirst()
                         .orElseThrow(() -> conflict("Ранее выбранный фактический получатель больше недоступен"));
         return new ManualCardPaymentContextResponse(
@@ -414,7 +543,9 @@ public class ContractorActualPaymentAttributionService {
                 link.getManualActualRecipientFrozenAt() != null,
                 preparedRecipient,
                 link.getManualActualReason(),
-                link.getManualActualReceiptUrl()
+                link.getManualActualReceiptUrl(),
+                "TASK_RECIPIENT_V1",
+                taskCandidate.map(value -> value.source().sourceGeneration()).orElse(null)
         );
     }
 
@@ -423,6 +554,7 @@ public class ContractorActualPaymentAttributionService {
     public void freezePaymentLinkRecipientIntent(
             Order order,
             PaymentLink link,
+            String requestedRecipientKey,
             ContractorRecipientType requestedType,
             Long requestedProfileId,
             String rawReason,
@@ -433,23 +565,35 @@ public class ContractorActualPaymentAttributionService {
         String receiptUrl = optionalReceiptUrl(rawReceiptUrl);
         String actor = required(rawActor, MAX_ACTOR_LENGTH, "Исполнитель операции");
         if (link.getManualActualRecipientFrozenAt() != null) {
-            requireFrozenReplay(link, requestedType, requestedProfileId, reason, receiptUrl);
+            requireFrozenReplay(link, requestedRecipientKey, requestedType, requestedProfileId, reason, receiptUrl);
             return;
         }
         ManualCardPaymentContextResponse context = manualCardPaymentContext(order, link);
-        ManualCardPaymentRecipientResponse selected = selectRecipient(context, requestedType, requestedProfileId);
-        ContractorAllocationMode mode = lockEnabledAccountingMode();
+        ManualCardPaymentRecipientResponse selected = selectRecipient(
+                context, requestedRecipientKey, requestedType, requestedProfileId);
+        ContractorAllocationMode mode = issuedTaskAccountingMode(link);
+        if (mode == null) {
+            mode = lockEnabledAccountingMode();
+        }
         Long originalAllocationId = currentAccountingAllocationId(link, mode);
         Worker worker = order.getWorker();
         Manager manager = orderManagerResolver.resolveForRouting(order);
 
         link.setManualActualAccountingMode(mode);
+        link.setManualActualOriginalCashDestinationKind(context.originalRecipient().cashDestinationKind());
+        link.setManualActualOriginalTaskId(context.originalRecipient().manualPaymentTaskId());
+        link.setManualActualOriginalTaskGeneration(context.originalRecipient().manualPaymentTaskGeneration());
+        link.setManualActualOriginalTaskTargetKind(context.originalRecipient().taskTargetKind());
         link.setManualActualOriginalAllocationId(originalAllocationId);
         link.setManualActualClientFacingAllocationId(link.getContractorAllocationId());
         link.setManualActualOriginalRecipientType(context.originalRecipient().recipientType());
         link.setManualActualOriginalRecipientProfileId(context.originalRecipient().recipientProfileId());
         link.setManualActualOriginalRecipientUserId(context.originalRecipient().recipientUserId());
         link.setManualActualOriginalRecipientNameSnapshot(context.originalRecipient().displayName());
+        link.setManualActualCashDestinationKind(selected.cashDestinationKind());
+        link.setManualActualTaskId(selected.manualPaymentTaskId());
+        link.setManualActualTaskGeneration(selected.manualPaymentTaskGeneration());
+        link.setManualActualTaskTargetKind(selected.taskTargetKind());
         link.setManualActualRecipientType(selected.recipientType());
         link.setManualActualRecipientProfileId(selected.recipientProfileId());
         link.setManualActualRecipientUserId(selected.recipientUserId());
@@ -473,7 +617,10 @@ public class ContractorActualPaymentAttributionService {
         // A frozen intent must remain finishable if test routing is disabled
         // after the bank route was irreversibly closed. New operations still
         // pass through lockEnabledAccountingMode() before freezing.
+        ContractorAllocationMode frozenMode = requireFrozenMode(
+                originalLink.getManualActualAccountingMode());
         ContractorAllocationMode currentMode = accountingPhaseService.lockCurrent();
+        taskReceiptIntegrationService.lockTaskForFinalAttribution(originalLink);
         Long originalAllocationId = originalLink.getManualActualAccountingMode() == currentMode
                 ? originalLink.getManualActualOriginalAllocationId()
                 : null;
@@ -495,26 +642,39 @@ public class ContractorActualPaymentAttributionService {
                 "payment-link-evidence:" + evidenceLink.getId(),
                 originalLink.getManualActualReceiptUrl(),
                 originalLink.getManualActualActor()
+                , originalLink.getManualActualOriginalCashDestinationKind()
+                , originalLink.getManualActualOriginalTaskId()
+                , originalLink.getManualActualOriginalTaskGeneration()
+                , originalLink.getManualActualOriginalTaskTargetKind()
         );
         ContractorActualPaymentRecipientCommand command = new ContractorActualPaymentRecipientCommand(
                 "PAYMENT_LINK:" + originalLink.getId(),
                 originalLink.getManualActualRecipientType(),
                 originalLink.getManualActualRecipientProfileId(),
                 evidenceLink.getAmountKopecks(),
-                originalLink.getManualActualRecipientNameSnapshot()
+                originalLink.getManualActualRecipientNameSnapshot(),
+                frozenRecipientKey(originalLink),
+                originalLink.getManualActualCashDestinationKind(),
+                originalLink.getManualActualTaskId(),
+                originalLink.getManualActualTaskGeneration(),
+                originalLink.getManualActualTaskTargetKind()
         );
-        return recordFinalAttributionsInternal(source, List.of(command), true).getFirst();
+        return recordFinalAttributionsInternal(
+                source, List.of(command), true, frozenMode).getFirst();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void requireCompletedPaymentReplay(
             PaymentLink link,
             long requestedAmountKopecks,
+            String requestedRecipientKey,
             ContractorRecipientType requestedType,
             Long requestedProfileId,
             String reason,
             String receiptUrl
     ) {
+        accountingPhaseService.lockCurrent();
+        taskReceiptIntegrationService.lockTaskForFinalAttribution(link);
         if (requestedAmountKopecks != link.getAmountKopecks()) {
             throw conflict("Сумма повторной ручной оплаты отличается от уже зафиксированной");
         }
@@ -527,8 +687,11 @@ public class ContractorActualPaymentAttributionService {
             throw conflict("Завершённая оплата создана до выбора фактического получателя");
         }
         requireFrozenIntent(link);
+        ContractorAllocationMode frozenMode = requireFrozenMode(
+                link.getManualActualAccountingMode());
         requireFrozenReplay(
                 link,
+                requestedRecipientKey,
                 requestedType,
                 requestedProfileId,
                 required(reason, MAX_REASON_LENGTH, "Причина"),
@@ -537,6 +700,9 @@ public class ContractorActualPaymentAttributionService {
         ContractorActualPaymentAttribution row = attributionRepository
                 .findByAttributionKey("PAYMENT_LINK:" + link.getId())
                 .orElseThrow(() -> conflict("У завершённой оплаты отсутствует атрибуция; требуется сверка"));
+        if (row.getAccountingMode() != frozenMode) {
+            throw conflict("Режим учёта выданного платежа изменился; требуется сверка");
+        }
         if (row.getActualRecipientType() != link.getManualActualRecipientType()
                 || !Objects.equals(row.getActualRecipientProfileId(), link.getManualActualRecipientProfileId())
                 || row.getAmountKopecks() != link.getAmountKopecks()) {
@@ -559,16 +725,25 @@ public class ContractorActualPaymentAttributionService {
                 row.getReason(),
                 row.getEvidenceReference(),
                 row.getReceiptUrl(),
-                row.getActor()
+                row.getActor(),
+                row.getOriginalCashDestinationKind(),
+                row.getOriginalManualPaymentTaskId(),
+                row.getOriginalManualPaymentTaskGeneration(),
+                row.getOriginalManualPaymentTaskTargetKind()
         );
         ContractorActualPaymentRecipientCommand command = new ContractorActualPaymentRecipientCommand(
                 row.getAttributionKey(),
                 row.getActualRecipientType(),
                 row.getActualRecipientProfileId(),
                 row.getAmountKopecks(),
-                row.getActualRecipientNameSnapshot()
+                row.getActualRecipientNameSnapshot(),
+                frozenRecipientKey(link),
+                row.getActualCashDestinationKind(),
+                row.getActualManualPaymentTaskId(),
+                row.getActualManualPaymentTaskGeneration(),
+                row.getActualManualPaymentTaskTargetKind()
         );
-        recordFinalAttributionsInternal(source, List.of(command), true);
+        recordFinalAttributionsInternal(source, List.of(command), true, frozenMode);
     }
 
 
@@ -583,13 +758,18 @@ public class ContractorActualPaymentAttributionService {
         String receiptUrl = optionalReceiptUrl(source.receiptUrl());
         String actor = required(source.actor(), MAX_ACTOR_LENGTH, "Исполнитель операции");
         String clientName = optional(source.clientFacingRecipientName(), 255, "Имя исходного получателя");
-        validateIdentity(source.clientFacingRecipientType(), source.clientFacingRecipientProfileId(), true);
+        validateDestination(source.clientFacingCashDestinationKind(), source.clientFacingRecipientType(),
+                source.clientFacingRecipientProfileId(), source.clientFacingManualPaymentTaskId(),
+                source.clientFacingManualPaymentTaskGeneration(),
+                source.clientFacingManualPaymentTaskTargetKind(), true);
         return new ContractorActualPaymentSource(
                 source.sourceKind(), source.sourceId(), source.evidenceId(), source.orderId(), source.commonInvoiceId(),
                 source.originalAllocationId(), source.clientFacingAllocationId(), source.clientFacingRecipientType(),
                 source.clientFacingRecipientProfileId(), clientName, source.currentWorkerId(), source.currentManagerId(),
                 source.effectiveAt() == null ? LocalDateTime.now() : source.effectiveAt(),
-                reason, evidence, receiptUrl, actor
+                reason, evidence, receiptUrl, actor, source.clientFacingCashDestinationKind(),
+                source.clientFacingManualPaymentTaskId(), source.clientFacingManualPaymentTaskGeneration(),
+                source.clientFacingManualPaymentTaskTargetKind()
         );
     }
 
@@ -609,13 +789,18 @@ public class ContractorActualPaymentAttributionService {
             if (!keys.add(key)) {
                 throw badRequest("Ключи строк фактического поступления должны быть уникальными");
             }
-            validateIdentity(command.actualRecipientType(), command.actualRecipientProfileId(), false);
+            validateDestination(command.cashDestinationKind(), command.actualRecipientType(),
+                    command.actualRecipientProfileId(), command.manualPaymentTaskId(),
+                    command.manualPaymentTaskGeneration(), command.manualPaymentTaskTargetKind(), false);
             result.add(new ContractorActualPaymentRecipientCommand(
                     key,
                     command.actualRecipientType(),
                     command.actualRecipientProfileId(),
                     command.amountKopecks(),
-                    optional(command.actualRecipientName(), 255, "Имя фактического получателя")
+                    optional(command.actualRecipientName(), 255, "Имя фактического получателя"),
+                    required(command.recipientKey(), 160, "Ключ получателя"),
+                    command.cashDestinationKind(), command.manualPaymentTaskId(),
+                    command.manualPaymentTaskGeneration(), command.manualPaymentTaskTargetKind()
             ));
         }
         return List.copyOf(result);
@@ -633,6 +818,47 @@ public class ContractorActualPaymentAttributionService {
         }
         if (type != ContractorRecipientType.OWNER && (profileId == null || profileId <= 0)) {
             throw badRequest("Для работника требуется платёжный профиль");
+        }
+    }
+
+    private void validateDestination(
+            ContractorCashDestinationKind kind, ContractorRecipientType type, Long profileId,
+            Long taskId, Long taskGeneration, ManualPaymentTaskAccountingTargetKind taskTargetKind,
+            boolean nullable
+    ) {
+        if (kind == null) {
+            if (nullable && type == null && profileId == null) return;
+            throw badRequest("Не указано денежное направление");
+        }
+        if (kind == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK) {
+            if (taskId == null || taskId <= 0 || taskGeneration == null || taskGeneration <= 0
+                    || taskTargetKind == null || taskTargetKind == ManualPaymentTaskAccountingTargetKind.UNRESOLVED) {
+                throw ManualPaymentTaskRouteErrors.unresolved();
+            }
+            if (taskTargetKind == ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK) {
+                if (type != null || profileId != null) throw badRequest("Внешний получатель задания не является работником");
+                return;
+            }
+            ContractorRecipientType expected = switch (taskTargetKind) {
+                case OWNER -> ContractorRecipientType.OWNER;
+                case SPECIALIST -> ContractorRecipientType.SPECIALIST;
+                case MANAGER -> ContractorRecipientType.MANAGER;
+                default -> null;
+            };
+            if (type != expected) throw badRequest("Цель задания не совпадает с получателем");
+            validateIdentity(type, profileId, false);
+            return;
+        }
+        if (taskId != null || taskGeneration != null || taskTargetKind != null) {
+            throw badRequest("Задание не должно быть указано для другого направления");
+        }
+        validateIdentity(type, profileId, nullable);
+        if (kind == ContractorCashDestinationKind.OWNER && type != ContractorRecipientType.OWNER) {
+            throw badRequest("Направление владельца не совпадает с получателем");
+        }
+        if (kind == ContractorCashDestinationKind.CONTRACTOR_PROFILE
+                && (type == null || type == ContractorRecipientType.OWNER)) {
+            throw badRequest("Направление работника не совпадает с получателем");
         }
     }
 
@@ -806,6 +1032,10 @@ public class ContractorActualPaymentAttributionService {
                 || originalMismatch
                 || row.getActualRecipientType() != command.actualRecipientType()
                 || !Objects.equals(row.getActualRecipientProfileId(), command.actualRecipientProfileId())
+                || row.getActualCashDestinationKind() != command.cashDestinationKind()
+                || !Objects.equals(row.getActualManualPaymentTaskId(), command.manualPaymentTaskId())
+                || !Objects.equals(row.getActualManualPaymentTaskGeneration(), command.manualPaymentTaskGeneration())
+                || row.getActualManualPaymentTaskTargetKind() != command.manualPaymentTaskTargetKind()
                 || row.getAmountKopecks() != command.amountKopecks()
                 || !Objects.equals(row.getEffectiveAt(), source.effectiveAt())
                 || !Objects.equals(row.getReason(), source.reason())
@@ -1020,12 +1250,28 @@ public class ContractorActualPaymentAttributionService {
             ContractorPaymentAllocation allocation,
             Map<Long, ContractorPaymentProfile> profiles
     ) {
+        if (source.clientFacingCashDestinationKind() == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK
+                && source.clientFacingManualPaymentTaskTargetKind()
+                        == ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK) {
+            return new ClientRecipient(
+                    null,
+                    null,
+                    null,
+                    firstNonBlank(source.clientFacingRecipientName(), "Внешний получатель задания")
+            );
+        }
         if (source.clientFacingRecipientType() != null) {
-            ContractorPaymentProfile profile = profiles.get(source.clientFacingRecipientProfileId());
-            if (source.clientFacingRecipientType() != ContractorRecipientType.OWNER) {
-                requireProfileRole(profile, source.clientFacingRecipientType());
-                targetAccessPolicy.requireCanManageUser(userId(profile));
+            if (source.clientFacingRecipientType() == ContractorRecipientType.OWNER) {
+                return new ClientRecipient(
+                        ContractorRecipientType.OWNER,
+                        null,
+                        null,
+                        firstNonBlank(source.clientFacingRecipientName(), "Владелец")
+                );
             }
+            ContractorPaymentProfile profile = profiles.get(source.clientFacingRecipientProfileId());
+            requireProfileRole(profile, source.clientFacingRecipientType());
+            targetAccessPolicy.requireCanManageUser(userId(profile));
             return new ClientRecipient(
                     source.clientFacingRecipientType(),
                     source.clientFacingRecipientProfileId(),
@@ -1051,7 +1297,8 @@ public class ContractorActualPaymentAttributionService {
             ContractorActualPaymentRecipientCommand command,
             Map<Long, ContractorPaymentProfile> profiles
     ) {
-        if (command.actualRecipientType() == ContractorRecipientType.OWNER) {
+        if (command.actualRecipientType() == null
+                || command.actualRecipientType() == ContractorRecipientType.OWNER) {
             return null;
         }
         ContractorPaymentProfile profile = profiles.get(command.actualRecipientProfileId());
@@ -1071,9 +1318,12 @@ public class ContractorActualPaymentAttributionService {
     private long capacity(
             ContractorPaymentProfile profile,
             ContractorAllocationMode mode,
-            ContractorPaymentAllocation reusableOriginal
+            ContractorPaymentAllocation reusableOriginal,
+            boolean frozenTaskTarget
     ) {
-        long available = profileService.available(profile, mode);
+        long available = frozenTaskTarget
+                ? Math.max(0L, profileService.capacityPosition(profile, mode))
+                : taskCapacityService.ordinaryAvailable(profile, mode);
         if (reusableOriginal != null && Objects.equals(profileId(reusableOriginal), profile.getId())) {
             available = Math.addExact(available, outstanding(reusableOriginal));
         }
@@ -1155,6 +1405,7 @@ public class ContractorActualPaymentAttributionService {
             return; // OWNER never receives a contractor credit/event
         }
         if (reuseOriginal && original != null && Objects.equals(profileId(original), actualProfile.getId())) {
+            bindActualTaskAllocation(original, row, actualProfile);
             confirm(original, row, !OUTSTANDING.contains(original.getStatus()));
             return;
         }
@@ -1201,11 +1452,14 @@ public class ContractorActualPaymentAttributionService {
                         original.getId(), confirmationRef(row.getId())
                 );
         if (confirmedOnOriginal) {
+            requireActualTaskAllocationBinding(original, row, actualProfile);
             return;
         }
         if (actualAllocation == null
                 || actualAllocation.getMode() != row.getAccountingMode()
                 || !Objects.equals(profileId(actualAllocation), actualProfile.getId())
+                || !Objects.equals(actualAllocation.getManualPaymentTaskId(),
+                        expectedActualTaskAllocationId(row, actualProfile))
                 || actualAllocation.getAmountKopecks() != row.getAmountKopecks()
                 || !SOURCE_FINAL.contains(actualAllocation.getStatus())
                 || !eventRepository.existsByAllocationIdAndExternalRef(
@@ -1255,6 +1509,7 @@ public class ContractorActualPaymentAttributionService {
             allocation.setAttemptNo(1);
             allocation.setOrderId(row.getOrderId());
             allocation.setCommonInvoiceId(row.getCommonInvoiceId());
+            allocation.setManualPaymentTaskId(expectedActualTaskAllocationId(row, profile));
             allocation.setRecipientType(row.getActualRecipientType());
             allocation.setRecipientProfile(profile);
             allocation.setRecipientUserId(profile.getUser().getId());
@@ -1272,10 +1527,60 @@ public class ContractorActualPaymentAttributionService {
             accountingService.recordReservation(allocation);
         } else if (!Objects.equals(profileId(allocation), profile.getId())
                 || allocation.getAmountKopecks() != row.getAmountKopecks()
-                || allocation.getMode() != row.getAccountingMode()) {
+                || allocation.getMode() != row.getAccountingMode()
+                || !Objects.equals(allocation.getManualPaymentTaskId(),
+                        expectedActualTaskAllocationId(row, profile))) {
             throw conflict("Учёт фактического получателя расходится с атрибуцией");
         }
         confirm(allocation, row, false);
+    }
+
+    private void bindActualTaskAllocation(
+            ContractorPaymentAllocation allocation,
+            ContractorActualPaymentAttribution row,
+            ContractorPaymentProfile profile
+    ) {
+        Long expectedTaskId = expectedActualTaskAllocationId(row, profile);
+        if (allocation.getManualPaymentTaskId() != null
+                && !Objects.equals(allocation.getManualPaymentTaskId(), expectedTaskId)) {
+            throw conflict("Распределение уже связано с другим платёжным заданием");
+        }
+        allocation.setManualPaymentTaskId(expectedTaskId);
+    }
+
+    private void requireActualTaskAllocationBinding(
+            ContractorPaymentAllocation allocation,
+            ContractorActualPaymentAttribution row,
+            ContractorPaymentProfile profile
+    ) {
+        if (!Objects.equals(allocation.getManualPaymentTaskId(),
+                expectedActualTaskAllocationId(row, profile))) {
+            throw conflict("Подтверждённое распределение не связано с денежной целью задания");
+        }
+    }
+
+    private Long expectedActualTaskAllocationId(
+            ContractorActualPaymentAttribution row,
+            ContractorPaymentProfile profile
+    ) {
+        if (row.getActualCashDestinationKind()
+                != ContractorCashDestinationKind.MANUAL_PAYMENT_TASK) {
+            return null;
+        }
+        ManualPaymentTaskAccountingTargetKind kind = row.getActualManualPaymentTaskTargetKind();
+        boolean contractorTask = kind == ManualPaymentTaskAccountingTargetKind.SPECIALIST
+                || kind == ManualPaymentTaskAccountingTargetKind.MANAGER;
+        ContractorRecipientType expectedType = kind == ManualPaymentTaskAccountingTargetKind.SPECIALIST
+                ? ContractorRecipientType.SPECIALIST : ContractorRecipientType.MANAGER;
+        if (!contractorTask
+                || row.getActualManualPaymentTaskId() == null
+                || row.getActualManualPaymentTaskId() <= 0L
+                || row.getActualRecipientType() != expectedType
+                || profile == null
+                || !Objects.equals(profile.getId(), row.getActualRecipientProfileId())) {
+            throw ManualPaymentTaskRouteErrors.stale();
+        }
+        return row.getActualManualPaymentTaskId();
     }
 
     private Set<Long> ordinaryCandidateProfileIds(
@@ -1314,7 +1619,9 @@ public class ContractorActualPaymentAttributionService {
                 || link.getManualActualOriginalRecipientType() == null) {
             return null;
         }
-        ContractorPaymentProfile profile = profiles.get(link.getManualActualOriginalRecipientProfileId());
+        Long originalProfileId = link.getManualActualOriginalRecipientProfileId();
+        ContractorPaymentProfile profile = originalProfileId == null
+                ? null : profiles.get(originalProfileId);
         if (link.getManualActualOriginalRecipientType() != ContractorRecipientType.OWNER) {
             requireProfileRole(profile, link.getManualActualOriginalRecipientType());
         }
@@ -1411,7 +1718,7 @@ public class ContractorActualPaymentAttributionService {
         }
         ContractorPaymentProfile profile = candidate.profileId() == null
                 ? null : profiles.get(candidate.profileId());
-        long available = profile == null ? 0L : capacity(profile, mode, original);
+        long available = profile == null ? 0L : capacity(profile, mode, original, false);
         ManualCardPaymentRecipientResponse response = new ManualCardPaymentRecipientResponse(
                 candidate.type(),
                 candidate.profileId(),
@@ -1427,11 +1734,83 @@ public class ContractorActualPaymentAttributionService {
         }
     }
 
+    private void addTaskCandidate(
+            Map<String, ManualCardPaymentRecipientResponse> target,
+            ManualPaymentTaskRouteSnapshot snapshot,
+            Map<Long, ContractorPaymentProfile> profiles,
+            ContractorAllocationMode mode,
+            ContractorPaymentAllocation original,
+            long amount,
+            boolean isOriginal
+    ) {
+        ManualPaymentTaskReceiptIntegrationService.Destination destination =
+                taskReceiptIntegrationService.destination(snapshot);
+        ContractorPaymentProfile profile = destination.recipientProfileId() == null
+                ? null : profiles.get(destination.recipientProfileId());
+        boolean contractorTarget = snapshot.accountingTargetKind()
+                == ManualPaymentTaskAccountingTargetKind.SPECIALIST
+                || snapshot.accountingTargetKind() == ManualPaymentTaskAccountingTargetKind.MANAGER;
+        if (contractorTarget) {
+            ContractorRole expectedRole = snapshot.accountingTargetKind()
+                    == ManualPaymentTaskAccountingTargetKind.SPECIALIST
+                    ? ContractorRole.SPECIALIST : ContractorRole.MANAGER;
+            if (profile == null || profile.getRole() != expectedRole || profile.getUser() == null
+                    || profile.getUser().getId() == null
+                    || !targetAccessPolicy.canManageUser(profile.getUser().getId())) {
+                throw ManualPaymentTaskRouteErrors.stale();
+            }
+        } else if (destination.recipientProfileId() != null) {
+            throw ManualPaymentTaskRouteErrors.stale();
+        }
+        Long userId = userId(profile);
+        long available = profile == null ? 0L : capacity(profile, mode, original, true);
+        String display = destination.bankRecipientName().isBlank()
+                ? destination.accountingTargetLabel() : destination.bankRecipientName();
+        target.put(snapshot.candidateKey(), new ManualCardPaymentRecipientResponse(
+                destination.recipientType(), destination.recipientProfileId(), userId, display,
+                available, profile == null ? 0L : Math.max(0L, amount - available), isOriginal,
+                snapshot.candidateKey(), ContractorCashDestinationKind.MANUAL_PAYMENT_TASK,
+                snapshot.taskId(), snapshot.taskGeneration(), snapshot.accountingTargetKind(),
+                snapshot.bankRecipientName(), snapshot.accountingTargetLabel(),
+                "Сумма будет зачтена в платёжное задание"
+        ));
+    }
+
+    private void suppressOrdinaryAliasForTask(
+            Map<String, ManualCardPaymentRecipientResponse> candidates,
+            ManualPaymentTaskRouteSnapshot task
+    ) {
+        if (task == null || task.accountingTargetKind() == null) {
+            return;
+        }
+        switch (task.accountingTargetKind()) {
+            case OWNER -> candidates.remove(recipientKey(ContractorRecipientType.OWNER, null));
+            case SPECIALIST -> candidates.remove(recipientKey(
+                    ContractorRecipientType.SPECIALIST, task.accountingTargetProfileId()));
+            case MANAGER -> candidates.remove(recipientKey(
+                    ContractorRecipientType.MANAGER, task.accountingTargetProfileId()));
+            case EXTERNAL_TASK, UNRESOLVED -> {
+                // EXTERNAL_TASK has no ordinary accounting alias. UNRESOLVED
+                // is rejected by addTaskCandidate before this point.
+            }
+        }
+    }
+
     private ManualCardPaymentRecipientResponse selectRecipient(
             ManualCardPaymentContextResponse context,
+            String requestedRecipientKey,
             ContractorRecipientType requestedType,
             Long requestedProfileId
     ) {
+        String key = normalize(requestedRecipientKey);
+        if (!key.isBlank()) {
+            return context.candidates().stream().filter(value -> value.key().equals(key)).findFirst()
+                    .orElseThrow(ManualPaymentTaskRouteErrors::stale);
+        }
+        if (context.originalRecipient().cashDestinationKind()
+                == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK) {
+            throw ManualPaymentTaskRouteErrors.actualRecipientRequired();
+        }
         if (requestedType == null && requestedProfileId == null) {
             return context.originalRecipient();
         }
@@ -1441,6 +1820,14 @@ public class ContractorActualPaymentAttributionService {
                 .filter(value -> Objects.equals(value.recipientProfileId(), requestedProfileId))
                 .findFirst()
                 .orElseThrow(() -> conflict("Выбранный получатель не относится к текущему заказу"));
+    }
+
+    private String frozenRecipientKey(PaymentLink link) {
+        if (link.getManualActualCashDestinationKind() == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK) {
+            return com.hunt.otziv.payments.service.ManualPaymentTaskLedgerService.candidateKey(
+                    link.getManualActualTaskId(), link.getManualActualTaskGeneration());
+        }
+        return recipientKey(link.getManualActualRecipientType(), link.getManualActualRecipientProfileId());
     }
 
     private ContractorActualPaymentSource paymentLinkSource(
@@ -1502,29 +1889,56 @@ public class ContractorActualPaymentAttributionService {
     private void requireFrozenIntent(PaymentLink link) {
         if (link.getManualActualRecipientFrozenAt() == null
                 || link.getManualActualAccountingMode() == null
-                || link.getManualActualOriginalRecipientType() == null
-                || link.getManualActualRecipientType() == null
                 || normalize(link.getManualActualReason()).isBlank()
                 || normalize(link.getManualActualActor()).isBlank()) {
             throw conflict("Получатель оплаты не был надёжно зафиксирован до сверки банка");
         }
+        validateDestination(
+                link.getManualActualOriginalCashDestinationKind(),
+                link.getManualActualOriginalRecipientType(),
+                link.getManualActualOriginalRecipientProfileId(),
+                link.getManualActualOriginalTaskId(),
+                link.getManualActualOriginalTaskGeneration(),
+                link.getManualActualOriginalTaskTargetKind(),
+                false
+        );
+        validateDestination(
+                link.getManualActualCashDestinationKind(),
+                link.getManualActualRecipientType(),
+                link.getManualActualRecipientProfileId(),
+                link.getManualActualTaskId(),
+                link.getManualActualTaskGeneration(),
+                link.getManualActualTaskTargetKind(),
+                false
+        );
     }
 
     private void requireFrozenReplay(
             PaymentLink link,
+            String requestedRecipientKey,
             ContractorRecipientType requestedType,
             Long requestedProfileId,
             String reason,
             String receiptUrl
     ) {
-        if (requestedType == null && requestedProfileId == null) {
+        String recipientKey = normalize(requestedRecipientKey);
+        if (!recipientKey.isBlank() && !frozenRecipientKey(link).equals(recipientKey)) {
+            throw conflict("Параметры ручной оплаты уже зафиксированы и не могут быть изменены");
+        }
+        if (recipientKey.isBlank() && requestedType == null && requestedProfileId == null) {
             throw conflict("Повтор операции должен явно указать ранее выбранного получателя");
         }
-        ContractorRecipientType type = requestedType;
-        Long profileId = requestedProfileId;
-        validateIdentity(type, profileId, false);
-        if (type != link.getManualActualRecipientType()
-                || !Objects.equals(profileId, link.getManualActualRecipientProfileId())
+        validateDestination(
+                link.getManualActualCashDestinationKind(),
+                requestedType,
+                requestedProfileId,
+                link.getManualActualTaskId(),
+                link.getManualActualTaskGeneration(),
+                link.getManualActualTaskTargetKind(),
+                false
+        );
+        if (requestedType != link.getManualActualRecipientType()
+                || !Objects.equals(requestedProfileId, link.getManualActualRecipientProfileId())
                 || !Objects.equals(reason, normalize(link.getManualActualReason()))
                 || !Objects.equals(normalize(receiptUrl), normalize(link.getManualActualReceiptUrl()))) {
             throw conflict("Параметры ручной оплаты уже зафиксированы и не могут быть изменены");
@@ -1538,9 +1952,21 @@ public class ContractorActualPaymentAttributionService {
         List<Map<String, Object>> safeRows = rows.stream().map(row -> {
             Map<String, Object> value = new LinkedHashMap<>();
             value.put("attributionId", row.getId());
-            value.put("recipientType", row.getActualRecipientType().name());
+            if (row.getActualRecipientType() != null) {
+                value.put("recipientType", row.getActualRecipientType().name());
+            }
             if (row.getActualRecipientProfileId() != null) {
                 value.put("recipientProfileId", row.getActualRecipientProfileId());
+            }
+            if (row.getActualCashDestinationKind() != null) {
+                value.put("cashDestinationKind", row.getActualCashDestinationKind().name());
+            }
+            if (row.getActualCashDestinationKind() == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK) {
+                value.put("manualPaymentTaskId", row.getActualManualPaymentTaskId());
+                value.put("manualPaymentTaskGeneration", row.getActualManualPaymentTaskGeneration());
+                if (row.getActualManualPaymentTaskTargetKind() != null) {
+                    value.put("manualPaymentTaskTargetKind", row.getActualManualPaymentTaskTargetKind().name());
+                }
             }
             value.put("amountKopecks", row.getAmountKopecks());
             value.put("projectedOverrunKopecks", row.getProjectedOverrunKopecks());

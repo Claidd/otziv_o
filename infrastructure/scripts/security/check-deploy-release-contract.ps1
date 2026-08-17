@@ -115,6 +115,8 @@ Assert-Order $deploy 'wait_service_healthy app 1200' '--remove-orphans --no-deps
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,150}compose --profile external-review up -d --remove-orphans --no-deps dozzle alloy[\s\S]{0,100}else[\s\S]{0,100}compose up -d --remove-orphans --no-deps dozzle alloy' 'Orphan cleanup must preserve the opted-in worker profile.'
 Assert-Match $deploy 'set_env EXTERNAL_REVIEW_CHECK_ENABLED "true"[\s\S]{0,100}set_env EXTERNAL_REVIEW_CHECK_ENABLED "false"' 'Production deploy must persist the backend hard switch consistently with the worker opt-in.'
 Assert-Match $deploy 'Join-Path \$scriptRoot ''DeploySnapshot\.ps1''' 'Production deploy must load the isolated automatic snapshot implementation.'
+Assert-Order $deploy '$snapshotMobileRelease = if ($SkipMobileApkUpload)' 'New-OtzivDeploySnapshot -Repository $repoRoot -InputPaths $deployInputPaths' 'Automatic snapshot deploys must pin the local mobile release before materializing the isolated worktree.'
+Assert-Match $deploy '\$forwardParameters\[''MobileApkPath''\]\s*=\s*\$snapshotMobileRelease\.File\.FullName' 'Automatic snapshot recursion must forward the pinned absolute local APK path instead of rediscovering releases inside the Git snapshot.'
 Assert-Match $deploy 'New-OtzivDeploySnapshot -Repository \$repoRoot -InputPaths \$deployInputPaths' 'Dirty production inputs must be captured through the isolated snapshot index.'
 Assert-Match $deploy 'worktree add --detach \$snapshotWorktree \$snapshot\.Commit' 'Automatic deploy must materialize the exact snapshot in a detached worktree.'
 Assert-Match $deploy '& \$snapshotValidator -RepoRoot \$snapshotWorktree -BaseRevision \$snapshot\.BaseRevision' 'Automatic deploy must validate the clean snapshot before contacting production.'
@@ -334,6 +336,15 @@ Assert-Order $deploy 'register-max-webhook.sh "`$env_file"' 'publish_bundled_mob
 Assert-Match $deploy 'Published mobile APK reuses the requested versionCode with a different SHA-256' 'The remote precheck must reject same-code mobile artifacts with a different hash.'
 Assert-Match $deploy 'Refusing to reuse mobile versionCode[\s\S]{0,100}different APK SHA-256' 'The publication transaction must enforce immutable versionCode-to-APK mapping.'
 Assert-Match $deploy 'current_actual_sha[\s\S]{0,300}current_metadata_sha' 'Already-published APK files must be verified against release.json before they can be skipped.'
+Assert-Match $deploy 'if \[ ! -r "`\$metadata" \]; then\s+printf ''MISSING''\s+exit 0' 'An unreadable remote mobile manifest must be deferred to the locked publication step without leaking grep permission errors.'
+Assert-Match $deploy 'sudo -n chown -R "`\$deploy_uid:`\$deploy_gid" "`\$target_dir"' 'APK publication must recursively grant the SSH deploy user access to existing private mobile release files.'
+Assert-Match $deploy 'chown -R `\$deploy_uid:`\$deploy_gid /host-data/mobile-releases' 'The no-sudo APK publication fallback must recursively repair existing mobile release ownership.'
+Assert-Match $deploy 'Mobile release metadata is not readable after permission repair' 'APK publication must fail closed if release.json remains unreadable after ownership repair.'
+Assert-Match $deploy 'Mobile release storage must not be a symlink' 'Recursive mobile release ownership repair must reject a symlink target.'
+$mobilePermissionNormalizationCount = [regex]::Matches($deploy, 'Unable to normalize published mobile release permissions').Count
+if ($mobilePermissionNormalizationCount -ne 2) {
+    throw "Verified existing and newly copied mobile releases must both normalize public file permissions; found $mobilePermissionNormalizationCount guarded paths."
+}
 Assert-Match $deploy 'restore_backend_mobile_storage_owner\(\)[\s\S]{0,800}10001:10001' 'APK publication must restore backend ownership of mobile release storage.'
 Assert-Match $deploy 'mobile_storage_owner_needs_restore[\s\S]{0,1000}restore_backend_mobile_storage_owner' 'Failure cleanup must repair mobile release storage ownership after partial publication.'
 

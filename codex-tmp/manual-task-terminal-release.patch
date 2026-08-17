@@ -1,0 +1,84 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/repository/PaymentLinkRepository.java
+@@
+     @Lock(LockModeType.PESSIMISTIC_WRITE)
+     @Query("SELECT link FROM PaymentLink link WHERE link.order.id = :orderId ORDER BY link.id")
+     List<PaymentLink> findByOrderIdForUpdate(@Param("orderId") Long orderId);
++
++    @Lock(LockModeType.PESSIMISTIC_WRITE)
++    @Query("""
++        SELECT link
++        FROM PaymentLink link
++        WHERE link.order.id = :orderId
++          AND link.status IN :statuses
++        ORDER BY link.id
++    """)
++    List<PaymentLink> findByOrderIdAndStatusInForUpdate(
++            @Param("orderId") Long orderId,
++            @Param("statuses") Collection<PaymentLinkStatus> statuses
++    );
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptIntegrationService.java
+@@
+     public void release(PaymentLink link, String reason) {
+         if (link == null || link.getManualSource() != ManualPaymentSource.MANUAL_TASK) return;
++        // The caller owns the source row. Phase remains the global financial
++        // mutex, but the persisted allocation mode decides what is released.
++        contractorReservationService.lockAccountingMode();
+         ManualPaymentTaskRouteSnapshot snapshot = routeBinding(link);
+@@
+     public void release(CommonInvoice invoice, String reason) {
+         if (invoice == null || invoice.getPaymentRouteManualSource() != ManualPaymentSource.MANUAL_TASK) return;
++        contractorReservationService.lockAccountingMode();
+         ManualPaymentTaskRouteSnapshot snapshot = routeBinding(invoice);
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/service/CommonBillingService.java
+@@
+         LocalDateTime now = LocalDateTime.now();
+         for (PaymentLink link : closable) {
+             Long orderId = link.getOrder() == null ? null : link.getOrder().getId();
++            taskReceiptIntegrationService.release(
++                    link,
++                    "Отдельный маршрут отменен при создании общего счета"
++            );
+             link.setStatus(PaymentLinkStatus.CANCELED);
+@@
+         LocalDateTime now = LocalDateTime.now();
+         for (PaymentLink link : closable) {
+             PaymentLinkStatus previousStatus = link.getStatus();
++            taskReceiptIntegrationService.release(
++                    link,
++                    "Отдельный маршрут отменен после ручной оплаты общего счета"
++            );
+             link.setStatus(PaymentLinkStatus.CANCELED);
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentAutoConfirmationService.java
+@@
+     private final PaymentSuccessNotificationDeliveryService paymentSuccessNotificationDeliveryService;
+     private final ContractorPaymentShadowService contractorPaymentShadowService;
++    private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
+@@
+-        List<PaymentLink> links = paymentLinkRepository.findByOrder_IdAndStatusIn(order.getId(), RETIRABLE_STATUSES);
++        List<PaymentLink> links = paymentLinkRepository.findByOrderIdAndStatusInForUpdate(
++                order.getId(), RETIRABLE_STATUSES);
+@@
+             if (link.getStatus() == PaymentLinkStatus.CONFIRMED || hasStartedBankPayment(link)) {
+                 continue;
+             }
++            taskReceiptIntegrationService.release(link, RETIRED_REASON);
+             link.setStatus(PaymentLinkStatus.CANCELED);
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/OrderPaymentIntegrityService.java
+@@
+     private final OrderStatusService orderStatusService;
+     private final BusinessAuditService businessAuditService;
++    private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
+@@
+-        List<PaymentLink> duplicateLinks = paymentLinkRepository.findByOrder_IdAndStatusIn(
++        List<PaymentLink> duplicateLinks = paymentLinkRepository.findByOrderIdAndStatusInForUpdate(
+                 orderId,
+                 DUPLICATE_ACTIVE_LINK_STATUSES
+         );
+         for (PaymentLink link : duplicateLinks) {
++            taskReceiptIntegrationService.release(
++                    link,
++                    "Срок резерва истек: " + RETIRED_LINK_REASON
++            );
+             link.setStatus(PaymentLinkStatus.EXPIRED);
+*** End Patch

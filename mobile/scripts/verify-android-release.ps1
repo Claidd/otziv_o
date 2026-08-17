@@ -58,8 +58,14 @@ function Resolve-AndroidSdkDirectory {
     ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
     foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath $candidate -PathType Container) {
-            return (Resolve-Path -LiteralPath $candidate).Path
+        if (-not (Test-Path -LiteralPath $candidate -PathType Container)) {
+            continue
+        }
+
+        $resolvedCandidate = (Resolve-Path -LiteralPath $candidate).Path
+        $buildToolsDirectory = Join-Path $resolvedCandidate "build-tools"
+        if (Test-Path -LiteralPath $buildToolsDirectory -PathType Container) {
+            return $resolvedCandidate
         }
     }
     return ""

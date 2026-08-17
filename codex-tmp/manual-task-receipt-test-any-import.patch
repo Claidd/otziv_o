@@ -1,0 +1,7 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptIntegrationServiceTest.java
+@@
+ import static org.junit.jupiter.api.Assertions.assertThrows;
++import static org.mockito.ArgumentMatchers.any;
+ import static org.mockito.Mockito.inOrder;
+*** End Patch

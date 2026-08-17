@@ -1,0 +1,94 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+     void createForOrderRoutesToManualTaskBeforeProfileMonthlyLimit() {
+         TbankPaymentProperties properties = properties();
+         PaymentLinkService service = service(properties);
+         PaymentProfile profile = profile(3L, "manual", "Ручной профиль", "manual-terminal");
+@@
+         task.setManualRecipientName("Петр П.");
+         task.setComment("Задание на оплату №{orderId}");
+         task.setTargetAmountKopecks(100000L);
+-        when(manualPaymentTaskService.findRoutableTask(any(), eq(profile), eq(50000L), any()))
+-                .thenReturn(Optional.of(task));
++        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
++        ManualPaymentTaskRouteSnapshot snapshot = new ManualPaymentTaskRouteSnapshot(
++                77L,
++                2L,
++                new com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef(
++                        com.hunt.otziv.payments.model.ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK,
++                        160L,
++                        "source-160"),
++                "TASK:77:2",
++                com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.OWNER,
++                null,
++                "Владелец",
++                ManualPaymentType.MOBILE_BANK,
++                "+79001234567",
++                "Петр П.",
++                null,
++                null,
++                50_000L,
++                null,
++                ""
++        );
++        when(manualPaymentTaskRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(task));
+ 
+         Order order = order(16L, "ООО Задание", BigDecimal.valueOf(500));
+-        order.setManager(manager("manager-task"));
++        Manager taskManager = manager("manager-task");
++        taskManager.setId(31L);
++        order.setManager(taskManager);
+@@
+-        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
++        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> {
++            PaymentLink saved = invocation.getArgument(0);
++            if (saved.getId() == null) saved.setId(160L);
++            return saved;
++        });
++        when(taskReceiptIntegrationService.reserveForPaymentLink(
++                any(PaymentLink.class), eq(31L), eq(3L))).thenReturn(Optional.of(snapshot));
+@@
+         assertEquals("Задание на оплату №16", link.getManualComment());
+         assertEquals("MANUAL_MOBILE_BANK", response.paymentMethod());
++        assertEquals("source-160", link.getManualTaskSourceGeneration());
++        assertEquals(2L, link.getManualTaskGeneration());
++        verify(taskReceiptIntegrationService).reserveForPaymentLink(link, 31L, 3L);
++        verify(manualPaymentTaskService, never()).findRoutableTask(any(), any(), anyLong(), any());
+         verify(paymentLinkRepository, never()).sumManualReservedAndConfirmedForPeriod(
+@@
+         );
+     }
++
++    @Test
++    void createForOrderDoesNotReserveTaskWhenTypedAccountingIsDisabled() {
++        TbankPaymentProperties properties = properties();
++        PaymentLinkService service = service(properties);
++        Order order = order(161L, "ООО Без task route", BigDecimal.valueOf(500));
++        Manager manager = manager("manager-task-disabled");
++        manager.setId(32L);
++        order.setManager(manager);
++        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(false);
++        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
++                eq(161L), anyCollection(), any(LocalDateTime.class))).thenReturn(Optional.empty());
++        when(orderRepository.findByIdForMutation(161L)).thenReturn(Optional.of(order));
++        when(badReviewTaskService.getSummaryForOrder(161L)).thenReturn(null);
++        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> {
++            PaymentLink saved = invocation.getArgument(0);
++            if (saved.getId() == null) saved.setId(161L);
++            return saved;
++        });
++
++        service.createForOrder(161L);
++
++        ArgumentCaptor<PaymentLink> captor = ArgumentCaptor.forClass(PaymentLink.class);
++        verify(paymentLinkRepository, times(2)).save(captor.capture());
++        PaymentLink link = captor.getAllValues().getLast();
++        assertNotEquals(ManualPaymentSource.MANUAL_TASK, link.getManualSource());
++        assertNull(link.getManualPaymentTask());
++        assertNull(link.getManualTaskSourceGeneration());
++        assertNull(link.getManualTaskGeneration());
++        verifyNoInteractions(taskReceiptIntegrationService);
++        verify(manualPaymentTaskService, never()).findRoutableTask(any(), any(), anyLong(), any());
++    }
+*** End Patch

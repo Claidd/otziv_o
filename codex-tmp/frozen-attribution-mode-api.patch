@@ -1,0 +1,104 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionService.java
+@@
+     public List<ContractorActualPaymentAttribution> recordFinalAttributions(
+             ContractorActualPaymentSource rawSource,
+             List<ContractorActualPaymentRecipientCommand> rawCommands
+     ) {
+         return recordFinalAttributionsInternal(rawSource, rawCommands, false);
+     }
++
++    /**
++     * Finishes an already issued source in the accounting mode persisted when
++     * its route was frozen. The current phase remains the first financial
++     * mutex, but a later SHADOW-to-LIVE promotion must not reinterpret the
++     * immutable client-facing receipt.
++     */
++    @Transactional(propagation = Propagation.MANDATORY)
++    public List<ContractorActualPaymentAttribution> recordFinalAttributionsForFrozenSource(
++            ContractorActualPaymentSource rawSource,
++            List<ContractorActualPaymentRecipientCommand> rawCommands,
++            ContractorAllocationMode persistedMode
++    ) {
++        return recordFinalAttributionsInternal(
++                rawSource, rawCommands, true, requireFrozenMode(persistedMode));
++    }
+ 
+     private List<ContractorActualPaymentAttribution> recordFinalAttributionsInternal(
+             ContractorActualPaymentSource rawSource,
+             List<ContractorActualPaymentRecipientCommand> rawCommands,
+             boolean committedOrFrozen
+     ) {
++        return recordFinalAttributionsInternal(
++                rawSource, rawCommands, committedOrFrozen, null);
++    }
++
++    private List<ContractorActualPaymentAttribution> recordFinalAttributionsInternal(
++            ContractorActualPaymentSource rawSource,
++            List<ContractorActualPaymentRecipientCommand> rawCommands,
++            boolean committedOrFrozen,
++            ContractorAllocationMode frozenMode
++    ) {
+         ContractorActualPaymentSource source = validateSource(rawSource);
+         List<ContractorActualPaymentRecipientCommand> commands = validateCommands(rawCommands);
+-        ContractorAllocationMode mode = committedOrFrozen
+-                ? accountingPhaseService.lockCurrent()
+-                : lockEnabledAccountingMode();
++        ContractorAllocationMode current = committedOrFrozen || frozenMode != null
++                ? accountingPhaseService.lockCurrent()
++                : null;
++        ContractorAllocationMode mode = frozenMode != null
++                ? frozenMode
++                : committedOrFrozen ? current : lockEnabledAccountingMode();
+ 
+         Map<String, ContractorActualPaymentAttribution> discovered = commands.stream()
+@@
+         if (!discovered.isEmpty() && discovered.size() != commands.size()) {
+             throw conflict("Неполный повтор фиксации получателя; требуется сверка");
+         }
++        if (frozenMode != null && discovered.values().stream()
++                .anyMatch(row -> row.getAccountingMode() != frozenMode)) {
++            throw conflict("Режим учёта выданного платежа изменился; требуется сверка");
++        }
+@@
+     public List<ContractorActualPaymentAttribution> requireFinalAttributionsAccountingApplied(
+@@
+         return recordFinalAttributionsInternal(source, commands, true);
+     }
++
++    /** Strict replay verifier for a source whose accounting mode was frozen. */
++    @Transactional(propagation = Propagation.MANDATORY)
++    public List<ContractorActualPaymentAttribution>
++    requireFinalAttributionsAccountingAppliedForFrozenSource(
++            ContractorActualPaymentSourceKind sourceKind,
++            Long sourceId,
++            ContractorAllocationMode persistedMode
++    ) {
++        ContractorAllocationMode mode = requireFrozenMode(persistedMode);
++        if (sourceKind == null || sourceId == null || sourceId <= 0) {
++            throw badRequest("Некорректный источник атрибуции");
++        }
++        List<ContractorActualPaymentAttribution> rows = attributionRepository
++                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(sourceKind, sourceId);
++        if (rows.isEmpty()) {
++            throw conflict("У завершённой оплаты отсутствует атрибуция; требуется сверка");
++        }
++        if (rows.stream().anyMatch(row -> row.getAccountingMode() != mode)) {
++            throw conflict("Режим учёта выданного платежа изменился; требуется сверка");
++        }
++        ContractorActualPaymentSource source = sourceFrom(rows.getFirst());
++        List<ContractorActualPaymentRecipientCommand> commands = rows.stream()
++                .map(this::commandFrom)
++                .toList();
++        return recordFinalAttributionsInternal(source, commands, true, mode);
++    }
++
++    private ContractorAllocationMode requireFrozenMode(ContractorAllocationMode mode) {
++        if (mode != ContractorAllocationMode.SHADOW && mode != ContractorAllocationMode.LIVE) {
++            throw conflict("У выданного платежа отсутствует режим учёта; требуется сверка");
++        }
++        return mode;
++    }
+ 
+     private ContractorActualPaymentSource sourceFrom(ContractorActualPaymentAttribution row) {
+*** End Patch

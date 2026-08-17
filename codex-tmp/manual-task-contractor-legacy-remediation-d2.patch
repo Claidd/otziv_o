@@ -1,0 +1,158 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReservationService.java
+@@
+ import com.hunt.otziv.payments.service.ManualPaymentTaskRouteErrors;
+ import java.time.LocalDateTime;
++import java.util.ArrayList;
++import java.util.LinkedHashSet;
++import java.util.List;
+ import java.util.Objects;
++import java.util.Set;
+@@
+     public Long reserve(CommonInvoice invoice, ManualPaymentTaskRouteSnapshot task, ContractorAllocationMode mode) {
+         if (invoice == null || invoice.getId() == null) throw ManualPaymentTaskRouteErrors.stale();
+@@
+         );
+     }
++
++    @Transactional(propagation = Propagation.MANDATORY)
++    public Long remediateLegacy(
++            PaymentLink link,
++            ManualPaymentTaskRouteSnapshot task,
++            ContractorAllocationMode mode
++    ) {
++        if (link == null || link.getId() == null) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        Long reusable = releaseConflictingLegacyReservations(
++                mode,
++                ContractorAllocationSourceType.PAYMENT_LINK,
++                link.getId(),
++                link.getContractorAllocationId(),
++                task
++        );
++        if (nonContractorTarget(task)) {
++            return null;
++        }
++        return reusable != null ? reusable : reserve(link, task, mode);
++    }
++
++    @Transactional(propagation = Propagation.MANDATORY)
++    public Long remediateLegacy(
++            CommonInvoice invoice,
++            ManualPaymentTaskRouteSnapshot task,
++            ContractorAllocationMode mode
++    ) {
++        if (invoice == null || invoice.getId() == null) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        Long reusable = releaseConflictingLegacyReservations(
++                mode,
++                ContractorAllocationSourceType.COMMON_INVOICE,
++                invoice.getId(),
++                invoice.getContractorAllocationId(),
++                task
++        );
++        if (nonContractorTarget(task)) {
++            return null;
++        }
++        return reusable != null ? reusable : reserve(invoice, task, mode);
++    }
++
++    private Long releaseConflictingLegacyReservations(
++            ContractorAllocationMode mode,
++            ContractorAllocationSourceType sourceType,
++            Long sourceId,
++            Long explicitAllocationId,
++            ManualPaymentTaskRouteSnapshot task
++    ) {
++        if (mode == null || task == null || task.source() == null
++                || task.source().sourceId() != sourceId
++                || !task.source().sourceGeneration().equals("LEGACY-" + sourceId)) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        Set<Long> allocationIds = new LinkedHashSet<>(
++                allocationRepository.findLatestIdsBySourceAcrossModes(
++                        sourceType.name(), sourceId));
++        if (explicitAllocationId != null) {
++            allocationIds.add(explicitAllocationId);
++        }
++        List<Long> sortedAllocationIds = allocationIds.stream().sorted().toList();
++        Set<Long> profileIds = new LinkedHashSet<>();
++        if (task.accountingTargetProfileId() != null) {
++            profileIds.add(task.accountingTargetProfileId());
++        }
++        for (Long allocationId : sortedAllocationIds) {
++            allocationRepository.findRecipientProfileIdById(allocationId).ifPresent(profileIds::add);
++        }
++        profileIds.stream().sorted().forEach(profileId ->
++                profileRepository.findByIdForUpdate(profileId)
++                        .orElseThrow(ManualPaymentTaskRouteErrors::stale));
++
++        List<ContractorPaymentAllocation> allocations = sortedAllocationIds.isEmpty()
++                ? List.of()
++                : allocationRepository.findAllByIdForUpdate(sortedAllocationIds);
++        if (allocations.size() != sortedAllocationIds.size()) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        Long reusable = null;
++        for (ContractorPaymentAllocation allocation : allocations) {
++            if (allocation.getSourceType() != sourceType
++                    || !Objects.equals(allocation.getSourceId(), sourceId)) {
++                throw ManualPaymentTaskRouteErrors.stale();
++            }
++            if (allocation.getStatus() == ContractorAllocationStatus.CLIENT_REPORTED
++                    || allocation.getStatus() == ContractorAllocationStatus.PARTIALLY_CONFIRMED
++                    || allocation.getConfirmedKopecks() > allocation.getReturnedKopecks()) {
++                throw ManualPaymentTaskRouteErrors.stale();
++            }
++            if (allocation.getStatus() != ContractorAllocationStatus.RESERVED) {
++                continue;
++            }
++            if (reusable == null && exactLegacyReservation(allocation, mode, task)) {
++                reusable = allocation.getId();
++                continue;
++            }
++            String externalRef = "TASK_LEGACY_REBIND:" + sourceType + ":" + sourceId
++                    + ":" + task.source().sourceGeneration() + ":" + allocation.getId();
++            boolean released = accountingService.recordRelease(
++                    allocation,
++                    ContractorAllocationStatus.CANCELED,
++                    LocalDateTime.now(),
++                    "Старый резерв перенесён к явно выбранному получателю задания",
++                    externalRef
++            );
++            if (!released) {
++                throw ManualPaymentTaskRouteErrors.stale();
++            }
++            allocationRepository.saveAndFlush(allocation);
++        }
++        return reusable;
++    }
++
++    private boolean exactLegacyReservation(
++            ContractorPaymentAllocation allocation,
++            ContractorAllocationMode mode,
++            ManualPaymentTaskRouteSnapshot task
++    ) {
++        Long profileId = allocation.getRecipientProfile() == null
++                ? null : allocation.getRecipientProfile().getId();
++        ContractorRecipientType expectedType = task.accountingTargetKind()
++                == ManualPaymentTaskAccountingTargetKind.SPECIALIST
++                ? ContractorRecipientType.SPECIALIST : ContractorRecipientType.MANAGER;
++        return !nonContractorTarget(task)
++                && allocation.getMode() == mode
++                && allocation.getRecipientType() == expectedType
++                && Objects.equals(profileId, task.accountingTargetProfileId())
++                && Objects.equals(allocation.getSourceGenerationSnapshot(),
++                        task.source().sourceGeneration())
++                && allocation.getAmountKopecks() == task.reservedAmountKopecks();
++    }
++
++    private boolean nonContractorTarget(ManualPaymentTaskRouteSnapshot task) {
++        return task.accountingTargetKind() == ManualPaymentTaskAccountingTargetKind.OWNER
++                || task.accountingTargetKind() == ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK;
++    }
+ 
+     private Long reserve(
+*** End Patch

@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.model;
 
+import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.u_users.model.Manager;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,6 +16,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
@@ -36,6 +38,10 @@ public class ManualPaymentTask {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private Long rowVersion;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id", nullable = false)
     private Manager manager;
@@ -43,6 +49,33 @@ public class ManualPaymentTask {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payment_profile_id", nullable = false)
     private PaymentProfile paymentProfile;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "accounting_target_kind", nullable = false, length = 32)
+    private ManualPaymentTaskAccountingTargetKind accountingTargetKind =
+            ManualPaymentTaskAccountingTargetKind.UNRESOLVED;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "accounting_target_profile_id")
+    private ContractorPaymentProfile accountingTargetProfile;
+
+    @Column(nullable = false)
+    private long generation = 1;
+
+    @Column(name = "needs_reconciliation", nullable = false)
+    private boolean needsReconciliation;
+
+    @Column(name = "target_overrun_acknowledged_at")
+    private LocalDateTime targetOverrunAcknowledgedAt;
+
+    @Column(name = "target_overrun_acknowledged_by", length = 160)
+    private String targetOverrunAcknowledgedBy;
+
+    @Column(name = "target_overrun_acknowledged_kopecks")
+    private Long targetOverrunAcknowledgedKopecks;
+
+    @Column(name = "target_capacity_available_snapshot_kopecks")
+    private Long targetCapacityAvailableSnapshotKopecks;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)

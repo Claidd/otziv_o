@@ -1,0 +1,61 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/repository/CommonInvoiceRepository.java
+@@
+         WHERE invoice.account.id = :accountId
+           AND invoice.status IN :statuses
+           AND invoice.invoicePurpose = 'STANDARD'
++          AND (invoice.paymentRouteSelectedAt IS NULL
++               OR COALESCE(TRIM(invoice.paymentRouteType), '') = '')
+         ORDER BY invoice.id DESC
+@@
+         WHERE invoice.status IN :statuses
+           AND invoice.invoicePurpose = 'STANDARD'
++          AND (invoice.paymentRouteSelectedAt IS NULL
++               OR COALESCE(TRIM(invoice.paymentRouteType), '') = '')
+         GROUP BY invoice.account.id
+@@
+     List<Long> findAccountIdsWithDuplicateCurrentInvoices(
+             @Param("statuses") Collection<CommonInvoiceStatus> statuses
+     );
++
++    @Query("""
++        SELECT DISTINCT invoice.id
++        FROM CommonInvoice invoice
++        WHERE invoice.status IN :statuses
++          AND invoice.invoicePurpose = 'STANDARD'
++          AND invoice.paymentRouteSelectedAt IS NOT NULL
++          AND COALESCE(TRIM(invoice.paymentRouteType), '') <> ''
++          AND (
++            invoice.account.id = :targetAccountId
++            OR EXISTS (
++                SELECT item.id
++                FROM CommonInvoiceOrder item
++                JOIN item.order linkedOrder
++                WHERE item.invoice = invoice
++                  AND item.activeMembership = TRUE
++                  AND item.paid = FALSE
++                  AND item.unpaid = FALSE
++                  AND linkedOrder.company.id = :companyId
++            )
++          )
++        ORDER BY invoice.id ASC
++    """)
++    List<Long> findFrozenCompositionInvoiceIdsForCompanyReconcile(
++            @Param("companyId") Long companyId,
++            @Param("targetAccountId") Long targetAccountId,
++            @Param("statuses") Collection<CommonInvoiceStatus> statuses
++    );
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/repository/CommonInvoiceOrderRepository.java
+@@
+           AND account.id <> :targetAccountId
+           AND invoice.status IN :statuses
++          AND (invoice.paymentRouteSelectedAt IS NULL
++               OR COALESCE(TRIM(invoice.paymentRouteType), '') = '')
+           AND item.paid = FALSE
+@@
+           AND account.id <> :targetAccountId
+           AND invoice.status IN :statuses
++          AND (invoice.paymentRouteSelectedAt IS NULL
++               OR COALESCE(TRIM(invoice.paymentRouteType), '') = '')
+           AND item.paid = FALSE
+*** End Patch

@@ -1,0 +1,38 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/PaymentLinkService.java
+@@
+-    @Transactional(noRollbackFor = ResponseStatusException.class)
++    @Transactional
+     public ManagerPaymentLinkResponse createForOrder(Long orderId) {
+@@
+-    @Transactional(noRollbackFor = ResponseStatusException.class)
++    @Transactional
+     public ManagerPaymentLinkResponse createForOrderAuthorized(
+@@
+-    @Transactional(noRollbackFor = ResponseStatusException.class)
++    @Transactional
+     public PaymentInstructionPreparation prepareForOrderAuthorized(
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+     void createForOrderRoutesToManualTaskBeforeProfileMonthlyLimit() {
+@@
+     }
++
++    @Test
++    void paymentInstructionCreationRollsBackEveryWriteOnUnsafeTaskRouteFailure() throws Exception {
++        for (var method : List.of(
++                PaymentLinkService.class.getMethod("createForOrder", Long.class),
++                PaymentLinkService.class.getMethod(
++                        "createForOrderAuthorized", Long.class, Authentication.class),
++                PaymentLinkService.class.getMethod(
++                        "prepareForOrderAuthorized", Long.class, Authentication.class))) {
++            org.springframework.transaction.annotation.Transactional transaction =
++                    method.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
++            assertNotNull(transaction);
++            assertEquals(0, transaction.noRollbackFor().length,
++                    method.getName() + " must roll back an unsafe task route");
++            assertEquals(0, transaction.noRollbackForClassName().length,
++                    method.getName() + " must not whitelist business exceptions");
++        }
++    }
+*** End Patch

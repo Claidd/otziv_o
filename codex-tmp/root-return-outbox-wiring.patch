@@ -1,0 +1,45 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/PaymentLinkService.java
+@@
+     private final ContractorPaymentLiveRoutingService contractorPaymentLiveRoutingService;
+     private final ContractorPaymentShadowService contractorPaymentShadowService;
++    private final PaymentLinkReturnOutboxService paymentLinkReturnOutboxService;
+     private final ContractorActualPaymentAttributionService actualPaymentAttributionService;
+@@
+         paymentLinkRepository.save(link);
+         if (REFUNDED_STATUSES.contains(merged)) {
++            paymentLinkReturnOutboxService.enqueue(link);
+             reconcileContractorPaymentRouteAfterCommit(link.getId());
+         }
+@@
+         if (REFUNDED_STATUSES.contains(link.getStatus())) {
++            paymentLinkReturnOutboxService.enqueue(link);
+             // The provider state is now durable. Reconcile after commit even
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/repository/PaymentLinkArchiveRepository.java
+@@
+                 OR (
+                     pl.status = 'CONFIRMED'
+                     AND pl.payment_success_notified_at IS NULL
+                     AND COALESCE(pl.payment_success_notification_retry_eligible, 0) = 1
+                 )
++                OR EXISTS (
++                    SELECT 1
++                    FROM payment_link_return_reconciliation_outbox return_outbox
++                    WHERE return_outbox.payment_link_id = pl.id
++                      AND return_outbox.status <> 'SUCCEEDED'
++                )
+             )
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+     @Mock
+     private ContractorPaymentShadowService contractorPaymentShadowService;
++
++    @Mock
++    private PaymentLinkReturnOutboxService paymentLinkReturnOutboxService;
+@@
+                 manualCardPaymentReviewNotificationService,
+                 contractorPaymentLiveRoutingService,
+                 contractorPaymentShadowService,
++                paymentLinkReturnOutboxService,
+                 actualPaymentAttributionService,
+*** End Patch

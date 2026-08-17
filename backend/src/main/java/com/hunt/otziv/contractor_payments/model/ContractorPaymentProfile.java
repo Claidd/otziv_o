@@ -70,6 +70,18 @@ public class ContractorPaymentProfile {
     @Column(name = "opening_balance_kopecks", nullable = false)
     private long openingBalanceKopecks;
 
+    /**
+     * Capacity promised to non-terminal typed manual-payment tasks but not yet
+     * represented by contractor allocations. Mutations are serialized by this
+     * profile row's PESSIMISTIC_WRITE mutex.
+     */
+    @Column(name = "manual_task_commitment_kopecks", nullable = false)
+    private long manualTaskCommitmentKopecks;
+
+    /** Exact, persisted operator acknowledgement covering task capacity overrun. */
+    @Column(name = "manual_task_overrun_ack_kopecks", nullable = false)
+    private long manualTaskOverrunAcknowledgedKopecks;
+
     @Column(name = "tracking_started_at", nullable = false)
     private LocalDateTime trackingStartedAt;
 

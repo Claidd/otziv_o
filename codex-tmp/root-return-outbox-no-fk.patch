@@ -1,0 +1,13 @@
+*** Begin Patch
+*** Update File: backend/src/main/resources/db/migration/V1_10_255__payment_link_return_reconciliation_outbox.sql
+@@
+     CONSTRAINT ck_payment_link_return_outbox_status
+         CHECK (status IN ('PENDING', 'PROCESSING', 'SUCCEEDED')),
+     CONSTRAINT ck_payment_link_return_outbox_attempts
+-        CHECK (attempt_count >= 0),
+-    CONSTRAINT fk_payment_link_return_outbox_link
+-        FOREIGN KEY (payment_link_id) REFERENCES payment_links (id)
+-        ON DELETE RESTRICT
++        CHECK (attempt_count >= 0)
+ );
+*** End Patch

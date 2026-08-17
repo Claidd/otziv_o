@@ -1,6 +1,7 @@
 package com.hunt.otziv.contractor_payments.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,6 +17,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class ContractorPaymentAccountingPhaseServiceTest {
@@ -46,6 +48,20 @@ class ContractorPaymentAccountingPhaseServiceTest {
 
         assertThat(service.lockAndPromoteForLiveRoute()).isEqualTo(ContractorAllocationMode.LIVE);
         assertThat(service.lockCurrent()).isEqualTo(ContractorAllocationMode.LIVE);
+        verify(repository, never()).saveAndFlush(state);
+    }
+
+    @Test
+    void promotionFailsClosedWhenTaskLedgerAndAllocationExposureDoNotMatch() {
+        ContractorPaymentAccountingPhase state = state(ContractorAllocationMode.SHADOW);
+        when(repository.findByIdForUpdate(ContractorPaymentAccountingPhase.SINGLETON_ID))
+                .thenReturn(Optional.of(state));
+        when(repository.countManualTaskPromotionAnomalies()).thenReturn(1L);
+
+        assertThatThrownBy(service::lockAndPromoteForLiveRoute)
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("заблокирован");
+        assertThat(state.getPhase()).isEqualTo(ContractorAllocationMode.SHADOW);
         verify(repository, never()).saveAndFlush(state);
     }
 

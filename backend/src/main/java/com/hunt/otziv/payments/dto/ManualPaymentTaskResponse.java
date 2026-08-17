@@ -26,6 +26,22 @@ public record ManualPaymentTaskResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime completedAt,
-        boolean routable
+        boolean routable,
+        String accountingTargetKind,
+        Long accountingTargetProfileId,
+        String accountingTargetLabel,
+        boolean accountingTargetResolved,
+        long generation,
+        Long rowVersion,
+        long redirectedAmountKopecks,
+        long releasedAmountKopecks,
+        long returnedAmountKopecks,
+        long unverifiedConfirmedAmountKopecks,
+        long needsReconciliationCount,
+        boolean needsReconciliation,
+        long targetCurrentAvailableKopecks,
+        long targetProjectedOverrunKopecks,
+        LocalDateTime targetOverrunAcknowledgedAt,
+        String targetOverrunAcknowledgedBy
 ) {
 }

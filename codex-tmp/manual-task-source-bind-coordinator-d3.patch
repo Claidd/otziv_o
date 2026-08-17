@@ -1,0 +1,199 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptIntegrationService.java
+@@
+ import com.hunt.otziv.common_billing.model.CommonInvoice;
++import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
++import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+@@
+ import com.hunt.otziv.payments.model.ManualPaymentSource;
++import com.hunt.otziv.payments.model.ManualPaymentTask;
+ import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
+ import com.hunt.otziv.payments.model.ManualPaymentTaskLedgerSourceKind;
+ import com.hunt.otziv.payments.model.PaymentLink;
++import com.hunt.otziv.payments.model.PaymentLinkStatus;
++import com.hunt.otziv.payments.repository.PaymentLinkRepository;
++import java.time.LocalDateTime;
++import java.util.List;
+ import java.util.Objects;
+ import java.util.Optional;
++import java.util.Set;
+@@
+     private static final String SYSTEM_ACTOR = "system:payment-routing";
++    private static final Set<PaymentLinkStatus> LEGACY_PENDING_LINK_STATUSES = Set.of(
++            PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
++            PaymentLinkStatus.MANUAL_REPORTED
++    );
++    private static final Set<CommonInvoiceStatus> LEGACY_PENDING_COMMON_STATUSES = Set.of(
++            CommonInvoiceStatus.COLLECTING,
++            CommonInvoiceStatus.READY,
++            CommonInvoiceStatus.INVOICED,
++            CommonInvoiceStatus.REMINDER,
++            CommonInvoiceStatus.PARTIALLY_PAID,
++            CommonInvoiceStatus.NEEDS_ATTENTION
++    );
+ 
+     private final ManualPaymentTaskLedgerService ledgerService;
+     private final ManualPaymentTaskContractorReservationService contractorReservationService;
++    private final PaymentLinkRepository paymentLinkRepository;
++    private final CommonInvoiceRepository commonInvoiceRepository;
+@@
+     public Optional<ManualPaymentTaskRouteSnapshot> reserveForCommonInvoice(
+             CommonInvoice invoice,
+@@
+         return result;
+     }
++
++    /**
++     * Completes the one-time V251 quarantine remediation atomically: the
++     * ledger target, exact source generation, contractor exposure and source
++     * allocation id are committed or rolled back together.
++     */
++    @Transactional(propagation = Propagation.MANDATORY)
++    public void bindPendingLegacyReservations(ManualPaymentTask task, String actor) {
++        if (task == null || task.getId() == null) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        ContractorAllocationMode mode = contractorReservationService.lockAccountingMode();
++        List<ManualPaymentTaskRouteSnapshot> sources =
++                ledgerService.bindPendingLegacyReservations(task, actor);
++        for (ManualPaymentTaskRouteSnapshot source : sources) {
++            if (source.source() == null
++                    || !source.source().sourceGeneration().equals(
++                            "LEGACY-" + source.source().sourceId())) {
++                throw ManualPaymentTaskRouteErrors.stale();
++            }
++            if (source.source().sourceKind() == ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK) {
++                bindLegacyPaymentLink(task, source, mode);
++            } else if (source.source().sourceKind()
++                    == ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE) {
++                bindLegacyCommonInvoice(task, source, mode);
++            } else {
++                throw ManualPaymentTaskRouteErrors.stale();
++            }
++        }
++    }
++
++    private void bindLegacyPaymentLink(
++            ManualPaymentTask task,
++            ManualPaymentTaskRouteSnapshot snapshot,
++            ContractorAllocationMode mode
++    ) {
++        PaymentLink link = paymentLinkRepository.findByIdForUpdate(snapshot.source().sourceId())
++                .orElseThrow(ManualPaymentTaskRouteErrors::stale);
++        long sourceAmount = effectiveManualAmount(link);
++        if (link.getManualSource() != ManualPaymentSource.MANUAL_TASK
++                || link.getManualPaymentTask() == null
++                || !Objects.equals(link.getManualPaymentTask().getId(), task.getId())
++                || !Objects.equals(link.getManualTaskSourceGeneration(),
++                        snapshot.source().sourceGeneration())
++                || link.getManualTaskGeneration() == null
++                || !LEGACY_PENDING_LINK_STATUSES.contains(link.getStatus())
++                || link.getExpiresAt() == null
++                || !link.getExpiresAt().isAfter(LocalDateTime.now())
++                || sourceAmount != snapshot.reservedAmountKopecks()) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        link.setManualTaskGeneration(snapshot.taskGeneration());
++        link.setContractorAllocationId(
++                contractorReservationService.remediateLegacy(link, snapshot, mode));
++        paymentLinkRepository.save(link);
++    }
++
++    private void bindLegacyCommonInvoice(
++            ManualPaymentTask task,
++            ManualPaymentTaskRouteSnapshot snapshot,
++            ContractorAllocationMode mode
++    ) {
++        CommonInvoice invoice = commonInvoiceRepository.findByIdForUpdate(snapshot.source().sourceId())
++                .orElseThrow(ManualPaymentTaskRouteErrors::stale);
++        long routeAmount = invoice.getPaymentRouteAmountKopecks() == null
++                ? 0 : invoice.getPaymentRouteAmountKopecks();
++        if (invoice.getPaymentRouteManualSource() != ManualPaymentSource.MANUAL_TASK
++                || !Objects.equals(invoice.getPaymentRouteManualTaskId(), task.getId())
++                || !Objects.equals(invoice.getPaymentRouteManualTaskSourceGeneration(),
++                        snapshot.source().sourceGeneration())
++                || invoice.getPaymentRouteManualTaskGeneration() == null
++                || invoice.getPaymentRouteSelectedAt() == null
++                || invoice.getStatus() == null
++                || !LEGACY_PENDING_COMMON_STATUSES.contains(invoice.getStatus())
++                || invoice.getPaidKopecks() >= invoice.getAmountKopecks()
++                || routeAmount != snapshot.reservedAmountKopecks()) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        invoice.setPaymentRouteManualTaskGeneration(snapshot.taskGeneration());
++        invoice.setContractorAllocationId(
++                contractorReservationService.remediateLegacy(invoice, snapshot, mode));
++        commonInvoiceRepository.save(invoice);
++    }
++
++    private long effectiveManualAmount(PaymentLink link) {
++        if (link.getConfirmedAmountKopecks() != null) {
++            return link.getConfirmedAmountKopecks();
++        }
++        if (link.getReservedAmountKopecks() != null) {
++            return link.getReservedAmountKopecks();
++        }
++        return link.getAmountKopecks();
++    }
+ 
+     @Transactional(propagation = Propagation.MANDATORY)
+     public Optional<ManualPaymentTaskRouteSnapshot> candidate(PaymentLink link) {
+@@
+     public Optional<ManualPaymentTaskRouteSnapshot> candidate(CommonInvoice invoice) {
+@@
+         return Optional.of(sourceFacing(snapshot, invoice));
+     }
++
++    /** Phase is locked by the caller before this canonical task lock. */
++    @Transactional(propagation = Propagation.MANDATORY)
++    public void lockTaskForFinalAttribution(PaymentLink link) {
++        if (link == null) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        Long originalTaskId = link.getManualActualOriginalCashDestinationKind()
++                == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK
++                ? link.getManualActualOriginalTaskId() : null;
++        Long actualTaskId = link.getManualActualCashDestinationKind()
++                == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK
++                ? link.getManualActualTaskId() : null;
++        if (originalTaskId == null && actualTaskId == null) {
++            return;
++        }
++        if (originalTaskId != null && actualTaskId != null
++                && !Objects.equals(originalTaskId, actualTaskId)) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        Long taskId = actualTaskId == null ? originalTaskId : actualTaskId;
++        if (link.getManualSource() != ManualPaymentSource.MANUAL_TASK
++                || link.getManualPaymentTask() == null
++                || !Objects.equals(link.getManualPaymentTask().getId(), taskId)
++                || link.getManualTaskGeneration() == null
++                || normalize(link.getManualTaskSourceGeneration()).isBlank()) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++        ManualPaymentTaskRouteSnapshot locked = ledgerService.lockSourceTask(
++                taskId, paymentLinkSource(link));
++        boolean legacy = locked.source().sourceGeneration().equals(
++                "LEGACY-" + locked.source().sourceId());
++        if (!Objects.equals(locked.taskId(), taskId)
++                || (!legacy && locked.taskGeneration() != link.getManualTaskGeneration())) {
++            throw ManualPaymentTaskRouteErrors.stale();
++        }
++    }
+ 
+     @Transactional(propagation = Propagation.MANDATORY)
+     public void settle(
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskService.java
+@@
+     private final PaymentProfileService paymentProfileService;
+     private final ManualPaymentTaskLedgerService taskLedgerService;
++    private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
+     private final ManualPaymentTaskAccountingTargetPolicy accountingTargetPolicy;
+@@
+         ManualPaymentTask saved = manualPaymentTaskRepository.save(task);
+         if (previousKind == ManualPaymentTaskAccountingTargetKind.UNRESOLVED
+                 && target.kind() != ManualPaymentTaskAccountingTargetKind.UNRESOLVED) {
+-            taskLedgerService.bindPendingLegacyReservations(saved, actor);
++            taskReceiptIntegrationService.bindPendingLegacyReservations(saved, actor);
+         }
+*** End Patch

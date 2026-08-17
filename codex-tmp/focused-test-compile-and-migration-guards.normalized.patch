@@ -1,0 +1,93 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonBillingServiceTest.java
+@@
+ import static org.junit.jupiter.api.Assertions.assertNull;
++import static org.junit.jupiter.api.Assertions.assertSame;
+ import static org.junit.jupiter.api.Assertions.assertThrows;
+@@
+ import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.verifyNoInteractions;
+ import static org.mockito.Mockito.when;
+@@
+-        assertTrue(preview.invoiceBlockers().contains("платёжный маршрут уже выдан клиенту"));
++        assertTrue(preview.blockers().contains("платёжный маршрут уже выдан клиенту"));
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+ import static org.mockito.Mockito.inOrder;
++import static org.mockito.Mockito.lenient;
+ import static org.mockito.Mockito.never;
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentTaskReturnServiceTest.java
+@@
+ import static org.mockito.Mockito.inOrder;
++import static org.mockito.Mockito.mock;
+@@
+ import static org.mockito.Mockito.when;
++import static org.mockito.Mockito.withSettings;
+@@
+-        ContractorActualPaymentAttribution row = new ContractorActualPaymentAttribution();
+-        row.setId(id);
+-        row.setSourceKind(ContractorActualPaymentSourceKind.COMMON_INVOICE);
+-        row.setSourceId(invoiceId);
+-        row.setActualCashDestinationKind(ContractorCashDestinationKind.MANUAL_PAYMENT_TASK);
+-        row.setActualManualPaymentTaskId(taskId);
+-        row.setActualManualPaymentTaskGeneration(taskGeneration);
+-        row.setActualManualPaymentTaskTargetKind(target);
+-        row.setAmountKopecks(amount);
+-        row.setEvidenceReference(evidence);
++        ContractorActualPaymentAttribution row = mock(
++                ContractorActualPaymentAttribution.class, withSettings().lenient());
++        when(row.getId()).thenReturn(id);
++        when(row.getSourceKind()).thenReturn(ContractorActualPaymentSourceKind.COMMON_INVOICE);
++        when(row.getSourceId()).thenReturn(invoiceId);
++        when(row.getActualCashDestinationKind())
++                .thenReturn(ContractorCashDestinationKind.MANUAL_PAYMENT_TASK);
++        when(row.getActualManualPaymentTaskId()).thenReturn(taskId);
++        when(row.getActualManualPaymentTaskGeneration()).thenReturn(taskGeneration);
++        when(row.getActualManualPaymentTaskTargetKind()).thenReturn(target);
++        when(row.getAmountKopecks()).thenReturn(amount);
++        when(row.getEvidenceReference()).thenReturn(evidence);
+         return row;
+@@
+-        ContractorActualPaymentAttribution row = new ContractorActualPaymentAttribution();
+-        row.setId(id);
+-        row.setSourceKind(ContractorActualPaymentSourceKind.COMMON_INVOICE);
+-        row.setSourceId(invoiceId);
+-        row.setActualCashDestinationKind(ContractorCashDestinationKind.CONTRACTOR_PROFILE);
+-        row.setAmountKopecks(amount);
+-        row.setEvidenceReference("profile-evidence");
++        ContractorActualPaymentAttribution row = mock(
++                ContractorActualPaymentAttribution.class, withSettings().lenient());
++        when(row.getId()).thenReturn(id);
++        when(row.getSourceKind()).thenReturn(ContractorActualPaymentSourceKind.COMMON_INVOICE);
++        when(row.getSourceId()).thenReturn(invoiceId);
++        when(row.getActualCashDestinationKind())
++                .thenReturn(ContractorCashDestinationKind.CONTRACTOR_PROFILE);
++        when(row.getAmountKopecks()).thenReturn(amount);
++        when(row.getEvidenceReference()).thenReturn("profile-evidence");
+         return row;
+*** Update File: backend/src/main/resources/db/migration/V1_10_251__manual_payment_task_accounting_ledger.sql
+@@
+ FROM payment_links link
+ JOIN manual_payment_tasks task ON task.id = link.manual_task_id
+-WHERE link.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
++WHERE link.manual_source = 'MANUAL_TASK'
++  AND link.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
+@@
+ FROM payment_links link
+ JOIN manual_payment_tasks task ON task.id = link.manual_task_id
+-WHERE link.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
++WHERE link.manual_source = 'MANUAL_TASK'
++  AND link.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
+@@
+ FROM common_invoices invoice
+ JOIN manual_payment_tasks task ON task.id = invoice.payment_route_manual_task_id
+-WHERE invoice.payment_route_selected_at IS NOT NULL
++WHERE invoice.payment_route_manual_source = 'MANUAL_TASK'
++  AND invoice.payment_route_selected_at IS NOT NULL
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskAccountingLedgerMigrationContractTest.java
+@@
+                 "CONCAT('TASK:RELEASE:PAYMENT_LINK:', LINK.ID, ':LEGACY-', LINK.ID)",
++                "WHERE LINK.MANUAL_SOURCE = 'MANUAL_TASK'",
++                "WHERE INVOICE.PAYMENT_ROUTE_MANUAL_SOURCE = 'MANUAL_TASK'",
+                 "LINK.EXPIRES_AT <= CURRENT_TIMESTAMP(6)",
+*** End Patch

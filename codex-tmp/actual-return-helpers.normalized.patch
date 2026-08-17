@@ -1,0 +1,276 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/service/ContractorPaymentShadowService.java
+@@
+         }
+         return snapshot;
+     }
++
++    private List<ContractorPaymentAllocation> paymentLinkSourceSnapshots(Long paymentLinkId) {
++        List<ContractorPaymentAllocation> snapshots = new ArrayList<>();
++        for (ContractorAllocationMode mode : List.of(
++                ContractorAllocationMode.SHADOW, ContractorAllocationMode.LIVE)) {
++            latestAllocation(mode, ContractorAllocationSourceType.PAYMENT_LINK, paymentLinkId)
++                    .ifPresent(snapshots::add);
++        }
++        return snapshots;
++    }
++
++    private int reconcileAttributedPaymentLinkReturn(
++            PaymentLink link,
++            List<ContractorPaymentAllocation> sourceSnapshots,
++            PaymentLinkActualReturnPlan plan,
++            LocalDateTime now
++    ) {
++        Map<Long, AllocationBefore> before = new LinkedHashMap<>();
++        sourceSnapshots.forEach(allocation -> before.put(
++                allocation.getId(),
++                new AllocationBefore(allocation.getStatus(), allocation.getReturnedKopecks())
++        ));
++        plan.actualSnapshots().forEach(allocation -> before.put(
++                allocation.getId(),
++                new AllocationBefore(allocation.getStatus(), allocation.getReturnedKopecks())
++        ));
++        Map<Long, ContractorPaymentAllocation> reconciled = reconcileAttributedPaymentLinkReturnLocked(
++                link, sourceSnapshots, plan, now
++        );
++        return (int) reconciled.values().stream()
++                .filter(allocation -> {
++                    AllocationBefore previous = before.get(allocation.getId());
++                    return previous != null && (previous.status() != allocation.getStatus()
++                            || previous.returnedKopecks() != allocation.getReturnedKopecks());
++                })
++                .count();
++    }
++
++    private Map<Long, ContractorPaymentAllocation> reconcileAttributedPaymentLinkReturnLocked(
++            PaymentLink link,
++            List<ContractorPaymentAllocation> sourceSnapshots,
++            PaymentLinkActualReturnPlan plan,
++            LocalDateTime now
++    ) {
++        if (!plan.attributionPresent()) {
++            throw new ContractorReconciliationRequiredException(
++                    "У фактического поступления отсутствует точная атрибуция"
++            );
++        }
++        Map<Long, ManualPaymentTaskContractorReturnBridge.Binding> bindings = new LinkedHashMap<>();
++        for (ContractorPaymentAllocation snapshot : sourceSnapshots) {
++            if (!plan.supersededSourceAllocationIds().contains(snapshot.getId())) {
++                bindings.put(snapshot.getId(), taskReturnBridge.lockPaymentLinkBinding(snapshot, link));
++            }
++        }
++        for (ContractorPaymentAllocation snapshot : plan.actualSnapshots()) {
++            bindings.put(snapshot.getId(), taskReturnBridge.lockActualPaymentBinding(snapshot));
++        }
++
++        List<ContractorPaymentAllocation> allSnapshots = new ArrayList<>(sourceSnapshots);
++        allSnapshots.addAll(plan.actualSnapshots());
++        Map<Long, ContractorPaymentAllocation> locked = lockLatestAttemptsCanonical(allSnapshots).stream()
++                .collect(java.util.stream.Collectors.toMap(
++                        ContractorPaymentAllocation::getId,
++                        value -> value,
++                        (left, right) -> left,
++                        LinkedHashMap::new
++                ));
++        requireExactActualReturnPlan(plan, locked);
++
++        Map<Long, ContractorPaymentAllocation> saved = new LinkedHashMap<>();
++        for (ContractorPaymentAllocation snapshot : sourceSnapshots) {
++            ContractorPaymentAllocation allocation = locked.get(snapshot.getId());
++            if (allocation == null) {
++                throw new ContractorReconciliationRequiredException(
++                        "Исходное назначение платежа изменилось во время сверки"
++                );
++            }
++            allocation.setLastReconciledAt(now);
++            if (!plan.supersededSourceAllocationIds().contains(allocation.getId())) {
++                applyLinkStatus(allocation, link, now);
++                taskReturnBridge.recordReturn(bindings.get(allocation.getId()), allocation);
++            }
++            clearReconciliationFailure(allocation);
++            saved.put(allocation.getId(), allocationRepository.save(allocation));
++        }
++        for (ContractorPaymentAllocation snapshot : plan.actualSnapshots()) {
++            ContractorPaymentAllocation allocation = locked.get(snapshot.getId());
++            if (allocation == null) {
++                throw new ContractorReconciliationRequiredException(
++                        "Фактическое назначение платежа изменилось во время сверки"
++                );
++            }
++            allocation.setLastReconciledAt(now);
++            applyLinkStatus(allocation, link, now);
++            taskReturnBridge.recordReturn(bindings.get(allocation.getId()), allocation);
++            clearReconciliationFailure(allocation);
++            saved.put(allocation.getId(), allocationRepository.save(allocation));
++        }
++        return saved;
++    }
++
++    private PaymentLinkActualReturnPlan paymentLinkActualReturnPlan(
++            PaymentLink link,
++            Collection<ContractorPaymentAllocation> sourceSnapshots
++    ) {
++        List<ContractorActualPaymentAttribution> rows = actualPaymentAttributionRepository
++                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
++                        ContractorActualPaymentSourceKind.PAYMENT_LINK, link.getId()
++                );
++        if (rows.isEmpty()) {
++            return PaymentLinkActualReturnPlan.none();
++        }
++        long attributedTotal = 0L;
++        Map<Long, ContractorPaymentAllocation> sourceById = (sourceSnapshots == null
++                ? List.<ContractorPaymentAllocation>of() : sourceSnapshots).stream()
++                .filter(Objects::nonNull)
++                .filter(allocation -> allocation.getId() != null)
++                .collect(java.util.stream.Collectors.toMap(
++                        ContractorPaymentAllocation::getId,
++                        value -> value,
++                        (left, right) -> left
++                ));
++        List<ContractorPaymentAllocation> actualSnapshots = new ArrayList<>();
++        Map<Long, ContractorActualPaymentAttribution> actualRowsByAllocationId = new LinkedHashMap<>();
++        Set<Long> reusedSourceAllocationIds = new java.util.LinkedHashSet<>();
++        Set<Long> supersededSourceAllocationIds = new java.util.LinkedHashSet<>();
++        Set<Long> rowIds = new java.util.HashSet<>();
++
++        for (ContractorActualPaymentAttribution row : rows) {
++            requirePaymentLinkAttributionRow(row, link);
++            if (!rowIds.add(row.getId())) {
++                throw new ContractorReconciliationRequiredException(
++                        "Атрибуция фактического поступления продублирована"
++                );
++            }
++            attributedTotal = Math.addExact(attributedTotal, row.getAmountKopecks());
++            ContractorPaymentAllocation actual = latestAllocation(
++                    row.getAccountingMode(), ContractorAllocationSourceType.ACTUAL_PAYMENT, row.getId()
++            ).orElse(null);
++            ContractorPaymentAllocation original = row.getOriginalAllocationId() == null
++                    ? null : sourceById.get(row.getOriginalAllocationId());
++            boolean contractorDestination = row.getActualRecipientProfileId() != null
++                    && row.getActualRecipientType() != null
++                    && row.getActualRecipientType() != ContractorRecipientType.OWNER
++                    && row.getActualCashDestinationKind() != ContractorCashDestinationKind.OWNER;
++            if (actual != null) {
++                if (!contractorDestination) {
++                    throw new ContractorReconciliationRequiredException(
++                            "Для оплаты владельцу обнаружено лишнее фактическое назначение"
++                    );
++                }
++                requireActualPaymentAllocation(row, actual);
++                actualSnapshots.add(actual);
++                actualRowsByAllocationId.put(actual.getId(), row);
++                if (row.getOriginalAllocationId() != null) {
++                    supersededSourceAllocationIds.add(row.getOriginalAllocationId());
++                }
++                continue;
++            }
++            if (contractorDestination) {
++                if (original == null) {
++                    throw new ContractorReconciliationRequiredException(
++                            "Не найдено подтвержденное назначение фактическому получателю"
++                    );
++                }
++                requireReusedPaymentLinkAllocation(row, original);
++                reusedSourceAllocationIds.add(original.getId());
++            } else if (row.getOriginalAllocationId() != null) {
++                supersededSourceAllocationIds.add(row.getOriginalAllocationId());
++            }
++        }
++        if (attributedTotal != confirmedAmount(link)) {
++            throw new ContractorReconciliationRequiredException(
++                    "Сумма фактических получателей не совпадает с подтвержденной суммой платежа"
++            );
++        }
++        if (!java.util.Collections.disjoint(reusedSourceAllocationIds, supersededSourceAllocationIds)) {
++            throw new ContractorReconciliationRequiredException(
++                    "Исходное назначение одновременно помечено использованным и замененным"
++            );
++        }
++        return new PaymentLinkActualReturnPlan(
++                true,
++                List.copyOf(actualSnapshots),
++                Map.copyOf(actualRowsByAllocationId),
++                Set.copyOf(reusedSourceAllocationIds),
++                Set.copyOf(supersededSourceAllocationIds)
++        );
++    }
++
++    private void requireExactActualReturnPlan(
++            PaymentLinkActualReturnPlan plan,
++            Map<Long, ContractorPaymentAllocation> locked
++    ) {
++        for (Map.Entry<Long, ContractorActualPaymentAttribution> entry
++                : plan.actualRowsByAllocationId().entrySet()) {
++            ContractorPaymentAllocation allocation = locked.get(entry.getKey());
++            if (allocation == null) {
++                throw new ContractorReconciliationRequiredException(
++                        "Фактическое назначение платежа больше не существует"
++                );
++            }
++            requireActualPaymentAllocation(entry.getValue(), allocation);
++        }
++    }
++
++    private void requirePaymentLinkAttributionRow(
++            ContractorActualPaymentAttribution row,
++            PaymentLink link
++    ) {
++        if (row == null || row.getId() == null || row.getId() <= 0L
++                || row.getSourceKind() != ContractorActualPaymentSourceKind.PAYMENT_LINK
++                || !Objects.equals(row.getSourceId(), link.getId())
++                || row.getAccountingMode() == null
++                || row.getAmountKopecks() <= 0L
++                || row.getActualCashDestinationKind() == null) {
++            throw new ContractorReconciliationRequiredException(
++                    "Атрибуция фактического поступления повреждена"
++            );
++        }
++    }
++
++    private void requireActualPaymentAllocation(
++            ContractorActualPaymentAttribution row,
++            ContractorPaymentAllocation allocation
++    ) {
++        Long profileId = allocation.getRecipientProfile() == null
++                ? null : allocation.getRecipientProfile().getId();
++        Long expectedTaskId = row.getActualCashDestinationKind()
++                == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK
++                ? row.getActualManualPaymentTaskId() : null;
++        if (allocation.getMode() != row.getAccountingMode()
++                || allocation.getSourceType() != ContractorAllocationSourceType.ACTUAL_PAYMENT
++                || !Objects.equals(allocation.getSourceId(), row.getId())
++                || !Objects.equals(profileId, row.getActualRecipientProfileId())
++                || allocation.getRecipientType() != row.getActualRecipientType()
++                || !Objects.equals(allocation.getManualPaymentTaskId(), expectedTaskId)
++                || allocation.getAmountKopecks() != row.getAmountKopecks()) {
++            throw new ContractorReconciliationRequiredException(
++                    "Фактическое назначение расходится с неизменяемой атрибуцией"
++            );
++        }
++    }
++
++    private void requireReusedPaymentLinkAllocation(
++            ContractorActualPaymentAttribution row,
++            ContractorPaymentAllocation allocation
++    ) {
++        Long profileId = allocation.getRecipientProfile() == null
++                ? null : allocation.getRecipientProfile().getId();
++        Long expectedTaskId = row.getActualCashDestinationKind()
++                == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK
++                ? row.getActualManualPaymentTaskId() : null;
++        if (allocation.getMode() != row.getAccountingMode()
++                || allocation.getSourceType() != ContractorAllocationSourceType.PAYMENT_LINK
++                || !Objects.equals(allocation.getSourceId(), row.getSourceId())
++                || !Objects.equals(allocation.getId(), row.getOriginalAllocationId())
++                || !Objects.equals(profileId, row.getActualRecipientProfileId())
++                || allocation.getRecipientType() != row.getActualRecipientType()
++                || !Objects.equals(allocation.getManualPaymentTaskId(), expectedTaskId)
++                || allocation.getAmountKopecks() != row.getAmountKopecks()) {
++            throw new ContractorReconciliationRequiredException(
++                    "Повторно использованное назначение расходится с атрибуцией"
++            );
++        }
++    }
+ 
+     private boolean hasFinalCommonActualRecipient(Long invoiceId) {
+*** End Patch

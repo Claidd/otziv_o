@@ -20,6 +20,7 @@ import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
 import com.hunt.otziv.manager_daily_summary.service.ManagerActivityMetricsService;
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManagerManualPaymentSettingsResponse;
+import com.hunt.otziv.payments.dto.ManualPaymentTaskAccountingTargetOption;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
 import com.hunt.otziv.payments.dto.UpdateManagerManualPaymentSettingsRequest;
 import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskRequest;
@@ -58,6 +59,8 @@ import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -189,51 +192,64 @@ public class ApiCabinetController {
 
     @GetMapping("/manual-payment-tasks")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
-    public List<ManualPaymentTaskResponse> manualPaymentTasks(Principal principal) {
+    public ResponseEntity<List<ManualPaymentTaskResponse>> manualPaymentTasks(Principal principal) {
         User user = currentUser(principal);
-        return manualPaymentTaskService.managerTasks(user.getId());
+        return noStore(manualPaymentTaskService.managerTasks(user.getId()));
+    }
+
+    @GetMapping("/manual-payment-tasks/accounting-targets")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ResponseEntity<List<ManualPaymentTaskAccountingTargetOption>> manualPaymentTaskAccountingTargets(
+            Principal principal,
+            @RequestParam(required = false) Long targetAmountKopecks,
+            @RequestParam(required = false) Long taskId
+    ) {
+        User user = currentUser(principal);
+        return noStore(manualPaymentTaskService.managerAccountingTargetOptions(
+                user.getId(), targetAmountKopecks, taskId));
     }
 
     @PostMapping("/manual-payment-tasks")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
-    public ManualPaymentTaskResponse createManualPaymentTask(
+    public ResponseEntity<ManualPaymentTaskResponse> createManualPaymentTask(
             Principal principal,
             @RequestBody CreateManualPaymentTaskRequest request
     ) {
         User user = currentUser(principal);
-        return manualPaymentTaskService.createManagerTask(user.getId(), request, principal.getName());
+        return noStore(manualPaymentTaskService.createManagerTask(
+                user.getId(), request, principal.getName()));
     }
 
     @PutMapping("/manual-payment-tasks/{taskId}/status")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
-    public ManualPaymentTaskResponse updateManualPaymentTaskStatus(
+    public ResponseEntity<ManualPaymentTaskResponse> updateManualPaymentTaskStatus(
             Principal principal,
             @PathVariable Long taskId,
             @RequestBody UpdateManualPaymentTaskStatusRequest request
     ) {
         User user = currentUser(principal);
-        return manualPaymentTaskService.updateManagerTaskStatus(
+        return noStore(manualPaymentTaskService.updateManagerTaskStatus(
                 user.getId(),
                 taskId,
                 request == null ? null : request.status(),
                 principal.getName()
-        );
+        ));
     }
 
     @PutMapping("/manual-payment-tasks/{taskId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
-    public ManualPaymentTaskResponse updateManualPaymentTask(
+    public ResponseEntity<ManualPaymentTaskResponse> updateManualPaymentTask(
             Principal principal,
             @PathVariable Long taskId,
             @RequestBody UpdateManualPaymentTaskRequest request
     ) {
         User user = currentUser(principal);
-        return manualPaymentTaskService.updateManagerTask(
+        return noStore(manualPaymentTaskService.updateManagerTask(
                 user.getId(),
                 taskId,
                 request,
                 principal.getName()
-        );
+        ));
     }
 
     @GetMapping("/team")
@@ -798,6 +814,13 @@ public class ApiCabinetController {
             }
         }
         return null;
+    }
+
+    private <T> ResponseEntity<T> noStore(T body) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(body);
     }
 
     private String workerName(Worker worker) {

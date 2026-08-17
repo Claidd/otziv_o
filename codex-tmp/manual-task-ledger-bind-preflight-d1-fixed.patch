@@ -1,0 +1,143 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskLedgerService.java
+@@
+ import java.time.LocalDateTime;
++import java.util.ArrayList;
+ import java.util.HashMap;
+@@
+     @Transactional
++    public ManualPaymentTaskRouteSnapshot lockPendingSourceTask(
++            Long taskId,
++            ManualPaymentTaskSourceRef sourceRef
++    ) {
++        requireSource(sourceRef);
++        ManualPaymentTask task = lockTask(taskId);
++        List<ManualPaymentTaskLedgerEntry> history = sourceHistory(sourceRef);
++        requireSourceTask(history, task.getId());
++        long pending = pendingForSource(history);
++        if (pending <= 0) {
++            throw conflict("Источник платёжного задания уже закрыт");
++        }
++        return snapshot(history.getFirst(), pending);
++    }
++
++    /**
++     * Locks the task in the global financial order and returns the amount
++     * already returned for the exact source generation. The caller keeps this
+@@
+-    public void bindPendingLegacyReservations(ManualPaymentTask task, String actor) {
++    public List<ManualPaymentTaskRouteSnapshot> bindPendingLegacyReservations(
++            ManualPaymentTask task,
++            String actor
++    ) {
+         if (task == null || task.getId() == null || !isResolvedAndUsable(task)) {
+-            return;
++            return List.of();
+         }
+         List<ManualPaymentTaskLedgerEntry> reservations =
+                 ledgerRepository.findPendingUnresolvedReservations(task.getId());
++        List<ManualPaymentTaskRouteSnapshot> boundSources = new ArrayList<>();
+         for (ManualPaymentTaskLedgerEntry reservation : reservations) {
+             ManualPaymentTaskSourceRef source = source(reservation);
+             List<ManualPaymentTaskLedgerEntry> history = sourceHistory(source);
+-            if (history.isEmpty()
+-                    || history.getFirst().getAccountingTargetKind()
+-                    != ManualPaymentTaskAccountingTargetKind.UNRESOLVED
+-                    || pendingForSource(history) <= 0) {
++            long pending = pendingForSource(history);
++            if (history.isEmpty()
++                    || reservation.getAccountingTargetKind()
++                    != ManualPaymentTaskAccountingTargetKind.UNRESOLVED
++                    || pending <= 0) {
+                 continue;
+             }
+-            String operationKey = "TASK_BIND:" + task.getId() + ":" + task.getGeneration()
+-                    + ":" + reservation.getId();
+-            if (!operation(operationKey).isEmpty()) {
+-                continue;
++            ManualPaymentTaskLedgerEntry latest = history.getFirst();
++            ManualPaymentTaskLedgerEntry bound;
++            if (latest.getAccountingTargetKind() != ManualPaymentTaskAccountingTargetKind.UNRESOLVED) {
++                if (!sameBoundTarget(latest, task)) {
++                    throw conflict("Старый резерв уже привязан к другому получателю");
++                }
++                bound = latest;
++            } else {
++                String operationKey = "TASK_BIND:" + task.getId() + ":" + task.getGeneration()
++                        + ":" + reservation.getId();
++                List<ManualPaymentTaskLedgerEntry> replay = operation(operationKey);
++                if (!replay.isEmpty()) {
++                    if (replay.size() != 1 || !sameSource(replay.getFirst(), source)
++                            || replay.getFirst().getEventType()
++                            != ManualPaymentTaskLedgerEventType.TARGET_BOUND
++                            || !sameBoundTarget(replay.getFirst(), task)) {
++                        throw conflict("Ключ привязки старого резерва уже использован");
++                    }
++                    bound = replay.getFirst();
++                } else {
++                    bound = copyEntry(
++                            reservation,
++                            ManualPaymentTaskLedgerEventType.TARGET_BOUND,
++                            operationKey,
++                            0,
++                            0,
++                            0,
++                            0,
++                            actor,
++                            "Явная привязка получателя старого задания"
++                    );
++                    // The one-time remediation freezes only the typed accounting
++                    // destination. Bank requisites remain the immutable source
++                    // snapshots and are never replaced with the task's current data.
++                    bound.setTaskGeneration(task.getGeneration());
++                    bound.setAccountingTargetKind(targetKind(task));
++                    bound.setAccountingTargetProfile(task.getAccountingTargetProfile());
++                    bound.setAccountingTargetLabelSnapshot(targetLabel(task));
++                    bound.setTargetOverrunAcknowledgedAt(task.getTargetOverrunAcknowledgedAt());
++                    bound.setTargetOverrunAcknowledgedBy(task.getTargetOverrunAcknowledgedBy());
++                    bound.setSelectedRecipientKey(candidateKey(task.getId(), task.getGeneration()));
++                    bound = ledgerRepository.save(bound);
++                }
+             }
+-            ManualPaymentTaskLedgerEntry bound = copyEntry(
+-                    reservation,
+-                    ManualPaymentTaskLedgerEventType.TARGET_BOUND,
+-                    operationKey,
+-                    0,
+-                    0,
+-                    0,
+-                    0,
+-                    actor,
+-                    "Явная привязка получателя старого задания"
+-            );
+-            // The one-time remediation freezes only the typed accounting
+-            // destination. Bank requisites remain the immutable source
+-            // snapshots and are never replaced with the task's current data.
+-            bound.setTaskGeneration(task.getGeneration());
+-            bound.setAccountingTargetKind(targetKind(task));
+-            bound.setAccountingTargetProfile(task.getAccountingTargetProfile());
+-            bound.setAccountingTargetLabelSnapshot(targetLabel(task));
+-            bound.setTargetOverrunAcknowledgedAt(task.getTargetOverrunAcknowledgedAt());
+-            bound.setTargetOverrunAcknowledgedBy(task.getTargetOverrunAcknowledgedBy());
+-            bound.setSelectedRecipientKey(candidateKey(task.getId(), task.getGeneration()));
+-            ledgerRepository.save(bound);
++            boundSources.add(snapshot(bound, pending));
+         }
+         ManualPaymentTaskBalance current = balance(task.getId());
+         task.setNeedsReconciliation(current.unverifiedConfirmedAmountKopecks() > 0);
+         taskRepository.save(task);
++        return List.copyOf(boundSources);
+     }
++
++    private boolean sameBoundTarget(ManualPaymentTaskLedgerEntry entry, ManualPaymentTask task) {
++        Long entryProfileId = entry.getAccountingTargetProfile() == null
++                ? null : entry.getAccountingTargetProfile().getId();
++        Long taskProfileId = task.getAccountingTargetProfile() == null
++                ? null : task.getAccountingTargetProfile().getId();
++        return entry.getTaskGeneration() == task.getGeneration()
++                && entry.getAccountingTargetKind() == targetKind(task)
++                && java.util.Objects.equals(entryProfileId, taskProfileId)
++                && normalize(entry.getSelectedRecipientKey()).equals(
++                        candidateKey(task.getId(), task.getGeneration()));
+     }
+*** End Patch

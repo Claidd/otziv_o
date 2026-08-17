@@ -1,0 +1,13 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskService.java
+@@
+     private void updateDigest(MessageDigest digest, Object value) {
+-        byte[] bytes = String.valueOf(value).getBytes(StandardCharsets.UTF_8);
++        if (value == null) {
++            digest.update((byte) 0);
++            return;
++        }
++        digest.update((byte) 1);
++        byte[] bytes = String.valueOf(value).getBytes(StandardCharsets.UTF_8);
+         digest.update(Integer.toString(bytes.length).getBytes(StandardCharsets.US_ASCII));
+*** End Patch

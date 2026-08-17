@@ -1,0 +1,271 @@
+:host {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+}
+
+.manual-payment-backdrop {
+  box-sizing: border-box;
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  overflow: auto;
+  padding: 1rem;
+  background: rgba(28, 39, 63, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.manual-payment-modal {
+  box-sizing: border-box;
+  width: min(100%, 36rem);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  border: 1px solid rgba(116, 137, 169, 0.25);
+  border-radius: 1.25rem;
+  padding: 1.1rem;
+  color: var(--otziv-dark, #26344e);
+  background: var(--otziv-white, #fff);
+  box-shadow: 0 1.5rem 4rem rgba(20, 31, 55, 0.28);
+}
+
+header,
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+header small,
+header h2,
+.manual-payment-state,
+.manual-payment-warning,
+.manual-payment-impact,
+.manual-payment-error {
+  margin: 0;
+}
+
+header small {
+  color: var(--otziv-muted, #71809a);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+header h2 {
+  margin-top: 0.2rem;
+  font-size: 1.15rem;
+}
+
+.icon-button {
+  display: grid;
+  flex: 0 0 2.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: #f0f3f8;
+}
+
+.manual-payment-state {
+  margin-top: 1rem;
+  border-radius: 0.9rem;
+  padding: 1rem;
+  background: #f5f7fb;
+}
+
+.error-state {
+  color: #a92945;
+  background: #fff0f3;
+}
+
+.error-state button {
+  margin-top: 0.75rem;
+}
+
+.manual-payment-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 1rem 0;
+}
+
+.manual-payment-summary div {
+  min-width: 0;
+  border-radius: 0.85rem;
+  padding: 0.75rem;
+  background: #f5f7fb;
+}
+
+.manual-payment-summary dt {
+  color: var(--otziv-muted, #71809a);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.manual-payment-summary dd {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+form,
+label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+form {
+  gap: 0.8rem;
+}
+
+label > span {
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+label em {
+  color: var(--otziv-muted, #71809a);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.recipient-capacity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.recipient-capacity div {
+  min-width: 0;
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: #eef8f6;
+}
+
+.recipient-capacity dt {
+  color: var(--otziv-muted, #71809a);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.recipient-capacity dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+select,
+textarea,
+input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid rgba(103, 116, 131, 0.3);
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  color: inherit;
+  background: #fff;
+  font: inherit;
+}
+
+textarea {
+  min-height: 5.5rem;
+  resize: vertical;
+}
+
+label small {
+  justify-self: end;
+  color: var(--otziv-muted, #71809a);
+}
+
+.manual-payment-warning,
+.manual-payment-impact,
+.manual-payment-error {
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.recipient-change,
+.manual-payment-impact {
+  color: #795916;
+  background: #fff8dc;
+}
+
+.anomaly,
+.manual-payment-error {
+  color: #a92945;
+  background: #fff0f3;
+}
+
+footer {
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+button {
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  color: #fff;
+  background: var(--otziv-action, #e6492d);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+button.secondary {
+  color: var(--otziv-dark, #26344e);
+  background: #edf1f6;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+select:focus-visible,
+textarea:focus-visible,
+input:focus-visible,
+button:focus-visible {
+  outline: 3px solid rgba(36, 128, 224, 0.28);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .manual-payment-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .manual-payment-modal {
+    width: 100%;
+    max-height: min(92dvh, 52rem);
+    border-radius: 1.25rem 1.25rem 0 0;
+    padding: 1rem;
+  }
+
+  .manual-payment-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .recipient-capacity {
+    grid-template-columns: 1fr;
+  }
+
+  footer {
+    display: grid;
+    grid-template-columns: 1fr 1.35fr;
+  }
+
+  footer button {
+    width: 100%;
+  }
+}

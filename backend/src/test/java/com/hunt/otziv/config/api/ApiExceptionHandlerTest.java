@@ -5,11 +5,28 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class ApiExceptionHandlerTest {
+    @Test
+    void handleCodedConflictKeepsStableCodeWithoutChangingMessage() {
+        ResponseStatusException failure = new CodedResponseStatusException(
+                HttpStatus.CONFLICT,
+                "PAYMENT_ROUTE_STALE",
+                "Маршрут изменился"
+        );
+
+        ResponseEntity<ApiExceptionHandler.ApiErrorResponse> response = handler.handleResponseStatus(failure);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Маршрут изменился", response.getBody().message());
+        assertEquals("PAYMENT_ROUTE_STALE", response.getBody().code());
+    }
+
 
     private final ApiExceptionHandler handler = new ApiExceptionHandler();
 

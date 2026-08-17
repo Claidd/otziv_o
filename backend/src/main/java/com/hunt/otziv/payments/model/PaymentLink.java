@@ -1,6 +1,7 @@
 package com.hunt.otziv.payments.model;
 
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
+import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.security.credentials.EncryptedCredentialConverter;
 import jakarta.persistence.Convert;
@@ -91,6 +92,12 @@ public class PaymentLink {
     @JoinColumn(name = "manual_task_id")
     private ManualPaymentTask manualPaymentTask;
 
+    @Column(name = "manual_task_source_generation", length = 36)
+    private String manualTaskSourceGeneration;
+
+    @Column(name = "manual_task_generation")
+    private Long manualTaskGeneration;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "manual_payment_type", length = 32)
     private ManualPaymentType manualPaymentType;
@@ -155,10 +162,15 @@ public class PaymentLink {
     @Column(name = "contractor_evidence_original_link_id")
     private Long contractorEvidenceOriginalLinkId;
 
-    /** Durable, typed recipient intent frozen before any remote bank cancel. */
+    /** Durable accounting mode fixed when a typed task route is issued and
+     * reused when recipient intent is frozen before any remote bank cancel. */
     @Enumerated(EnumType.STRING)
     @Column(name = "manual_actual_accounting_mode", length = 16)
     private ContractorAllocationMode manualActualAccountingMode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_actual_original_cash_destination_kind", length = 32)
+    private ContractorCashDestinationKind manualActualOriginalCashDestinationKind;
 
     @Column(name = "manual_actual_original_allocation_id")
     private Long manualActualOriginalAllocationId;
@@ -180,6 +192,20 @@ public class PaymentLink {
     @Column(name = "manual_actual_original_recipient_name_snapshot", columnDefinition = "TEXT")
     private String manualActualOriginalRecipientNameSnapshot;
 
+    @Column(name = "manual_actual_original_task_id")
+    private Long manualActualOriginalTaskId;
+
+    @Column(name = "manual_actual_original_task_generation")
+    private Long manualActualOriginalTaskGeneration;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_actual_original_task_target_kind", length = 32)
+    private ManualPaymentTaskAccountingTargetKind manualActualOriginalTaskTargetKind;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_actual_cash_destination_kind", length = 32)
+    private ContractorCashDestinationKind manualActualCashDestinationKind;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "manual_actual_recipient_type", length = 24)
     private ContractorRecipientType manualActualRecipientType;
@@ -193,6 +219,16 @@ public class PaymentLink {
     @Convert(converter = EncryptedCredentialConverter.class)
     @Column(name = "manual_actual_recipient_name_snapshot", columnDefinition = "TEXT")
     private String manualActualRecipientNameSnapshot;
+
+    @Column(name = "manual_actual_task_id")
+    private Long manualActualTaskId;
+
+    @Column(name = "manual_actual_task_generation")
+    private Long manualActualTaskGeneration;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_actual_task_target_kind", length = 32)
+    private ManualPaymentTaskAccountingTargetKind manualActualTaskTargetKind;
 
     @Column(name = "manual_actual_current_worker_id")
     private Long manualActualCurrentWorkerId;

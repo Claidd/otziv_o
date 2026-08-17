@@ -93,6 +93,36 @@ class ContractorPaymentReconciliationDispatcherTest {
         org.mockito.Mockito.verifyNoInteractions(shadowService);
     }
 
+    @Test
+    void disabledCreationToggleStillDispatchesExistingShadowAllocation() {
+        ContractorPaymentAllocation shadow = allocation(4L);
+        when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
+                .thenReturn(false);
+        when(repository.findPaymentLinksForReconciliation(
+                eq(ContractorAllocationMode.SHADOW), anyCollection(), anyCollection(),
+                any(LocalDateTime.class), any(LocalDateTime.class), any(Pageable.class)
+        )).thenReturn(List.of(shadow));
+        when(repository.findCommonInvoicesForReconciliation(
+                eq(ContractorAllocationMode.SHADOW), anyCollection(), anyCollection(),
+                any(LocalDateTime.class), any(LocalDateTime.class), any(Pageable.class)
+        )).thenReturn(List.of());
+        when(repository.findPaymentLinksForReconciliation(
+                eq(ContractorAllocationMode.LIVE), anyCollection(), anyCollection(),
+                any(LocalDateTime.class), any(LocalDateTime.class), any(Pageable.class)
+        )).thenReturn(List.of());
+        when(repository.findCommonInvoicesForReconciliation(
+                eq(ContractorAllocationMode.LIVE), anyCollection(), anyCollection(),
+                any(LocalDateTime.class), any(LocalDateTime.class), any(Pageable.class)
+        )).thenReturn(List.of());
+        when(claimService.tryClaim(eq(4L), any(LocalDateTime.class)))
+                .thenReturn(Optional.of("claim-4"));
+
+        dispatcher.reconcile();
+
+        verify(shadowService).reconcileAllocationId(4L);
+        verify(claimService).succeeded(4L, "claim-4");
+    }
+
     private ContractorPaymentAllocation allocation(Long id) {
         ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
         allocation.setId(id);

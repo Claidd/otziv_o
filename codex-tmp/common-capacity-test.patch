@@ -1,0 +1,71 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinatorTest.java
+@@
+ import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
+ import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
++import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
++import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
++import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
+ import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
+@@
+-import com.hunt.otziv.contractor_payments.service.ContractorPaymentAccountingService;
+ import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
+-import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
++import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
+ import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
+@@
+ import org.mockito.InOrder;
+ import org.springframework.http.HttpStatus;
++import org.springframework.test.util.ReflectionTestUtils;
+ import org.springframework.web.server.ResponseStatusException;
+@@
+-    private final ContractorPaymentAccountingService accountingService =
+-            mock(ContractorPaymentAccountingService.class);
+-    private final ContractorRewardLedgerService ledgerService = mock(ContractorRewardLedgerService.class);
++    private final ManualPaymentTaskContractorCapacityService taskCapacityService =
++            mock(ManualPaymentTaskContractorCapacityService.class);
+@@
+-                    accountingService,
+-                    ledgerService,
++                    taskCapacityService,
+                     managerResolver,
+@@
+             );
++
++    @Test
++    void ordinaryCommonCandidateKeepsTaskPriorityAndAddsBackOnlyReusableSourceExposure() {
++        ContractorPaymentProfile profile = mock(ContractorPaymentProfile.class);
++        when(profile.getId()).thenReturn(77L);
++        // Canonical availability already subtracts an 80k task commitment from
++        // 100k capacity, including any task exposure carried from SHADOW.
++        when(taskCapacityService.ordinaryAvailable(profile, ContractorAllocationMode.LIVE))
++                .thenReturn(20_000L);
++
++        Long withoutReusableSource = ReflectionTestUtils.invokeMethod(
++                coordinator,
++                "availableFor",
++                profile,
++                ContractorAllocationMode.LIVE,
++                null
++        );
++        assertEquals(20_000L, withoutReusableSource.longValue());
++
++        ContractorPaymentAllocation reusable = mock(ContractorPaymentAllocation.class);
++        when(reusable.getRecipientProfile()).thenReturn(profile);
++        when(reusable.getStatus()).thenReturn(ContractorAllocationStatus.PARTIALLY_CONFIRMED);
++        when(reusable.getAmountKopecks()).thenReturn(30_000L);
++        when(reusable.getConfirmedKopecks()).thenReturn(10_000L);
++        when(reusable.getReturnedKopecks()).thenReturn(2_000L);
++
++        Long withReusableSource = ReflectionTestUtils.invokeMethod(
++                coordinator,
++                "availableFor",
++                profile,
++                ContractorAllocationMode.LIVE,
++                reusable
++        );
++        assertEquals(42_000L, withReusableSource.longValue());
++        verify(taskCapacityService, org.mockito.Mockito.times(2))
++                .ordinaryAvailable(profile, ContractorAllocationMode.LIVE);
++    }
+*** End Patch

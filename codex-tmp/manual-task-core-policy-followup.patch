@@ -1,0 +1,76 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskAccountingTargetPolicy.java
+@@
+ import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
++import com.hunt.otziv.contractor_payments.service.ContractorPaymentAccountingPhaseService;
++import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
+@@
+     private final ManualPaymentTaskRepository taskRepository;
+     private final ManualPaymentTaskLedgerService ledgerService;
++    private final ContractorPaymentAccountingPhaseService accountingPhaseService;
++    private final ContractorPaymentTargetAccessPolicy targetAccessPolicy;
+@@
+-        List<ContractorPaymentProfile> profiles = profileRepository.findAllEnabledWithUser();
++        List<ContractorPaymentProfile> profiles = profileRepository.findAllEnabledWithUser().stream()
++                .filter(profile -> profile.getUser() != null
++                        && targetAccessPolicy.canManageUser(profile.getUser().getId()))
++                .toList();
+@@
+         if (manager == null || manager.getId() == null || manager.getUser() == null
+@@
+         }
++        if (taskId != null) {
++            ManualPaymentTask task = taskRepository.findByIdWithDetails(taskId)
++                    .orElseThrow(() -> new ResponseStatusException(
++                            HttpStatus.NOT_FOUND, "Платёжное задание не найдено"));
++            if (task.getManager() == null || !manager.getId().equals(task.getManager().getId())) {
++                throw new ResponseStatusException(
++                        HttpStatus.FORBIDDEN, "Можно просматривать только свои платёжные задания");
++            }
++        }
+@@
+-        ContractorPaymentProfile profile = profileRepository.findByIdForUpdate(profileId)
++        ContractorAllocationMode accountingMode = accountingPhaseService.lockCurrent();
++        ContractorPaymentProfile profile = profileRepository.findByIdForUpdate(profileId)
+                 .orElseThrow(() -> badRequest("Профиль получателя не найден"));
++        targetAccessPolicy.requireCanManageUser(
++                profile.getUser() == null ? null : profile.getUser().getId());
+@@
+-        long available = Math.max(0, profileService.available(profile, ContractorAllocationMode.LIVE));
++        long available = Math.max(0, profileService.available(profile, accountingMode));
+@@
+     private List<ManualPaymentTaskAccountingTargetOption> options(
+@@
+         result.add(option(ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK, null, target, 0));
+         result.add(option(ManualPaymentTaskAccountingTargetKind.OWNER, null, target, 0));
++        ContractorAllocationMode accountingMode = accountingPhaseService.current();
+         for (ContractorPaymentProfile profile : profiles) {
+-            long available = Math.max(0, profileService.available(profile, ContractorAllocationMode.LIVE));
++            long available = Math.max(0, profileService.available(profile, accountingMode));
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskService.java
+@@
+ import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
++import com.hunt.otziv.contractor_payments.service.ContractorPaymentAccountingPhaseService;
+@@
+     private final ContractorPaymentProfileService contractorPaymentProfileService;
++    private final ContractorPaymentAccountingPhaseService contractorPaymentAccountingPhaseService;
+@@
+         long available = Math.max(0,
+-                contractorPaymentProfileService.available(profile, ContractorAllocationMode.LIVE));
++                contractorPaymentProfileService.available(
++                        profile, contractorPaymentAccountingPhaseService.current()));
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskServiceTest.java
+@@
+ import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
++import com.hunt.otziv.contractor_payments.service.ContractorPaymentAccountingPhaseService;
+@@
+     private ContractorPaymentProfileService contractorPaymentProfileService;
++    @Mock
++    private ContractorPaymentAccountingPhaseService contractorPaymentAccountingPhaseService;
+@@
+                 accountingTargetPolicy,
+-                contractorPaymentProfileService
++                contractorPaymentProfileService,
++                contractorPaymentAccountingPhaseService
+         );
+*** End Patch

@@ -1,0 +1,103 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinatorTest.java
+@@
+ import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
+ import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
++import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
+@@
+     private final ContractorPaymentTargetAccessPolicy targetAccessPolicy =
+             mock(ContractorPaymentTargetAccessPolicy.class);
++    private final ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService =
++            mock(ManualPaymentTaskReceiptIntegrationService.class);
+@@
+                     ledgerService,
+                     managerResolver,
+-                    targetAccessPolicy
++                    targetAccessPolicy,
++                    taskReceiptIntegrationService
+             );
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionServiceTest.java
+@@
+         service.requireCompletedPaymentReplay(
+                 original,
+                 1_000L,
++                "PROFILE:" + manager.getId(),
+                 ContractorRecipientType.MANAGER,
+                 manager.getId(),
+@@
+         assertThatThrownBy(() -> service.requireCompletedPaymentReplay(
+                 original,
+                 1_000L,
++                "OWNER",
+                 ContractorRecipientType.OWNER,
+                 null,
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskServiceTest.java
+@@
+                         "Оплатить",
+                         100_000L,
+                         "current edit",
+-                        true
++                        true,
++                        null,
++                        null,
++                        false,
++                        1L
+                 ),
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+ import com.hunt.otziv.payments.model.ManualPaymentTaskStatus;
+@@
++import com.hunt.otziv.payments.repository.ManualPaymentTaskRepository;
+ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
++import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
+ import com.hunt.otziv.payments.service.ManualPaymentTaskService;
+@@
+     @Mock
+     private ManualPaymentTaskService manualPaymentTaskService;
+ 
++    @Mock
++    private ManualPaymentTaskReceiptIntegrationService taskReceiptIntegrationService;
++
++    @Mock
++    private ManualPaymentTaskRepository manualPaymentTaskRepository;
++
+     @Mock
+     private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+@@
+         verify(actualPaymentAttributionService, never()).freezePaymentLinkRecipientIntent(
+-                any(), any(), any(), any(), anyString(), any(), anyString()
++                any(), any(), any(), any(), any(), anyString(), any(), anyString()
+         );
+@@
+                 service.reportPaidByManualCardTransferForOrder(
+                         25072L, "Клиент перевёл напрямую", null,
+-                        ContractorRecipientType.OWNER, null, "manager@example.ru", authentication
++                        ContractorRecipientType.OWNER, null, "OWNER", "manager@example.ru", authentication
+                 ));
+@@
+         verify(actualPaymentAttributionService, never()).freezePaymentLinkRecipientIntent(
+-                any(), any(), any(), any(), anyString(), any(), anyString()
++                any(), any(), any(), any(), any(), anyString(), any(), anyString()
+         );
+@@
+                 service.reportPaidByManualCardTransferForOrder(
+                         25073L, "Клиент перевёл напрямую", null,
+-                        ContractorRecipientType.OWNER, null, "manager@example.ru", authentication
++                        ContractorRecipientType.OWNER, null, "OWNER", "manager@example.ru", authentication
+                 ));
+@@
+         verify(actualPaymentAttributionService, never()).freezePaymentLinkRecipientIntent(
+-                any(), any(), any(), any(), anyString(), any(), anyString()
++                any(), any(), any(), any(), any(), anyString(), any(), anyString()
+         );
+@@
+                 paymentSuccessNotificationDeliveryService,
+                 manualPaymentTaskService,
++                taskReceiptIntegrationService,
++                manualPaymentTaskRepository,
+                 paymentInvoiceRetryScheduler,
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskMigrationContractTest.java
+@@
+-        assertTrue(sql.contains("CONCAT('LEGACY-', invoice.id)"));
++        assertTrue(sql.contains("CONCAT('LEGACY-', invoice.invoice_id)"));
+*** End Patch

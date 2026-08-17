@@ -125,6 +125,12 @@ public class PaymentLinkArchiveRepository {
                     AND pl.payment_success_notified_at IS NULL
                     AND COALESCE(pl.payment_success_notification_retry_eligible, 0) = 1
                 )
+                OR EXISTS (
+                    SELECT 1
+                    FROM payment_link_return_reconciliation_outbox return_outbox
+                    WHERE return_outbox.payment_link_id = pl.id
+                      AND return_outbox.status <> 'SUCCEEDED'
+                )
             )
             """;
 

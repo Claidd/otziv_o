@@ -1,0 +1,93 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+-    void commonInvoiceRouteUsesActiveManualTaskInTbankLinkMode() {
++    void commonInvoiceFallbackNeverRediscoversLegacyTaskAfterEmptyLedgerReserve() {
+         PaymentLinkService service = service(properties());
+         Manager manager = manager("manager-task");
++        manager.setId(30L);
+         PaymentProfile profile = profile(3L, "manual", "Ручной профиль", "manual-terminal");
+         ManualPaymentTask task = new ManualPaymentTask();
+@@
+         when(paymentProfileService.toRuntime(profile)).thenReturn(new TbankPaymentProfile(
+@@
+         when(manualPaymentTaskService.findRoutableTask(manager, profile, 230_000L, null))
+                 .thenReturn(Optional.of(task));
++        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
++        com.hunt.otziv.common_billing.model.CommonInvoice invoice =
++                new com.hunt.otziv.common_billing.model.CommonInvoice();
++        invoice.setId(700L);
++        when(taskReceiptIntegrationService.reserveForCommonInvoice(
++                invoice, 30L, 3L, 230_000L)).thenReturn(Optional.empty());
+ 
++        assertTrue(service.selectCommonInvoiceTaskRoute(invoice, manager, 230_000L).isEmpty());
+         var route = service.selectCommonInvoiceRoute(manager, 230_000L);
+ 
+-        assertEquals(PaymentMethod.MANUAL_EXTERNAL_LINK.name(), route.routeType());
+-        assertEquals(ManualPaymentSource.MANUAL_TASK.name(), route.manualSource());
+-        assertEquals(77L, route.manualTaskId());
+-        assertEquals("https://pay.alfabank.ru/sc/common", route.manualPaymentUrl());
+-        assertTrue(route.instructionText().contains("Получатель"));
++        assertNotEquals(ManualPaymentSource.MANUAL_TASK.name(), route.manualSource());
++        assertNull(route.manualTaskId());
++        assertNull(route.manualTaskSourceGeneration());
++        assertNull(route.manualTaskGeneration());
++        assertNull(invoice.getPaymentRouteManualTaskSourceGeneration());
++        verify(manualPaymentTaskService, never())
++                .findRoutableTask(any(), any(), anyLong(), any());
++    }
++
++    @Test
++    void commonInvoiceTaskRouteIsNotReservedWhenTypedAccountingIsDisabled() {
++        PaymentLinkService service = service(properties());
++        Manager manager = manager("manager-disabled-task");
++        manager.setId(31L);
++        com.hunt.otziv.common_billing.model.CommonInvoice invoice =
++                new com.hunt.otziv.common_billing.model.CommonInvoice();
++        invoice.setId(701L);
++        invoice.setPaymentRouteManualTaskSourceGeneration("stale-generation");
++        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(false);
++
++        assertTrue(service.selectCommonInvoiceTaskRoute(invoice, manager, 10_000L).isEmpty());
++
++        assertNull(invoice.getPaymentRouteManualTaskSourceGeneration());
++        verifyNoInteractions(taskReceiptIntegrationService);
++        verify(paymentProfileService, never()).selectForManager(any());
+     }
+@@
+     void reportManualPaymentMarksLinkAsReportedWithoutConfirmingOrder() throws Exception {
+@@
+         verify(contractorPaymentShadowService).reconcilePaymentLinkId(140L);
+     }
++
++    @Test
++    void reportManualPaymentExpiresTaskRouteOnlyAfterReleasingItsReservation() {
++        PaymentLinkService service = service(properties());
++        PaymentLink link = new PaymentLink();
++        link.setId(142L);
++        link.setOrder(order(142L, "ООО Истекший резерв", BigDecimal.valueOf(500)));
++        link.setToken("expired-manual-task");
++        link.setAmountKopecks(50_000L);
++        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
++        link.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
++        link.setManualSource(ManualPaymentSource.MANUAL_TASK);
++        link.setManualTaskSourceGeneration("source-generation");
++        link.setManualTaskGeneration(4L);
++        link.setExpiresAt(LocalDateTime.now().minusMinutes(1));
++        when(paymentLinkRepository.findByTokenForUpdate(link.getToken())).thenReturn(Optional.of(link));
++
++        ResponseStatusException gone = assertThrows(
++                ResponseStatusException.class,
++                () -> service.reportManualPayment(link.getToken())
++        );
++
++        assertEquals(410, gone.getStatusCode().value());
++        assertEquals(PaymentLinkStatus.EXPIRED, link.getStatus());
++        assertEquals("source-generation", link.getManualTaskSourceGeneration());
++        assertEquals(4L, link.getManualTaskGeneration());
++        InOrder ordered = inOrder(taskReceiptIntegrationService, paymentLinkRepository);
++        ordered.verify(taskReceiptIntegrationService)
++                .release(link, "Срок действия платёжной ссылки истек");
++        verify(paymentLinkRepository, never()).save(link);
++    }
+*** End Patch

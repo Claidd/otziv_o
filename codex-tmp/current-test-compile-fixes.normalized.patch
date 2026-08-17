@@ -1,0 +1,14 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonBillingServiceTest.java
+@@
+-    void archivePreviewAndArchiveRejectCollectingInvoiceWithIssuedTaskRoute() {
++    void archivePreviewAndArchiveRejectCollectingInvoiceWithIssuedTaskRoute() throws Exception {
+@@
+-    void legacyPaidConfirmationRejectsIssuedManualTaskRouteWithoutClosingInvoice() {
++    void legacyPaidConfirmationRejectsIssuedManualTaskRouteWithoutClosingInvoice() throws Exception {
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinatorTest.java
+@@
+ import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.ArgumentMatchers.anyLong;
+ import static org.mockito.ArgumentMatchers.anyList;
+*** End Patch

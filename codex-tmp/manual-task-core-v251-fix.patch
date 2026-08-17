@@ -1,0 +1,68 @@
+*** Begin Patch
+*** Update File: backend/src/main/resources/db/migration/V1_10_251__manual_payment_task_accounting_ledger.sql
+@@
+        SELECT invoice.payment_route_manual_task_id AS task_id,
+                invoice.payment_route_amount_kopecks AS amount_kopecks
+@@
+           AND invoice.paid_kopecks >= invoice.amount_kopecks
++
++        UNION ALL
++
++        SELECT archived_link.manual_task_id AS task_id,
++               COALESCE(archived_link.confirmed_amount_kopecks,
++                        archived_link.reserved_amount_kopecks,
++                        archived_link.amount_kopecks) AS amount_kopecks
++        FROM archive_payment_links archived_link
++        WHERE archived_link.manual_task_id IS NOT NULL
++          AND archived_link.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK')
++          AND archived_link.status = 'CONFIRMED'
++          AND NOT EXISTS (
++              SELECT 1 FROM payment_links live_link WHERE live_link.id = archived_link.id
++          )
++
++        UNION ALL
++
++        SELECT archived_invoice.payment_route_manual_task_id AS task_id,
++               archived_invoice.payment_route_amount_kopecks AS amount_kopecks
++        FROM archive_common_invoices archived_invoice
++        WHERE archived_invoice.payment_route_manual_task_id IS NOT NULL
++          AND archived_invoice.payment_route_selected_at IS NOT NULL
++          AND archived_invoice.payment_route_amount_kopecks > 0
++          AND archived_invoice.paid_kopecks >= archived_invoice.amount_kopecks
++          AND archived_invoice.restored_at IS NULL
++          AND NOT EXISTS (
++              SELECT 1 FROM common_invoices live_invoice
++              WHERE live_invoice.invoice_id = archived_invoice.invoice_id
++          )
+     ) confirmed
+@@
+-       'Исторический получатель не проверен',
++       NULL,
+        task.manual_payment_type,
+-       task.manual_phone,
+-       task.manual_recipient_name,
+-       task.manual_payment_url,
++       NULL,
++       NULL,
++       NULL,
+@@
+-       'Получатель задания не привязан',
++       NULL,
+        COALESCE(link.manual_payment_type, task.manual_payment_type),
+-       COALESCE(link.manual_phone, task.manual_phone),
+-       COALESCE(link.manual_recipient_name, task.manual_recipient_name),
+-       COALESCE(link.manual_payment_url, task.manual_payment_url),
++       NULL,
++       NULL,
++       NULL,
+@@
+-       'Получатель задания не привязан',
++       NULL,
+        COALESCE(invoice.payment_route_manual_type, task.manual_payment_type),
+-       COALESCE(invoice.payment_route_manual_phone, task.manual_phone),
+-       COALESCE(invoice.payment_route_manual_recipient, task.manual_recipient_name),
+-       COALESCE(invoice.payment_route_manual_url, task.manual_payment_url),
++       NULL,
++       NULL,
++       NULL,
+*** End Patch

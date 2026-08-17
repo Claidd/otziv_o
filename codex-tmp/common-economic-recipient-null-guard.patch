@@ -1,0 +1,9 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinator.java
+@@
+         String key;
+         if (candidate.cashDestinationKind() == ContractorCashDestinationKind.MANUAL_PAYMENT_TASK) {
+-            key = switch (candidate.taskTargetKind()) {
++            key = candidate.taskTargetKind() == null ? "" : switch (candidate.taskTargetKind()) {
+                 case OWNER -> OWNER_KEY;
+*** End Patch

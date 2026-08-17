@@ -1,0 +1,39 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskServiceTest.java
+@@
+ import com.hunt.otziv.payments.model.ManualPaymentTask;
++import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
+@@
+ import com.hunt.otziv.payments.service.ManualPaymentTaskAccountingTargetPolicy;
++import com.hunt.otziv.payments.service.ManualPaymentTaskAccountingTargetPolicy.TargetResolution;
+@@
+         when(taskRepository.save(any(ManualPaymentTask.class)))
+                 .thenAnswer(invocation -> invocation.getArgument(0));
++        org.mockito.Mockito.lenient().when(ledgerService.balance(71L))
++                .thenReturn(com.hunt.otziv.payments.dto.ManualPaymentTaskBalance.empty(false));
++        org.mockito.Mockito.lenient().when(accountingTargetPolicy.resolveForManagement(
++                        org.mockito.ArgumentMatchers.eq(ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK.name()),
++                        org.mockito.ArgumentMatchers.isNull(),
++                        org.mockito.ArgumentMatchers.eq(100_000L),
++                        org.mockito.ArgumentMatchers.anyBoolean(),
++                        org.mockito.ArgumentMatchers.eq(71L)))
++                .thenReturn(new TargetResolution(
++                        ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK,
++                        null,
++                        "Получатель задания",
++                        0,
++                        0,
++                        false
++                ));
+@@
+         task.setStatus(ManualPaymentTaskStatus.ACTIVE);
++        task.setGeneration(1);
++        task.setAccountingTargetKind(ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK);
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskLedgerService.java
+@@
+                 || entry.getReservedDeltaKopecks() != command.amountKopecks()
+                 || !entry.getOperationKey().equals(normalize(command.operationKey()))
+-                || !sameSource(entry, command.source())) {
++                || !sameSource(entry, command.source())
++                || !normalize(entry.getActor()).equals(defaultActor(command.actor()))) {
+*** End Patch

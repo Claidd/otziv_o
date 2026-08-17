@@ -172,6 +172,177 @@ public interface ContractorPaymentAllocationRepository extends JpaRepository<Con
             @Param("mode") String mode
     );
 
+    /** Reporting/preview snapshot; write decisions must use capacityTotalsForUpdate. */
+    @Query(value = """
+        SELECT
+            COALESCE(SUM(GREATEST(0, allocation.confirmed_kopecks)), 0) AS confirmedKopecks,
+            COALESCE(SUM(GREATEST(0, allocation.returned_kopecks)), 0) AS returnedKopecks,
+            COALESCE(SUM(
+                CASE
+                    WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                        THEN GREATEST(
+                            0,
+                            allocation.amount_kopecks
+                                - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+                        )
+                    ELSE 0
+                END
+            ), 0) AS outstandingKopecks
+        FROM contractor_payment_allocations allocation
+        WHERE allocation.recipient_profile_id = :profileId
+          AND allocation.mode = :mode
+    """, nativeQuery = true)
+    CapacityTotals capacityTotalsSnapshot(
+            @Param("profileId") Long profileId,
+            @Param("mode") String mode
+    );
+
+    /**
+     * Task exposure persisted in the other accounting phase is not present in
+     * the current phase capacity position. Keep it reserved explicitly after
+     * the irreversible SHADOW -> LIVE promotion.
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(
+            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+            + CASE
+                WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                    THEN GREATEST(
+                        0,
+                        allocation.amount_kopecks
+                            - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+                    )
+                ELSE 0
+              END
+        ), 0)
+        FROM contractor_payment_allocations allocation
+        WHERE allocation.recipient_profile_id = :profileId
+          AND allocation.manual_payment_task_id IS NOT NULL
+          AND allocation.mode <> :mode
+        FOR UPDATE
+    """, nativeQuery = true)
+    long taskCapacityExposureOutsideModeForUpdate(
+            @Param("profileId") Long profileId,
+            @Param("mode") String mode
+    );
+
+    @Query(value = """
+        SELECT COALESCE(SUM(
+            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+            + CASE
+                WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                    THEN GREATEST(
+                        0,
+                        allocation.amount_kopecks
+                            - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+                    )
+                ELSE 0
+              END
+        ), 0)
+        FROM contractor_payment_allocations allocation
+        WHERE allocation.recipient_profile_id = :profileId
+          AND allocation.manual_payment_task_id IS NOT NULL
+          AND allocation.mode <> :mode
+    """, nativeQuery = true)
+    long taskCapacityExposureOutsideModeSnapshot(
+            @Param("profileId") Long profileId,
+            @Param("mode") String mode
+    );
+
+    @Query(value = """
+        SELECT COALESCE(SUM(
+            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+            + CASE
+                WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                    THEN GREATEST(
+                        0,
+                        allocation.amount_kopecks
+                            - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+                    )
+                ELSE 0
+              END
+        ), 0)
+        FROM contractor_payment_allocations allocation
+        WHERE allocation.recipient_profile_id = :profileId
+          AND allocation.manual_payment_task_id = :taskId
+          AND allocation.mode <> :mode
+        FOR UPDATE
+    """, nativeQuery = true)
+    long taskCapacityExposureOutsideModeForUpdate(
+            @Param("profileId") Long profileId,
+            @Param("taskId") Long taskId,
+            @Param("mode") String mode
+    );
+
+    @Query(value = """
+        SELECT COALESCE(SUM(
+            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+            + CASE
+                WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                    THEN GREATEST(
+                        0,
+                        allocation.amount_kopecks
+                            - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+                    )
+                ELSE 0
+              END
+        ), 0)
+        FROM contractor_payment_allocations allocation
+        WHERE allocation.recipient_profile_id = :profileId
+          AND allocation.manual_payment_task_id = :taskId
+          AND allocation.mode <> :mode
+    """, nativeQuery = true)
+    long taskCapacityExposureOutsideModeSnapshot(
+            @Param("profileId") Long profileId,
+            @Param("taskId") Long taskId,
+            @Param("mode") String mode
+    );
+
+    @Query(value = """
+        SELECT COALESCE(SUM(
+            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+            + CASE
+                WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                    THEN GREATEST(
+                        0,
+                        allocation.amount_kopecks
+                            - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+                    )
+                ELSE 0
+              END
+        ), 0)
+        FROM contractor_payment_allocations allocation
+        WHERE allocation.recipient_profile_id = :profileId
+          AND allocation.manual_payment_task_id = :taskId
+        FOR UPDATE
+    """, nativeQuery = true)
+    long taskCapacityExposureAllModesForUpdate(
+            @Param("profileId") Long profileId,
+            @Param("taskId") Long taskId
+    );
+
+    @Query(value = """
+        SELECT COALESCE(SUM(
+            GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+            + CASE
+                WHEN allocation.status IN ('RESERVED', 'CLIENT_REPORTED', 'PARTIALLY_CONFIRMED')
+                    THEN GREATEST(
+                        0,
+                        allocation.amount_kopecks
+                            - GREATEST(0, allocation.confirmed_kopecks - allocation.returned_kopecks)
+                    )
+                ELSE 0
+              END
+        ), 0)
+        FROM contractor_payment_allocations allocation
+        WHERE allocation.recipient_profile_id = :profileId
+          AND allocation.manual_payment_task_id = :taskId
+    """, nativeQuery = true)
+    long taskCapacityExposureAllModesSnapshot(
+            @Param("profileId") Long profileId,
+            @Param("taskId") Long taskId
+    );
+
     /**
      * Counts every invoice-routing attempt made during the business day,
      * including attempts later released, canceled, expired or returned. This
@@ -293,7 +464,18 @@ public interface ContractorPaymentAllocationRepository extends JpaRepository<Con
         SELECT a
         FROM ContractorPaymentAllocation a
         WHERE a.mode = :mode
-          AND a.sourceType = com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType.PAYMENT_LINK
+          AND (
+              a.sourceType = com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType.PAYMENT_LINK
+              OR (
+                  a.sourceType = com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType.ACTUAL_PAYMENT
+                  AND EXISTS (
+                      SELECT attribution.id
+                      FROM ContractorActualPaymentAttribution attribution
+                      WHERE attribution.id = a.sourceId
+                        AND attribution.sourceKind = com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind.PAYMENT_LINK
+                  )
+              )
+          )
           AND a.status IN :statuses
           AND (a.reconcileLeaseUntil IS NULL OR a.reconcileLeaseUntil < :now)
           AND (a.reconcileNextRetryAt IS NULL OR a.reconcileNextRetryAt <= :now)
@@ -313,7 +495,17 @@ public interface ContractorPaymentAllocationRepository extends JpaRepository<Con
                   SELECT link.id
                   FROM PaymentLink link
                   WHERE link.id = a.sourceId
+                    AND a.sourceType = com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType.PAYMENT_LINK
                     AND (a.lastReconciledAt IS NULL OR link.updatedAt > a.lastReconciledAt)
+              )
+              OR EXISTS (
+                  SELECT attribution.id
+                  FROM ContractorActualPaymentAttribution attribution, PaymentLink actualLink
+                  WHERE a.sourceType = com.hunt.otziv.contractor_payments.model.ContractorAllocationSourceType.ACTUAL_PAYMENT
+                    AND attribution.id = a.sourceId
+                    AND attribution.sourceKind = com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind.PAYMENT_LINK
+                    AND actualLink.id = attribution.sourceId
+                    AND (a.lastReconciledAt IS NULL OR actualLink.updatedAt > a.lastReconciledAt)
               )
           )
         ORDER BY

@@ -1,0 +1,15 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ManualPaymentTaskContractorReturnBridgeTest.java
+@@
+     void legacyPaymentLinkFullRefundUsesExactUnverifiedSourceBaseline() {
+         PaymentLink link = paymentLink(128L);
++        link.setManualTaskGeneration(null);
++        link.setManualTaskSourceGeneration(null);
+         link.setAmountKopecks(AMOUNT);
+@@
+     void legacyPaymentLinkFullRefundReplayIsNoOpAtCumulativeTotal() {
+         PaymentLink link = paymentLink(128L);
++        link.setManualTaskGeneration(null);
++        link.setManualTaskSourceGeneration(null);
+         link.setAmountKopecks(AMOUNT);
+*** End Patch

@@ -1,0 +1,108 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/controller/AdminPaymentControllerTest.java
+@@
+         verify(paymentLinkService).reportPaidByManualCardTransferForOrder(
+                 25047L,
+                 request.reason(),
++                null,
++                null,
++                null,
++                null,
+                 "manager@example.ru",
+                 authentication
+         );
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskAccountingLedgerMigrationContractTest.java
+@@
+-                "'UNRESOLVED',\n       NULL,\n       NULL,\n       task.manual_payment_type,\n       NULL,\n       NULL,\n       NULL",
++                "'UNRESOLVED',\n       NULL,\n       NULL,\n       COALESCE(confirmed.manual_payment_type, task.manual_payment_type),\n       NULL,\n       NULL,\n       NULL",
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
+@@
+-        ordered.verify(paymentLinkRepository).expireManualLinks(
++        ordered.verify(paymentLinkRepository).findExpiredManualLinksForUpdate(
+                 anyCollection(),
+                 anyCollection(),
+-                eq(PaymentLinkStatus.EXPIRED),
+-                anyString(),
+                 any(LocalDateTime.class)
+         );
+@@
+-        verify(paymentLinkRepository).save(captor.capture());
++        verify(paymentLinkRepository, times(2)).save(captor.capture());
+         assertEquals("last@example.ru", captor.getValue().getPayerEmail());
+@@
+-        verify(paymentLinkRepository).save(captor.capture());
++        verify(paymentLinkRepository, times(2)).save(captor.capture());
+         assertEquals(TbankPaymentProfile.SECONDARY_CODE, captor.getValue().getPaymentProfileCode());
+@@
+-        verify(paymentLinkRepository).save(captor.capture());
++        verify(paymentLinkRepository, times(2)).save(captor.capture());
+         PaymentLink link = captor.getValue();
+         assertEquals(PaymentMethod.MANUAL_MOBILE_BANK, link.getPaymentMethod());
+@@
+-        verify(paymentLinkRepository).save(captor.capture());
++        verify(paymentLinkRepository, times(2)).save(captor.capture());
+         PaymentLink link = captor.getValue();
+         assertEquals(PaymentMethod.MANUAL_EXTERNAL_LINK, link.getPaymentMethod());
+@@
+-        verify(paymentLinkRepository).save(captor.capture());
++        verify(paymentLinkRepository, times(2)).save(captor.capture());
+         PaymentLink link = captor.getValue();
+         assertEquals(PaymentMethod.BANK_FORM, link.getPaymentMethod());
+@@
+-        verify(paymentLinkRepository).save(captor.capture());
++        verify(paymentLinkRepository, times(2)).save(captor.capture());
+         PaymentLink link = captor.getValue();
+         assertEquals(PaymentMethod.MANUAL_MOBILE_BANK, link.getPaymentMethod());
+@@
+-        verify(paymentLinkRepository, times(2)).save(captor.capture());
++        verify(paymentLinkRepository, times(3)).save(captor.capture());
+         assertSame(existing, captor.getAllValues().get(0));
+-        assertEquals(125000L, captor.getAllValues().get(1).getAmountKopecks());
++        assertEquals(125000L, captor.getAllValues().getLast().getAmountKopecks());
+@@
+-        verify(paymentLinkRepository).save(any(PaymentLink.class));
++        verify(paymentLinkRepository, times(2)).save(any(PaymentLink.class));
+     }
+@@
+-        verify(paymentLinkRepository).save(any(PaymentLink.class));
++        verify(paymentLinkRepository, times(2)).save(any(PaymentLink.class));
+     }
+@@
+-        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
++        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+         verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/repository/PaymentLinkArchiveMySqlIntegrationTest.java
+@@
+     private void initializeSchema(DataSource dataSource) {
+         JdbcTemplate setup = new JdbcTemplate(dataSource);
++        setup.execute("DROP TABLE IF EXISTS payment_link_return_reconciliation_outbox");
++        setup.execute("DROP TABLE IF EXISTS contractor_actual_payment_attributions");
+         setup.execute("DROP TABLE IF EXISTS payment_success_notification_retry_claims");
+@@
+         setup.execute("""
+                 CREATE TABLE contractor_payment_allocation_events (
+@@
+                 ) ENGINE=InnoDB
+                 """);
++        setup.execute("""
++                CREATE TABLE contractor_actual_payment_attributions (
++                    id BIGINT NOT NULL AUTO_INCREMENT,
++                    source_kind VARCHAR(32) NOT NULL,
++                    source_id BIGINT NOT NULL,
++                    evidence_id BIGINT NULL,
++                    PRIMARY KEY (id),
++                    KEY idx_test_actual_payment_source (source_kind, source_id, evidence_id)
++                ) ENGINE=InnoDB
++                """);
++        setup.execute("""
++                CREATE TABLE payment_link_return_reconciliation_outbox (
++                    id BIGINT NOT NULL AUTO_INCREMENT,
++                    payment_link_id BIGINT NOT NULL,
++                    status VARCHAR(32) NOT NULL,
++                    PRIMARY KEY (id),
++                    KEY idx_test_return_outbox_source (payment_link_id, status)
++                ) ENGINE=InnoDB
++                """);
+         setup.execute("""
+                 CREATE TABLE archive_payment_links (
+*** End Patch

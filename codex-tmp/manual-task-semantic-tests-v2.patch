@@ -1,0 +1,261 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskLedgerServiceTest.java
+@@
+ import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.verify;
+ import static org.mockito.Mockito.when;
+@@
+ import com.hunt.otziv.payments.dto.ManualPaymentTaskReserveCommand;
++import com.hunt.otziv.payments.dto.ManualPaymentTaskSettlementCommand;
+ import com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef;
+@@
+        assertThat(balance.unverifiedConfirmedAmountKopecks()).isEqualTo(100_000);
+        assertThat(balance.needsReconciliation()).isTrue();
+    }
++
++    @Test
++    void migratedBaselineCountsTowardCompletionAfterVerifiedSettlement() {
++        ManualPaymentTask task = task(16L, ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK);
++        task.setTargetAmountKopecks(100_000L);
++        ManualPaymentTaskSourceRef source = new ManualPaymentTaskSourceRef(
++                ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 78L, "route-78");
++        ManualPaymentTaskLedgerEntry baseline = entry(
++                task, ManualPaymentTaskLedgerEventType.LEGACY_BASELINE, 0, 90_000, false, 0);
++        baseline.setSourceKind(ManualPaymentTaskLedgerSourceKind.LEGACY_TASK_BASELINE);
++        ManualPaymentTaskLedgerEntry reserve = entry(
++                task, ManualPaymentTaskLedgerEventType.RESERVED, 10_000, 0, true, 0);
++        reserve.setSourceId(78L);
++        reserve.setSourceGeneration("route-78");
++        reserve.setSelectedRecipientKey("TASK:16:1");
++        ManualPaymentTaskLedgerEntry confirmed = entry(
++                task, ManualPaymentTaskLedgerEventType.CONFIRMED_TO_TASK, -10_000, 10_000, true, 0);
++        confirmed.setSourceId(78L);
++        confirmed.setSourceGeneration("route-78");
++        when(taskRepository.findByIdForUpdate(16L)).thenReturn(Optional.of(task));
++        when(taskRepository.findById(16L)).thenReturn(Optional.of(task));
++        when(ledgerRepository.findAllByOperationKeyOrderByOperationSequence("settle-78"))
++                .thenReturn(List.of());
++        when(ledgerRepository.findSourceHistoryNewestFirst(
++                ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 78L, "route-78"))
++                .thenReturn(List.of(reserve));
++        when(ledgerRepository.findAllByTaskIdOrderById(16L))
++                .thenReturn(List.of(baseline, reserve, confirmed));
++        when(ledgerRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
++
++        service.settle(new ManualPaymentTaskSettlementCommand(
++                16L, 1L, source, "TASK:16:1", 10_000L, 10_000L,
++                "settle-78", "manager", "Оплачено"));
++
++        assertThat(task.getStatus()).isEqualTo(ManualPaymentTaskStatus.COMPLETED);
++        assertThat(task.getCompletedAt()).isNotNull();
++        verify(taskRepository).save(task);
++    }
+ 
+    private ManualPaymentTask task(Long id, ManualPaymentTaskAccountingTargetKind kind) {
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/ManualPaymentTaskServiceTest.java
+@@
+ import static org.junit.jupiter.api.Assertions.assertFalse;
++import static org.junit.jupiter.api.Assertions.assertThrows;
+ import static org.junit.jupiter.api.Assertions.assertTrue;
+ import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.inOrder;
++import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.verify;
+ import static org.mockito.Mockito.when;
+@@
+ import com.hunt.otziv.contractor_payments.service.ContractorPaymentAccountingPhaseService;
++import com.hunt.otziv.payments.dto.ManualPaymentTaskBalance;
+ import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskRequest;
+@@
+ import org.junit.jupiter.api.extension.ExtendWith;
++import org.mockito.InOrder;
+ import org.mockito.Mock;
+ import org.mockito.junit.jupiter.MockitoExtension;
++import org.springframework.http.HttpStatus;
++import org.springframework.web.server.ResponseStatusException;
+@@
+        assertEquals("https://pay.example/replacement", response.manualPaymentUrl());
+        assertTrue(response.routable());
+    }
++
++    @Test
++    void migratedBaselineCountsTowardServiceCompletionThreshold() {
++        ManualPaymentTask task = unsafeExternalTask();
++        task.setTargetAmountKopecks(100_000L);
++        when(taskRepository.findByIdWithDetailsForUpdate(71L)).thenReturn(Optional.of(task));
++        when(ledgerService.balance(71L)).thenReturn(new ManualPaymentTaskBalance(
++                0, 100_000L, 100_000L, 0, 0, 0, 90_000L, 0, 1, true));
++
++        service.completeIfConfirmedTargetReached(task);
++
++        assertEquals(ManualPaymentTaskStatus.COMPLETED, task.getStatus());
++        verify(taskRepository).save(task);
++    }
++
++    @Test
++    void destinationChangeWithPendingMoneyIsRejectedAfterPhaseThenTaskLocks() {
++        ManualPaymentTask task = unsafeExternalTask();
++        when(taskRepository.findByIdWithDetailsForUpdate(71L)).thenReturn(Optional.of(task));
++        when(ledgerService.balance(71L)).thenReturn(new ManualPaymentTaskBalance(
++                10_000L, 0, 10_000L, 0, 0, 0, 0, 1, 0, false));
++        when(accountingTargetPolicy.resolveForManagement(
++                ManualPaymentTaskAccountingTargetKind.OWNER.name(), null, 100_000L,
++                false, 71L)).thenReturn(new TargetResolution(
++                ManualPaymentTaskAccountingTargetKind.OWNER, null, "Владелец",
++                0, 0, false));
++        UpdateManualPaymentTaskRequest request = new UpdateManualPaymentTaskRequest(
++                ManualPaymentType.EXTERNAL_LINK.name(), "", "Получатель",
++                "https://pay.example/current", "Оплатить", 100_000L, "change target",
++                true, ManualPaymentTaskAccountingTargetKind.OWNER.name(), null, false, 1L);
++
++        ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
++                service.updateManagementTask(71L, request, "admin"));
++
++        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
++        verify(taskRepository, never()).save(task);
++        InOrder locks = inOrder(contractorPaymentAccountingPhaseService, taskRepository);
++        locks.verify(contractorPaymentAccountingPhaseService).lockCurrent();
++        locks.verify(taskRepository).findByIdWithDetailsForUpdate(71L);
++    }
+ 
+    private ManualPaymentTask unsafeExternalTask() {
+*** Update File: backend/src/test/java/com/hunt/otziv/common_billing/service/CommonManualPaymentAttributionCoordinatorTest.java
+@@
+ import static org.mockito.Mockito.never;
++import static org.mockito.Mockito.inOrder;
+ import static org.mockito.Mockito.verify;
+@@
+ import java.util.List;
+ import org.junit.jupiter.api.Test;
++import org.mockito.InOrder;
+ import org.springframework.http.HttpStatus;
+@@
+        when(existing.getReason()).thenReturn("Ручная сверка");
+        when(existing.getReceiptUrl()).thenReturn(null);
++        when(existing.getActor()).thenReturn("original-manager");
+        when(attributionRepository.findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
+@@
+        );
+ 
+        assertTrue(replayed);
+-        verify(attributionService).requireFinalAttributionsAccountingApplied(
+-                ContractorActualPaymentSourceKind.COMMON_INVOICE,
+-                91L
+-        );
++        InOrder order = inOrder(attributionService, taskReceiptIntegrationService);
++        order.verify(attributionService).lockEnabledAccountingMode();
++        order.verify(taskReceiptIntegrationService).settle(
++                invoice,
++                "SPLIT:batch-91",
++                0L,
++                "TASK:SETTLE:COMMON_INVOICE:91:batch-91",
++                "original-manager",
++                "Ручная сверка"
++        );
++        order.verify(attributionService).requireFinalAttributionsAccountingApplied(
++                ContractorActualPaymentSourceKind.COMMON_INVOICE, 91L);
+    }
+ }
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionServiceTest.java
+@@
+ import com.hunt.otziv.contractor_payments.model.ContractorAllocationStatus;
++import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
+ import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
+@@
+ import com.hunt.otziv.p_products.model.Order;
++import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
+ import com.hunt.otziv.payments.model.PaymentLink;
+@@
+        original.setAmountKopecks(1_000L);
+        original.setManualActualAccountingMode(ContractorAllocationMode.SHADOW);
++        original.setManualActualOriginalCashDestinationKind(ContractorCashDestinationKind.OWNER);
+        original.setManualActualOriginalRecipientType(ContractorRecipientType.OWNER);
+        original.setManualActualOriginalRecipientNameSnapshot("Владелец");
++        original.setManualActualCashDestinationKind(ContractorCashDestinationKind.CONTRACTOR_PROFILE);
+        original.setManualActualRecipientType(ContractorRecipientType.MANAGER);
+@@
+        )).isInstanceOf(ResponseStatusException.class);
+    }
++
++    @Test
++    void externalTaskFinalizesAuditsAndReplaysWithoutFakeOwnerIdentity() {
++        Order order = new Order();
++        order.setId(ORDER_ID);
++        PaymentLink original = new PaymentLink();
++        original.setId(SOURCE_ID);
++        original.setOrder(order);
++        original.setAmountKopecks(2_500L);
++        original.setManualActualAccountingMode(ContractorAllocationMode.LIVE);
++        original.setManualActualOriginalCashDestinationKind(ContractorCashDestinationKind.MANUAL_PAYMENT_TASK);
++        original.setManualActualOriginalTaskId(16L);
++        original.setManualActualOriginalTaskGeneration(3L);
++        original.setManualActualOriginalTaskTargetKind(ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK);
++        original.setManualActualOriginalRecipientNameSnapshot("Наталья");
++        original.setManualActualCashDestinationKind(ContractorCashDestinationKind.MANUAL_PAYMENT_TASK);
++        original.setManualActualTaskId(16L);
++        original.setManualActualTaskGeneration(3L);
++        original.setManualActualTaskTargetKind(ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK);
++        original.setManualActualRecipientNameSnapshot("Наталья");
++        original.setManualActualReason("Клиент оплатил внешнему получателю задания");
++        original.setManualActualActor("manager@example.ru");
++        original.setManualActualRecipientFrozenAt(EFFECTIVE_AT.minusMinutes(1));
++        PaymentLink evidence = new PaymentLink();
++        evidence.setId(601L);
++        evidence.setAmountKopecks(2_500L);
++        evidence.setPaidAt(EFFECTIVE_AT);
++
++        ContractorActualPaymentAttribution row = service.recordPaymentLinkFinalAttribution(
++                order, original, evidence);
++
++        assertThat(row.getOriginalRecipientType()).isNull();
++        assertThat(row.getActualRecipientType()).isNull();
++        assertThat(row.getActualCashDestinationKind())
++                .isEqualTo(ContractorCashDestinationKind.MANUAL_PAYMENT_TASK);
++        assertThat(row.getActualManualPaymentTaskId()).isEqualTo(16L);
++        verify(businessAuditService).recordRequiredInCurrentTransaction(
++                anyString(), anyString(), any(), any(), any(), any(), any(), anyString());
++
++        service.requireCompletedPaymentReplay(
++                original, 2_500L, "TASK:16:3", null, null,
++                "Клиент оплатил внешнему получателю задания", null);
++        assertThat(actualAllocations()).isEmpty();
++    }
+ 
+    private ContractorActualPaymentAttribution record(
+*** Update File: backend/src/main/java/com/hunt/otziv/contractor_payments/model/ContractorActualPaymentAttribution.java
+@@
+    @Enumerated(EnumType.STRING)
+-    @Column(name = "original_recipient_type", nullable = false, length = 24, updatable = false)
++    @Column(name = "original_recipient_type", length = 24, updatable = false)
+    private ContractorRecipientType originalRecipientType;
+@@
+    @Enumerated(EnumType.STRING)
+-    @Column(name = "actual_recipient_type", nullable = false, length = 24, updatable = false)
++    @Column(name = "actual_recipient_type", length = 24, updatable = false)
+    private ContractorRecipientType actualRecipientType;
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskMigrationContractTest.java
+@@
++import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentAttribution;
++import jakarta.persistence.Column;
+ import java.nio.file.Files;
+@@
+        assertTrue(sql.contains("CONCAT('LEGACY-', invoice.invoice_id)"));
+        assertTrue(sql.contains("invoice.payment_route_manual_task_generation = task.generation"));
++        assertTrue(sql.contains("MODIFY COLUMN original_recipient_type VARCHAR(24) NULL"));
++        assertTrue(sql.contains("MODIFY COLUMN actual_recipient_type VARCHAR(24) NULL"));
+        assertTrue(sql.contains("JOIN manual_payment_tasks task"));
+        assertFalse(sql.toLowerCase().contains("alter table payment_link_archive"));
+    }
++
++    @Test
++    void externalTaskRecipientTypesAreNullableInJpaMapping() throws Exception {
++        Column original = ContractorActualPaymentAttribution.class
++                .getDeclaredField("originalRecipientType").getAnnotation(Column.class);
++        Column actual = ContractorActualPaymentAttribution.class
++                .getDeclaredField("actualRecipientType").getAnnotation(Column.class);
++
++        assertTrue(original.nullable());
++        assertTrue(actual.nullable());
+    }
+ }
+*** End Patch

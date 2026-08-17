@@ -75,6 +75,10 @@ public class CommonInvoiceOrder {
     @Column(name = "manual_payment_receipt_url", length = 1024)
     private String manualPaymentReceiptUrl;
 
+    /** Immutable V250+ typed receipt batch that settled this invoice item. */
+    @Column(name = "actual_payment_evidence_reference", length = 160)
+    private String actualPaymentEvidenceReference;
+
     /**
      * Moment when this position first became a pre-publication outlier while at
      * least one sibling position had already reached publication. The value is

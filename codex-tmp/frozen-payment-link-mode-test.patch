@@ -1,0 +1,33 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionServiceTest.java
+@@
+     @Test
+     void frozenPaymentLinkFinalizesAfterShadowFlagIsDisabledAndReplaysExactly() {
+-        when(accountingPhaseService.lockCurrent()).thenReturn(ContractorAllocationMode.SHADOW);
++        when(accountingPhaseService.lockCurrent()).thenReturn(ContractorAllocationMode.LIVE);
+@@
+         assertThatThrownBy(() -> service.requireCompletedPaymentReplay(
+                 original,
+                 1_000L,
+@@
+                 "Клиент перевёл менеджеру",
+                 null
+         )).isInstanceOf(ResponseStatusException.class);
++
++        ReflectionTestUtils.setField(
++                row, "accountingMode", ContractorAllocationMode.LIVE);
++        assertThatThrownBy(() -> service.requireCompletedPaymentReplay(
++                original,
++                1_000L,
++                "MANAGER:" + manager.getId(),
++                ContractorRecipientType.MANAGER,
++                manager.getId(),
++                "Клиент перевёл менеджеру",
++                null
++        )).isInstanceOf(ResponseStatusException.class)
++                .satisfies(failure -> assertThat(
++                        ((ResponseStatusException) failure).getStatusCode().value())
++                        .isEqualTo(409))
++                .hasMessageContaining("Режим учёта");
+     }
+*** End Patch

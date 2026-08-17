@@ -1,0 +1,69 @@
+*** Begin Patch
+*** Update File: backend/src/main/resources/db/migration/V1_10_251__manual_payment_task_accounting_ledger.sql
+@@
+-       COALESCE(link.reserved_amount_kopecks, link.amount_kopecks),
++       COALESCE(link.confirmed_amount_kopecks,
++                link.reserved_amount_kopecks,
++                link.amount_kopecks),
+@@
+-  AND COALESCE(link.reserved_amount_kopecks, link.amount_kopecks) > 0;
++  AND COALESCE(link.confirmed_amount_kopecks,
++               link.reserved_amount_kopecks,
++               link.amount_kopecks) > 0;
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskAccountingTargetPolicy.java
+@@
+     public TargetResolution resolveForManagement(
+             String kindValue,
+             Long profileId,
+             long targetAmountKopecks,
+-            boolean overrunAcknowledged
++            boolean overrunAcknowledged,
++            Long existingTaskId
+     ) {
+-        return resolve(null, null, kindValue, profileId, targetAmountKopecks, overrunAcknowledged);
++        return resolve(null, null, kindValue, profileId, targetAmountKopecks,
++                overrunAcknowledged, existingTaskId);
+@@
+             String kindValue,
+             Long profileId,
+             long targetAmountKopecks,
+-            boolean overrunAcknowledged
++            boolean overrunAcknowledged,
++            Long existingTaskId
+@@
+-        return resolve(manager, allowed, kindValue, profileId, targetAmountKopecks, overrunAcknowledged);
++        return resolve(manager, allowed, kindValue, profileId, targetAmountKopecks,
++                overrunAcknowledged, existingTaskId);
+@@
+             Long profileId,
+             long targetAmountKopecks,
+-            boolean overrunAcknowledged
++            boolean overrunAcknowledged,
++            Long existingTaskId
+@@
+         long available = Math.max(0, profileService.available(profile, accountingMode));
++        available = addOwnPendingExposure(available, profile, existingTaskId);
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskService.java
+@@
+                         request == null ? null : request.accountingTargetProfileId(),
+                         targetAmountKopecks,
+-                        request != null && Boolean.TRUE.equals(request.accountingTargetOverrunAcknowledged()))
++                        request != null && Boolean.TRUE.equals(request.accountingTargetOverrunAcknowledged()),
++                        null)
+                 : accountingTargetPolicy.resolveForManagement(
+@@
+                         request == null ? null : request.accountingTargetProfileId(),
+                         targetAmountKopecks,
+-                        request != null && Boolean.TRUE.equals(request.accountingTargetOverrunAcknowledged()));
++                        request != null && Boolean.TRUE.equals(request.accountingTargetOverrunAcknowledged()),
++                        null);
+@@
+                 ? accountingTargetPolicy.resolveForManager(
+                         task.getManager(), effectiveKind, effectiveProfileId,
+-                        targetAmountKopecks, acknowledged)
++                        targetAmountKopecks, acknowledged, task.getId())
+                 : accountingTargetPolicy.resolveForManagement(
+-                        effectiveKind, effectiveProfileId, targetAmountKopecks, acknowledged);
++                        effectiveKind, effectiveProfileId, targetAmountKopecks,
++                        acknowledged, task.getId());
+*** End Patch

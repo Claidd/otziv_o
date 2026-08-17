@@ -53,6 +53,9 @@ public class ContractorPaymentAllocation {
     @Column(name = "common_invoice_id")
     private Long commonInvoiceId;
 
+    @Column(name = "manual_payment_task_id")
+    private Long manualPaymentTaskId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "recipient_type", nullable = false, length = 24)
     private ContractorRecipientType recipientType;
@@ -143,6 +146,24 @@ public class ContractorPaymentAllocation {
 
     @Column(name = "available_before_kopecks")
     private Long availableBeforeKopecks;
+
+    @Column(name = "task_capacity_position_before_kopecks")
+    private Long taskCapacityPositionBeforeKopecks;
+
+    @Column(name = "task_capacity_commitment_before_kopecks")
+    private Long taskCapacityCommitmentBeforeKopecks;
+
+    @Column(name = "task_capacity_projected_overrun_kopecks")
+    private Long taskCapacityProjectedOverrunKopecks;
+
+    @Column(name = "task_capacity_acknowledged_kopecks")
+    private Long taskCapacityAcknowledgedKopecks;
+
+    @Column(name = "task_capacity_acknowledged_at")
+    private LocalDateTime taskCapacityAcknowledgedAt;
+
+    @Column(name = "task_capacity_acknowledged_by", length = 160)
+    private String taskCapacityAcknowledgedBy;
 
     @Column(name = "reserved_at")
     private LocalDateTime reservedAt;

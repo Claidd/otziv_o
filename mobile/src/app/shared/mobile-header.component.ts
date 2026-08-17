@@ -12,6 +12,7 @@ import {
 import { MobileThemeMode, MobileThemeService } from './mobile-theme.service';
 import { ManagerReportReviewAccessService } from '../core/manager-report-review-access.service';
 import { MobileConfirmService } from './mobile-confirm.service';
+import { MobileAuthDiagnosticsService, type MobileAuthDiagnosticValue } from '../core/mobile-auth-diagnostics.service';
 
 interface MobileHeaderLink {
   label: string;
@@ -36,6 +37,9 @@ const HEADER_LINKS: MobileHeaderLink[] = [
   { label: 'WhatsApp', icon: 'qr_code_2', path: '/tabs/whatsapp', roles: ['MANAGER'] },
   { label: 'Профиль', icon: 'account_circle', path: '/tabs/profile', roles: rolesForAction(MOBILE_SECTIONS.home, MOBILE_ACTIONS.view) }
 ];
+
+const HEADER_LOGOUT_MENU_GUARD_MS = 600;
+const HEADER_LOGOUT_CONFIRM_GUARD_MS = 900;
 
 @Component({
   selector: 'app-mobile-header',
@@ -75,7 +79,7 @@ const HEADER_LINKS: MobileHeaderLink[] = [
               type="button"
               [attr.aria-expanded]="menuOpen()"
               aria-label="Открыть меню"
-              (click)="toggleMenu()"
+              (click)="toggleMenu($event)"
             >
               <span class="material-icons-sharp" aria-hidden="true">{{ menuOpen() ? 'close' : 'menu' }}</span>
             </button>
@@ -101,7 +105,12 @@ const HEADER_LINKS: MobileHeaderLink[] = [
               }
             </div>
 
-            <button class="mobile-menu-logout" type="button" (click)="logout()">
+            <button
+              class="mobile-menu-logout"
+              type="button"
+              [disabled]="logoutInProgress()"
+              (click)="logout($event)"
+            >
               <span class="material-icons-sharp" aria-hidden="true">logout</span>
               <strong>Выход</strong>
             </button>
@@ -345,7 +354,11 @@ export class MobileHeaderComponent {
   readonly confirm = inject(MobileConfirmService);
   readonly theme = inject(MobileThemeService);
   readonly reportReview = inject(ManagerReportReviewAccessService);
+  readonly diagnostics = inject(MobileAuthDiagnosticsService);
   readonly menuOpen = signal(false);
+  readonly logoutInProgress = signal(false);
+  private menuOpenedAt = 0;
+  private logoutAttemptSequence = 0;
 
   visibleLinks(): MobileHeaderLink[] {
     return HEADER_LINKS.filter((link) => {
@@ -380,26 +393,111 @@ export class MobileHeaderComponent {
     this.theme.setTheme(theme);
   }
 
-  toggleMenu(): void {
-    this.menuOpen.update((open) => !open);
+  toggleMenu(event: MouseEvent): void {
+    const opening = !this.menuOpen();
+    this.menuOpen.set(opening);
+    if (!opening) {
+      this.menuOpenedAt = 0;
+      return;
+    }
+
+    this.menuOpenedAt = Date.now();
+    void this.diagnostics.record('ui.header_menu_opened', this.uiEventDetails(event));
+    void this.diagnostics.checkpoint('ui.header_menu_opened');
   }
 
   closeMenu(): void {
     this.menuOpen.set(false);
+    this.menuOpenedAt = 0;
   }
 
-  async logout(): Promise<void> {
-    this.closeMenu();
-    const confirmed = await this.confirm.confirm({
-      title: 'Выйти из приложения?',
-      message: 'Сессия будет завершена, и для продолжения потребуется войти снова. Закрывать приложение после работы не нужно.',
-      confirmText: 'Выйти',
-      cancelText: 'Остаться',
-      danger: true
-    });
-    if (!confirmed) {
+  async logout(event: MouseEvent): Promise<void> {
+    event.stopPropagation();
+    const triggeredAt = Date.now();
+    const menuOpenDurationMs = this.menuOpenedAt > 0 ? triggeredAt - this.menuOpenedAt : -1;
+    const attemptId = `${triggeredAt.toString(36)}-${(++this.logoutAttemptSequence).toString(36)}`;
+    const triggerDetails = this.uiEventDetails(event);
+
+    if (this.logoutInProgress()) {
+      void this.diagnostics.record('ui.logout_trigger_ignored', {
+        attemptId,
+        reason: 'already_in_progress',
+        menuOpenDurationMs,
+        ...triggerDetails
+      });
       return;
     }
-    await this.auth.logoutFrom('header_menu');
+    if (!this.menuOpen() || menuOpenDurationMs < HEADER_LOGOUT_MENU_GUARD_MS) {
+      void this.diagnostics.record('ui.logout_trigger_ignored', {
+        attemptId,
+        reason: this.menuOpen() ? 'menu_open_guard' : 'menu_not_open',
+        menuOpenDurationMs,
+        guardMs: HEADER_LOGOUT_MENU_GUARD_MS,
+        ...triggerDetails
+      });
+      void this.diagnostics.checkpoint('ui.logout_trigger_ignored');
+      return;
+    }
+
+    this.logoutInProgress.set(true);
+    this.closeMenu();
+    void this.diagnostics.record('ui.logout_prompt_opened', {
+      attemptId,
+      source: 'header_menu',
+      menuOpenDurationMs,
+      confirmGuardMs: HEADER_LOGOUT_CONFIRM_GUARD_MS,
+      ...triggerDetails
+    });
+    void this.diagnostics.checkpoint('ui.logout_prompt_opened');
+    const promptOpenedAt = Date.now();
+
+    try {
+      const confirmed = await this.confirm.confirm({
+        title: 'Выйти из приложения?',
+        message: 'Сессия будет завершена, и для продолжения потребуется войти снова. Закрывать приложение после работы не нужно.',
+        confirmText: 'Выйти',
+        cancelText: 'Остаться',
+        danger: true,
+        confirmDelayMs: HEADER_LOGOUT_CONFIRM_GUARD_MS
+      });
+      const promptDurationMs = Date.now() - promptOpenedAt;
+      await this.diagnostics.record('ui.logout_prompt_result', {
+        attemptId,
+        source: 'header_menu',
+        confirmed,
+        promptDurationMs
+      });
+      void this.diagnostics.checkpoint(confirmed ? 'ui.logout_confirmed' : 'ui.logout_cancelled');
+      if (!confirmed) {
+        return;
+      }
+      await this.auth.logoutFrom('header_menu', {
+        attemptId,
+        menuOpenDurationMs,
+        promptDurationMs,
+        triggerEvent: triggerDetails['eventType'],
+        triggerTrusted: triggerDetails['isTrusted'],
+        triggerPointer: triggerDetails['pointerType'],
+        triggerDetail: triggerDetails['detail']
+      });
+    } finally {
+      this.logoutInProgress.set(false);
+    }
+  }
+
+  private uiEventDetails(event: MouseEvent): Record<string, MobileAuthDiagnosticValue> {
+    const pointerType = typeof PointerEvent !== 'undefined' && event instanceof PointerEvent
+      ? event.pointerType || 'unknown'
+      : event.detail === 0 ? 'keyboard' : 'mouse_or_touch';
+    return {
+      eventType: event.type || 'unknown',
+      isTrusted: event.isTrusted,
+      pointerType,
+      detail: event.detail,
+      clientX: Math.round(event.clientX),
+      clientY: Math.round(event.clientY),
+      viewportWidth: Math.round(window.innerWidth),
+      viewportHeight: Math.round(window.innerHeight)
+    };
   }
 }

@@ -6,6 +6,7 @@ import {
   CabinetApi,
   CabinetProfile,
   ManagerManualPaymentSettings,
+  ManualPaymentTaskAccountingTargetOption,
   ManualPaymentTaskResponse,
   ManualPaymentType,
   ManualPaymentTaskStatus
@@ -43,6 +44,13 @@ import {
   shouldShowLegacyCabinetMetrics
 } from './contractor-payment-coverage';
 import { ContractorPaymentMetricHelpComponent } from './contractor-payment-metric-help.component';
+import {
+  manualPaymentTaskSelectedTarget,
+  manualPaymentTaskTargetEffect,
+  manualPaymentTaskTargetForSnapshot,
+  manualPaymentTaskTargetValid
+} from '../../shared/manual-payment-task-target';
+import { ManualPaymentTaskOperationKeyDraft } from '../../shared/manual-payment-operation-key';
 
 type DashboardAction = {
   label: string;
@@ -135,6 +143,11 @@ export class HomeComponent {
   readonly manualTaskPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly manualTaskAmountRubles = signal('');
   readonly manualTaskComment = signal('');
+  readonly manualTaskAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
+  readonly manualTaskAccountingTargetKey = signal('');
+  readonly manualTaskAccountingTargetAcknowledged = signal(false);
+  readonly manualTaskAccountingTargetsLoading = signal(false);
+  readonly manualTaskAccountingTargetError = signal<string | null>(null);
   readonly manualTaskEditPaymentType = signal<ManualPaymentType>(DEFAULT_MANUAL_PAYMENT_TYPE);
   readonly manualTaskEditPhone = signal('');
   readonly manualTaskEditRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
@@ -142,6 +155,14 @@ export class HomeComponent {
   readonly manualTaskEditPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly manualTaskEditAmountRubles = signal('');
   readonly manualTaskEditComment = signal('');
+  readonly manualTaskEditAccountingTargets = signal<ManualPaymentTaskAccountingTargetOption[]>([]);
+  readonly manualTaskEditAccountingTargetKey = signal('');
+  readonly manualTaskEditAccountingTargetAcknowledged = signal(false);
+  readonly manualTaskEditAccountingTargetsLoading = signal(false);
+  readonly manualTaskEditAccountingTargetError = signal<string | null>(null);
+  private manualTaskAccountingPreviewEpoch = 0;
+  private manualTaskEditAccountingPreviewEpoch = 0;
+  private readonly manualTaskOperationKey = new ManualPaymentTaskOperationKeyDraft();
   readonly error = signal<DashboardWarning | null>(null);
   readonly healthError = signal<DashboardWarning | null>(null);
   readonly cabinetError = signal<DashboardWarning | null>(null);
@@ -340,6 +361,15 @@ export class HomeComponent {
   readonly showManagerTeamProgress = computed(() =>
     this.isManagerUser() && !this.reportReviewAccess.state()?.restricted
   );
+  readonly selectedManualTaskAccountingTarget = computed(() => manualPaymentTaskSelectedTarget(
+    this.manualTaskAccountingTargets(),
+    this.manualTaskAccountingTargetKey()
+  ));
+  readonly selectedManualTaskEditAccountingTarget = computed(() => manualPaymentTaskSelectedTarget(
+    this.manualTaskEditAccountingTargets(),
+    this.manualTaskEditAccountingTargetKey()
+  ));
+  readonly manualTaskTargetEffect = manualPaymentTaskTargetEffect;
 
   readonly canCreateManualTask = computed(() => {
     const hasTarget = this.manualTaskPaymentType() === 'MOBILE_BANK'
@@ -347,7 +377,11 @@ export class HomeComponent {
       : Boolean(this.manualTaskPaymentUrl().trim()) && Boolean(this.manualTaskRecipient().trim());
     return !this.manualTaskSaving()
       && hasTarget
-      && this.manualTaskTargetKopecks() > 0;
+      && this.manualTaskTargetKopecks() > 0
+      && !this.manualTaskAccountingTargetsLoading()
+      && manualPaymentTaskTargetValid(
+        this.selectedManualTaskAccountingTarget(), this.manualTaskAccountingTargetAcknowledged()
+      );
   });
 
   readonly cabinetMetrics = computed(() => {
@@ -789,6 +823,16 @@ export class HomeComponent {
 
   setManualTaskAmount(value: string | number | null): void {
     this.manualTaskAmountRubles.set(value == null ? '' : String(value));
+    this.loadManualTaskAccountingTargets();
+  }
+
+  setManualTaskAccountingTarget(value: string | null): void {
+    this.manualTaskAccountingTargetKey.set(value?.trim() ?? '');
+    this.manualTaskAccountingTargetAcknowledged.set(false);
+  }
+
+  setManualTaskAccountingTargetAcknowledged(value: boolean): void {
+    this.manualTaskAccountingTargetAcknowledged.set(Boolean(value));
   }
 
   setManualTaskComment(value: string): void {
@@ -820,6 +864,16 @@ export class HomeComponent {
 
   setManualTaskEditAmount(value: string | number | null): void {
     this.manualTaskEditAmountRubles.set(value == null ? '' : String(value));
+    this.loadManualTaskEditAccountingTargets();
+  }
+
+  setManualTaskEditAccountingTarget(value: string | null): void {
+    this.manualTaskEditAccountingTargetKey.set(value?.trim() ?? '');
+    this.manualTaskEditAccountingTargetAcknowledged.set(false);
+  }
+
+  setManualTaskEditAccountingTargetAcknowledged(value: boolean): void {
+    this.manualTaskEditAccountingTargetAcknowledged.set(Boolean(value));
   }
 
   setManualTaskEditComment(value: string): void {
@@ -838,10 +892,18 @@ export class HomeComponent {
     this.manualTaskEditPaymentButtonLabel.set(this.manualPaymentButtonLabelOrDefault(task.manualPaymentButtonLabel));
     this.manualTaskEditAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
     this.manualTaskEditComment.set(task.comment ?? '');
+    this.manualTaskEditAccountingTargetKey.set('');
+    this.manualTaskEditAccountingTargetAcknowledged.set(false);
+    this.loadManualTaskEditAccountingTargets(task);
   }
 
   cancelManualTaskEdit(): void {
     this.manualTaskEditingId.set(null);
+    this.manualTaskEditAccountingTargets.set([]);
+    this.manualTaskEditAccountingTargetKey.set('');
+    this.manualTaskEditAccountingTargetAcknowledged.set(false);
+    this.manualTaskEditAccountingTargetError.set(null);
+    this.manualTaskEditAccountingPreviewEpoch += 1;
   }
 
   canSaveManualTaskEdit(task: ManualPaymentTaskResponse): boolean {
@@ -853,35 +915,41 @@ export class HomeComponent {
       && task.status !== 'COMPLETED'
       && task.status !== 'CANCELED'
       && hasTarget
-      && this.manualTaskEditTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0);
+      && this.manualTaskEditTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0)
+      && !this.manualTaskEditAccountingTargetsLoading()
+      && manualPaymentTaskTargetValid(
+        this.selectedManualTaskEditAccountingTarget(), this.manualTaskEditAccountingTargetAcknowledged()
+      );
   }
 
   createManualPaymentTask(): void {
     if (!this.canCreateManualTask()) {
       return;
     }
+    const accountingTarget = this.selectedManualTaskAccountingTarget();
+    if (!accountingTarget) {
+      return;
+    }
 
     this.manualTaskSaving.set(true);
     this.manualTaskError.set(null);
     this.cabinetApi.createManagerManualPaymentTask({
+      operationKey: this.manualTaskOperationKey.current(),
       manualPaymentType: this.manualTaskPaymentType(),
       manualPhone: this.manualTaskPhone().trim(),
       manualRecipientName: this.manualTaskRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
       manualPaymentUrl: this.manualTaskPaymentUrl().trim(),
       manualPaymentButtonLabel: this.manualTaskPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
       targetAmountKopecks: this.manualTaskTargetKopecks(),
-      comment: this.manualTaskComment().trim() || null
+      comment: this.manualTaskComment().trim() || null,
+      accountingTargetKind: accountingTarget.kind,
+      accountingTargetProfileId: accountingTarget.profileId ?? null,
+      accountingTargetOverrunAcknowledged: this.manualTaskAccountingTargetAcknowledged()
     }).subscribe({
       next: (task) => {
-        this.manualPaymentTasks.update((tasks) => [task, ...tasks]);
-        this.manualTaskPaymentType.set(DEFAULT_MANUAL_PAYMENT_TYPE);
-        this.manualTaskPhone.set('');
-        this.manualTaskRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
-        this.manualTaskPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
-        this.manualTaskPaymentButtonLabel.set(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
-        this.manualTaskAmountRubles.set('');
-        this.manualTaskComment.set('');
+        this.manualPaymentTasks.update((tasks) => [task, ...tasks.filter((item) => item.id !== task.id)]);
         this.manualTaskSaving.set(false);
+        this.resetManualPaymentTaskDraft();
         this.toastService.success('Платежное задание создано', 'Новые ссылки сначала будут проверять это задание.');
       },
       error: (err) => {
@@ -896,6 +964,25 @@ export class HomeComponent {
         this.toastService.error(warning.title, warning.detail);
       }
     });
+  }
+
+  resetManualPaymentTaskDraft(): void {
+    if (this.manualTaskSaving()) {
+      return;
+    }
+    this.manualTaskPaymentType.set(DEFAULT_MANUAL_PAYMENT_TYPE);
+    this.manualTaskPhone.set('');
+    this.manualTaskRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
+    this.manualTaskPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
+    this.manualTaskPaymentButtonLabel.set(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+    this.manualTaskAmountRubles.set('');
+    this.manualTaskComment.set('');
+    this.manualTaskAccountingTargets.set([]);
+    this.manualTaskAccountingTargetKey.set('');
+    this.manualTaskAccountingTargetAcknowledged.set(false);
+    this.manualTaskAccountingTargetError.set(null);
+    this.manualTaskAccountingPreviewEpoch += 1;
+    this.manualTaskOperationKey.rotate();
   }
 
   updateManualTaskStatus(task: ManualPaymentTaskResponse, status: ManualPaymentTaskStatus): void {
@@ -919,6 +1006,10 @@ export class HomeComponent {
     if (!task?.id || !this.canSaveManualTaskEdit(task)) {
       return;
     }
+    const accountingTarget = this.selectedManualTaskEditAccountingTarget();
+    if (!accountingTarget) {
+      return;
+    }
     this.manualTaskMutatingId.set(task.id);
     this.cabinetApi.updateManagerManualPaymentTask(task.id, {
       manualPaymentType: this.manualTaskEditPaymentType(),
@@ -930,7 +1021,11 @@ export class HomeComponent {
       comment: this.manualTaskEditComment().trim() || null,
       manualPaymentUrlReplacementConfirmed: this.manualTaskEditPaymentType() === 'EXTERNAL_LINK'
         && !Boolean(task.manualPaymentUrl?.trim())
-        && Boolean(this.manualTaskEditPaymentUrl().trim())
+        && Boolean(this.manualTaskEditPaymentUrl().trim()),
+      accountingTargetKind: accountingTarget.kind,
+      accountingTargetProfileId: accountingTarget.profileId ?? null,
+      accountingTargetOverrunAcknowledged: this.manualTaskEditAccountingTargetAcknowledged(),
+      expectedGeneration: task.generation ?? null
     }).subscribe({
       next: (updated) => {
         this.replaceManualTask(updated);
@@ -1024,6 +1119,85 @@ export class HomeComponent {
   private manualTaskEditTargetKopecks(): number {
     const value = Number(this.manualTaskEditAmountRubles());
     return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
+  }
+
+  private loadManualTaskAccountingTargets(): void {
+    const amount = this.manualTaskTargetKopecks();
+    const previousKey = this.manualTaskAccountingTargetKey();
+    const epoch = ++this.manualTaskAccountingPreviewEpoch;
+    this.manualTaskAccountingTargetAcknowledged.set(false);
+    this.manualTaskAccountingTargetError.set(null);
+    if (amount <= 0) {
+      this.manualTaskAccountingTargets.set([]);
+      this.manualTaskAccountingTargetKey.set('');
+      this.manualTaskAccountingTargetsLoading.set(false);
+      return;
+    }
+    this.manualTaskAccountingTargetsLoading.set(true);
+    this.cabinetApi.getManagerManualPaymentTaskAccountingTargets(amount).subscribe({
+      next: (options) => {
+        if (epoch !== this.manualTaskAccountingPreviewEpoch) {
+          return;
+        }
+        const normalized = options ?? [];
+        this.manualTaskAccountingTargets.set(normalized);
+        this.manualTaskAccountingTargetKey.set(
+          normalized.some(option => option.key === previousKey) ? previousKey : ''
+        );
+        this.manualTaskAccountingTargetsLoading.set(false);
+      },
+      error: (error) => {
+        if (epoch !== this.manualTaskAccountingPreviewEpoch) {
+          return;
+        }
+        this.manualTaskAccountingTargets.set([]);
+        this.manualTaskAccountingTargetKey.set('');
+        this.manualTaskAccountingTargetsLoading.set(false);
+        this.manualTaskAccountingTargetError.set(apiErrorDetail(
+          error, 'Не удалось рассчитать получателя и возможное превышение.'
+        ));
+      }
+    });
+  }
+
+  private loadManualTaskEditAccountingTargets(sourceTask?: ManualPaymentTaskResponse): void {
+    const task = sourceTask ?? this.manualPaymentTasks().find(item => item.id === this.manualTaskEditingId());
+    const amount = this.manualTaskEditTargetKopecks();
+    const previousKey = this.manualTaskEditAccountingTargetKey();
+    const epoch = ++this.manualTaskEditAccountingPreviewEpoch;
+    this.manualTaskEditAccountingTargetAcknowledged.set(false);
+    this.manualTaskEditAccountingTargetError.set(null);
+    if (!task || amount <= 0) {
+      this.manualTaskEditAccountingTargets.set([]);
+      this.manualTaskEditAccountingTargetKey.set('');
+      this.manualTaskEditAccountingTargetsLoading.set(false);
+      return;
+    }
+    this.manualTaskEditAccountingTargetsLoading.set(true);
+    this.cabinetApi.getManagerManualPaymentTaskAccountingTargets(amount, task.id).subscribe({
+      next: (options) => {
+        if (epoch !== this.manualTaskEditAccountingPreviewEpoch) {
+          return;
+        }
+        const normalized = options ?? [];
+        const restored = normalized.find(option => option.key === previousKey)
+          ?? manualPaymentTaskTargetForSnapshot(normalized, task);
+        this.manualTaskEditAccountingTargets.set(normalized);
+        this.manualTaskEditAccountingTargetKey.set(restored?.key ?? '');
+        this.manualTaskEditAccountingTargetsLoading.set(false);
+      },
+      error: (error) => {
+        if (epoch !== this.manualTaskEditAccountingPreviewEpoch) {
+          return;
+        }
+        this.manualTaskEditAccountingTargets.set([]);
+        this.manualTaskEditAccountingTargetKey.set('');
+        this.manualTaskEditAccountingTargetsLoading.set(false);
+        this.manualTaskEditAccountingTargetError.set(apiErrorDetail(
+          error, 'Не удалось пересчитать получателя задания.'
+        ));
+      }
+    });
   }
 
   private normalizeManualPaymentType(value?: string | null): ManualPaymentType {

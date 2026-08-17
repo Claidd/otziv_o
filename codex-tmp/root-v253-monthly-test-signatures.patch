@@ -1,0 +1,35 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentRecipientMonthlySummaryServiceTest.java
+@@
+-        when(paymentLinkRepository.findLegacyManualConfirmedForMonthlyRecipientSummary(
+-                any(),
+-                eq(PaymentLinkStatus.CONFIRMED),
+-                eq(ContractorActualPaymentSourceKind.PAYMENT_LINK),
+-                any(LocalDateTime.class),
+-                any(LocalDateTime.class)
+-        )).thenReturn(List.of());
++        when(paymentLinkRepository.findLegacyManualConfirmedForMonthlyRecipientSummary(
++                any(LocalDateTime.class),
++                any(LocalDateTime.class)
++        )).thenReturn(List.of());
+         when(commonInvoiceRepository.findLegacyManualConfirmedForMonthlyRecipientSummary(
+-                eq(ContractorActualPaymentSourceKind.COMMON_INVOICE),
+                 any(LocalDateTime.class),
+                 any(LocalDateTime.class)
+@@
+-        when(paymentLinkRepository.findLegacyManualConfirmedForMonthlyRecipientSummary(
+-                any(),
+-                eq(PaymentLinkStatus.CONFIRMED),
+-                eq(ContractorActualPaymentSourceKind.PAYMENT_LINK),
+-                any(LocalDateTime.class),
+-                any(LocalDateTime.class)
+-        )).thenReturn(List.of(legacyLink));
++        when(paymentLinkRepository.findLegacyManualConfirmedForMonthlyRecipientSummary(
++                any(LocalDateTime.class),
++                any(LocalDateTime.class)
++        )).thenReturn(List.of(legacyLink));
+         when(commonInvoiceRepository.findLegacyManualConfirmedForMonthlyRecipientSummary(
+-                eq(ContractorActualPaymentSourceKind.COMMON_INVOICE),
+                 any(LocalDateTime.class),
+                 any(LocalDateTime.class)
+*** End Patch

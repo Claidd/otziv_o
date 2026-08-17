@@ -4345,7 +4345,12 @@ if (
     & $proxyIpSyncScript -EnvFile $envPath
 }
 
-$composeArgs = @("compose", "-f", $composePath, "--env-file", $envPath)
+$composeArgs = @(
+    "compose",
+    "--project-directory", $repoRoot,
+    "-f", $composePath,
+    "--env-file", $envPath
+)
 $dbAdminComposeArgs = $composeArgs + @("--profile", "db-admin")
 if (-not $NoDbAdmin) {
     $composeArgs += @("--profile", "db-admin")

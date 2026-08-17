@@ -1,0 +1,9 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskService.java
+@@
+-        return clean;
++        return clean.toLowerCase(Locale.ROOT);
+     }
+ 
+     private String creationPayloadHash(
+*** End Patch

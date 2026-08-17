@@ -65,7 +65,7 @@ class ContractorShadowRouteBackfillServiceTest {
     }
 
     @Test
-    void capsBatchAndStillRepairsLiveEvidenceWhenShadowIsDisabled() {
+    void capsBatchAndStillScansExistingShadowEvidenceWhenCreationIsDisabled() {
         when(appSettingService.getBoolean(
                 AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED,
                 true
@@ -74,7 +74,7 @@ class ContractorShadowRouteBackfillServiceTest {
                 .thenReturn(50_000);
         when(paymentLinkRepository.findUnrecordedContractorManualCardEvidence(
                 any(LocalDateTime.class),
-                eq(false),
+                eq(true),
                 any(LocalDateTime.class),
                 any(Pageable.class)
         )).thenReturn(List.of());
@@ -84,7 +84,7 @@ class ContractorShadowRouteBackfillServiceTest {
         ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
         verify(paymentLinkRepository).findUnrecordedContractorManualCardEvidence(
                 any(LocalDateTime.class),
-                eq(false),
+                eq(true),
                 any(LocalDateTime.class),
                 page.capture()
         );

@@ -4,5 +4,6 @@ public enum ManualPaymentTaskStatus {
     ACTIVE,
     PAUSED,
     COMPLETED,
+    NEEDS_ATTENTION,
     CANCELED
 }

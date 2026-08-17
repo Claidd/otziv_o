@@ -147,6 +147,8 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
           AND item.activeMembership = TRUE
           AND account.id <> :targetAccountId
           AND invoice.status IN :statuses
+          AND (invoice.paymentRouteSelectedAt IS NULL
+               OR COALESCE(TRIM(invoice.paymentRouteType), '') = '')
           AND item.paid = FALSE
           AND item.unpaid = FALSE
         ORDER BY invoice.id ASC, item.id ASC
@@ -170,6 +172,8 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
           AND item.activeMembership = TRUE
           AND account.id <> :targetAccountId
           AND invoice.status IN :statuses
+          AND (invoice.paymentRouteSelectedAt IS NULL
+               OR COALESCE(TRIM(invoice.paymentRouteType), '') = '')
           AND item.paid = FALSE
           AND item.unpaid = FALSE
         ORDER BY order.id ASC, invoice.id ASC

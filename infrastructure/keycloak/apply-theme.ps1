@@ -5,6 +5,8 @@ param(
     [int]$AccessTokenLifespan = 600,
     [int]$SsoSessionIdleTimeout = 28800,
     [int]$SsoSessionMaxLifespan = 86400,
+    [int]$SsoSessionIdleTimeoutRememberMe = 86400,
+    [int]$SsoSessionMaxLifespanRememberMe = 86400,
     [string]$Server = $(if ($env:KEYCLOAK_KCADM_SERVER) { $env:KEYCLOAK_KCADM_SERVER } else { "http://localhost:8080/keycloak" }),
     [string]$AdminUser = $(if ($env:KEYCLOAK_ADMIN) { $env:KEYCLOAK_ADMIN } else { "admin" }),
     [string]$AdminPassword = $(if ($env:KEYCLOAK_ADMIN_PASSWORD) { $env:KEYCLOAK_ADMIN_PASSWORD } else { "admin" })
@@ -24,7 +26,10 @@ docker exec $Container /opt/keycloak/bin/kcadm.sh update "realms/$Realm" `
     -s "defaultLocale=ru" `
     -s "supportedLocales=$supportedLocales" `
     -s "accessTokenLifespan=$AccessTokenLifespan" `
+    -s "rememberMe=true" `
     -s "ssoSessionIdleTimeout=$SsoSessionIdleTimeout" `
-    -s "ssoSessionMaxLifespan=$SsoSessionMaxLifespan"
+    -s "ssoSessionMaxLifespan=$SsoSessionMaxLifespan" `
+    -s "ssoSessionIdleTimeoutRememberMe=$SsoSessionIdleTimeoutRememberMe" `
+    -s "ssoSessionMaxLifespanRememberMe=$SsoSessionMaxLifespanRememberMe"
 
 Write-Host "Keycloak realm settings applied to realm '$Realm'."

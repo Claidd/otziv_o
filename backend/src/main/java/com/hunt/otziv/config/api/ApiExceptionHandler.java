@@ -1,5 +1,7 @@
 package com.hunt.otziv.config.api;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -41,7 +43,8 @@ public class ApiExceptionHandler {
         String message = ex.getReason() == null || ex.getReason().isBlank()
                 ? "Ошибка запроса"
                 : ex.getReason();
-        return ResponseEntity.status(ex.getStatusCode()).body(new ApiErrorResponse(message));
+        String code = ex instanceof CodedResponseStatusException coded ? coded.code() : null;
+        return ResponseEntity.status(ex.getStatusCode()).body(new ApiErrorResponse(message, code));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -101,6 +104,10 @@ public class ApiExceptionHandler {
         return ex.getMessage() == null ? "" : ex.getMessage();
     }
 
-    public record ApiErrorResponse(String message) {
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ApiErrorResponse(String message, String code) {
+        public ApiErrorResponse(String message) {
+            this(message, null);
+        }
     }
 }

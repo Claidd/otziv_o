@@ -339,6 +339,8 @@ class PaymentLinkArchiveMySqlIntegrationTest {
 
     private void initializeSchema(DataSource dataSource) {
         JdbcTemplate setup = new JdbcTemplate(dataSource);
+        setup.execute("DROP TABLE IF EXISTS payment_link_return_reconciliation_outbox");
+        setup.execute("DROP TABLE IF EXISTS contractor_actual_payment_attributions");
         setup.execute("DROP TABLE IF EXISTS payment_success_notification_retry_claims");
         setup.execute("DROP TABLE IF EXISTS contractor_payment_allocation_events");
         setup.execute("DROP TABLE IF EXISTS archive_common_invoices");
@@ -406,6 +408,8 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                     bank_init_nonce VARCHAR(64) NULL,
                     bank_cancel_nonce VARCHAR(64) NULL,
                     bank_cancel_origin_status VARCHAR(32) NULL,
+                    last_error VARCHAR(1000) NULL,
+                    manual_actual_recipient_frozen_at DATETIME(6) NULL,
                     payment_success_notified_at DATETIME(6) NULL,
                     payment_success_notification_retry_eligible TINYINT(1) NOT NULL DEFAULT 0,
                     created_at DATETIME(6) NOT NULL,
@@ -457,6 +461,25 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                         (event_type, effective_at, allocation_id),
                     KEY idx_contractor_allocation_event_allocation_time
                         (allocation_id, effective_at, id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE contractor_actual_payment_attributions (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    source_kind VARCHAR(32) NOT NULL,
+                    source_id BIGINT NOT NULL,
+                    evidence_id BIGINT NULL,
+                    PRIMARY KEY (id),
+                    KEY idx_test_actual_payment_source (source_kind, source_id, evidence_id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE payment_link_return_reconciliation_outbox (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    payment_link_id BIGINT NOT NULL,
+                    status VARCHAR(32) NOT NULL,
+                    PRIMARY KEY (id),
+                    KEY idx_test_return_outbox_source (payment_link_id, status)
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""

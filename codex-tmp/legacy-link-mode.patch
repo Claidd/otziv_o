@@ -1,0 +1,17 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptIntegrationService.java
+@@
+         }
+         link.setManualTaskGeneration(snapshot.taskGeneration());
++        link.setManualActualAccountingMode(mode);
+         link.setContractorAllocationId(
+                 contractorReservationService.remediateLegacy(link, snapshot, mode));
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptIntegrationServiceTest.java
+@@
+         assertEquals(9L, link.getManualTaskGeneration());
++        assertEquals(
++                com.hunt.otziv.contractor_payments.model.ContractorAllocationMode.SHADOW,
++                link.getManualActualAccountingMode()
++        );
+         assertEquals(92L, link.getContractorAllocationId());
+*** End Patch

@@ -28,6 +28,8 @@ test('release verifier pins identity, signer and internal APK metadata', () => {
   assert.match(verifier, /actualVersionCode -ne \$ExpectedVersionCode/);
   assert.match(verifier, /actualVersionName, \$ExpectedVersionName/);
   assert.match(verifier, /application-debuggable/);
+  assert.match(verifier, /Join-Path \$resolvedCandidate "build-tools"/);
+  assert.match(verifier, /Test-Path -LiteralPath \$buildToolsDirectory -PathType Container/);
 });
 
 test('release build verifies both Gradle output and immutable copied artifact', () => {

@@ -1,0 +1,21 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskReceiptIntegrationService.java
+@@
+         contractorReservationService.lockAccountingMode();
+         ManualPaymentTaskRouteSnapshot snapshot = routeBinding(link);
++        // Complete canonical lock order before the first financial write:
++        // source (caller) -> phase -> task -> profile -> allocation.
++        ledgerService.lockSourceTask(snapshot.taskId(), snapshot.source());
++        contractorReservationService.preflightRelease(
++                link.getContractorAllocationId(), ContractorAllocationSourceType.PAYMENT_LINK,
++                link.getId(), snapshot.source().sourceGeneration(), snapshot.reservedAmountKopecks());
+         release(snapshot, reason);
+@@
+         contractorReservationService.lockAccountingMode();
+         ManualPaymentTaskRouteSnapshot snapshot = routeBinding(invoice);
++        ledgerService.lockSourceTask(snapshot.taskId(), snapshot.source());
++        contractorReservationService.preflightRelease(
++                invoice.getContractorAllocationId(), ContractorAllocationSourceType.COMMON_INVOICE,
++                invoice.getId(), snapshot.source().sourceGeneration(), snapshot.reservedAmountKopecks());
+         release(snapshot, reason);
+*** End Patch
