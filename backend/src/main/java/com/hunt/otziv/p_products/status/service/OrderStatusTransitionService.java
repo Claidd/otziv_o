@@ -161,12 +161,35 @@ public class OrderStatusTransitionService {
         return changeStatusForOrderInternal(orderID, title, true, true, false);
     }
 
+    @Transactional
+    public boolean changeStatusAfterPaymentReturn(Long orderID, String title) throws Exception {
+        return changeStatusForOrderInternal(orderID, title, false, false, false, true);
+    }
+
     private boolean changeStatusForOrderInternal(
             Long orderID,
             String title,
             boolean allowCommonBillingFinancialStatus,
             boolean allowBanWithPendingBadTasks,
             boolean restoredArchiveOrigin
+    ) throws Exception {
+        return changeStatusForOrderInternal(
+                orderID,
+                title,
+                allowCommonBillingFinancialStatus,
+                allowBanWithPendingBadTasks,
+                restoredArchiveOrigin,
+                false
+        );
+    }
+
+    private boolean changeStatusForOrderInternal(
+            Long orderID,
+            String title,
+            boolean allowCommonBillingFinancialStatus,
+            boolean allowBanWithPendingBadTasks,
+            boolean restoredArchiveOrigin,
+            boolean allowPaymentReturnReminder
     ) throws Exception {
         try {
             orderAggregateMutationLockService.lock(orderID);
@@ -181,7 +204,7 @@ public class OrderStatusTransitionService {
             }
             ensureCommonBillingStatusTransitionAllowed(order, title, allowCommonBillingFinancialStatus);
             ensureCompletedOrderNotReopened(order, title);
-            ensureStatusTransitionAllowed(order, title);
+            ensureStatusTransitionAllowed(order, title, allowPaymentReturnReminder);
             if (STATUS_ARCHIVE.equals(title) && !OrderManualArchivePolicy.isAllowed(order)) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
@@ -201,7 +224,9 @@ public class OrderStatusTransitionService {
                 case STATUS_NOT_PAID -> handleNotPaidStatus(order);
                 case STATUS_BAN -> handleBanStatus(order, allowBanWithPendingBadTasks);
                 case STATUS_NEW -> handleSimpleStatus(order, STATUS_NEW);
-                case STATUS_REMINDER -> handleSimpleStatus(order, STATUS_REMINDER);
+                case STATUS_REMINDER -> allowPaymentReturnReminder
+                        ? handlePaymentReturnReminderStatus(order)
+                        : handleSimpleStatus(order, STATUS_REMINDER);
                 default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Недопустимый статус заказа");
             };
             recordStatusAudit(order, oldStatus, safeStatusTitle(order), title, changed);
@@ -222,9 +247,14 @@ public class OrderStatusTransitionService {
         }
     }
 
-    private void ensureStatusTransitionAllowed(Order order, String targetStatus) {
+    private void ensureStatusTransitionAllowed(Order order, String targetStatus, boolean allowPaymentReturnReminder) {
         String currentStatus = safeStatusTitle(order);
         if (safeString(currentStatus).equals(safeString(targetStatus))) {
+            return;
+        }
+        if (allowPaymentReturnReminder
+                && STATUS_REMINDER.equals(targetStatus)
+                && (STATUS_PAYMENT.equals(currentStatus) || STATUS_BAN.equals(currentStatus))) {
             return;
         }
         Set<String> allowedSources = ALLOWED_SOURCE_STATUSES.get(targetStatus);
@@ -253,6 +283,15 @@ public class OrderStatusTransitionService {
 
     private boolean handleSimpleStatus(Order order, String title) {
         order.setStatus(orderStatusService.getOrderStatusByTitle(title));
+        orderRepository.save(order);
+        return true;
+    }
+
+    private boolean handlePaymentReturnReminderStatus(Order order) {
+        order.setComplete(false);
+        order.setPayDay(null);
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_REMINDER));
+        orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_REMINDER);
         orderRepository.save(order);
         return true;
     }

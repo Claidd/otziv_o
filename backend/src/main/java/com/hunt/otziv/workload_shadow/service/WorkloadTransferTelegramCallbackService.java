@@ -24,6 +24,7 @@ public class WorkloadTransferTelegramCallbackService {
     private final WorkloadLiveSettingsService liveSettingsService;
     private final WorkloadShadowSettingsService shadowSettingsService;
     private final TelegramService telegramService;
+    private final WorkloadForcedSingleRecipientService forcedSingleRecipientService;
     private final com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository liveControlRepository;
 
     @Transactional
@@ -73,6 +74,7 @@ public class WorkloadTransferTelegramCallbackService {
         int messageId = callbackQuery.getMessage().getMessageId();
         long actorTelegramId = callbackQuery.getFrom().getId();
         int updated;
+        boolean forcedFallback = false;
         if (parsed.accept()) {
             updated = repository.accept(
                     parsed.offerToken(),
@@ -93,6 +95,10 @@ public class WorkloadTransferTelegramCallbackService {
                     liveSettings.revision(),
                     now
             );
+            if (updated > 0 && offer.getWorkflowId() != null) {
+                forcedFallback = forcedSingleRecipientService
+                        .acceptExhaustedWorkflow(offer.getWorkflowId(), now) > 0;
+            }
         }
         /*
          * accept/decline atomically update offer, workflow and candidate in one
@@ -104,17 +110,20 @@ public class WorkloadTransferTelegramCallbackService {
                     "Ответ не принят: предложение изменилось или предназначено другому сотруднику"
             );
         }
+        boolean callbackForcedFallback = forcedFallback;
         afterCommit(() -> telegramService.editMessageText(
                 chatId,
                 messageId,
-                resultText(offer, parsed.accept()),
+                resultText(offer, parsed.accept(), callbackForcedFallback),
                 "HTML",
                 null
         ));
         return Optional.of(
                 parsed.accept()
                         ? "Согласие принято. Передача будет выполнена только после повторной проверки"
-                        : "Отказ принят. Предложение перейдёт следующему кандидату"
+                        : forcedFallback
+                                ? "Отказ принят. Других получателей нет: передача будет выполнена принудительно, владелец уведомлён"
+                                : "Отказ принят. Предложение перейдёт следующему кандидату"
         );
     }
 
@@ -167,12 +176,21 @@ public class WorkloadTransferTelegramCallbackService {
         };
     }
 
-    private String resultText(CallbackProjection offer, boolean accepted) {
+    private String resultText(
+            CallbackProjection offer,
+            boolean accepted,
+            boolean forcedFallback
+    ) {
         String company = html(offer.getCompanyTitle());
         if (accepted) {
             return "<b>✅ Предложение принято</b>\n\nКомпания: <b>"
                     + company
                     + "</b>\nНазначения пока не изменены. Выполняется повторная проверка графа.";
+        }
+        if (forcedFallback) {
+            return "<b>❌ Предложение отклонено</b>\n\nКомпания: <b>"
+                    + company
+                    + "</b>\nДругих получателей нет. Передача будет выполнена принудительно; владелец уведомлён, что нужен новый сотрудник.";
         }
         return "<b>❌ Предложение отклонено</b>\n\nКомпания: <b>"
                 + company

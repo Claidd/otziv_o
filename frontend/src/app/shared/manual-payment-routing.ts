@@ -41,6 +41,7 @@ export interface ManualPaymentTaskAccountingTargetOptionLike {
   currentAvailableKopecks?: number | null;
   projectedOverrunKopecks?: number | null;
   overrunAcknowledgementRequired?: boolean;
+  recommended?: boolean | null;
 }
 
 const ROUTE_ERROR_CODES = new Set<PaymentRouteErrorCode>([

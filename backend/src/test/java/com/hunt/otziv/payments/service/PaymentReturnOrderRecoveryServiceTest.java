@@ -1,6 +1,7 @@
 package com.hunt.otziv.payments.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,7 @@ import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,7 +38,7 @@ class PaymentReturnOrderRecoveryServiceTest {
     private PaymentLinkService paymentLinkService;
 
     @Test
-    void fullRefundReopensOrderAndCreatesReplacementLink() throws Exception {
+    void fullRefundReopensOrderWithoutPreparingReplacementInsideStatusTransaction() throws Exception {
         Order order = order(42L, "Оплачено");
         PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
         link.setConfirmedAmountKopecks(10_000L);
@@ -50,25 +52,83 @@ class PaymentReturnOrderRecoveryServiceTest {
                         7L, PaymentLinkStatus.REFUNDED))
         );
 
-        verify(orderStatusTransitionService).changeStatusForOrder(42L, "Напоминание");
+        verify(orderStatusTransitionService).changeStatusAfterPaymentReturn(42L, "Напоминание");
+        verify(paymentLinkService, never()).createForOrder(42L);
+    }
+
+    @Test
+    void createReplacementPaymentRouteDelegatesAfterStatusTransaction() throws Exception {
+        service().createReplacementPaymentRoute(42L);
+
         verify(paymentLinkService).createForOrder(42L);
     }
 
     @Test
-    void disabledPaymentLinksStillCommitUnpaidStateAndLeaveReminderForRetry() throws Exception {
+    void historicalReturnDoesNotReopenOrderWhenNewerPaymentIsAlreadyConfirmed() throws Exception {
         Order order = order(42L, "Оплачено");
         PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
-        link.setConfirmedAmountKopecks(10_000L);
+        LocalDateTime returnedAt = LocalDateTime.of(2026, 5, 26, 1, 5);
+        link.setPaidAt(returnedAt);
         when(paymentLinkRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.existsNewerConfirmedPayment(42L, 7L, returnedAt)).thenReturn(true);
+
+        assertEquals(Optional.empty(), service().reopenAfterFullReturn(
+                new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
+                        7L, PaymentLinkStatus.REFUNDED)));
+
+        verify(orderStatusTransitionService, never()).changeStatusAfterPaymentReturn(42L, "Напоминание");
+        verify(paymentLinkService, never()).createForOrder(42L);
+    }
+
+    @Test
+    void disabledPaymentLinksStillLeaveReminderForRetry() throws Exception {
         when(paymentLinkService.createForOrder(42L)).thenThrow(new ResponseStatusException(
                 HttpStatus.CONFLICT,
                 "Платежные ссылки выключены"
         ));
+
+        assertDoesNotThrow(() -> service().createReplacementPaymentRoute(42L));
+
+        verify(paymentLinkService).createForOrder(42L);
+    }
+
+    @Test
+    void unresolvedManualTaskRouteStillLeavesReminderForRetry() throws Exception {
+        when(paymentLinkService.createForOrder(42L)).thenThrow(new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Получатель платёжного задания не привязан; оплату нужно сверить вручную"
+        ));
+
+        assertDoesNotThrow(() -> service().createReplacementPaymentRoute(42L));
+
+        verify(paymentLinkService).createForOrder(42L);
+    }
+
+    @Test
+    void existingBankPaymentStillLeavesReminderForRetry() throws Exception {
+        when(paymentLinkService.createForOrder(42L)).thenThrow(new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "У заказа уже есть созданный банковский платеж. Проверьте его статус перед новым счетом."
+        ));
+
+        assertDoesNotThrow(() -> service().createReplacementPaymentRoute(42L));
+
+        verify(paymentLinkService).createForOrder(42L);
+    }
+
+    @Test
+    void disabledPaymentLinksStillCommitReminderStateBeforeRouteRetry() throws Exception {
+        Order order = order(42L, "Оплачено");
+        PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
+        link.setConfirmedAmountKopecks(10_000L);
+        when(paymentLinkRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(link));
+
         assertEquals(Optional.of(42L), service().reopenAfterFullReturn(
                 new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
                         7L, PaymentLinkStatus.REFUNDED)));
-        verify(orderStatusTransitionService).changeStatusForOrder(42L, "Напоминание");
-        verify(paymentLinkService).createForOrder(42L);
+
+        verify(orderStatusTransitionService).changeStatusAfterPaymentReturn(42L, "Напоминание");
+        verify(paymentLinkService, never()).createForOrder(42L);
     }
 
     @Test
@@ -82,8 +142,8 @@ class PaymentReturnOrderRecoveryServiceTest {
                 new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
                         7L, PaymentLinkStatus.REVERSED)));
 
-        verify(orderStatusTransitionService, never()).changeStatusForOrder(42L, "Напоминание");
-        verify(paymentLinkService).createForOrder(42L);
+        verify(orderStatusTransitionService, never()).changeStatusAfterPaymentReturn(42L, "Напоминание");
+        verify(paymentLinkService, never()).createForOrder(42L);
     }
 
     @Test

@@ -68,7 +68,7 @@ public class OrderPaymentMessageBuilder {
 
     private ManagerPaymentLinkResponse paymentLink(Order order) {
         try {
-            return paymentLinkServiceProvider.getObject().createForOrder(order.getId());
+            return paymentLinkServiceProvider.getObject().createForOrderInNewTransaction(order.getId());
         } catch (Exception e) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,

@@ -24,6 +24,7 @@ import { normalizeRole, roleLabel } from '../../shared/role-labels';
 import { CabinetBarChartComponent } from '../cabinet/cabinet-bar-chart.component';
 import {
   cabinetDailyBarChartFrom,
+  cabinetPeriodTotalFrom,
   cabinetYearlyLineChartFrom,
   type CabinetBarChart,
   type CabinetLineChart
@@ -45,6 +46,7 @@ import {
 } from './contractor-payment-coverage';
 import { ContractorPaymentMetricHelpComponent } from './contractor-payment-metric-help.component';
 import {
+  manualPaymentTaskRecommendedTarget,
   manualPaymentTaskSelectedTarget,
   manualPaymentTaskTargetEffect,
   manualPaymentTaskTargetForSnapshot,
@@ -73,6 +75,12 @@ type PublicHomeLink = {
   description: string;
   icon: string;
   routerLink: string;
+};
+
+type ContractorRewardMetric = {
+  label: string;
+  value: string;
+  percent: number | null;
 };
 
 const MONTH_NAMES = [
@@ -397,6 +405,20 @@ export class HomeComponent {
       { label: 'За год', value: this.money(workerZp.sum1Year), percent: workerZp.percent1Year },
       { label: 'Заказов за месяц', value: this.count(workerZp.sumOrders1Month), percent: workerZp.percent1MonthOrders },
       { label: 'За прошлый месяц', value: this.count(workerZp.sumOrders2Month), percent: workerZp.percent2MonthOrders }
+    ];
+  });
+
+  readonly contractorRewardMetrics = computed<ContractorRewardMetric[]>(() => {
+    const workerZp = this.cabinet()?.workerZp;
+    if (!workerZp) {
+      return [];
+    }
+
+    return [
+      { label: 'За период', value: this.money(this.contractorRewardPeriodTotal(workerZp.zpPayMapMonth)), percent: null },
+      { label: 'За день', value: this.money(workerZp.sum1Day), percent: workerZp.percent1Day },
+      { label: 'За неделю', value: this.money(workerZp.sum1Week), percent: workerZp.percent1Week },
+      { label: 'За месяц', value: this.money(workerZp.sum1Month), percent: workerZp.percent1Month }
     ];
   });
 
@@ -1140,10 +1162,10 @@ export class HomeComponent {
           return;
         }
         const normalized = options ?? [];
+        const restored = normalized.find(option => option.key === previousKey)
+          ?? manualPaymentTaskRecommendedTarget(normalized);
         this.manualTaskAccountingTargets.set(normalized);
-        this.manualTaskAccountingTargetKey.set(
-          normalized.some(option => option.key === previousKey) ? previousKey : ''
-        );
+        this.manualTaskAccountingTargetKey.set(restored?.key ?? '');
         this.manualTaskAccountingTargetsLoading.set(false);
       },
       error: (error) => {
@@ -1275,8 +1297,18 @@ export class HomeComponent {
     return 'red';
   }
 
+  contractorRewardMetricTone(metric: ContractorRewardMetric): string {
+    return metric.percent == null ? 'blue' : this.tone(metric.percent);
+  }
+
   private money(value?: number | null): string {
     return `${new Intl.NumberFormat('ru-RU').format(value || 0)} руб.`;
+  }
+
+  private contractorRewardPeriodTotal(map?: string | null): number {
+    return cabinetPeriodTotalFrom(map, {
+      fallbackYear: new Date(this.cabinetDate()).getFullYear()
+    });
   }
 
   private count(value?: number | null): string {

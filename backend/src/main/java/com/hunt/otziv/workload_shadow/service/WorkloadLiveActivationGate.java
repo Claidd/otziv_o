@@ -180,8 +180,16 @@ public class WorkloadLiveActivationGate {
         boolean capacitySafe = !selected.isEmpty()
                 && allManagersPresent
                 && insufficientManagers == 0;
+        long singleRecipientManagers = selected.stream()
+                .filter(value -> value.getEligibleRecipientCount() != null
+                        && value.getEligibleRecipientCount() == 1)
+                .count();
         String capacityMessage;
-        if (capacitySafe) {
+        if (capacitySafe && singleRecipientManagers > 0) {
+            capacityMessage = "Минимум получателей пройден; менеджеров с одним получателем: "
+                    + singleRecipientManagers
+                    + ". При отказе единственного получателя будет принудительная передача и уведомление владельца";
+        } else if (capacitySafe) {
             capacityMessage = "У каждого выбранного менеджера достаточно получателей";
         } else if (WorkloadLiveSettingsService.MODE_CANARY.equals(mode)
                 && targetManagers.isEmpty()) {

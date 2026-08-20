@@ -13,6 +13,7 @@ import com.hunt.otziv.payments.model.ManualPaymentTask;
 import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
 import com.hunt.otziv.payments.repository.ManualPaymentTaskRepository;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.WorkerRepository;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -32,6 +33,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class ManualPaymentTaskAccountingTargetPolicy {
 
     private final ContractorPaymentProfileRepository profileRepository;
+    private final ManagerRepository managerRepository;
     private final WorkerRepository workerRepository;
     private final ManualPaymentTaskRepository taskRepository;
     private final ManualPaymentTaskLedgerService ledgerService;
@@ -53,7 +55,7 @@ public class ManualPaymentTaskAccountingTargetPolicy {
                 .filter(profile -> profile.getUser() != null
                         && targetAccessPolicy.canManageUser(profile.getUser().getId()))
                 .toList();
-        return options(profiles, target, taskId, legacyRemediation);
+        return options(profiles, target, taskId, legacyRemediation, recommendedManagerUserId(managerId));
     }
 
     @Transactional(readOnly = true)
@@ -87,7 +89,8 @@ public class ManualPaymentTaskAccountingTargetPolicy {
                 .stream()
                 .filter(profile -> allowedForManager(profile, manager, allowedUserIds))
                 .toList();
-        return options(profiles, nonNegative(targetAmountKopecks), taskId, legacyRemediation);
+        return options(profiles, nonNegative(targetAmountKopecks), taskId, legacyRemediation,
+                manager.getUser().getId());
     }
 
     @Transactional
@@ -224,13 +227,14 @@ public class ManualPaymentTaskAccountingTargetPolicy {
             List<ContractorPaymentProfile> profiles,
             long target,
             Long taskId,
-            boolean legacyRemediation
+            boolean legacyRemediation,
+            Long recommendedManagerUserId
     ) {
         List<ManualPaymentTaskAccountingTargetOption> result = new ArrayList<>();
         result.add(option(ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK, null,
-                target, 0, 0, true, false));
+                target, 0, 0, true, false, false));
         result.add(option(ManualPaymentTaskAccountingTargetKind.OWNER, null,
-                target, 0, 0, true, false));
+                target, 0, 0, true, false, false));
         ContractorAllocationMode accountingMode = accountingPhaseService.current();
         ExistingTaskExposure exposure = existingTaskExposure(taskId);
         for (ContractorPaymentProfile profile : profiles) {
@@ -261,10 +265,33 @@ public class ManualPaymentTaskAccountingTargetPolicy {
                     capacity.projectedOverrunKopecks(),
                     !historicalProfile || legacyRemediation,
                     capacity.projectedOverrunKopecks() > 0 && !exactPersisted,
-                    historicalProfile
+                    historicalProfile,
+                    recommendedManagerProfile(kind, profile, recommendedManagerUserId)
             ));
         }
         return List.copyOf(result);
+    }
+
+    private Long recommendedManagerUserId(Long managerId) {
+        if (managerId == null || managerId <= 0) {
+            return null;
+        }
+        return managerRepository.findByIdWithUser(managerId)
+                .map(Manager::getUser)
+                .map(com.hunt.otziv.u_users.model.User::getId)
+                .orElse(null);
+    }
+
+    private boolean recommendedManagerProfile(
+            ManualPaymentTaskAccountingTargetKind kind,
+            ContractorPaymentProfile profile,
+            Long managerUserId
+    ) {
+        return kind == ManualPaymentTaskAccountingTargetKind.MANAGER
+                && managerUserId != null
+                && profile != null
+                && profile.getUser() != null
+                && managerUserId.equals(profile.getUser().getId());
     }
 
     private ExistingTaskExposure existingTaskExposure(Long taskId) {
@@ -322,10 +349,11 @@ public class ManualPaymentTaskAccountingTargetPolicy {
             long available,
             long overrun,
             boolean enabled,
-            boolean needsAcknowledgement
+            boolean needsAcknowledgement,
+            boolean recommended
     ) {
         return option(kind, profile, target, available, overrun, enabled,
-                needsAcknowledgement, false);
+                needsAcknowledgement, false, recommended);
     }
 
     private ManualPaymentTaskAccountingTargetOption option(
@@ -336,7 +364,8 @@ public class ManualPaymentTaskAccountingTargetPolicy {
             long overrun,
             boolean enabled,
             boolean needsAcknowledgement,
-            boolean historicalProfile
+            boolean historicalProfile,
+            boolean recommended
     ) {
         Long profileId = profile == null ? null : profile.getId();
         Long userId = profile == null || profile.getUser() == null ? null : profile.getUser().getId();
@@ -351,7 +380,8 @@ public class ManualPaymentTaskAccountingTargetPolicy {
                 available,
                 target,
                 overrun,
-                needsAcknowledgement
+                needsAcknowledgement,
+                recommended
         );
     }
 

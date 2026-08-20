@@ -516,16 +516,28 @@
                         <strong>Использовать реквизиты в новых счетах</strong>
                         <small>{{ contractorProfileRoutingState(profile).detail }}</small>
                       </div>
-                      <label class="contractor-routing-switch">
-                        <input
-                          type="checkbox"
-                          [checked]="profile.liveEnabled"
-                          [disabled]="!canEditContractorRouting(profile)"
-                          (change)="updateContractorProfile(profile.id, 'liveEnabled', $any($event.target).checked)"
-                        >
-                        <span aria-hidden="true"></span>
-                        <strong>{{ contractorProfileRoutingState(profile).label }}</strong>
-                      </label>
+                      <div class="contractor-routing-actions">
+                        <label class="contractor-routing-switch">
+                          <input
+                            type="checkbox"
+                            [checked]="profile.liveEnabled"
+                            [disabled]="!canEditContractorRouting(profile)"
+                            (change)="updateContractorProfile(profile.id, 'liveEnabled', $any($event.target).checked)"
+                          >
+                          <span aria-hidden="true"></span>
+                          <strong>{{ contractorProfileRoutingState(profile).label }}</strong>
+                        </label>
+                        @if (contractorProfileRoutingChanged(profile)) {
+                          <button
+                            type="button"
+                            class="contractor-routing-save"
+                            (click)="saveContractorPaymentProfile(profile)"
+                            [disabled]="!canManageContractorProfiles() || contractorProfileSavingId() !== null"
+                          >
+                            {{ contractorProfileSavingId() === profile.id ? 'Сохраняю' : 'Сохранить допуск' }}
+                          </button>
+                        }
+                      </div>
                     </section>
 
                     <div class="contractor-profile-fields">

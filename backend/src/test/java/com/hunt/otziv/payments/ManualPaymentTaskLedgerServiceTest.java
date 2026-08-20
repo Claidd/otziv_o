@@ -58,23 +58,22 @@ class ManualPaymentTaskLedgerServiceTest {
     }
 
     @Test
-    void activeTaskWithCapacityAndUnresolvedTargetFailsClosed() {
+    void activeTaskWithCapacityAndUnresolvedTargetIsSkippedForNewRoute() {
         ManualPaymentTask task = task(11L, ManualPaymentTaskAccountingTargetKind.UNRESOLVED);
         when(taskRepository.findActiveForRouting(4L, 8L, ManualPaymentTaskStatus.ACTIVE))
                 .thenReturn(List.of(task));
         when(ledgerRepository.findReservation("PAYMENT_LINK:99:g-1")).thenReturn(Optional.empty());
 
-        Throwable failure = catchThrowable(() -> service.reserveFirst(new ManualPaymentTaskReserveCommand(
+        var result = service.reserveFirst(new ManualPaymentTaskReserveCommand(
                 4L,
                 8L,
                 new ManualPaymentTaskSourceRef(ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 99L, "g-1"),
                 25_000,
                 "reserve:99:g-1",
                 "test"
-        )));
+        ));
 
-        assertThat(failure).isInstanceOf(CodedResponseStatusException.class);
-        assertThat(((CodedResponseStatusException) failure).code()).isEqualTo("TASK_TARGET_UNRESOLVED");
+        assertThat(result).isEmpty();
     }
 
     @Test

@@ -44,44 +44,48 @@ function summary(overrides = {}) {
   };
 }
 
-test('uses clear Russian labels and preserves backend-provided amounts', () => {
-  const metrics = contractorPaymentMetrics(summary());
+test('shows only the four manager-facing payment metrics', () => {
+  const metrics = contractorPaymentMetrics(summary({
+    reservedKopecks: 520_000,
+    clientReportedKopecks: 30_000,
+    partiallyConfirmedOutstandingKopecks: 80_000
+  }));
   const byKey = Object.fromEntries(metrics.map((metric) => [metric.key, metric]));
 
-  assert.equal(byKey['client-reported'].label, 'Клиент нажал «Оплатил»');
-  assert.equal(byKey['partially-confirmed'].label, 'Остаток по частично оплаченным счетам');
-  assert.equal(byKey.available.label, 'Осталось покрыть новыми счетами');
-  assert.equal(byKey.available.totalKopecks, 45_600);
-  assert.equal(byKey.reserved.totalKopecks, 520_000);
+  assert.equal(JSON.stringify(metrics.map((metric) => metric.key)), JSON.stringify(['accrued', 'reserved', 'paid', 'due']));
+  assert.equal(byKey.accrued.label, 'Начислено');
+  assert.equal(byKey.reserved.label, 'Зарезервировано');
+  assert.equal(byKey.paid.label, 'Оплачено');
+  assert.equal(byKey.due.label, 'Ожидает / к доплате');
+  assert.equal(byKey.reserved.totalKopecks, 630_000);
+  assert.equal(byKey.paid.totalKopecks, 525_000);
+  assert.equal(byKey.due.totalKopecks, 45_600);
   assert.equal(byKey.accrued.monthKopecks, 1_090_600);
 });
 
-test('labels simulated and live money without presenting simulation as a real transfer', () => {
-  const simulated = contractorPaymentMetrics(summary());
-  assert.equal(simulated.find((metric) => metric.key === 'confirmed').label, 'Тестово учтённые поступления');
-  assert.match(simulated.find((metric) => metric.key === 'net-received').description, /не сумма подтверждённых реальных переводов/i);
-
-  const live = contractorPaymentMetrics(summary({ reportingLive: true }));
-  assert.equal(live.find((metric) => metric.key === 'confirmed').label, 'Подтверждённые поступления');
-  assert.equal(live.find((metric) => metric.key === 'net-received').label, 'Фактически получено после возвратов');
-});
-
-test('shows credit instead of available balance and adds an overrun warning only when needed', () => {
-  const regularKeys = contractorPaymentMetrics(summary()).map((metric) => metric.key);
-  assert.ok(regularKeys.includes('available'));
-  assert.ok(!regularKeys.includes('credit'));
-  assert.ok(!regularKeys.includes('exposure-overrun'));
-
-  const warningKeys = contractorPaymentMetrics(summary({
-    availableKopecks: 0,
+test('does not expose internal receipt, return, and reconciliation states as manager cards', () => {
+  const keys = contractorPaymentMetrics(summary({
     creditKopecks: 12_300,
     exposureOverrunKopecks: 4_500
   })).map((metric) => metric.key);
-  assert.ok(!warningKeys.includes('available'));
-  assert.ok(warningKeys.includes('credit'));
-  assert.ok(warningKeys.includes('exposure-overrun'));
+
+  assert.ok(!keys.includes('client-reported'));
+  assert.ok(!keys.includes('partially-confirmed'));
+  assert.ok(!keys.includes('returned'));
+  assert.ok(!keys.includes('net-received'));
+  assert.ok(!keys.includes('credit'));
+  assert.ok(!keys.includes('exposure-overrun'));
 });
 
+test('explains paid money differently for test and live accounting without changing the card label', () => {
+  const simulatedPaid = contractorPaymentMetrics(summary()).find((metric) => metric.key === 'paid');
+  assert.equal(simulatedPaid.label, 'Оплачено');
+  assert.match(simulatedPaid.description, /не сумма подтверждённых реальных переводов/i);
+
+  const livePaid = contractorPaymentMetrics(summary({ reportingLive: true })).find((metric) => metric.key === 'paid');
+  assert.equal(livePaid.label, 'Оплачено');
+  assert.match(livePaid.description, /Реально подтверждённые поступления/i);
+});
 test('keeps mode and coverage wording in parity with web', () => {
   assert.equal(contractorPaymentModeLabel(summary()), 'Реквизиты не участвуют в новых счетах');
   assert.equal(contractorPaymentModeClass(summary()), 'disabled');
@@ -94,7 +98,7 @@ test('keeps mode and coverage wording in parity with web', () => {
 test('builds unique accessible help ids from profile and metric', () => {
   const first = contractorPaymentMetricDescriptionId(17, 'reserved');
   const secondProfile = contractorPaymentMetricDescriptionId(18, 'reserved');
-  const secondMetric = contractorPaymentMetricDescriptionId(17, 'available');
+  const secondMetric = contractorPaymentMetricDescriptionId(17, 'due');
 
   assert.equal(first, 'mobile-contractor-payment-help-17-reserved');
   assert.notEqual(first, secondProfile);

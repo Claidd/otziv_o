@@ -42,6 +42,20 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
 
     boolean existsByOrder_IdAndStatusIn(Long orderId, Collection<PaymentLinkStatus> statuses);
 
+    @Query("""
+        SELECT COUNT(link) > 0
+        FROM PaymentLink link
+        WHERE link.order.id = :orderId
+          AND link.id <> :returnedLinkId
+          AND link.status = com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED
+          AND COALESCE(link.manualConfirmedAt, link.paidAt, link.createdAt) > :returnedAt
+    """)
+    boolean existsNewerConfirmedPayment(
+            @Param("orderId") Long orderId,
+            @Param("returnedLinkId") Long returnedLinkId,
+            @Param("returnedAt") LocalDateTime returnedAt
+    );
+
     @Query("SELECT link FROM PaymentLink link WHERE link.order.id IN :orderIds ORDER BY link.order.id, link.id")
     List<PaymentLink> findByOrderIdInForRead(@Param("orderIds") Collection<Long> orderIds);
 

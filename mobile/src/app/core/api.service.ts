@@ -49,6 +49,7 @@ export interface ManualPaymentTaskAccountingTargetOption {
   currentAvailableKopecks?: number | null;
   projectedOverrunKopecks?: number | null;
   overrunAcknowledgementRequired: boolean;
+  recommended?: boolean | null;
 }
 export type PaymentLinkListSource = 'LIVE' | 'ARCHIVE';
 

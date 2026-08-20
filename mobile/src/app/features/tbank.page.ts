@@ -41,6 +41,7 @@ import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
 import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
 import {
+  mobileManualTaskRecommendedTarget,
   mobileManualTaskSelectedTarget,
   mobileManualTaskTargetEffect,
   mobileManualTaskTargetForSnapshot,
@@ -3666,7 +3667,9 @@ export class TbankPage implements OnInit {
       if (epoch !== this.adminTaskAccountingPreviewEpoch) return;
       const normalized = options ?? [];
       this.adminTaskAccountingTargets.set(normalized);
-      this.adminTaskAccountingTargetKey.set(normalized.some(option => option.key === previousKey) ? previousKey : '');
+      const restored = normalized.find(option => option.key === previousKey)
+        ?? mobileManualTaskRecommendedTarget(normalized);
+      this.adminTaskAccountingTargetKey.set(restored?.key ?? '');
     } catch (error) {
       if (epoch !== this.adminTaskAccountingPreviewEpoch) return;
       this.adminTaskAccountingTargets.set([]); this.adminTaskAccountingTargetKey.set('');

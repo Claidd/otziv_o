@@ -309,6 +309,47 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
+    void ordinaryPaidToReminderTransitionIsStillRejected() {
+        OrderStatusTransitionService service = service();
+        Order order = order(201L, "Оплачено");
+
+        when(orderRepository.findByIdForMutation(201L)).thenReturn(Optional.of(order));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(201L, "Напоминание")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("Недопустимый переход статуса заказа: \"Оплачено\" → \"Напоминание\"", exception.getReason());
+        verify(orderStatusService, never()).getOrderStatusByTitle("Напоминание");
+        verify(orderRepository, never()).save(order);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Оплачено", "Бан"})
+    void paymentReturnCanMoveTerminalFinancialStatusToReminderWithoutBadReviewTasks(String currentStatus) throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(202L, currentStatus);
+        order.setComplete(true);
+        order.setPayDay(LocalDate.of(2026, 8, 17));
+        OrderStatus reminder = status("Напоминание");
+
+        when(orderRepository.findByIdForMutation(202L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Напоминание")).thenReturn(reminder);
+
+        assertTrue(service.changeStatusAfterPaymentReturn(202L, "Напоминание"));
+
+        assertSame(reminder, order.getStatus());
+        assertFalse(order.isComplete());
+        assertNull(order.getPayDay());
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Напоминание");
+        verify(orderRepository).save(order);
+        verify(badReviewTaskService, never()).createTasksForUnpaidOrder(order);
+        verify(badReviewTaskService, never()).deletePendingTasksForOrder(order);
+    }
+
+    @Test
     void liveArchivedOrderCanReturnToNewAsOfferedByArchiveBoard() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = order(102L, "Архив");

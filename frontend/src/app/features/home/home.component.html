@@ -204,13 +204,38 @@
             } @else if (contractorPayments().length === 0) {
               <p class="contractor-payment-state">Платёжный профиль для вашей роли ещё не создан.</p>
             } @else {
+              @if (contractorRewardMetrics().length > 0) {
+                <section class="contractor-payment-analytics" aria-label="Динамика вознаграждений">
+                  <div class="contractor-payment-analytics-title">
+                    <span class="material-icons-sharp" aria-hidden="true">payments</span>
+                    <h3>Вознаграждения</h3>
+                  </div>
+
+                  <div class="contractor-payment-analytics-grid">
+                    @for (metric of contractorRewardMetrics(); track metric.label) {
+                      <article class="contractor-payment-analytics-card" [class]="contractorRewardMetricTone(metric)">
+                        <div>
+                          <h4>{{ metric.label }}</h4>
+                          <strong>{{ metric.value }}</strong>
+                        </div>
+                        @if (metric.percent !== null) {
+                          <div class="contractor-payment-percent-ring">
+                            <span>{{ metric.percent }}%</span>
+                          </div>
+                        }
+                      </article>
+                    }
+                  </div>
+                </section>
+              }
+
               <div class="contractor-payment-role-list">
                 @for (summary of contractorPayments(); track summary.profileId) {
                   <article class="contractor-payment-role">
                     <header>
                       <div>
                         <strong>{{ contractorPaymentRoleLabel(summary.role) }}</strong>
-                        <small>Начисления, счета и поступления</small>
+                        <small>Начислено · резерв · оплачено · ожидает</small>
                       </div>
                       <span
                         class="contractor-payment-mode"
@@ -234,117 +259,64 @@
                     </p>
 
                     <div class="contractor-payment-metrics">
-                      <span>
+                      <span class="contractor-payment-metric-card">
                         <app-contractor-payment-metric-help
-                          label="Начислено всего"
-                          description="Все начисленные вознаграждения плюс переходящий неоплаченный остаток, если он был задан. Ниже отдельно показано начисление за текущий месяц."
+                          label="Начислено"
+                          description="Сколько вознаграждения начислено по вашим заказам плюс переходящий неоплаченный остаток, если он был задан. Ниже отдельно показано начисление за текущий месяц."
                           [descriptionId]="'contractor-payment-help-' + summary.profileId + '-accrued'"
                         />
                         <strong>{{ contractorMoney(summary.accruedTotalKopecks) }}</strong>
                         <em>за месяц {{ contractorMoney(summary.accruedMonthKopecks) }}</em>
                       </span>
-                      <span>
+                      <span class="contractor-payment-metric-card">
                         <app-contractor-payment-metric-help
-                          label="Зарезервировано под счета"
-                          description="Сумма счетов, которым уже назначены ваши реквизиты, но клиент ещё не сообщил об оплате. Она временно уменьшает остаток для следующих счетов."
+                          label="Зарезервировано"
+                          description="Суммы, уже закреплённые за активными счетами. Включает обычный резерв, оплаты, отмеченные менеджером, и остатки частично оплаченных счетов."
                           [descriptionId]="'contractor-payment-help-' + summary.profileId + '-reserved'"
                         />
-                        <strong>{{ contractorMoney(summary.reservedKopecks) }}</strong>
+                        <strong>{{ contractorMoney(summary.reservedKopecks + summary.clientReportedKopecks + summary.partiallyConfirmedOutstandingKopecks) }}</strong>
                       </span>
-                      <span>
+                      <span class="contractor-payment-metric-card">
                         <app-contractor-payment-metric-help
-                          label="Клиент нажал «Оплатил»"
-                          description="Сумма счетов, по которым клиент сообщил об оплате. Поступление денег ещё не подтверждено по банку, поэтому сумма остаётся занятой."
-                          [descriptionId]="'contractor-payment-help-' + summary.profileId + '-client-reported'"
-                        />
-                        <strong>{{ contractorMoney(summary.clientReportedKopecks) }}</strong>
-                      </span>
-                      <span>
-                        <app-contractor-payment-metric-help
-                          label="Остаток по частично оплаченным счетам"
-                          description="Часть суммы уже подтверждена как поступившая. Здесь показана оставшаяся неподтверждённая часть; она остаётся занятой до доплаты или закрытия."
-                          [descriptionId]="'contractor-payment-help-' + summary.profileId + '-partially-confirmed'"
-                        />
-                        <strong>{{ contractorMoney(summary.partiallyConfirmedOutstandingKopecks) }}</strong>
-                      </span>
-                      <span>
-                        <app-contractor-payment-metric-help
-                          [label]="summary.reportingLive ? 'Подтверждённые поступления' : 'Тестово учтённые поступления'"
+                          label="Оплачено"
                           [description]="summary.reportingLive
-                            ? 'Сумма поступлений, подтверждённых сверкой, до вычета возвратов. Ниже отдельно показаны поступления за текущий месяц.'
-                            : 'Сумма, которую система в тестовом режиме засчитала бы как поступившую. Это не означает, что деньги фактически пришли.'"
-                          [descriptionId]="'contractor-payment-help-' + summary.profileId + '-confirmed'"
-                        />
-                        <strong>{{ contractorMoney(summary.grossConfirmedTotalKopecks) }}</strong>
-                        <em>за месяц {{ contractorMoney(summary.grossConfirmedMonthKopecks) }}</em>
-                      </span>
-                      <span>
-                        <app-contractor-payment-metric-help
-                          [label]="summary.reportingLive ? 'Возвращено клиентам' : 'Тестово учтено возвратов'"
-                          [description]="summary.reportingLive
-                            ? 'Подтверждённые возвраты клиентам. Они вычитаются из итоговой суммы поступлений.'
-                            : 'Расчётная сумма возвратов в тестовом режиме. Она уменьшает тестовый итог и не подтверждает фактический возврат денег.'"
-                          [descriptionId]="'contractor-payment-help-' + summary.profileId + '-returned'"
-                        />
-                        <strong>{{ contractorMoney(summary.returnedTotalKopecks) }}</strong>
-                        <em>за месяц {{ contractorMoney(summary.returnedMonthKopecks) }}</em>
-                      </span>
-                      <span>
-                        <app-contractor-payment-metric-help
-                          [label]="summary.reportingLive ? 'Снято с резерва без оплаты' : 'Тестово снято с резерва без оплаты'"
-                          [description]="summary.reportingLive
-                            ? 'Неоплаченный остаток отменённых, истёкших или отмеченных неоплаченными счетов. Резерв уже освобождён и повторно из остатка не вычитается.'
-                            : 'Расчётная сумма отменённых, истёкших или отмеченных неоплаченными счетов в тестовом режиме. Тестовый резерв уже освобождён и повторно из остатка не вычитается.'"
-                          [descriptionId]="'contractor-payment-help-' + summary.profileId + '-closed-unpaid'"
-                        />
-                        <strong>{{ contractorMoney(summary.closedWithoutPaymentTotalKopecks) }}</strong>
-                        <em>за месяц {{ contractorMoney(summary.closedWithoutPaymentMonthKopecks) }}</em>
-                      </span>
-                      <span>
-                        <app-contractor-payment-metric-help
-                          [label]="summary.reportingLive ? 'Фактически получено после возвратов' : 'Тестовый итог после возвратов'"
-                          [description]="summary.reportingLive
-                            ? 'Все подтверждённые поступления за вычетом подтверждённых возвратов клиентам. Ниже отдельно показан итог за текущий месяц.'
+                            ? 'Реально подтверждённые поступления за вычетом возвратов. Ниже отдельно показана сумма за текущий месяц.'
                             : 'Тестово учтённые поступления за вычетом тестово учтённых возвратов. Это не сумма подтверждённых реальных переводов.'"
-                          [descriptionId]="'contractor-payment-help-' + summary.profileId + '-net-received'"
+                          [descriptionId]="'contractor-payment-help-' + summary.profileId + '-paid'"
                         />
                         <strong>{{ contractorMoney(summary.netReceivedTotalKopecks) }}</strong>
                         <em>за месяц {{ contractorMoney(summary.netReceivedMonthKopecks) }}</em>
                       </span>
-                      @if (summary.creditKopecks > 0) {
-                        <span class="credit">
-                          <app-contractor-payment-metric-help
-                            [label]="summary.reportingLive ? 'Аванс сверх начисленного' : 'Тестовый аванс сверх начисленного'"
-                            [description]="summary.reportingLive
-                              ? 'Подтверждено поступлений больше, чем начислено. Разница будет учитываться при дальнейших начислениях.'
-                              : 'В тестовом расчёте учтено поступлений больше, чем начислено. Это не подтверждает фактический аванс.'"
-                            [descriptionId]="'contractor-payment-help-' + summary.profileId + '-credit'"
-                          />
-                          <strong>{{ contractorMoney(summary.creditKopecks) }}</strong>
-                        </span>
-                      } @else {
-                        <span class="available">
-                          <app-contractor-payment-metric-help
-                            label="Осталось покрыть новыми счетами"
-                            description="Начислено минус итог после возвратов и минус суммы, уже занятые счетами. Если использование реквизитов выключено, это только расчётный остаток: новые счета на ваши реквизиты не направляются."
-                            [descriptionId]="'contractor-payment-help-' + summary.profileId + '-available'"
-                          />
-                          <strong>{{ contractorMoney(summary.availableKopecks) }}</strong>
-                        </span>
-                      }
-                      @if (summary.exposureOverrunKopecks > 0) {
-                        <span class="credit">
-                          <app-contractor-payment-metric-help
-                            label="Нужна сверка: учтено больше начисленного"
-                            [description]="summary.reportingLive
-                              ? 'Подтверждённые поступления и суммы активных счетов вместе превышают начисленное. Новые счета на превышение не назначаются; данные нужно проверить.'
-                              : 'Тестовый итог и суммы активных тестовых резервов вместе превышают начисленное. Это расчётное предупреждение; данные нужно проверить перед включением.'"
-                            [descriptionId]="'contractor-payment-help-' + summary.profileId + '-exposure-overrun'"
-                          />
-                          <strong>{{ contractorMoney(summary.exposureOverrunKopecks) }}</strong>
-                        </span>
-                      }
+                      <span class="contractor-payment-metric-card available">
+                        <app-contractor-payment-metric-help
+                          label="Ожидает"
+                          description="Начислено минус оплачено и минус уже зарезервированные суммы. Это остаток, который ещё нужно покрыть новыми счетами — по смыслу к доплате."
+                          [descriptionId]="'contractor-payment-help-' + summary.profileId + '-due'"
+                        />
+                        <strong>{{ contractorMoney(summary.availableKopecks) }}</strong>
+                      </span>
                     </div>
+
+                    <dl class="contractor-payment-requisites" aria-label="Мои реквизиты оплаты">
+                      <div>
+                        <dt>Получатель</dt>
+                        <dd>{{ summary.recipientName || 'не указан' }}</dd>
+                      </div>
+                      <div>
+                        <dt>Телефон или карта</dt>
+                        <dd>{{ summary.paymentPhone || 'не указано' }}</dd>
+                      </div>
+                      <div>
+                        <dt>Банк</dt>
+                        <dd>{{ summary.bankName || 'не указан' }}</dd>
+                      </div>
+                      @if (summary.paymentComment) {
+                        <div>
+                          <dt>Комментарий</dt>
+                          <dd>{{ summary.paymentComment }}</dd>
+                        </div>
+                      }
+                    </dl>
                   </article>
                 }
               </div>
@@ -907,3 +879,4 @@
     </section>
   }
 </app-admin-layout>
+

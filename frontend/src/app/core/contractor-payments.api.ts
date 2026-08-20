@@ -63,6 +63,10 @@ export interface ContractorPaymentSummary {
   role: ContractorPaymentRole;
   profileEnabled: boolean;
   liveEnabled: boolean;
+  recipientName?: string | null;
+  paymentPhone?: string | null;
+  bankName?: string | null;
+  paymentComment?: string | null;
   accruedMonthKopecks: number;
   accruedTotalKopecks: number;
   reservedKopecks: number;

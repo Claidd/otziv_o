@@ -54,6 +54,7 @@ import {
   shouldShowLegacyContractorMetrics
 } from '../shared/contractor-payment-summary';
 import {
+  mobileManualTaskRecommendedTarget,
   mobileManualTaskSelectedTarget,
   mobileManualTaskTargetEffect,
   mobileManualTaskTargetForSnapshot,
@@ -3918,7 +3919,9 @@ export class HomePage implements OnInit, OnDestroy {
       if (epoch !== this.manualTaskAccountingPreviewEpoch) return;
       const normalized = options ?? [];
       this.manualTaskAccountingTargets.set(normalized);
-      this.manualTaskAccountingTargetKey.set(normalized.some(option => option.key === previousKey) ? previousKey : '');
+      const restored = normalized.find(option => option.key === previousKey)
+        ?? mobileManualTaskRecommendedTarget(normalized);
+      this.manualTaskAccountingTargetKey.set(restored?.key ?? '');
     } catch (error) {
       if (epoch !== this.manualTaskAccountingPreviewEpoch) return;
       this.manualTaskAccountingTargets.set([]);

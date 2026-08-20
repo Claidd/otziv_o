@@ -3,6 +3,7 @@ import test from 'node:test';
 import { loadTsModule } from './load-ts-module.mjs';
 
 const {
+  mobileManualTaskRecommendedTarget,
   mobileManualTaskTargetEffect,
   mobileManualTaskTargetForSnapshot,
   mobileManualTaskTargetValid
@@ -32,4 +33,15 @@ test('requires acknowledgement for a server-projected target overrun', () => {
 
 test('explains external-task accounting without implying owner credit', () => {
   assert.match(mobileManualTaskTargetEffect(options[0]), /не изменит лимиты владельца и сотрудников/i);
+});
+
+test('uses only explicit server recommendation as creation default', () => {
+  assert.equal(mobileManualTaskRecommendedTarget([
+    { key: 'OWNER', kind: 'OWNER', label: 'Владелец', enabled: true },
+    { key: 'MANAGER:7', kind: 'MANAGER', profileId: 7, label: 'Менеджер', enabled: true }
+  ]), null);
+  assert.equal(mobileManualTaskRecommendedTarget([
+    { key: 'MANAGER:7', kind: 'MANAGER', profileId: 7, label: 'Менеджер', enabled: true, recommended: true },
+    { key: 'SPECIALIST:8', kind: 'SPECIALIST', profileId: 8, label: 'Специалист', enabled: true, recommended: true }
+  ]).key, 'MANAGER:7');
 });

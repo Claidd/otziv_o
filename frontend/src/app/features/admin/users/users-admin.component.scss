@@ -5,6 +5,7 @@
 .users-workspace {
   display: grid;
   gap: 0.85rem;
+  container-type: inline-size;
   font-family: 'laptev_brush', var(--otziv-font-family);
 }
 
@@ -837,7 +838,19 @@ tr.unlinked td {
   background: rgba(103, 116, 131, 0.055);
 }
 
+.contractor-routing-actions {
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
 .contractor-routing-switch {
+  position: relative;
   display: grid;
   max-width: 100%;
   min-width: 0;
@@ -849,10 +862,13 @@ tr.unlinked td {
 
 .contractor-routing-switch input {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   opacity: 0;
-  pointer-events: none;
+  cursor: inherit;
 }
 
 .contractor-routing-switch > span {
@@ -904,6 +920,25 @@ tr.unlinked td {
   font-size: 0.69rem;
   overflow-wrap: anywhere;
   text-align: left;
+}
+
+.contractor-routing-save {
+  min-height: 1.95rem;
+  border: 1px solid var(--otziv-action-border);
+  border-radius: 999px;
+  padding: 0 0.75rem;
+  color: var(--otziv-action);
+  background: var(--otziv-action-soft);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.contractor-routing-save:disabled {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 .contractor-profile-fields {
@@ -1770,6 +1805,12 @@ tr.unlinked td {
 @media (max-width: 1500px) {
   .users-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 96rem) {
+  .users-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

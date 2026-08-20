@@ -28,6 +28,7 @@ import { Component, Input, signal } from '@angular/core';
     }
 
     .metric-help-trigger {
+      appearance: none;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -35,10 +36,11 @@ import { Component, Input, signal } from '@angular/core';
       width: 100%;
       min-height: 2.75rem;
       max-width: 100%;
-      border: 0;
+      border: 0 !important;
+      box-shadow: none !important;
       padding: 0.35rem 0;
-      color: var(--otziv-info);
-      background: transparent;
+      color: var(--otziv-dark);
+      background: transparent !important;
       font: inherit;
       font-size: 0.75rem;
       font-weight: 800;
@@ -71,8 +73,9 @@ import { Component, Input, signal } from '@angular/core';
       width: 0.9rem;
       height: 0.9rem;
       margin-top: 0.01rem;
-      border: 1px solid currentColor;
+      border: 1px solid rgba(103, 116, 131, 0.42);
       border-radius: 50%;
+      color: var(--otziv-info);
       font-size: 0.58rem;
       line-height: 1;
       text-decoration: none;

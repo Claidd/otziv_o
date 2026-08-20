@@ -64,13 +64,14 @@ class ContractorRewardInitialMonthSyncServiceTest {
         ContractorPaymentProfile profile = profile(ContractorRole.SPECIALIST);
         Zp first = reward(81L, "5000.00", true);
         Zp second = reward(95L, "3280.00", true);
+        Zp afterBoundary = reward(101L, "777.00", true);
         second.setSource(ContractorRewardSourceCodes.LEGACY_PERFORMER_PRODUCT);
         second.setContractorRole(ContractorRole.SPECIALIST);
         second.setAttributionFinal(true);
         when(profileRepository.findById(7L)).thenReturn(Optional.of(profile));
         when(profileRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(profile));
         when(zpRepository.findLegacySpecialistRewardIdsInPeriod(5L, AUGUST_START, AUGUST_START.plusMonths(1)))
-                .thenReturn(List.of(95L, 81L, 95L));
+                .thenReturn(List.of(95L, 101L, 81L, 95L));
         when(zpRepository.findByIdForContractorLedgerUpdate(81L)).thenReturn(Optional.of(first));
         when(zpRepository.findByIdForContractorLedgerUpdate(95L)).thenReturn(Optional.of(second));
         when(zpRepository.countEligibleLegacySpecialistRewardForSync(81L)).thenReturn(1L);
@@ -84,6 +85,9 @@ class ContractorRewardInitialMonthSyncServiceTest {
         assertThat(second.getSource()).isEqualTo(ContractorRewardSourceCodes.LEGACY_PERFORMER_PRODUCT);
         assertThat(first.isAttributionFinal()).isTrue();
         assertThat(second.isAttributionFinal()).isTrue();
+        assertThat(afterBoundary.getContractorRole()).isNull();
+        assertThat(afterBoundary.getSource()).isNull();
+        assertThat(afterBoundary.isAttributionFinal()).isFalse();
         assertThat(second.isActive()).isTrue();
         assertThat(profile.getTrackingStartZpId()).isEqualTo(80L);
         assertThat(profile.getTrackingStartedAt()).isEqualTo(AUGUST_START.atStartOfDay());
@@ -95,8 +99,10 @@ class ContractorRewardInitialMonthSyncServiceTest {
                 imported.capture(), org.mockito.ArgumentMatchers.same(profile)
         );
         assertThat(imported.getValue()).containsExactly(first, second);
+        verify(zpRepository, never()).findByIdForContractorLedgerUpdate(101L);
         verify(zpRepository).save(first);
         verify(zpRepository, never()).save(second);
+        verify(zpRepository, never()).save(afterBoundary);
         verify(businessAuditService).recordRequiredInCurrentTransaction(
                 any(), any(), any(), any(), any(), any(), any(), any()
         );

@@ -52,6 +52,7 @@ class PaymentLinkReturnOutboxRecoveryWorkerTest {
                         128L, PaymentLinkStatus.REFUNDED
                 )
         );
+        verify(recoveryService).createReplacementPaymentRoute(42L);
         verify(clientMessageService).enqueuePaymentReminderAfterFullReturn(42L);
         verify(transactions).succeeded(claim);
     }

@@ -13,6 +13,7 @@ public record ManualPaymentTaskAccountingTargetOption(
         long currentAvailableKopecks,
         long targetAmountKopecks,
         long projectedOverrunKopecks,
-        boolean needsAcknowledgement
+        boolean needsAcknowledgement,
+        boolean recommended
 ) {
 }

@@ -42,6 +42,7 @@ class WorkloadTransferOfferServiceTest {
     @Mock private WorkloadLiveControlRepository liveControlRepository;
     @Mock private LiveControlProjection liveControl;
     @Mock private WorkloadShadowSettingsService shadowSettingsService;
+    @Mock private WorkloadForcedSingleRecipientService forcedSingleRecipientService;
 
     private WorkloadTransferOfferService service;
 
@@ -52,6 +53,7 @@ class WorkloadTransferOfferServiceTest {
                 workflowRepository,
                 liveSettingsService,
                 shadowSettingsService,
+                forcedSingleRecipientService,
                 liveControlRepository
         );
         lenient().when(shadowSettingsService.current()).thenReturn(null);

@@ -6,6 +6,7 @@ import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
@@ -71,10 +72,16 @@ public class PaymentReturnOrderRecoveryService {
             // A cancellation before any money was confirmed is not a refund.
             return Optional.empty();
         }
+        if (paymentLinkRepository.existsNewerConfirmedPayment(
+                order.getId(), link.getId(), returnedAt(link))) {
+            log.info("Ignoring historical provider return because order has a newer confirmed payment: orderId={}, returnedLinkId={}",
+                    order.getId(), link.getId());
+            return Optional.empty();
+        }
 
         if (!STATUS_REMINDER.equals(statusTitle(order))) {
             try {
-                orderStatusTransitionService.changeStatusForOrder(order.getId(), STATUS_REMINDER);
+                orderStatusTransitionService.changeStatusAfterPaymentReturn(order.getId(), STATUS_REMINDER);
             } catch (Exception e) {
                 throw new IllegalStateException(
                         "Не удалось вернуть заказ " + order.getId() + " в статус \"Напоминание\"",
@@ -83,28 +90,49 @@ public class PaymentReturnOrderRecoveryService {
             }
         }
 
-        // The old link is terminal. The payment service either reuses an
-        // already active replacement or atomically creates a fresh one under
-        // the order lock. A safety switch may temporarily disable standalone
-        // links, or a common invoice may own this order. The order must still
-        // become unpaid in that case; the durable reminder remains ACTIVE and
-        // will retry route preparation when it becomes available.
-        try {
-            paymentLinkService.createForOrder(order.getId());
-        } catch (ResponseStatusException e) {
-            if (!isDeferredPaymentRoute(e)) {
-                throw e;
-            }
-            log.warn("Payment route deferred after full return: orderId={}, status={}, reason={}",
-                    order.getId(), e.getStatusCode(), e.getReason());
-        }
         log.info("Payment cycle reopened after full provider return: orderId={}, linkId={}",
                 order.getId(), link.getId());
         return Optional.of(order.getId());
     }
 
+    /**
+     * The replacement route is deliberately prepared after the order-status
+     * transaction has committed.  createForOrder may fail closed with a 409
+     * while payment routes are disabled or a legacy task recipient is still
+     * unresolved; letting that happen inside the status transaction would mark
+     * it rollback-only even when the exception is caught.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void createReplacementPaymentRoute(Long orderId) {
+        if (orderId == null) {
+            return;
+        }
+        try {
+            paymentLinkService.createForOrder(orderId);
+        } catch (ResponseStatusException e) {
+            if (!isDeferredPaymentRoute(e)) {
+                throw e;
+            }
+            log.warn("Payment route deferred after full return: orderId={}, status={}, reason={}",
+                    orderId, e.getStatusCode(), e.getReason());
+        }
+    }
+
     private boolean positive(Long amount) {
         return amount != null && amount > 0;
+    }
+
+    private LocalDateTime returnedAt(PaymentLink link) {
+        if (link.getPaidAt() != null) {
+            return link.getPaidAt();
+        }
+        if (link.getManualConfirmedAt() != null) {
+            return link.getManualConfirmedAt();
+        }
+        if (link.getCreatedAt() != null) {
+            return link.getCreatedAt();
+        }
+        return LocalDateTime.MIN;
     }
 
     private boolean isDeferredPaymentRoute(ResponseStatusException exception) {
@@ -117,6 +145,11 @@ public class PaymentReturnOrderRecoveryService {
         }
         String normalized = reason.toLowerCase(java.util.Locale.ROOT);
         return normalized.contains("платежные ссылки выключены")
+                || normalized.contains("получатель платёжного задания не привязан")
+                || normalized.contains("получатель платежного задания не привязан")
+                || normalized.contains("оплату нужно сверить вручную")
+                || normalized.contains("у заказа уже есть созданный банковский платеж")
+                || normalized.contains("у заказа уже есть созданный банковский платёж")
                 || normalized.contains("общий счет")
                 || normalized.contains("общий счёт");
     }

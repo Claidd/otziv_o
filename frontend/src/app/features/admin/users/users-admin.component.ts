@@ -543,6 +543,10 @@ export class UsersAdminComponent implements OnDestroy {
     );
   }
 
+  contractorProfileRoutingChanged(profile: ContractorPaymentProfileDraft): boolean {
+    return profile.liveEnabled !== profile.savedLiveEnabled;
+  }
+
   canEditContractorRouting(profile: ContractorPaymentProfileDraft): boolean {
     return canEditContractorProfileRouting(
       this.canManageContractorProfiles(),

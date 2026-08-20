@@ -14,6 +14,7 @@ export interface MobileManualPaymentTaskAccountingTargetOptionLike {
   currentAvailableKopecks?: number | null;
   projectedOverrunKopecks?: number | null;
   overrunAcknowledgementRequired?: boolean;
+  recommended?: boolean | null;
 }
 
 export interface MobileManualPaymentTaskTargetSnapshotLike {
@@ -35,6 +36,14 @@ export function mobileManualTaskTargetForSnapshot<T extends MobileManualPaymentT
 ): T | null {
   return options.find(option => option.kind === task.accountingTargetKind
     && (option.profileId ?? null) === (task.accountingTargetProfileId ?? null)) ?? null;
+}
+
+export function mobileManualTaskRecommendedTarget<T extends MobileManualPaymentTaskAccountingTargetOptionLike>(
+  options: readonly T[]
+): T | null {
+  return options.find(option => option.recommended === true
+    && option.enabled
+    && option.kind !== 'UNRESOLVED') ?? null;
 }
 
 export function mobileManualTaskTargetEffect(

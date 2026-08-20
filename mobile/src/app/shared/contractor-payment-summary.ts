@@ -83,109 +83,44 @@ export function shouldShowLegacyContractorMetrics(
 }
 
 export function contractorPaymentMetrics(summary: ContractorPaymentSummary): ContractorPaymentMetric[] {
-  const metrics: ContractorPaymentMetric[] = [
+  const reservedTotal = Math.max(0,
+    (summary.reservedKopecks ?? 0)
+      + (summary.clientReportedKopecks ?? 0)
+      + (summary.partiallyConfirmedOutstandingKopecks ?? 0)
+  );
+
+  return [
     {
       key: 'accrued',
-      label: 'Начислено всего',
-      description: 'Все начисленные вознаграждения плюс переходящий неоплаченный остаток, если он был задан. Ниже отдельно показано начисление за текущий месяц.',
+      label: 'Начислено',
+      description: 'Сколько вознаграждения начислено по вашим заказам плюс переходящий неоплаченный остаток, если он был задан. Ниже отдельно показано начисление за текущий месяц.',
       totalKopecks: summary.accruedTotalKopecks,
       monthKopecks: summary.accruedMonthKopecks,
       tone: 'default'
     },
     {
       key: 'reserved',
-      label: 'Зарезервировано под счета',
-      description: 'Сумма счетов, которым уже назначены ваши реквизиты, но клиент ещё не сообщил об оплате. Она временно уменьшает остаток для следующих счетов.',
-      totalKopecks: summary.reservedKopecks,
+      label: 'Зарезервировано',
+      description: 'Суммы, уже закреплённые за активными счетами. Включает обычный резерв, оплаты, отмеченные менеджером, и остатки частично оплаченных счетов.',
+      totalKopecks: reservedTotal,
       tone: 'default'
     },
     {
-      key: 'client-reported',
-      label: 'Клиент нажал «Оплатил»',
-      description: 'Сумма счетов, по которым клиент сообщил об оплате. Поступление денег ещё не подтверждено по банку, поэтому сумма остаётся занятой.',
-      totalKopecks: summary.clientReportedKopecks,
-      tone: 'default'
-    },
-    {
-      key: 'partially-confirmed',
-      label: 'Остаток по частично оплаченным счетам',
-      description: 'Часть суммы уже подтверждена как поступившая. Здесь показана оставшаяся неподтверждённая часть; она остаётся занятой до доплаты или закрытия.',
-      totalKopecks: summary.partiallyConfirmedOutstandingKopecks,
-      tone: 'default'
-    },
-    {
-      key: 'confirmed',
-      label: summary.reportingLive ? 'Подтверждённые поступления' : 'Тестово учтённые поступления',
+      key: 'paid',
+      label: 'Оплачено',
       description: summary.reportingLive
-        ? 'Сумма поступлений, подтверждённых сверкой, до вычета возвратов. Ниже отдельно показаны поступления за текущий месяц.'
-        : 'Сумма, которую система в тестовом режиме засчитала бы как поступившую. Это не означает, что деньги фактически пришли.',
-      totalKopecks: summary.grossConfirmedTotalKopecks,
-      monthKopecks: summary.grossConfirmedMonthKopecks,
-      tone: 'default'
-    },
-    {
-      key: 'returned',
-      label: summary.reportingLive ? 'Возвращено клиентам' : 'Тестово учтено возвратов',
-      description: summary.reportingLive
-        ? 'Подтверждённые возвраты клиентам. Они вычитаются из итоговой суммы поступлений.'
-        : 'Расчётная сумма возвратов в тестовом режиме. Она уменьшает тестовый итог и не подтверждает фактический возврат денег.',
-      totalKopecks: summary.returnedTotalKopecks,
-      monthKopecks: summary.returnedMonthKopecks,
-      tone: 'default'
-    },
-    {
-      key: 'closed-unpaid',
-      label: summary.reportingLive ? 'Снято с резерва без оплаты' : 'Тестово снято с резерва без оплаты',
-      description: summary.reportingLive
-        ? 'Неоплаченный остаток отменённых, истёкших или отмеченных неоплаченными счетов. Резерв уже освобождён и повторно из остатка не вычитается.'
-        : 'Расчётная сумма отменённых, истёкших или отмеченных неоплаченными счетов в тестовом режиме. Тестовый резерв уже освобождён и повторно из остатка не вычитается.',
-      totalKopecks: summary.closedWithoutPaymentTotalKopecks,
-      monthKopecks: summary.closedWithoutPaymentMonthKopecks,
-      tone: 'default'
-    },
-    {
-      key: 'net-received',
-      label: summary.reportingLive ? 'Фактически получено после возвратов' : 'Тестовый итог после возвратов',
-      description: summary.reportingLive
-        ? 'Все подтверждённые поступления за вычетом подтверждённых возвратов клиентам. Ниже отдельно показан итог за текущий месяц.'
+        ? 'Реально подтверждённые поступления за вычетом возвратов. Ниже отдельно показана сумма за текущий месяц.'
         : 'Тестово учтённые поступления за вычетом тестово учтённых возвратов. Это не сумма подтверждённых реальных переводов.',
       totalKopecks: summary.netReceivedTotalKopecks,
       monthKopecks: summary.netReceivedMonthKopecks,
       tone: 'default'
-    }
-  ];
-
-  if (summary.creditKopecks > 0) {
-    metrics.push({
-      key: 'credit',
-      label: summary.reportingLive ? 'Аванс сверх начисленного' : 'Тестовый аванс сверх начисленного',
-      description: summary.reportingLive
-        ? 'Подтверждено поступлений больше, чем начислено. Разница будет учитываться при дальнейших начислениях.'
-        : 'В тестовом расчёте учтено поступлений больше, чем начислено. Это не подтверждает фактический аванс.',
-      totalKopecks: summary.creditKopecks,
-      tone: 'credit'
-    });
-  } else {
-    metrics.push({
-      key: 'available',
-      label: 'Осталось покрыть новыми счетами',
-      description: 'Начислено минус итог после возвратов и минус суммы, уже занятые счетами. Если использование реквизитов выключено, это только расчётный остаток: новые счета на ваши реквизиты не направляются.',
+    },
+    {
+      key: 'due',
+      label: 'Ожидает / к доплате',
+      description: 'Начислено минус оплачено и минус уже зарезервированные суммы. Это остаток, который ещё нужно покрыть новыми счетами.',
       totalKopecks: summary.availableKopecks,
       tone: 'available'
-    });
-  }
-
-  if (summary.exposureOverrunKopecks > 0) {
-    metrics.push({
-      key: 'exposure-overrun',
-      label: 'Нужна сверка: учтено больше начисленного',
-      description: summary.reportingLive
-        ? 'Подтверждённые поступления и суммы активных счетов вместе превышают начисленное. Новые счета на превышение не назначаются; данные нужно проверить.'
-        : 'Тестовый итог и суммы активных тестовых резервов вместе превышают начисленное. Это расчётное предупреждение; данные нужно проверить перед включением.',
-      totalKopecks: summary.exposureOverrunKopecks,
-      tone: 'credit'
-    });
-  }
-
-  return metrics;
+    }
+  ];
 }

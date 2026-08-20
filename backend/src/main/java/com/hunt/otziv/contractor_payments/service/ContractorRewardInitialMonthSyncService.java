@@ -53,8 +53,10 @@ public class ContractorRewardInitialMonthSyncService {
         Long userId = discovered.getUser().getId();
         ContractorRole role = discovered.getRole();
         LocalDateTime previousTrackingStartedAt = discovered.getTrackingStartedAt();
+        long initialBoundary = Math.max(0L, discovered.getTrackingStartZpId());
         List<Long> sourceIds = legacySourceIds(userId, role, monthStart, monthStart.plusMonths(1)).stream()
                 .filter(Objects::nonNull)
+                .filter(sourceId -> sourceId <= initialBoundary)
                 .distinct()
                 .sorted()
                 .toList();

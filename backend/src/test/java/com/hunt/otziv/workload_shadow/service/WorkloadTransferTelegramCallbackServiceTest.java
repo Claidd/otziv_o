@@ -48,6 +48,7 @@ class WorkloadTransferTelegramCallbackServiceTest {
     @Mock private WorkloadLiveControlRepository liveControlRepository;
     @Mock private LiveControlProjection liveControl;
     @Mock private TelegramService telegramService;
+    @Mock private WorkloadForcedSingleRecipientService forcedSingleRecipientService;
     @Mock private CallbackProjection projection;
 
     private WorkloadTransferTelegramCallbackService service;
@@ -59,6 +60,7 @@ class WorkloadTransferTelegramCallbackServiceTest {
                 liveSettingsService,
                 shadowSettingsService,
                 telegramService,
+                forcedSingleRecipientService,
                 liveControlRepository
         );
         lenient().when(liveControlRepository.lockState()).thenReturn(Optional.of(liveControl));
@@ -132,6 +134,44 @@ class WorkloadTransferTelegramCallbackServiceTest {
                 eq(GROUP_CHAT_ID),
                 eq(MESSAGE_ID),
                 org.mockito.ArgumentMatchers.contains("Предложение отклонено"),
+                eq("HTML"),
+                org.mockito.ArgumentMatchers.isNull()
+        );
+    }
+
+    @Test
+    void singleRecipientDeclineTriggersForcedFallback() {
+        enableLive();
+        offeredProjection();
+        when(repository.findCallbackOffer(OFFER_TOKEN))
+                .thenReturn(Optional.of(projection));
+        when(projection.getWorkflowId()).thenReturn(501L);
+        when(repository.decline(
+                eq(OFFER_TOKEN),
+                eq(GROUP_CHAT_ID),
+                eq(MESSAGE_ID),
+                eq(ACTOR_TELEGRAM_ID),
+                eq(MANAGER_ID),
+                eq(1L),
+                any(LocalDateTime.class)
+        )).thenReturn(3);
+        when(forcedSingleRecipientService.acceptExhaustedWorkflow(
+                eq(501L),
+                any(LocalDateTime.class)
+        )).thenReturn(3);
+
+        Optional<String> result = service.handle(callback("wlt:d:" + OFFER_TOKEN));
+
+        assertThat(result.orElseThrow())
+                .contains("передача будет выполнена принудительно");
+        verify(forcedSingleRecipientService).acceptExhaustedWorkflow(
+                eq(501L),
+                any(LocalDateTime.class)
+        );
+        verify(telegramService).editMessageText(
+                eq(GROUP_CHAT_ID),
+                eq(MESSAGE_ID),
+                org.mockito.ArgumentMatchers.contains("Передача будет выполнена принудительно"),
                 eq("HTML"),
                 org.mockito.ArgumentMatchers.isNull()
         );

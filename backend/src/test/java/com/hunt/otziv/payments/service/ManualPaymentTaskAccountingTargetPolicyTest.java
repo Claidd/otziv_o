@@ -13,7 +13,6 @@ import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentAccountingPhaseService;
-import com.hunt.otziv.contractor_payments.service.ContractorPaymentProfileService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskBalance;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef;
@@ -21,10 +20,13 @@ import com.hunt.otziv.payments.model.ManualPaymentTask;
 import com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind;
 import com.hunt.otziv.payments.model.ManualPaymentTaskLedgerSourceKind;
 import com.hunt.otziv.payments.repository.ManualPaymentTaskRepository;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.WorkerRepository;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +38,7 @@ import org.springframework.web.server.ResponseStatusException;
 class ManualPaymentTaskAccountingTargetPolicyTest {
 
     @Mock private ContractorPaymentProfileRepository profileRepository;
+    @Mock private ManagerRepository managerRepository;
     @Mock private WorkerRepository workerRepository;
     @Mock private ManualPaymentTaskRepository taskRepository;
     @Mock private ManualPaymentTaskLedgerService ledgerService;
@@ -49,6 +52,7 @@ class ManualPaymentTaskAccountingTargetPolicyTest {
     void setUp() {
         policy = new ManualPaymentTaskAccountingTargetPolicy(
                 profileRepository,
+                managerRepository,
                 workerRepository,
                 taskRepository,
                 ledgerService,
@@ -123,6 +127,48 @@ class ManualPaymentTaskAccountingTargetPolicyTest {
                 false,
                 null
         ));
+    }
+
+    @Test
+    void managerOptionsRecommendOnlyManagersOwnStructuredProfile() {
+        User managerUser = new User();
+        managerUser.setId(42L);
+        managerUser.setFio("Вика");
+        Manager manager = new Manager();
+        manager.setId(5L);
+        manager.setUser(managerUser);
+        ContractorPaymentProfile managerProfile = profile(true);
+        managerProfile.setRole(ContractorRole.MANAGER);
+        managerProfile.setUser(managerUser);
+        ContractorPaymentProfile specialistProfile = profile(true);
+        specialistProfile.setId(88L);
+        specialistProfile.setRole(ContractorRole.SPECIALIST);
+        User specialistUser = new User();
+        specialistUser.setId(84L);
+        specialistUser.setFio("Наталья");
+        specialistProfile.setUser(specialistUser);
+
+        when(workerRepository.findUserIdsByManagerIds(Set.of(5L))).thenReturn(List.of(84L));
+        when(profileRepository.findAllEnabledByUserIds(Set.of(42L, 84L)))
+                .thenReturn(List.of(managerProfile, specialistProfile));
+        when(accountingPhaseService.current()).thenReturn(ContractorAllocationMode.SHADOW);
+        when(capacityService.evaluateTargetSnapshot(
+                any(), any(), any(), anyLong(), anyLong(), anyLong(), anyBoolean()
+        )).thenReturn(new ManualPaymentTaskContractorCapacityService.TargetCapacity(
+                500_000L, 0L, 0L, 500_000L, 100_000L, 0L));
+
+        var options = policy.managerOptions(manager, 100_000L, null);
+
+        assertEquals(true, options.stream()
+                .filter(option -> Long.valueOf(77L).equals(option.profileId()))
+                .findFirst()
+                .orElseThrow()
+                .recommended());
+        assertEquals(false, options.stream()
+                .filter(option -> Long.valueOf(88L).equals(option.profileId()))
+                .findFirst()
+                .orElseThrow()
+                .recommended());
     }
 
     @Test

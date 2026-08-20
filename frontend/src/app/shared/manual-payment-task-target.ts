@@ -24,6 +24,14 @@ export function manualPaymentTaskTargetForSnapshot(
     && (option.profileId ?? null) === (task.accountingTargetProfileId ?? null)) ?? null;
 }
 
+export function manualPaymentTaskRecommendedTarget(
+  options: readonly ManualPaymentTaskAccountingTargetOptionLike[]
+): ManualPaymentTaskAccountingTargetOptionLike | null {
+  return options.find(option => option.recommended === true
+    && option.enabled
+    && option.kind !== 'UNRESOLVED') ?? null;
+}
+
 export function manualPaymentTaskTargetEffect(
   target: ManualPaymentTaskAccountingTargetOptionLike | null | undefined
 ): string {

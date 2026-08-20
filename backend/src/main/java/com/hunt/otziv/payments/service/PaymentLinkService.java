@@ -267,6 +267,13 @@ public class PaymentLinkService {
         return prepareForOrder(orderId, null, false).response();
     }
 
+    public ManagerPaymentLinkResponse createForOrderInNewTransaction(Long orderId) {
+        return transactionExecutor.required(() -> {
+            requirePaymentLinksEnabled();
+            return prepareForOrder(orderId, null, false).response();
+        });
+    }
+
     /**
      * Manager-facing entry point. The current order row is locked before the
      * object-scope check, so a concurrent reassignment cannot invalidate the

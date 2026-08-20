@@ -1,0 +1,6 @@
+*** Begin Patch
+*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/PaymentReturnOrderRecoveryServiceTest.java
+@@
+-    void historicalReturnDoesNotReopenOrderWhenNewerPaymentIsAlreadyConfirmed() {
++    void historicalReturnDoesNotReopenOrderWhenNewerPaymentIsAlreadyConfirmed() throws Exception {
+*** End Patch

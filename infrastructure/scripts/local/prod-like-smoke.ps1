@@ -4131,6 +4131,26 @@ function Invoke-DockerComposeUpWithNetworkRepair {
     return Invoke-DockerComposeUp -ComposeArguments $ComposeArguments -UpArguments $UpArguments
 }
 
+function Assert-BackendDockerBuildContext {
+    param([Parameter(Mandatory = $true)][string]$RepoRoot)
+
+    $backendDir = Join-Path $RepoRoot "backend"
+    $requiredRelativePaths = @(
+        "Dockerfile",
+        "pom.xml",
+        "src\main",
+        "docker\certs\russian_trusted_root_ca.crt",
+        "docker\certs\russian_trusted_sub_ca.crt",
+        "docker\certs\russian_trusted_sub_ca_2024.crt"
+    )
+    foreach ($relativePath in $requiredRelativePaths) {
+        $candidate = Join-Path $backendDir $relativePath
+        if (-not (Test-Path -LiteralPath $candidate)) {
+            throw "Backend Docker build context is incomplete: missing $relativePath in $backendDir"
+        }
+    }
+}
+
 function Invoke-OfflineAppBuild {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,
@@ -4182,6 +4202,7 @@ function Invoke-OfflineAppBuild {
 
 $operationMutex = [System.Threading.Mutex]::new($false, 'OtzivProdLikeDatabaseOperation')
 $operationLockHeld = $false
+$repoLocationPushed = $false
 $previousLegacyMigrationEnv = [Environment]::GetEnvironmentVariable(
     'OTZIV_AUTH_LEGACY_MIGRATION_ENABLED',
     [EnvironmentVariableTarget]::Process
@@ -4222,6 +4243,8 @@ $env:OTZIV_CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_MASTER_ENABLED = 'false'
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
+Push-Location $repoRoot
+$repoLocationPushed = $true
 if (-not $SkipProdDbRestore -and ($VpsHost -notmatch '^[A-Za-z0-9.-]+$' -or $VpsUser -notmatch '^[A-Za-z0-9._-]+$')) {
     throw 'VpsHost/VpsUser contain unsupported characters.'
 }
@@ -4402,6 +4425,7 @@ try {
             # Build the application image before mounting legacy volumes. This
             # lets the ownership repair complete before Compose waits on the
             # non-root application's health check.
+            Assert-BackendDockerBuildContext -RepoRoot $repoRoot
             $buildResult = Invoke-DockerComposeUp -ComposeArguments $composeArgs -UpArguments @("build")
             $canFallback = $buildResult.ExitCode -ne 0 -and -not $NoOfflineFallback -and (Test-RegistryBuildFailure -Output $buildResult.Output)
             if ($buildResult.ExitCode -ne 0 -and -not $canFallback) {
@@ -4522,4 +4546,7 @@ try {
         $operationMutex.ReleaseMutex()
     }
     $operationMutex.Dispose()
+    if ($repoLocationPushed) {
+        Pop-Location
+    }
 }

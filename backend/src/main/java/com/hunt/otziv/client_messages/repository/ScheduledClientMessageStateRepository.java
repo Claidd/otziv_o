@@ -39,6 +39,23 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
 
     List<ScheduledClientMessageState> findByOrderIdIn(Collection<Long> orderIds);
 
+    @Query("""
+        SELECT s
+        FROM ScheduledClientMessageState s, Order o
+        JOIN o.status status
+        WHERE s.orderId = o.id
+          AND s.status = :status
+          AND s.scenario IN :scenarios
+          AND status.title IN :orderStatuses
+        ORDER BY s.id ASC
+    """)
+    List<ScheduledClientMessageState> findActiveOrderAutomationStatesByOrderStatuses(
+            @Param("scenarios") Collection<ClientMessageScenario> scenarios,
+            @Param("status") ScheduledMessageStateStatus status,
+            @Param("orderStatuses") Collection<String> orderStatuses,
+            Pageable pageable
+    );
+
     long countByStatus(ScheduledMessageStateStatus status);
 
     @Query(value = """
@@ -424,7 +441,21 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
           AND s.nextAttemptAt IS NOT NULL
           AND s.nextAttemptAt <= :now
           AND (s.lockedUntil IS NULL OR s.lockedUntil < :now)
-        ORDER BY s.nextAttemptAt ASC, s.id ASC
+        ORDER BY
+          CASE s.scenario
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_INVOICE_RETRY THEN 0
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.BAD_REVIEW_INVOICE THEN 1
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_REMINDER THEN 2
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION THEN 3
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_RECOVERY_NOTICE THEN 4
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.CLIENT_TEXT_REMINDER THEN 5
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY THEN 6
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER THEN 7
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.ARCHIVE_REORDER_OFFER THEN 20
+            ELSE 10
+          END ASC,
+          s.nextAttemptAt ASC,
+          s.id ASC
     """)
     List<ScheduledClientMessageState> findDue(@Param("status") ScheduledMessageStateStatus status,
                                               @Param("now") LocalDateTime now,
@@ -437,7 +468,21 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
           AND s.nextAttemptAt IS NOT NULL
           AND s.nextAttemptAt <= :now
           AND (s.lockedUntil IS NULL OR s.lockedUntil < :now)
-        ORDER BY s.nextAttemptAt ASC, s.id ASC
+        ORDER BY
+          CASE s.scenario
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_INVOICE_RETRY THEN 0
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.BAD_REVIEW_INVOICE THEN 1
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_REMINDER THEN 2
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION THEN 3
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_RECOVERY_NOTICE THEN 4
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.CLIENT_TEXT_REMINDER THEN 5
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY THEN 6
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.REVIEW_CHECK_REMINDER THEN 7
+            WHEN com.hunt.otziv.client_messages.model.ClientMessageScenario.ARCHIVE_REORDER_OFFER THEN 20
+            ELSE 10
+          END ASC,
+          s.nextAttemptAt ASC,
+          s.id ASC
     """)
     List<Long> findDueIds(@Param("status") ScheduledMessageStateStatus status,
                           @Param("now") LocalDateTime now,

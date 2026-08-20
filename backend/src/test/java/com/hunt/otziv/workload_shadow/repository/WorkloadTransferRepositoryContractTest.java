@@ -335,6 +335,60 @@ class WorkloadTransferRepositoryContractTest {
     }
 
     @Test
+    void singleRecipientFallbackForcesOnlyRealNoResponseAndKeepsOwnerVisible() {
+        assertQueryContains(
+                WorkloadTransferOfferRepository.class,
+                "lockSingleRecipientForcedTransfers",
+                "candidate.status IN ('DECLINED', 'EXPIRED')"
+        );
+        assertQueryContains(
+                WorkloadTransferOfferRepository.class,
+                "lockSingleRecipientForcedTransfers",
+                "offer.status IN ('DECLINED', 'EXPIRED')"
+        );
+        assertQueryContains(
+                WorkloadTransferOfferRepository.class,
+                "lockSingleRecipientForcedTransfers",
+                "AND open_candidate.status IN ("
+        );
+        assertQueryContains(
+                WorkloadTransferOfferRepository.class,
+                "lockSingleRecipientForcedTransfers",
+                ") = 1"
+        );
+        assertQueryContains(
+                WorkloadTransferOfferRepository.class,
+                "lockSingleRecipientForcedTransfers",
+                "candidate_current.recipient_eligible = TRUE"
+        );
+        assertQueryContains(
+                WorkloadTransferOfferRepository.class,
+                "lockSingleRecipientForcedTransfers",
+                "FOR UPDATE"
+        );
+        assertQueryContains(
+                WorkloadTransferOfferRepository.class,
+                "forceSingleRecipientAcceptedAfterNoResponse",
+                "workflow.status = 'ACCEPTED'"
+        );
+        assertQueryDoesNotContain(
+                WorkloadTransferOfferRepository.class,
+                "forceSingleRecipientAcceptedAfterNoResponse",
+                "FROM workload_transfer_workflows workflow"
+        );
+        assertQueryContains(
+                WorkloadShadowEventRepository.class,
+                "upsertSingleRecipientForcedTransferEvents",
+                "LIVE_SINGLE_RECIPIENT_FORCED"
+        );
+        assertQueryContains(
+                WorkloadShadowEventRepository.class,
+                "upsertSingleRecipientForcedTransferEvents",
+                "Нужен дополнительный получатель нагрузки"
+        );
+    }
+
+    @Test
     void employeeResponseDeadlineStartsOnlyAfterTelegramDelivery() {
         assertQueryContains(
                 WorkloadTransferOfferRepository.class,

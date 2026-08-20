@@ -997,6 +997,124 @@ public interface WorkloadTransferOfferRepository
 
     @Modifying
     @Query(value = """
+            UPDATE workload_transfer_workflows workflow
+            JOIN workload_transfer_workflow_candidates candidate
+              ON candidate.workload_transfer_workflow_candidate_id =
+                 :candidateId
+             AND candidate.workflow_id =
+                 workflow.workload_transfer_workflow_id
+            JOIN workload_transfer_offers offer
+              ON offer.workload_transfer_offer_id = :offerId
+             AND offer.workflow_id = workflow.workload_transfer_workflow_id
+             AND offer.workflow_candidate_id =
+                 candidate.workload_transfer_workflow_candidate_id
+            JOIN workload_shadow_worker_current candidate_current
+              ON candidate_current.worker_id = candidate.worker_id
+             AND candidate_current.manager_id = workflow.manager_id
+            JOIN workers candidate_worker
+              ON candidate_worker.worker_id = candidate.worker_id
+            JOIN users candidate_user
+              ON candidate_user.id = candidate_worker.user_id
+            SET offer.status = 'ACCEPTED',
+                offer.responded_at = COALESCE(offer.responded_at, :now),
+                offer.response_reason = :reason,
+                offer.updated_at = :now,
+                workflow.status = 'ACCEPTED',
+                workflow.current_offer_id = offer.workload_transfer_offer_id,
+                workflow.accepted_worker_id = candidate.worker_id,
+                workflow.owner_confirmation_required = FALSE,
+                workflow.last_transition_at = :now,
+                workflow.workflow_version = workflow.workflow_version + 1,
+                workflow.updated_at = :now,
+                candidate.status = 'ACCEPTED',
+                candidate.last_responded_at =
+                    COALESCE(candidate.last_responded_at, :now),
+                candidate.response_reason = :reason,
+                candidate.updated_at = :now
+            WHERE workflow.workload_transfer_workflow_id = :workflowId
+              AND workflow.active = TRUE
+              AND workflow.status = 'READY_TO_OFFER'
+              AND workflow.current_offer_id IS NULL
+              AND candidate.status IN ('DECLINED', 'EXPIRED')
+              AND offer.status IN ('DECLINED', 'EXPIRED')
+              AND candidate_current.recipient_eligible = TRUE
+              AND candidate_current.accepts_company_transfers = TRUE
+              AND candidate_current.worker_group_connected = TRUE
+              AND candidate_user.worker_telegram_group_chat_id =
+                  candidate.target_group_chat_id
+              AND candidate_user.telegram_chat_id =
+                  candidate.candidate_telegram_id
+            """, nativeQuery = true)
+    int forceSingleRecipientAcceptedAfterNoResponse(
+            @Param("workflowId") long workflowId,
+            @Param("candidateId") long candidateId,
+            @Param("offerId") long offerId,
+            @Param("now") LocalDateTime now,
+            @Param("reason") String reason
+    );
+
+    @Query(value = """
+            SELECT workflow.workload_transfer_workflow_id AS workflowId,
+                   candidate.workload_transfer_workflow_candidate_id
+                       AS candidateId,
+                   offer.workload_transfer_offer_id AS offerId
+            FROM workload_transfer_workflows workflow
+            JOIN workload_transfer_workflow_candidates candidate
+              ON candidate.workflow_id =
+                 workflow.workload_transfer_workflow_id
+            JOIN workload_transfer_offers offer
+              ON offer.workflow_id =
+                 workflow.workload_transfer_workflow_id
+             AND offer.workflow_candidate_id =
+                 candidate.workload_transfer_workflow_candidate_id
+            JOIN workload_shadow_worker_current candidate_current
+              ON candidate_current.worker_id = candidate.worker_id
+             AND candidate_current.manager_id = workflow.manager_id
+            JOIN workers candidate_worker
+              ON candidate_worker.worker_id = candidate.worker_id
+            JOIN users candidate_user
+              ON candidate_user.id = candidate_worker.user_id
+            WHERE workflow.active = TRUE
+              AND workflow.status = 'READY_TO_OFFER'
+              AND workflow.current_offer_id IS NULL
+              AND (:workflowId IS NULL
+                   OR workflow.workload_transfer_workflow_id = :workflowId)
+              AND candidate.status IN ('DECLINED', 'EXPIRED')
+              AND offer.status IN ('DECLINED', 'EXPIRED')
+              AND candidate_current.recipient_eligible = TRUE
+              AND candidate_current.accepts_company_transfers = TRUE
+              AND candidate_current.worker_group_connected = TRUE
+              AND candidate_user.worker_telegram_group_chat_id =
+                  candidate.target_group_chat_id
+              AND candidate_user.telegram_chat_id =
+                  candidate.candidate_telegram_id
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM workload_transfer_workflow_candidates open_candidate
+                  WHERE open_candidate.workflow_id =
+                        workflow.workload_transfer_workflow_id
+                    AND open_candidate.status IN (
+                        'WAITING',
+                        'OFFERED',
+                        'ACCEPTED'
+                    )
+              )
+              AND (
+                  SELECT COUNT(*)
+                  FROM workload_transfer_workflow_candidates only_candidate
+                  WHERE only_candidate.workflow_id =
+                        workflow.workload_transfer_workflow_id
+              ) = 1
+            ORDER BY workflow.last_transition_at,
+                     workflow.workload_transfer_workflow_id
+            FOR UPDATE
+            """, nativeQuery = true)
+    List<ForcedSingleRecipientProjection> lockSingleRecipientForcedTransfers(
+            @Param("workflowId") Long workflowId
+    );
+
+    @Modifying
+    @Query(value = """
             UPDATE workload_transfer_offers
             SET status = 'CANCELLED',
                 responded_at = :now,
@@ -1011,6 +1129,13 @@ public interface WorkloadTransferOfferRepository
             @Param("reason") String reason
     );
 
+    interface ForcedSingleRecipientProjection {
+        Long getWorkflowId();
+
+        Long getCandidateId();
+
+        Long getOfferId();
+    }
     interface StageCandidateProjection {
         Long getWorkflowId();
         Long getManagerId();

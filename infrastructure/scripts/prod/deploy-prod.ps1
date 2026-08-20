@@ -689,6 +689,17 @@ if (-not $Tag.EndsWith($revisionTagSuffix, [StringComparison]::OrdinalIgnoreCase
 Write-Host "Deployment revision: $gitRevision"
 Write-Host "Traceable image tag: $Tag"
 
+$deployWhatsAppChanged = $true
+if ($PreparedDeploySnapshot) {
+    $deployChangedFiles = @(& git -C $repoRoot diff --name-only --diff-filter=ACDMRTUXB $DeploySnapshotBaseRevision $gitRevision)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to determine deploy snapshot changed files for WhatsApp image policy.'
+    }
+    $deployWhatsAppChanged = @($deployChangedFiles | Where-Object {
+        $_ -eq 'Dockerfile.whatsapp' -or $_ -like 'whatsapp/*'
+    }).Count -gt 0
+}
+
 if ($PrepareSnapshotOnly) {
     if ($PreparedDeploySnapshot) {
         Write-Host 'Automatic snapshot preparation completed; Docker build and VPS access were not started.'
@@ -822,6 +833,11 @@ if ($EnableExternalReviewWorker) {
     Write-Host "  EXTERNAL_REVIEW_WORKER_IMAGE=$externalReviewWorkerImage (enabled)"
 } else {
     Write-Host "  EXTERNAL_REVIEW_WORKER=disabled (use -EnableExternalReviewWorker to opt in)"
+}
+if ($deployWhatsAppChanged) {
+    Write-Host "  WHATSAPP_IMAGE=otziv-whatsapp:$Tag (remote build required)"
+} else {
+    Write-Host "  WHATSAPP_IMAGE=reuse current remote image (sources unchanged)"
 }
 if ($null -ne $mobileRelease) {
     Write-Host "  MOBILE_APK_CANDIDATE=$($mobileRelease.File.FullName) (version $($mobileRelease.VersionName), code $($mobileRelease.VersionCode))"
@@ -1035,6 +1051,7 @@ chmod 600 $remoteBundleForUploadQuoted
     $remoteDeployLockTokenQuoted = ConvertTo-BashSingleQuoted $remoteDeployLockToken
     $uploadedEnv = if ($SkipEnvUpload) { "0" } else { "1" }
     $deployExternalReviewWorker = if ($EnableExternalReviewWorker) { "1" } else { "0" }
+    $deployWhatsAppChangedFlag = if ($deployWhatsAppChanged) { "1" } else { "0" }
 
     # Create and independently download a verified encrypted DB backup before
     # the remote rollout can start Flyway. The deploy bundle is only read here;
@@ -1345,6 +1362,7 @@ app_image=$appImageQuoted
 web_image=$webImageQuoted
 external_review_worker_image=$externalReviewWorkerImageQuoted
 deploy_external_review_worker=$deployExternalReviewWorker
+deploy_whatsapp_changed=$deployWhatsAppChangedFlag
 env_file=$remoteEnvFileQuoted
 deploy_tag=$deployTagQuoted
 vps_host=$vpsHostQuoted
@@ -2486,7 +2504,21 @@ if [ "`$deploy_external_review_worker" = "1" ]; then
 else
   set_env EXTERNAL_REVIEW_CHECK_ENABLED "false"
 fi
-set_env WHATSAPP_IMAGE "otziv-whatsapp:`$deploy_tag"
+if [ "`$deploy_whatsapp_changed" = "1" ]; then
+  whatsapp_image="otziv-whatsapp:`$deploy_tag"
+else
+  whatsapp_image="`$(docker inspect -f '{{.Config.Image}}' whatsapp_lika 2>/dev/null || true)"
+  if [ -z "`$whatsapp_image" ]; then
+    echo "WhatsApp sources are unchanged, but whatsapp_lika container is missing; cannot safely reuse an image." >&2
+    exit 1
+  fi
+  if ! docker image inspect "`$whatsapp_image" >/dev/null 2>&1; then
+    echo "WhatsApp sources are unchanged, but reusable image `$whatsapp_image is missing." >&2
+    exit 1
+  fi
+  echo "WhatsApp sources unchanged; reusing `$whatsapp_image."
+fi
+set_env WHATSAPP_IMAGE "`$whatsapp_image"
 
 chmod 600 "`$env_file" || true
 
@@ -2588,7 +2620,11 @@ if [ "`$current_flyway_sha" != "`$expected_flyway_fingerprint" ]; then
   exit 1
 fi
 bash infrastructure/scripts/prod/validate-flyway-migrations.sh "`$app_image" my-mysql
-compose build whatsapp_lika whatsapp_vika
+if [ "`$deploy_whatsapp_changed" = "1" ]; then
+  compose build whatsapp_lika whatsapp_vika
+else
+  echo "Skipping WhatsApp image build because WhatsApp sources are unchanged."
+fi
 if ! compose run --rm --no-deps --interactive=false -T --entrypoint node whatsapp_lika chromium-smoke.js </dev/null >/dev/null 2>&1; then
   echo "WhatsApp Chromium sandbox preflight failed; existing gateway containers were not stopped." >&2
   exit 1

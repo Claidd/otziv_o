@@ -1,0 +1,10 @@
+*** Begin Patch
+*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/ManualPaymentTaskLedgerService.java
+@@
+-            if (!isResolvedAndUsable(task)) {
+-                throw ManualPaymentTaskRouteErrors.unresolved();
+-            }
++            if (!isResolvedAndUsable(task)) {
++                continue;
++            }
+*** End Patch

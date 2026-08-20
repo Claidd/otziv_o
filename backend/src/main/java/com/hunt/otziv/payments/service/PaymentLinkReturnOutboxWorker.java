@@ -69,7 +69,10 @@ public class PaymentLinkReturnOutboxWorker {
                                 claim.paymentLinkId(),
                                 observedStatus
                         )
-                ).ifPresent(clientMessageService::enqueuePaymentReminderAfterFullReturn);
+                ).ifPresent(orderId -> {
+                    orderRecoveryService.createReplacementPaymentRoute(orderId);
+                    clientMessageService.enqueuePaymentReminderAfterFullReturn(orderId);
+                });
             }
             transactions.succeeded(claim);
         } catch (RuntimeException failure) {

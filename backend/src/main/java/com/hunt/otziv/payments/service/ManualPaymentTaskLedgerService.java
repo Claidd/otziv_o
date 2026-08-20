@@ -90,7 +90,7 @@ public class ManualPaymentTaskLedgerService {
                 continue;
             }
             if (!isResolvedAndUsable(task)) {
-                throw ManualPaymentTaskRouteErrors.unresolved();
+                continue;
             }
             ManualPaymentTaskContractorCapacityService.TaskCommitmentSnapshot beforeCommitment =
                     capacityService.snapshot(task, balance);

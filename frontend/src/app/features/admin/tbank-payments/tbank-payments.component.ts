@@ -54,6 +54,7 @@ import {
   manualPaymentUnpaidCloseNotePrompt
 } from './manual-payment-unpaid-close';
 import {
+  manualPaymentTaskRecommendedTarget,
   manualPaymentTaskSelectedTarget,
   manualPaymentTaskTargetEffect,
   manualPaymentTaskTargetForSnapshot,
@@ -1645,10 +1646,10 @@ export class TbankPaymentsComponent implements OnDestroy {
           return;
         }
         const normalized = options ?? [];
+        const restored = normalized.find(option => option.key === previousKey)
+          ?? manualPaymentTaskRecommendedTarget(normalized);
         this.adminTaskAccountingTargets.set(normalized);
-        this.adminTaskAccountingTargetKey.set(
-          normalized.some(option => option.key === previousKey) ? previousKey : ''
-        );
+        this.adminTaskAccountingTargetKey.set(restored?.key ?? '');
         this.adminTaskAccountingTargetsLoading.set(false);
       },
       error: (error) => {

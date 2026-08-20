@@ -26,6 +26,7 @@ public class WorkloadTransferOfferService {
     private final WorkloadTransferWorkflowRepository workflowRepository;
     private final WorkloadLiveSettingsService liveSettingsService;
     private final WorkloadShadowSettingsService shadowSettingsService;
+    private final WorkloadForcedSingleRecipientService forcedSingleRecipientService;
     private final com.hunt.otziv.workload_shadow.repository.WorkloadLiveControlRepository liveControlRepository;
 
     @Transactional
@@ -54,13 +55,13 @@ public class WorkloadTransferOfferService {
         offerRepository.expireUndeliveredOffers(now);
         offerRepository.releaseDeliveryFailedWorkflows(now);
         offerRepository.skipUnavailableWaitingCandidates(now);
-        workflowRepository.markExhaustedWorkflows(now);
+        finalizeExhausted(now);
         if (!insideOfferWindow(settings, now.toLocalTime())) {
             return new OfferStageResult(true, 0, expired, "Вне окна предложений");
         }
 
         int staged = stageCandidateOffers(settings, now);
-        workflowRepository.markExhaustedWorkflows(now);
+        finalizeExhausted(now);
         return new OfferStageResult(
                 true,
                 staged,
@@ -83,10 +84,10 @@ public class WorkloadTransferOfferService {
                 offerRepository.releaseUnavailableUndeliveredOffers(now);
         if (unavailable > 0) {
             offerRepository.skipUnavailableWaitingCandidates(now);
-            workflowRepository.markExhaustedWorkflows(now);
+            finalizeExhausted(now);
             if (insideOfferWindow(settings, now.toLocalTime())) {
                 stageCandidateOffers(settings, now);
-                workflowRepository.markExhaustedWorkflows(now);
+                finalizeExhausted(now);
             }
         }
         String token = UUID.randomUUID().toString();
@@ -202,6 +203,11 @@ public class WorkloadTransferOfferService {
         }
         offerRepository.releaseDeliveryFailedWorkflows(failedAt);
         workflowRepository.markExhaustedWorkflows(failedAt);
+    }
+
+    private void finalizeExhausted(LocalDateTime now) {
+        forcedSingleRecipientService.acceptExhaustedQueues(now);
+        workflowRepository.markExhaustedWorkflows(now);
     }
 
     private int stageCandidateOffers(
