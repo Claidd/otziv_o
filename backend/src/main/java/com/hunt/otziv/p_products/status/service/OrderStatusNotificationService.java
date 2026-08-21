@@ -213,11 +213,15 @@ public class OrderStatusNotificationService {
         log.info("🔹 Активный канал по ссылке: {}", activePlatform);
 
         String sentChannel = switch (activePlatform) {
-            case WHATSAPP -> hasText(groupId) ? sendToWhatsApp(order, clientId, groupId, message) : missingActiveChannel("WhatsApp", order);
+            case WHATSAPP -> hasText(groupId)
+                    ? sendToWhatsApp(order, clientId, groupId, messageForPlainChannel(message, telegramCopyButton))
+                    : missingActiveChannel("WhatsApp", order);
             case TELEGRAM -> telegramChatId != null
                     ? sendToTelegram(telegramChatId, message, telegramCopyButton)
                     : missingActiveChannel("Telegram", order);
-            case MAX -> maxChatId != null ? sendToMax(maxChatId, message) : missingActiveChannel("MAX", order);
+            case MAX -> maxChatId != null
+                    ? sendToMax(maxChatId, messageForPlainChannel(message, telegramCopyButton))
+                    : missingActiveChannel("MAX", order);
             case UNKNOWN -> missingActiveChannel("неизвестный мессенджер", order);
         };
         return sentChannel;
@@ -440,6 +444,27 @@ public class OrderStatusNotificationService {
 
     private Long maxGroupChatId(Order order) {
         return order != null && order.getCompany() != null ? order.getCompany().getMaxGroupChatId() : null;
+    }
+
+    private String messageForPlainChannel(String message, TelegramTransferCopyButton copyButton) {
+        if (copyButton == null || !hasText(copyButton.copyText())) {
+            return message;
+        }
+        String copyHint = plainCopyHint(copyButton);
+        if (!hasText(copyHint) || (message != null && message.contains(copyHint))) {
+            return message;
+        }
+        return message + "\n\n" + copyHint;
+    }
+
+    private String plainCopyHint(TelegramTransferCopyButton copyButton) {
+        String label = "Скопировать номер";
+        if ("Скопировать номер карты".equals(copyButton.text())) {
+            label = "Номер карты для копирования";
+        } else if ("Скопировать номер телефона".equals(copyButton.text())) {
+            label = "Телефон для копирования";
+        }
+        return label + ": " + copyButton.copyText();
     }
 
     private ChatPlatform activeChatPlatform(Order order) {

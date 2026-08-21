@@ -187,157 +187,112 @@ dd {
   overflow-wrap: anywhere;
   font-weight: 900;
 }
-
-.manager-performance {
+.card-finance {
   display: grid;
-  gap: 0.65rem;
-  border-top: 1px solid rgba(103, 116, 131, 0.16);
-  padding-top: 0.75rem;
+  gap: 0.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: 0.95rem;
+  padding: 0.72rem;
+  background:
+    radial-gradient(circle at top right, rgba(49, 164, 145, 0.1), transparent 9rem),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 248, 253, 0.9));
 }
 
-.performance-head {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.15rem 0.45rem;
+.card-finance.muted {
+  opacity: 0.62;
+}
+
+.card-finance-title {
+  display: flex;
+  min-width: 0;
   align-items: center;
+  gap: 0.35rem;
+  color: var(--otziv-info);
 }
 
-.performance-head span {
-  grid-row: span 2;
+.card-finance-title span {
   color: var(--otziv-primary);
+  font-size: 1.05rem;
 }
 
-.performance-head strong,
-.performance-head small {
+.card-finance-title strong {
+  color: var(--otziv-dark);
+  font-size: 0.82rem;
+}
+
+.card-finance-title small {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  background: var(--otziv-light);
+  color: var(--otziv-info);
+  font-size: 0.66rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.card-finance-title small.live {
+  color: var(--otziv-success);
+  background: rgba(49, 164, 145, 0.12);
+}
+
+.card-finance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.35rem, 1fr));
+  gap: 0.45rem;
+}
+
+.card-finance-grid > span {
+  min-width: 0;
+  border: 1px solid rgba(103, 116, 131, 0.12);
+  border-radius: 0.75rem;
+  padding: 0.52rem;
+  background: var(--otziv-white);
+}
+
+.card-finance-grid > span.reserved {
+  border-color: rgba(239, 177, 77, 0.34);
+  background: linear-gradient(135deg, rgba(239, 177, 77, 0.11), rgba(255, 255, 255, 0.95));
+}
+
+.card-finance-grid > span.paid {
+  border-color: rgba(49, 164, 145, 0.28);
+  background: linear-gradient(135deg, rgba(49, 164, 145, 0.11), rgba(255, 255, 255, 0.95));
+}
+
+.card-finance-grid > span.transfers {
+  border-color: rgba(79, 111, 181, 0.24);
+  background: linear-gradient(135deg, rgba(79, 111, 181, 0.1), rgba(255, 255, 255, 0.95));
+}
+
+.card-finance-grid small {
+  display: block;
   overflow: hidden;
+  color: var(--otziv-info);
+  font-size: 0.66rem;
+  font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.performance-head small,
-.performance-grid small {
-  color: var(--otziv-info);
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.performance-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.45rem;
-}
-
-.performance-grid span {
-  display: grid;
-  min-width: 0;
-  min-height: 3rem;
-  align-content: center;
-  gap: 0.1rem;
-  border: 1px solid rgba(103, 116, 131, 0.12);
-  border-radius: var(--otziv-small-radius);
-  padding: 0.45rem;
-  background: var(--otziv-muted-surface);
-}
-
-.performance-grid b {
+.card-finance-grid b {
+  display: block;
+  margin-top: 0.18rem;
+  color: var(--otziv-dark);
+  font-size: 0.82rem;
+  font-weight: 900;
   overflow-wrap: anywhere;
 }
 
-.score-formula {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.formula-title {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.35rem;
-}
-
-.formula-title strong {
-  font-size: 0.86rem;
-}
-
-.formula-title small {
+.card-finance-grid em {
+  display: block;
+  margin-top: 0.1rem;
   color: var(--otziv-info);
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: lowercase;
-}
-
-.formula-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.45rem;
-}
-
-.formula-factor {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-width: 0;
-  min-height: 3.35rem;
-  align-items: center;
-  gap: 0.15rem 0.45rem;
-  border: 1px solid rgba(103, 116, 131, 0.15);
-  border-radius: var(--otziv-small-radius);
-  padding: 0.5rem;
-  color: var(--otziv-dark);
-  background: var(--otziv-white);
-  box-shadow: none;
-  text-align: left;
-}
-
-.formula-factor:hover,
-.formula-factor.active {
-  border-color: rgba(126, 166, 228, 0.55);
-  background: rgba(126, 166, 228, 0.1);
-}
-
-.formula-factor span {
-  display: grid;
-  min-width: 0;
-  gap: 0.05rem;
-}
-
-.formula-factor small,
-.factor-tip {
-  color: var(--otziv-info);
-  font-size: 0.7rem;
-  font-weight: 800;
-}
-
-.formula-factor b,
-.formula-factor strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.formula-factor strong {
-  font-size: 0.8rem;
-}
-
-.factor-tip {
-  grid-column: 1 / -1;
-  padding-top: 0.25rem;
+  font-size: 0.66rem;
   font-style: normal;
-  line-height: 1.35;
-}
-
-.manager-performance.excellent .performance-head span,
-.manager-performance.good .performance-head span {
-  color: var(--otziv-success);
-}
-
-.manager-performance.warning .performance-head span {
-  color: #b78a16;
-}
-
-.manager-performance.risk .performance-head span {
-  color: var(--otziv-danger);
+  font-weight: 900;
 }
 
 .empty-section {
@@ -409,9 +364,6 @@ dd {
     font-size: 1.35rem;
   }
 
-  .formula-grid {
-    grid-template-columns: 1fr;
-  }
 
   .score-section {
     gap: 0.65rem;
@@ -623,7 +575,7 @@ dd {
   }
 
   .score-card > dl,
-  .manager-performance {
+  .card-finance {
     grid-column: 1 / -1;
   }
 
@@ -644,29 +596,6 @@ dd {
   dd {
     margin-top: 0.12rem;
     font-size: 0.72rem;
-  }
-
-  .manager-performance {
-    gap: 0.5rem;
-    padding-top: 0.6rem;
-  }
-
-  .performance-grid span,
-  .formula-factor {
-    border-color: rgba(103, 116, 131, 0.14);
-    border-radius: 0.7rem;
-    background: var(--otziv-white);
-  }
-
-  .formula-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .formula-factor:hover,
-  .formula-factor.active {
-    border-color: rgba(108, 155, 207, 0.3);
-    color: var(--otziv-primary);
-    background: var(--otziv-light);
   }
 
   .empty-section {

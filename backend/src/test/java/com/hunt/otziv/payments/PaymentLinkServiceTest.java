@@ -7,6 +7,7 @@ import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentRequisitesSnapshot;
+import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.manager.service.ManagerAccessService;
@@ -51,6 +52,7 @@ import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.ManualCardPaymentReviewNotificationService;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
@@ -67,6 +69,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -179,6 +182,9 @@ class PaymentLinkServiceTest {
     private ContractorPaymentShadowService contractorPaymentShadowService;
 
     @Mock
+    private ContractorPaymentRuntimeSwitch contractorPaymentRuntimeSwitch;
+
+    @Mock
     private PaymentLinkReturnOutboxService paymentLinkReturnOutboxService;
 
     @Mock
@@ -218,6 +224,34 @@ class PaymentLinkServiceTest {
 
             verify(contractorPaymentShadowService)
                     .reserveForPaymentLinkId(8_901L, "generation");
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    void liveContractorRouteDoesNotCreateExtraShadowReservation() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = payableLink(null, "live-route", 10_000L);
+        link.setId(8_902L);
+        link.setShadowRouteGeneration("shadow-generation");
+        link.setManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        link.setContractorAllocationId(8_903L);
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            ManagerPaymentLinkResponse response = ReflectionTestUtils.invokeMethod(
+                    service,
+                    "toManagerResponseWithShadowRoute",
+                    link
+            );
+
+            assertNotNull(response);
+            assertTrue(org.springframework.transaction.support.TransactionSynchronizationManager
+                    .getSynchronizations()
+                    .isEmpty());
+            verify(contractorPaymentShadowService, never())
+                    .reserveForPaymentLinkId(anyLong(), any());
         } finally {
             org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
         }
@@ -712,6 +746,49 @@ class PaymentLinkServiceTest {
         ArgumentCaptor<PaymentLink> saved = ArgumentCaptor.forClass(PaymentLink.class);
         verify(paymentLinkRepository, times(2)).save(saved.capture());
         assertEquals(723L, saved.getAllValues().getLast().getContractorAllocationId());
+    }
+
+    @Test
+    void blockedLiveRoutingFallsBackToBankLinkInsteadOfLegacyManualProfile() {
+        PaymentLinkService service = service(properties());
+        Order order = order(725L, "ООО Заблокированный LIVE", BigDecimal.valueOf(1000));
+        PaymentProfile manualProfile = profile(6L, "manual", "Ручной профиль", "terminal");
+        manualProfile.setPaymentPolicy(PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK);
+        manualProfile.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
+        manualProfile.setManualPhone("+79990001122");
+        manualProfile.setManualRecipientName("Старый получатель");
+        manualProfile.setManualMonthlyHardLimitKopecks(200_000L);
+
+        when(orderRepository.findByIdForCounterUpdate(725L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(725L)).thenReturn(List.of());
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(725L),
+                anyCollection(),
+                any(LocalDateTime.class)
+        )).thenReturn(Optional.empty());
+        when(paymentProfileService.selectForManager(any())).thenReturn(manualProfile);
+        when(paymentProfileService.lockForRouting(manualProfile)).thenReturn(manualProfile);
+        when(contractorPaymentLiveRoutingService.enabledForNewRoutes()).thenReturn(false);
+        when(contractorPaymentLiveRoutingService.configuredButBlockedForNewRoutes()).thenReturn(true);
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> {
+            PaymentLink saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(726L);
+            }
+            return saved;
+        });
+
+        service.createForOrder(725L);
+
+        ArgumentCaptor<PaymentLink> saved = ArgumentCaptor.forClass(PaymentLink.class);
+        verify(paymentLinkRepository, times(2)).save(saved.capture());
+        PaymentLink link = saved.getAllValues().getLast();
+        assertEquals(PaymentMethod.BANK_FORM, link.getPaymentMethod());
+        assertNull(link.getManualSource());
+        assertNull(link.getManualPaymentType());
+        assertNull(link.getManualPhone());
+        assertNull(link.getManualRecipientName());
+        verify(contractorPaymentLiveRoutingService, never()).reserveForPaymentLink(any());
     }
 
     @ParameterizedTest
@@ -1454,6 +1531,44 @@ class PaymentLinkServiceTest {
         assertNull(route.manualTaskSourceGeneration());
         assertNull(route.manualTaskGeneration());
         assertNull(invoice.getPaymentRouteManualTaskSourceGeneration());
+        verify(manualPaymentTaskService, never())
+                .findRoutableTask(any(), any(), anyLong(), any());
+    }
+
+    @Test
+    void commonInvoiceBlockedLiveRoutingFallsBackToBankLinkInsteadOfLegacyManualProfile() {
+        PaymentLinkService service = service(properties());
+        Manager manager = manager("manager-common-blocked");
+        PaymentProfile profile = profile(7L, "manual-common", "Ручной профиль", "manual-terminal");
+        profile.setPaymentPolicy(PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK);
+        profile.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
+        profile.setManualPhone("+79990001122");
+        profile.setManualRecipientName("Старый получатель");
+        profile.setManualMonthlyHardLimitKopecks(500_000L);
+
+        when(runtimeSettingsService.paymentInstructionSource())
+                .thenReturn(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK);
+        when(paymentProfileService.selectForManager(manager)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(new TbankPaymentProfile(
+                7L,
+                "manual-common",
+                "Ручной профиль",
+                true,
+                "manual-terminal",
+                "password",
+                false
+        ));
+        when(contractorPaymentLiveRoutingService.configuredButBlockedForNewRoutes()).thenReturn(true);
+
+        var route = service.selectCommonInvoiceRoute(manager, 230_000L);
+
+        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK, route.routeType());
+        assertNull(route.manualSource());
+        assertNull(route.manualTaskId());
+        assertEquals("", route.manualPhone());
+        assertEquals("", route.manualRecipientName());
+        assertEquals("", route.instructionText());
         verify(manualPaymentTaskService, never())
                 .findRoutableTask(any(), any(), anyLong(), any());
     }
@@ -4273,6 +4388,101 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void preCutoverHistoricalBankRouteContextOffersOnlyLegacySettlementOption() {
+        PaymentLinkService service = service(properties());
+        Order order = order(25145L, "Мир тентов", BigDecimal.valueOf(1000));
+        PaymentLink link = initiatedBankLink(5245L, order, 100_000L);
+        link.setStatus(PaymentLinkStatus.EXPIRED);
+        link.setProviderTerminalStatus("DEADLINE_EXPIRED");
+        link.setCreatedAt(LocalDateTime.of(2026, 8, 19, 12, 0));
+        when(contractorPaymentRuntimeSwitch.completionAccountingActivatedAt())
+                .thenReturn(Optional.of(LocalDateTime.of(2026, 8, 20, 22, 30)));
+        when(orderRepository.findByIdForCounterUpdate(25145L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25145L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(5245L)).thenReturn(Optional.of(link));
+
+        ManualCardPaymentContextResponse context = service.manualCardPaymentContextForOrder(25145L, authentication);
+
+        assertEquals(25145L, context.orderId());
+        assertEquals(1, context.candidates().size());
+        assertEquals("LEGACY_PRE_CUTOVER_MANUAL_CARD", context.originalRecipient().key());
+        assertEquals("Историческая оплата до запуска", context.originalRecipient().displayName());
+        assertNull(context.originalRecipient().recipientType());
+        assertTrue(context.originalRecipient().effectText().contains("новые выплаты"));
+        verifyNoInteractions(actualPaymentAttributionService);
+    }
+
+    @Test
+    void preCutoverHistoricalBankRouteReportCompletesOrderWithoutLiveActualAttribution() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25146L, "Дали", BigDecimal.valueOf(1000));
+        PaymentLink link = initiatedBankLink(5246L, order, 100_000L);
+        link.setStatus(PaymentLinkStatus.EXPIRED);
+        link.setProviderTerminalStatus("DEADLINE_EXPIRED");
+        link.setCreatedAt(LocalDateTime.of(2026, 8, 19, 12, 0));
+        when(contractorPaymentRuntimeSwitch.completionAccountingActivatedAt())
+                .thenReturn(Optional.of(LocalDateTime.of(2026, 8, 20, 22, 30)));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        when(orderRepository.findByIdForCounterUpdate(25146L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25146L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(5246L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(5246L)).thenReturn(Optional.of(link));
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+
+        service.reportPaidByManualCardTransferForOrder(
+                25146L,
+                "Оплата пришла до запуска на старые реквизиты",
+                null,
+                null,
+                null,
+                "LEGACY_PRE_CUTOVER_MANUAL_CARD",
+                "manager@example.ru",
+                authentication
+        );
+
+        assertTrue(link.getLastError().startsWith("manual_card_payment_completed:"));
+        verify(orderTransactionService).handlePaymentStatus(order);
+        verify(actualPaymentAttributionService, never()).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), any(), anyString(), any(), anyString()
+        );
+        verify(actualPaymentAttributionService, never()).recordPaymentLinkFinalAttribution(any(), any(), any());
+        verify(taskReceiptIntegrationService, never()).settle(any(PaymentLink.class), anyString(), anyLong(), anyString(), any(), any());
+    }
+
+    @Test
+    void postCutoverBankRouteCannotUseHistoricalManualCardSettlementKey() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25147L, "Новая оплата", BigDecimal.valueOf(1000));
+        PaymentLink link = initiatedBankLink(5247L, order, 100_000L);
+        link.setStatus(PaymentLinkStatus.EXPIRED);
+        link.setProviderTerminalStatus("DEADLINE_EXPIRED");
+        link.setCreatedAt(LocalDateTime.of(2026, 8, 21, 12, 0));
+        when(contractorPaymentRuntimeSwitch.completionAccountingActivatedAt())
+                .thenReturn(Optional.of(LocalDateTime.of(2026, 8, 20, 22, 30)));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        when(orderRepository.findByIdForCounterUpdate(25147L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25147L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(5247L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(5247L)).thenReturn(Optional.of(link));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class, () ->
+                service.reportPaidByManualCardTransferForOrder(
+                        25147L,
+                        "Новая оплата не должна идти историческим путём",
+                        null,
+                        null,
+                        null,
+                        "LEGACY_PRE_CUTOVER_MANUAL_CARD",
+                        "manager@example.ru",
+                        authentication
+                ));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+        verify(actualPaymentAttributionService, never()).recordPaymentLinkFinalAttribution(any(), any(), any());
+    }
+
+    @Test
     void managerManualCardReportRequiresReasonBeforeReadingPaymentData() {
         PaymentLinkService service = service(properties());
 
@@ -6014,6 +6224,7 @@ class PaymentLinkServiceTest {
                 manualCardPaymentReviewNotificationService,
                 contractorPaymentLiveRoutingService,
                 contractorPaymentShadowService,
+                contractorPaymentRuntimeSwitch,
                 paymentLinkReturnOutboxService,
                 actualPaymentAttributionService,
                 contractorPaymentTargetAccessPolicy,

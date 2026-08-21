@@ -28,8 +28,10 @@ import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.model.PaymentLink;
-import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
+import com.hunt.otziv.payments.service.PaymentIssueReminderService;
+import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
@@ -168,6 +170,7 @@ public class ScheduledClientMessageService {
     private final OrderStatusNotificationService orderStatusNotificationService;
     private final OrderPaymentMessageBuilder orderPaymentMessageBuilder;
     private final PaymentLinkService paymentLinkService;
+    private final PaymentIssueReminderService paymentIssueReminderService;
     private final OrderReviewCheckMessageBuilder reviewCheckMessageBuilder;
     private final BadReviewTaskService badReviewTaskService;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
@@ -373,6 +376,30 @@ public class ScheduledClientMessageService {
         return manualRetryResult(refreshed, true);
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Optional<RecoveredBadReviewDeliveryResult> recoverUncertainBadReviewInvoiceDelivery(
+            Long stateId,
+            boolean chatDeliveryVerified
+    ) {
+        if (stateId == null || stateId <= 0) {
+            return Optional.empty();
+        }
+        ScheduledClientMessageState snapshot = stateRepository.findById(stateId).orElse(null);
+        if (!isRecoverableUncertainBadReviewDelivery(snapshot)) {
+            return Optional.empty();
+        }
+        PaymentLinkService.PaymentLinkReconcileResult linkResult = snapshot.getOrderId() == null
+                ? new PaymentLinkService.PaymentLinkReconcileResult(null, null, null, false)
+                : paymentLinkService.reconcileActiveLinkForOrder(snapshot.getOrderId());
+        Optional<RecoveredBadReviewDeliveryResult> result = transactionRunner.callInNewTransaction(
+                () -> recoverUncertainBadReviewInvoiceDeliveryLocked(stateId, chatDeliveryVerified, linkResult)
+        );
+        result.filter(recovered -> !recovered.retryScheduled() && recovered.orderId() != null)
+                .ifPresent(recovered -> transactionRunner.runInNewTransaction(
+                        () -> scheduleBadReviewAutoBanAfterDelivery(recovered.orderId())
+                ));
+        return result;
+    }
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void reconcileCandidatesNow() {
         LocalDateTime nowStorage = LocalDateTime.now(clock);
@@ -1286,6 +1313,141 @@ public class ScheduledClientMessageService {
         }
     }
 
+    private Optional<RecoveredBadReviewDeliveryResult> recoverUncertainBadReviewInvoiceDeliveryLocked(
+            Long stateId,
+            boolean chatDeliveryVerified,
+            PaymentLinkService.PaymentLinkReconcileResult linkResult
+    ) {
+        ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
+        if (!isRecoverableUncertainBadReviewDelivery(state)) {
+            return Optional.empty();
+        }
+        Optional<ScheduledClientMessageAttempt> sentAttempt = latestSentAttemptFor(state);
+        if (!chatDeliveryVerified && sentAttempt.isEmpty()) {
+            return Optional.empty();
+        }
+        LocalDateTime nowStorage = databaseTimestamp(LocalDateTime.now(clock));
+        String source = chatDeliveryVerified ? "истории чата" : "зафиксированной SENT-попытке";
+        String message = firstText(
+                state.getDeliveryMessage(),
+                sentAttempt.map(ScheduledClientMessageAttempt::getMessagePreview).orElse(null),
+                state.getLastErrorMessage()
+        );
+        if (sentAttempt.isEmpty()) {
+            recordAttempt(state, ScheduledMessageAttemptStatus.SENT, "whatsapp", null, null, message, 0);
+        } else {
+            recordAttempt(
+                    state,
+                    ScheduledMessageAttemptStatus.SKIPPED,
+                    "system",
+                    AUTO_RECOVERED_ERROR_CODE,
+                    "Предыдущая отправка подтверждена по " + source,
+                    message,
+                    0
+            );
+        }
+        state.setDeliveryStatus("SENT");
+        state.setLastAttemptAt(nowStorage);
+        state.setLastSuccessAt(sentAttempt.map(ScheduledClientMessageAttempt::getAttemptedAt).orElse(nowStorage));
+        state.setConsecutiveFailures(0);
+        state.setSentCount(Math.max(1, state.getSentCount()));
+        state.setLockedUntil(null);
+
+        boolean retryScheduled = shouldScheduleBadReviewInvoiceRetryAfterRecoveredDelivery(state, linkResult);
+        String recoveryMessage;
+        if (retryScheduled) {
+            clearDeliveryPreparation(state);
+            state.setStatus(ScheduledMessageStateStatus.ACTIVE);
+            state.setNextAttemptAt(scheduleAtStorage(nowStorage));
+            state.setLastErrorCode(AUTO_RECOVERED_ERROR_CODE);
+            recoveryMessage = "Предыдущая отправка подтверждена по " + source
+                    + "; старая платежная ссылка закрыта или истекла, задача поставлена на безопасную новую отправку счета";
+            state.setLastErrorMessage(recoveryMessage);
+        } else {
+            state.setStatus(ScheduledMessageStateStatus.DONE);
+            state.setNextAttemptAt(null);
+            state.setLastErrorCode(null);
+            state.setLastErrorMessage(null);
+            recoveryMessage = "Предыдущая отправка подтверждена по " + source
+                    + "; техническая ошибка закрыта, повторный счет не отправлялся";
+        }
+        stateRepository.save(state);
+        return Optional.of(new RecoveredBadReviewDeliveryResult(
+                state.getId(),
+                state.getOrderId(),
+                retryScheduled,
+                recoveryMessage
+        ));
+    }
+
+    private boolean isRecoverableUncertainBadReviewDelivery(ScheduledClientMessageState state) {
+        return state != null
+                && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                && state.getScenario() == ClientMessageScenario.BAD_REVIEW_INVOICE
+                && ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode());
+    }
+
+    private Optional<ScheduledClientMessageAttempt> latestSentAttemptFor(ScheduledClientMessageState state) {
+        if (state == null) {
+            return Optional.empty();
+        }
+        return attemptRepository.findFirstByStateIdAndStatusOrderByAttemptedAtDescIdDesc(
+                        state.getId(),
+                        ScheduledMessageAttemptStatus.SENT
+                )
+                .or(() -> hasText(state.getTargetKey())
+                        ? attemptRepository.findFirstByScenarioAndTargetKeyAndStatusOrderByAttemptedAtDescIdDesc(
+                                state.getScenario(),
+                                state.getTargetKey(),
+                                ScheduledMessageAttemptStatus.SENT
+                        )
+                        : Optional.empty());
+    }
+
+    private boolean shouldScheduleBadReviewInvoiceRetryAfterRecoveredDelivery(
+            ScheduledClientMessageState state,
+            PaymentLinkService.PaymentLinkReconcileResult linkResult
+    ) {
+        if (state == null || state.getOrderId() == null) {
+            return false;
+        }
+        PaymentLinkStatus status = linkResult == null
+                ? null
+                : linkResult.statusAfter() == null ? linkResult.statusBefore() : linkResult.statusAfter();
+        if (isActiveRecoveredDeliveryPaymentLinkStatus(status)) {
+            return false;
+        }
+        Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
+        if (order == null || orderPaymentIntegrityService.hasSettledPaymentEvidence(order)) {
+            return false;
+        }
+        if (isManagedByActiveCommonInvoice(order)) {
+            return false;
+        }
+        String orderStatus = statusTitle(order);
+        return STATUS_NOT_PAID.equals(orderStatus) && !badReviewInvoiceTerminalStatuses().contains(orderStatus);
+    }
+
+    private boolean isActiveRecoveredDeliveryPaymentLinkStatus(PaymentLinkStatus status) {
+        return status == PaymentLinkStatus.CREATED
+                || status == PaymentLinkStatus.INITIATED
+                || status == PaymentLinkStatus.AUTHORIZED
+                || status == PaymentLinkStatus.WAITING_MANUAL_PAYMENT
+                || status == PaymentLinkStatus.MANUAL_REPORTED
+                || status == PaymentLinkStatus.NEEDS_RECONCILIATION;
+    }
+
+    private String firstText(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
     private PreparedBadReviewDelivery prepareBadReviewDelivery(
             Long stateId,
             LocalDateTime nowStorage,
@@ -2616,6 +2778,7 @@ public class ScheduledClientMessageService {
         );
 
         stateRepository.save(state);
+        notifyPaymentIssueIfNeeded(state, code, readable);
         if (policy.notifyWhatsAppAuth()) {
             Manager targetManager = manager != null ? manager : company == null ? null : company.getManager();
             whatsAppAuthAlertService.notifyAuthIssue(
@@ -2632,6 +2795,42 @@ public class ScheduledClientMessageService {
         if (policy.countForMassProtection()) {
             applyMassErrorProtection(nowStorage, code, readable);
         }
+    }
+
+    private void notifyPaymentIssueIfNeeded(ScheduledClientMessageState state, String code, String readable) {
+        if (!isPaymentFailClosedIssue(state, code)) {
+            return;
+        }
+        Long orderId = state.getOrderId();
+        String scenario = state.getScenario() == null ? "не указан" : state.getScenario().name();
+        paymentIssueReminderService.notifyOrderIssueAfterCommit(
+                orderId,
+                PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED,
+                orderId,
+                "Платёж требует внимания: заказ №" + orderId,
+                limit(
+                        "Автоответчик не смог выставить или сверить оплату."
+                                + "\nЗаказ: №" + orderId
+                                + "\nСценарий: " + scenario
+                                + "\nКод: " + code
+                                + "\nПричина: " + readable
+                                + "\nПроверьте карточку заказа и платёжную инструкцию; система не отправила клиенту сомнительный счет автоматически.",
+                        1000
+                )
+        );
+    }
+
+    private boolean isPaymentFailClosedIssue(ScheduledClientMessageState state, String code) {
+        if (state == null || state.getOrderId() == null || state.getOrderId() <= 0) {
+            return false;
+        }
+        ClientMessageScenario scenario = state.getScenario();
+        if (PAYMENT_AUTOMATION_SCENARIOS.contains(scenario)
+                || scenario == ClientMessageScenario.BAD_REVIEW_INVOICE) {
+            return true;
+        }
+        String normalized = code == null ? "" : code.toLowerCase(Locale.ROOT);
+        return normalized.contains("payment");
     }
 
     private FailureRetryPolicy failureRetryPolicy(
@@ -3583,6 +3782,13 @@ public class ScheduledClientMessageService {
     ) {
     }
 
+    public record RecoveredBadReviewDeliveryResult(
+            Long stateId,
+            Long orderId,
+            boolean retryScheduled,
+            String message
+    ) {
+    }
     private record ClientMessageReconcileSummary(
             int clientTextReminderCandidates,
             int reviewCheckCandidates,

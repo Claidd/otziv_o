@@ -22,6 +22,7 @@ import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
+import com.hunt.otziv.client_messages.service.ClientMessageStateSafety;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
@@ -1518,6 +1519,21 @@ public class ManagerControlService {
         ManagerAutomationFailureService.AutomationFailureIssue issue = currentIssue.get();
         ensureAutomationChatReady(issue);
 
+        Optional<ScheduledClientMessageService.RecoveredBadReviewDeliveryResult> recovered =
+                recoverUncertainBadReviewDelivery(issue, manager);
+        if (recovered.isPresent()) {
+            ScheduledClientMessageService.RecoveredBadReviewDeliveryResult result = recovered.get();
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    result.message(),
+                    principal,
+                    result.retryScheduled()
+                            ? "Подтверждена старая отправка счета и запланирована безопасная новая"
+                            : "Подтверждена и закрыта зависшая отправка счета"
+            );
+        }
+
         ScheduledClientMessageService.ManualRetryResult retry =
                 scheduledClientMessageService.retryNow(issue.stateId());
         Optional<ManagerAutomationFailureService.AutomationFailureIssue> remaining =
@@ -1547,6 +1563,52 @@ public class ManagerControlService {
         );
     }
 
+    private Optional<ScheduledClientMessageService.RecoveredBadReviewDeliveryResult> recoverUncertainBadReviewDelivery(
+            ManagerAutomationFailureService.AutomationFailureIssue issue,
+            Manager manager
+    ) {
+        if (issue == null || issue.stateId() == null) {
+            return Optional.empty();
+        }
+        ScheduledClientMessageState state = scheduledClientMessageStateRepository.findById(issue.stateId()).orElse(null);
+        if (state == null
+                || state.getScenario() != ClientMessageScenario.BAD_REVIEW_INVOICE
+                || !ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(state.getLastErrorCode())) {
+            return Optional.empty();
+        }
+        boolean chatVerified = verifyUncertainDeliveryInWhatsAppChat(manager, state);
+        return scheduledClientMessageService.recoverUncertainBadReviewInvoiceDelivery(state.getId(), chatVerified);
+    }
+
+    private boolean verifyUncertainDeliveryInWhatsAppChat(Manager manager, ScheduledClientMessageState state) {
+        Company company = automationFailureCompany(state);
+        if (company == null || safe(company.getGroupId()).isBlank() || safe(state.getDeliveryMessage()).isBlank()) {
+            return false;
+        }
+        String chat = safe(company.getUrlChat()).toLowerCase(Locale.ROOT);
+        if (!isWhatsAppChat(chat)) {
+            return false;
+        }
+        LocalDateTime from = state.getDeliveryPreparedAt() != null
+                ? state.getDeliveryPreparedAt()
+                : state.getLastAttemptAt();
+        try {
+            return clientChatMessageReconciliationService.reconcileWhatsAppGroupContainsOutgoingText(
+                    manager,
+                    company.getGroupId(),
+                    from,
+                    state.getDeliveryMessage()
+            );
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Не удалось сверить зависшую отправку счета по истории WhatsApp stateId={} companyId={}",
+                    state.getId(),
+                    company.getId(),
+                    e
+            );
+            return false;
+        }
+    }
     private void ensureAutomationChatReady(
             ManagerAutomationFailureService.AutomationFailureIssue issue
     ) {

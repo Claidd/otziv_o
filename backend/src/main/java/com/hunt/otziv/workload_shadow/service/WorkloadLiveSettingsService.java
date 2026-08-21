@@ -57,11 +57,11 @@ public class WorkloadLiveSettingsService {
                 integer(values, "stable-hours", 168),
                 integer(values, "min-candidates-per-manager", 2),
                 managerIds(stringAllowEmpty(values, "canary-manager-ids", "")),
-                integer(values, "offer-timeout-minutes", 15),
+                integer(values, "offer-timeout-minutes", 60),
                 string(values, "offer-start-time", "10:00"),
                 string(values, "offer-end-time", "21:00"),
-                integer(values, "max-transfers-per-manager-day", 1),
-                integer(values, "max-transfers-global-day", 3),
+                integer(values, "max-transfers-per-manager-day", 5),
+                integer(values, "max-transfers-global-day", 10),
                 integer(values, "rollback-window-minutes", 30),
                 integer(values, "first-live-owner-confirmations", 5),
                 bool(values, "emergency-fallback-enabled", false),
@@ -449,3 +449,4 @@ public class WorkloadLiveSettingsService {
     private record SettingWrite(String settingKey, String settingValue) {
     }
 }
+

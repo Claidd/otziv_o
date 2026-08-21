@@ -30,6 +30,7 @@ export type ManagerBoardActionFacadeDeps = {
 export class ManagerBoardActionFacade {
   private static readonly ACTIVE_BANK_PAYMENT_CONFLICT =
     'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.';
+  private static readonly ACTUAL_RECIPIENT_REQUIRED_HINT = 'фактического получателя';
 
   constructor(private readonly deps: ManagerBoardActionFacadeDeps) {}
 
@@ -80,23 +81,38 @@ export class ManagerBoardActionFacade {
       || !this.deps.canOverrideActiveBankPayment()) {
       return false;
     }
-    if (!err || typeof err !== 'object' || !('status' in err) || err.status !== 409 || !('error' in err)) {
+    if (!err || typeof err !== 'object' || !('status' in err) || err.status !== 409) {
       return false;
     }
     if (manualPaymentRouteErrorCode(err) === 'ACTUAL_RECIPIENT_REQUIRED') {
       return true;
     }
-    const payload = err.error;
-    const message = typeof payload === 'string'
-      ? payload
-      : payload && typeof payload === 'object'
-        ? ('message' in payload && typeof payload.message === 'string'
-          ? payload.message
-          : 'detail' in payload && typeof payload.detail === 'string'
-            ? payload.detail
-            : '')
-        : '';
-    return message.trim() === ManagerBoardActionFacade.ACTIVE_BANK_PAYMENT_CONFLICT;
+    const message = ManagerBoardActionFacade.apiErrorMessage(err);
+    return message.trim() === ManagerBoardActionFacade.ACTIVE_BANK_PAYMENT_CONFLICT
+      || message.toLocaleLowerCase('ru-RU').includes(ManagerBoardActionFacade.ACTUAL_RECIPIENT_REQUIRED_HINT);
+  }
+
+  private static apiErrorMessage(err: unknown): string {
+    if (!err || typeof err !== 'object') {
+      return '';
+    }
+    const outer = err as Record<string, unknown>;
+    for (const payload of [outer['error'], outer]) {
+      if (typeof payload === 'string') {
+        return payload.trim();
+      }
+      if (!payload || typeof payload !== 'object') {
+        continue;
+      }
+      const record = payload as Record<string, unknown>;
+      for (const key of ['message', 'detail', 'error']) {
+        const value = record[key];
+        if (typeof value === 'string' && value.trim()) {
+          return value.trim();
+        }
+      }
+    }
+    return '';
   }
 
   toggleOrderClientWaiting(order: OrderCardItem): void {

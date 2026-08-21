@@ -6,9 +6,7 @@ import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentAccountingMismatchView;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentAccountingReconciliationService;
-import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
-import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.service.UserService;
+import com.hunt.otziv.payments.service.PaymentIssueReminderService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,8 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -32,9 +30,7 @@ class PaymentAccountingReconciliationServiceTest {
     @Mock
     private PaymentLinkRepository paymentLinkRepository;
     @Mock
-    private PersonalReminderService personalReminderService;
-    @Mock
-    private UserService userService;
+    private PaymentIssueReminderService paymentIssueReminderService;
     @Mock
     private BusinessAuditService businessAuditService;
     @Mock
@@ -54,27 +50,16 @@ class PaymentAccountingReconciliationServiceTest {
         when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(24378L), any()))
                 .thenReturn(List.of(older, latest));
 
-        User owner = user(10L);
-        User admin = user(11L);
-        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
-        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of(admin));
-        when(personalReminderService.hasOpenSystemReminder(
-                owner,
-                PaymentAccountingReconciliationService.REMINDER_SOURCE,
-                24378L
-        )).thenReturn(true);
-
         service.reconcile();
 
         assertTrue(latest.getLastError().startsWith(PaymentAccountingReconciliationService.ERROR_PREFIX));
         verify(paymentLinkRepository).save(latest);
-        verify(personalReminderService, never()).createSystemReminderDueNow(
-                eq(owner), anyString(), anyString(), anyString(), any(), any()
-        );
-        verify(personalReminderService).createSystemReminderDueNow(
-                eq(admin), anyString(), anyString(),
+        verify(paymentIssueReminderService).notifyOrderIssue(
+                eq(24378L),
                 eq(PaymentAccountingReconciliationService.REMINDER_SOURCE),
-                eq(24378L), eq(24378L)
+                eq(24378L),
+                eq("Нужна сверка оплаты заказа №24378"),
+                contains("сумма активных чеков")
         );
         verify(businessAuditService).recordSafely(
                 eq("PAYMENT_ACCOUNTING_MISMATCH_DETECTED"),
@@ -94,12 +79,5 @@ class PaymentAccountingReconciliationServiceTest {
         link.setStatus(PaymentLinkStatus.CONFIRMED);
         link.setPaidAt(paidAt);
         return link;
-    }
-
-    private User user(Long id) {
-        User user = new User();
-        user.setId(id);
-        user.setActive(true);
-        return user;
     }
 }

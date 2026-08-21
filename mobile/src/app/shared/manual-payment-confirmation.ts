@@ -15,6 +15,7 @@ export interface ManualCardPaymentConfirmationEvidence {
 
 export const UNFINISHED_PROVIDER_PAYMENT_MESSAGE =
   'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.';
+const ACTUAL_RECIPIENT_REQUIRED_MESSAGE_HINT = 'фактического получателя';
 
 export type ManualCardPaymentFallbackReason =
   | 'allowed'
@@ -128,9 +129,11 @@ export function manualCardPaymentFallbackAccessDecision(
 }
 
 export function isManualCardPaymentFallbackConflict(error: unknown): boolean {
+  const message = apiErrorMessage(error);
   return apiErrorStatus(error) === 409 && (
     mobilePaymentRouteErrorCode(error) === 'ACTUAL_RECIPIENT_REQUIRED'
-      || apiErrorMessage(error) === UNFINISHED_PROVIDER_PAYMENT_MESSAGE
+      || message === UNFINISHED_PROVIDER_PAYMENT_MESSAGE
+      || message.toLocaleLowerCase('ru-RU').includes(ACTUAL_RECIPIENT_REQUIRED_MESSAGE_HINT)
   );
 }
 

@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAllocationJournalItemResponse;
+import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAdminSummaryResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSummaryResponse;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationEventType;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
@@ -24,6 +25,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationEventRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorActualPaymentAttributionRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
 import com.hunt.otziv.u_users.model.Role;
@@ -48,6 +50,8 @@ class ContractorPaymentVisibilityServiceTest {
             mock(ContractorPaymentAllocationRepository.class);
     private final ContractorPaymentAllocationEventRepository eventRepository =
             mock(ContractorPaymentAllocationEventRepository.class);
+    private final ContractorActualPaymentAttributionRepository attributionRepository =
+            mock(ContractorActualPaymentAttributionRepository.class);
     private final ContractorRewardLedgerService ledgerService = mock(ContractorRewardLedgerService.class);
     private final ContractorPaymentAccountingService accountingService =
             mock(ContractorPaymentAccountingService.class);
@@ -63,6 +67,7 @@ class ContractorPaymentVisibilityServiceTest {
             profileRepository,
             allocationRepository,
             eventRepository,
+            attributionRepository,
             ledgerService,
             accountingService,
             runtimeSwitch,
@@ -81,6 +86,23 @@ class ContractorPaymentVisibilityServiceTest {
                 false, true, false, false, false, false
         ));
         when(accountingPhaseService.current()).thenReturn(ContractorAllocationMode.SHADOW);
+    }
+
+    @Test
+    void adminSummaryIncludesActualTransferCountAndAmount() {
+        User user = user(25L, "worker-transfer", "ROLE_WORKER");
+        user.setFio("Елена Ч.");
+        ContractorPaymentProfile profile = profile(41L, user, ContractorRole.SPECIALIST);
+        profile.setEnabled(true);
+        profile.setLiveEnabled(true);
+        when(profileRepository.findAllWithUser()).thenReturn(List.of(profile));
+        when(attributionRepository.summarizeProfileActualTransfersInPeriod(any(), any(), any(), any()))
+                .thenReturn(List.of(actualTransferSummary(41L, 3L, 12_500L)));
+
+        ContractorPaymentAdminSummaryResponse response = service.adminSummary().getFirst();
+
+        assertEquals(3L, response.actualTransferCount());
+        assertEquals(12_500L, response.actualTransferAmountKopecks());
     }
 
     @Test
@@ -362,6 +384,29 @@ class ContractorPaymentVisibilityServiceTest {
         assertEquals(2_000L, summary.returnedMonthKopecks());
         assertEquals(-2_000L, summary.netReceivedMonthKopecks());
         assertEquals(3_000L, summary.netReceivedTotalKopecks());
+    }
+
+    private ContractorActualPaymentAttributionRepository.ProfileActualTransferSummary actualTransferSummary(
+            Long profileId,
+            Long count,
+            Long amount
+    ) {
+        return new ContractorActualPaymentAttributionRepository.ProfileActualTransferSummary() {
+            @Override
+            public Long getProfileId() {
+                return profileId;
+            }
+
+            @Override
+            public Long getTransferCount() {
+                return count;
+            }
+
+            @Override
+            public Long getTransferAmountKopecks() {
+                return amount;
+            }
+        };
     }
 
     private User user(Long id, String username, String roleName) {

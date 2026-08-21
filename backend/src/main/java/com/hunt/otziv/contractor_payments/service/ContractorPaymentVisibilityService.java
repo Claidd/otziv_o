@@ -1,6 +1,7 @@
 package com.hunt.otziv.contractor_payments.service;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAdminSummaryResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAllocationEventResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAllocationJournalItemResponse;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentSummaryResponse;
@@ -12,6 +13,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocationEvent
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationEventRepository;
+import com.hunt.otziv.contractor_payments.repository.ContractorActualPaymentAttributionRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentAllocationRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
 import com.hunt.otziv.u_users.model.User;
@@ -22,6 +24,7 @@ import java.time.ZoneId;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +57,7 @@ public class ContractorPaymentVisibilityService {
     private final ContractorPaymentProfileRepository profileRepository;
     private final ContractorPaymentAllocationRepository allocationRepository;
     private final ContractorPaymentAllocationEventRepository eventRepository;
+    private final ContractorActualPaymentAttributionRepository attributionRepository;
     private final ContractorRewardLedgerService ledgerService;
     private final ContractorPaymentAccountingService accountingService;
     private final ContractorPaymentRuntimeSwitch runtimeSwitch;
@@ -79,6 +83,49 @@ public class ContractorPaymentVisibilityService {
         profileService.ensureForUser(user.getId());
         return profileRepository.findAllByUserIdForUpdate(user.getId()).stream()
                 .map(this::summary)
+                .toList();
+    }
+
+    /**
+     * Read-only finance overview for administrators and owners. The endpoint
+     * layer must still enforce role access; this method deliberately returns no
+     * payment requisites.
+     */
+    @Transactional(readOnly = true)
+    public List<ContractorPaymentAdminSummaryResponse> adminSummary() {
+        List<ContractorPaymentProfile> profiles = profileRepository.findAllWithUser();
+        Map<Long, ActualTransferStats> actualTransfers = actualTransfersByProfile(profiles);
+        return profiles.stream()
+                .map(profile -> {
+                    ContractorPaymentSummaryResponse summary = summary(profile);
+                    ActualTransferStats transferStats = actualTransfers.getOrDefault(
+                            profile.getId(),
+                            ActualTransferStats.empty()
+                    );
+                    long pending = Math.addExact(
+                            summary.clientReportedKopecks(),
+                            summary.partiallyConfirmedOutstandingKopecks()
+                    );
+                    return new ContractorPaymentAdminSummaryResponse(
+                            profile.getId(),
+                            profile.getUser().getId(),
+                            profile.getUser().getFio(),
+                            profile.getRole(),
+                            profile.isEnabled(),
+                            profile.isLiveEnabled(),
+                            summary.accruedMonthKopecks(),
+                            summary.accruedTotalKopecks(),
+                            summary.reservedKopecks(),
+                            pending,
+                            summary.netReceivedMonthKopecks(),
+                            summary.netReceivedTotalKopecks(),
+                            transferStats.count(),
+                            transferStats.amountKopecks(),
+                            summary.availableKopecks(),
+                            summary.reportingLive(),
+                            summary.currentMonthCoverageComplete()
+                    );
+                })
                 .toList();
     }
 
@@ -116,6 +163,37 @@ public class ContractorPaymentVisibilityService {
                 allocation,
                 eventsByAllocation.getOrDefault(allocation.getId(), List.of())
         ));
+    }
+
+    private Map<Long, ActualTransferStats> actualTransfersByProfile(List<ContractorPaymentProfile> profiles) {
+        if (profiles == null || profiles.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> profileIds = profiles.stream()
+                .map(ContractorPaymentProfile::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (profileIds.isEmpty()) {
+            return Map.of();
+        }
+
+        LocalDate monthStart = LocalDate.now(businessZone()).withDayOfMonth(1);
+        LocalDateTime from = monthStart.atStartOfDay();
+        LocalDateTime to = monthStart.plusMonths(1).atStartOfDay();
+        ContractorAllocationMode mode = accountingPhaseService.current();
+
+        return attributionRepository
+                .summarizeProfileActualTransfersInPeriod(profileIds, mode, from, to)
+                .stream()
+                .filter(row -> row.getProfileId() != null)
+                .collect(Collectors.toMap(
+                        ContractorActualPaymentAttributionRepository.ProfileActualTransferSummary::getProfileId,
+                        row -> new ActualTransferStats(
+                                safeLong(row.getTransferCount()),
+                                safeLong(row.getTransferAmountKopecks())
+                        ),
+                        ActualTransferStats::merge
+                ));
     }
 
     private ContractorPaymentSummaryResponse summary(ContractorPaymentProfile profile) {
@@ -275,6 +353,23 @@ public class ContractorPaymentVisibilityService {
         }
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
+    }
+
+    private static long safeLong(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    private record ActualTransferStats(long count, long amountKopecks) {
+        private static ActualTransferStats empty() {
+            return new ActualTransferStats(0L, 0L);
+        }
+
+        private static ActualTransferStats merge(ActualTransferStats left, ActualTransferStats right) {
+            return new ActualTransferStats(
+                    Math.addExact(left.count(), right.count()),
+                    Math.addExact(left.amountKopecks(), right.amountKopecks())
+            );
+        }
     }
 
     private Jwt jwt(Authentication authentication) {

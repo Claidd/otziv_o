@@ -25,6 +25,7 @@ import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRep
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService;
 import com.hunt.otziv.contractor_payments.service.ContractorOrderManagerResolver;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentAccountingPhaseService;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
@@ -81,6 +82,7 @@ public class CommonManualPaymentAttributionCoordinator {
     private final ContractorActualPaymentAttributionRepository attributionRepository;
     private final ContractorActualPaymentAttributionService attributionService;
     private final ContractorPaymentAccountingPhaseService accountingPhaseService;
+    private final ContractorPaymentRuntimeSwitch runtimeSwitch;
     private final ManualPaymentTaskContractorCapacityService taskCapacityService;
     private final ContractorOrderManagerResolver orderManagerResolver;
     private final ContractorPaymentTargetAccessPolicy targetAccessPolicy;
@@ -244,13 +246,26 @@ public class CommonManualPaymentAttributionCoordinator {
             return attributionService.lockEnabledAccountingMode();
         }
         ContractorAllocationMode persisted = invoice.getPaymentRouteManualTaskAccountingMode();
-        if (persisted == null) {
-            throw conflict("У выданного маршрута задания отсутствует режим учёта; требуется сверка");
-        }
         // The global phase row remains the first financial mutex. A later
         // SHADOW->LIVE promotion must not reinterpret the issued receipt.
         accountingPhaseService.lockCurrent();
-        return persisted;
+        if (persisted != null) {
+            return persisted;
+        }
+        if (isPreCutoverFrozenTaskRoute(invoice)) {
+            return ContractorAllocationMode.SHADOW;
+        }
+        throw conflict("У выданного маршрута задания отсутствует режим учёта; требуется сверка");
+    }
+
+    private boolean isPreCutoverFrozenTaskRoute(CommonInvoice invoice) {
+        LocalDateTime selectedAt = invoice == null ? null : invoice.getPaymentRouteSelectedAt();
+        if (selectedAt == null) {
+            return false;
+        }
+        return runtimeSwitch.completionAccountingActivatedAt()
+                .map(selectedAt::isBefore)
+                .orElse(false);
     }
 
     private boolean isFrozenTaskRoute(CommonInvoice invoice) {

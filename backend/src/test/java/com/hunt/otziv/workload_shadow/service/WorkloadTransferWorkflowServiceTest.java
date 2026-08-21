@@ -2,6 +2,7 @@ package com.hunt.otziv.workload_shadow.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -63,6 +64,13 @@ class WorkloadTransferWorkflowServiceTest {
                 com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsResponse.class
         );
         when(shadow.revision()).thenReturn(7L);
+        when(shadow.allowedFailureDays()).thenReturn(4);
+        when(shadow.fourthFailurePercent()).thenReturn(15);
+        when(shadow.fourthFailureMaxCompanies()).thenReturn(1);
+        when(shadow.fifthFailurePercent()).thenReturn(25);
+        when(shadow.fifthFailureMaxCompanies()).thenReturn(2);
+        when(shadow.sixthFailurePercent()).thenReturn(30);
+        when(shadow.sixthFailureMaxCompanies()).thenReturn(3);
         when(shadowSettingsService.current()).thenReturn(shadow);
         when(shadowSettingsService.zone(shadow))
                 .thenReturn(ZoneId.of("Asia/Irkutsk"));
@@ -86,8 +94,9 @@ class WorkloadTransferWorkflowServiceTest {
                 candidate(102L, 12L, 1002L, 203L, 1),
                 candidate(102L, 12L, 1002L, 204L, 2)
         );
-        when(repository.findRecommendationCandidates()).thenReturn(candidates);
+        when(repository.findRecommendationCandidates(anyInt())).thenReturn(candidates);
         when(repository.reservedByManagerSince(any())).thenReturn(List.of());
+        when(repository.reservedBySourceWorkerSince(any())).thenReturn(List.of());
         when(graphQueryService.findActiveGraphs(any(), any())).thenReturn(Map.of(
                 101L, List.of(graph(1001L, 11L, 101L)),
                 102L, List.of(graph(1002L, 12L, 102L))
@@ -159,12 +168,121 @@ class WorkloadTransferWorkflowServiceTest {
         )).containsExactly(1001L, 1001L, 1002L, 1002L);
     }
 
+    @Test
+    void limitsOneSourceWorkerByCurrentBusinessStage() throws Exception {
+        WorkloadLiveSettingsResponse settings = settings();
+        when(liveSettingsService.current()).thenReturn(settings);
+        when(liveSettingsService.applicationAllowed(settings)).thenReturn(true);
+        when(liveSettingsService.managerAllowed(eq(settings), anyLong()))
+                .thenReturn(true);
+        List<RecommendationCandidateProjection> candidates = List.of(
+                candidate(101L, 11L, 1001L, 201L, 1, 5),
+                candidate(101L, 11L, 1001L, 202L, 2, 5),
+                candidate(101L, 11L, 1002L, 203L, 1, 5),
+                candidate(101L, 11L, 1002L, 204L, 2, 5)
+        );
+        when(repository.findRecommendationCandidates(anyInt())).thenReturn(candidates);
+        when(repository.reservedByManagerSince(any())).thenReturn(List.of());
+        when(repository.reservedBySourceWorkerSince(any())).thenReturn(List.of());
+        when(graphQueryService.findActiveGraphs(any(), any())).thenReturn(Map.of(
+                101L,
+                List.of(graph(1001L, 11L, 101L), graph(1002L, 11L, 101L))
+        ));
+        when(repository.countAppliedExecutions()).thenReturn(0L);
+        when(repository.insertWorkflowsBulk(
+                anyString(),
+                eq("CANARY"),
+                eq(true),
+                anyLong(),
+                anyLong(),
+                any(LocalDate.class),
+                any(LocalDateTime.class)
+        )).thenReturn(1);
+        when(repository.insertWorkflowCandidatesBulk(
+                anyString(),
+                any(LocalDateTime.class)
+        )).thenReturn(2);
+        when(repository.countIncompleteWorkflowQueues(anyString()))
+                .thenReturn(0L);
+
+        var result = service.stageEligibleRecommendations();
+
+        assertThat(result.staged()).isEqualTo(1);
+        assertThat(result.skippedByPolicy()).isEqualTo(1);
+        ArgumentCaptor<String> workflowsJson = ArgumentCaptor.forClass(String.class);
+        verify(repository).insertWorkflowsBulk(
+                workflowsJson.capture(),
+                eq("CANARY"),
+                eq(true),
+                anyLong(),
+                anyLong(),
+                any(LocalDate.class),
+                any(LocalDateTime.class)
+        );
+        JsonNode workflowRows = objectMapper.readTree(workflowsJson.getValue());
+        assertThat(workflowRows.size()).isEqualTo(1);
+        assertThat(workflowRows.get(0).get("sourceWorkerId").asLong()).isEqualTo(101L);
+    }
+
+    @Test
+    void allowsSecondCompanyForSameSourceWorkerAtNextBusinessStage() throws Exception {
+        WorkloadLiveSettingsResponse settings = settings();
+        when(liveSettingsService.current()).thenReturn(settings);
+        when(liveSettingsService.applicationAllowed(settings)).thenReturn(true);
+        when(liveSettingsService.managerAllowed(eq(settings), anyLong()))
+                .thenReturn(true);
+        List<RecommendationCandidateProjection> candidates = List.of(
+                candidate(101L, 11L, 1001L, 201L, 1, 6),
+                candidate(101L, 11L, 1001L, 202L, 2, 6),
+                candidate(101L, 11L, 1002L, 203L, 1, 6),
+                candidate(101L, 11L, 1002L, 204L, 2, 6)
+        );
+        when(repository.findRecommendationCandidates(anyInt())).thenReturn(candidates);
+        when(repository.reservedByManagerSince(any())).thenReturn(List.of());
+        when(repository.reservedBySourceWorkerSince(any())).thenReturn(List.of());
+        when(graphQueryService.findActiveGraphs(any(), any())).thenReturn(Map.of(
+                101L,
+                List.of(graph(1001L, 11L, 101L), graph(1002L, 11L, 101L))
+        ));
+        when(repository.countAppliedExecutions()).thenReturn(0L);
+        when(repository.insertWorkflowsBulk(
+                anyString(),
+                eq("CANARY"),
+                eq(true),
+                anyLong(),
+                anyLong(),
+                any(LocalDate.class),
+                any(LocalDateTime.class)
+        )).thenReturn(2);
+        when(repository.insertWorkflowCandidatesBulk(
+                anyString(),
+                any(LocalDateTime.class)
+        )).thenReturn(4);
+        when(repository.countIncompleteWorkflowQueues(anyString()))
+                .thenReturn(0L);
+
+        var result = service.stageEligibleRecommendations();
+
+        assertThat(result.staged()).isEqualTo(2);
+        assertThat(result.skippedByPolicy()).isZero();
+    }
     private RecommendationCandidateProjection candidate(
             long sourceWorkerId,
             long managerId,
             long companyId,
             long candidateWorkerId,
             int sequenceNumber
+    ) {
+        return candidate(sourceWorkerId, managerId, companyId, candidateWorkerId, sequenceNumber, 5);
+    }
+
+    private RecommendationCandidateProjection candidate(
+            long sourceWorkerId,
+            long managerId,
+            long companyId,
+            long candidateWorkerId,
+            int sequenceNumber,
+            int failureNumber
     ) {
         RecommendationCandidateProjection row =
                 org.mockito.Mockito.mock(RecommendationCandidateProjection.class);
@@ -173,6 +291,7 @@ class WorkloadTransferWorkflowServiceTest {
         when(row.getSourceWorkerId()).thenReturn(sourceWorkerId);
         when(row.getCompanyId()).thenReturn(companyId);
         if (sequenceNumber == 1) {
+            when(row.getFailureNumber()).thenReturn(failureNumber);
             when(row.getFinanciallyUnsafeOrderCount()).thenReturn(0L);
         }
         when(row.getCandidateWorkerId()).thenReturn(candidateWorkerId);
@@ -236,3 +355,7 @@ class WorkloadTransferWorkflowServiceTest {
         );
     }
 }
+
+
+
+

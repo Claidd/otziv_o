@@ -30,6 +30,7 @@ public class ManualCardPaymentReviewNotificationService {
     private final PersonalReminderService personalReminderService;
     private final TelegramService telegramService;
     private final PlatformTransactionManager transactionManager;
+    private final PaymentIssueReminderService paymentIssueReminderService;
 
     public void notifyAfterCommit(ReviewRequest request) {
         if (request == null || request.orderId() == null) {
@@ -73,13 +74,14 @@ public class ManualCardPaymentReviewNotificationService {
 
     private void notifyNow(ReviewRequest request) {
         String text = notificationText(request);
+        String title = "Проверить ручную оплату заказа №" + request.orderId();
         Long sourceId = request.evidenceLinkId() == null ? request.orderId() : request.evidenceLinkId();
         for (User recipient : recipients().values()) {
             try {
                 if (!personalReminderService.hasOpenSystemReminder(recipient, REMINDER_SOURCE, sourceId)) {
                     personalReminderService.createSystemReminderDueNow(
                             recipient,
-                            "Проверить ручную оплату заказа №" + request.orderId(),
+                            title,
                             limit(text, 1000),
                             REMINDER_SOURCE,
                             sourceId,
@@ -108,10 +110,18 @@ public class ManualCardPaymentReviewNotificationService {
                 );
             }
         }
+        paymentIssueReminderService.notifyOrderIssue(
+                request.orderId(),
+                REMINDER_SOURCE,
+                sourceId,
+                title,
+                limit(text, 1000)
+        );
     }
 
     private void notifyCommonInvoiceNow(CommonInvoiceReviewRequest request) {
         String text = commonInvoiceNotificationText(request);
+        String title = "Проверить ручную оплату общего счета №" + request.invoiceId();
         Long sourceOrderId = request.orderIds() == null || request.orderIds().isEmpty()
                 ? null
                 : request.orderIds().getFirst();
@@ -124,7 +134,7 @@ public class ManualCardPaymentReviewNotificationService {
                 )) {
                     personalReminderService.createSystemReminderDueNow(
                             recipient,
-                            "Проверить ручную оплату общего счета №" + request.invoiceId(),
+                            title,
                             limit(text, 1000),
                             COMMON_INVOICE_REMINDER_SOURCE,
                             request.invoiceId(),
@@ -152,6 +162,15 @@ public class ManualCardPaymentReviewNotificationService {
                         exception
                 );
             }
+        }
+        if (sourceOrderId != null) {
+            paymentIssueReminderService.notifyOrderIssue(
+                    sourceOrderId,
+                    COMMON_INVOICE_REMINDER_SOURCE,
+                    request.invoiceId(),
+                    title,
+                    limit(text, 1000)
+            );
         }
     }
 

@@ -586,7 +586,7 @@
                       }
                     </td>
                     <td>
-                      @if (workflow.status === 'AWAITING_OWNER_CONFIRMATION' && canControlLive()) {
+                      @if (workflow.status === 'AWAITING_OWNER_CONFIRMATION' && canConfirmLiveTransfer()) {
                         <button type="button" class="primary-button compact-button" [disabled]="liveBusy()" (click)="confirmWorkflow(workflow)">
                           Подтвердить
                         </button>

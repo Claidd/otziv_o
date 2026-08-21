@@ -61,6 +61,7 @@ class ContractorCompletionRewardServiceTest {
     @Mock private ContractorPaymentRolloutStateService rolloutStateService;
     @Mock private ContractorLegacyRewardGuard legacyRewardGuard;
     @Mock private ContractorLegacyRewardReconciliationService legacyRewardReconciliationService;
+    @Mock private ContractorPaymentProfileService profileService;
 
     private ContractorCompletionRewardService service;
     private Order order;
@@ -82,7 +83,8 @@ class ContractorCompletionRewardServiceTest {
                 new ContractorOrderManagerResolver(),
                 rolloutStateService,
                 legacyRewardGuard,
-                legacyRewardReconciliationService
+                legacyRewardReconciliationService,
+                profileService
         );
         order = new Order();
         order.setId(91L);
@@ -520,6 +522,57 @@ class ContractorCompletionRewardServiceTest {
     }
 
     @Test
+    void canceledPreCutoffTaskMarkerWithoutOriginalRewardAdjustsOpeningBalance() {
+        User specialistUser = order.getWorker().getUser();
+        specialistUser.setCoefficient(new BigDecimal("0.30"));
+        BadReviewTask task = BadReviewTask.builder()
+                .id(707L)
+                .order(order)
+                .status(BadReviewTaskStatus.CANCELED)
+                .price(new BigDecimal("500.00"))
+                .completedDate(LocalDate.of(2026, 7, 31))
+                .worker(order.getWorker())
+                .build();
+        ContractorCompletionRewardMarker done = marker(
+                ContractorRewardSourceCodes.badReviewDoneMarker(707L),
+                LocalDate.of(2026, 7, 31)
+        );
+        when(markerRepository.findByOrderIdAndLogicalSource(
+                91L,
+                ContractorRewardSourceCodes.badReviewDoneMarker(707L)
+        )).thenReturn(Optional.of(done));
+        when(markerRepository.findByOrderIdAndLogicalSource(
+                91L,
+                ContractorRewardSourceCodes.badReviewCancelMarker(707L)
+        )).thenReturn(Optional.empty());
+        when(badReviewTaskRepository.findByIdForMutation(707L)).thenReturn(Optional.of(task));
+        when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 21));
+
+        assertThat(service.adjustCanceledBadReviewTaskAccrual(91L, 707L)).isEqualTo(2);
+
+        verify(profileService).applySystemOpeningBalanceDelta(
+                18L,
+                ContractorRole.MANAGER,
+                -5_000L,
+                "Автокорректировка переходящего остатка: плохая задача #707 удалена из счета заказа #91"
+        );
+        verify(profileService).applySystemOpeningBalanceDelta(
+                17L,
+                ContractorRole.SPECIALIST,
+                -15_000L,
+                "Автокорректировка переходящего остатка: плохая задача #707 удалена из счета заказа #91"
+        );
+        ArgumentCaptor<ContractorCompletionRewardMarker> markerCaptor =
+                ArgumentCaptor.forClass(ContractorCompletionRewardMarker.class);
+        verify(markerRepository).save(markerCaptor.capture());
+        assertThat(markerCaptor.getValue().getLogicalSource())
+                .isEqualTo(ContractorRewardSourceCodes.badReviewCancelMarker(707L));
+        assertThat(markerCaptor.getValue().getOccurredOn()).isEqualTo(LocalDate.of(2026, 8, 21));
+        verify(ledgerService, never()).synchronizeCompletionSourcesCanonical(any());
+        verify(zpRepository, never()).save(any(Zp.class));
+    }
+
+    @Test
     void canceledPostCutoffTaskMarkerWithoutOriginalRewardFailsClosed() {
         ContractorCompletionRewardMarker done = marker(
                 ContractorRewardSourceCodes.badReviewDoneMarker(707L)
@@ -846,10 +899,14 @@ class ContractorCompletionRewardServiceTest {
     }
 
     private ContractorCompletionRewardMarker marker(String source) {
+        return marker(source, LocalDate.of(2026, 8, 1));
+    }
+
+    private ContractorCompletionRewardMarker marker(String source, LocalDate occurredOn) {
         ContractorCompletionRewardMarker marker = new ContractorCompletionRewardMarker();
         marker.setOrderId(91L);
         marker.setLogicalSource(source);
-        marker.setOccurredOn(LocalDate.of(2026, 8, 1));
+        marker.setOccurredOn(occurredOn);
         return marker;
     }
 }

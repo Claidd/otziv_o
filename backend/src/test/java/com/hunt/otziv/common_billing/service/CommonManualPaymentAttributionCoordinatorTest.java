@@ -32,11 +32,14 @@ import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRep
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService;
 import com.hunt.otziv.contractor_payments.service.ContractorOrderManagerResolver;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentAccountingPhaseService;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
+import com.hunt.otziv.u_users.model.User;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -57,6 +60,7 @@ class CommonManualPaymentAttributionCoordinatorTest {
             mock(ContractorActualPaymentAttributionService.class);
     private final ContractorPaymentAccountingPhaseService accountingPhaseService =
             mock(ContractorPaymentAccountingPhaseService.class);
+    private final ContractorPaymentRuntimeSwitch runtimeSwitch = mock(ContractorPaymentRuntimeSwitch.class);
     private final ManualPaymentTaskContractorCapacityService taskCapacityService =
             mock(ManualPaymentTaskContractorCapacityService.class);
     private final ContractorOrderManagerResolver managerResolver = mock(ContractorOrderManagerResolver.class);
@@ -71,6 +75,7 @@ class CommonManualPaymentAttributionCoordinatorTest {
                     attributionRepository,
                     attributionService,
                     accountingPhaseService,
+                    runtimeSwitch,
                     taskCapacityService,
                     managerResolver,
                     targetAccessPolicy,
@@ -562,7 +567,7 @@ class CommonManualPaymentAttributionCoordinatorTest {
     }
 
     @Test
-    void frozenLegacyTaskWithoutPersistedModeFailsClosed() {
+    void preCutoverFrozenTaskWithoutPersistedModeUsesShadowFallback() {
         CommonInvoice invoice = new CommonInvoice();
         invoice.setId(192L);
         invoice.setPaymentRouteManualSource(
@@ -570,7 +575,94 @@ class CommonManualPaymentAttributionCoordinatorTest {
         invoice.setPaymentRouteManualTaskId(117L);
         invoice.setPaymentRouteManualTaskGeneration(2L);
         invoice.setPaymentRouteManualTaskSourceGeneration("LEGACY-192");
-        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 15, 9, 0));
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 19, 9, 0));
+        when(runtimeSwitch.completionAccountingActivatedAt())
+                .thenReturn(Optional.of(LocalDateTime.of(2026, 8, 20, 22, 0)));
+        when(accountingPhaseService.lockCurrent()).thenReturn(ContractorAllocationMode.LIVE);
+        var snapshot = mock(com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot.class);
+        when(snapshot.candidateKey()).thenReturn("TASK:117:2");
+        when(snapshot.taskId()).thenReturn(117L);
+        when(snapshot.taskGeneration()).thenReturn(2L);
+        when(snapshot.source()).thenReturn(new com.hunt.otziv.payments.dto.ManualPaymentTaskSourceRef(
+                com.hunt.otziv.payments.model.ManualPaymentTaskLedgerSourceKind.COMMON_INVOICE,
+                192L,
+                "LEGACY-192"));
+        when(snapshot.accountingTargetKind()).thenReturn(
+                com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.SPECIALIST);
+        when(snapshot.accountingTargetProfileId()).thenReturn(44L);
+        when(snapshot.bankRecipientName()).thenReturn("Анастасия Щ.");
+        when(snapshot.accountingTargetLabel()).thenReturn("Специалист · Анастасия Щ.");
+        when(snapshot.reservedAmountKopecks()).thenReturn(2_600L);
+        when(taskReceiptIntegrationService.candidate(invoice))
+                .thenReturn(Optional.of(snapshot));
+        when(taskReceiptIntegrationService.destination(snapshot)).thenReturn(
+                new ManualPaymentTaskReceiptIntegrationService.Destination(
+                        "TASK:117:2",
+                        com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind.MANUAL_PAYMENT_TASK,
+                        ContractorRecipientType.SPECIALIST,
+                        44L,
+                        117L,
+                        2L,
+                        com.hunt.otziv.payments.model.ManualPaymentTaskAccountingTargetKind.SPECIALIST,
+                        "Анастасия Щ.",
+                        "Специалист · Анастасия Щ."
+                ));
+        ContractorPaymentProfile profile = mock(ContractorPaymentProfile.class);
+        User user = mock(User.class);
+        when(profile.getId()).thenReturn(44L);
+        when(profile.getRole()).thenReturn(com.hunt.otziv.contractor_payments.model.ContractorRole.SPECIALIST);
+        when(profile.getUser()).thenReturn(user);
+        when(user.getId()).thenReturn(144L);
+        when(user.getFio()).thenReturn("Анастасия Щ.");
+        when(profileRepository.findById(44L)).thenReturn(Optional.of(profile));
+        when(targetAccessPolicy.canManageUser(144L)).thenReturn(true);
+        when(attributionService.recordFinalAttributionsForFrozenSource(
+                any(), anyList(), org.mockito.ArgumentMatchers.eq(ContractorAllocationMode.SHADOW)))
+                .thenReturn(List.of());
+        CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
+                "batch-192",
+                true,
+                true,
+                LocalDateTime.of(2026, 8, 21, 12, 10),
+                "Ручная сверка старого маршрута",
+                "",
+                List.of(new CommonManualPaymentAttributionRowRequest(
+                        "task-specialist",
+                        "TASK:117:2",
+                        ContractorRecipientType.SPECIALIST,
+                        44L,
+                        2_600L
+                ))
+        );
+
+        coordinator.recordFinalReceipt(invoice, List.of(), 2_600L, request, () -> "owner");
+
+        verify(accountingPhaseService).lockCurrent();
+        verify(attributionService, never()).lockEnabledAccountingMode();
+        verify(attributionService).recordFinalAttributionsForFrozenSource(
+                any(), anyList(), org.mockito.ArgumentMatchers.eq(ContractorAllocationMode.SHADOW));
+        verify(taskReceiptIntegrationService).settle(
+                invoice,
+                "TASK:117:2",
+                2_600L,
+                "TASK:SETTLE:COMMON_INVOICE:192:batch-192",
+                "owner",
+                "Ручная сверка старого маршрута"
+        );
+    }
+
+    @Test
+    void postCutoverFrozenTaskWithoutPersistedModeFailsClosed() {
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(193L);
+        invoice.setPaymentRouteManualSource(
+                com.hunt.otziv.payments.model.ManualPaymentSource.MANUAL_TASK);
+        invoice.setPaymentRouteManualTaskId(117L);
+        invoice.setPaymentRouteManualTaskGeneration(2L);
+        invoice.setPaymentRouteManualTaskSourceGeneration("source-193");
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 21, 9, 0));
+        when(runtimeSwitch.completionAccountingActivatedAt())
+                .thenReturn(Optional.of(LocalDateTime.of(2026, 8, 20, 22, 0)));
 
         ResponseStatusException error = assertThrows(
                 ResponseStatusException.class,
@@ -578,7 +670,7 @@ class CommonManualPaymentAttributionCoordinatorTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
-        verify(accountingPhaseService, never()).lockCurrent();
+        verify(accountingPhaseService).lockCurrent();
         verify(attributionService, never()).lockEnabledAccountingMode();
     }
 

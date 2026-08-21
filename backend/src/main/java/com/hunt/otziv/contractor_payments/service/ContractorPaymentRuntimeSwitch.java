@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -62,6 +63,18 @@ public class ContractorPaymentRuntimeSwitch {
             return Optional.empty();
         }
         return verifiedCompletionAttributionStartDate(rollout.attributionStartDate());
+    }
+
+    /** Exact activation timestamp for routing rules that must distinguish the launch day itself. */
+    public Optional<LocalDateTime> completionAccountingActivatedAt() {
+        ContractorPaymentRolloutStateService.Snapshot rollout = rolloutStateService.freshSnapshot();
+        if (!rollout.completionAccountingActive()
+                || rollout.attributionStartDate() == null
+                || rollout.activatedAt() == null) {
+            return Optional.empty();
+        }
+        return verifiedCompletionAttributionStartDate(rollout.attributionStartDate())
+                .map(ignored -> rollout.activatedAt());
     }
 
     private Optional<LocalDate> verifiedCompletionAttributionStartDate(LocalDate configuredStartDate) {

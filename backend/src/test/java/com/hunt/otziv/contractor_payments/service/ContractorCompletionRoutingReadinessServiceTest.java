@@ -3,6 +3,7 @@ package com.hunt.otziv.contractor_payments.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -98,16 +99,31 @@ class ContractorCompletionRoutingReadinessServiceTest {
     }
 
     @Test
-    void activeRecoveryBaseGapKeepsLiveRoutingClosedButIsNotSubmittedToRepair() {
+    void activeRecoveryBaseGapDoesNotKeepLiveRoutingClosed() {
         when(repairStateRepository.count()).thenReturn(0L);
         when(businessClock.now()).thenReturn(now);
-        when(orderRepository.countCompletionRewardDeferredByActiveRecovery(
-                any(), any(), eq(3L)
-        )).thenReturn(14L);
+        when(orderRepository.findCompletionRewardRepairOrderIds(
+                any(), any(), eq(3L), eq(now), any(Pageable.class)
+        )).thenReturn(List.of());
+        when(badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
+                eq("DONE"),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX),
+                eq(now),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+        when(badReviewTaskRepository.findCompletionRewardCancellationRepairGapTaskIds(
+                eq("CANCELED"),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_CANCEL_MARKER_PREFIX),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_MANAGER_PREFIX),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_SPECIALIST_PREFIX),
+                eq(now),
+                any(Pageable.class)
+        )).thenReturn(List.of());
 
-        assertThat(service.readyForLiveRouting()).isFalse();
+        assertThat(service.readyForLiveRouting()).isTrue();
 
-        verifyNoInteractions(badReviewTaskRepository);
+        verify(orderRepository, never()).countCompletionRewardDeferredByActiveRecovery(any(), any(), eq(3L));
     }
 
     @Test
@@ -121,7 +137,7 @@ class ContractorCompletionRoutingReadinessServiceTest {
                 eq(now),
                 any(Pageable.class)
         )).thenReturn(List.of());
-        when(badReviewTaskRepository.findCompletionRewardRepairGapOrderIds(
+        when(badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
                 eq("DONE"),
                 eq(ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX),
                 eq(now),
@@ -177,7 +193,7 @@ class ContractorCompletionRoutingReadinessServiceTest {
         when(orderRepository.findCompletionRewardRepairOrderIds(
                 any(), any(), eq(3L), eq(now), any(Pageable.class)
         )).thenReturn(List.of());
-        when(badReviewTaskRepository.findCompletionRewardRepairGapOrderIds(
+        when(badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
                 eq("DONE"),
                 eq(ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX),
                 eq(now),
@@ -207,7 +223,7 @@ class ContractorCompletionRoutingReadinessServiceTest {
                 eq(now),
                 any(Pageable.class)
         )).thenReturn(List.of());
-        when(badReviewTaskRepository.findCompletionRewardRepairGapOrderIds(
+        when(badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
                 eq("DONE"),
                 eq(ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX),
                 eq(now),

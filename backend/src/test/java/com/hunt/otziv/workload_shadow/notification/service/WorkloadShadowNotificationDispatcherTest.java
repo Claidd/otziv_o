@@ -96,6 +96,41 @@ class WorkloadShadowNotificationDispatcherTest {
     }
 
     @Test
+    void liveEventUsesLiveLabelInMonitoringGroup() {
+        WorkloadShadowNotificationEvent event = new WorkloadShadowNotificationEvent(
+                2L,
+                "WARNING",
+                "LIVE_SINGLE_RECIPIENT_FORCED",
+                7L,
+                "Нужен получатель",
+                "Назначение уже изменено",
+                WorkloadShadowNotificationDispatcher.TARGET_ADMIN_OWNER_MONITORING,
+                -100L,
+                0
+        );
+        prepareClaim(event);
+        when(telegramService.sendMessage(
+                org.mockito.ArgumentMatchers.eq(-100L),
+                anyString(),
+                org.mockito.ArgumentMatchers.eq("HTML")
+        )).thenReturn(true);
+
+        dispatcher.dispatchDue();
+
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessage(
+                org.mockito.ArgumentMatchers.eq(-100L),
+                text.capture(),
+                org.mockito.ArgumentMatchers.eq("HTML")
+        );
+        assertThat(text.getValue())
+                .contains("LIVE · БОЕВОЙ КОНТУР")
+                .contains("Система может менять назначения по нагрузке")
+                .contains("LIVE_SINGLE_RECIPIENT_FORCED")
+                .doesNotContain("SHADOW · РЕЖИМ НАБЛЮДЕНИЯ")
+                .doesNotContain("ничего не передаёт");
+    }
+    @Test
     void positiveConfiguredChatIdStopsDeliveryBeforeQueueAccess() {
         when(settings.getBoolean(
                 WorkloadShadowNotificationDispatcher.GROUP_NOTIFICATIONS_ENABLED,

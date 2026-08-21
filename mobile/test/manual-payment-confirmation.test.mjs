@@ -97,6 +97,16 @@ test('accepts the structured actual-recipient-required conflict without matching
   assert.equal(decision.reason, 'allowed');
 });
 
+test("accepts the legacy actual-recipient-required message without a structured code", () => {
+  const error = {
+    status: 409,
+    error: { message: "Нужно заново выбрать фактического получателя оплаты." }
+  };
+  const decision = manualCardPaymentFallbackDecision(error, ["OWNER"], 25047, 100000);
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.exactConflict, true);
+  assert.equal(decision.reason, "allowed");
+});
 test('rejects missing order id or non-positive/non-exact amount with an explicit safe error', () => {
   const missingOrder = manualCardPaymentFallbackDecision(exactConflict(), ['OWNER'], null, 100000);
   assert.equal(missingOrder.allowed, false);

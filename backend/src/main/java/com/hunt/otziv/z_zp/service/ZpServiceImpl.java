@@ -6,6 +6,7 @@ import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch
 import com.hunt.otziv.contractor_payments.service.ContractorRewardAttributionService;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardAttributionSnapshotCodec;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
+import com.hunt.otziv.contractor_payments.service.ContractorRewardSourceCodes;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.service.UserService;
@@ -275,7 +276,7 @@ public class ZpServiceImpl implements ZpService{
             managerZp.setProfessionId(order.getManager().getId());
             managerZp.setAmount(amount);
             managerZp.setActive(true);
-            managerZp.setSource("ORDER_MANAGER_REWARD");
+            managerZp.setSource(managerRewardSource());
             managerZp.setContractorRole(ContractorRole.MANAGER);
             Zp saved = zpRepository.save(managerZp);
             contractorRewardLedgerService.synchronizeSourcesSafely(List.of(saved));
@@ -306,7 +307,7 @@ public class ZpServiceImpl implements ZpService{
             workerZp.setProfessionId(order.getWorker().getId());
             workerZp.setAmount(amount);
             workerZp.setActive(true);
-            workerZp.setSource("ORDER_SPECIALIST_REWARD");
+            workerZp.setSource(specialistRewardSource(attributionFinal));
             workerZp.setContractorRole(ContractorRole.SPECIALIST);
             workerZp.setAttributionFinal(attributionFinal);
             workerZp.setRewardBasis(sum);
@@ -389,7 +390,7 @@ public class ZpServiceImpl implements ZpService{
             workerZp.setProfessionId(share.workerId());
             workerZp.setAmount(share.workUnits());
             workerZp.setActive(true);
-            workerZp.setSource("ORDER_SPECIALIST_REWARD");
+            workerZp.setSource(ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST);
             workerZp.setContractorRole(ContractorRole.SPECIALIST);
             workerZp.setAttributionFinal(true);
             workerZp.setRewardBasis(share.grossAmount());
@@ -400,6 +401,18 @@ public class ZpServiceImpl implements ZpService{
 
     private boolean liveRewardAttributionEnabled() {
         return contractorPaymentRuntimeSwitch.rewardAttributionLiveEnabled();
+    }
+
+    private String managerRewardSource() {
+        return liveRewardAttributionEnabled()
+                ? ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER
+                : ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER;
+    }
+
+    private String specialistRewardSource(boolean attributionFinal) {
+        return attributionFinal || liveRewardAttributionEnabled()
+                ? ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST
+                : ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST;
     }
     @Transactional
     protected void saveZpMarketolog(Lead lead){ // Сохранить ЗП Маркетолога в БД

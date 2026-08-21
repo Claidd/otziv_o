@@ -1,7 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { CabinetApi, ManagerPerformanceScore, ScoreResponse, ScoreUser } from '../../core/cabinet.api';
+import { CabinetApi, ScoreContractorPaymentSummary, ScoreResponse, ScoreUser } from '../../core/cabinet.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
@@ -15,14 +15,6 @@ type ScoreSection = {
   icon: string;
 };
 
-type ManagerScoreFactor = {
-  key: string;
-  label: string;
-  weight: number;
-  score: number;
-  hint: string;
-};
-
 @Component({
   selector: 'app-score',
   imports: [AdminLayoutComponent, FormsModule, LoadErrorCardComponent, RouterLink],
@@ -34,7 +26,6 @@ export class ScoreComponent {
   readonly score = signal<ScoreResponse | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
-  readonly activeFactorTip = signal<string | null>(null);
 
   readonly sections: ScoreSection[] = [
     { key: 'managers', title: 'Менеджеры', icon: 'groups' },
@@ -76,25 +67,31 @@ export class ScoreComponent {
     return this.score()?.groups[section.key] ?? [];
   }
 
+  contractorPaymentFor(user: ScoreUser): ScoreContractorPaymentSummary | null {
+    if (!this.score()?.financeVisible || !user.userId) {
+      return null;
+    }
+    const rows = this.score()?.contractorPayments ?? [];
+    const userRows = rows.filter(row => row.userId === user.userId);
+    if (!userRows.length) {
+      return null;
+    }
+    const expectedRole = this.contractorRoleForUser(user);
+    return userRows.find(row => row.role === expectedRole) ?? userRows[0] ?? null;
+  }
+
   rows(section: ScoreSection, user: ScoreUser): Array<{ label: string; value: string }> {
     if (section.key === 'managers') {
-      const performance = user.managerPerformance;
       return [
-        performance ? { label: 'Эффективность', value: `${performance.grade} · ${performance.loadAdjustedPerformanceScore}` } : null,
-        performance ? { label: 'База KPI', value: `${performance.performanceScore} без нагрузки` } : null,
-        performance ? { label: 'Нагрузка', value: `${this.workloadLabel(performance.workloadLevel)} · ${this.decimal(performance.avgDailyWorkload)} в день` } : null,
-        performance ? { label: 'К действию', value: this.amount(performance.actionTotal) } : null,
-        this.financeRow('Начислено', user.salary),
-        this.financeRow('Новые компании', user.newCompanies, ' шт.'),
         { label: 'Заказы', value: this.count(user.order1Month) },
         { label: 'Отзывы', value: this.count(user.review1Month) },
+        user.newCompanies != null ? { label: 'Новые компании', value: this.count(user.newCompanies) } : null,
         this.financeRow('Оборот', user.totalSum)
       ].filter(Boolean) as Array<{ label: string; value: string }>;
     }
 
     if (section.key === 'workers') {
       return [
-        this.financeRow('Начислено', user.salary),
         { label: 'Заказы', value: this.count(user.order1Month) },
         { label: 'Отзывы', value: this.count(user.review1Month) },
         { label: 'Выгул', value: this.count(user.inVigul) },
@@ -110,133 +107,40 @@ export class ScoreComponent {
     ].filter(Boolean) as Array<{ label: string; value: string }>;
   }
 
-  managerPerformanceRows(user: ScoreUser): Array<{ label: string; value: string }> {
-    const performance = user.managerPerformance;
-    if (!performance) {
-      return [];
-    }
-    return [
-      {
-        label: 'Команда 100%',
-        value: performance.teamProgressEligibleDays > 0
-          ? `${performance.teamProgressReached100Days}/${performance.teamProgressEligibleDays} дн. · ${this.percent(performance.teamProgressReached100Rate)}`
-          : '-'
-      },
-      { label: 'В срок проблем', value: this.percent(performance.problemSlaRate) },
-      { label: 'В срок клиентов', value: this.percent(performance.clientSlaRate) },
-      { label: 'Просрочки', value: `${this.percent(performance.overdueRate)} · ${this.decimal(performance.avgDailyOverdue)} в день` },
-      { label: 'Заказы / спец.', value: `${this.amount(performance.workloadOrder)} / ${this.amount(performance.workloadWorker)}` },
-      { label: 'Ответы', value: performance.clientReplyMedianMinutes > 0 ? `${this.decimal(performance.clientReplyMedianMinutes)} / ${this.decimal(performance.clientReplyP90Minutes)} мин.` : '-' },
-      { label: 'Риски', value: performance.riskResolutionAvgHours > 0 ? `${this.decimal(performance.riskResolutionAvgHours)} ч.` : '-' },
-      { label: 'Хвосты', value: this.amount(performance.backlogCount) },
-      { label: 'Повторы', value: this.percent(performance.reopenRate) },
-      { label: 'Контроль', value: `${performance.controlAcceptedCount}/${performance.controlClosedCount}` }
-    ];
-  }
-
-  managerScoreFactors(user: ScoreUser): ManagerScoreFactor[] {
-    const performance = user.managerPerformance;
-    if (!performance) {
-      return [];
-    }
-    return [
-      {
-        key: 'team-completion',
-        label: 'Команда 100%',
-        weight: 15,
-        score: performance.teamCompletionScore,
-        hint: `Доля дней, когда все работники закрыли к 23:59 задачи, поступившие до 23:00, и средний итоговый прогресс команды (${this.percent(performance.teamProgressAveragePercent)}). Задачи последнего часа переходят на следующий день.`
-      },
-      {
-        key: 'problem-speed',
-        label: 'Проблемы',
-        weight: 17,
-        score: performance.problemSpeedScore,
-        hint: 'Скорость решения замечаний из дневного контроля. Открытые задачи считаются по текущему времени и не штрафуются жестко, пока они еще внутри SLA 8 часов.'
-      },
-      {
-        key: 'client-response',
-        label: 'Клиенты',
-        weight: 21,
-        score: performance.clientResponseScore,
-        hint: 'Скорость ответа на неотвеченные клиентские сообщения. Открытые сообщения считаются по текущему времени и штрафуются только по мере приближения или выхода за норматив 30 минут.'
-      },
-      {
-        key: 'overdue-control',
-        label: 'Просрочки',
-        weight: 21,
-        score: performance.overdueControlScore,
-        hint: 'Контроль просроченных заказов: учитываем долю просрочек в общей нагрузке и возраст просроченных задач.'
-      },
-      {
-        key: 'specialist-risk',
-        label: 'Спец. и риски',
-        weight: 13,
-        score: performance.specialistRiskScore,
-        hint: `Работа с проблемами специалистов и рисками. Учитываем SLA реакции и качество обработки риска: ${performance.riskQualityScore}/100.`
-      },
-      {
-        key: 'control-discipline',
-        label: 'Контроль',
-        weight: 9,
-        score: performance.controlDisciplineScore,
-        hint: 'Дисциплина дневного контроля: принятие контроля, закрытие дня и отсутствие формального быстрого прокликивания.'
-      },
-      {
-        key: 'stability',
-        label: 'Стабильность',
-        weight: 4,
-        score: performance.stabilityScore,
-        hint: 'Стабильность работы: меньше повторных проблем и отложенных задач означает более высокий балл.'
-      }
-    ];
-  }
-
-  scorePeriodLabel(): string {
-    const date = new Date(`${this.selectedDate()}T00:00:00`);
-    return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(date);
-  }
-
-  factorTipKey(user: ScoreUser, factor: ManagerScoreFactor): string {
-    return `${user.userId || user.fio}-${factor.key}`;
-  }
-
-  toggleFactorTip(event: MouseEvent, user: ScoreUser, factor: ManagerScoreFactor): void {
-    event.stopPropagation();
-    const key = this.factorTipKey(user, factor);
-    this.activeFactorTip.set(this.activeFactorTip() === key ? null : key);
-  }
-
-  closeFactorTip(): void {
-    this.activeFactorTip.set(null);
-  }
-
-  hasManagerPerformance(section: ScoreSection, user: ScoreUser): boolean {
-    return section.key === 'managers'
-      && !!this.score()?.managerPerformanceVisible
-      && !!user.managerPerformance;
-  }
-
-  performanceTone(performance?: ManagerPerformanceScore | null): string {
-    const score = performance?.loadAdjustedPerformanceScore ?? performance?.performanceScore ?? 0;
-    if (score >= 90) {
-      return 'excellent';
-    }
-    if (score >= 80) {
-      return 'good';
-    }
-    if (score >= 40) {
-      return 'warning';
-    }
-    return 'risk';
-  }
-
   imageUrl(imageId?: number | null): string {
     return this.cabinetApi.imageUrl(imageId);
   }
 
   userTrack(user: ScoreUser): string {
     return `${user.role}-${user.userId || user.fio}`;
+  }
+
+
+  private contractorRoleForUser(user: ScoreUser): string | null {
+    if (user.role === 'ROLE_MANAGER') {
+      return 'MANAGER';
+    }
+    if (user.role === 'ROLE_WORKER') {
+      return 'SPECIALIST';
+    }
+    return null;
+  }
+
+  contractorStatusLabel(row: ScoreContractorPaymentSummary): string {
+    if (!row.profileEnabled) {
+      return 'профиль выключен';
+    }
+    if (!row.liveEnabled) {
+      return 'реквизиты выключены';
+    }
+    return row.reportingLive ? 'LIVE' : 'тестовый расчёт';
+  }
+
+  moneyKopecks(value?: number | null): string {
+    return `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format((value || 0) / 100)} ₽`;
   }
 
   private financeRow(label: string, value?: number | null, suffix = ' руб.'): { label: string; value: string } | null {
@@ -256,30 +160,6 @@ export class ScoreComponent {
 
   private amount(value?: number | null): string {
     return new Intl.NumberFormat('ru-RU').format(value || 0);
-  }
-
-  private percent(value?: number | null): string {
-    return `${this.decimal(value ?? 0)}%`;
-  }
-
-  private decimal(value?: number | null): string {
-    return new Intl.NumberFormat('ru-RU', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 1
-    }).format(value ?? 0);
-  }
-
-  private workloadLabel(value?: string | null): string {
-    switch (value) {
-      case 'EXTREME':
-        return 'очень высокая';
-      case 'HIGH':
-        return 'высокая';
-      case 'NORMAL':
-        return 'нормальная';
-      default:
-        return 'низкая';
-    }
   }
 
   private todayIso(): string {

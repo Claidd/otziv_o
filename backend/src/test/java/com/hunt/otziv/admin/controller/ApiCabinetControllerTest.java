@@ -13,6 +13,7 @@ import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService.AggregateTeam;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentVisibilityService;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
 import com.hunt.otziv.manager_daily_summary.service.ManagerActivityMetricsService;
@@ -106,6 +107,9 @@ class ApiCabinetControllerTest {
     @Mock
     private TeamPatternAnalysisService teamPatternAnalysisService;
 
+    @Mock
+    private ContractorPaymentVisibilityService contractorPaymentVisibilityService;
+
     private ApiCabinetController controller;
     private Principal principal;
     private Authentication authentication;
@@ -129,7 +133,8 @@ class ApiCabinetControllerTest {
                 managerActivityMetricsService,
                 staffDailyProgressService,
                 workerNetworkViolationService,
-                teamPatternAnalysisService
+                teamPatternAnalysisService,
+                contractorPaymentVisibilityService
         );
         principal = () -> "alex";
         authentication = new UsernamePasswordAuthenticationToken(

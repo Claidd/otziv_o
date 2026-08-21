@@ -256,6 +256,26 @@ export interface ScoreUser {
   managerPerformance?: ManagerPerformanceScore | null;
 }
 
+export interface ScoreContractorPaymentSummary {
+  profileId: number;
+  userId: number;
+  fio: string;
+  role: 'SPECIALIST' | 'MANAGER' | string;
+  profileEnabled: boolean;
+  liveEnabled: boolean;
+  accruedMonthKopecks: number;
+  accruedTotalKopecks: number;
+  reservedKopecks: number;
+  pendingKopecks: number;
+  paidMonthKopecks: number;
+  paidTotalKopecks: number;
+  actualTransferCount: number;
+  actualTransferAmountKopecks: number;
+  availableKopecks: number;
+  reportingLive: boolean;
+  currentMonthCoverageComplete: boolean;
+}
+
 export interface ManagerPerformanceScore {
   managerId: number;
   managerUserId?: number | null;
@@ -306,6 +326,7 @@ export interface ScoreResponse {
   user: UserLk;
   financeVisible: boolean;
   managerPerformanceVisible?: boolean;
+  contractorPayments?: ScoreContractorPaymentSummary[];
   groups: {
     managers: ScoreUser[];
     marketologs: ScoreUser[];

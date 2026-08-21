@@ -260,6 +260,62 @@ public class ContractorPaymentProfileService {
         return toResponse(saved);
     }
 
+    @Transactional
+    public long applySystemOpeningBalanceDelta(
+            Long userId,
+            ContractorRole role,
+            long deltaKopecks,
+            String reason
+    ) {
+        if (userId == null || userId <= 0 || role == null || deltaKopecks == 0L) {
+            return 0L;
+        }
+        ContractorPaymentProfile profile = profileRepository.findByUserIdAndRoleForUpdate(userId, role)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Платёжный профиль для автоматической корректировки остатка не найден"
+                ));
+        long oldBalance = profile.getOpeningBalanceKopecks();
+        long newBalance;
+        try {
+            newBalance = Math.addExact(oldBalance, deltaKopecks);
+        } catch (ArithmeticException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автоматическая корректировка переходящего остатка превышает допустимый предел",
+                    exception
+            );
+        }
+        if (newBalance < 0L || newBalance > ContractorPaymentAmountLimits.MAX_AMOUNT_KOPECKS) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Переходящего остатка недостаточно для автоматической корректировки выполненной работы"
+            );
+        }
+        profile.setOpeningBalanceKopecks(newBalance);
+        ContractorPaymentProfile saved = profileRepository.saveAndFlush(profile);
+        String adjustmentReason = normalize(reason);
+        if (adjustmentReason.isBlank()) {
+            adjustmentReason = "Автокорректировка переходящего остатка";
+        }
+        recordOpeningAdjustment(saved, oldBalance, newBalance, adjustmentReason, currentActor());
+        businessAuditService.recordRequiredInCurrentTransaction(
+                "AUTO_ADJUST_CONTRACTOR_OPENING_BALANCE",
+                "CONTRACTOR_PAYMENT_PROFILE",
+                saved.getId(),
+                null,
+                null,
+                Map.of("openingBalanceKopecks", oldBalance),
+                Map.of(
+                        "openingBalanceKopecks", newBalance,
+                        "deltaKopecks", deltaKopecks,
+                        "reason", adjustmentReason
+                ),
+                "userId=" + userId + ", role=" + role
+        );
+        return deltaKopecks;
+    }
+
     @Transactional(readOnly = true)
     public List<ContractorPaymentProfileAdjustmentResponse> openingBalanceHistory(
             Long userId,
@@ -476,20 +532,39 @@ public class ContractorPaymentProfileService {
             long oldBalance,
             ContractorPaymentProfileRequest request
     ) {
-        String requestedReason = normalize(request.openingBalanceReason());
+        recordOpeningAdjustment(
+                profile,
+                oldBalance,
+                request.openingBalanceKopecks(),
+                request.openingBalanceReason(),
+                currentActor()
+        );
+    }
+
+    private void recordOpeningAdjustment(
+            ContractorPaymentProfile profile,
+            long oldBalance,
+            long newBalance,
+            String reason,
+            String actor
+    ) {
+        String requestedReason = normalize(reason);
         if (requestedReason.isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Для изменения переходящего остатка укажите источник и причину"
             );
         }
+        if (requestedReason.length() > 255) {
+            requestedReason = requestedReason.substring(0, 255);
+        }
         ContractorPaymentProfileAdjustment adjustment = new ContractorPaymentProfileAdjustment();
         adjustment.setProfile(profile);
         adjustment.setOldBalanceKopecks(oldBalance);
-        adjustment.setNewBalanceKopecks(request.openingBalanceKopecks());
-        adjustment.setDeltaKopecks(Math.subtractExact(request.openingBalanceKopecks(), oldBalance));
+        adjustment.setNewBalanceKopecks(newBalance);
+        adjustment.setDeltaKopecks(Math.subtractExact(newBalance, oldBalance));
         adjustment.setReason(requestedReason);
-        adjustment.setChangedBy(currentActor());
+        adjustment.setChangedBy(normalize(actor).isBlank() ? "system" : normalize(actor));
         adjustment.setEffectiveAt(LocalDateTime.now());
         adjustmentRepository.save(adjustment);
     }

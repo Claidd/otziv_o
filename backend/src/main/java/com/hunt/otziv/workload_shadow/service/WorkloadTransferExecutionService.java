@@ -26,6 +26,7 @@ public class WorkloadTransferExecutionService {
     private final WorkloadLiveSettingsService liveSettingsService;
     private final WorkloadShadowSettingsService shadowSettingsService;
     private final WorkloadLiveControlRepository liveControlRepository;
+    private final WorkloadTransferAppliedNotificationService appliedNotificationService;
 
     public List<WorkloadTransferExecutionTransactionService.ApplyResult>
             applyAcceptedWorkflows() {
@@ -42,10 +43,13 @@ public class WorkloadTransferExecutionService {
                 continue;
             }
             try {
-                results.add(transactionService.apply(
-                        row.getWorkflowId(),
-                        row.getWorkflowVersion()
-                ));
+                WorkloadTransferExecutionTransactionService.ApplyResult result =
+                        transactionService.apply(
+                                row.getWorkflowId(),
+                                row.getWorkflowVersion()
+                        );
+                results.add(result);
+                notifyApplied(result);
             } catch (RuntimeException exception) {
                 log.error(
                         "Atomic workload transfer failed for workflow {}",
@@ -68,6 +72,16 @@ public class WorkloadTransferExecutionService {
         return List.copyOf(results);
     }
 
+    private void notifyApplied(
+            WorkloadTransferExecutionTransactionService.ApplyResult result
+    ) {
+        if (result == null
+                || result.executionId() == null
+                || !"APPLIED".equals(result.status())) {
+            return;
+        }
+        appliedNotificationService.notifyApplied(result.executionId());
+    }
     @Transactional
     public void confirmByOwner(long workflowId) {
         if (workflowId <= 0) {

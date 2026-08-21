@@ -1,6 +1,6 @@
 package com.hunt.otziv.performers.service;
 
-import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
+import com.hunt.otziv.contractor_payments.service.ContractorCompletionRepairTransactionService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
 import com.hunt.otziv.p_products.status.event.OrderStatusChangedEvent;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,7 @@ public class PerformerProductRewardZpListener {
 
     private final PerformerProductRewardZpService rewardZpService;
     private final ContractorPaymentRuntimeSwitch runtimeSwitch;
-    private final ContractorCompletionRewardService completionRewardService;
+    private final ContractorCompletionRepairTransactionService completionRepairTransactionService;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderPaid(OrderStatusChangedEvent event) {
@@ -31,7 +31,7 @@ public class PerformerProductRewardZpListener {
                     || STATUS_PUBLIC.equals(event.newStatus())
                     || STATUS_PAID.equals(event.newStatus())) {
                 try {
-                    completionRewardService.ensureOrderCompletionAccrual(event.orderId());
+                    completionRepairTransactionService.repairOrder(event.orderId());
                 } catch (RuntimeException exception) {
                     log.error(
                             "Не удалось восстановить начисления завершенного заказа: orderId={}, code={}",

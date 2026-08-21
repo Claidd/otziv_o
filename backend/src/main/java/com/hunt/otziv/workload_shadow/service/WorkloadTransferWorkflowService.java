@@ -1,9 +1,11 @@
 package com.hunt.otziv.workload_shadow.service;
 
 import com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse;
+import com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsResponse;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferWorkflowRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferWorkflowRepository.ManagerReservationProjection;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferWorkflowRepository.RecommendationCandidateProjection;
+import com.hunt.otziv.workload_shadow.repository.WorkloadTransferWorkflowRepository.SourceWorkerReservationProjection;
 import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferCompanyGraph;
 import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferGraphDiagnostics;
 import com.hunt.otziv.workload_shadow.transfer.service.WorkloadTransferGraphQueryService;
@@ -52,13 +54,15 @@ public class WorkloadTransferWorkflowService {
 
         quotaLockService.lock(now.toLocalDate());
         List<RecommendationCandidateProjection> rows =
-                repository.findRecommendationCandidates();
+                repository.findRecommendationCandidates(shadowSettings.allowedFailureDays());
         if (rows.isEmpty()) {
             return new StageResult(true, 0, 0, 0, "Новых рекомендаций нет");
         }
 
         Map<Long, RecommendationGroup> groups = group(rows);
-        Map<Long, Long> reservedByManager = reservations(now.toLocalDate().atStartOfDay());
+        LocalDateTime dayStart = now.toLocalDate().atStartOfDay();
+        Map<Long, Long> reservedByManager = reservations(dayStart);
+        Map<Long, Long> reservedBySourceWorker = sourceWorkerReservations(dayStart);
         long globalReserved = reservedByManager.values().stream()
                 .mapToLong(Long::longValue)
                 .sum();
@@ -94,8 +98,18 @@ public class WorkloadTransferWorkflowService {
                 skippedByPolicy++;
                 continue;
             }
+            long sourceReserved = reservedBySourceWorker.getOrDefault(
+                    group.sourceWorkerId(),
+                    0L
+            );
+            int sourceLimit = sourceDailyLimit(group.failureNumber(), shadowSettings);
+            if (sourceReserved >= sourceLimit) {
+                skippedByPolicy++;
+                continue;
+            }
             selected.add(group);
             reservedByManager.put(group.managerId(), managerReserved + 1);
+            reservedBySourceWorker.put(group.sourceWorkerId(), sourceReserved + 1);
         }
         if (selected.isEmpty()) {
             return new StageResult(
@@ -248,6 +262,16 @@ public class WorkloadTransferWorkflowService {
         }
         return result;
     }
+    private Map<Long, Long> sourceWorkerReservations(LocalDateTime dayStart) {
+        Map<Long, Long> result = new LinkedHashMap<>();
+        for (SourceWorkerReservationProjection row
+                : repository.reservedBySourceWorkerSince(dayStart)) {
+            if (row != null && row.getSourceWorkerId() != null) {
+                result.put(row.getSourceWorkerId(), value(row.getReservedCount()));
+            }
+        }
+        return result;
+    }
 
     private WorkloadTransferCompanyGraph graph(
             List<WorkloadTransferCompanyGraph> values,
@@ -284,6 +308,31 @@ public class WorkloadTransferWorkflowService {
         return !now.isBefore(start) && now.isBefore(end);
     }
 
+    private int sourceDailyLimit(
+            int failureNumber,
+            WorkloadShadowSettingsResponse settings
+    ) {
+        if (settings == null || failureNumber <= settings.allowedFailureDays()) {
+            return 0;
+        }
+        WorkloadTransferSelectionPolicy.Tier tier = WorkloadTransferSelectionPolicy.tier(
+                failureNumber,
+                settings.allowedFailureDays(),
+                new WorkloadTransferSelectionPolicy.Tier(
+                        settings.fourthFailurePercent(),
+                        settings.fourthFailureMaxCompanies()
+                ),
+                new WorkloadTransferSelectionPolicy.Tier(
+                        settings.fifthFailurePercent(),
+                        settings.fifthFailureMaxCompanies()
+                ),
+                new WorkloadTransferSelectionPolicy.Tier(
+                        settings.sixthFailurePercent(),
+                        settings.sixthFailureMaxCompanies()
+                )
+        );
+        return Math.max(0, tier.maxCompanies());
+    }
     private int remaining(int configured, long used) {
         long value = Math.max(0, (long) configured - Math.max(0, used));
         return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
@@ -355,6 +404,7 @@ public class WorkloadTransferWorkflowService {
             long managerId,
             long sourceWorkerId,
             long companyId,
+            int failureNumber,
             long financiallyUnsafeOrderCount,
             List<CandidateSnapshot> candidates
     ) {
@@ -374,6 +424,7 @@ public class WorkloadTransferWorkflowService {
                     first.getManagerId(),
                     first.getSourceWorkerId(),
                     first.getCompanyId(),
+                    first.getFailureNumber() == null ? 0 : first.getFailureNumber(),
                     first.getFinanciallyUnsafeOrderCount() == null
                             ? 0
                             : first.getFinanciallyUnsafeOrderCount(),
@@ -382,3 +433,6 @@ public class WorkloadTransferWorkflowService {
         }
     }
 }
+
+
+

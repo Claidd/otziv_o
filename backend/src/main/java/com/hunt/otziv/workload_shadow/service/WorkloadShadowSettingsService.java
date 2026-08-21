@@ -73,7 +73,7 @@ public class WorkloadShadowSettingsService {
                 settings.getBoolean("adaptive-estimates-enabled", true),
                 settings.getInt("adaptive-minimum-samples", 30),
                 settings.getInt("lookback-days", 30),
-                settings.getInt("allowed-failure-days", 3),
+                settings.getInt("allowed-failure-days", 4),
                 settings.getInt("recipient-minimum-rating", 85),
                 settings.getInt("recipient-minimum-100-rate", 80),
                 settings.getInt("recipient-maximum-failure-days", 2),
@@ -484,3 +484,4 @@ public class WorkloadShadowSettingsService {
         }
     }
 }
+

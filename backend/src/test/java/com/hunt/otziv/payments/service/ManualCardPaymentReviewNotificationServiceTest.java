@@ -32,6 +32,7 @@ class ManualCardPaymentReviewNotificationServiceTest {
     @Mock private PersonalReminderService personalReminderService;
     @Mock private TelegramService telegramService;
     @Mock private PlatformTransactionManager transactionManager;
+    @Mock private PaymentIssueReminderService paymentIssueReminderService;
     @Mock private TransactionStatus transactionStatus;
 
     @InjectMocks
@@ -84,6 +85,13 @@ class ManualCardPaymentReviewNotificationServiceTest {
         );
         verify(telegramService).sendMessage(eq(100L), contains("PaymentId …6400"));
         verify(telegramService).sendMessage(eq(200L), contains("Проверьте поступление в выписке"));
+        verify(paymentIssueReminderService).notifyOrderIssue(
+                eq(25047L),
+                eq(ManualCardPaymentReviewNotificationService.REMINDER_SOURCE),
+                eq(9001L),
+                eq("Проверить ручную оплату заказа №25047"),
+                contains("Проверьте поступление")
+        );
     }
 
     @Test
@@ -123,6 +131,13 @@ class ManualCardPaymentReviewNotificationServiceTest {
         );
         verify(telegramService).sendMessage(eq(100L), contains("Заказы: №23489, №23490, №23987"));
         verify(telegramService).sendMessage(eq(200L), contains("Закрытые одиночные инструкции"));
+        verify(paymentIssueReminderService).notifyOrderIssue(
+                eq(23_489L),
+                eq(ManualCardPaymentReviewNotificationService.COMMON_INVOICE_REMINDER_SOURCE),
+                eq(171L),
+                eq("Проверить ручную оплату общего счета №171"),
+                contains("Причина: Клиент перевел всю сумму менеджеру на карту")
+        );
     }
 
     @Test
@@ -165,6 +180,13 @@ class ManualCardPaymentReviewNotificationServiceTest {
                 eq(ManualCardPaymentReviewNotificationService.COMMON_INVOICE_REMINDER_SOURCE),
                 eq(171L),
                 eq(23_489L)
+        );
+        verify(paymentIssueReminderService).notifyOrderIssue(
+                eq(23_489L),
+                eq(ManualCardPaymentReviewNotificationService.COMMON_INVOICE_REMINDER_SOURCE),
+                eq(171L),
+                eq("Проверить ручную оплату общего счета №171"),
+                contains("Причина: Клиент оплатил переводом на карту")
         );
     }
 

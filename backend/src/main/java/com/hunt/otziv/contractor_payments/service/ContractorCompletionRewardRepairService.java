@@ -58,19 +58,12 @@ public class ContractorCompletionRewardRepairService {
                 now,
                 PageRequest.of(0, batchSize)
         ));
-        if (orderIds.size() < batchSize) {
-            for (Long orderId : badReviewTaskRepository.findCompletionRewardRepairGapOrderIds(
-                    BadReviewTaskStatus.DONE.name(),
-                    ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX,
-                    now,
-                    PageRequest.of(0, batchSize)
-            )) {
-                orderIds.add(orderId);
-                if (orderIds.size() >= batchSize) {
-                    break;
-                }
-            }
-        }
+        List<Long> completedTaskGapIds = badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
+                BadReviewTaskStatus.DONE.name(),
+                ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX,
+                now,
+                PageRequest.of(0, batchSize)
+        );
         for (Long orderId : orderIds) {
             try {
                 // The scheduled method itself is not transactional, so every
@@ -99,7 +92,36 @@ public class ContractorCompletionRewardRepairService {
             }
         }
 
+        repairCompletedTaskGaps(completedTaskGapIds);
         repairCanceledTaskGaps(batchSize, now);
+    }
+
+    private void repairCompletedTaskGaps(List<Long> taskIds) {
+        for (Long taskId : taskIds) {
+            Optional<Long> orderId = badReviewTaskRepository.findOrderIdById(taskId);
+            if (orderId.isEmpty()) {
+                continue;
+            }
+            try {
+                repairTransactionService.repairCompletedBadReviewTask(orderId.get(), taskId);
+            } catch (RuntimeException exception) {
+                try {
+                    deferFailedOrder(orderId.get(), exception);
+                } catch (RuntimeException stateFailure) {
+                    log.warn(
+                            "Не удалось обновить backoff выполненной работы: orderId={}, code={}",
+                            orderId.get(),
+                            stateFailure.getClass().getSimpleName()
+                    );
+                }
+                log.error(
+                        "Не удалось восстановить выполненную работу: orderId={}, taskId={}, code={}",
+                        orderId.get(),
+                        taskId,
+                        exception.getClass().getSimpleName()
+                );
+            }
+        }
     }
 
     private void repairCanceledTaskGaps(int batchSize, LocalDateTime now) {

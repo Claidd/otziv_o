@@ -54,6 +54,24 @@ class WorkloadTransferRepositoryContractTest {
     }
 
     @Test
+    void liveWorkflowStagingUsesCurrentFailureThresholdAndSourceQuota() {
+        assertQueryContains(
+                WorkloadTransferWorkflowRepository.class,
+                "findRecommendationCandidates",
+                "transfer_case.failure_number > :allowedFailureDays"
+        );
+        assertQueryContains(
+                WorkloadTransferWorkflowRepository.class,
+                "reservedBySourceWorkerSince",
+                "workflow.source_worker_id AS source_worker_id"
+        );
+        assertQueryContains(
+                WorkloadTransferWorkflowRepository.class,
+                "reservedBySourceWorkerSince",
+                "emergency.source_worker_id AS source_worker_id"
+        );
+    }
+    @Test
     void workflowAndCandidateStagingUseBoundedBulkJsonQueries() {
         assertQueryContains(
                 WorkloadTransferWorkflowRepository.class,
@@ -738,3 +756,4 @@ class WorkloadTransferRepositoryContractTest {
         return query;
     }
 }
+

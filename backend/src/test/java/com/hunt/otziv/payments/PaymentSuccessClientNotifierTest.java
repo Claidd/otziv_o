@@ -8,6 +8,7 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.service.PaymentSuccessClientNotifier;
 import com.hunt.otziv.u_users.model.Manager;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -77,4 +79,55 @@ class PaymentSuccessClientNotifierTest {
         assertTrue(message.contains("Страница оплаты: https://o-ogo.ru/pay/pay-token"));
         assertTrue(message.contains("Чек будет отправлен на e-mail: client@example.ru."));
     }
+
+    @Test
+    void notifySuccessUsesManualConfirmationTextForManualPayments() {
+        TbankPaymentProperties properties = new TbankPaymentProperties();
+        properties.setPublicBaseUrl("https://o-ogo.ru/");
+        PaymentSuccessClientNotifier notifier = new PaymentSuccessClientNotifier(messageSender, properties, appSettingService);
+
+        Manager manager = new Manager();
+        manager.setClientId("wa-client");
+        Company company = new Company();
+        company.setTitle("Галерея");
+        company.setGroupId("wa-group");
+        company.setManager(manager);
+        Order order = new Order();
+        order.setId(25362L);
+        order.setCompany(company);
+
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order);
+        link.setToken("manual-token");
+        link.setAmountKopecks(110000L);
+        link.setConfirmedAmountKopecks(110000L);
+        link.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        link.setPayerEmail("client@example.ru");
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(messageSender.send(eq(company), eq("wa-client"), eq("wa-group"), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT,
+                ScheduledClientMessageService.DEFAULT_PAYMENT_SUCCESS_TEXT
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_PAYMENT_SUCCESS_TEXT);
+
+        ClientMessageSendResult result = notifier.notifySuccess(link);
+
+        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+        verify(messageSender).send(eq(company), eq("wa-client"), eq("wa-group"), messageCaptor.capture());
+        String message = messageCaptor.getValue();
+        assertTrue(result.sent());
+        assertTrue(message.contains("Оплата по реквизитам подтверждена."));
+        assertTrue(message.contains("Менеджер сверил перевод по реквизитам. Заказ принят в работу."));
+        assertTrue(message.contains("Заказ №25362"));
+        assertTrue(message.contains("Компания: Галерея"));
+        assertTrue(message.contains("Сумма: 1100 ₽"));
+        assertTrue(message.contains("Чек будет отправлен на e-mail: client@example.ru."));
+        assertFalse(message.contains("Страница оплаты:"));
+        assertFalse(message.contains("https://o-ogo.ru/pay/manual-token"));
+    }
+
 }

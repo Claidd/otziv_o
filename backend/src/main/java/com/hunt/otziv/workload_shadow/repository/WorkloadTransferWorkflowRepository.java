@@ -100,6 +100,7 @@ public interface WorkloadTransferWorkflowRepository
             WHERE transfer_case.active = TRUE
               AND transfer_case.status = 'SHADOW_PENDING'
               AND transfer_case.graph_error_count = 0
+              AND transfer_case.failure_number > :allowedFailureDays
               AND candidate_current.recipient_eligible = TRUE
               AND candidate_current.accepts_company_transfers = TRUE
               AND candidate_current.worker_group_connected = TRUE
@@ -119,7 +120,9 @@ public interface WorkloadTransferWorkflowRepository
                      transfer_case.workload_shadow_transfer_case_id,
                      candidate.sequence_number
             """, nativeQuery = true)
-    List<RecommendationCandidateProjection> findRecommendationCandidates();
+    List<RecommendationCandidateProjection> findRecommendationCandidates(
+            @Param("allowedFailureDays") int allowedFailureDays
+    );
 
     @Query(value = """
             SELECT reserved.manager_id AS managerId,
@@ -155,6 +158,42 @@ public interface WorkloadTransferWorkflowRepository
             GROUP BY reserved.manager_id
             """, nativeQuery = true)
     List<ManagerReservationProjection> reservedByManagerSince(
+            @Param("dayStart") LocalDateTime dayStart
+    );
+    @Query(value = """
+            SELECT reserved.source_worker_id AS sourceWorkerId,
+                   SUM(reserved.reserved_count) AS reservedCount
+            FROM (
+                SELECT workflow.source_worker_id AS source_worker_id,
+                       COUNT(*) AS reserved_count
+                FROM workload_transfer_workflows workflow
+                WHERE workflow.created_at >= :dayStart
+                  AND workflow.status NOT IN (
+                        'CANCELLED',
+                        'CANCELLED_EXPIRED',
+                        'FAILED',
+                        'ROLLED_BACK',
+                        'STAFFING_REQUIRED',
+                        'EMERGENCY_APPLIED'
+                  )
+                GROUP BY workflow.source_worker_id
+
+                UNION ALL
+
+                SELECT emergency.source_worker_id AS source_worker_id,
+                       COUNT(*) AS reserved_count
+                FROM workload_transfer_emergency_assignments emergency
+                WHERE emergency.created_at >= :dayStart
+                  AND emergency.status NOT IN (
+                        'BLOCKED',
+                        'FAILED',
+                        'ROLLED_BACK'
+                  )
+                GROUP BY emergency.source_worker_id
+            ) reserved
+            GROUP BY reserved.source_worker_id
+            """, nativeQuery = true)
+    List<SourceWorkerReservationProjection> reservedBySourceWorkerSince(
             @Param("dayStart") LocalDateTime dayStart
     );
 
@@ -469,4 +508,11 @@ public interface WorkloadTransferWorkflowRepository
         Long getManagerId();
         Long getReservedCount();
     }
+    interface SourceWorkerReservationProjection {
+        Long getSourceWorkerId();
+        Long getReservedCount();
+    }
 }
+
+
+

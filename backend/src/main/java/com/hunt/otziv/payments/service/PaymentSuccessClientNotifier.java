@@ -8,6 +8,7 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.u_users.model.Manager;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
@@ -19,6 +20,15 @@ import static com.hunt.otziv.client_messages.service.ScheduledClientMessageServi
 @Service
 @RequiredArgsConstructor
 public class PaymentSuccessClientNotifier {
+
+    private static final String DEFAULT_MANUAL_PAYMENT_SUCCESS_TEXT = String.join("\n",
+            "Оплата по реквизитам подтверждена.",
+            "",
+            "Менеджер сверил перевод по реквизитам. Заказ принят в работу.",
+            "{orderLine}{companyLine}Сумма: {sum}",
+            "",
+            "{receiptText}"
+    );
 
     private final ClientChatMessageSender messageSender;
     private final TbankPaymentProperties properties;
@@ -60,7 +70,7 @@ public class PaymentSuccessClientNotifier {
         variables.put("payerEmail", payerEmail);
         variables.put("receiptText", receiptText(payerEmail));
 
-        return renderTemplate(paymentSuccessTemplate(), variables);
+        return renderTemplate(paymentSuccessTemplate(link), variables);
     }
 
     private String clientId(Order order, Company company) {
@@ -89,11 +99,23 @@ public class PaymentSuccessClientNotifier {
         return baseUrl.isBlank() ? "/pay/" + token : baseUrl + "/pay/" + token;
     }
 
-    private String paymentSuccessTemplate() {
-        return appSettingService.getString(
+    private String paymentSuccessTemplate(PaymentLink link) {
+        String configuredTemplate = appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT,
                 DEFAULT_PAYMENT_SUCCESS_TEXT
         );
+        if (isManualPayment(link)
+                && (configuredTemplate == null
+                || configuredTemplate.isBlank()
+                || DEFAULT_PAYMENT_SUCCESS_TEXT.equals(configuredTemplate.trim()))) {
+            return DEFAULT_MANUAL_PAYMENT_SUCCESS_TEXT;
+        }
+        return configuredTemplate;
+    }
+
+    private boolean isManualPayment(PaymentLink link) {
+        PaymentMethod method = link == null ? null : link.getPaymentMethod();
+        return method == PaymentMethod.MANUAL_MOBILE_BANK || method == PaymentMethod.MANUAL_EXTERNAL_LINK;
     }
 
     private String companyAndFilial(String companyTitle, String filialTitle) {

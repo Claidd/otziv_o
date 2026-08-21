@@ -50,8 +50,24 @@ public interface ContractorCompletionCutoverPreflightRepository extends JpaRepos
                   FROM orders old_order
                   WHERE old_order.order_id = reward.zp_order
                     AND old_order.order_amount > 0
-                    AND reward.zp_date IS NOT NULL
-                    AND reward.zp_date < :startDate
+                    AND (
+                        (reward.zp_date IS NOT NULL AND reward.zp_date < :startDate)
+                        OR EXISTS (
+                            SELECT 1
+                            FROM contractor_completion_reward_markers bridge_marker
+                            WHERE bridge_marker.order_id = reward.zp_order
+                              AND bridge_marker.occurred_on < :startDate
+                              AND bridge_marker.logical_source = CASE
+                                  WHEN CAST(reward.zp_source AS BINARY) = CAST('ORDER_MANAGER_REWARD' AS BINARY)
+                                      THEN 'ORDER_COMPLETION_MANAGER'
+                                  WHEN CAST(reward.zp_source AS BINARY) = CAST('ORDER_SPECIALIST_REWARD' AS BINARY)
+                                      THEN 'ORDER_COMPLETION_SPECIALIST'
+                                  WHEN CAST(reward.zp_source AS BINARY) = CAST('PERFORMER_PRODUCT_REWARD' AS BINARY)
+                                      THEN 'PERFORMER_PRODUCT_COMPLETION'
+                                  ELSE ''
+                              END
+                        )
+                    )
                     AND (
                         SELECT COUNT(*)
                         FROM order_details completed_detail

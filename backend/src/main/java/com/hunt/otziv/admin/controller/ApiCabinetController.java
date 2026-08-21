@@ -15,6 +15,8 @@ import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsService;
 import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
+import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAdminSummaryResponse;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentVisibilityService;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
 import com.hunt.otziv.manager_daily_summary.service.ManagerActivityMetricsService;
@@ -107,6 +109,7 @@ public class ApiCabinetController {
     private final StaffDailyProgressService staffDailyProgressService;
     private final WorkerNetworkViolationService workerNetworkViolationService;
     private final TeamPatternAnalysisService teamPatternAnalysisService;
+    private final ContractorPaymentVisibilityService contractorPaymentVisibilityService;
 
     @Value("${otziv.analytics.aggregates.read-enabled:false}")
     private boolean aggregateAnalyticsReadEnabled;
@@ -372,6 +375,7 @@ public class ApiCabinetController {
                                 personalService.getUserLK(principal),
                                 financeVisible,
                                 managerPerformanceVisible,
+                                financeVisible ? contractorPaymentVisibilityService.adminSummary() : List.of(),
                                 Map.of(
                                         "managers", groupedUsers.getOrDefault("ROLE_MANAGER", List.of()),
                                         "marketologs", groupedUsers.getOrDefault("ROLE_MARKETOLOG", List.of()),
@@ -1044,6 +1048,7 @@ public class ApiCabinetController {
             UserLKDTO user,
             boolean financeVisible,
             boolean managerPerformanceVisible,
+            List<ContractorPaymentAdminSummaryResponse> contractorPayments,
             Map<String, List<ScoreUserResponse>> groups
     ) {
     }

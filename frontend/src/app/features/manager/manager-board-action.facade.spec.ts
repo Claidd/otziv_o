@@ -157,6 +157,46 @@ describe('ManagerBoardActionFacade', () => {
     expect(toastMessages).toEqual([]);
   });
 
+  it("opens the manual-card modal for actual-recipient conflict code", () => {
+    const { facade, calls, toastMessages } = createFacade({
+      orderStatusError: {
+        status: 409,
+        error: {
+          code: "ACTUAL_RECIPIENT_REQUIRED",
+          message: "Выберите фактического получателя оплаты перед закрытием заказа."
+        }
+      }
+    });
+
+    facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
+      label: "оплатили", status: "Оплачено", icon: "payments"
+    });
+
+    expect(calls).toEqual([
+      "order-status:25047:Оплачено",
+      "open-manual-card:25047"
+    ]);
+    expect(toastMessages).toEqual([]);
+  });
+
+  it("opens the manual-card modal for legacy actual-recipient conflict text", () => {
+    const { facade, calls, toastMessages } = createFacade({
+      orderStatusError: {
+        status: 409,
+        message: "Нужно заново выбрать фактического получателя оплаты."
+      }
+    });
+
+    facade.updateOrderStatus(order({ id: 25047, sum: 1000 }), {
+      label: "оплатили", status: "Оплачено", icon: "payments"
+    });
+
+    expect(calls).toEqual([
+      "order-status:25047:Оплачено",
+      "open-manual-card:25047"
+    ]);
+    expect(toastMessages).toEqual([]);
+  });
   it('does not open the manual-card modal for a non-paid status', () => {
     const conflict = {
       status: 409,

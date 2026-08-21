@@ -193,6 +193,10 @@ export class WorkloadShadowComponent implements OnDestroy {
     this.auth.tokenParsed();
     return this.auth.hasRealmRole('OWNER');
   });
+  readonly canConfirmLiveTransfer = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasRealmRole('ADMIN') || this.auth.hasRealmRole('OWNER');
+  });
   readonly managers = computed(() => {
     const summaryManagers = this.summary()?.managers ?? [];
     if (summaryManagers.length) {
@@ -441,7 +445,7 @@ export class WorkloadShadowComponent implements OnDestroy {
     adaptiveEstimatesEnabled: [true],
     adaptiveMinimumSamples: [30, [Validators.required, Validators.min(10), Validators.max(10000)]],
     lookbackDays: [30, [Validators.required, Validators.min(7), Validators.max(90)]],
-    allowedFailureDays: [3, [Validators.required, Validators.min(0), Validators.max(15)]],
+    allowedFailureDays: [4, [Validators.required, Validators.min(0), Validators.max(15)]],
     recipientMinimumRating: [85, [Validators.required, Validators.min(0), Validators.max(100)]],
     recipientMinimumHundredPercentRate: [80, [Validators.required, Validators.min(0), Validators.max(100)]],
     recipientMaximumFailureDays: [2, [Validators.required, Validators.min(0), Validators.max(31)]],
@@ -473,11 +477,11 @@ export class WorkloadShadowComponent implements OnDestroy {
     stableHours: [168, [Validators.required, Validators.min(1), Validators.max(720)]],
     minCandidatesPerManager: [2, [Validators.required, Validators.min(1), Validators.max(20)]],
     canaryManagerIds: [''],
-    offerTimeoutMinutes: [15, [Validators.required, Validators.min(1), Validators.max(240)]],
+    offerTimeoutMinutes: [60, [Validators.required, Validators.min(1), Validators.max(240)]],
     offerStartTime: ['10:00', [Validators.required, Validators.pattern(TIME_PATTERN)]],
     offerEndTime: ['21:00', [Validators.required, Validators.pattern(TIME_PATTERN)]],
-    maxTransfersPerManagerDay: [1, [Validators.required, Validators.min(1), Validators.max(100)]],
-    maxTransfersGlobalDay: [3, [Validators.required, Validators.min(1), Validators.max(500)]],
+    maxTransfersPerManagerDay: [5, [Validators.required, Validators.min(1), Validators.max(100)]],
+    maxTransfersGlobalDay: [10, [Validators.required, Validators.min(1), Validators.max(500)]],
     rollbackWindowMinutes: [30, [Validators.required, Validators.min(1), Validators.max(1440)]],
     firstLiveOwnerConfirmations: [5, [Validators.required, Validators.min(0), Validators.max(100)]],
     emergencyFallbackEnabled: [false],
@@ -674,7 +678,7 @@ export class WorkloadShadowComponent implements OnDestroy {
   }
 
   confirmWorkflow(workflow: WorkloadTransferWorkflow): void {
-    if (!this.canControlLive() || this.liveBusy()) return;
+    if (!this.canConfirmLiveTransfer() || this.liveBusy()) return;
     const confirmation = window.prompt(
       `Подтвердить передачу «${workflow.companyTitle}» от ${workflow.sourceWorkerName} к ${workflow.targetWorkerName || 'получателю'}?\nВведите: ПОДТВЕРЖДАЮ ПЕРЕДАЧУ`
     );

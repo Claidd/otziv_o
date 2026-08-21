@@ -31,6 +31,8 @@ const ROUTE_ERROR_CODES = new Set<PaymentRouteErrorCode>([
   'TASK_TARGET_UNRESOLVED'
 ]);
 
+const HISTORICAL_PRE_CUTOVER_MANUAL_CARD_RECIPIENT_KEY = 'LEGACY_PRE_CUTOVER_MANUAL_CARD';
+
 export function mobilePaymentRouteErrorCode(error: unknown): PaymentRouteErrorCode | null {
   const outer = asRecord(error);
   const payload = asRecord(outer?.['error']) ?? outer;
@@ -102,6 +104,9 @@ export function mobileIsTaskRecipient(candidate: MobileManualPaymentRecipientLik
 }
 
 export function mobileTaskAwareRecipientLabel(candidate: MobileManualPaymentRecipientLike): string {
+  if (candidate.key?.trim() === HISTORICAL_PRE_CUTOVER_MANUAL_CARD_RECIPIENT_KEY) {
+    return candidate.displayName?.trim() || candidate.label?.trim() || 'Историческая оплата до запуска';
+  }
   if (mobileIsTaskRecipient(candidate)) {
     const task = candidate.manualPaymentTaskId != null
       ? `Платёжное задание №${candidate.manualPaymentTaskId}`

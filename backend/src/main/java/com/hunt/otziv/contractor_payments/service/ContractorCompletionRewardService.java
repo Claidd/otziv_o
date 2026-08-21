@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +58,7 @@ public class ContractorCompletionRewardService {
     private final ContractorPaymentRolloutStateService rolloutStateService;
     private final ContractorLegacyRewardGuard legacyRewardGuard;
     private final ContractorLegacyRewardReconciliationService legacyRewardReconciliationService;
+    private final ContractorPaymentProfileService profileService;
 
     /**
      * Ensures every completion source for an order. This method is used by the
@@ -295,10 +297,10 @@ public class ContractorCompletionRewardService {
         LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
         if (originals.isEmpty() && doneMarker != null) {
             if (attributionStart != null && doneMarker.getOccurredOn().isBefore(attributionStart)) {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Работа входит в начальный остаток. Сначала оформите явную корректировку остатка."
-                );
+                int changed = adjustPreCutoffCanceledBadReviewOpeningBalance(orderId, taskId, doneMarker);
+                saveMarker(orderId, markerSource, businessClock.today());
+                synchronizeCompletionSources(orderId);
+                return changed;
             }
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -687,6 +689,83 @@ public class ContractorCompletionRewardService {
         );
     }
 
+    private int adjustPreCutoffCanceledBadReviewOpeningBalance(
+            Long orderId,
+            Long taskId,
+            ContractorCompletionRewardMarker doneMarker
+    ) {
+        BadReviewTask task = badReviewTaskRepository.findByIdForMutation(taskId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Выполненная дополнительная работа не найдена; нужна ручная сверка"
+                ));
+        Long actualOrderId = task.getOrder() == null ? null : task.getOrder().getId();
+        if (!Objects.equals(actualOrderId, orderId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Дополнительная работа относится к другому заказу; нужна ручная сверка"
+            );
+        }
+        if (task.getCompletedDate() == null
+                || doneMarker.getOccurredOn() == null
+                || !doneMarker.getOccurredOn().equals(task.getCompletedDate())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Дата выполненной дополнительной работы изменилась; нужна ручная сверка"
+            );
+        }
+        BigDecimal gross = money(task.getPrice());
+        if (gross.signum() <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сумма выполненной дополнительной работы не подтверждена; нужна ручная сверка"
+            );
+        }
+        Order order = task.getOrder();
+        Manager manager = orderManagerResolver.resolve(order, false);
+        Worker worker = task.getWorker();
+        if (worker == null || worker.getId() == null || worker.getUser() == null || worker.getUser().getId() == null) {
+            throw unverifiableCompletedTaskWorker();
+        }
+        int changed = 0;
+        changed += applyOpeningBalanceBadReviewCancellation(
+                manager.getUser(),
+                ContractorRole.MANAGER,
+                gross.multiply(coefficient(manager.getUser())),
+                orderId,
+                taskId
+        );
+        changed += applyOpeningBalanceBadReviewCancellation(
+                worker.getUser(),
+                ContractorRole.SPECIALIST,
+                gross.multiply(coefficient(worker.getUser())),
+                orderId,
+                taskId
+        );
+        return changed;
+    }
+
+    private int applyOpeningBalanceBadReviewCancellation(
+            User user,
+            ContractorRole role,
+            BigDecimal amount,
+            Long orderId,
+            Long taskId
+    ) {
+        long amountKopecks = kopecks(amount);
+        if (amountKopecks <= 0L) {
+            return 0;
+        }
+        profileService.applySystemOpeningBalanceDelta(
+                user.getId(),
+                role,
+                -amountKopecks,
+                "Автокорректировка переходящего остатка: плохая задача #" + taskId
+                        + " удалена из счета заказа #" + orderId
+        );
+        return 1;
+    }
+
     private int ensureAdjustment(Zp original, String source, LocalDate occurredOn) {
         if (original == null
                 || original.getOrderId() == null
@@ -950,6 +1029,10 @@ public class ContractorCompletionRewardService {
 
     private BigDecimal coefficient(User user) {
         return user == null || user.getCoefficient() == null ? BigDecimal.ZERO : user.getCoefficient();
+    }
+
+    private long kopecks(BigDecimal value) {
+        return money(value).movePointRight(2).longValueExact();
     }
 
     private BigDecimal money(BigDecimal value) {

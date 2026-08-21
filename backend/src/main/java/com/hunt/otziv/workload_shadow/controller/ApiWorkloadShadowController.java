@@ -107,7 +107,7 @@ public class ApiWorkloadShadowController {
     }
 
     @PostMapping("/live/workflows/{workflowId}/confirm")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public WorkloadTransferActionResponse confirmTransfer(
             @PathVariable long workflowId,
             @RequestBody WorkloadTransferOwnerConfirmationRequest request

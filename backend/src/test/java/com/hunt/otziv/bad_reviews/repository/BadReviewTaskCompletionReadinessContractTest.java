@@ -13,7 +13,7 @@ class BadReviewTaskCompletionReadinessContractTest {
     @Test
     void doneTaskGapUsesItsImmutableMarkerAndDurableOrderBackoff() throws Exception {
         Method method = BadReviewTaskRepository.class.getMethod(
-                "findCompletionRewardRepairGapOrderIds",
+                "findCompletionRewardRepairGapTaskIds",
                 String.class,
                 String.class,
                 LocalDateTime.class,
@@ -23,6 +23,7 @@ class BadReviewTaskCompletionReadinessContractTest {
         Query query = method.getAnnotation(Query.class);
         assertThat(query.nativeQuery()).isTrue();
         assertThat(query.value())
+                .contains("SELECT task.bad_review_task_id")
                 .contains("task.bad_review_task_status = :completedStatus")
                 .contains("marker.order_id = task.bad_review_task_order")
                 .contains("marker.logical_source = CONCAT(:markerPrefix, task.bad_review_task_id)")

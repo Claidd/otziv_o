@@ -194,8 +194,8 @@ public class WorkloadShadowNotificationDispatcher {
             sent = telegramService.sendMessage(
                     notificationGroupChatId,
                     events.size() == 1
-                            ? shadowMessage(events.getFirst())
-                            : shadowDigestMessage(events),
+                            ? eventMessage(events.getFirst())
+                            : digestMessage(events),
                     "HTML"
             );
         } catch (RuntimeException exception) {
@@ -272,6 +272,12 @@ public class WorkloadShadowNotificationDispatcher {
         }
     }
 
+    private String eventMessage(WorkloadShadowNotificationEvent event) {
+        if (isLiveEvent(event)) {
+            return liveMessage(event);
+        }
+        return shadowMessage(event);
+    }
     private String shadowMessage(WorkloadShadowNotificationEvent event) {
         String severity = escaped(event.severity());
         String title = escaped(event.title());
@@ -285,6 +291,25 @@ public class WorkloadShadowNotificationDispatcher {
                 + (eventType.isBlank() ? "" : "\n\n<code>" + eventType + "</code>");
     }
 
+    private String liveMessage(WorkloadShadowNotificationEvent event) {
+        String severity = escaped(event.severity());
+        String title = escaped(event.title());
+        String message = escaped(event.message());
+        String eventType = escaped(event.eventType());
+        return "🟢 <b>LIVE · БОЕВОЙ КОНТУР</b>\n"
+                + "<i>Система может менять назначения по нагрузке.</i>\n\n"
+                + (severity.isBlank() ? "" : "<b>Уровень:</b> " + severity + "\n")
+                + "<b>" + title + "</b>\n"
+                + message
+                + (eventType.isBlank() ? "" : "\n\n<code>" + eventType + "</code>");
+    }
+
+    private String digestMessage(List<WorkloadShadowNotificationEvent> events) {
+        if (events.stream().allMatch(this::isLiveEvent)) {
+            return liveDigestMessage(events);
+        }
+        return shadowDigestMessage(events);
+    }
     private String shadowDigestMessage(List<WorkloadShadowNotificationEvent> events) {
         Map<String, Integer> severityCounts = new LinkedHashMap<>();
         Map<String, Integer> typeCounts = new LinkedHashMap<>();
@@ -336,6 +361,21 @@ public class WorkloadShadowNotificationDispatcher {
         ).toString();
     }
 
+    private String liveDigestMessage(List<WorkloadShadowNotificationEvent> events) {
+        return shadowDigestMessage(events)
+                .replace(
+                        "🟣 <b>SHADOW · СВОДКА НАБЛЮДЕНИЯ</b>",
+                        "🟢 <b>LIVE · СВОДКА БОЕВОГО КОНТУРА</b>"
+                )
+                .replace(
+                        "<i>Система ничего не передаёт и не меняет назначения.</i>",
+                        "<i>Система может менять назначения по нагрузке.</i>"
+                )
+                .replace(
+                        "Полный список доступен на странице мониторинга SHADOW.",
+                        "Полный список доступен на странице мониторинга нагрузки."
+                );
+    }
     private String escapedCounts(Map<String, Integer> counts) {
         return counts.entrySet().stream()
                 .map(entry -> escaped(entry.getKey()) + " — " + entry.getValue())
@@ -394,6 +434,9 @@ public class WorkloadShadowNotificationDispatcher {
         return Duration.ofMinutes(Math.max(1, minutes));
     }
 
+    private boolean isLiveEvent(WorkloadShadowNotificationEvent event) {
+        return event.eventType() != null && event.eventType().startsWith("LIVE_");
+    }
     private int bounded(int value, int minimum, int maximum) {
         return Math.max(minimum, Math.min(maximum, value));
     }

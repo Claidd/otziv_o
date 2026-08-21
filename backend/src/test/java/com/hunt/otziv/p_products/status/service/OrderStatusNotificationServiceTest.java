@@ -68,8 +68,7 @@ class OrderStatusNotificationServiceTest {
                 "client",
                 "group",
                 "message",
-                "На проверке",
-                "2202208238396676"
+                "На проверке"
         );
 
         assertTrue(result);
@@ -141,6 +140,28 @@ class OrderStatusNotificationServiceTest {
     }
 
     @Test
+    void whatsappPaymentAddsPlainCopyHintFromFrozenTransferNumber() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        OrderStatus success = status("Выставлен счет");
+        String message = "Оплата по карте 2202208238396676";
+        String messageWithCopyHint = message + "\n\nНомер карты для копирования: 2202208238396676";
+
+        when(whatsAppService.sendMessageToGroup("client", "group", messageWithCopyHint)).thenReturn("ok");
+        when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(success);
+
+        boolean result = service.sendMessageToGroup(
+                "Опубликовано", order, "client", "group",
+                message, "Выставлен счет", "2202208238396676"
+        );
+
+        assertTrue(result);
+        verify(whatsAppService).sendMessageToGroup("client", "group", messageWithCopyHint);
+        verifyNoInteractions(telegramService);
+        verifyNoInteractions(maxBotClient);
+    }
+
+    @Test
     void sendMessageToGroupUsesMaxWhenChatLinkPointsToMax() {
         OrderStatusNotificationService service = service();
         Order order = orderWithManager(10L, "Компания", 123L);
@@ -158,14 +179,37 @@ class OrderStatusNotificationServiceTest {
                 "client",
                 "group",
                 "message",
-                "Выставлен счет",
-                "2202208238396676"
+                "Выставлен счет"
         );
 
         assertTrue(result);
         assertSame(success, order.getStatus());
         verify(maxBotClient).sendMessageToChat(-200L, "message");
         verify(orderRepository).save(order);
+        verifyNoInteractions(whatsAppService);
+        verifyNoInteractions(telegramService);
+    }
+
+    @Test
+    void maxPaymentAddsPlainCopyHintFromFrozenTransferNumber() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        order.getCompany().setUrlChat("max.ru/join/SharedToken123");
+        order.getCompany().setMaxGroupChatId(-200L);
+        OrderStatus success = status("Выставлен счет");
+        String message = "Оплата по телефону 89149528806";
+        String messageWithCopyHint = message + "\n\nТелефон для копирования: 89149528806";
+
+        when(maxBotClient.sendMessageToChat(-200L, messageWithCopyHint)).thenReturn(true);
+        when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(success);
+
+        boolean result = service.sendMessageToGroup(
+                "Опубликовано", order, "client", "group",
+                message, "Выставлен счет", "89149528806"
+        );
+
+        assertTrue(result);
+        verify(maxBotClient).sendMessageToChat(-200L, messageWithCopyHint);
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(telegramService);
     }

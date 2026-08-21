@@ -19,6 +19,7 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAmountLimits;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfile;
+import com.hunt.otziv.contractor_payments.model.ContractorPaymentProfileAdjustment;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileRequest;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentProfileResponse;
@@ -37,6 +38,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -696,6 +698,73 @@ class ContractorPaymentProfileServiceTest {
         assertThat(profile.getRecipientName()).isEqualTo("Исправленный получатель");
         assertThat(profile.isEnabled()).isFalse();
         verify(adjustmentRepository).save(any());
+    }
+
+    @Test
+    void systemOpeningBalanceDeltaPersistsHistoryAndAudit() {
+        User user = userWithRole(45L, "ROLE_WORKER");
+        profile.setUser(user);
+        profile.setRole(ContractorRole.SPECIALIST);
+        profile.setOpeningBalanceKopecks(10_000L);
+        when(profileRepository.findByUserIdAndRoleForUpdate(45L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(profile));
+        when(profileRepository.saveAndFlush(profile)).thenReturn(profile);
+
+        long delta = service.applySystemOpeningBalanceDelta(
+                45L,
+                ContractorRole.SPECIALIST,
+                -2_500L,
+                "  Автокорректировка плохой задачи  "
+        );
+
+        assertThat(delta).isEqualTo(-2_500L);
+        assertThat(profile.getOpeningBalanceKopecks()).isEqualTo(7_500L);
+        ArgumentCaptor<ContractorPaymentProfileAdjustment> adjustmentCaptor =
+                ArgumentCaptor.forClass(ContractorPaymentProfileAdjustment.class);
+        verify(adjustmentRepository).save(adjustmentCaptor.capture());
+        ContractorPaymentProfileAdjustment adjustment = adjustmentCaptor.getValue();
+        assertThat(adjustment.getProfile()).isSameAs(profile);
+        assertThat(adjustment.getOldBalanceKopecks()).isEqualTo(10_000L);
+        assertThat(adjustment.getNewBalanceKopecks()).isEqualTo(7_500L);
+        assertThat(adjustment.getDeltaKopecks()).isEqualTo(-2_500L);
+        assertThat(adjustment.getReason()).isEqualTo("Автокорректировка плохой задачи");
+        assertThat(adjustment.getChangedBy()).isEqualTo("system");
+        verify(businessAuditService).recordRequiredInCurrentTransaction(
+                eq("AUTO_ADJUST_CONTRACTOR_OPENING_BALANCE"),
+                eq("CONTRACTOR_PAYMENT_PROFILE"),
+                eq(7L),
+                eq(null),
+                eq(null),
+                any(),
+                any(),
+                eq("userId=45, role=SPECIALIST")
+        );
+    }
+
+    @Test
+    void systemOpeningBalanceDeltaCannotMakeHistoricalBalanceNegative() {
+        User user = userWithRole(46L, "ROLE_WORKER");
+        profile.setUser(user);
+        profile.setRole(ContractorRole.SPECIALIST);
+        profile.setOpeningBalanceKopecks(1_000L);
+        when(profileRepository.findByUserIdAndRoleForUpdate(46L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(profile));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.applySystemOpeningBalanceDelta(
+                        46L,
+                        ContractorRole.SPECIALIST,
+                        -2_500L,
+                        "Автокорректировка плохой задачи"
+                )
+        );
+
+        assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(profile.getOpeningBalanceKopecks()).isEqualTo(1_000L);
+        verify(profileRepository, never()).saveAndFlush(any());
+        verify(adjustmentRepository, never()).save(any());
+        verifyNoInteractions(businessAuditService);
     }
 
     @Test

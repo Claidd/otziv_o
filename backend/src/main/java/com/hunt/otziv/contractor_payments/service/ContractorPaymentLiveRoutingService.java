@@ -82,6 +82,16 @@ public class ContractorPaymentLiveRoutingService {
         return runtimeSwitch.liveRoutingEnabled();
     }
 
+    public boolean configuredButBlockedForNewRoutes() {
+        ContractorPaymentRuntimeSwitch.RuntimeStatus status = runtimeSwitch.status();
+        return status.liveRoutingMasterEnabled()
+                && status.liveRoutingDatabaseEnabled()
+                && status.rewardAttributionMasterEnabled()
+                && status.rewardAttributionDatabaseEnabled()
+                && status.rewardAttributionLiveEnabled()
+                && !status.liveRoutingEnabled();
+    }
+
     @Transactional(readOnly = true)
     public boolean isCommonClientReportable(CommonInvoice invoice) {
         if (invoice == null

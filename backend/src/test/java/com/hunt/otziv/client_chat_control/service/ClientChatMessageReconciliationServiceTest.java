@@ -3,10 +3,12 @@ package com.hunt.otziv.client_chat_control.service;
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
 import com.hunt.otziv.client_chat_control.dto.ClientChatReconciliationResult;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
+import com.hunt.otziv.client_chat_control.model.ClientChatMessage;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
+import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.whatsapp.dto.WhatsAppChatMessageCursor;
@@ -23,6 +25,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -34,6 +38,8 @@ class ClientChatMessageReconciliationServiceTest {
 
     @Mock
     private ClientChatUnansweredItemRepository unansweredRepository;
+    @Mock
+    private ClientChatMessageRepository messageRepository;
     @Mock
     private ClientChatMessageTrackerService trackerService;
     @Mock
@@ -153,6 +159,50 @@ class ClientChatMessageReconciliationServiceTest {
 
         service.reconcileOpenWhatsAppMessages(manager);
 
+        verify(trackerService).track(
+                org.mockito.ArgumentMatchers.any(ClientChatMessageCommand.class),
+                eq(ClientChatSenderRole.BOT)
+        );
+    }
+    @Test
+    void verifiesOutgoingPaymentLinkAfterReconcilingSpecificWhatsAppGroup() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        manager.setClientId("whatsapp_vika");
+        String groupId = "120363000000000000@g.us";
+        LocalDateTime preparedAt = LocalDateTime.of(2026, 8, 16, 14, 20);
+        String messageText = "Здравствуйте. Ссылка на оплату: https://o-ogo.ru/pay/JrSKZEp7DdcPEwatdp7RQp8vk5Jemu6J";
+        when(whatsAppService.reconcileGroupMessages(eq("whatsapp_vika"), anyList()))
+                .thenReturn(List.of(new WhatsAppReconciledMessage(
+                        "whatsapp_vika",
+                        groupId,
+                        "Клиент",
+                        "79990000000@c.us",
+                        "",
+                        "bot-payment-1",
+                        preparedAt.plusMinutes(1).atZone(ZoneId.systemDefault()).toEpochSecond(),
+                        true,
+                        true,
+                        messageText
+                )));
+        ClientChatMessage stored = new ClientChatMessage();
+        stored.setMessageText(messageText);
+        when(messageRepository.findByPlatformAndChatIdAndDirectionAndMessageAtBetweenOrderByMessageAtAscIdAsc(
+                eq(ClientChatPlatform.WHATSAPP),
+                eq(groupId),
+                eq(ClientChatDirection.OUTGOING),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class)
+        )).thenReturn(List.of(stored));
+
+        boolean verified = service.reconcileWhatsAppGroupContainsOutgoingText(
+                manager,
+                groupId,
+                preparedAt,
+                "Повтор счета: https://o-ogo.ru/pay/JrSKZEp7DdcPEwatdp7RQp8vk5Jemu6J"
+        );
+
+        assertTrue(verified);
         verify(trackerService).track(
                 org.mockito.ArgumentMatchers.any(ClientChatMessageCommand.class),
                 eq(ClientChatSenderRole.BOT)

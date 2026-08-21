@@ -68,7 +68,7 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
 
     /** Missing DONE markers share the order-level durable backoff queue. */
     @Query(value = """
-        SELECT DISTINCT task.bad_review_task_order
+        SELECT task.bad_review_task_id
         FROM bad_review_tasks task
         WHERE task.bad_review_task_status = :completedStatus
           AND NOT EXISTS (
@@ -83,9 +83,9 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
               WHERE repair.order_id = task.bad_review_task_order
                 AND repair.next_attempt_at > :dueAt
           )
-        ORDER BY task.bad_review_task_order
+        ORDER BY task.bad_review_task_id
     """, nativeQuery = true)
-    List<Long> findCompletionRewardRepairGapOrderIds(
+    List<Long> findCompletionRewardRepairGapTaskIds(
             @Param("completedStatus") String completedStatus,
             @Param("markerPrefix") String markerPrefix,
             @Param("dueAt") LocalDateTime dueAt,

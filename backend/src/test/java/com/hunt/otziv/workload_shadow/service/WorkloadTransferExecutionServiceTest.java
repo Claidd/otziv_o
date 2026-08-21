@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse;
@@ -35,6 +36,7 @@ class WorkloadTransferExecutionServiceTest {
     @Mock private WorkloadLiveSettingsService liveSettingsService;
     @Mock private WorkloadShadowSettingsService shadowSettingsService;
     @Mock private WorkloadLiveControlRepository liveControlRepository;
+    @Mock private WorkloadTransferAppliedNotificationService appliedNotificationService;
     @Mock private LiveControlProjection liveControl;
 
     private WorkloadTransferExecutionService service;
@@ -47,7 +49,8 @@ class WorkloadTransferExecutionServiceTest {
                 failureService,
                 liveSettingsService,
                 shadowSettingsService,
-                liveControlRepository
+                liveControlRepository,
+                appliedNotificationService
         );
     }
 
@@ -58,7 +61,12 @@ class WorkloadTransferExecutionServiceTest {
         when(liveSettingsService.applicationAllowed(settings)).thenReturn(false);
 
         assertThat(service.applyAcceptedWorkflows()).isEmpty();
-        verifyNoInteractions(repository, transactionService, failureService);
+        verifyNoInteractions(
+                repository,
+                transactionService,
+                failureService,
+                appliedNotificationService
+        );
     }
 
     @Test
@@ -84,10 +92,11 @@ class WorkloadTransferExecutionServiceTest {
             assertThat(result.message()).contains("row count changed");
         });
         verify(failureService).block(41L, "EXECUTION_FAILED", "row count changed");
+        verifyNoInteractions(appliedNotificationService);
     }
 
     @Test
-    void successfulExecutionKeepsTheAtomicServiceResult() {
+    void successfulExecutionKeepsTheAtomicServiceResultAndNotifiesOwnersAndAdmins() {
         WorkloadLiveSettingsResponse settings = settings("CANARY", true);
         when(liveSettingsService.current()).thenReturn(settings);
         when(liveSettingsService.applicationAllowed(settings)).thenReturn(true);
@@ -104,7 +113,9 @@ class WorkloadTransferExecutionServiceTest {
         when(transactionService.apply(41L, 7L)).thenReturn(applied);
 
         assertThat(service.applyAcceptedWorkflows()).containsExactly(applied);
+        verify(appliedNotificationService).notifyApplied(81L);
         verifyNoInteractions(failureService);
+        verifyNoMoreInteractions(appliedNotificationService);
     }
 
     @Test

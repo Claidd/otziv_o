@@ -55,13 +55,13 @@ public class ClientChatMessageSender {
 
         return switch (activePlatform) {
             case WHATSAPP -> hasText(groupId)
-                    ? sendToWhatsApp(clientId, groupId, message)
+                    ? sendToWhatsApp(clientId, groupId, messageForPlainChannel(message, telegramCopyButton))
                     : missingActiveChannel("whatsapp_group_missing", "Для WhatsApp-группы не задан groupId");
             case TELEGRAM -> company.getTelegramGroupChatId() != null
                     ? sendToTelegram(company.getTelegramGroupChatId(), message, telegramCopyButton)
                     : missingActiveChannel("telegram_group_missing", "Для Telegram-группы не задан chatId");
             case MAX -> company.getMaxGroupChatId() != null
-                    ? sendToMax(company.getMaxGroupChatId(), message)
+                    ? sendToMax(company.getMaxGroupChatId(), messageForPlainChannel(message, telegramCopyButton))
                     : missingActiveChannel("max_group_missing", "Для MAX-группы не задан chatId");
             case UNKNOWN -> missingActiveChannel("chat_platform_unknown", "Ссылка на чат не распознана или не указана");
         };
@@ -162,6 +162,27 @@ public class ClientChatMessageSender {
 
     private ClientMessageSendResult missingActiveChannel(String code, String message) {
         return ClientMessageSendResult.failed(code, message);
+    }
+
+    private String messageForPlainChannel(String message, TelegramTransferCopyButton copyButton) {
+        if (copyButton == null || !hasText(copyButton.copyText())) {
+            return message;
+        }
+        String copyHint = plainCopyHint(copyButton);
+        if (!hasText(copyHint) || (message != null && message.contains(copyHint))) {
+            return message;
+        }
+        return message + "\n\n" + copyHint;
+    }
+
+    private String plainCopyHint(TelegramTransferCopyButton copyButton) {
+        String label = "Скопировать номер";
+        if ("Скопировать номер карты".equals(copyButton.text())) {
+            label = "Номер карты для копирования";
+        } else if ("Скопировать номер телефона".equals(copyButton.text())) {
+            label = "Телефон для копирования";
+        }
+        return label + ": " + copyButton.copyText();
     }
 
     private ChatPlatform activeChatPlatform(Company company) {

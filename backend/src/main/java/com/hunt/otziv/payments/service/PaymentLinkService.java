@@ -10,12 +10,14 @@ import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentRequisitesSnapshot;
 import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse;
+import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentRecipientResponse;
 import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentLiveRoutingService.FrozenPaymentLinkAction;
+import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTargetAccessPolicy;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentTransferNumber;
@@ -115,6 +117,8 @@ public class PaymentLinkService {
     private static final String MANUAL_CARD_PAYMENT_PENDING_PREFIX = "manual_card_payment_pending:";
     private static final String MANUAL_CARD_PAYMENT_COMPLETED_PREFIX = "manual_card_payment_completed:";
     private static final String MANUAL_UNPAID_CLOSED_AUDIT_PREFIX = "manual_payment_absent_verified";
+    private static final String HISTORICAL_PRE_CUTOVER_MANUAL_CARD_RECIPIENT_KEY =
+            "LEGACY_PRE_CUTOVER_MANUAL_CARD";
     private static final String CONTRACTOR_SOURCE_CONFIRMATION_AUDIT_PREFIX =
             "contractor_source_confirmation";
     private static final String PREPAID_WAITING_ORDER_COMPLETION = "prepaid_waiting_order_completion";
@@ -254,6 +258,7 @@ public class PaymentLinkService {
     private final ManualCardPaymentReviewNotificationService manualCardPaymentReviewNotificationService;
     private final ContractorPaymentLiveRoutingService contractorPaymentLiveRoutingService;
     private final ContractorPaymentShadowService contractorPaymentShadowService;
+    private final ContractorPaymentRuntimeSwitch contractorPaymentRuntimeSwitch;
     private final PaymentLinkReturnOutboxService paymentLinkReturnOutboxService;
     private final ContractorActualPaymentAttributionService actualPaymentAttributionService;
     private final ContractorPaymentTargetAccessPolicy contractorPaymentTargetAccessPolicy;
@@ -507,17 +512,25 @@ public class PaymentLinkService {
     private ManagerPaymentLinkResponse toManagerResponseWithShadowRoute(PaymentLink link) {
         Long linkId = link == null ? null : link.getId();
         String routeGeneration = link == null ? null : link.getShadowRouteGeneration();
-        if (linkId != null && TransactionSynchronizationManager.isSynchronizationActive()) {
+        if (shouldReserveShadowRoute(link) && TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
                     reserveContractorShadowRouteSafely(linkId, routeGeneration);
                 }
             });
-        } else if (linkId != null) {
+        } else if (shouldReserveShadowRoute(link)) {
             reserveContractorShadowRouteSafely(linkId, routeGeneration);
         }
         return toManagerResponse(link);
+    }
+
+    private boolean shouldReserveShadowRoute(PaymentLink link) {
+        return link != null
+                && link.getId() != null
+                && link.getContractorAllocationId() == null
+                && link.getManualSource() != ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE
+                && link.getManualSource() != ManualPaymentSource.MANUAL_TASK;
     }
 
     private void reserveContractorShadowRouteSafely(Long linkId, String routeGeneration) {
@@ -570,11 +583,10 @@ public class PaymentLinkService {
         // Common-invoice tasks are reserved exclusively through the typed
         // task ledger in selectCommonInvoiceTaskRoute. Falling back here must
         // never rediscover a legacy task without source generation/binding.
-        if (shouldUseManualPayment(profile, amountKopecks, LocalDateTime.now(), null)) {
+        if (allowLegacyManualProfileRoute() && shouldUseManualPayment(profile, amountKopecks, LocalDateTime.now(), null)) {
             applyManualProfilePayment(route, profile);
         } else {
-            route.setStatus(PaymentLinkStatus.CREATED);
-            route.setPaymentMethod(PaymentMethod.BANK_FORM);
+            applyBankPaymentRoute(route);
         }
 
         return new PaymentRouteSelection(
@@ -844,17 +856,25 @@ public class PaymentLinkService {
             PaymentLink link, PaymentProfile profile, long amountKopecks,
             LocalDateTime now, Long excludedLinkId
     ) {
-        if (shouldUseManualPayment(profile, amountKopecks, now, excludedLinkId)) {
+        if (allowLegacyManualProfileRoute() && shouldUseManualPayment(profile, amountKopecks, now, excludedLinkId)) {
             applyManualProfilePayment(link, profile);
         } else {
-            link.setStatus(PaymentLinkStatus.CREATED);
-            link.setPaymentMethod(PaymentMethod.BANK_FORM);
-            link.setManualSource(null);
-            link.setManualPaymentTask(null);
-            link.setManualPaymentType(null);
-            link.setManualPaymentUrl(null);
-            link.setManualPaymentButtonLabel(null);
+            applyBankPaymentRoute(link);
         }
+    }
+
+    private boolean allowLegacyManualProfileRoute() {
+        return !contractorPaymentLiveRoutingService.configuredButBlockedForNewRoutes();
+    }
+
+    private void applyBankPaymentRoute(PaymentLink link) {
+        link.setStatus(PaymentLinkStatus.CREATED);
+        link.setPaymentMethod(PaymentMethod.BANK_FORM);
+        link.setManualSource(null);
+        link.setManualPaymentTask(null);
+        link.setManualPaymentType(null);
+        link.setManualPaymentUrl(null);
+        link.setManualPaymentButtonLabel(null);
     }
 
     private boolean canReuseLink(PaymentLink current, PaymentLink candidate) {
@@ -1549,7 +1569,7 @@ public class PaymentLinkService {
             if (!hasOrderBinding(link, orderId) || link.getAmountKopecks() != route.amountKopecks()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Платёжный источник заказа изменился");
             }
-            return actualPaymentAttributionService.manualCardPaymentContext(order, link);
+            return manualCardPaymentContextForRoute(order, link);
         });
     }
 
@@ -1634,6 +1654,121 @@ public class PaymentLinkService {
                 recipientProfileId,
                 recipientKey
         );
+    }
+
+    private ManualCardPaymentContextResponse manualCardPaymentContextForRoute(Order order, PaymentLink link) {
+        if (isHistoricalPreCutoverManualCardRoute(link)) {
+            ManualCardPaymentRecipientResponse recipient = historicalPreCutoverManualCardRecipient(link);
+            return new ManualCardPaymentContextResponse(
+                    order == null ? null : order.getId(),
+                    link == null ? 0L : link.getAmountKopecks(),
+                    recipient,
+                    List.of(recipient),
+                    "Старая оплата до запуска новой системы будет закрыта без нового учёта выплат.",
+                    false,
+                    null,
+                    null,
+                    null,
+                    "TASK_RECIPIENT_V1",
+                    HISTORICAL_PRE_CUTOVER_MANUAL_CARD_RECIPIENT_KEY + ":" + (link == null ? "" : link.getId())
+            );
+        }
+        return actualPaymentAttributionService.manualCardPaymentContext(order, link);
+    }
+
+    private ManualCardPaymentRecipientResponse historicalPreCutoverManualCardRecipient(PaymentLink link) {
+        long amountKopecks = link == null ? 0L : link.getAmountKopecks();
+        return new ManualCardPaymentRecipientResponse(
+                null,
+                null,
+                null,
+                "Историческая оплата до запуска",
+                amountKopecks,
+                0L,
+                true,
+                HISTORICAL_PRE_CUTOVER_MANUAL_CARD_RECIPIENT_KEY,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Без нового учёта выплат",
+                "Заказ будет отмечен оплаченным; новые выплаты, лимиты и резервы сотрудников не изменятся. "
+                        + "Если клиенту были выданы реквизиты платёжного задания, используйте маршрут задания — он будет засчитан отдельно."
+        );
+    }
+
+    private boolean isHistoricalPreCutoverManualCardRecipientKey(String recipientKey) {
+        return HISTORICAL_PRE_CUTOVER_MANUAL_CARD_RECIPIENT_KEY.equals(normalize(recipientKey));
+    }
+
+    private boolean isHistoricalPreCutoverManualCardSettlement(PaymentLink link, String recipientKey) {
+        return isHistoricalPreCutoverManualCardRecipientKey(recipientKey)
+                && isHistoricalPreCutoverManualCardRoute(link);
+    }
+
+    private void requireHistoricalPreCutoverManualCardSelectionIfNeeded(PaymentLink link, String recipientKey) {
+        boolean historicalRoute = isHistoricalPreCutoverManualCardRoute(link);
+        boolean historicalSelection = isHistoricalPreCutoverManualCardRecipientKey(recipientKey);
+        if (!historicalRoute && !historicalSelection) {
+            return;
+        }
+        if (historicalRoute && historicalSelection) {
+            return;
+        }
+        if (historicalSelection) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Историческое подтверждение доступно только для ссылок, созданных до запуска новой системы."
+            );
+        }
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Эта ссылка создана до запуска новой системы. Выберите историческую оплату до запуска; "
+                        + "новый учёт выплат для неё не применяется."
+        );
+    }
+
+    private boolean isHistoricalPreCutoverManualCardRoute(PaymentLink link) {
+        if (link == null
+                || link.getCreatedAt() == null
+                || link.getManualActualRecipientFrozenAt() != null
+                || link.getManualSource() == ManualPaymentSource.MANUAL_TASK
+                || !isSafeHistoricalBankRoute(link)) {
+            return false;
+        }
+        Optional<LocalDateTime> activatedAt = safeCompletionAccountingActivatedAt();
+        if (activatedAt.isPresent()) {
+            return link.getCreatedAt().isBefore(activatedAt.get());
+        }
+        Optional<LocalDate> startDate = safeCompletionAttributionStartDate();
+        return startDate.isPresent() && link.getCreatedAt().toLocalDate().isBefore(startDate.get());
+    }
+
+    private Optional<LocalDateTime> safeCompletionAccountingActivatedAt() {
+        try {
+            Optional<LocalDateTime> value = contractorPaymentRuntimeSwitch.completionAccountingActivatedAt();
+            return value == null ? Optional.empty() : value;
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Не удалось прочитать точное время запуска новой системы оплат: failure={}",
+                    exception.getClass().getSimpleName()
+            );
+            return Optional.empty();
+        }
+    }
+
+    private Optional<LocalDate> safeCompletionAttributionStartDate() {
+        try {
+            Optional<LocalDate> value = contractorPaymentRuntimeSwitch.completionAttributionStartDate();
+            return value == null ? Optional.empty() : value;
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Не удалось прочитать дату запуска новой системы оплат: failure={}",
+                    exception.getClass().getSimpleName()
+            );
+            return Optional.empty();
+        }
     }
 
     private OrderManualCardRoute selectManualCardPaymentRouteForOrder(
@@ -1790,7 +1925,7 @@ public class PaymentLinkService {
             return transactionExecutor.required(() -> {
                 PaymentLink locked = paymentLinkRepository.findByIdForUpdate(linkId)
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
-                actualPaymentAttributionService.requireCompletedPaymentReplay(
+                requireCompletedManualCardPaymentReplay(
                         locked,
                         receivedAmountKopecks,
                         requestedRecipientKey,
@@ -2076,7 +2211,7 @@ public class PaymentLinkService {
                 actor.isBlank() ? "system" : actor
         );
         link.setStatus(PaymentLinkStatus.CANCELED);
-        link.setManualComment(manualCardPaymentEvidence(note, receiptUrl, context.mode()));
+        setManualCardPaymentComment(link, manualCardPaymentEvidence(note, receiptUrl, context.mode()));
         link.setLastError(limit(
                 MANUAL_CARD_PAYMENT_PENDING_PREFIX + " local_route_closed; " + actorAuditKey(context.mode()) + "="
                         + limit(actor.isBlank() ? "admin" : actor, 80),
@@ -2174,7 +2309,7 @@ public class PaymentLinkService {
                     receiptUrl,
                     actor.isBlank() ? "system" : actor
             );
-            link.setManualComment(manualCardPaymentEvidence(note, receiptUrl, context.mode()));
+            setManualCardPaymentComment(link, manualCardPaymentEvidence(note, receiptUrl, context.mode()));
             return manualCardPaymentPlan(link, reserveBankCancel(link, orderId));
         }
         if (("CANCELED".equals(providerStatus) && link.getStatus() == PaymentLinkStatus.CANCELED)
@@ -2238,7 +2373,7 @@ public class PaymentLinkService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Платёжный источник заказа изменился");
             }
             if (isCompletedManualCardPayment(link)) {
-                actualPaymentAttributionService.requireCompletedPaymentReplay(
+                requireCompletedManualCardPaymentReplay(
                         link,
                         amountKopecks,
                         requestedRecipientKey,
@@ -2253,9 +2388,35 @@ public class PaymentLinkService {
             if (actor.isBlank() || actor.length() > 150) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный исполнитель операции");
             }
-            actualPaymentAttributionService.manualCardPaymentContext(order, link);
+            requireHistoricalPreCutoverManualCardSelectionIfNeeded(link, requestedRecipientKey);
+            if (!isHistoricalPreCutoverManualCardSettlement(link, requestedRecipientKey)) {
+                actualPaymentAttributionService.manualCardPaymentContext(order, link);
+            }
             return null;
         });
+    }
+
+    private void requireCompletedManualCardPaymentReplay(
+            PaymentLink link,
+            long requestedAmountKopecks,
+            String requestedRecipientKey,
+            ContractorRecipientType requestedType,
+            Long requestedProfileId,
+            String reason,
+            String receiptUrl
+    ) {
+        if (isHistoricalPreCutoverManualCardSettlement(link, requestedRecipientKey)) {
+            return;
+        }
+        actualPaymentAttributionService.requireCompletedPaymentReplay(
+                link,
+                requestedAmountKopecks,
+                requestedRecipientKey,
+                requestedType,
+                requestedProfileId,
+                reason,
+                receiptUrl
+        );
     }
 
     private void freezeActualRecipientIntentIfRequired(
@@ -2268,6 +2429,10 @@ public class PaymentLinkService {
             String receiptUrl,
             String actor
     ) {
+        requireHistoricalPreCutoverManualCardSelectionIfNeeded(link, requestedRecipientKey);
+        if (isHistoricalPreCutoverManualCardSettlement(link, requestedRecipientKey)) {
+            return;
+        }
         boolean required = link.getManualActualRecipientFrozenAt() != null
                 || link.getManualSource() == ManualPaymentSource.MANUAL_TASK
                 || actualPaymentAttributionService.actualRecipientAccountingEnabled();
@@ -2365,7 +2530,7 @@ public class PaymentLinkService {
                 receiptUrl,
                 actor.isBlank() ? "system" : actor
         );
-        link.setManualComment(manualCardPaymentEvidence(note, receiptUrl, context.mode()));
+        setManualCardPaymentComment(link, manualCardPaymentEvidence(note, receiptUrl, context.mode()));
         link.setLastError(limit(
                 MANUAL_CARD_PAYMENT_PENDING_PREFIX + " " + actorAuditKey(context.mode()) + "="
                         + limit(actor.isBlank() ? "admin" : actor, 80),
@@ -2393,7 +2558,7 @@ public class PaymentLinkService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         requireManualCardPlanBinding(link, plan);
         if (isCompletedManualCardPayment(link)) {
-            actualPaymentAttributionService.requireCompletedPaymentReplay(
+            requireCompletedManualCardPaymentReplay(
                     link,
                     plan.amountKopecks(),
                     requestedRecipientKey,
@@ -2456,7 +2621,7 @@ public class PaymentLinkService {
                 context.mode()
         );
         manualEvidence = paymentLinkRepository.saveAndFlush(manualEvidence);
-        link.setManualComment(manualCardPaymentAudit(note, receiptUrl, context.mode()));
+        setManualCardPaymentComment(link, manualCardPaymentAudit(note, receiptUrl, context.mode()));
         link.setManualConfirmedAt(null);
         link.setManualConfirmedBy(null);
         link.setConfirmedAmountKopecks(null);
@@ -2466,6 +2631,8 @@ public class PaymentLinkService {
                 512
         ));
         paymentLinkRepository.saveAndFlush(link);
+        boolean historicalPreCutoverManualCard = isHistoricalPreCutoverManualCardSettlement(
+                link, requestedRecipientKey);
         if (link.getManualActualRecipientFrozenAt() != null) {
             actualPaymentAttributionService.recordPaymentLinkFinalAttribution(
                     order,
@@ -2483,7 +2650,8 @@ public class PaymentLinkService {
                     link, selectedKey, toTask ? manualEvidence.getAmountKopecks() : 0L,
                     "TASK:SETTLE:PAYMENT_LINK:" + link.getId(),
                     link.getManualActualActor(), link.getManualActualReason());
-        } else if (actualPaymentAttributionService.actualRecipientAccountingEnabled()) {
+        } else if (!historicalPreCutoverManualCard
+                && actualPaymentAttributionService.actualRecipientAccountingEnabled()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Режим учёта изменился после закрытия банковской сессии; повторите операцию с выбором получателя"
@@ -2516,7 +2684,7 @@ public class PaymentLinkService {
             throw ManualPaymentTaskRouteErrors.stale();
         }
         if (link.getStatus() == PaymentLinkStatus.CONFIRMED) {
-            actualPaymentAttributionService.requireCompletedPaymentReplay(
+            requireCompletedManualCardPaymentReplay(
                     link, amountKopecks, requestedRecipientKey, requestedType, requestedProfileId,
                     context.reason(), receiptUrl);
             settleTaskReceipt(link);
@@ -2546,7 +2714,7 @@ public class PaymentLinkService {
         link.setManualConfirmedBy(limit(actor, 160));
         link.setConfirmedAmountKopecks(amountKopecks);
         link.setReceiptStatus(PaymentReceiptStatus.PENDING);
-        link.setManualComment(manualCardPaymentAudit(note, receiptUrl, context.mode()));
+        setManualCardPaymentComment(link, manualCardPaymentAudit(note, receiptUrl, context.mode()));
         link.setLastError(canApplyOrderPaymentNow(order) ? null : PREPAID_WAITING_ORDER_COMPLETION);
         prepareSuccessNotificationRetry(link);
         paymentLinkRepository.saveAndFlush(link);
@@ -2891,6 +3059,20 @@ public class PaymentLinkService {
         return mode == ManualCardPaymentMode.MANAGER_REPORTED
                 ? MANAGER_REPORTED_CARD_PAYMENT_EVIDENCE_PREFIX
                 : MANUAL_CARD_PAYMENT_EVIDENCE_PREFIX;
+    }
+
+    private void setManualCardPaymentComment(PaymentLink link, String comment) {
+        if (link == null) {
+            return;
+        }
+        if (link.getManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE) {
+            // Contractor routes keep recipient/payment PII only in the encrypted
+            // allocation snapshot/evidence link. The legacy payment_links
+            // plaintext fields are protected by ck_payment_links_contractor_pii_blank.
+            link.setManualComment(null);
+            return;
+        }
+        link.setManualComment(comment);
     }
 
     private String actorAuditKey(ManualCardPaymentMode mode) {

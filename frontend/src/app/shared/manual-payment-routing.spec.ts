@@ -33,6 +33,16 @@ describe('manual payment task routing', () => {
     expect(manualPaymentRecipientEffect(external)).toMatch(/только в платёжное задание/i);
     expect(manualPaymentRecipientEffect(external)).toMatch(/не изменятся/i);
   });
+  it('renders pre-cutover historical manual payment as a standalone settlement choice', () => {
+    const historical = {
+      key: 'LEGACY_PRE_CUTOVER_MANUAL_CARD',
+      displayName: 'Историческая оплата до запуска',
+      effectText: 'Заказ будет закрыт без нового учёта выплат.'
+    };
+    expect(manualPaymentRecipientKey(historical)).toBe('LEGACY_PRE_CUTOVER_MANUAL_CARD');
+    expect(manualPaymentRecipientLabel(historical)).toBe('Историческая оплата до запуска');
+    expect(manualPaymentRecipientEffect(historical)).toBe('Заказ будет закрыт без нового учёта выплат.');
+  });
 
   it('recognises stable route errors and retries only refreshable conflicts', () => {
     expect(manualPaymentRouteErrorCode({ status: 409, error: { code: 'PAYMENT_ROUTE_STALE' } }))

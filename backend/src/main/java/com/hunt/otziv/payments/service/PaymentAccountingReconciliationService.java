@@ -5,9 +5,6 @@ import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentAccountingMismatchView;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
-import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
-import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.u_users.service.UserService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -36,8 +33,7 @@ public class PaymentAccountingReconciliationService {
     );
 
     private final PaymentLinkRepository paymentLinkRepository;
-    private final PersonalReminderService personalReminderService;
-    private final UserService userService;
+    private final PaymentIssueReminderService paymentIssueReminderService;
     private final BusinessAuditService businessAuditService;
 
     @Scheduled(
@@ -83,20 +79,15 @@ public class PaymentAccountingReconciliationService {
                     paymentLinkRepository.save(link);
                 });
 
-        for (User recipient : recipients()) {
-            if (!personalReminderService.hasOpenSystemReminder(recipient, REMINDER_SOURCE, orderId)) {
-                personalReminderService.createSystemReminderDueNow(
-                        recipient,
-                        "Нужна сверка оплаты заказа №" + orderId,
-                        "Сумма подтвержденных платежей: " + rubles(confirmed)
-                                + " ₽, сумма активных чеков: " + rubles(checked)
-                                + " ₽. Проверьте банк и первичный документ; система не меняла деньги автоматически.",
-                        REMINDER_SOURCE,
-                        orderId,
-                        orderId
-                );
-            }
-        }
+        paymentIssueReminderService.notifyOrderIssue(
+                orderId,
+                REMINDER_SOURCE,
+                orderId,
+                "Нужна сверка оплаты заказа №" + orderId,
+                "Сумма подтвержденных платежей: " + rubles(confirmed)
+                        + " ₽, сумма активных чеков: " + rubles(checked)
+                        + " ₽. Проверьте банк и первичный документ; система не меняла деньги автоматически."
+        );
         businessAuditService.recordSafely(
                 "PAYMENT_ACCOUNTING_MISMATCH_DETECTED",
                 "PAYMENT_LINK",
@@ -107,23 +98,6 @@ public class PaymentAccountingReconciliationService {
                 confirmed,
                 error
         );
-    }
-
-    private List<User> recipients() {
-        return java.util.stream.Stream.concat(
-                        userService.getAllOwners("ROLE_OWNER").stream(),
-                        userService.getAllOwners("ROLE_ADMIN").stream()
-                )
-                .filter(user -> user != null && user.getId() != null && user.isActive())
-                .collect(java.util.stream.Collectors.toMap(
-                        User::getId,
-                        user -> user,
-                        (left, right) -> left,
-                        java.util.LinkedHashMap::new
-                ))
-                .values()
-                .stream()
-                .toList();
     }
 
     private long kopecks(BigDecimal value) {

@@ -129,20 +129,43 @@ class ContractorCompletionRewardRepairServiceTest {
     }
 
     @Test
-    void missingDoneTaskMarkerAddsItsOrderToTheSameBoundedRepairBatch() {
+    void missingDoneTaskMarkerRepairsTheSpecificTaskWithoutRequiringWholeOrderCompletion() {
         when(orderRepository.findCompletionRewardRepairOrderIds(
                 any(), any(), eq(3L), eq(now), any(Pageable.class)
         )).thenReturn(List.of());
-        when(badReviewTaskRepository.findCompletionRewardRepairGapOrderIds(
+        when(badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
                 eq("DONE"),
                 eq(ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX),
                 eq(now),
                 any(Pageable.class)
-        )).thenReturn(List.of(30L));
+        )).thenReturn(List.of(44L));
+        when(badReviewTaskRepository.findOrderIdById(44L)).thenReturn(Optional.of(30L));
 
         service.repairCompletedUnpaidOrders();
 
-        verify(repairTransactionService).repairOrder(30L);
+        verify(repairTransactionService).repairCompletedBadReviewTask(30L, 44L);
+        verify(repairTransactionService, never()).repairOrder(30L);
+    }
+
+    @Test
+    void doneTaskRepairRunsEvenWhenOrderRepairBatchIsFull() {
+        when(orderRepository.findCompletionRewardRepairOrderIds(
+                any(), any(), eq(3L), eq(now), any(Pageable.class)
+        )).thenReturn(List.of(10L, 11L, 12L));
+        when(badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
+                eq("DONE"),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX),
+                eq(now),
+                any(Pageable.class)
+        )).thenReturn(List.of(44L));
+        when(badReviewTaskRepository.findOrderIdById(44L)).thenReturn(Optional.of(30L));
+
+        service.repairCompletedUnpaidOrders();
+
+        verify(repairTransactionService).repairOrder(10L);
+        verify(repairTransactionService).repairOrder(11L);
+        verify(repairTransactionService).repairOrder(12L);
+        verify(repairTransactionService).repairCompletedBadReviewTask(30L, 44L);
     }
 
     @Test

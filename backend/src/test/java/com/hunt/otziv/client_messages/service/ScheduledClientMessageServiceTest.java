@@ -27,7 +27,9 @@ import com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder;
 import com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder;
 import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
+import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.PaymentIssueReminderService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
@@ -63,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.nullable;
@@ -101,6 +104,8 @@ class ScheduledClientMessageServiceTest {
     private OrderPaymentMessageBuilder orderPaymentMessageBuilder;
     @Mock
     private PaymentLinkService paymentLinkService;
+    @Mock
+    private PaymentIssueReminderService paymentIssueReminderService;
     @Mock
     private OrderReviewCheckMessageBuilder reviewCheckMessageBuilder;
     @Mock
@@ -1825,6 +1830,13 @@ class ScheduledClientMessageServiceTest {
         assertNotNull(state.getNextAttemptAt());
         assertNull(state.getLockedUntil());
         verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(paymentIssueReminderService).notifyOrderIssueAfterCommit(
+                eq(54L),
+                eq(PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED),
+                eq(54L),
+                eq("Платёж требует внимания: заказ №54"),
+                contains("payment_instruction_failed")
+        );
     }
 
     @Test
@@ -1879,6 +1891,129 @@ class ScheduledClientMessageServiceTest {
         verify(stateRepository).save(state);
     }
 
+    @Test
+    void recoversUncertainBadReviewDeliveryAndSchedulesFreshInvoiceWhenOldLinkExpired() {
+        LocalDateTime preparedAt = LocalDateTime.of(2026, 8, 16, 14, 20);
+        String message = "Ссылка на оплату: https://o-ogo.ru/pay/JrSKZEp7DdcPEwatdp7RQp8vk5Jemu6J";
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(510L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-invoice:order:59")
+                .companyId(25L)
+                .orderId(59L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN)
+                .lastErrorMessage("Исход внешней отправки не определен")
+                .deliveryStatus("UNKNOWN")
+                .deliveryMessage(message)
+                .deliveryPreparedAt(preparedAt)
+                .build();
+        ScheduledClientMessageAttempt sentAttempt = ScheduledClientMessageAttempt.builder()
+                .stateId(510L)
+                .status(ScheduledMessageAttemptStatus.SENT)
+                .messagePreview(message)
+                .attemptedAt(preparedAt.plusMinutes(1))
+                .build();
+        Order order = new Order();
+        order.setId(59L);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+
+        when(stateRepository.findById(510L)).thenReturn(Optional.of(state));
+        when(paymentLinkService.reconcileActiveLinkForOrder(59L)).thenReturn(
+                new PaymentLinkService.PaymentLinkReconcileResult(
+                        900L,
+                        PaymentLinkStatus.CREATED,
+                        PaymentLinkStatus.EXPIRED,
+                        true
+                )
+        );
+        when(transactionRunner.callInNewTransaction(any())).thenAnswer(invocation -> {
+            Supplier<?> work = invocation.getArgument(0);
+            return work.get();
+        });
+        when(stateRepository.findByIdForUpdate(510L)).thenReturn(Optional.of(state));
+        when(attemptRepository.findFirstByStateIdAndStatusOrderByAttemptedAtDescIdDesc(
+                510L,
+                ScheduledMessageAttemptStatus.SENT
+        )).thenReturn(Optional.of(sentAttempt));
+        when(orderRepository.findByIdForMutation(59L)).thenReturn(Optional.of(order));
+        when(orderPaymentIntegrityService.hasSettledPaymentEvidence(order)).thenReturn(false);
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(null);
+
+        Optional<ScheduledClientMessageService.RecoveredBadReviewDeliveryResult> result =
+                service.recoverUncertainBadReviewInvoiceDelivery(510L, false);
+
+        assertTrue(result.isPresent());
+        assertTrue(result.get().retryScheduled());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals(ScheduledClientMessageService.AUTO_RECOVERED_ERROR_CODE, state.getLastErrorCode());
+        assertNull(state.getDeliveryStatus());
+        assertNull(state.getDeliveryMessage());
+        assertNotNull(state.getNextAttemptAt());
+        assertNull(state.getLockedUntil());
+        assertEquals(1, state.getSentCount());
+        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
+                ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
+        assertEquals(ScheduledClientMessageService.AUTO_RECOVERED_ERROR_CODE, attemptCaptor.getValue().getErrorCode());
+    }
+
+    @Test
+    void recoversUncertainBadReviewDeliveryWithoutDuplicateWhenLinkStillActive() {
+        LocalDateTime preparedAt = LocalDateTime.of(2026, 8, 16, 14, 20);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(511L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-invoice:order:60")
+                .companyId(25L)
+                .orderId(60L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN)
+                .deliveryStatus("UNKNOWN")
+                .deliveryMessage("Ссылка на оплату: https://o-ogo.ru/pay/active-token")
+                .deliveryPreparedAt(preparedAt)
+                .build();
+        when(stateRepository.findById(511L)).thenReturn(Optional.of(state));
+        when(paymentLinkService.reconcileActiveLinkForOrder(60L)).thenReturn(
+                new PaymentLinkService.PaymentLinkReconcileResult(
+                        901L,
+                        PaymentLinkStatus.CREATED,
+                        PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
+                        false
+                )
+        );
+        when(transactionRunner.callInNewTransaction(any())).thenAnswer(invocation -> {
+            Supplier<?> work = invocation.getArgument(0);
+            return work.get();
+        });
+        when(stateRepository.findByIdForUpdate(511L)).thenReturn(Optional.of(state));
+        when(attemptRepository.findFirstByStateIdAndStatusOrderByAttemptedAtDescIdDesc(
+                511L,
+                ScheduledMessageAttemptStatus.SENT
+        )).thenReturn(Optional.empty());
+        when(attemptRepository.findFirstByScenarioAndTargetKeyAndStatusOrderByAttemptedAtDescIdDesc(
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                "bad-review-invoice:order:60",
+                ScheduledMessageAttemptStatus.SENT
+        )).thenReturn(Optional.empty());
+
+        Optional<ScheduledClientMessageService.RecoveredBadReviewDeliveryResult> result =
+                service.recoverUncertainBadReviewInvoiceDelivery(511L, true);
+
+        assertTrue(result.isPresent());
+        assertEquals(false, result.get().retryScheduled());
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        assertEquals("SENT", state.getDeliveryStatus());
+        assertNull(state.getNextAttemptAt());
+        assertNull(state.getLastErrorCode());
+        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
+                ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        assertEquals(ScheduledMessageAttemptStatus.SENT, attemptCaptor.getValue().getStatus());
+    }
     @Test
     void disabledAutoBanRemainsActiveForRetry() throws Exception {
         LocalDateTime now = LocalDateTime.of(2026, 8, 13, 12, 0);

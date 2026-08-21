@@ -1,4 +1,4 @@
-<app-admin-layout title="Рейтинг" active="score" (click)="closeFactorTip()">
+<app-admin-layout title="Рейтинг" active="score">
   <section class="score-toolbar">
     <div>
       <p class="eyebrow">SCORE</p>
@@ -56,6 +56,37 @@
                 <p>{{ user.role }}</p>
               </div>
 
+              @if (contractorPaymentFor(user); as payment) {
+                <div class="card-finance" [class.muted]="!payment.profileEnabled">
+                  <div class="card-finance-title">
+                    <span class="material-icons-sharp">payments</span>
+                    <strong>Финансы</strong>
+                    <small [class.live]="payment.reportingLive && payment.liveEnabled">
+                      {{ contractorStatusLabel(payment) }}
+                    </small>
+                  </div>
+                  <div class="card-finance-grid">
+                    <span class="accrued">
+                      <small>Начислено</small>
+                      <b>{{ moneyKopecks(payment.accruedMonthKopecks) }}</b>
+                    </span>
+                    <span class="reserved">
+                      <small>Резерв</small>
+                      <b>{{ moneyKopecks(payment.reservedKopecks) }}</b>
+                    </span>
+                    <span class="paid">
+                      <small>Оплачено</small>
+                      <b>{{ moneyKopecks(payment.paidMonthKopecks) }}</b>
+                    </span>
+                    <span class="transfers">
+                      <small>Переводы</small>
+                      <b>{{ payment.actualTransferCount || 0 }} шт.</b>
+                      <em>{{ moneyKopecks(payment.actualTransferAmountKopecks) }}</em>
+                    </span>
+                  </div>
+                </div>
+              }
+
               <dl>
                 @for (row of rows(section, user); track row.label) {
                   <div>
@@ -65,49 +96,6 @@
                 }
               </dl>
 
-              @if (hasManagerPerformance(section, user)) {
-                <div class="manager-performance" [class]="performanceTone(user.managerPerformance)">
-                  <div class="performance-head">
-                    <span class="material-icons-sharp">workspace_premium</span>
-                    <strong>{{ user.managerPerformance?.grade }} · {{ user.managerPerformance?.loadAdjustedPerformanceScore }}</strong>
-                    <small>база {{ user.managerPerformance?.performanceScore }} · {{ user.managerPerformance?.openCount }} открыто · {{ user.managerPerformance?.handledCount }} обработано</small>
-                  </div>
-                  <div class="performance-grid">
-                    @for (row of managerPerformanceRows(user); track row.label) {
-                      <span>
-                        <small>{{ row.label }}</small>
-                        <b>{{ row.value }}</b>
-                      </span>
-                    }
-                  </div>
-                  <div class="score-formula">
-                    <div class="formula-title">
-                      <strong>Расчет оценки</strong>
-                      <small>{{ scorePeriodLabel() }}</small>
-                    </div>
-                    <div class="formula-grid">
-                      @for (factor of managerScoreFactors(user); track factor.key) {
-                        <button
-                          type="button"
-                          class="formula-factor"
-                          [class.active]="activeFactorTip() === factorTipKey(user, factor)"
-                          [attr.aria-expanded]="activeFactorTip() === factorTipKey(user, factor)"
-                          (click)="toggleFactorTip($event, user, factor)"
-                        >
-                          <span>
-                            <small>{{ factor.weight }}%</small>
-                            <b>{{ factor.label }}</b>
-                          </span>
-                          <strong>{{ factor.score }}/100</strong>
-                          @if (activeFactorTip() === factorTipKey(user, factor)) {
-                            <em class="factor-tip">{{ factor.hint }}</em>
-                          }
-                        </button>
-                      }
-                    </div>
-                  </div>
-                </div>
-              }
             </article>
           } @empty {
             <article class="empty-section">

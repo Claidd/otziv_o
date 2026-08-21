@@ -54,13 +54,7 @@ public class ContractorCompletionRoutingReadinessService {
                 || cutoverPreflightRepository.countActiveLegacyRewardCutoverConflicts(lockedCutover) > 0L) {
             return false;
         }
-        if (orderRepository.countCompletionRewardDeferredByActiveRecovery(
-                ContractorCompletionRewardRepairService.DATED_COMPLETION_STATUSES,
-                ContractorRewardSourceCodes.REQUIRED_ORDER_COMPLETION_MARKERS,
-                ContractorRewardSourceCodes.REQUIRED_ORDER_COMPLETION_MARKERS.size()
-        ) > 0L) {
-            return false;
-        }
+
         if (!orderRepository.findCompletionRewardRepairOrderIds(
                 ContractorCompletionRewardRepairService.DATED_COMPLETION_STATUSES,
                 ContractorRewardSourceCodes.REQUIRED_ORDER_COMPLETION_MARKERS,
@@ -70,7 +64,7 @@ public class ContractorCompletionRoutingReadinessService {
         ).isEmpty()) {
             return false;
         }
-        if (!badReviewTaskRepository.findCompletionRewardRepairGapOrderIds(
+        if (!badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
                 BadReviewTaskStatus.DONE.name(),
                 ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX,
                 now,

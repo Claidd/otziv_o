@@ -55,35 +55,39 @@ class ClientChatMessageSenderTest {
     }
 
     @Test
-    void whatsappIgnoresTelegramMetadataAndUsesOriginalSendApi() {
+    void whatsappAddsPlainCopyHintWhenCopyMetadataExists() {
         Company company = company("https://chat.whatsapp.com/example", null, null);
-        when(whatsAppService.sendMessageToGroup("manager", "whatsapp-group", "Счет"))
+        String message = "Счет";
+        String messageWithCopyHint = message + "\n\nНомер карты для копирования: 2202208238396676";
+        when(whatsAppService.sendMessageToGroup("manager", "whatsapp-group", messageWithCopyHint))
                 .thenReturn("ok");
 
         ClientMessageSendResult result = sender.send(
-                company, "manager", "whatsapp-group", "Счет", copyButton
+                company, "manager", "whatsapp-group", message, copyButton
         );
 
         assertTrue(result.sent());
-        verify(whatsAppService).sendMessageToGroup("manager", "whatsapp-group", "Счет");
+        verify(whatsAppService).sendMessageToGroup("manager", "whatsapp-group", messageWithCopyHint);
         verify(telegramService, never()).sendMessageWithCopyTextButton(
-                12345L, "Счет", "Скопировать номер карты", "2202208238396676"
+                12345L, message, "Скопировать номер карты", "2202208238396676"
         );
     }
 
     @Test
-    void maxIgnoresTelegramMetadataAndUsesOriginalSendApi() {
+    void maxAddsPlainCopyHintWhenCopyMetadataExists() {
         Company company = company("https://max.ru/example", null, 98765L);
-        when(maxBotClient.sendMessageToChat(98765L, "Счет")).thenReturn(true);
+        String message = "Счет";
+        String messageWithCopyHint = message + "\n\nНомер карты для копирования: 2202208238396676";
+        when(maxBotClient.sendMessageToChat(98765L, messageWithCopyHint)).thenReturn(true);
 
         ClientMessageSendResult result = sender.send(
-                company, "manager", "whatsapp-group", "Счет", copyButton
+                company, "manager", "whatsapp-group", message, copyButton
         );
 
         assertTrue(result.sent());
-        verify(maxBotClient).sendMessageToChat(98765L, "Счет");
+        verify(maxBotClient).sendMessageToChat(98765L, messageWithCopyHint);
         verify(telegramService, never()).sendMessageWithCopyTextButton(
-                98765L, "Счет", "Скопировать номер карты", "2202208238396676"
+                98765L, message, "Скопировать номер карты", "2202208238396676"
         );
     }
 

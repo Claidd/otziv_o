@@ -11,6 +11,7 @@ import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentRuntimeSwitch;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardAttributionService;
 import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
+import com.hunt.otziv.contractor_payments.service.ContractorRewardSourceCodes;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -89,6 +90,36 @@ class ZpServiceImplTest {
         verify(attributionService, never()).attribute(any(Order.class), any(BigDecimal.class));
         verify(ledgerService).synchronizeSourcesSafely(List.of(managerReward));
         verify(ledgerService).synchronizeSourcesSafely(List.of(specialistReward));
+    }
+
+    @Test
+    void enabledLiveAttributionWritesCompletionSourcesEvenThroughLegacyWriter() {
+        when(runtimeSwitch.rewardAttributionLiveEnabled()).thenReturn(true);
+        Order order = order();
+        User splitSpecialist = order.getWorker().getUser();
+        when(attributionService.attribute(order, new BigDecimal("1234.56")))
+                .thenReturn(List.of(new ContractorRewardAttributionService.SpecialistShare(
+                        splitSpecialist,
+                        order.getWorker().getId(),
+                        new BigDecimal("1234.56"),
+                        7
+                )));
+
+        assertThat(service.save(order, new BigDecimal("1234.56"), 7)).isTrue();
+
+        ArgumentCaptor<Zp> rewards = ArgumentCaptor.forClass(Zp.class);
+        verify(zpRepository, times(2)).save(rewards.capture());
+        List<Zp> rows = rewards.getAllValues();
+
+        assertThat(rows.get(0).getSource())
+                .isEqualTo(ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER);
+        assertThat(rows.get(0).getContractorRole()).isEqualTo(ContractorRole.MANAGER);
+        assertThat(rows.get(1).getSource())
+                .isEqualTo(ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST);
+        assertThat(rows.get(1).getContractorRole()).isEqualTo(ContractorRole.SPECIALIST);
+        assertThat(rows.get(1).isAttributionFinal()).isTrue();
+        verify(ledgerService).synchronizeSourcesSafely(List.of(rows.get(0)));
+        verify(ledgerService).synchronizeSourcesSafely(List.of(rows.get(1)));
     }
 
     private Order order() {

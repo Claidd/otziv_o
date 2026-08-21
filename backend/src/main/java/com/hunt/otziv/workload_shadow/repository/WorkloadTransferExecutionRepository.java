@@ -619,6 +619,99 @@ public interface WorkloadTransferExecutionRepository
             @Param("sourceWorkerId") long sourceWorkerId
     );
 
+
+    @Query(value = """
+            SELECT execution.workload_transfer_execution_id AS executionId,
+                   execution.workflow_id AS workflowId,
+                   workflow.mode AS mode,
+                   execution.manager_id AS managerId,
+                   COALESCE(
+                     NULLIF(TRIM(manager_user.fio), ''),
+                     manager_user.username,
+                     CONCAT('Менеджер #', execution.manager_id)
+                   ) AS managerName,
+                   execution.source_worker_id AS sourceWorkerId,
+                   COALESCE(
+                     NULLIF(TRIM(source_user.fio), ''),
+                     source_user.username,
+                     CONCAT('Специалист #', execution.source_worker_id)
+                   ) AS sourceWorkerName,
+                   execution.target_worker_id AS targetWorkerId,
+                   COALESCE(
+                     NULLIF(TRIM(target_user.fio), ''),
+                     target_user.username,
+                     CONCAT('Специалист #', execution.target_worker_id)
+                   ) AS targetWorkerName,
+                   execution.company_id AS companyId,
+                   COALESCE(
+                     NULLIF(TRIM(company.company_title), ''),
+                     NULLIF(TRIM(workflow.company_title), ''),
+                     CONCAT('Компания #', execution.company_id)
+                   ) AS companyTitle,
+                   execution.transferred_order_count AS orderCount,
+                   execution.transferred_review_count AS reviewCount,
+                   execution.transferred_bad_task_count AS badTaskCount,
+                   execution.transferred_recovery_task_count AS recoveryTaskCount,
+                   execution.applied_at AS appliedAt,
+                   execution.rollback_deadline_at AS rollbackDeadlineAt,
+                   COALESCE(
+                     GROUP_CONCAT(
+                       CASE
+                         WHEN audit.entity_type = 'ORDER' THEN audit.entity_id
+                         ELSE NULL
+                       END
+                       ORDER BY audit.entity_id
+                       SEPARATOR ', '
+                     ),
+                     ''
+                   ) AS orderIds
+            FROM workload_transfer_executions execution
+            JOIN workload_transfer_workflows workflow
+              ON workflow.workload_transfer_workflow_id = execution.workflow_id
+            JOIN managers manager
+              ON manager.manager_id = execution.manager_id
+            JOIN users manager_user
+              ON manager_user.id = manager.user_id
+            JOIN workers source_worker
+              ON source_worker.worker_id = execution.source_worker_id
+            JOIN users source_user
+              ON source_user.id = source_worker.user_id
+            JOIN workers target_worker
+              ON target_worker.worker_id = execution.target_worker_id
+            JOIN users target_user
+              ON target_user.id = target_worker.user_id
+            JOIN companies company
+              ON company.company_id = execution.company_id
+            LEFT JOIN workload_transfer_assignment_audit audit
+              ON audit.execution_id = execution.workload_transfer_execution_id
+            WHERE execution.workload_transfer_execution_id = :executionId
+              AND execution.status = 'APPLIED'
+            GROUP BY execution.workload_transfer_execution_id,
+                     execution.workflow_id,
+                     workflow.mode,
+                     execution.manager_id,
+                     manager_user.fio,
+                     manager_user.username,
+                     execution.source_worker_id,
+                     source_user.fio,
+                     source_user.username,
+                     execution.target_worker_id,
+                     target_user.fio,
+                     target_user.username,
+                     execution.company_id,
+                     company.company_title,
+                     workflow.company_title,
+                     execution.transferred_order_count,
+                     execution.transferred_review_count,
+                     execution.transferred_bad_task_count,
+                     execution.transferred_recovery_task_count,
+                     execution.applied_at,
+                     execution.rollback_deadline_at
+            """, nativeQuery = true)
+    Optional<AppliedNotificationProjection> findAppliedNotification(
+            @Param("executionId") long executionId
+    );
+
     @Modifying
     @Query(value = """
             UPDATE workload_transfer_executions
@@ -1497,6 +1590,26 @@ public interface WorkloadTransferExecutionRepository
         Long getManagerId();
     }
 
+    interface AppliedNotificationProjection {
+        Long getExecutionId();
+        Long getWorkflowId();
+        String getMode();
+        Long getManagerId();
+        String getManagerName();
+        Long getSourceWorkerId();
+        String getSourceWorkerName();
+        Long getTargetWorkerId();
+        String getTargetWorkerName();
+        Long getCompanyId();
+        String getCompanyTitle();
+        Integer getOrderCount();
+        Integer getReviewCount();
+        Integer getBadTaskCount();
+        Integer getRecoveryTaskCount();
+        LocalDateTime getAppliedAt();
+        LocalDateTime getRollbackDeadlineAt();
+        String getOrderIds();
+    }
     interface RollbackContextProjection {
         Long getExecutionId();
         Long getWorkflowId();
