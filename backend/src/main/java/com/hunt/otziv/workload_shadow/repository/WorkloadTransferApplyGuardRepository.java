@@ -27,6 +27,7 @@ public interface WorkloadTransferApplyGuardRepository
                         AND source_current.manager_id = workflow.manager_id
                         AND source_current.run_id = successful.workload_shadow_run_id
                         AND source_current.diagnostic_status = 'OK'
+                        AND source_current.last_day_reached_100 = FALSE
                         AND source_current.failure_days > CAST(
                             TRIM(allowed_failures.setting_value) AS UNSIGNED
                         )

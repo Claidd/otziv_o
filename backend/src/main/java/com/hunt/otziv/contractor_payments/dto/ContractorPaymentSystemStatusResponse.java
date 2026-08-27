@@ -14,6 +14,7 @@ public record ContractorPaymentSystemStatusResponse(
         boolean completionBacklogReady,
         boolean activationAvailable,
         List<String> activationBlockedReasons,
+        List<String> runtimeWarnings,
         LocalDate attributionStartDate,
         long revision,
         boolean liveRoutingMasterEnabled,

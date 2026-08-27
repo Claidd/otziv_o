@@ -4,6 +4,7 @@ public record UpdateManualPaymentTaskRequest(
         String manualPaymentType,
         String manualPhone,
         String manualRecipientName,
+        String manualBankName,
         String manualPaymentUrl,
         String manualPaymentButtonLabel,
         Long targetAmountKopecks,
@@ -28,6 +29,7 @@ public record UpdateManualPaymentTaskRequest(
                 manualPaymentType,
                 manualPhone,
                 manualRecipientName,
+                null,
                 manualPaymentUrl,
                 manualPaymentButtonLabel,
                 targetAmountKopecks,
@@ -37,6 +39,38 @@ public record UpdateManualPaymentTaskRequest(
                 null,
                 false,
                 null
+        );
+    }
+
+    /** Legacy request shape kept for Java callers and mixed-version clients. */
+    public UpdateManualPaymentTaskRequest(
+            String manualPaymentType,
+            String manualPhone,
+            String manualRecipientName,
+            String manualPaymentUrl,
+            String manualPaymentButtonLabel,
+            Long targetAmountKopecks,
+            String comment,
+            Boolean manualPaymentUrlReplacementConfirmed,
+            String accountingTargetKind,
+            Long accountingTargetProfileId,
+            Boolean accountingTargetOverrunAcknowledged,
+            Long expectedGeneration
+    ) {
+        this(
+                manualPaymentType,
+                manualPhone,
+                manualRecipientName,
+                null,
+                manualPaymentUrl,
+                manualPaymentButtonLabel,
+                targetAmountKopecks,
+                comment,
+                manualPaymentUrlReplacementConfirmed,
+                accountingTargetKind,
+                accountingTargetProfileId,
+                accountingTargetOverrunAcknowledged,
+                expectedGeneration
         );
     }
 }

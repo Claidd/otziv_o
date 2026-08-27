@@ -15,6 +15,7 @@ import com.hunt.otziv.contractor_payments.repository.ContractorCompletionCutover
 import com.hunt.otziv.contractor_payments.repository.ContractorPaymentProfileRepository;
 import com.hunt.otziv.contractor_payments.repository.ContractorRewardRepairClaimRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.ZpRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -73,16 +74,17 @@ class ContractorCompletionRoutingReadinessServiceTest {
     }
 
     @Test
-    void durableRepairFailureKeepsLiveRoutingClosedWithoutScanningOrders() {
+    void durableRepairFailureKeepsLiveRoutingClosed() {
         when(repairStateRepository.count()).thenReturn(1L);
 
         assertThat(service.readyForLiveRouting()).isFalse();
 
-        verifyNoInteractions(orderRepository, badReviewTaskRepository, businessClock);
+        assertThat(service.hardRuntimeBlockers())
+                .contains("Выполняется восстановление финансового состояния");
     }
 
     @Test
-    void partialBaseMarkerSetKeepsLiveRoutingClosedWithoutScanningTasks() {
+    void partialBaseMarkerSetIsLocalWarningAndDoesNotFlapLiveRouting() {
         when(repairStateRepository.count()).thenReturn(0L);
         when(businessClock.now()).thenReturn(now);
         when(orderRepository.findCompletionRewardRepairOrderIds(
@@ -93,9 +95,9 @@ class ContractorCompletionRoutingReadinessServiceTest {
                 any(Pageable.class)
         )).thenReturn(List.of(71L));
 
-        assertThat(service.readyForLiveRouting()).isFalse();
-
-        verifyNoInteractions(badReviewTaskRepository);
+        assertThat(service.readyForLiveRouting()).isTrue();
+        assertThat(service.runtimeWarnings())
+                .contains("Есть заказы с локальной очередью восстановления начислений");
     }
 
     @Test
@@ -122,12 +124,13 @@ class ContractorCompletionRoutingReadinessServiceTest {
         )).thenReturn(List.of());
 
         assertThat(service.readyForLiveRouting()).isTrue();
+        assertThat(service.runtimeWarnings()).isEmpty();
 
         verify(orderRepository, never()).countCompletionRewardDeferredByActiveRecovery(any(), any(), eq(3L));
     }
 
     @Test
-    void missingDoneTaskMarkerKeepsLiveRoutingClosed() {
+    void missingDoneTaskMarkerIsLocalWarningAndDoesNotFlapLiveRouting() {
         when(repairStateRepository.count()).thenReturn(0L);
         when(businessClock.now()).thenReturn(now);
         when(orderRepository.findCompletionRewardRepairOrderIds(
@@ -144,13 +147,14 @@ class ContractorCompletionRoutingReadinessServiceTest {
                 any(Pageable.class)
         )).thenReturn(List.of(91L));
 
-        assertThat(service.readyForLiveRouting()).isFalse();
+        assertThat(service.readyForLiveRouting()).isTrue();
+        assertThat(service.runtimeWarnings())
+                .contains("Есть выполненные задачи отзывов с локальной очередью начислений");
     }
 
     @Test
     void incompleteInitialMonthSyncKeepsLiveRoutingClosed() {
         when(repairStateRepository.count()).thenReturn(0L);
-        when(businessClock.now()).thenReturn(now);
         when(profileRepository.findEnabledIdsRequiringCurrentMonthSync(any(), any(Pageable.class)))
                 .thenReturn(List.of(17L));
 
@@ -160,7 +164,7 @@ class ContractorCompletionRoutingReadinessServiceTest {
     }
 
     @Test
-    void rewardLedgerRepairOrLegacyOverlapKeepsLiveRoutingClosed() {
+    void rewardLedgerRepairIsGlobalButHistoricalOverlapIsLocalWarning() {
         when(repairStateRepository.count()).thenReturn(0L);
         when(businessClock.now()).thenReturn(now);
         when(rewardRepairClaimRepository.count()).thenReturn(1L);
@@ -171,14 +175,14 @@ class ContractorCompletionRoutingReadinessServiceTest {
         when(cutoverPreflightRepository.countActiveLegacyRewardCutoverConflicts(any()))
                 .thenReturn(1L);
 
-        assertThat(service.readyForLiveRouting()).isFalse();
-        verifyNoInteractions(orderRepository, badReviewTaskRepository);
+        assertThat(service.readyForLiveRouting()).isTrue();
+        assertThat(service.runtimeWarnings())
+                .contains("Исторические начисления требуют локальной сверки: заказов — 1");
     }
 
     @Test
     void currentSyncMarkerCannotHideIncompatibleSourceRoleFromLiveRouting() {
         when(repairStateRepository.count()).thenReturn(0L);
-        when(businessClock.now()).thenReturn(now);
         when(zpRepository.countActiveIncompatibleContractorRewardSources()).thenReturn(1L);
 
         assertThat(service.readyForLiveRouting()).isFalse();
@@ -187,7 +191,7 @@ class ContractorCompletionRoutingReadinessServiceTest {
     }
 
     @Test
-    void missingCancellationMarkerKeepsLiveRoutingClosed() {
+    void missingCancellationMarkerIsLocalWarningAndDoesNotFlapLiveRouting() {
         when(repairStateRepository.count()).thenReturn(0L);
         when(businessClock.now()).thenReturn(now);
         when(orderRepository.findCompletionRewardRepairOrderIds(
@@ -209,11 +213,44 @@ class ContractorCompletionRoutingReadinessServiceTest {
                 any(Pageable.class)
         )).thenReturn(List.of(92L));
 
-        assertThat(service.readyForLiveRouting()).isFalse();
+        assertThat(service.readyForLiveRouting()).isTrue();
+        assertThat(service.runtimeWarnings())
+                .contains("Есть отменённые задачи отзывов с локальной очередью корректировок");
     }
 
     @Test
-    void liveRoutingIsReadyOnlyWhenRepairStateAndEveryMarkerScanAreEmpty() {
+    void transientContractorRewardSyncBacklogDoesNotFlapLiveRoutingAfterCutover() {
+        when(repairStateRepository.count()).thenReturn(0L);
+        when(businessClock.now()).thenReturn(now);
+        lenient().when(zpRepository.findContractorRewardsNeedingGlobalRepair(any(), any(Pageable.class)))
+                .thenReturn(List.of(new Zp()));
+        when(orderRepository.findCompletionRewardRepairOrderIds(
+                any(), any(), eq(3L), eq(now), any(Pageable.class)
+        )).thenReturn(List.of());
+        when(badReviewTaskRepository.findCompletionRewardRepairGapTaskIds(
+                eq("DONE"),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX),
+                eq(now),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+        when(badReviewTaskRepository.findCompletionRewardCancellationRepairGapTaskIds(
+                eq("CANCELED"),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_DONE_MARKER_PREFIX),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_CANCEL_MARKER_PREFIX),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_MANAGER_PREFIX),
+                eq(ContractorRewardSourceCodes.BAD_REVIEW_SPECIALIST_PREFIX),
+                eq(now),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+
+        assertThat(service.readyForLiveRouting()).isTrue();
+        assertThat(service.runtimeWarnings()).isEmpty();
+
+        verify(zpRepository, never()).findContractorRewardsNeedingGlobalRepair(any(), any(Pageable.class));
+    }
+
+    @Test
+    void runtimeWarningsScanEveryLocalMarkerQueueWithoutBlockingRouting() {
         when(repairStateRepository.count()).thenReturn(0L);
         when(businessClock.now()).thenReturn(now);
         when(orderRepository.findCompletionRewardRepairOrderIds(
@@ -240,6 +277,7 @@ class ContractorCompletionRoutingReadinessServiceTest {
         )).thenReturn(List.of());
 
         assertThat(service.readyForLiveRouting()).isTrue();
+        assertThat(service.runtimeWarnings()).isEmpty();
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<String>> requiredMarkers = ArgumentCaptor.forClass(Collection.class);

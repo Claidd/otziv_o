@@ -117,6 +117,22 @@ class WorkloadTransferEmergencyCardSelectorTest {
         ));
     }
 
+    @Test
+    void detachedReviewsAreNeverSelectedForEmergencyFallback() {
+        ReviewNode detachedReady = review(
+                301L,
+                99L,
+                ReviewStage.PUBLISH,
+                true,
+                true,
+                false
+        );
+
+        assertNull(WorkloadTransferEmergencyCardSelector.select(
+                graphWithDetached(detachedReady)
+        ));
+    }
+
     private static WorkloadTransferCompanyGraph graph(OrderNode... orders) {
         return graph(List.of(), List.of(orders));
     }

@@ -96,6 +96,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ApiWorkerBoardControllerTest {
+    private static final LocalDate DATABASE_MAX_DATE = LocalDate.of(9999, 12, 31);
 
     @Mock
     private OrderService orderService;
@@ -649,6 +650,7 @@ class ApiWorkerBoardControllerTest {
     void workerCanOpenRecoveryTasksBeforePublication() {
         when(orderService.countActionableOrdersByStatusToWorker(worker))
                 .thenReturn(Map.of("Новый", 3, "Коррекция", 2));
+        ArgumentCaptor<LocalDate> dateCaptor = ArgumentCaptor.forClass(LocalDate.class);
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
 
         ApiWorkerBoardController.WorkerBoardResponse response = getBoard("recovery");
@@ -657,14 +659,86 @@ class ApiWorkerBoardControllerTest {
         assertFalse(response.warning());
         verify(reviewRecoveryTaskService).getDueTasksToWorker(
                 eq(worker),
-                any(LocalDate.class),
+                dateCaptor.capture(),
                 eq(""),
                 pageableCaptor.capture()
         );
+        assertEquals(LocalDate.now(), dateCaptor.getValue());
         Pageable pageable = pageableCaptor.getValue();
         assertEquals(Sort.Direction.ASC, pageable.getSort().getOrderFor("scheduledDate").getDirection());
         assertEquals(Sort.Direction.ASC, pageable.getSort().getOrderFor("id").getDirection());
         verify(reviewService, never()).hasActiveNagulReviews(principal);
+    }
+
+    @Test
+    void managerRecoveryBoardIncludesFutureArchiveTasks() {
+        Principal managerPrincipal = () -> "manager";
+        Authentication managerAuth = auth("ROLE_MANAGER");
+        User managerUser = new User();
+        managerUser.setId(11L);
+        Manager manager = new Manager();
+        manager.setId(22L);
+        manager.setUser(managerUser);
+
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(managerUser));
+        when(managerService.getManagerByUserId(11L)).thenReturn(manager);
+        when(metricSnapshotService.deltas(
+                eq(managerPrincipal),
+                eq(UserMetricSnapshotService.PAGE_WORKER),
+                anyList()
+        )).thenReturn(Map.of());
+        when(reviewRecoveryTaskService.getDueTasksToManager(
+                eq(manager),
+                eq(DATABASE_MAX_DATE),
+                eq(""),
+                any(Pageable.class)
+        )).thenReturn(Page.empty());
+
+        ApiWorkerBoardController.WorkerBoardResponse response = controller.getBoard(
+                "recovery", "", 0, 10, "desc", null, managerPrincipal, managerAuth);
+
+        assertEquals("recovery", response.section());
+        verify(reviewRecoveryTaskService).getDueTasksToManager(
+                eq(manager),
+                eq(DATABASE_MAX_DATE),
+                eq(""),
+                any(Pageable.class)
+        );
+        verify(reviewRecoveryTaskService).countDueTasksToManager(manager, DATABASE_MAX_DATE);
+    }
+
+    @Test
+    void ownerRecoveryBoardIncludesFutureArchiveTasks() {
+        Principal ownerPrincipal = () -> "owner";
+        Authentication ownerAuth = auth("ROLE_OWNER");
+        Manager manager = new Manager();
+        manager.setId(33L);
+        Set<Manager> managers = Set.of(manager);
+
+        when(userService.findManagersByUserName("owner")).thenReturn(managers);
+        when(metricSnapshotService.deltas(
+                eq(ownerPrincipal),
+                eq(UserMetricSnapshotService.PAGE_WORKER),
+                anyList()
+        )).thenReturn(Map.of());
+        when(reviewRecoveryTaskService.getDueTasksToOwner(
+                eq(managers),
+                eq(DATABASE_MAX_DATE),
+                eq(""),
+                any(Pageable.class)
+        )).thenReturn(Page.empty());
+
+        ApiWorkerBoardController.WorkerBoardResponse response = controller.getBoard(
+                "recovery", "", 0, 10, "desc", null, ownerPrincipal, ownerAuth);
+
+        assertEquals("recovery", response.section());
+        verify(reviewRecoveryTaskService).getDueTasksToOwner(
+                eq(managers),
+                eq(DATABASE_MAX_DATE),
+                eq(""),
+                any(Pageable.class)
+        );
+        verify(reviewRecoveryTaskService).countDueTasksToOwner(managers, DATABASE_MAX_DATE);
     }
 
     @Test

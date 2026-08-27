@@ -285,6 +285,9 @@ public class PaymentLink {
     @Column(name = "manual_reported_at")
     private LocalDateTime manualReportedAt;
 
+    @Column(name = "paper_invoice_issued_at")
+    private LocalDateTime paperInvoiceIssuedAt;
+
     @Column(name = "manual_confirmed_by", length = 160)
     private String manualConfirmedBy;
 

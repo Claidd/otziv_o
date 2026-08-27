@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
 import type { OrderCardItem } from './manager.api';
 
+export type InvoicePaymentMode = 'AUTO_ROUTING' | 'OWNER_PAPER_INVOICE';
+
 export interface CommonBillingCompanyResponse {
   companyId: number;
   companyTitle: string;
@@ -47,6 +49,8 @@ export interface CommonInvoiceSummaryResponse {
   paymentRouteSelectedAt?: string | null;
   invoicePurpose?: string | null;
   supersedesInvoiceId?: number | null;
+  invoicePaymentMode?: InvoicePaymentMode | null;
+  paperInvoiceIssuedAt?: string | null;
 }
 
 export interface CommonBillingAccountResponse {
@@ -60,6 +64,7 @@ export interface CommonBillingAccountResponse {
   invoiceCompanyTitle?: string | null;
   companies: CommonBillingCompanyResponse[];
   currentInvoice?: CommonInvoiceSummaryResponse | null;
+  invoicePaymentMode?: InvoicePaymentMode | null;
 }
 
 export interface CommonBillingAccountRequest {
@@ -85,7 +90,7 @@ export interface CommonInvoiceOrderResponse {
   unpaid: boolean;
   detachable: boolean;
   paidAt?: string | null;
-  paymentMethod?: 'TBANK' | 'MANUAL' | 'MIXED' | 'MANUAL_LEGACY' | null;
+  paymentMethod?: 'TBANK' | 'MANUAL' | 'MIXED' | 'MANUAL_LEGACY' | 'OWNER_PAPER_INVOICE' | null;
   paidBy?: string | null;
   paymentComment?: string | null;
   paymentReceiptUrl?: string | null;
@@ -132,6 +137,18 @@ export interface CommonInvoiceDetailsResponse {
   nextCycleOrders: CommonInvoiceNextCycleResponse[];
   paymentRefs?: CommonInvoicePaymentRefResponse[];
   paymentEvidenceToken?: string | null;
+}
+
+export type CommonInvoicePaymentRouteChangeTarget = 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK';
+
+export interface CommonInvoicePaymentRouteChangeContextResponse {
+  currentRoute: string;
+  currentTarget: CommonInvoicePaymentRouteChangeTarget;
+  currentRecipient: string;
+  status: string;
+  canChange: boolean;
+  blockReason: string;
+  paymentEvidenceToken: string;
 }
 
 export interface CommonInvoiceArchiveOrderPreview {
@@ -255,6 +272,52 @@ export class CommonBillingApi {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/send`,
       {}
+    );
+  }
+
+  changeInvoicePaymentMode(
+    invoiceId: number,
+    mode: InvoicePaymentMode
+  ): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/payment-mode`,
+      { mode, confirmedUnpaid: true }
+    );
+  }
+
+  commonInvoicePaymentRouteChangeContext(
+    invoiceId: number
+  ): Observable<CommonInvoicePaymentRouteChangeContextResponse> {
+    return this.http.get<CommonInvoicePaymentRouteChangeContextResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/payment-route-change-context`
+    );
+  }
+
+  changeCommonInvoicePaymentRoute(
+    invoiceId: number,
+    target: CommonInvoicePaymentRouteChangeTarget,
+    expectedPaymentEvidenceToken: string
+  ): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/payment-route-change`,
+      { target, confirmedUnpaid: true, expectedPaymentEvidenceToken }
+    );
+  }
+
+  markPaperInvoiceIssued(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/paper-invoice/issued`,
+      {}
+    );
+  }
+
+  markPaperInvoicePaid(
+    invoiceId: number,
+    request: ManualPaymentConfirmationRequest
+  ): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/paper-invoice/paid`,
+      request
     );
   }
 

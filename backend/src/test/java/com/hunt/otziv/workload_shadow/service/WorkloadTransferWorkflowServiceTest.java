@@ -18,6 +18,7 @@ import com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferWorkflowRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferWorkflowRepository.RecommendationCandidateProjection;
 import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferCompanyGraph;
+import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferCompanyGraph.OrderNode;
 import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferCompanyGraph.WorkloadTotals;
 import com.hunt.otziv.workload_shadow.transfer.service.WorkloadTransferGraphQueryService;
 import java.math.BigDecimal;
@@ -50,7 +51,7 @@ class WorkloadTransferWorkflowServiceTest {
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper();
+        objectMapper = new ObjectMapper().findAndRegisterModules();
         service = new WorkloadTransferWorkflowService(
                 repository,
                 graphQueryService,
@@ -311,8 +312,29 @@ class WorkloadTransferWorkflowServiceTest {
             long sourceWorkerId
     ) {
         WorkloadTotals totals = new WorkloadTotals(
-                0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0
+                1, 0, 1, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 10
+        );
+        OrderNode order = new OrderNode(
+                companyId + 20_000L,
+                "Новый",
+                sourceWorkerId,
+                managerId,
+                false,
+                false,
+                LocalDate.of(2026, 8, 22),
+                LocalDate.of(2026, 8, 22),
+                1,
+                1,
+                1,
+                0,
+                1,
+                0,
+                List.of(),
+                List.of(),
+                List.of(),
+                totals,
+                List.of()
         );
         return new WorkloadTransferCompanyGraph(
                 companyId,
@@ -325,7 +347,7 @@ class WorkloadTransferWorkflowServiceTest {
                 false,
                 0,
                 0,
-                List.of(),
+                List.of(order),
                 List.of(),
                 List.of(),
                 List.of(),

@@ -1006,8 +1006,18 @@ class OrderStatusTransitionServiceTest {
         Review clientReview = new Review();
         clientReview.setId(701L);
         clientReview.setAnswer("Исправьте название");
-        order.getDetails().getFirst().setReviews(List.of(clientReview));
+        Review placeholderReview = new Review();
+        placeholderReview.setId(702L);
+        placeholderReview.setAnswer("впишите сюда замечания к отзыву, если есть и нажмите кнопку <Сохранить>, затем кнопку <Корректировать>, ниже, под всеми отзывами");
+        Review emptyReview = new Review();
+        emptyReview.setId(703L);
+        emptyReview.setAnswer("   ");
+        order.getDetails().getFirst().setReviews(List.of(clientReview, placeholderReview, emptyReview));
         OrderStatus correction = status("Коррекция");
+        String expectedCorrectionNote = "Коррекция:\nОбщее замечание клиента"
+                + "\nОтзыв #701: Исправьте название"
+                + "\nЗаметка заказа:\nзаметка"
+                + "\nЗаметка компании:\nкомментарий";
 
         when(orderRepository.findByIdForMutation(7L)).thenReturn(Optional.of(order));
         when(orderStatusNotificationService.hasWorkerWithTelegram(order)).thenReturn(true);
@@ -1024,13 +1034,13 @@ class OrderStatusTransitionServiceTest {
         inOrder.verify(orderRepository).save(order);
         inOrder.verify(mobilePushBusinessNotificationService).notifyWorkerCorrection(
                 order,
-                "Общее замечание клиента\nОтзыв #701: Исправьте название"
+                expectedCorrectionNote
         );
         inOrder.verify(orderCorrectionTelegramNotifier).notifyWorkerCorrection(
                 7L,
                 -700L,
                 "Компания",
-                "Общее замечание клиента\nОтзыв #701: Исправьте название"
+                expectedCorrectionNote
         );
         verify(telegramService, never()).sendMessage(
                 eq(700L),

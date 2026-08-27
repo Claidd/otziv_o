@@ -1,6 +1,104 @@
 :host {
   display: block;
   min-width: 0;
+
+  --billing-action-text: #263248;
+  --billing-action-muted: #67758a;
+  --billing-action-surface: #f5f7fa;
+  --billing-action-surface-hover: #e9eef5;
+  --billing-action-border: #d8e0ea;
+  --billing-action-primary: #d23f29;
+  --billing-action-primary-hover: #bf3421;
+  --billing-action-success: #168268;
+  --billing-action-success-hover: #106d57;
+  --billing-action-success-soft: #e8f7f2;
+  --billing-action-success-soft-hover: #d9f0e8;
+  --billing-action-success-soft-text: #126650;
+  --billing-action-success-soft-border: #a7d9ca;
+  --billing-action-warning-soft: #fff6df;
+  --billing-action-warning-soft-hover: #f9ebc6;
+  --billing-action-warning-text: #805600;
+  --billing-action-warning-border: #e4c36e;
+  --billing-action-danger-soft: #fff0f3;
+  --billing-action-danger-soft-hover: #f9dfe6;
+  --billing-action-danger-text: #a62b48;
+  --billing-action-danger-border: #e7a5b5;
+  --billing-action-disabled-bg: #edf0f4;
+  --billing-action-disabled-text: #929ba8;
+  --billing-panel-surface: #fbfcfd;
+  --billing-panel-border: #e3e8ef;
+  --billing-summary-surface: #ffffff;
+  --billing-alert-surface: #fff4f6;
+  --billing-alert-border: #efbdc8;
+  --billing-alert-title: #9f173c;
+  --billing-alert-text: #5e6977;
+  --billing-chip-surface: #eef3f8;
+  --billing-chip-text: #5e6977;
+  --billing-toolbar-surface: #f5f7fa;
+  --billing-toolbar-border: #dce3ec;
+  --billing-toolbar-amount-surface: #ffffff;
+  --billing-toolbar-control-surface: #ffffff;
+  --billing-toolbar-control-hover: #eaf0f6;
+  --billing-toolbar-control-border: #d5dde7;
+  --billing-toolbar-control-text: #405068;
+  --billing-toolbar-detach-surface: #fff4f2;
+  --billing-toolbar-detach-border: #edb9b0;
+  --billing-toolbar-detach-text: #a93a2f;
+  --billing-toolbar-complete-surface: #e8f7f2;
+  --billing-toolbar-complete-border: #abd9cc;
+  --billing-toolbar-complete-text: #126650;
+  --billing-toolbar-disabled-surface: #edf1f5;
+  --billing-toolbar-disabled-text: #9aa4b0;
+}
+
+:host-context(body.otziv-dark-theme) {
+  --billing-action-text: #e8edf3;
+  --billing-action-muted: #a6b1bd;
+  --billing-action-surface: #2a3137;
+  --billing-action-surface-hover: #343d44;
+  --billing-action-border: #47525c;
+  --billing-action-primary: #c84b2e;
+  --billing-action-primary-hover: #df5a37;
+  --billing-action-success: #17745f;
+  --billing-action-success-hover: #1d8a70;
+  --billing-action-success-soft: #203a34;
+  --billing-action-success-soft-hover: #294a42;
+  --billing-action-success-soft-text: #79d8c2;
+  --billing-action-success-soft-border: #386c61;
+  --billing-action-warning-soft: #3a3221;
+  --billing-action-warning-soft-hover: #49402a;
+  --billing-action-warning-text: #f0cf83;
+  --billing-action-warning-border: #6b592f;
+  --billing-action-danger-soft: #402630;
+  --billing-action-danger-soft-hover: #512e3a;
+  --billing-action-danger-text: #ff9ab6;
+  --billing-action-danger-border: #754354;
+  --billing-action-disabled-bg: #282e33;
+  --billing-action-disabled-text: #707b85;
+  --billing-panel-surface: #22272b;
+  --billing-panel-border: #3b444c;
+  --billing-summary-surface: #282e33;
+  --billing-alert-surface: #3b252d;
+  --billing-alert-border: #704052;
+  --billing-alert-title: #ff9ab6;
+  --billing-alert-text: #d2d8df;
+  --billing-chip-surface: #2d343a;
+  --billing-chip-text: #c4ccd5;
+  --billing-toolbar-surface: #252b30;
+  --billing-toolbar-border: #3d464e;
+  --billing-toolbar-amount-surface: #1f2529;
+  --billing-toolbar-control-surface: #2a3238;
+  --billing-toolbar-control-hover: #343e45;
+  --billing-toolbar-control-border: #46515a;
+  --billing-toolbar-control-text: #d8e0e8;
+  --billing-toolbar-detach-surface: #3c2929;
+  --billing-toolbar-detach-border: #724840;
+  --billing-toolbar-detach-text: #ffab9d;
+  --billing-toolbar-complete-surface: #203a34;
+  --billing-toolbar-complete-border: #386c61;
+  --billing-toolbar-complete-text: #79d8c2;
+  --billing-toolbar-disabled-surface: #292f34;
+  --billing-toolbar-disabled-text: #6f7a83;
 }
 
 .mobile-invoice-pager {
@@ -480,10 +578,10 @@ button .material-icons-sharp {
   grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
   min-width: 0;
-  border: 1px solid #e8ecf1;
+  border: 1px solid var(--billing-panel-border);
   border-radius: 0.5rem;
   padding: 0.75rem;
-  background: #fbfcfd;
+  background: var(--billing-panel-surface);
 }
 
 .invoice-order-card-wrap {
@@ -498,10 +596,11 @@ button .material-icons-sharp {
   grid-template-columns: minmax(0, 1fr) 2rem 2rem 2rem;
   align-items: center;
   gap: 0.34rem;
-  border: 1px solid #e8ecf1;
-  border-radius: 0.55rem;
-  padding: 0.34rem;
-  background: #fbfcfd;
+  border: 1px solid var(--billing-toolbar-border);
+  border-radius: 0.65rem;
+  padding: 0.38rem;
+  background: var(--billing-toolbar-surface);
+  box-shadow: 0 0.28rem 0.7rem rgba(30, 39, 52, 0.06);
 }
 
 .invoice-order-card-toolbar > span {
@@ -511,11 +610,11 @@ button .material-icons-sharp {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid #e2e7ee;
+  border: 1px solid var(--billing-toolbar-control-border);
   border-radius: 999px;
   padding: 0 0.55rem;
   color: var(--otziv-text, #1f2430);
-  background: #fff;
+  background: var(--billing-toolbar-amount-surface);
   font-size: 0.74rem;
   font-weight: 900;
   white-space: nowrap;
@@ -526,26 +625,55 @@ button .material-icons-sharp {
 .invoice-order-card-toolbar .order-details-link {
   width: 2rem;
   min-height: 2rem;
+  border: 1px solid var(--billing-toolbar-control-border);
+  border-radius: 0.5rem;
   padding: 0;
-  background: #eef3f8;
-  color: #1f2430;
+  background: var(--billing-toolbar-control-surface);
+  color: var(--billing-toolbar-control-text);
+  box-shadow: none;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.invoice-order-card-toolbar button:hover:not(:disabled),
+.invoice-order-card-toolbar .order-details-link:hover {
+  background: var(--billing-toolbar-control-hover);
+  transform: translateY(-1px);
 }
 
 .invoice-order-card-toolbar .order-details-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.42rem;
-  color: #1f2430;
+  color: var(--billing-toolbar-control-text);
   text-decoration: none;
+}
+
+.invoice-order-card-toolbar .toolbar-action--detach {
+  border-color: var(--billing-toolbar-detach-border);
+  color: var(--billing-toolbar-detach-text);
+  background: var(--billing-toolbar-detach-surface);
+}
+
+.invoice-order-card-toolbar .toolbar-action--complete {
+  border-color: var(--billing-toolbar-complete-border);
+  color: var(--billing-toolbar-complete-text);
+  background: var(--billing-toolbar-complete-surface);
+}
+
+.invoice-order-card-toolbar button:disabled {
+  border-color: transparent;
+  color: var(--billing-toolbar-disabled-text);
+  background: var(--billing-toolbar-disabled-surface);
+  opacity: 0.78;
+  cursor: not-allowed;
 }
 
 .invoice-order-card-toolbar .material-icons-sharp {
   font-size: 1rem;
 }
 
-.invoice-order-card-wrap.paid .invoice-order-card-toolbar button {
-  color: #31a965;
+.invoice-order-card-wrap.paid .invoice-order-card-toolbar .toolbar-action--complete {
+  color: var(--billing-toolbar-complete-text);
 }
 
 .invoice-order-card-wrap.unpaid {
@@ -646,10 +774,10 @@ button .material-icons-sharp {
 
 .invoice-summary div {
   min-width: 0;
-  border: 1px solid #e8ecf1;
+  border: 1px solid var(--billing-panel-border);
   border-radius: 0.48rem;
   padding: 0.52rem;
-  background: #fbfcfd;
+  background: var(--billing-summary-surface);
 }
 
 .invoice-summary strong {
@@ -666,11 +794,11 @@ button .material-icons-sharp {
   grid-template-columns: 2rem minmax(0, 1fr);
   align-items: start;
   gap: 0.55rem;
-  border: 1px solid rgba(239, 49, 100, 0.22);
+  border: 1px solid var(--billing-alert-border);
   border-radius: 0.7rem;
   padding: 0.62rem;
-  color: #9f173c;
-  background: rgba(239, 49, 100, 0.06);
+  color: var(--billing-alert-title);
+  background: var(--billing-alert-surface);
 }
 
 .invoice-problem > span {
@@ -689,14 +817,14 @@ button .material-icons-sharp {
 }
 
 .invoice-problem strong {
-  color: #9f173c;
+  color: var(--billing-alert-title);
   font-size: 0.78rem;
   font-weight: 950;
 }
 
 .invoice-problem p {
   margin: 0.2rem 0 0;
-  color: #5e6977;
+  color: var(--billing-alert-text);
   font-size: 0.72rem;
   font-weight: 850;
   line-height: 1.28;
@@ -775,19 +903,95 @@ button .material-icons-sharp {
 .invoice-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.42rem;
+  gap: 0.5rem;
 }
 
 .invoice-actions button {
   width: 100%;
+  min-height: 2.55rem;
+  border: 1px solid var(--billing-action-border);
+  border-radius: 0.65rem;
+  padding: 0.45rem 0.62rem;
+  color: var(--billing-action-text);
+  background: var(--billing-action-surface);
+  box-shadow: 0 0.18rem 0.45rem rgba(30, 39, 52, 0.05);
+  line-height: 1.12;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.invoice-actions button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--billing-action-text) 28%, var(--billing-action-border));
+  background: var(--billing-action-surface-hover);
+  box-shadow: 0 0.32rem 0.75rem rgba(30, 39, 52, 0.11);
+  transform: translateY(-1px);
+}
+
+.invoice-actions button:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--otziv-action, #e53220) 24%, transparent);
+}
+
+.invoice-actions button:disabled {
+  border-color: transparent;
+  color: var(--billing-action-disabled-text);
+  background: var(--billing-action-disabled-bg);
+  box-shadow: none;
+  opacity: 0.78;
+}
+
+.invoice-actions .primary {
+  border-color: var(--billing-action-primary);
+  color: #fff;
+  background: var(--billing-action-primary);
+}
+
+.invoice-actions .primary:hover:not(:disabled) {
+  border-color: var(--billing-action-primary-hover);
+  background: var(--billing-action-primary-hover);
 }
 
 .invoice-actions .success {
-  background: #31bd6f;
+  border-color: var(--billing-action-success);
+  color: #fff;
+  background: var(--billing-action-success);
+}
+
+.invoice-actions .success:hover:not(:disabled) {
+  border-color: var(--billing-action-success-hover);
+  background: var(--billing-action-success-hover);
+}
+
+.invoice-actions .review {
+  border-color: var(--billing-action-success-soft-border);
+  color: var(--billing-action-success-soft-text);
+  background: var(--billing-action-success-soft);
+}
+
+.invoice-actions .review:hover:not(:disabled) {
+  border-color: var(--billing-action-success-soft-border);
+  background: var(--billing-action-success-soft-hover);
+}
+
+.invoice-actions .warning {
+  border-color: var(--billing-action-warning-border);
+  color: var(--billing-action-warning-text);
+  background: var(--billing-action-warning-soft);
+}
+
+.invoice-actions .warning:hover:not(:disabled) {
+  border-color: var(--billing-action-warning-border);
+  background: var(--billing-action-warning-soft-hover);
 }
 
 .invoice-actions .danger {
-  background: #e05252;
+  border-color: var(--billing-action-danger-border);
+  color: var(--billing-action-danger-text);
+  background: var(--billing-action-danger-soft);
+}
+
+.invoice-actions .danger:hover:not(:disabled) {
+  border-color: var(--billing-action-danger-border);
+  background: var(--billing-action-danger-soft-hover);
 }
 
 .invoice-timeline {
@@ -827,8 +1031,8 @@ button .material-icons-sharp {
 
 .common-billing-right-panel .primary-action,
 .common-billing-right-panel .invoice-actions button {
-  min-height: 2.2rem;
-  font-size: 0.7rem;
+  min-height: 2.55rem;
+  font-size: 0.72rem;
 }
 
 .common-billing-right-stats {
@@ -893,8 +1097,8 @@ button .material-icons-sharp {
 
 .invoice-timeline span,
 .status-pill.neutral {
-  color: #5e6977;
-  background: #eef3f8;
+  color: var(--billing-chip-text);
+  background: var(--billing-chip-surface);
 }
 
 .status-pill.active,

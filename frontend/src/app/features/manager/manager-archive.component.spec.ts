@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import type {
   ArchiveOrderDetailsPayload,
   ArchiveOrderListItem,
@@ -9,6 +9,7 @@ import type {
   ManagerPage
 } from '../../core/manager.api';
 import { AuthService } from '../../core/auth.service';
+import { CommonBillingApi, CommonInvoiceArchivePage } from '../../core/common-billing.api';
 import { ManagerApi } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { ToastService } from '../../shared/toast.service';
@@ -64,6 +65,18 @@ function page(content: ArchiveOrderListItem[]): ManagerPage<ArchiveOrderListItem
     content,
     number: 0,
     size: 10,
+    totalElements: content.length,
+    totalPages: content.length ? 1 : 0,
+    first: true,
+    last: true
+  };
+}
+
+function commonInvoicePage(content: CommonInvoiceArchivePage['content'] = []): CommonInvoiceArchivePage {
+  return {
+    content,
+    number: 0,
+    size: 50,
     totalElements: content.length,
     totalPages: content.length ? 1 : 0,
     first: true,
@@ -148,6 +161,11 @@ describe('ManagerArchiveComponent', () => {
     restoreArchiveOrder: ReturnType<typeof vi.fn>;
     updateOrderStatus: ReturnType<typeof vi.fn>;
   };
+  let commonBillingApi: {
+    archiveInvoices: ReturnType<typeof vi.fn>;
+    archiveInvoiceDetails: ReturnType<typeof vi.fn>;
+    restoreArchiveInvoice: ReturnType<typeof vi.fn>;
+  };
   let toastService: {
     success: ReturnType<typeof vi.fn>;
     error: ReturnType<typeof vi.fn>;
@@ -163,6 +181,11 @@ describe('ManagerArchiveComponent', () => {
       restoreArchiveOrder: vi.fn((orderId: number, targetStatus: string) => of(restoreResult(orderId, targetStatus))),
       updateOrderStatus: vi.fn(() => of(void 0))
     };
+    commonBillingApi = {
+      archiveInvoices: vi.fn(() => of(commonInvoicePage())),
+      archiveInvoiceDetails: vi.fn(),
+      restoreArchiveInvoice: vi.fn()
+    };
     toastService = {
       success: vi.fn(),
       error: vi.fn()
@@ -176,6 +199,7 @@ describe('ManagerArchiveComponent', () => {
       providers: [
         provideRouter([]),
         { provide: ManagerApi, useValue: managerApi },
+        { provide: CommonBillingApi, useValue: commonBillingApi },
         { provide: AuthService, useValue: authService },
         { provide: ToastService, useValue: toastService }
       ]
@@ -212,6 +236,45 @@ describe('ManagerArchiveComponent', () => {
     expect(fixture.componentInstance.canRestore(liveOrder)).toBe(false);
     expect(fixture.componentInstance.canChangeLiveStatus(liveOrder)).toBe(true);
     expect(fixture.componentInstance.orderDetailsLink(liveOrder)).toEqual(['/orders', 7, 4]);
+  });
+
+  it('shows archive search progress while orders are loading', () => {
+    const pending = new Subject<ManagerPage<ArchiveOrderListItem>>();
+    managerApi.getArchiveOrders.mockReturnValueOnce(pending.asObservable());
+    const fixture = TestBed.createComponent(ManagerArchiveComponent);
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(fixture.componentInstance.loading()).toBe(true);
+    expect(element.textContent).toContain('Ищу в архиве');
+    expect(element.querySelector('.archive-loading-panel')).not.toBeNull();
+
+    pending.next(page([storedOrder]));
+    pending.complete();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.loading()).toBe(false);
+    expect(element.querySelector('.archive-loading-panel')).toBeNull();
+  });
+
+  it('ignores stale archive responses after a newer request wins', () => {
+    const first = new Subject<ManagerPage<ArchiveOrderListItem>>();
+    const second = new Subject<ManagerPage<ArchiveOrderListItem>>();
+    managerApi.getArchiveOrders
+      .mockReturnValueOnce(first.asObservable())
+      .mockReturnValueOnce(second.asObservable());
+    const fixture = TestBed.createComponent(ManagerArchiveComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.refresh();
+    second.next(page([liveOrder]));
+    second.complete();
+    first.next(page([storedOrder]));
+    first.complete();
+    fixture.detectChanges();
+
+    expect(component.orders().map((order) => order.id)).toEqual([4]);
   });
 
   it('toggles archive sort from the pager', async () => {

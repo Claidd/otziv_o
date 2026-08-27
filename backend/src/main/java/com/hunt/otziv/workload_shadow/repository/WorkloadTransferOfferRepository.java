@@ -1057,7 +1057,13 @@ public interface WorkloadTransferOfferRepository
             SELECT workflow.workload_transfer_workflow_id AS workflowId,
                    candidate.workload_transfer_workflow_candidate_id
                        AS candidateId,
-                   offer.workload_transfer_offer_id AS offerId
+                   offer.workload_transfer_offer_id AS offerId,
+                   (
+                       SELECT COUNT(*)
+                       FROM workload_transfer_workflow_candidates counted_candidate
+                       WHERE counted_candidate.workflow_id =
+                             workflow.workload_transfer_workflow_id
+                   ) AS candidateCount
             FROM workload_transfer_workflows workflow
             JOIN workload_transfer_workflow_candidates candidate
               ON candidate.workflow_id =
@@ -1099,14 +1105,19 @@ public interface WorkloadTransferOfferRepository
                         'ACCEPTED'
                     )
               )
-              AND (
-                  SELECT COUNT(*)
-                  FROM workload_transfer_workflow_candidates only_candidate
-                  WHERE only_candidate.workflow_id =
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM workload_transfer_workflow_candidates unresolved_candidate
+                  WHERE unresolved_candidate.workflow_id =
                         workflow.workload_transfer_workflow_id
-              ) = 1
+                    AND unresolved_candidate.status NOT IN (
+                        'DECLINED',
+                        'EXPIRED'
+                    )
+              )
             ORDER BY workflow.last_transition_at,
-                     workflow.workload_transfer_workflow_id
+                     workflow.workload_transfer_workflow_id,
+                     RAND()
             FOR UPDATE
             """, nativeQuery = true)
     List<ForcedSingleRecipientProjection> lockSingleRecipientForcedTransfers(
@@ -1135,6 +1146,8 @@ public interface WorkloadTransferOfferRepository
         Long getCandidateId();
 
         Long getOfferId();
+
+        Integer getCandidateCount();
     }
     interface StageCandidateProjection {
         Long getWorkflowId();

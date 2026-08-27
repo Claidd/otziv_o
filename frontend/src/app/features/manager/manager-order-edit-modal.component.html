@@ -175,6 +175,76 @@
             </label>
           </div>
 
+          @if (allowPaymentRouteChange && !order.complete) {
+            <section class="payment-route-change" aria-label="Смена способа оплаты">
+              <div class="payment-route-change__head">
+                <div>
+                  <strong>Способ оплаты</strong>
+                  <small>Используйте, если клиент попросил оплатить иначе</small>
+                </div>
+                @if (!paymentRouteContext) {
+                  <button
+                    type="button"
+                    class="secondary"
+                    (click)="paymentRouteChangeOpened.emit()"
+                    [disabled]="saving || deleting || cancelingPayment || paymentRouteContextLoading || paymentRouteChanging"
+                  >
+                    {{ paymentRouteContextLoading ? 'Проверяю...' : 'Сменить способ оплаты' }}
+                  </button>
+                }
+              </div>
+
+              @if (paymentRouteContext) {
+                <div class="payment-route-change__body">
+                  <p>
+                    Сейчас: <strong>{{ paymentRouteContext.currentRoute }}</strong>
+                    @if (paymentRouteContext.currentRecipient) {
+                      <span> · {{ paymentRouteContext.currentRecipient }}</span>
+                    }
+                  </p>
+                  @if (!paymentRouteContext.canChange) {
+                    <div class="payment-route-change__warning">{{ paymentRouteContext.blockReason }}</div>
+                  } @else {
+                    <div class="payment-route-change__options">
+                      <button type="button" class="secondary"
+                        (click)="paymentRouteChanged.emit('EMPLOYEE_REQUISITES')"
+                        [disabled]="paymentRouteChanging">
+                        Реквизиты сотрудника
+                      </button>
+                      <button type="button" class="secondary"
+                        (click)="paymentRouteChanged.emit('OWNER_TBANK')"
+                        [disabled]="paymentRouteChanging">
+                        Ссылка Т-Банк владельца
+                      </button>
+                      @if (allowPaperInvoiceMode) {
+                        <button type="button" class="secondary"
+                          (click)="paymentRouteChanged.emit('OWNER_PAPER_INVOICE')"
+                          [disabled]="paymentRouteChanging">
+                          Бумажный счёт владельца
+                        </button>
+                      }
+                    </div>
+                  }
+                  @if (allowPaperInvoiceMode
+                    && paymentRouteContext.configuredMode === 'OWNER_PAPER_INVOICE'
+                    && paymentRouteContext.paymentLinkId != null
+                    && !paymentRouteContext.paperInvoiceIssued) {
+                    <button type="button" class="secondary"
+                      (click)="paperInvoiceIssued.emit()"
+                      [disabled]="paymentRouteChanging">
+                      Счёт отправлен клиенту
+                    </button>
+                    <small>До этой отметки автоматические напоминания не отправляются.</small>
+                  }
+                  <button type="button" class="payment-route-change__close"
+                    (click)="paymentRouteChangeClosed.emit()" [disabled]="paymentRouteChanging">
+                    Закрыть
+                  </button>
+                </div>
+              }
+            </section>
+          }
+
           <div class="lead-edit-actions" [class.lead-edit-actions--split]="order.canDelete || order.canCancelPayment">
             @if (order.canCancelPayment) {
               <div class="lead-edit-actions-group lead-edit-actions-group--danger">

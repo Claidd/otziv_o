@@ -230,6 +230,38 @@ class ApiCabinetControllerTest {
     }
 
     @Test
+    void teamCachesNetworkAndPatternInsightsWithTheTeamResponse() {
+        TeamFixture fixture = teamFixture();
+        WorkersListDTO worker = WorkersListDTO.builder()
+                .id(300L)
+                .userId(30L)
+                .fio("Worker One")
+                .login("worker")
+                .build();
+        ReflectionTestUtils.setField(controller, "aggregateAnalyticsReadEnabled", false);
+        stubOwnerTeamContext(fixture);
+        when(personalService.getManagersAndCountToDateToOwner(List.of(fixture.manager()), DATE)).thenReturn(List.of());
+        when(personalService.getMarketologsAndCountToDateToOwner(List.of(fixture.marketolog()), DATE)).thenReturn(List.of());
+        when(personalService.gerWorkersToAndCountToDateToOwner(List.of(fixture.worker()), DATE)).thenReturn(List.of(worker));
+        when(personalService.gerOperatorsAndCountToDateToOwner(List.of(fixture.operator()), DATE)).thenReturn(List.of());
+
+        controller.team(principal, ownerAuthentication(), DATE, null, true);
+        controller.team(principal, ownerAuthentication(), DATE, null, false);
+
+        verify(workerNetworkViolationService, org.mockito.Mockito.times(2)).statsForPeriod(
+                org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
+        verify(teamPatternAnalysisService, org.mockito.Mockito.times(1)).analyze(
+                org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.eq(DATE.withDayOfMonth(1))
+        );
+        verify(personalService, org.mockito.Mockito.times(1))
+                .gerWorkersToAndCountToDateToOwner(List.of(fixture.worker()), DATE);
+    }
+
+    @Test
     void managerTeamContainsOnlyAssignedOperationalRolesAndWorkerProgress() {
         User managerUser = user(10L, "Manager One");
         Manager manager = Manager.builder().id(100L).user(managerUser).build();

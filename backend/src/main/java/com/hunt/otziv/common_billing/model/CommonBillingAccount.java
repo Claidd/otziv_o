@@ -2,12 +2,15 @@ package com.hunt.otziv.common_billing.model;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
@@ -36,6 +39,10 @@ public class CommonBillingAccount {
 
     @Column(name = "auto_repeat_orders", nullable = false)
     private boolean autoRepeatOrders = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "invoice_payment_mode", nullable = false, length = 32)
+    private InvoicePaymentMode invoicePaymentMode = InvoicePaymentMode.AUTO_ROUTING;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id")

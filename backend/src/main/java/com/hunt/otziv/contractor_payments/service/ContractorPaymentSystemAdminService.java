@@ -69,6 +69,7 @@ public class ContractorPaymentSystemAdminService {
                 lockedCutover,
                 activationPreflightReady
         );
+        List<String> runtimeWarnings = safeRuntimeWarnings();
         boolean activationAvailable = legacyBehavior
                 && runtime.rewardAttributionMasterEnabled()
                 && activationPreflightReady;
@@ -98,6 +99,7 @@ public class ContractorPaymentSystemAdminService {
                 backlogReady,
                 activationAvailable,
                 List.copyOf(blockers),
+                runtimeWarnings,
                 rollout.attributionStartDate(),
                 rollout.revision(),
                 runtime.liveRoutingMasterEnabled(),
@@ -291,6 +293,14 @@ public class ContractorPaymentSystemAdminService {
             return cutoverPreflightService.readyForActivation(startDate);
         } catch (RuntimeException exception) {
             return false;
+        }
+    }
+
+    private List<String> safeRuntimeWarnings() {
+        try {
+            return completionRoutingReadinessService.runtimeWarnings();
+        } catch (RuntimeException exception) {
+            return List.of("Не удалось получить локальную диагностику платёжного контура");
         }
     }
 

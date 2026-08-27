@@ -99,6 +99,37 @@
   padding: 0 0.85rem 0 2.35rem;
 }
 
+.archive-search--busy label {
+  box-shadow: 0 0 0 2px rgba(255, 99, 71, 0.08);
+}
+
+.archive-search-status {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-self: flex-start;
+  gap: 0.4rem;
+  min-height: 1.8rem;
+  padding: 0 0.65rem;
+  border: 1px solid rgba(255, 99, 71, 0.2);
+  border-radius: var(--otziv-small-radius);
+  color: var(--otziv-primary);
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.archive-search-status .material-icons-sharp,
+.archive-loading-panel > .material-icons-sharp {
+  animation: archive-loading-spin 0.9s linear infinite;
+}
+
+@keyframes archive-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .common-invoice-archive {
   display: grid;
   gap: 0.7rem;
@@ -174,8 +205,16 @@
 }
 
 .common-invoice-empty {
+  grid-column: 1 / -1;
   margin: 0;
   color: var(--otziv-info-dark);
+}
+
+.common-invoice-empty--loading {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  font-weight: 900;
 }
 
 .archive-search select {
@@ -312,6 +351,46 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   gap: 1rem;
+}
+
+.archive-cards--loading .archive-order-card {
+  pointer-events: none;
+  opacity: 0.42;
+}
+
+.archive-loading-panel {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4.5rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(255, 99, 71, 0.24);
+  border-radius: var(--otziv-small-radius);
+  color: var(--otziv-primary);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 0.8rem 1.6rem rgba(132, 139, 200, 0.12);
+}
+
+.archive-loading-panel > .material-icons-sharp {
+  font-size: 1.65rem;
+}
+
+.archive-loading-panel h2,
+.archive-loading-panel p {
+  margin: 0;
+}
+
+.archive-loading-panel h2 {
+  color: var(--otziv-dark);
+  font-size: 0.95rem;
+}
+
+.archive-loading-panel p {
+  margin-top: 0.15rem;
+  color: var(--otziv-info-dark);
+  font-size: 0.74rem;
+  font-weight: 900;
 }
 
 .archive-order-card {

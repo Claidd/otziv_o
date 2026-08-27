@@ -47,6 +47,7 @@ export class WorkerReviewEditModalComponent {
   @Input() canOnlyUnsetVigul = false;
   @Input() canDelete = false;
   @Input() hideBotPassword = false;
+  @Input() recoveryTaskEdit = false;
   @Input() canReassignTask = false;
   @Input() workerOptions: WorkerOption[] = [];
   @Input() taskWorkerId: number | null = null;
@@ -96,6 +97,26 @@ export class WorkerReviewEditModalComponent {
     }
 
     return !!this.productOptions.find((product) => product.id === productId)?.photo;
+  }
+
+  dialogKicker(): string {
+    if (this.recoveryTaskEdit) {
+      return `Восстановление #${this.recoveryTaskId() ?? this.review?.id ?? ''}`;
+    }
+
+    return `Отзыв #${this.review?.id ?? ''}`;
+  }
+
+  dialogTitle(): string {
+    return this.recoveryTaskEdit ? 'Редактирование восстановления' : 'Редактирование отзыва';
+  }
+
+  publicationDateLabel(): string {
+    return this.recoveryTaskEdit ? 'Дата восстановления' : 'Дата публикации';
+  }
+
+  private recoveryTaskId(): number | null {
+    return (this.review as { recoveryTaskId?: number | null } | null)?.recoveryTaskId ?? null;
   }
 
   uploadPhoto(event: Event): void {

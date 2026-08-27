@@ -3020,6 +3020,17 @@
                   </div>
                 }
 
+                @if ((status.runtimeWarnings ?? []).length > 0) {
+                  <div class="contractor-system-blockers" role="status">
+                    <strong>Локальная диагностика (не выключает новые маршруты):</strong>
+                    <ul>
+                      @for (warning of (status.runtimeWarnings ?? []); track warning) {
+                        <li>{{ warning }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+
                 <div class="contractor-system-deployment">
                   <span>
                     Routing master:

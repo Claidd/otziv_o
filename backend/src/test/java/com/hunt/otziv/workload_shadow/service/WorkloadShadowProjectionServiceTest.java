@@ -331,8 +331,8 @@ class WorkloadShadowProjectionServiceTest {
     }
 
     @Test
-    void recipientRequiresBothLastFinalizedDayAndStrongCurrentMonthHistory() {
-        assertFalse(WorkloadShadowProjectionService.isRecipientEligible(
+    void recipientFailureGracePreventsImmediateExclusionAfterOneBadDay() {
+        assertTrue(WorkloadShadowProjectionService.isRecipientEligible(
                 true,
                 true,
                 12,
@@ -343,33 +343,46 @@ class WorkloadShadowProjectionServiceTest {
                 1,
                 85,
                 80,
-                2
+                4
+        ));
+        assertTrue(WorkloadShadowProjectionService.isRecipientEligible(
+                true,
+                true,
+                4,
+                1,
+                false,
+                BigDecimal.valueOf(95),
+                BigDecimal.valueOf(25),
+                3,
+                85,
+                80,
+                4
         ));
         assertFalse(WorkloadShadowProjectionService.isRecipientEligible(
                 true,
                 true,
                 12,
-                9,
+                7,
                 true,
                 BigDecimal.valueOf(95),
-                BigDecimal.valueOf(75),
-                3,
+                BigDecimal.valueOf(58.33),
+                5,
                 85,
                 80,
-                2
+                4
         ));
         assertTrue(WorkloadShadowProjectionService.isRecipientEligible(
                 true,
                 true,
-                12,
-                11,
+                25,
+                20,
                 true,
                 BigDecimal.valueOf(95),
-                BigDecimal.valueOf(91.67),
-                1,
+                BigDecimal.valueOf(80),
+                5,
                 85,
                 80,
-                2
+                4
         ));
     }
 

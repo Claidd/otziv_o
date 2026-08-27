@@ -2,6 +2,9 @@ package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.model.PaymentMethod;
+import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -17,6 +20,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -35,9 +39,19 @@ public class ManualPaymentRecipientTelegramNotificationService {
     private final UserRepository userRepository;
     private final ManagerRepository managerRepository;
     private final TelegramService telegramService;
+    private final PaymentLinkRepository paymentLinkRepository;
 
     public void notifyAfterCommit(PaymentLink link) {
         buildRequest(link).ifPresent(this::notifyAfterCommit);
+    }
+
+    @Transactional(readOnly = true)
+    public void notifyAfterCommit(Long paymentLinkId) {
+        if (paymentLinkId == null) {
+            return;
+        }
+        paymentLinkRepository.findByIdWithOrder(paymentLinkId)
+                .ifPresent(this::notifyAfterCommit);
     }
 
     void notifyAfterCommit(NotificationRequest request) {
@@ -100,6 +114,8 @@ public class ManualPaymentRecipientTelegramNotificationService {
     private Optional<NotificationRequest> buildRequest(PaymentLink link) {
         if (link == null
                 || link.getId() == null
+                || link.getStatus() != PaymentLinkStatus.CONFIRMED
+                || !isManualPayment(link)
                 || link.getManualActualRecipientType() == null
                 || link.getManualActualRecipientUserId() == null) {
             return Optional.empty();
@@ -121,6 +137,11 @@ public class ManualPaymentRecipientTelegramNotificationService {
                 link.getManualConfirmedBy(),
                 link.getManualConfirmedAt() == null ? link.getPaidAt() : link.getManualConfirmedAt()
         ));
+    }
+
+    private static boolean isManualPayment(PaymentLink link) {
+        return link.getPaymentMethod() == PaymentMethod.MANUAL_MOBILE_BANK
+                || link.getPaymentMethod() == PaymentMethod.MANUAL_EXTERNAL_LINK;
     }
 
     private Long resolveChatId(ContractorRecipientType recipientType, User user) {
@@ -148,14 +169,33 @@ public class ManualPaymentRecipientTelegramNotificationService {
         if (!company.isBlank()) {
             message.append("Компания: ").append(company).append('\n');
         }
-        if (hasText(request.actor())) {
-            message.append("Подтвердил: ").append(request.actor().trim()).append('\n');
+        String actorDisplayName = resolveActorDisplayName(request.actor());
+        if (hasText(actorDisplayName)) {
+            message.append("Подтвердил: ").append(actorDisplayName).append('\n');
         }
         if (request.confirmedAt() != null) {
             message.append("Время: ").append(DATE_TIME_FORMAT.format(request.confirmedAt())).append('\n');
         }
         message.append('\n').append("Зачтено в расчёт получателя.");
         return message.toString();
+    }
+
+    private String resolveActorDisplayName(String actor) {
+        if (!hasText(actor)) {
+            return null;
+        }
+        String identity = actor.trim();
+        try {
+            Optional<User> byUsername = userRepository.findByUsername(identity);
+            if (byUsername.isPresent()) {
+                return displayName(byUsername.get());
+            }
+            User byEmail = userRepository.findByEmail(identity);
+            return byEmail == null ? identity : displayName(byEmail);
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось определить имя подтвердившего оплату actor={}: {}", identity, exception.getMessage());
+            return identity;
+        }
     }
 
     private static String displayName(User user) {

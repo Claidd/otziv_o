@@ -5,6 +5,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -62,6 +63,11 @@ public class Order {
     @Builder.Default
     @Column(name = "order_client_text_expected")
     private boolean clientTextExpected = false;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "invoice_payment_mode", nullable = false, length = 32)
+    private InvoicePaymentMode invoicePaymentMode = InvoicePaymentMode.AUTO_ROUTING;
 
     @Column(name = "order_zametka")
     private String zametka;

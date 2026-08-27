@@ -15,8 +15,10 @@ import com.hunt.otziv.common_billing.dto.CommonManualPaymentAttributionRowReques
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceManualCardPaymentRequest;
+import com.hunt.otziv.common_billing.dto.InvoicePaymentModeChangeRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentInitCheckRequest;
+import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeRequest;
 import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.model.CommonBillingAccount;
 import com.hunt.otziv.common_billing.model.CommonBillingAccountCompany;
@@ -59,19 +61,23 @@ import com.hunt.otziv.p_products.service.OrderTransactionService;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.TbankCancelResponse;
+import com.hunt.otziv.payments.dto.TbankGetStateResponse;
 import com.hunt.otziv.payments.dto.TbankInitCommand;
 import com.hunt.otziv.payments.dto.TbankInitResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.dto.PaymentRouteSelection;
+import com.hunt.otziv.payments.dto.PaymentRouteChangeTarget;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.PaymentIssueReminderService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import com.hunt.otziv.payments.service.TbankClient;
@@ -177,6 +183,8 @@ class CommonBillingServiceTest {
     private PaymentLinkService paymentLinkService;
     @Mock
     private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+    @Mock
+    private PaymentIssueReminderService paymentIssueReminderService;
     @Mock
     private ManualPaymentTaskService manualPaymentTaskService;
     @Mock
@@ -333,6 +341,383 @@ class CommonBillingServiceTest {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    @Test
+    void newCommonInvoiceInheritsOwnerPaperInvoiceModeWithoutSelectingRoute() {
+        CommonBillingAccount account = account();
+        account.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);
+        when(invoiceRepository.save(any(CommonInvoice.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CommonInvoice invoice = ReflectionTestUtils.invokeMethod(service, "createInvoice", account);
+
+        assertNotNull(invoice);
+        assertEquals(InvoicePaymentMode.OWNER_PAPER_INVOICE, invoice.getInvoicePaymentMode());
+        assertEquals(CommonInvoiceStatus.COLLECTING, invoice.getStatus());
+        assertNull(invoice.getPaymentRouteType());
+        assertNull(invoice.getContractorAllocationId());
+        verifyNoInteractions(contractorPaymentLiveRoutingService);
+        verify(paymentLinkService, never()).selectCommonInvoiceRoute(any(), anyLong());
+    }
+
+    @Test
+    void paperInvoiceReminderRequiresDocumentToBeMarkedAsIssued() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);
+        CommonInvoiceOrder item = item(invoice, order(8_902L));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> ReflectionTestUtils.invokeMethod(
+                        service,
+                        "ensureCommonInvoiceReadyForReminder",
+                        invoice,
+                        List.of(item)
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertTrue(exception.getReason().contains("бумажный счёт отправлен"));
+
+        invoice.setPaperInvoiceIssuedAt(LocalDateTime.of(2026, 8, 27, 12, 0));
+        assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(
+                service,
+                "ensureCommonInvoiceReadyForReminder",
+                invoice,
+                List.of(item)
+        ));
+    }
+
+    @Test
+    void existingPublicCommonInvoiceLinkCanSwitchToPaperModeWithoutBankSession() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        invoice.setSentAt(LocalDateTime.of(2026, 8, 27, 12, 0));
+        invoice.setPaymentRouteType("TBANK_LINK");
+        invoice.setPaymentRouteProfileId(1L);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 27, 11, 55));
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        stubPaymentModeChangeInvoice(invoice, invoiceItem, order);
+
+        CommonInvoiceDetailsResponse response = service.changeInvoicePaymentMode(
+                invoice.getId(),
+                new InvoicePaymentModeChangeRequest(InvoicePaymentMode.OWNER_PAPER_INVOICE, true),
+                () -> "owner"
+        );
+
+        assertNotNull(response);
+        assertEquals(InvoicePaymentMode.OWNER_PAPER_INVOICE, invoice.getInvoicePaymentMode());
+        assertEquals(InvoicePaymentMode.OWNER_PAPER_INVOICE, account.getInvoicePaymentMode());
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertNull(invoice.getSentAt());
+        assertNull(invoice.getPaymentRouteType());
+        assertNull(invoice.getPaymentRouteProfileId());
+        assertNull(invoice.getPaymentRouteSelectedAt());
+        assertNull(invoice.getLastError());
+        verifyNoInteractions(tbankClient);
+    }
+
+    @Test
+    void initializedUnpaidTbankSessionIsCanceledBeforeSwitchingCommonInvoiceToPaperMode() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setTbankOrderId("provider-order");
+        invoice.setTbankPaymentId("provider-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setTbankPaymentCreatedAt(LocalDateTime.of(2026, 8, 27, 12, 0));
+        invoice.setPaymentUrl("https://securepay.tbank.ru/provider-payment");
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        CommonInvoicePaymentRef ref = paymentRef(
+                501L,
+                invoice,
+                "CURRENT",
+                "provider-order",
+                "provider-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(ref.getId(), ref);
+        stubPaymentModeChangeInvoice(invoice, invoiceItem, order);
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(paymentProfile()));
+        when(paymentProfileService.toRuntimeForTerminal(any(), eq("terminal"))).thenReturn(runtimeProfile());
+        when(tbankClient.getState(any(), eq("provider-payment"))).thenReturn(new TbankGetStateResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "NEW",
+                "provider-payment",
+                "provider-order",
+                100_000L
+        ));
+        when(tbankClient.cancel(any(), any())).thenReturn(new TbankCancelResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "CANCELED",
+                "provider-payment",
+                "provider-order",
+                100_000L,
+                100_000L,
+                0L
+        ));
+
+        CommonInvoiceDetailsResponse response = service.changeInvoicePaymentMode(
+                invoice.getId(),
+                new InvoicePaymentModeChangeRequest(InvoicePaymentMode.OWNER_PAPER_INVOICE, true),
+                () -> "owner"
+        );
+
+        assertNotNull(response);
+        assertEquals(InvoicePaymentMode.OWNER_PAPER_INVOICE, invoice.getInvoicePaymentMode());
+        assertEquals(InvoicePaymentMode.OWNER_PAPER_INVOICE, account.getInvoicePaymentMode());
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertEquals("CANCELED", ref.getStatus());
+        assertNull(invoice.getTbankOrderId());
+        assertNull(invoice.getTbankPaymentId());
+        assertNull(invoice.getTbankTerminalKey());
+        assertNull(invoice.getTbankPaymentAmountKopecks());
+        assertNull(invoice.getPaymentUrl());
+        var bankOrder = inOrder(tbankClient);
+        bankOrder.verify(tbankClient).getState(any(), eq("provider-payment"));
+        bankOrder.verify(tbankClient).cancel(any(), any());
+    }
+
+    @Test
+    void confirmedTbankSessionBlocksPaperModeAndKeepsDurableAttentionState() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setTbankOrderId("provider-order");
+        invoice.setTbankPaymentId("provider-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setTbankPaymentCreatedAt(LocalDateTime.of(2026, 8, 27, 12, 0));
+        invoice.setPaymentUrl("https://securepay.tbank.ru/provider-payment");
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        CommonInvoicePaymentRef ref = paymentRef(
+                502L,
+                invoice,
+                "CURRENT",
+                "provider-order",
+                "provider-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(ref.getId(), ref);
+        stubPaymentModeChangeInvoice(invoice, invoiceItem, order);
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(paymentProfile()));
+        when(paymentProfileService.toRuntimeForTerminal(any(), eq("terminal"))).thenReturn(runtimeProfile());
+        when(tbankClient.getState(any(), eq("provider-payment"))).thenReturn(new TbankGetStateResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "CONFIRMED",
+                "provider-payment",
+                "provider-order",
+                100_000L
+        ));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeInvoicePaymentMode(
+                        invoice.getId(),
+                        new InvoicePaymentModeChangeRequest(InvoicePaymentMode.OWNER_PAPER_INVOICE, true),
+                        () -> "owner"
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(InvoicePaymentMode.AUTO_ROUTING, invoice.getInvoicePaymentMode());
+        assertEquals(InvoicePaymentMode.AUTO_ROUTING, account.getInvoicePaymentMode());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith("paper_invoice_mode_switch_payment_detected:"));
+        assertEquals("CONFIRMED", ref.getStatus());
+        assertNull(invoice.getPaymentUrl());
+        verify(tbankClient, never()).cancel(any(), any());
+    }
+
+    @Test
+    void commonInvoiceRouteCanSwitchFromOwnerTbankToEmployeeRequisitesAtomically() {
+        CommonBillingAccount account = account();
+        account.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        CommonInvoice invoice = invoice(account);
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaymentRouteType(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK);
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 27, 14, 0));
+        invoice.setContractorAllocationId(501L);
+        invoice.setSentAt(LocalDateTime.of(2026, 8, 27, 14, 1));
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        stubPaymentModeChangeInvoice(invoice, invoiceItem, order);
+        when(paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId())).thenReturn(List.of());
+        when(contractorPaymentLiveRoutingService.frozenCommonRouteAction(invoice.getId(), 501L))
+                .thenReturn(FrozenCommonRouteAction.KEEP);
+        when(paymentLinkService.selectCommonInvoiceTaskRoute(invoice, null, 100_000L))
+                .thenReturn(Optional.empty());
+        ContractorPaymentAllocation replacement = new ContractorPaymentAllocation();
+        replacement.setId(502L);
+        replacement.setRecipientType(ContractorRecipientType.SPECIALIST);
+        replacement.setRecipientNameSnapshot("Елена Ч.");
+        replacement.setPaymentPhoneSnapshot("89149528806");
+        replacement.setBankNameSnapshot("Альфа банк");
+        when(contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(
+                eq(invoice), eq(List.of(order)), eq((Manager) null), eq(100_000L)))
+                .thenReturn(replacement);
+        String token = ReflectionTestUtils.invokeMethod(
+                service, "commonInvoiceRouteChangeToken", invoice, List.of());
+
+        Boolean changed = ReflectionTestUtils.invokeMethod(
+                service,
+                "replaceCommonInvoicePaymentRouteLocked",
+                invoice.getId(),
+                new CommonInvoicePaymentRouteChangeRequest(
+                        PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, token),
+                "manager"
+        );
+
+        assertEquals(Boolean.TRUE, changed);
+        assertEquals(PaymentMethod.MANUAL_MOBILE_BANK.name(), invoice.getPaymentRouteType());
+        assertEquals(502L, invoice.getContractorAllocationId());
+        assertEquals(100_000L, invoice.getPaymentRouteAmountKopecks());
+        assertNull(invoice.getSentAt());
+        assertEquals(InvoicePaymentMode.AUTO_ROUTING, account.getInvoicePaymentMode());
+        verify(contractorPaymentLiveRoutingService).releaseCommonInvoiceRouteForReplacement(
+                eq(invoice), eq("Способ оплаты общего счёта изменён по просьбе клиента"),
+                eq("LIVE_COMMON:ROUTE_REPLACED"));
+        verify(contractorPaymentLiveRoutingService).reserveContractorForCommonInvoice(
+                eq(invoice), eq(List.of(order)), eq((Manager) null), eq(100_000L));
+    }
+
+    @Test
+    void commonInvoiceRouteCanSwitchFromEmployeeRequisitesToOwnerTbankWithoutChangingFutureMode() {
+        CommonBillingAccount account = account();
+        account.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        CommonInvoice invoice = invoice(account);
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaymentRouteType(PaymentMethod.MANUAL_MOBILE_BANK.name());
+        invoice.setPaymentRouteManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 27, 14, 0));
+        invoice.setContractorAllocationId(601L);
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        stubPaymentModeChangeInvoice(invoice, invoiceItem, order);
+        when(paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId())).thenReturn(List.of());
+        when(contractorPaymentLiveRoutingService.frozenCommonRouteAction(invoice.getId(), 601L))
+                .thenReturn(FrozenCommonRouteAction.KEEP);
+        ContractorPaymentAllocation owner = new ContractorPaymentAllocation();
+        owner.setId(602L);
+        owner.setRecipientType(ContractorRecipientType.OWNER);
+        when(contractorPaymentLiveRoutingService.reserveOwnerForCommonInvoice(
+                eq(invoice), eq(List.of(order)), eq((Manager) null), eq(100_000L)))
+                .thenReturn(owner);
+        when(paymentLinkService.selectCommonInvoiceOwnerAcquiringRoute(null, 100_000L))
+                .thenReturn(new PaymentRouteSelection(
+                        TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK,
+                        1L,
+                        "OWNER",
+                        "Владелец",
+                        "terminal",
+                        null,
+                        null,
+                        null,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        ""
+                ));
+        String token = ReflectionTestUtils.invokeMethod(
+                service, "commonInvoiceRouteChangeToken", invoice, List.of());
+
+        Boolean changed = ReflectionTestUtils.invokeMethod(
+                service,
+                "replaceCommonInvoicePaymentRouteLocked",
+                invoice.getId(),
+                new CommonInvoicePaymentRouteChangeRequest(
+                        PaymentRouteChangeTarget.OWNER_TBANK, true, token),
+                "manager"
+        );
+
+        assertEquals(Boolean.TRUE, changed);
+        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK, invoice.getPaymentRouteType());
+        assertEquals(602L, invoice.getContractorAllocationId());
+        assertEquals(InvoicePaymentMode.AUTO_ROUTING, invoice.getInvoicePaymentMode());
+        assertEquals(InvoicePaymentMode.AUTO_ROUTING, account.getInvoicePaymentMode());
+        verify(contractorPaymentLiveRoutingService).releaseCommonInvoiceRouteForReplacement(
+                eq(invoice), eq("Способ оплаты общего счёта изменён по просьбе клиента"),
+                eq("LIVE_COMMON:ROUTE_REPLACED"));
+        verify(paymentLinkService).selectCommonInvoiceOwnerAcquiringRoute(null, 100_000L);
+    }
+
+    @Test
+    void commonInvoiceRouteChangeIsBlockedAfterTbankSessionStarts() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        invoice.setPaymentRouteType(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK);
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 27, 14, 0));
+        invoice.setTbankPaymentId("payment-1");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+
+        String reason = ReflectionTestUtils.invokeMethod(
+                service, "commonInvoiceRouteChangeBlockReason", invoice, List.of());
+
+        assertNotNull(reason);
+        assertTrue(reason.contains("открыл банковскую оплату"));
+        verifyNoInteractions(contractorPaymentLiveRoutingService);
+    }
+
+    @Test
+    void commonInvoiceRouteChangeRejectsStaleContextBeforeReleasingReservation() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.AUTO_ROUTING);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaymentRouteType(PaymentMethod.MANUAL_MOBILE_BANK.name());
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 27, 14, 0));
+        invoice.setContractorAllocationId(701L);
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        stubPaymentModeChangeInvoice(invoice, invoiceItem, order);
+        when(paymentRefRepository.findByInvoiceIdForUpdate(invoice.getId())).thenReturn(List.of());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> ReflectionTestUtils.invokeMethod(
+                        service,
+                        "replaceCommonInvoicePaymentRouteLocked",
+                        invoice.getId(),
+                        new CommonInvoicePaymentRouteChangeRequest(
+                                PaymentRouteChangeTarget.OWNER_TBANK, true, "stale"),
+                        "manager"
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertTrue(exception.getReason().contains("уже изменился"));
+        verify(contractorPaymentLiveRoutingService, never()).releaseCommonInvoiceRouteForReplacement(
+                any(), any(), any());
     }
 
     @Test
@@ -1799,6 +2184,148 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void liveCommonRouteUsesExplicitOwnerAllocationWhenContractorIsIneligible() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setShadowRouteContractorEligible(false);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(501L);
+        allocation.setRecipientType(ContractorRecipientType.OWNER);
+        PaymentRouteSelection ownerRoute = new PaymentRouteSelection(
+                TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK,
+                1L,
+                TbankPaymentProfile.PRIMARY_CODE,
+                "Основной магазин",
+                "",
+                null,
+                null,
+                null,
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        );
+
+        when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
+        when(contractorPaymentLiveRoutingService.enabledForNewRoutes()).thenReturn(true);
+        when(contractorPaymentLiveRoutingService.reserveForCommonInvoice(
+                eq(invoice), any(), any(), eq(100_000L)
+        )).thenReturn(allocation);
+        when(paymentLinkService.selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L)))
+                .thenReturn(ownerRoute);
+
+        var response = service.publicInvoice("token");
+
+        assertEquals(501L, invoice.getContractorAllocationId());
+        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK, response.paymentRouteType());
+        verify(contractorPaymentLiveRoutingService).reserveForCommonInvoice(
+                eq(invoice), any(), any(), eq(100_000L));
+        verify(paymentLinkService).selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L));
+        verify(paymentLinkService, never()).selectCommonInvoiceRoute(any(), anyLong());
+    }
+
+    @Test
+    void liveCommonOwnerAcquiringFailureCreatesReminder() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(502L);
+        allocation.setRecipientType(ContractorRecipientType.OWNER);
+
+        when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
+        when(contractorPaymentLiveRoutingService.enabledForNewRoutes()).thenReturn(true);
+        when(contractorPaymentLiveRoutingService.reserveForCommonInvoice(
+                eq(invoice), any(), any(), eq(100_000L)
+        )).thenReturn(allocation);
+        when(paymentLinkService.selectCommonInvoiceOwnerAcquiringRoute(any(), eq(100_000L)))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "T-Bank недоступен"));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.publicInvoice("token")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(paymentIssueReminderService).notifyOrderIssue(
+                eq(101L),
+                eq(PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED),
+                eq(10L),
+                anyString(),
+                anyString()
+        );
+    }
+
+    @Test
+    void configuredButBlockedLiveCommonRouteFailsClosedWithoutLegacyFallback() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+
+        when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
+        when(contractorPaymentLiveRoutingService.enabledForNewRoutes()).thenReturn(false);
+        when(contractorPaymentLiveRoutingService.configuredButBlockedForNewRoutes()).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.publicInvoice("token")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(paymentLinkService, never()).selectCommonInvoiceRoute(any(), anyLong());
+        verify(paymentLinkService, never()).selectCommonInvoiceOwnerAcquiringRoute(any(), anyLong());
+        verify(paymentIssueReminderService).notifyOrderIssue(
+                eq(101L),
+                eq(PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED),
+                eq(10L),
+                anyString(),
+                anyString()
+        );
+    }
+
+    @Test
+    void missingLiveCommonAllocationFailsClosedAndCreatesReminder() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+
+        when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
+        when(contractorPaymentLiveRoutingService.enabledForNewRoutes()).thenReturn(true);
+        when(contractorPaymentLiveRoutingService.reserveForCommonInvoice(
+                eq(invoice), any(), any(), eq(100_000L)
+        )).thenReturn(null);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.publicInvoice("token")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(paymentLinkService, never()).selectCommonInvoiceRoute(any(), anyLong());
+        verify(paymentLinkService, never()).selectCommonInvoiceOwnerAcquiringRoute(any(), anyLong());
+        verify(paymentIssueReminderService).notifyOrderIssue(
+                eq(101L),
+                eq(PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED),
+                eq(10L),
+                anyString(),
+                anyString()
+        );
+    }
+
+    @Test
     void contractorCommonInvoiceSendUsesFrozenSnapshotInTextAndTelegramCopyButton() throws Exception {
         CommonInvoice invoice = invoice(account());
         invoice.setStatus(CommonInvoiceStatus.READY);
@@ -1834,10 +2361,43 @@ class CommonBillingServiceTest {
         ArgumentCaptor<TelegramTransferCopyButton> button =
                 ArgumentCaptor.forClass(TelegramTransferCopyButton.class);
         verify(messageSender).send(any(), any(), any(), text.capture(), button.capture());
-        assertTrue(text.getValue().contains("Оплата по номеру карты: 2202208238396676"));
+        assertTrue(text.getValue().contains("Оплата по мобильному банку: 2202208238396676"));
         assertTrue(text.getValue().contains("Получатель: Получатель snapshot"));
+        assertTrue(text.getValue().contains("После оплаты отправьте чек в этот чат."));
+        assertFalse(text.getValue().contains("Страница общего счета:"));
         assertEquals("Скопировать номер карты", button.getValue().text());
         assertEquals("2202208238396676", button.getValue().copyText());
+    }
+
+    @Test
+    void contractorCommonInvoiceSendFailsClosedWhenFrozenRequisitesCannotBeResolved() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setContractorAllocationId(4_991L);
+        invoice.setPaymentRouteType(PaymentMethod.MANUAL_MOBILE_BANK.name());
+        invoice.setPaymentRouteManualType(ManualPaymentType.MOBILE_BANK);
+        invoice.setPaymentRouteManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.now().minusMinutes(1));
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
+        when(contractorPaymentLiveRoutingService.frozenCommonRouteAction(10L, 4_991L))
+                .thenReturn(FrozenCommonRouteAction.KEEP);
+        when(contractorPaymentLiveRoutingService.activeCommonInvoiceRequisites(invoice, 100_000L))
+                .thenReturn(Optional.empty());
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.sendInvoice(10L, true)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("сообщение не отправлено"));
+        verifyNoInteractions(messageSender);
     }
 
     @Test
@@ -2664,6 +3224,30 @@ class CommonBillingServiceTest {
         assertTrue(messageCaptor.getValue().contains("Общий счет: Общий плательщик"));
         assertTrue(messageCaptor.getValue().contains("Сумма: 1000 руб."));
         assertTrue(messageCaptor.getValue().contains("client@example.com"));
+    }
+
+    @Test
+    void manualCommonPaymentSuccessUsesRequisitesConfirmationWithoutPaymentPage() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setPaymentRouteType(PaymentMethod.MANUAL_MOBILE_BANK.name());
+        invoice.setPaymentRouteManualType(ManualPaymentType.MOBILE_BANK);
+        invoice.setPaidKopecks(100_000L);
+        invoice.setPayerEmail("client@example.com");
+        CommonInvoiceOrder item = item(invoice, order(101L));
+
+        String message = ReflectionTestUtils.invokeMethod(
+                service,
+                "paymentSuccessMessage",
+                invoice,
+                List.of(item)
+        );
+
+        assertNotNull(message);
+        assertTrue(message.contains("Оплата по реквизитам подтверждена."));
+        assertTrue(message.contains("Менеджер сверил перевод по реквизитам."));
+        assertTrue(message.contains("Сумма: 1000 руб."));
+        assertFalse(message.contains("Страница оплаты:"));
+        assertFalse(message.contains("/pay/"));
     }
 
     @Test
@@ -4608,6 +5192,36 @@ class CommonBillingServiceTest {
                 .changeStatusForCommonBillingOrder(101L, "Выставлен счет");
         verify(orderStatusTransitionService)
                 .changeStatusForCommonBillingOrder(102L, "Выставлен счет");
+    }
+
+    @Test
+    void unsentInvoiceBatchContinuesAfterOneCandidateFailsClosed() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice blocked = invoice(account);
+        blocked.setStatus(CommonInvoiceStatus.READY);
+        CommonInvoice healthy = invoice(account);
+        healthy.setId(11L);
+        healthy.setStatus(CommonInvoiceStatus.READY);
+        Order healthyOrder = order(102L);
+        CommonInvoiceOrder healthyItem = item(healthy, healthyOrder);
+
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+                .thenReturn(true);
+        when(invoiceRepository.findUnsentActionCandidates(any(), any(), any(Pageable.class)))
+                .thenReturn(List.of(blocked, healthy));
+        when(invoiceRepository.findByIdWithAccount(10L))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "LIVE route unavailable"));
+        when(invoiceRepository.findByIdWithAccount(11L)).thenReturn(Optional.of(healthy));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(11L)).thenReturn(List.of(healthyItem));
+        when(badReviewTaskService.getPayableSum(healthyOrder)).thenReturn(BigDecimal.valueOf(1000));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        when(messageSender.send(any(), any(), any(), any())).thenReturn(ClientMessageSendResult.sent("test"));
+
+        assertEquals(1, service.sendUnsentActionInvoices(20));
+
+        verify(messageSender).send(any(), any(), any(), any());
+        assertNotNull(healthy.getSentAt());
     }
 
     @Test
@@ -7667,6 +8281,14 @@ class CommonBillingServiceTest {
                 .thenReturn(Optional.of(invoice.getAccount()));
         when(invoiceRepository.findByIdWithAccountForUpdate(invoice.getId())).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findMembershipByInvoiceIdForRead(invoice.getId())).thenReturn(List.of(item));
+    }
+
+    private void stubPaymentModeChangeInvoice(CommonInvoice invoice, CommonInvoiceOrder item, Order order) {
+        stubLockedInvoice(invoice, item, order);
+        lenient().when(invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId())).thenReturn(List.of(item));
+        lenient().when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        lenient().when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        lenient().when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
     }
 
     private PaymentLink confirmedStandaloneBankPayment(Long id, Order order, long amountKopecks) {

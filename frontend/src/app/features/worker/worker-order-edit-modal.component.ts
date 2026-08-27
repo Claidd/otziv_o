@@ -1,6 +1,12 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import type { ManagerOption, OrderEditPayload, OrderUpdateRequest } from '../../core/manager.api';
+import type {
+  ManagerOption,
+  OrderEditPayload,
+  OrderUpdateRequest,
+  PaymentRouteChangeContext,
+  PaymentRouteChangeTarget
+} from '../../core/manager.api';
 import { trackWorkerOption } from './worker-board.config';
 
 export type WorkerOrderEditDraftChange = {
@@ -24,11 +30,20 @@ export class WorkerOrderEditModalComponent {
   @Input() deleting = false;
   @Input() cancelingPayment = false;
   @Input() error: string | null = null;
+  @Input() allowPaymentRouteChange = false;
+  @Input() allowPaperInvoiceMode = false;
+  @Input() paymentRouteContext: PaymentRouteChangeContext | null = null;
+  @Input() paymentRouteContextLoading = false;
+  @Input() paymentRouteChanging = false;
 
   @Output() readonly closed = new EventEmitter<void>();
   @Output() readonly submitted = new EventEmitter<void>();
   @Output() readonly deleted = new EventEmitter<void>();
   @Output() readonly paymentCanceled = new EventEmitter<void>();
+  @Output() readonly paymentRouteChangeOpened = new EventEmitter<void>();
+  @Output() readonly paymentRouteChangeClosed = new EventEmitter<void>();
+  @Output() readonly paymentRouteChanged = new EventEmitter<PaymentRouteChangeTarget>();
+  @Output() readonly paperInvoiceIssued = new EventEmitter<void>();
   @Output() readonly draftChange = new EventEmitter<WorkerOrderEditDraftChange>();
 
   setField<K extends keyof OrderUpdateRequest>(field: K, value: OrderUpdateRequest[K]): void {

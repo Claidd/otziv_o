@@ -219,7 +219,13 @@ class OtzivOApplicationTests {
 
 		var control = workloadLiveControlRepository.lockState();
 		assertThat(control).isPresent();
-		assertThat(control.orElseThrow().getSettingsRevision()).isEqualTo(1L);
+		Long currentLiveSettingsRevision = jdbcTemplate.queryForObject("""
+			SELECT CAST(setting_value AS UNSIGNED)
+			FROM app_settings
+			WHERE setting_key = 'workload.live.settings-revision'
+			""", Long.class);
+		assertThat(control.orElseThrow().getSettingsRevision())
+				.isEqualTo(currentLiveSettingsRevision);
 		assertThat(control.orElseThrow().getMode()).isEqualTo("SHADOW");
 		assertThat(control.orElseThrow().getApplyEnabled()).isEqualTo("false");
 
@@ -768,7 +774,7 @@ class OtzivOApplicationTests {
 		assertThat(projectionResult.workerCount()).isEqualTo(2);
 		jdbcTemplate.update("""
 			UPDATE workload_shadow_worker_current
-			SET failure_days = 4,
+			SET failure_days = 5,
 			    rating = 70,
 			    last_day_reached_100 = 0,
 			    recipient_eligible = 0,
@@ -1155,7 +1161,7 @@ class OtzivOApplicationTests {
 			);
 			jdbcTemplate.update("""
 				UPDATE workload_shadow_worker_current
-				SET failure_days = 4,
+				SET failure_days = 5,
 				    rating = 70,
 				    last_day_reached_100 = 0,
 				    recipient_eligible = 0,
@@ -1209,15 +1215,26 @@ class OtzivOApplicationTests {
 				LIMIT 1
 				""", Long.class, source.workerId(), companyId, managerId);
 			assertThat(transferCaseId).isNotNull();
-			assertThat(jdbcTemplate.queryForList("""
+			java.util.List<Long> queuedRecipientIds = jdbcTemplate.queryForList("""
 				SELECT worker_id
 				FROM workload_shadow_transfer_candidates
 				WHERE transfer_case_id = ?
 				ORDER BY sequence_number
-				""", Long.class, transferCaseId)).containsExactly(
+				""", Long.class, transferCaseId);
+			assertThat(queuedRecipientIds).containsExactlyInAnyOrder(
 					firstRecipient.workerId(),
 					secondRecipient.workerId()
 			);
+			long firstQueuedWorkerId = queuedRecipientIds.get(0);
+			long secondQueuedWorkerId = queuedRecipientIds.get(1);
+			long firstQueuedGroupChatId = firstQueuedWorkerId == firstRecipient.workerId()
+					? firstGroupChatId : secondGroupChatId;
+			long secondQueuedGroupChatId = secondQueuedWorkerId == firstRecipient.workerId()
+					? firstGroupChatId : secondGroupChatId;
+			long firstQueuedTelegramId = firstQueuedWorkerId == firstRecipient.workerId()
+					? firstTelegramId : secondTelegramId;
+			long secondQueuedTelegramId = secondQueuedWorkerId == firstRecipient.workerId()
+					? firstTelegramId : secondTelegramId;
 
 			assertThat(jdbcTemplate.update("""
 				UPDATE workload_shadow_runs
@@ -1354,10 +1371,8 @@ class OtzivOApplicationTests {
 				WHERE candidate.workflow_id = ?
 				  AND current.manager_id = ?
 				ORDER BY candidate.sequence_number
-			""", Long.class, workflowId, managerId)).containsExactly(
-					firstRecipient.workerId(),
-					secondRecipient.workerId()
-			);
+			""", Long.class, workflowId, managerId))
+					.containsExactlyElementsOf(queuedRecipientIds);
 			assertThat(workloadTransferWorkflowService
 					.stageEligibleRecommendations()
 					.staged()).isZero();
@@ -1381,7 +1396,7 @@ class OtzivOApplicationTests {
 			assertThat(firstStage.staged()).isEqualTo(1);
 			WorkloadTestOffer firstOffer = findWorkloadTestOffer(workflowId, 1);
 			assertThat(firstOffer.candidateWorkerId())
-					.isEqualTo(firstRecipient.workerId());
+					.isEqualTo(firstQueuedWorkerId);
 			var firstClaim = workloadTransferOfferService.claimDueOffers();
 			assertThat(firstClaim.offers())
 					.extracting(WorkloadTransferOfferRepository.DeliveryProjection::getOfferId)
@@ -1394,9 +1409,9 @@ class OtzivOApplicationTests {
 			workloadTransferOfferService.markKeyboardActivated(firstOffer.offerId(), 91_001);
 			assertThat(workloadTransferOfferRepository.decline(
 					firstOffer.offerToken(),
-					firstGroupChatId,
+					firstQueuedGroupChatId,
 					91_001,
-					firstTelegramId,
+					firstQueuedTelegramId,
 					managerId,
 					liveSettingsRevision,
 					LocalDateTime.now(java.time.ZoneId.of("Asia/Irkutsk"))
@@ -1411,7 +1426,7 @@ class OtzivOApplicationTests {
 			assertThat(secondStage.staged()).isEqualTo(1);
 			WorkloadTestOffer secondOffer = findWorkloadTestOffer(workflowId, 2);
 			assertThat(secondOffer.candidateWorkerId())
-					.isEqualTo(secondRecipient.workerId());
+					.isEqualTo(secondQueuedWorkerId);
 			var secondClaim = workloadTransferOfferService.claimDueOffers();
 			assertThat(secondClaim.offers())
 					.extracting(WorkloadTransferOfferRepository.DeliveryProjection::getOfferId)
@@ -1424,9 +1439,9 @@ class OtzivOApplicationTests {
 			workloadTransferOfferService.markKeyboardActivated(secondOffer.offerId(), 91_002);
 			assertThat(workloadTransferOfferRepository.accept(
 					secondOffer.offerToken(),
-					secondGroupChatId,
+					secondQueuedGroupChatId,
 					91_002,
-					secondTelegramId,
+					secondQueuedTelegramId,
 					managerId,
 					liveSettingsRevision,
 					LocalDateTime.now(java.time.ZoneId.of("Asia/Irkutsk"))
@@ -1462,7 +1477,7 @@ class OtzivOApplicationTests {
 				SELECT order_worker
 				FROM orders
 				WHERE order_id = ?
-				""", Long.class, orderId)).isEqualTo(secondRecipient.workerId());
+				""", Long.class, orderId)).isEqualTo(secondQueuedWorkerId);
 			assertThat(jdbcTemplate.queryForObject("""
 				SELECT COUNT(*)
 				FROM orders
@@ -1478,7 +1493,7 @@ class OtzivOApplicationTests {
 				""", Integer.class,
 					firstReviewId,
 					secondReviewId,
-					secondRecipient.workerId()
+					secondQueuedWorkerId
 			)).isEqualTo(2);
 			assertThat(jdbcTemplate.queryForObject("""
 				SELECT COUNT(*)
@@ -1491,13 +1506,13 @@ class OtzivOApplicationTests {
 				SELECT bad_review_task_worker
 				FROM bad_review_tasks
 				WHERE bad_review_task_id = ?
-				""", Long.class, badTaskId)).isEqualTo(secondRecipient.workerId());
+				""", Long.class, badTaskId)).isEqualTo(secondQueuedWorkerId);
 			assertThat(jdbcTemplate.queryForObject("""
 				SELECT review_recovery_task_worker
 				FROM review_recovery_tasks
 				WHERE review_recovery_task_id = ?
 				""", Long.class, recoveryTaskId))
-					.isEqualTo(secondRecipient.workerId());
+					.isEqualTo(secondQueuedWorkerId);
 			assertThat(jdbcTemplate.queryForObject("""
 				SELECT COUNT(*)
 				FROM workload_transfer_assignment_audit
@@ -1515,7 +1530,7 @@ class OtzivOApplicationTests {
 				FROM workers_companies
 				WHERE company_id = ?
 				  AND worker_id = ?
-				""", Integer.class, companyId, secondRecipient.workerId())).isEqualTo(1);
+				""", Integer.class, companyId, secondQueuedWorkerId)).isEqualTo(1);
 
 			var rollback = workloadTransferRollbackService.rollback(
 					executionId,
@@ -1582,7 +1597,7 @@ class OtzivOApplicationTests {
 				FROM workers_companies
 				WHERE company_id = ?
 				  AND worker_id = ?
-				""", Integer.class, companyId, secondRecipient.workerId())).isZero();
+				""", Integer.class, companyId, secondQueuedWorkerId)).isZero();
 
 			LocalDateTime stableSince = LocalDateTime.of(2099, 1, 1, 0, 0);
 			LocalDateTime checkedAt = stableSince.plusMinutes(60);

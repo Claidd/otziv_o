@@ -376,12 +376,21 @@
       [saving]="orderSaving()"
       [deleting]="orderDeleting()"
       [cancelingPayment]="orderCancelingPayment()"
+      [allowPaymentRouteChange]="true"
+      [allowPaperInvoiceMode]="canManagePaperInvoices()"
+      [paymentRouteContext]="paymentRouteContext()"
+      [paymentRouteContextLoading]="paymentRouteContextLoading()"
+      [paymentRouteChanging]="paymentRouteChanging()"
       [error]="orderError()"
       (closed)="closeOrderEdit()"
       (submitted)="saveOrderEdit()"
       (deleted)="deleteOrderEdit()"
       (paymentCanceled)="cancelOrderPayment()"
       (draftChange)="handleOrderEditDraftChange($event)"
+      (paymentRouteChangeOpened)="openPaymentRouteChange()"
+      (paymentRouteChangeClosed)="closePaymentRouteChange()"
+      (paymentRouteChanged)="changePaymentRoute($event)"
+      (paperInvoiceIssued)="markPaperInvoiceIssued()"
     />
   }
 

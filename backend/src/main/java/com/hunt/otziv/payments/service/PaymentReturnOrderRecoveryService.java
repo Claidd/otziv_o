@@ -78,6 +78,12 @@ public class PaymentReturnOrderRecoveryService {
                     order.getId(), link.getId());
             return Optional.empty();
         }
+        if (paymentLinkRepository.existsNewerManualPaidClosure(
+                order.getId(), link.getId(), returnedAt(link))) {
+            log.info("Ignoring historical provider return because order has a newer manual paid closure: orderId={}, returnedLinkId={}",
+                    order.getId(), link.getId());
+            return Optional.empty();
+        }
 
         if (!STATUS_REMINDER.equals(statusTitle(order))) {
             try {

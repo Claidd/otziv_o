@@ -12,14 +12,14 @@
 
       <div class="archive-actions">
         <a routerLink="/orders">Заказы</a>
-        <button type="button" (click)="refresh()" [disabled]="loading()">
+        <button type="button" (click)="refresh()" [disabled]="archiveListBusy()">
           <span class="material-icons-sharp">refresh</span>
-          {{ loading() ? 'Загрузка' : 'Обновить' }}
+          {{ archiveListBusy() ? 'Загрузка' : 'Обновить' }}
         </button>
       </div>
     </header>
 
-    <section class="archive-search">
+    <section class="archive-search" [class.archive-search--busy]="archiveListBusy()">
       <label>
         <span class="material-icons-sharp">search</span>
         <input
@@ -37,7 +37,7 @@
         }
       </select>
 
-      <button type="button" class="icon-button" (click)="search()" [disabled]="loading()" title="Найти">
+      <button type="button" class="icon-button" (click)="search()" [disabled]="archiveListBusy()" title="Найти">
         <span class="material-icons-sharp">manage_search</span>
       </button>
 
@@ -45,6 +45,13 @@
         <button type="button" class="icon-button" (click)="clearSearch()" title="Сбросить">
           <span class="material-icons-sharp">close</span>
         </button>
+      }
+
+      @if (archiveSearchStatus()) {
+        <div class="archive-search-status" role="status" aria-live="polite">
+          <span class="material-icons-sharp">sync</span>
+          {{ archiveSearchStatus() }}
+        </div>
       }
     </section>
 
@@ -70,6 +77,11 @@
       </header>
 
       <div class="common-invoice-grid">
+        @if (commonInvoiceLoading() && !commonInvoiceArchives().length) {
+          <p class="common-invoice-empty common-invoice-empty--loading">
+            Загружаю общие счета...
+          </p>
+        }
         @for (invoice of commonInvoiceArchives(); track trackCommonInvoice($index, invoice)) {
           <article class="common-invoice-card" [class.common-invoice-card--ban]="invoice.status === 'BAN'">
             <div class="common-invoice-card__head">
@@ -116,7 +128,9 @@
             </div>
           </article>
         } @empty {
-          <p class="common-invoice-empty">Закрытых общих счетов нет.</p>
+          @if (!commonInvoiceLoading()) {
+            <p class="common-invoice-empty">Закрытых общих счетов нет.</p>
+          }
         }
       </div>
     </section>
@@ -126,7 +140,17 @@
       <span>закрытых заказов</span>
     </section>
 
-    <section class="archive-cards">
+    <section class="archive-cards" [class.archive-cards--loading]="archiveListBusy()" [attr.aria-busy]="archiveListBusy()">
+      @if (archiveListBusy()) {
+        <div class="archive-loading-panel" role="status" aria-live="polite">
+          <span class="material-icons-sharp">sync</span>
+          <div>
+            <h2>{{ archiveSearchStatus() }}</h2>
+            <p>Проверяю заказы, общие счета и архивные записи...</p>
+          </div>
+        </div>
+      }
+
       @for (order of orders(); track trackOrder($index, order)) {
         <article
           class="archive-order-card"
@@ -230,10 +254,12 @@
           </footer>
         </article>
       } @empty {
-        <div class="archive-empty">
-          <span class="material-icons-sharp">inventory_2</span>
-          <h2>Заказов нет</h2>
-        </div>
+        @if (!archiveListBusy()) {
+          <div class="archive-empty">
+            <span class="material-icons-sharp">inventory_2</span>
+            <h2>Заказов нет</h2>
+          </div>
+        }
       }
     </section>
 

@@ -44,8 +44,13 @@ public interface WorkloadEmergencyAssignmentRepository
               ON orders.order_id = detail.order_detail_order
              AND orders.order_company = transfer_case.company_id
              AND COALESCE(orders.order_complete, 0) = 0
+            JOIN workload_shadow_worker_current source_current
+              ON source_current.worker_id = transfer_case.source_worker_id
+             AND source_current.manager_id = transfer_case.manager_id
             WHERE transfer_case.active = TRUE
               AND transfer_case.graph_error_count = 0
+              AND source_current.diagnostic_status = 'OK'
+              AND source_current.last_day_reached_100 = FALSE
               AND transfer_case.fallback_review_id IS NOT NULL
               AND (
                     transfer_case.staffing_required = TRUE
@@ -190,6 +195,9 @@ public interface WorkloadEmergencyAssignmentRepository
               ON orders.order_id = detail.order_detail_order
              AND orders.order_company = transfer_case.company_id
              AND COALESCE(orders.order_complete, 0) = 0
+            JOIN workload_shadow_worker_current source_current
+              ON source_current.worker_id = transfer_case.source_worker_id
+             AND source_current.manager_id = transfer_case.manager_id
             JOIN workload_shadow_worker_current target_current
               ON target_current.worker_id = :targetWorkerId
              AND target_current.recipient_eligible = TRUE
@@ -205,6 +213,8 @@ public interface WorkloadEmergencyAssignmentRepository
             WHERE transfer_case.workload_shadow_transfer_case_id = :shadowCaseId
               AND transfer_case.active = TRUE
               AND transfer_case.graph_error_count = 0
+              AND source_current.diagnostic_status = 'OK'
+              AND source_current.last_day_reached_100 = FALSE
               AND transfer_case.fallback_review_id = :reviewId
               AND (
                     (

@@ -155,6 +155,12 @@ function createFacade(config: {
   const clearedDrafts: number[] = [];
   let lastOrderRequest: OrderUpdateRequest | null = null;
   let lastReviewRequest: ReviewEditDraft | null = null;
+  let lastRecoveryTaskRequest: {
+    taskId: number;
+    recoveryText: string;
+    scheduledDate?: string | null;
+    recoveryAnswer?: string | null;
+  } | null = null;
   const orderPayload = config.orderPayload ?? orderEdit();
   const details = config.details ?? orderDetails();
   const deps: WorkerBoardEditFacadeDeps = {
@@ -194,6 +200,18 @@ function createFacade(config: {
         return of(config.uploadReview ?? details.reviews[0]);
       }
     },
+    workerApi: {
+      updateRecoveryTask: (
+        taskId: number,
+        recoveryText: string,
+        scheduledDate?: string | null,
+        recoveryAnswer?: string | null
+      ) => {
+        calls.push(`update-recovery:${taskId}`);
+        lastRecoveryTaskRequest = { taskId, recoveryText, scheduledDate, recoveryAnswer };
+        return of(void 0);
+      }
+    },
     toastService: {
       success: (title: string, message?: string) => {
         toastMessages.push(`success:${title}:${message ?? ''}`);
@@ -227,6 +245,9 @@ function createFacade(config: {
     },
     get lastReviewRequest() {
       return lastReviewRequest;
+    },
+    get lastRecoveryTaskRequest() {
+      return lastRecoveryTaskRequest;
     }
   };
 }
@@ -290,20 +311,38 @@ describe('WorkerBoardEditFacade', () => {
 
     facade.openReviewEdit(workerReview({
       id: 7,
-      text: 'stale board text',
-      recoveryTask: true,
-      recoveryTaskId: 91,
-      taskWorkerId: 101
+      text: 'stale board text'
     }));
 
     expect(calls).toContain('get-details:20');
     expect(facade.editReview()?.text).toBe('fresh details text');
-    expect((facade.editReview() as WorkerReviewItem | null)?.recoveryTaskId).toBe(91);
-    expect((facade.editReview() as WorkerReviewItem | null)?.taskWorkerId).toBe(101);
     expect(facade.reviewEditDraft()?.text).toBe('fresh details text');
     expect(facade.reviewEditDraft()?.publish).toBe(true);
     expect(facade.reviewEditDraft()?.url).toBe('details-photo.jpg');
     expect(facade.productOptions()).toEqual([{ id: 5, label: 'Product', photo: true }]);
+  });
+
+  it('opens recovery task edit without loading live order details', () => {
+    const { facade, calls } = createFacade();
+
+    facade.openReviewEdit(workerReview({
+      id: 101,
+      orderId: 404,
+      text: 'archive recovery text',
+      answer: 'archive answer',
+      publishedDate: '2026-07-01',
+      recoveryTask: true,
+      recoveryTaskId: 91,
+      recoveryTaskScheduledDate: '2026-07-09',
+      taskWorkerId: 101
+    }));
+
+    expect(calls).not.toContain('get-details:404');
+    expect(facade.editReview()?.text).toBe('archive recovery text');
+    expect((facade.editReview() as WorkerReviewItem | null)?.recoveryTaskId).toBe(91);
+    expect((facade.editReview() as WorkerReviewItem | null)?.taskWorkerId).toBe(101);
+    expect(facade.reviewEditDraft()?.publishedDate).toBe('2026-07-09');
+    expect(facade.productOptions()).toEqual([]);
 
     facade.setReviewTaskWorker(202);
     expect((facade.editReview() as WorkerReviewItem | null)?.taskWorkerId).toBe(202);
@@ -381,6 +420,36 @@ describe('WorkerBoardEditFacade', () => {
     expect(state.calls).toContain('upload-review:20:7:photo.jpg');
     expect(state.facade.editReview()?.url).toBe('new-photo.jpg');
     expect(state.facade.reviewEditDraft()?.url).toBe('new-photo.jpg');
+    expect(state.calls).toContain('load-board');
+  });
+
+  it('saves recovery task edit through worker recovery API', () => {
+    const state = createFacade();
+
+    state.facade.openReviewEdit(workerReview({
+      id: 101,
+      orderId: 404,
+      text: 'old recovery text',
+      answer: 'old answer',
+      recoveryTask: true,
+      recoveryTaskId: 91,
+      recoveryTaskScheduledDate: '2026-07-09'
+    }));
+    state.facade.handleReviewEditDraftChange({ field: 'text', value: 'new recovery text' });
+    state.facade.handleReviewEditDraftChange({ field: 'answer', value: 'new answer' });
+    state.facade.handleReviewEditDraftChange({ field: 'publishedDate', value: '2026-07-12' });
+    state.facade.saveReviewEdit();
+
+    expect(state.calls).toContain('update-recovery:91');
+    expect(state.calls).not.toContain('update-review:404:101');
+    expect(state.lastRecoveryTaskRequest).toEqual({
+      taskId: 91,
+      recoveryText: 'new recovery text',
+      scheduledDate: '2026-07-12',
+      recoveryAnswer: 'new answer'
+    });
+    expect(state.clearedDrafts).toEqual([101]);
+    expect(state.facade.editReview()).toBeNull();
     expect(state.calls).toContain('load-board');
   });
 

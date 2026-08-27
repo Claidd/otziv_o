@@ -271,66 +271,74 @@ public class ApiCabinetController {
             LocalDate selectedMonth = selectedMonth(month, selectedDate);
             String role = primaryRole(authentication);
 
-            TeamResponse response = cached(
+            return cached(
                     CacheConfig.CABINET_TEAM,
                     cabinetKey("team", principal.getName(), role, selectedDate, selectedMonth, aggregateAnalyticsReadEnabled),
                     refresh,
-                    () -> {
-                        User user = currentUser(principal);
-                        boolean canManageUsers = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
-
-                        if ("ROLE_MANAGER".equals(role)) {
-                            Manager manager = managerService.getManagerByUserId(user.getId());
-                            return withTeamMonthlyProgress(withTeamDailyProgress(new TeamResponse(
-                                    selectedDate,
-                                    shortRole(role),
-                                    canManageUsers,
-                                    false,
-                                    false,
-                                    List.of(),
-                                    List.of(),
-                                    personalService.gerWorkersToManager(manager),
-                                    personalService.gerOperatorsToManager(manager),
-                                    null
-                            ), selectedDate, true), selectedMonth, true);
-                        }
-
-                        if ("ROLE_OWNER".equals(role)) {
-                            List<Manager> managers = userService.findManagersByUserName(principal.getName()).stream().toList();
-                            List<Manager> expandedManagers = personalService.findAllManagersWorkers(managers);
-                            List<Marketolog> marketologs = personalService.findCurrentMarketologsForManagers(managers);
-                            List<Operator> operators = personalService.findCurrentOperatorsForManagers(managers).stream().toList();
-                            List<Worker> workers = personalService.findCurrentWorkersForManagers(managers).stream().toList();
-
-                            return withTeamMonthlyProgress(withTeamDailyProgress(ownerTeamResponse(
-                                    selectedDate,
-                                    role,
-                                    managers,
-                                    marketologs,
-                                    workers,
-                                    operators
-                            ), selectedDate, true), selectedMonth, true);
-                        }
-
-                        return withTeamMonthlyProgress(withTeamDailyProgress(new TeamResponse(
-                                selectedDate,
-                                shortRole(role),
-                                canManageUsers,
-                                canManageUsers,
-                                true,
-                                personalService.getManagers(),
-                                personalService.getMarketologs(),
-                                personalService.gerWorkers(),
-                                personalService.gerOperators(),
-                                null
-                        ), selectedDate, canManageUsers), selectedMonth, canManageUsers);
-                    }
-            );
-            return withTeamPatterns(
-                    withTeamNetworkViolations(response, selectedDate, selectedMonth),
-                    selectedMonth
+                    () -> withTeamInsights(
+                            teamResponse(principal, authentication, selectedDate, selectedMonth, role),
+                            selectedDate,
+                            selectedMonth
+                    )
             );
         });
+    }
+
+    private TeamResponse teamResponse(
+            Principal principal,
+            Authentication authentication,
+            LocalDate selectedDate,
+            LocalDate selectedMonth,
+            String role
+    ) {
+        User user = currentUser(principal);
+        boolean canManageUsers = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
+
+        if ("ROLE_MANAGER".equals(role)) {
+            Manager manager = managerService.getManagerByUserId(user.getId());
+            return withTeamMonthlyProgress(withTeamDailyProgress(new TeamResponse(
+                    selectedDate,
+                    shortRole(role),
+                    canManageUsers,
+                    false,
+                    false,
+                    List.of(),
+                    List.of(),
+                    personalService.gerWorkersToManager(manager),
+                    personalService.gerOperatorsToManager(manager),
+                    null
+            ), selectedDate, true), selectedMonth, true);
+        }
+
+        if ("ROLE_OWNER".equals(role)) {
+            List<Manager> managers = userService.findManagersByUserName(principal.getName()).stream().toList();
+            personalService.findAllManagersWorkers(managers);
+            List<Marketolog> marketologs = personalService.findCurrentMarketologsForManagers(managers);
+            List<Operator> operators = personalService.findCurrentOperatorsForManagers(managers).stream().toList();
+            List<Worker> workers = personalService.findCurrentWorkersForManagers(managers).stream().toList();
+
+            return withTeamMonthlyProgress(withTeamDailyProgress(ownerTeamResponse(
+                    selectedDate,
+                    role,
+                    managers,
+                    marketologs,
+                    workers,
+                    operators
+            ), selectedDate, true), selectedMonth, true);
+        }
+
+        return withTeamMonthlyProgress(withTeamDailyProgress(new TeamResponse(
+                selectedDate,
+                shortRole(role),
+                canManageUsers,
+                canManageUsers,
+                true,
+                personalService.getManagers(),
+                personalService.getMarketologs(),
+                personalService.gerWorkers(),
+                personalService.gerOperators(),
+                null
+        ), selectedDate, canManageUsers), selectedMonth, canManageUsers);
     }
 
     @GetMapping("/score")
@@ -686,6 +694,17 @@ public class ApiCabinetController {
             ));
         });
         return response;
+    }
+
+    private TeamResponse withTeamInsights(
+            TeamResponse response,
+            LocalDate selectedDate,
+            LocalDate selectedMonth
+    ) {
+        return withTeamPatterns(
+                withTeamNetworkViolations(response, selectedDate, selectedMonth),
+                selectedMonth
+        );
     }
 
     private TeamResponse withTeamNetworkViolations(

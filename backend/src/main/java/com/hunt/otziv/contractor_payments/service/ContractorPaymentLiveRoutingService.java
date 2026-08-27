@@ -613,8 +613,86 @@ public class ContractorPaymentLiveRoutingService {
         return true;
     }
 
+    /** Releases a pristine common-invoice recipient reservation after an explicit
+     * OWNER/ADMIN switch to a paper invoice. Provider/payment evidence is
+     * checked by CommonBillingService before this method is called. */
+    @Transactional
+    public boolean releaseCommonInvoiceRouteForPaperInvoice(CommonInvoice invoice) {
+        return releaseCommonInvoiceRouteForReplacement(
+                invoice,
+                "Получатель общего счёта заменён на бумажный счёт владельца",
+                "LIVE_COMMON:PAPER_INVOICE_SWITCH"
+        );
+    }
+
+    @Transactional
+    public boolean releaseCommonInvoiceRouteForReplacement(
+            CommonInvoice invoice,
+            String reason,
+            String eventKey
+    ) {
+        if (invoice == null || invoice.getId() == null || invoice.getContractorAllocationId() == null) {
+            return false;
+        }
+        ContractorPaymentAllocation allocation = lockAllocationProfileFirst(invoice.getContractorAllocationId())
+                .orElse(null);
+        if (allocation == null
+                || allocation.getMode() != ContractorAllocationMode.LIVE
+                || allocation.getSourceType() != ContractorAllocationSourceType.COMMON_INVOICE
+                || !Objects.equals(allocation.getSourceId(), invoice.getId())
+                || (allocation.getStatus() != ContractorAllocationStatus.RESERVED
+                && allocation.getStatus() != ContractorAllocationStatus.OWNER_FALLBACK)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Резерв общего счёта уже изменился и требует ручной сверки"
+            );
+        }
+        if (allocation.getClientReportedAt() != null || allocation.getConfirmedKopecks() > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "По прежним реквизитам уже есть признаки оплаты; смена способа оплаты заблокирована"
+            );
+        }
+        boolean released = accountingService.recordRelease(
+                allocation,
+                ContractorAllocationStatus.CANCELED,
+                LocalDateTime.now(),
+                reason == null || reason.isBlank()
+                        ? "Получатель общего счёта заменён"
+                        : reason,
+                eventKey == null || eventKey.isBlank()
+                        ? "LIVE_COMMON:ROUTE_REPLACED"
+                        : eventKey
+        );
+        if (!released || allocation.getStatus() != ContractorAllocationStatus.CANCELED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Не удалось безопасно закрыть прежний маршрут общего счёта"
+            );
+        }
+        allocationRepository.save(allocation);
+        return true;
+    }
+
     @Transactional
     public ContractorPaymentAllocation reserveForPaymentLink(PaymentLink link) {
+        return reserveForPaymentLink(link, PaymentLinkRoutePreference.AUTO);
+    }
+
+    @Transactional
+    public ContractorPaymentAllocation reserveOwnerForPaymentLink(PaymentLink link) {
+        return reserveForPaymentLink(link, PaymentLinkRoutePreference.OWNER);
+    }
+
+    @Transactional
+    public ContractorPaymentAllocation reserveContractorForPaymentLink(PaymentLink link) {
+        return reserveForPaymentLink(link, PaymentLinkRoutePreference.CONTRACTOR_ONLY);
+    }
+
+    private ContractorPaymentAllocation reserveForPaymentLink(
+            PaymentLink link,
+            PaymentLinkRoutePreference preference
+    ) {
         if (!enabledForNewRoutes()) {
             return null;
         }
@@ -642,9 +720,19 @@ public class ContractorPaymentLiveRoutingService {
         ContractorPaymentRouteDecision decision;
         if (!sourceSnapshotReady) {
             // LIVE requisites are read back only through this immutable
-            // generation. Reserving a recipient without it would consume
-            // capacity while exposing no usable requisites to the client.
-            decision = ownerRequiredBySourceSnapshot();
+            // generation. Falling back to owner here would silently bypass the
+            // specialist->manager routing contract and expose the wrong payment
+            // route to the client.
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "payment_link_source_snapshot_not_ready"
+            );
+        } else if (preference == PaymentLinkRoutePreference.OWNER) {
+            decision = ContractorPaymentRouteDecision.owner(
+                    ContractorRoutingDecisionReason.CLIENT_REQUEST_OWNER_TBANK,
+                    null,
+                    null
+            );
         } else if (!link.isShadowRouteCompanyRoutingAllowed()) {
             decision = ownerRequiredByCompany();
         } else {
@@ -653,6 +741,13 @@ public class ContractorPaymentLiveRoutingService {
                     effectiveManager(order),
                     amount,
                     null
+            );
+        }
+
+        if (preference == PaymentLinkRoutePreference.CONTRACTOR_ONLY && decision.recipient() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сейчас ни специалист, ни менеджер не могут принять эту сумму: проверьте реквизиты, допуск и лимиты"
             );
         }
 
@@ -670,6 +765,12 @@ public class ContractorPaymentLiveRoutingService {
         return save(allocation, decision);
     }
 
+    private enum PaymentLinkRoutePreference {
+        AUTO,
+        CONTRACTOR_ONLY,
+        OWNER
+    }
+
     private boolean paymentLinkSourceSnapshotReady(PaymentLink link, Order order, long amount) {
         return link.getShadowRouteGeneration() != null
                 && !link.getShadowRouteGeneration().isBlank()
@@ -684,6 +785,38 @@ public class ContractorPaymentLiveRoutingService {
             List<Order> orders,
             Manager manager,
             long amount
+    ) {
+        return reserveForCommonInvoice(invoice, orders, manager, amount, CommonInvoiceRoutePreference.AUTO, false);
+    }
+
+    @Transactional
+    public ContractorPaymentAllocation reserveContractorForCommonInvoice(
+            CommonInvoice invoice,
+            List<Order> orders,
+            Manager manager,
+            long amount
+    ) {
+        return reserveForCommonInvoice(
+                invoice, orders, manager, amount, CommonInvoiceRoutePreference.CONTRACTOR_ONLY, true);
+    }
+
+    @Transactional
+    public ContractorPaymentAllocation reserveOwnerForCommonInvoice(
+            CommonInvoice invoice,
+            List<Order> orders,
+            Manager manager,
+            long amount
+    ) {
+        return reserveForCommonInvoice(invoice, orders, manager, amount, CommonInvoiceRoutePreference.OWNER, true);
+    }
+
+    private ContractorPaymentAllocation reserveForCommonInvoice(
+            CommonInvoice invoice,
+            List<Order> orders,
+            Manager manager,
+            long amount,
+            CommonInvoiceRoutePreference preference,
+            boolean explicitReplacement
     ) {
         if (!enabledForNewRoutes()) {
             return null;
@@ -700,17 +833,26 @@ public class ContractorPaymentLiveRoutingService {
         );
         if (latest.isPresent()) {
             if (retryable(latest.get())) {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Повторный маршрут общего счета требует явной сверки старой попытки"
-                );
+                if (!explicitReplacement) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Повторный маршрут общего счета требует явной сверки старой попытки"
+                    );
+                }
+            } else {
+                return latest.get();
             }
-            return latest.get();
         }
         if (!rolloutStateService.lockAndCheckRoutingRequested()) {
             return null;
         }
         accountingPhaseService.lockAndPromoteForLiveRoute();
+        if (!commonInvoiceSourceSnapshotReady(invoice, amount)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "common_invoice_source_snapshot_not_ready"
+            );
+        }
 
         List<Order> safeOrders = orders == null ? List.of() : orders;
         boolean completeWorkerSet = !safeOrders.isEmpty() && safeOrders.stream().allMatch(order ->
@@ -739,20 +881,37 @@ public class ContractorPaymentLiveRoutingService {
                 completeWorkerSet,
                 workers
         );
-        ContractorPaymentRouteDecision decision = !companyAllowsRouting
-                ? ownerRequiredByCompany()
-                : contractorEligible
-                ? selectRoutableProfile(
-                        completeWorkerSet && workers.size() == 1 ? workers.getFirst() : null,
-                        manager,
-                        amount,
-                        specialistPrecondition
-                )
-                : ContractorPaymentRouteDecision.owner(
-                        ContractorRoutingDecisionReason.PRIOR_PAYMENT_EVIDENCE,
-                        null,
-                        null
+        ContractorPaymentRouteDecision decision;
+        if (preference == CommonInvoiceRoutePreference.OWNER) {
+            decision = ContractorPaymentRouteDecision.owner(
+                    ContractorRoutingDecisionReason.CLIENT_REQUEST_OWNER_TBANK,
+                    null,
+                    null
+            );
+        } else {
+            decision = !companyAllowsRouting
+                    ? ownerRequiredByCompany()
+                    : contractorEligible
+                    ? selectRoutableProfile(
+                            completeWorkerSet && workers.size() == 1 ? workers.getFirst() : null,
+                            manager,
+                            amount,
+                            specialistPrecondition
+                    )
+                    : ContractorPaymentRouteDecision.owner(
+                            ContractorRoutingDecisionReason.PRIOR_PAYMENT_EVIDENCE,
+                            null,
+                            null
+                    );
+            if (preference == CommonInvoiceRoutePreference.CONTRACTOR_ONLY
+                    && decision.recipient() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Сейчас ни специалист, ни менеджер не могут принять сумму общего счёта: "
+                                + "проверьте реквизиты, допуск и лимиты"
                 );
+            }
+        }
 
         ContractorPaymentAllocation allocation = base(
                 ContractorAllocationSourceType.COMMON_INVOICE,
@@ -774,6 +933,20 @@ public class ContractorPaymentLiveRoutingService {
         );
         allocation.setCurrentManagerId(manager == null ? null : manager.getId());
         return save(allocation, decision);
+    }
+
+    private enum CommonInvoiceRoutePreference {
+        AUTO,
+        CONTRACTOR_ONLY,
+        OWNER
+    }
+
+    private boolean commonInvoiceSourceSnapshotReady(CommonInvoice invoice, long amount) {
+        return invoice != null
+                && invoice.getShadowRouteGeneration() != null
+                && !invoice.getShadowRouteGeneration().isBlank()
+                && invoice.getShadowRoutePreparedAt() != null
+                && Objects.equals(invoice.getShadowRouteAmountKopecks(), amount);
     }
 
     private Optional<ContractorPaymentAllocation> latest(

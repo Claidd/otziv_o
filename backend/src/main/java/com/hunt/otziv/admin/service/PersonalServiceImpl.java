@@ -1247,7 +1247,59 @@ public class PersonalServiceImpl implements PersonalService {
     }
 
     public String displayResultToManager(Map<String, UserData> result) {
-        return buildTelegramMonthlyReport(result, true);
+        if (result == null || result.isEmpty()) {
+            return "📊 <b>Отчёт за месяц</b>\n\nНет данных для отчёта.";
+        }
+
+        List<Map.Entry<String, UserData>> managers = sortedManagerGroupReportEntries(result, ROLE_MANAGER);
+        List<Map.Entry<String, UserData>> workers = sortedManagerGroupReportEntries(result, ROLE_WORKER);
+
+        StringBuilder report = new StringBuilder("📊 <b>Отчёт за месяц</b>\n\n");
+
+        if (!managers.isEmpty()) {
+            appendSectionTitle(report, "Менеджер");
+            managers.forEach(entry -> appendManagerGroupReportBlock(report, entry.getKey(), entry.getValue()));
+        }
+
+        if (!workers.isEmpty()) {
+            appendSectionTitle(report, "Специалисты");
+            workers.forEach(entry -> appendWorkerGroupReportBlock(report, entry.getKey(), entry.getValue()));
+        }
+
+        return report.toString().trim();
+    }
+
+    private List<Map.Entry<String, UserData>> sortedManagerGroupReportEntries(
+            Map<String, UserData> result,
+            String role
+    ) {
+        return result.entrySet().stream()
+                .filter(entry -> role.equals(entry.getValue().getRole()))
+                .sorted((entry1, entry2) -> {
+                    int activityComparison = Long.compare(
+                            visibleOrderActivity(entry2.getValue()),
+                            visibleOrderActivity(entry1.getValue())
+                    );
+                    if (activityComparison != 0) {
+                        return activityComparison;
+                    }
+                    return entry1.getKey().compareToIgnoreCase(entry2.getKey());
+                })
+                .toList();
+    }
+
+    private long visibleOrderActivity(UserData user) {
+        return safeLong(user.getNewOrders())
+                + safeLong(user.getCorrectOrders())
+                + safeLong(user.getInVigul())
+                + safeLong(user.getInPublish())
+                + safeLong(user.getBadTasks())
+                + safeLong(user.getRecoveryTasks());
+    }
+
+    private void appendManagerGroupReportBlock(StringBuilder report, String fio, UserData user) {
+        report.append("👤 <b>").append(escapeHtml(fio)).append("</b>\n");
+        report.append("Начислено: <b>").append(money(safeLong(user.getSalary()))).append("</b>\n\n");
     }
 
 

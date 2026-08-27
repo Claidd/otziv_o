@@ -9,6 +9,7 @@ import {
   CommonInvoiceDetailsResponse,
   CommonInvoiceOrderResponse,
   CommonInvoicePaymentRefResponse,
+  CommonInvoicePaymentRouteChangeTarget,
   CommonInvoiceSummaryResponse,
   ManualPaymentConfirmationRequest
 } from '../../../core/common-billing.api';
@@ -17,7 +18,12 @@ import {
   type CommonManualPaymentMode
 } from '../../../core/common-manual-payment-attribution.api';
 import { AuthService } from '../../../core/auth.service';
-import { CompanyCardItem, ManagerApi, OrderCardItem } from '../../../core/manager.api';
+import {
+  CompanyCardItem,
+  ManagerApi,
+  OrderCardItem,
+  type PaymentRouteChangeTarget
+} from '../../../core/manager.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../../shared/api-error-message';
 import { copyTextToClipboard } from '../../../shared/clipboard-copy';
@@ -279,6 +285,9 @@ export class CommonBillingComponent implements OnDestroy {
   readonly orderError = this.orderFacade.orderError;
   readonly orderDeleting = this.orderFacade.orderDeleting;
   readonly orderCancelingPayment = this.orderFacade.orderCancelingPayment;
+  readonly paymentRouteContext = this.orderFacade.paymentRouteContext;
+  readonly paymentRouteContextLoading = this.orderFacade.paymentRouteContextLoading;
+  readonly paymentRouteChanging = this.orderFacade.paymentRouteChanging;
 
   readonly selectedAccount = computed(() => {
     const id = this.selectedAccountId();
@@ -421,13 +430,21 @@ export class CommonBillingComponent implements OnDestroy {
       .find((url) => Boolean(url)) ?? '';
   });
   readonly paymentNotificationCopyText = computed(() => this.buildPaymentNotificationText());
+  readonly paperModeSwitchNeedsRetry = computed(() => {
+    const error = this.invoiceProblemRaw().toLowerCase();
+    return error.startsWith('paper_invoice_mode_switch_retry:')
+      || error.startsWith('paper_invoice_mode_switch_in_progress:')
+      || error.startsWith('paper_invoice_mode_switch_state_changed:');
+  });
   readonly attentionRetryEnabled = computed(() => this.invoiceNeedsAttention()
     && !this.attentionRequiresManualCheck()
-    && !this.attentionHasStandaloneRouteConflict());
+    && !this.attentionHasStandaloneRouteConflict()
+    && !this.invoiceProblemRaw().toLowerCase().startsWith('paper_invoice_mode_switch_'));
   readonly attentionResolveEnabled = computed(() => {
     return this.invoiceNeedsAttention()
       && !this.attentionRequiresManualCheck()
-      && !this.attentionHasStandaloneRouteConflict();
+      && !this.attentionHasStandaloneRouteConflict()
+      && !this.invoiceProblemRaw().toLowerCase().startsWith('paper_invoice_mode_switch_');
   });
   readonly readyForSending = computed(() => {
     const invoice = this.currentInvoice();
@@ -437,6 +454,10 @@ export class CommonBillingComponent implements OnDestroy {
         && invoice.readyOrders >= invoice.totalOrders
         && ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID'].includes(invoice.status)
     );
+  });
+  readonly canManagePaperInvoices = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
   });
   readonly canMarkPaid = computed(() => {
     const invoice = this.currentInvoice();
@@ -826,6 +847,22 @@ export class CommonBillingComponent implements OnDestroy {
     if (!invoice || this.mutating() || !this.canMarkPaid()) {
       return;
     }
+    if (invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+      const evidence = this.requestManualPaymentEvidence(
+        'Подтверждение оплаты бумажного счёта',
+        'Подтвердить поступление денег по бумажному счёту владельца? Все заказы будут закрыты штатной логикой без начисления получателю-реквизитодержателю.'
+      );
+      if (!evidence) {
+        return;
+      }
+      this.invoiceAction(
+        invoice.id,
+        'paper-invoice-paid',
+        () => this.commonBillingApi.markPaperInvoicePaid(invoice.id, evidence),
+        'Бумажный счёт закрыт оплатой'
+      );
+      return;
+    }
     if (this.manualAttributionRequired() == null) {
       this.toastService.error('Режим оплаты загружается', 'Повторите действие через несколько секунд');
       this.loadManualAttributionMode(invoice.id);
@@ -845,6 +882,99 @@ export class CommonBillingComponent implements OnDestroy {
       'mark-paid',
       () => this.commonBillingApi.markPaid(invoice.id, evidence),
       'Общий счет закрыт оплатой'
+    );
+  }
+
+  changePaperInvoiceMode(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || !this.canManagePaperInvoices() || this.mutating()) {
+      return;
+    }
+    const paperEnabled = invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE';
+    const nextMode = paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE';
+    const confirmation = paperEnabled
+      ? 'Вернуть автоматическое распределение специалист → менеджер → владелец? Продолжайте только если бумажный счёт ещё не отправлялся и оплаты по нему нет.'
+      : 'Включить бумажный счёт владельца? Система проверит прежнюю T‑Bank-ссылку и отменит её только при подтверждённом отсутствии оплаты. Текущий безопасный резерв будет освобождён, а будущие циклы этого общего счёта тоже станут бумажными. Продолжайте только если клиент ещё не платил.';
+    if (!window.confirm(confirmation)) {
+      return;
+    }
+    this.invoiceAction(
+      invoice.id,
+      'change-paper-invoice-mode',
+      () => this.commonBillingApi.changeInvoicePaymentMode(invoice.id, nextMode),
+      paperEnabled ? 'Автоматическое распределение восстановлено' : 'Режим бумажного счёта включён'
+    );
+  }
+
+  changeCommonInvoicePaymentRoute(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || this.mutating() || invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+      return;
+    }
+    const viewGeneration = this.invoiceViewGeneration;
+    const mutationKey = 'load-common-payment-route-change';
+    this.mutating.set(mutationKey);
+    this.commonBillingApi.commonInvoicePaymentRouteChangeContext(invoice.id).subscribe({
+      next: (context) => {
+        if (!this.isCurrentPageView(viewGeneration) || this.mutating() !== mutationKey) {
+          return;
+        }
+        this.mutating.set('');
+        if (!context.canChange) {
+          this.toastService.error('Способ оплаты нельзя изменить', context.blockReason || 'Нужна ручная сверка');
+          return;
+        }
+        const target: CommonInvoicePaymentRouteChangeTarget = context.currentTarget === 'OWNER_TBANK'
+          ? 'EMPLOYEE_REQUISITES'
+          : 'OWNER_TBANK';
+        const destination = target === 'EMPLOYEE_REQUISITES'
+          ? 'реквизиты специалиста или менеджера'
+          : 'ссылку T‑Bank владельца';
+        const currentRecipient = context.currentRecipient?.trim()
+          ? ` Получатель сейчас: ${context.currentRecipient}.`
+          : '';
+        if (!window.confirm(
+          `Сменить способ оплаты на ${destination}?${currentRecipient} `
+          + 'Старый безопасный резерв будет освобождён, новый маршрут создан заново, '
+          + 'а клиенту сразу уйдёт обновлённое сообщение. Продолжайте только если клиент ещё не платил.'
+        )) {
+          return;
+        }
+        this.invoiceAction(
+          invoice.id,
+          'change-common-payment-route',
+          () => this.commonBillingApi.changeCommonInvoicePaymentRoute(
+            invoice.id,
+            target,
+            context.paymentEvidenceToken
+          ),
+          target === 'EMPLOYEE_REQUISITES'
+            ? 'Общий счёт переведён на реквизиты сотрудника'
+            : 'Общий счёт переведён на ссылку T‑Bank владельца'
+        );
+      },
+      error: (err) => {
+        if (this.isCurrentPageView(viewGeneration) && this.mutating() === mutationKey) {
+          this.failMutation(err, 'Не удалось проверить смену способа оплаты');
+        }
+      }
+    });
+  }
+
+  markPaperInvoiceIssued(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
+      || invoice.paperInvoiceIssuedAt || !this.canManagePaperInvoices() || this.mutating()) {
+      return;
+    }
+    if (!window.confirm('Подтвердить, что бумажный счёт уже отправлен клиенту? После этой отметки начнутся автоматические напоминания.')) {
+      return;
+    }
+    this.invoiceAction(
+      invoice.id,
+      'paper-invoice-issued',
+      () => this.commonBillingApi.markPaperInvoiceIssued(invoice.id),
+      'Бумажный счёт отмечен как отправленный'
     );
   }
 
@@ -1223,12 +1353,17 @@ export class CommonBillingComponent implements OnDestroy {
         return 'Подтверждено вручную';
       case 'MANUAL_LEGACY':
         return 'Подтверждено вручную · старые данные';
+      case 'OWNER_PAPER_INVOICE':
+        return 'Бумажный счёт владельца';
       default:
         return 'Способ не указан';
     }
   }
 
   paymentRouteLabel(invoice: CommonInvoiceSummaryResponse): string {
+    if (invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+      return 'Бумажный счёт владельца';
+    }
     const profile = invoice.paymentRouteProfileName?.trim();
     switch (invoice.paymentRouteType) {
       case 'TBANK_LINK':
@@ -1558,6 +1693,22 @@ export class CommonBillingComponent implements OnDestroy {
     this.orderFacade.cancelOrderPayment();
   }
 
+  openPaymentRouteChange(): void {
+    this.orderFacade.openPaymentRouteChange();
+  }
+
+  closePaymentRouteChange(): void {
+    this.orderFacade.closePaymentRouteChange();
+  }
+
+  changePaymentRoute(target: PaymentRouteChangeTarget): void {
+    this.orderFacade.changePaymentRoute(target);
+  }
+
+  markOrderPaperInvoiceIssued(): void {
+    this.orderFacade.markPaperInvoiceIssued();
+  }
+
   updateOrderStatus(order: OrderCardItem, action: StatusAction): void {
     if (['Выставлен счет', 'Напоминание', 'Не оплачено', 'Оплачено'].includes(action.status)) {
       this.toastService.error('Одиночное финансовое действие отключено', 'Этот заказ входит в общий счет');
@@ -1746,6 +1897,14 @@ export class CommonBillingComponent implements OnDestroy {
     }
     if (normalized.startsWith('whatsapp_group_missing')) {
       return 'Не найден чат WhatsApp для отправки общего счета. Проверьте связь компании с чатом или отправьте счет вручную.';
+    }
+    if (normalized.startsWith('paper_invoice_mode_switch_payment_detected:')) {
+      return 'T-Bank обнаружил платёжное движение по прежней ссылке. Бумажный режим не включён: сначала нужно сверить банковскую оплату.';
+    }
+    if (normalized.startsWith('paper_invoice_mode_switch_retry:')
+      || normalized.startsWith('paper_invoice_mode_switch_in_progress:')
+      || normalized.startsWith('paper_invoice_mode_switch_state_changed:')) {
+      return 'Прежняя T-Bank-сессия ещё не закрыта однозначно. Оплата по ссылке остановлена в интерфейсе; повторите включение бумажного счёта после обновления.';
     }
     if (normalized.includes('t-bank') || normalized.includes('tbank') || normalized.includes('payment')) {
       return 'Есть ошибка платежа или T-Bank. Проверьте состояние оплаты в правой панели и повторите действие только после сверки.';

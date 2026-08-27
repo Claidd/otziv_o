@@ -4,6 +4,7 @@ import {
   isAutomationWaitingForSlotReason,
   isTelegramBindingAutomationIssue,
   isExplicitlyRepairableCommonInvoiceReason,
+  needsManagerControlDetailSync,
   shouldHideClientChatUnansweredAfterAction,
   telegramGroupLinkCommand
 } from './manager-control.component';
@@ -89,5 +90,38 @@ describe('scheduled automation queue', () => {
       'Автоответчик не обработал заказ: telegram_group_missing',
       beforeSlot
     )).toBe(false);
+  });
+});
+
+describe('needsManagerControlDetailSync', () => {
+  it('requires sync when an open action card has no concrete id', () => {
+    expect(needsManagerControlDetailSync({
+      dailyControlId: 7,
+      items: [{
+        itemStatus: 'OPEN',
+        group: 'ACTION',
+        count: 1,
+        examples: [{ title: 'Заказ #1' }]
+      }]
+    } as any)).toBe(true);
+  });
+
+  it('does not require sync for a prepared open action card', () => {
+    expect(needsManagerControlDetailSync({
+      dailyControlId: 7,
+      items: [{
+        itemStatus: 'OPEN',
+        group: 'ACTION',
+        count: 1,
+        examples: [{ controlEntityId: 11, title: 'Заказ #1' }]
+      }]
+    } as any)).toBe(false);
+  });
+
+  it('requires sync when the day control itself is not created yet', () => {
+    expect(needsManagerControlDetailSync({
+      dailyControlId: null,
+      items: []
+    } as any)).toBe(true);
   });
 });

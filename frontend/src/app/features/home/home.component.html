@@ -546,6 +546,15 @@
                   (ngModelChange)="setManualTaskRecipient($event)"
                 >
               </label>
+              <label>
+                <span>Банк</span>
+                <input
+                  type="text"
+                  placeholder="Альфа банк"
+                  [ngModel]="manualTaskBankName()"
+                  (ngModelChange)="setManualTaskBankName($event)"
+                >
+              </label>
             }
             <label>
               <span>Цель, руб.</span>
@@ -683,6 +692,7 @@
                     } @else {
                       <label><span>Телефон</span><input autocomplete="tel" [ngModel]="manualTaskEditPhone()" (ngModelChange)="setManualTaskEditPhone($event)" placeholder="+7..."></label>
                       <label><span>Получатель в банке</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                      <label><span>Банк</span><input [ngModel]="manualTaskEditBankName()" (ngModelChange)="setManualTaskEditBankName($event)" placeholder="Альфа банк"></label>
                     }
                     <label><span>Цель, руб.</span><input type="number" min="1" step="100" [ngModel]="manualTaskEditAmountRubles()" (ngModelChange)="setManualTaskEditAmount($event)"></label>
                     <label>

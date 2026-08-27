@@ -24,6 +24,8 @@ import { Component, Input, signal } from '@angular/core';
   styles: [`
     :host {
       display: block;
+      width: 100%;
+      max-width: 100%;
       min-width: 0;
     }
 
@@ -51,6 +53,7 @@ import { Component, Input, signal } from '@angular/core';
     }
 
     .metric-help-trigger span:first-child {
+      flex: 1 1 auto;
       min-width: 0;
       overflow-wrap: anywhere;
     }

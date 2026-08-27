@@ -20,8 +20,8 @@
         </button>
       }
       <div>
-        <small>Отзыв #{{ review?.id }}</small>
-        <h2 id="review-edit-title">Редактирование отзыва</h2>
+        <small>{{ dialogKicker() }}</small>
+        <h2 id="review-edit-title">{{ dialogTitle() }}</h2>
       </div>
       <button type="button" class="lead-edit-close" (click)="closed.emit()" [disabled]="busy" title="Закрыть">
         <span class="material-icons-sharp" aria-hidden="true">close</span>
@@ -61,17 +61,19 @@
               ></textarea>
             </label>
 
-            <label class="lead-edit-field lead-edit-field--wide">
-              <span>Комментарий</span>
-              <textarea
-                name="reviewComment"
-                rows="3"
-                [ngModel]="draft.comment"
-                (ngModelChange)="setField('comment', $event)"
-              ></textarea>
-            </label>
+            @if (!recoveryTaskEdit) {
+              <label class="lead-edit-field lead-edit-field--wide">
+                <span>Комментарий</span>
+                <textarea
+                  name="reviewComment"
+                  rows="3"
+                  [ngModel]="draft.comment"
+                  (ngModelChange)="setField('comment', $event)"
+                ></textarea>
+              </label>
+            }
 
-            @if (canEditDates) {
+            @if (canEditDates && !recoveryTaskEdit) {
               <label class="lead-edit-field">
                 <span>Дата создания</span>
                 <input
@@ -94,7 +96,7 @@
             }
 
             <label class="lead-edit-field">
-              <span>Дата публикации</span>
+              <span>{{ publicationDateLabel() }}</span>
               <input
                 name="reviewPublishedDate"
                 type="date"
@@ -104,19 +106,21 @@
               >
             </label>
 
-            <label class="lead-edit-field">
-              <span>Продукт</span>
-              <select
-                name="reviewProduct"
-                [ngModel]="draft.productId"
-                (ngModelChange)="setField('productId', $event)"
-              >
-                <option [ngValue]="null">-- Выберите продукт --</option>
-                @for (product of productOptions; track trackOption($index, product)) {
-                  <option [ngValue]="product.id">{{ product.label }}</option>
-                }
-              </select>
-            </label>
+            @if (!recoveryTaskEdit) {
+              <label class="lead-edit-field">
+                <span>Продукт</span>
+                <select
+                  name="reviewProduct"
+                  [ngModel]="draft.productId"
+                  (ngModelChange)="setField('productId', $event)"
+                >
+                  <option [ngValue]="null">-- Выберите продукт --</option>
+                  @for (product of productOptions; track trackOption($index, product)) {
+                    <option [ngValue]="product.id">{{ product.label }}</option>
+                  }
+                </select>
+              </label>
+            }
 
             @if (canReassignTask && workerOptions.length > 0) {
               <label class="lead-edit-field">
@@ -140,17 +144,19 @@
               </label>
             }
 
-            <label class="lead-edit-field">
-              <span>Имя бота</span>
-              <input
-                name="reviewBotName"
-                type="text"
-                [ngModel]="draft.botName"
-                (ngModelChange)="setField('botName', $event)"
-              >
-            </label>
+            @if (!recoveryTaskEdit) {
+              <label class="lead-edit-field">
+                <span>Имя бота</span>
+                <input
+                  name="reviewBotName"
+                  type="text"
+                  [ngModel]="draft.botName"
+                  (ngModelChange)="setField('botName', $event)"
+                >
+              </label>
+            }
 
-            @if (!hideBotPassword) {
+            @if (!hideBotPassword && !recoveryTaskEdit) {
               <label class="lead-edit-field">
                 <span>Пароль бота</span>
                 <input
@@ -164,7 +170,7 @@
               </label>
             }
 
-            @if (canEditPublish) {
+            @if (canEditPublish && !recoveryTaskEdit) {
               <label class="review-edit-check">
                 <input
                   name="reviewPublish"
@@ -176,7 +182,7 @@
               </label>
             }
 
-            @if (canShowVigulControl(draft)) {
+            @if (canShowVigulControl(draft) && !recoveryTaskEdit) {
               <label class="review-edit-check">
                 <input
                   name="reviewVigul"
@@ -189,7 +195,7 @@
               </label>
             }
 
-            @if (productNeedsPhoto(draft.productId) || draft.url.trim()) {
+            @if (!recoveryTaskEdit && (productNeedsPhoto(draft.productId) || draft.url.trim())) {
               <label class="lead-edit-field lead-edit-field--wide">
                 <span>URL для фото</span>
                 <textarea
@@ -216,14 +222,16 @@
 
           <div class="lead-edit-actions">
             <div class="lead-edit-actions-group">
-              <button
-                type="button"
-                class="secondary review-new-account"
-                (click)="newAccountRequested.emit()"
-                [disabled]="busy"
-              >
-                {{ newAccountLoading ? 'Назначаю...' : 'Новый аккаунт' }}
-              </button>
+              @if (!recoveryTaskEdit) {
+                <button
+                  type="button"
+                  class="secondary review-new-account"
+                  (click)="newAccountRequested.emit()"
+                  [disabled]="busy"
+                >
+                  {{ newAccountLoading ? 'Назначаю...' : 'Новый аккаунт' }}
+                </button>
+              }
               <button
                 type="button"
                 class="secondary"

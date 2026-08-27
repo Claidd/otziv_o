@@ -782,7 +782,6 @@ public class ReviewServiceImpl implements ReviewService {
         assignmentMutationGuardService.assertReview(reviewId);
         Review saveReview = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Отзыв '%d' не найден", reviewId)));
-        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(saveReview));
 
         boolean isChanged = false;
         boolean publishChanged = false;
@@ -798,6 +797,21 @@ public class ReviewServiceImpl implements ReviewService {
         Long dtoFilialId = reviewDTO.getFilial() != null ? reviewDTO.getFilial().getId() : null;
         Long currentFilialId = currentFilial != null ? currentFilial.getId() : null;
         boolean reassignBotAfterSave = false;
+        boolean productChanged = false;
+        if (dtoProduct != null && currentProduct != null) {
+            if (!Objects.equals(dtoProductId, currentProductId)) {
+                productChanged = true;
+            }
+        } else if (dtoProduct != null || currentProduct != null) {
+            productChanged = true;
+        }
+        boolean filialChanged = dtoFilialId != null && !Objects.equals(dtoFilialId, currentFilialId);
+        boolean publishFlagChanged = ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole))
+                && !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish());
+        boolean publishedDateChanged = !Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate());
+        if (productChanged || filialChanged || publishFlagChanged || publishedDateChanged) {
+            contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(saveReview));
+        }
 
         log.info("text: {}", !Objects.equals(reviewDTO.getText(), saveReview.getText()));
         log.info("answer: {}", !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
@@ -859,22 +873,13 @@ public class ReviewServiceImpl implements ReviewService {
             isChanged = true;
         }
 
-        if (dtoFilialId != null && !Objects.equals(dtoFilialId, currentFilialId)) {
+        if (filialChanged) {
             log.info("Обновляем филиал отзыва");
             Filial newFilial = filialService.getFilial(dtoFilialId);
             validateReviewFilial(saveReview, newFilial);
             reassignBotAfterSave = filialCityChanged(currentFilial, newFilial);
             saveReview.setFilial(newFilial);
             isChanged = true;
-        }
-
-        boolean productChanged = false;
-        if (dtoProduct != null && currentProduct != null) {
-            if (!Objects.equals(dtoProductId, currentProductId)) {
-                productChanged = true;
-            }
-        } else if (dtoProduct != null || currentProduct != null) {
-            productChanged = true;
         }
 
         if (productChanged) {
@@ -896,14 +901,12 @@ public class ReviewServiceImpl implements ReviewService {
             }
         }
 
-        if ("ROLE_ADMIN".equals(userRole) || "ROLE_OWNER".equals(userRole)) {
-            if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
-                log.info("Обновляем публикацию отзыва");
-                saveReview.setPublish(reviewDTO.isPublish());
-                syncExternalConfirmationState(saveReview, oldPublish);
-                isChanged = true;
-                publishChanged = true;
-            }
+        if (publishFlagChanged) {
+            log.info("Обновляем публикацию отзыва");
+            saveReview.setPublish(reviewDTO.isPublish());
+            syncExternalConfirmationState(saveReview, oldPublish);
+            isChanged = true;
+            publishChanged = true;
         }
 
         if (canManageReviewVigul(userRole)) {
@@ -932,7 +935,7 @@ public class ReviewServiceImpl implements ReviewService {
             }
         }
 
-        if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
+        if (publishedDateChanged) {
             requireWorkerPublicationDatePermission(userRole, saveReview);
             requirePublicationDateIntegrity(saveReview, reviewDTO.getPublishedDate());
             validateManualPublicationDate(saveReview, reviewDTO.getPublishedDate());

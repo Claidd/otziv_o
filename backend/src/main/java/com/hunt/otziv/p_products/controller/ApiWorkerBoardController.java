@@ -131,6 +131,7 @@ public class ApiWorkerBoardController {
     );
     private static final int MAX_PAGE_SIZE = 50;
     private static final String OWNER_CONTROL_ALL_MANAGERS = "ALL_MANAGERS";
+    private static final LocalDate DATABASE_MAX_DATE = LocalDate.of(9999, 12, 31);
 
     private final OrderService orderService;
     private final OrderBoardQueryService orderBoardQueryService;
@@ -1305,7 +1306,7 @@ public class ApiWorkerBoardController {
                 pageNumber,
                 pageSize,
                 sortDirection,
-                LocalDate.now()
+                recoveryTaskBoardHorizon(authentication)
         );
     }
 
@@ -1609,7 +1610,7 @@ public class ApiWorkerBoardController {
     }
 
     private int countRecoveryTasks(Principal principal, Authentication authentication, Worker selectedWorker) {
-        LocalDate date = LocalDate.now();
+        LocalDate date = recoveryTaskBoardHorizon(authentication);
         if (selectedWorker != null) {
             return reviewRecoveryTaskService.countDueTasksToWorker(selectedWorker, date);
         }
@@ -1623,6 +1624,13 @@ public class ApiWorkerBoardController {
             return reviewRecoveryTaskService.countDueTasksToManager(resolveManager(principal), date);
         }
         return reviewRecoveryTaskService.countDueTasksToWorker(resolveWorker(principal), date);
+    }
+
+    private LocalDate recoveryTaskBoardHorizon(Authentication authentication) {
+        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER") || hasRole(authentication, "MANAGER")) {
+            return DATABASE_MAX_DATE;
+        }
+        return LocalDate.now();
     }
 
     private WorkerMetricResponse orderMetric(

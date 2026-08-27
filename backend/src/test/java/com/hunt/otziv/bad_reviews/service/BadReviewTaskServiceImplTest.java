@@ -853,6 +853,27 @@ class BadReviewTaskServiceImplTest {
     }
 
     @Test
+    void cancelDoneTaskAdjustsCompletionRewardAccrual() {
+        Order order = order(12L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        stubPayableMutation(task);
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(12L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
+        ));
+
+        service.cancelTask(42L);
+
+        verify(contractorCompletionRewardService).adjustCanceledBadReviewTaskAccrual(12L, 42L);
+    }
+
+    @Test
     void deletePendingTasksForOrderDeletesOnlyNewTasks() {
         Order order = order(21L);
 

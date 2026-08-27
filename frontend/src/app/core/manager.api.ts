@@ -545,6 +545,32 @@ export interface OrderUpdateRequest {
   removePreviousWorkerFromCompany: boolean;
 }
 
+export type PaymentRouteChangeTarget = 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE';
+
+export interface PaymentRouteChangeContext {
+  paymentLinkId: number | null;
+  currentRoute: string;
+  currentRecipient: string;
+  status: string;
+  canChange: boolean;
+  blockReason: string;
+  configuredMode?: 'AUTO_ROUTING' | 'OWNER_PAPER_INVOICE' | string;
+  paperInvoiceIssued?: boolean;
+}
+
+export interface PaymentRouteChangeRequest {
+  expectedPaymentLinkId: number | null;
+  target: PaymentRouteChangeTarget;
+  confirmedUnpaid: boolean;
+}
+
+export interface PaymentRouteChangeResponse {
+  previousPaymentLinkId: number | null;
+  paymentLinkId: number | null;
+  target: PaymentRouteChangeTarget;
+  clientNotificationScheduled: boolean;
+}
+
 export interface OrderReviewItem {
   id: number;
   companyId: number;
@@ -1071,6 +1097,29 @@ export class ManagerApi {
 
   cancelOrderPayment(orderId: number): Observable<OrderEditPayload> {
     return this.http.post<OrderEditPayload>(`${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/payment-cancel`, {});
+  }
+
+  getPaymentRouteChangeContext(orderId: number): Observable<PaymentRouteChangeContext> {
+    return this.http.get<PaymentRouteChangeContext>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/payment-route-change-context`
+    );
+  }
+
+  changePaymentRoute(
+    orderId: number,
+    request: PaymentRouteChangeRequest
+  ): Observable<PaymentRouteChangeResponse> {
+    return this.http.post<PaymentRouteChangeResponse>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/payment-route-change`,
+      request
+    );
+  }
+
+  markPaperInvoiceIssued(orderId: number): Observable<unknown> {
+    return this.http.post(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/paper-invoice/issued`,
+      {}
+    );
   }
 
   deleteOrder(orderId: number): Observable<void> {

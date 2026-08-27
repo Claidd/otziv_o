@@ -872,6 +872,15 @@
                 placeholder="ФИО получателя"
               />
             </label>
+            <label class="profile-field">
+              <span>Банк</span>
+              <input
+                type="text"
+                [ngModel]="adminTaskBankName()"
+                (ngModelChange)="setAdminTaskBankName($event)"
+                placeholder="Альфа банк"
+              />
+            </label>
           }
           <label class="profile-field manual-task-accounting-field">
             <span>Кому учитывать оплату</span>
@@ -1023,6 +1032,10 @@
                     <label class="profile-field">
                       <span>Получатель в банке</span>
                       <input type="text" [ngModel]="editTaskRecipient()" (ngModelChange)="setEditTaskRecipient($event)" />
+                    </label>
+                    <label class="profile-field">
+                      <span>Банк</span>
+                      <input type="text" [ngModel]="editTaskBankName()" (ngModelChange)="setEditTaskBankName($event)" placeholder="Альфа банк" />
                     </label>
                   }
                   <label class="profile-field limit-field">

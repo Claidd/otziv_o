@@ -223,6 +223,7 @@ export interface PaymentProfileResponse {
   manualPaymentType?: ManualPaymentType | string | null;
   manualPhone?: string | null;
   manualRecipientName?: string | null;
+  manualBankName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentUrlConfigured?: boolean;
   manualPaymentButtonLabel?: string | null;
@@ -294,6 +295,7 @@ export interface ManualPaymentTaskResponse {
   manualPaymentType?: ManualPaymentType | string | null;
   manualPhone?: string | null;
   manualRecipientName?: string | null;
+  manualBankName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;
   targetAmountKopecks: number;
@@ -360,6 +362,7 @@ export interface CreateManualPaymentTaskRequest {
   manualPaymentType?: ManualPaymentType | string | null;
   manualPhone?: string | null;
   manualRecipientName?: string | null;
+  manualBankName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;
   targetAmountKopecks: number;
@@ -373,6 +376,7 @@ export interface UpdateManualPaymentTaskRequest {
   manualPaymentType?: ManualPaymentType | string | null;
   manualPhone?: string | null;
   manualRecipientName?: string | null;
+  manualBankName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;
   targetAmountKopecks: number;
@@ -427,6 +431,7 @@ export interface PaymentProfilePolicyRequest {
   manualPaymentType?: ManualPaymentType | string | null;
   manualPhone?: string | null;
   manualRecipientName?: string | null;
+  manualBankName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;
   manualComment?: string | null;

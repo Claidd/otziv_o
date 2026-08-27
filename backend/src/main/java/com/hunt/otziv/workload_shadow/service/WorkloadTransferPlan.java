@@ -32,9 +32,6 @@ public record WorkloadTransferPlan(
             order.badTasks().forEach(value -> badTaskIds.add(value.taskId()));
             order.recoveryTasks().forEach(value -> recoveryTaskIds.add(value.taskId()));
         }
-        graph.detachedReviews().forEach(value -> reviewIds.add(value.reviewId()));
-        graph.detachedBadTasks().forEach(value -> badTaskIds.add(value.taskId()));
-        graph.detachedRecoveryTasks().forEach(value -> recoveryTaskIds.add(value.taskId()));
         return new WorkloadTransferPlan(
                 List.copyOf(orderIds),
                 List.copyOf(reviewIds),

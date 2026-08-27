@@ -4,5 +4,6 @@ public enum PaymentMethod {
     BANK_FORM,
     SBP_QR,
     MANUAL_MOBILE_BANK,
-    MANUAL_EXTERNAL_LINK
+    MANUAL_EXTERNAL_LINK,
+    OWNER_PAPER_INVOICE
 }

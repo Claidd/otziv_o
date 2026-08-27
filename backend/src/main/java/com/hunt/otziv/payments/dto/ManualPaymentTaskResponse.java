@@ -14,6 +14,7 @@ public record ManualPaymentTaskResponse(
         String manualPaymentType,
         String manualPhone,
         String manualRecipientName,
+        String manualBankName,
         String manualPaymentUrl,
         String manualPaymentButtonLabel,
         long targetAmountKopecks,

@@ -91,6 +91,9 @@ public class ManualPaymentTask {
     @Column(name = "manual_recipient_name", length = 160)
     private String manualRecipientName = ManualPaymentType.DEFAULT_MANUAL_RECIPIENT_NAME;
 
+    @Column(name = "manual_bank_name", length = 120)
+    private String manualBankName;
+
     @Column(name = "manual_payment_url", length = 512)
     private String manualPaymentUrl = ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL;
 

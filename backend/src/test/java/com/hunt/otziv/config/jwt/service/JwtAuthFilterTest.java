@@ -12,6 +12,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -66,6 +67,11 @@ class JwtAuthFilterTest {
     @Test
     void acceptsLegacyBearerOnlyDuringTheBoundedRolloutWindow() throws Exception {
         ReflectionTestUtils.setField(filter, "legacyBearerEnabled", true);
+        ReflectionTestUtils.setField(
+                filter,
+                "legacyBearerAcceptUntil",
+                Instant.now().plusSeconds(60).toString()
+        );
         LeadDtoTransfer dto = lead();
         String token = jwtService.generateLegacyTransferToken(dto);
         FilterChain chain = mock(FilterChain.class);
@@ -75,6 +81,25 @@ class JwtAuthFilterTest {
 
         assertThat(response.getStatus()).isEqualTo(200);
         verify(chain).doFilter(any(HttpServletRequest.class), same(response));
+    }
+
+    @Test
+    void rejectsLegacyBearerAfterTheBoundedRolloutWindow() throws Exception {
+        ReflectionTestUtils.setField(filter, "legacyBearerEnabled", true);
+        ReflectionTestUtils.setField(
+                filter,
+                "legacyBearerAcceptUntil",
+                Instant.now().minusSeconds(60).toString()
+        );
+        LeadDtoTransfer dto = lead();
+        String token = jwtService.generateLegacyTransferToken(dto);
+        FilterChain chain = mock(FilterChain.class);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request(dto, "Authorization", "Bearer " + token), response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        verify(chain, never()).doFilter(any(), any());
     }
 
     @Test

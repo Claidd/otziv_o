@@ -56,9 +56,24 @@ class WorkloadTransferRepositoryContractTest {
     @Test
     void liveWorkflowStagingUsesCurrentFailureThresholdAndSourceQuota() {
         assertQueryContains(
+                WorkloadShadowTransferRepository.class,
+                "findSourceWorkers",
+                "current.last_day_reached_100 = FALSE"
+        );
+        assertQueryContains(
                 WorkloadTransferWorkflowRepository.class,
                 "findRecommendationCandidates",
                 "transfer_case.failure_number > :allowedFailureDays"
+        );
+        assertQueryContains(
+                WorkloadTransferWorkflowRepository.class,
+                "findRecommendationCandidates",
+                "source_current.failure_days > :allowedFailureDays"
+        );
+        assertQueryContains(
+                WorkloadTransferWorkflowRepository.class,
+                "findRecommendationCandidates",
+                "source_current.last_day_reached_100 = FALSE"
         );
         assertQueryContains(
                 WorkloadTransferWorkflowRepository.class,
@@ -372,6 +387,21 @@ class WorkloadTransferRepositoryContractTest {
         assertQueryContains(
                 WorkloadTransferOfferRepository.class,
                 "lockSingleRecipientForcedTransfers",
+                "candidateCount"
+        );
+        assertQueryContains(
+                WorkloadTransferOfferRepository.class,
+                "lockSingleRecipientForcedTransfers",
+                "unresolved_candidate.status NOT IN"
+        );
+        assertQueryContains(
+                WorkloadTransferOfferRepository.class,
+                "lockSingleRecipientForcedTransfers",
+                "RAND()"
+        );
+        assertQueryDoesNotContain(
+                WorkloadTransferOfferRepository.class,
+                "lockSingleRecipientForcedTransfers",
                 ") = 1"
         );
         assertQueryContains(
@@ -403,6 +433,16 @@ class WorkloadTransferRepositoryContractTest {
                 WorkloadShadowEventRepository.class,
                 "upsertSingleRecipientForcedTransferEvents",
                 "Нужен дополнительный получатель нагрузки"
+        );
+        assertQueryContains(
+                WorkloadShadowEventRepository.class,
+                "upsertExhaustedQueueForcedTransferEvents",
+                "LIVE_EXHAUSTED_QUEUE_FORCED"
+        );
+        assertQueryContains(
+                WorkloadShadowEventRepository.class,
+                "upsertExhaustedQueueForcedTransferEvents",
+                "Задачи без связанного заказа не передаются"
         );
     }
 
@@ -640,6 +680,16 @@ class WorkloadTransferRepositoryContractTest {
 
     @Test
     void emergencyFallbackIsOneCardAndNeverACompanyPackage() {
+        assertQueryContains(
+                WorkloadEmergencyAssignmentRepository.class,
+                "findReadyCases",
+                "source_current.last_day_reached_100 = FALSE"
+        );
+        assertQueryContains(
+                WorkloadEmergencyAssignmentRepository.class,
+                "insertPrepared",
+                "source_current.last_day_reached_100 = FALSE"
+        );
         assertQueryContains(
                 WorkloadEmergencyAssignmentRepository.class,
                 "transferReview",

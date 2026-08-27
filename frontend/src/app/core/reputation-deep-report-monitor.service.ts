@@ -32,7 +32,7 @@ export class ReputationDeepReportMonitorService {
   ) {}
 
   restore(): void {
-    const stored = Number(window.localStorage.getItem(ACTIVE_DEEP_REPORT_COMPANY_KEY));
+    const stored = Number(this.storage()?.getItem(ACTIVE_DEEP_REPORT_COMPANY_KEY));
     if (Number.isFinite(stored) && stored > 0) {
       this.watch(Math.trunc(stored), this.readStoredContext());
     }
@@ -44,7 +44,7 @@ export class ReputationDeepReportMonitorService {
       return;
     }
 
-    window.localStorage.setItem(ACTIVE_DEEP_REPORT_COMPANY_KEY, String(id));
+    this.storage()?.setItem(ACTIVE_DEEP_REPORT_COMPANY_KEY, String(id));
     this.activeContext = context;
     this.writeStoredContext(context);
     if (this.activeCompanyId === id && this.pollSubscription) {
@@ -72,8 +72,8 @@ export class ReputationDeepReportMonitorService {
   }
 
   clear(): void {
-    window.localStorage.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
-    window.localStorage.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
+    this.storage()?.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
+    this.storage()?.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
     this.stopPolling();
     this.currentJob.set(null);
   }
@@ -82,8 +82,8 @@ export class ReputationDeepReportMonitorService {
     this.currentJob.set(job);
     if (job.status === 'DONE') {
       const context = this.activeContext;
-      window.localStorage.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
-      window.localStorage.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
+      this.storage()?.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
+      this.storage()?.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
       this.stopPolling();
       this.toastService.success(
         this.doneTitle(job),
@@ -94,8 +94,8 @@ export class ReputationDeepReportMonitorService {
     }
 
     if (job.status === 'FAILED') {
-      window.localStorage.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
-      window.localStorage.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
+      this.storage()?.removeItem(ACTIVE_DEEP_REPORT_COMPANY_KEY);
+      this.storage()?.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
       this.stopPolling();
       this.toastService.error('Глубокий отчёт не собрался', deepReportErrorMessage(job.errorMessage));
     }
@@ -148,8 +148,16 @@ export class ReputationDeepReportMonitorService {
     return 'Глубокий отчёт готов';
   }
 
+  private storage(): Storage | null {
+    try {
+      return typeof window === 'undefined' ? null : (window.localStorage ?? null);
+    } catch {
+      return null;
+    }
+  }
+
   private readStoredContext(): DeepReportMonitorContext | null {
-    const raw = window.localStorage.getItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
+    const raw = this.storage()?.getItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
     if (!raw) {
       return null;
     }
@@ -164,10 +172,10 @@ export class ReputationDeepReportMonitorService {
 
   private writeStoredContext(context: DeepReportMonitorContext | null): void {
     if (!context) {
-      window.localStorage.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
+      this.storage()?.removeItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY);
       return;
     }
 
-    window.localStorage.setItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY, JSON.stringify(context));
+    this.storage()?.setItem(ACTIVE_DEEP_REPORT_CONTEXT_KEY, JSON.stringify(context));
   }
 }

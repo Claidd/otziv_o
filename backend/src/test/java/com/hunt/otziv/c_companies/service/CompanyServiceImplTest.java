@@ -6,6 +6,7 @@ import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.repository.CompanyInfoRepository;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
@@ -31,6 +32,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import jakarta.persistence.Transient;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Optional;
@@ -164,6 +166,50 @@ class CompanyServiceImplTest {
     @Test
     void companyInfoIsLoadedExplicitlyInsteadOfTriggeringInverseOneToOneChecks() throws Exception {
         assertTrue(Company.class.getDeclaredField("info").isAnnotationPresent(Transient.class));
+    }
+
+    @Test
+    void findByGroupIdPrefersActiveNonBannedNewestCompanyWhenGroupIsShared() {
+        CompanyServiceImpl service = service();
+        CompanyStatus activeStatus = new CompanyStatus();
+        activeStatus.setTitle("В работе");
+        CompanyStatus bannedStatus = new CompanyStatus();
+        bannedStatus.setTitle("бан");
+        Company inactive = Company.builder()
+                .id(10L)
+                .title("Старая карточка")
+                .active(false)
+                .status(activeStatus)
+                .statusChangedAt(LocalDateTime.of(2026, 8, 20, 10, 0))
+                .build();
+        Company banned = Company.builder()
+                .id(11L)
+                .title("Забаненная карточка")
+                .active(true)
+                .status(bannedStatus)
+                .statusChangedAt(LocalDateTime.of(2026, 8, 21, 10, 0))
+                .build();
+        Company selected = Company.builder()
+                .id(12L)
+                .title("Актуальная карточка")
+                .active(true)
+                .status(activeStatus)
+                .statusChangedAt(LocalDateTime.of(2026, 8, 22, 10, 0))
+                .build();
+        Company olderActive = Company.builder()
+                .id(13L)
+                .title("Активная, но старее")
+                .active(true)
+                .status(activeStatus)
+                .statusChangedAt(LocalDateTime.of(2026, 8, 19, 10, 0))
+                .build();
+        when(companyRepository.findAllByGroupId("120363-test@g.us"))
+                .thenReturn(List.of(inactive, banned, selected, olderActive));
+
+        Optional<Company> result = service.findByGroupId("120363-test@g.us");
+
+        assertTrue(result.isPresent());
+        assertEquals(12L, result.get().getId());
     }
 
     private CompanyServiceImpl service() {

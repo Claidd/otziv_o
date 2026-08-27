@@ -8,6 +8,8 @@ import type {
   ManagerApi,
   OrderCardItem,
   OrderEditPayload,
+  PaymentRouteChangeContext,
+  PaymentRouteChangeTarget,
   OrderUpdateRequest
 } from '../../core/manager.api';
 import type { ToastService } from '../../shared/toast.service';
@@ -34,6 +36,9 @@ type ManagerBoardOrderApi = Pick<
   | 'updateOrder'
   | 'deleteOrder'
   | 'cancelOrderPayment'
+  | 'getPaymentRouteChangeContext'
+  | 'changePaymentRoute'
+  | 'markPaperInvoiceIssued'
 >;
 
 type ManagerBoardOrderToast = Pick<ToastService, 'success' | 'error'>;
@@ -54,6 +59,9 @@ export class ManagerBoardOrderFacade {
   readonly orderSaving = signal(false);
   readonly orderError = signal<string | null>(null);
   readonly orderDeleting = signal(false);
+  readonly paymentRouteContext = signal<PaymentRouteChangeContext | null>(null);
+  readonly paymentRouteContextLoading = signal(false);
+  readonly paymentRouteChanging = signal(false);
   readonly orderCancelingPayment = signal(false);
   readonly createOrderPayload = signal<CompanyOrderCreatePayload | null>(null);
   readonly createOrderDraft = signal<CompanyOrderCreateRequest | null>(null);
@@ -142,6 +150,9 @@ export class ManagerBoardOrderFacade {
 
   openOrderEdit(order: OrderCardItem): void {
     this.orderLoading.set(true);
+    this.paymentRouteContext.set(null);
+    this.paymentRouteContextLoading.set(false);
+    this.paymentRouteChanging.set(false);
     this.orderError.set(null);
     this.orderDeleting.set(false);
     this.orderCancelingPayment.set(false);
@@ -161,7 +172,8 @@ export class ManagerBoardOrderFacade {
   }
 
   closeOrderEdit(): void {
-    if (this.orderLoading() || this.orderSaving() || this.orderDeleting() || this.orderCancelingPayment()) {
+    if (this.orderLoading() || this.orderSaving() || this.orderDeleting()
+        || this.orderCancelingPayment() || this.paymentRouteChanging()) {
       return;
     }
 
@@ -169,6 +181,7 @@ export class ManagerBoardOrderFacade {
     this.editOrder.set(null);
     this.orderDraft.set(null);
     this.orderError.set(null);
+    this.paymentRouteContext.set(null);
   }
 
   handleOrderEditDraftChange(change: ManagerOrderEditDraftChange): void {
@@ -268,6 +281,102 @@ export class ManagerBoardOrderFacade {
       }
     });
   }
+  openPaymentRouteChange(): void {
+    const order = this.editOrder();
+    if (!order || this.paymentRouteContextLoading() || this.paymentRouteChanging()) {
+      return;
+    }
+    this.paymentRouteContextLoading.set(true);
+    this.orderError.set(null);
+    this.deps.managerApi.getPaymentRouteChangeContext(order.id).subscribe({
+      next: (context) => {
+        this.paymentRouteContext.set(context);
+        this.paymentRouteContextLoading.set(false);
+      },
+      error: (err) => {
+        const message = this.deps.errorMessage(err, 'Не удалось проверить текущий способ оплаты');
+        this.paymentRouteContextLoading.set(false);
+        this.orderError.set(message);
+        this.deps.toastService.error('Способ оплаты не открыт', message);
+      }
+    });
+  }
+
+  closePaymentRouteChange(): void {
+    if (!this.paymentRouteChanging()) {
+      this.paymentRouteContext.set(null);
+    }
+  }
+
+  changePaymentRoute(target: PaymentRouteChangeTarget): void {
+    const order = this.editOrder();
+    const context = this.paymentRouteContext();
+    if (!order || !context?.canChange || this.paymentRouteChanging()) {
+      return;
+    }
+    const targetTitle = target === 'EMPLOYEE_REQUISITES'
+      ? 'реквизиты специалиста/менеджера'
+      : target === 'OWNER_TBANK'
+        ? 'ссылку эквайринга владельца'
+        : 'режим бумажного счёта владельца';
+    if (!window.confirm(
+      `Клиент еще не оплатил по прежним реквизитам? Старый счет будет закрыт, а клиенту будут отправлены ${targetTitle}.`
+    )) {
+      return;
+    }
+
+    this.paymentRouteChanging.set(true);
+    this.orderError.set(null);
+    this.deps.managerApi.changePaymentRoute(order.id, {
+      expectedPaymentLinkId: context.paymentLinkId,
+      target,
+      confirmedUnpaid: true
+    }).subscribe({
+      next: (response) => {
+        this.paymentRouteChanging.set(false);
+        this.paymentRouteContext.set(null);
+        this.deps.toastService.success('Способ оплаты изменен',
+          response.clientNotificationScheduled
+            ? `Клиенту отправляется новый способ оплаты по заказу #${order.id}`
+            : `Режим сохранён для следующей отправки счёта по заказу #${order.id}`);
+        this.deps.loadBoard();
+      },
+      error: (err) => {
+        const message = this.deps.errorMessage(err, 'Не удалось изменить способ оплаты');
+        this.paymentRouteChanging.set(false);
+        this.orderError.set(message);
+        this.deps.toastService.error('Способ оплаты не изменен', message);
+        this.openPaymentRouteChange();
+      }
+    });
+  }
+
+  markPaperInvoiceIssued(): void {
+    const order = this.editOrder();
+    const context = this.paymentRouteContext();
+    if (!order || context?.configuredMode !== 'OWNER_PAPER_INVOICE'
+      || context.paperInvoiceIssued || context.paymentLinkId == null || this.paymentRouteChanging()) {
+      return;
+    }
+    if (!window.confirm('Подтвердить, что бумажный счёт уже отправлен клиенту? После этого начнутся напоминания.')) {
+      return;
+    }
+    this.paymentRouteChanging.set(true);
+    this.deps.managerApi.markPaperInvoiceIssued(order.id).subscribe({
+      next: () => {
+        this.paymentRouteChanging.set(false);
+        this.deps.toastService.success('Бумажный счёт отмечен как отправленный');
+        this.openPaymentRouteChange();
+      },
+      error: (err) => {
+        const message = this.deps.errorMessage(err, 'Не удалось отметить отправку бумажного счёта');
+        this.paymentRouteChanging.set(false);
+        this.orderError.set(message);
+        this.deps.toastService.error('Отметка не сохранена', message);
+      }
+    });
+  }
+
 
   private applyOrderEditPayload(payload: OrderEditPayload): void {
     const sourceDraft = managerOrderEditDraft(payload);

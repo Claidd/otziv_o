@@ -12,6 +12,11 @@ import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferCompanyGraph.
  * <p>The complete graph is still the transfer boundary. This projection is used only to
  * decide whether the company has a current problem and how much of that problem should be
  * counted by the shadow recommendation.</p>
+ *
+ * <p>Detached nodes are intentionally present in the graph for diagnostics, but they are not
+ * actionable for company transfer. A live transfer can safely move only work attached to a
+ * source-owned active order, because detached tasks do not have an active order bundle that can
+ * be moved with them.</p>
  */
 public record WorkloadTransferActionableWorkload(
         long newUnits,
@@ -38,9 +43,6 @@ public record WorkloadTransferActionableWorkload(
             order.recoveryTasks().forEach(counter::addRecovery);
             order.badTasks().forEach(counter::addBad);
         }
-        graph.detachedReviews().forEach(counter::addReview);
-        graph.detachedRecoveryTasks().forEach(counter::addRecovery);
-        graph.detachedBadTasks().forEach(counter::addBad);
         return counter.toValue();
     }
 

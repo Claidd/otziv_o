@@ -252,6 +252,7 @@ export class WorkerBoardComponent implements OnDestroy {
   });
   private readonly editFacade = new WorkerBoardEditFacade({
     managerApi: this.managerApi,
+    workerApi: this.workerApi,
     toastService: this.toastService,
     loadBoard: () => this.loadBoard(),
     board: this.board,

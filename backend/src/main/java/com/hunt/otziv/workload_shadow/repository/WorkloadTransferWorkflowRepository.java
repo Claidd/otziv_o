@@ -90,6 +90,9 @@ public interface WorkloadTransferWorkflowRepository
             LEFT JOIN financially_unsafe
               ON financially_unsafe.shadow_case_id =
                  transfer_case.workload_shadow_transfer_case_id
+            JOIN workload_shadow_worker_current source_current
+              ON source_current.worker_id = transfer_case.source_worker_id
+             AND source_current.manager_id = transfer_case.manager_id
             JOIN workload_shadow_worker_current candidate_current
               ON candidate_current.worker_id = candidate.worker_id
              AND candidate_current.manager_id = transfer_case.manager_id
@@ -101,6 +104,9 @@ public interface WorkloadTransferWorkflowRepository
               AND transfer_case.status = 'SHADOW_PENDING'
               AND transfer_case.graph_error_count = 0
               AND transfer_case.failure_number > :allowedFailureDays
+              AND source_current.failure_days > :allowedFailureDays
+              AND source_current.last_day_reached_100 = FALSE
+              AND source_current.diagnostic_status = 'OK'
               AND candidate_current.recipient_eligible = TRUE
               AND candidate_current.accepts_company_transfers = TRUE
               AND candidate_current.worker_group_connected = TRUE

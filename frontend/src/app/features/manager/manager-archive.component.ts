@@ -90,6 +90,9 @@ export class ManagerArchiveComponent implements OnDestroy {
   private searchDebounceId: ReturnType<typeof setTimeout> | null = null;
   private loadingArchiveOrderId: number | null = null;
   private lastListQueryKey = '';
+  private lastCommonInvoiceQueryKey = '';
+  private archiveOrdersRequestSeq = 0;
+  private commonInvoiceRequestSeq = 0;
   private readonly routeSubscription: Subscription;
 
   readonly modeTabs: ArchiveModeTab[] = [
@@ -105,6 +108,7 @@ export class ManagerArchiveComponent implements OnDestroy {
   readonly pageSize = signal(10);
   readonly sortDirection = signal<'desc' | 'asc'>('desc');
   readonly loading = signal(false);
+  readonly searchPending = signal(false);
   readonly error = signal<string | null>(null);
   readonly restoreOrder = signal<ArchiveOrderListItem | null>(null);
   readonly restoreDetails = signal<ArchiveOrderDetailsPayload | null>(null);
@@ -126,6 +130,16 @@ export class ManagerArchiveComponent implements OnDestroy {
   readonly restoreStatuses = RESTORE_STATUS_OPTIONS;
 
   readonly orders = computed(() => this.ordersPage().content ?? []);
+  readonly archiveListBusy = computed(() => this.loading() || this.searchPending());
+  readonly archiveSearchStatus = computed(() => {
+    if (this.searchPending()) {
+      return 'Готовлю поиск...';
+    }
+    if (this.loading()) {
+      return 'Ищу в архиве...';
+    }
+    return '';
+  });
   readonly rightMetrics = computed<ArchiveSideMetric[]>(() => {
     const orders = this.orders();
     const total = this.ordersPage().totalElements;
@@ -161,14 +175,19 @@ export class ManagerArchiveComponent implements OnDestroy {
 
   search(): void {
     this.clearSearchDebounce();
+    this.searchPending.set(true);
     this.navigateArchiveState({ keyword: this.keyword(), pageNumber: 0, archiveOrderId: null });
+    this.clearPendingSearchIfQueryUnchanged({ keyword: this.keyword(), pageNumber: 0, archiveOrderId: null });
   }
 
   updateKeyword(value: string): void {
     this.keyword.set(value);
+    this.searchPending.set(true);
     this.clearSearchDebounce();
     this.searchDebounceId = setTimeout(() => {
-      this.navigateArchiveState({ keyword: this.keyword(), pageNumber: 0, archiveOrderId: null }, true);
+      const patch: Partial<ArchiveRouteState> = { keyword: this.keyword(), pageNumber: 0, archiveOrderId: null };
+      this.navigateArchiveState(patch, true);
+      this.clearPendingSearchIfQueryUnchanged(patch);
       this.searchDebounceId = null;
     }, 450);
   }
@@ -199,7 +218,7 @@ export class ManagerArchiveComponent implements OnDestroy {
   }
 
   refresh(): void {
-    this.loadOrders();
+    this.loadOrders(true);
   }
 
   toggleSortDirection(): void {
@@ -272,7 +291,7 @@ export class ManagerArchiveComponent implements OnDestroy {
         this.commonInvoiceMutationId.set(null);
         this.commonInvoiceDetails.set(null);
         this.toastService.success('Общий счет восстановлен', result.message);
-        this.loadOrders();
+        this.loadOrders(true);
       },
       error: (err) => {
         this.commonInvoiceMutationId.set(null);
@@ -519,8 +538,10 @@ export class ManagerArchiveComponent implements OnDestroy {
     return order.source === 'archive';
   }
 
-  private loadOrders(): void {
-    this.loadCommonInvoices();
+  private loadOrders(forceCommonInvoices = false): void {
+    this.loadCommonInvoices(forceCommonInvoices);
+    const requestSeq = ++this.archiveOrdersRequestSeq;
+    this.searchPending.set(false);
     this.loading.set(true);
     this.error.set(null);
 
@@ -532,10 +553,16 @@ export class ManagerArchiveComponent implements OnDestroy {
       sortDirection: this.sortDirection()
     }).subscribe({
       next: (page) => {
+        if (requestSeq !== this.archiveOrdersRequestSeq) {
+          return;
+        }
         this.ordersPage.set(page);
         this.loading.set(false);
       },
       error: (err) => {
+        if (requestSeq !== this.archiveOrdersRequestSeq) {
+          return;
+        }
         const message = apiErrorMessage(err, 'Архив заказов не загрузился');
         this.error.set(message);
         this.loading.set(false);
@@ -544,7 +571,14 @@ export class ManagerArchiveComponent implements OnDestroy {
     });
   }
 
-  private loadCommonInvoices(): void {
+  private loadCommonInvoices(force = false): void {
+    const queryKey = this.commonInvoiceQueryKey();
+    if (!force && queryKey === this.lastCommonInvoiceQueryKey) {
+      return;
+    }
+
+    this.lastCommonInvoiceQueryKey = queryKey;
+    const requestSeq = ++this.commonInvoiceRequestSeq;
     this.commonInvoiceLoading.set(true);
     this.commonBillingApi.archiveInvoices({
       keyword: this.keyword(),
@@ -553,11 +587,17 @@ export class ManagerArchiveComponent implements OnDestroy {
       sortDirection: this.sortDirection()
     }).subscribe({
       next: (page) => {
+        if (requestSeq !== this.commonInvoiceRequestSeq) {
+          return;
+        }
         this.commonInvoiceArchives.set(page.content ?? []);
         this.commonInvoiceArchiveTotal.set(page.totalElements ?? 0);
         this.commonInvoiceLoading.set(false);
       },
       error: (err) => {
+        if (requestSeq !== this.commonInvoiceRequestSeq) {
+          return;
+        }
         this.commonInvoiceLoading.set(false);
         this.toastService.error(
           'Общие счета не загрузились',
@@ -633,6 +673,8 @@ export class ManagerArchiveComponent implements OnDestroy {
     if (listKey !== this.lastListQueryKey) {
       this.lastListQueryKey = listKey;
       this.loadOrders();
+    } else {
+      this.searchPending.set(false);
     }
 
     if (nextState.archiveOrderId) {
@@ -706,6 +748,26 @@ export class ManagerArchiveComponent implements OnDestroy {
       queryParams: this.routeQueryParams(state),
       replaceUrl
     });
+  }
+
+  private clearPendingSearchIfQueryUnchanged(patch: Partial<ArchiveRouteState>): void {
+    const state: ArchiveRouteState = {
+      mode: this.mode(),
+      keyword: this.keyword(),
+      pageNumber: this.pageNumber(),
+      pageSize: this.pageSize(),
+      sortDirection: this.sortDirection(),
+      archiveOrderId: this.activeArchiveOrderId(),
+      ...patch
+    };
+
+    if (this.listQueryKey(state) === this.lastListQueryKey) {
+      this.searchPending.set(false);
+    }
+  }
+
+  private commonInvoiceQueryKey(): string {
+    return [this.keyword().trim(), this.sortDirection()].join('|');
   }
 
   private readRouteState(params: ParamMap): ArchiveRouteState {

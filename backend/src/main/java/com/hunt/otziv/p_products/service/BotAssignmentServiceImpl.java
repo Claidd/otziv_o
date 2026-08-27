@@ -415,9 +415,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
 
         log.info("Проверка наличия ботов-заглушек...");
-        int replacedStubBots = replaceStubBotsFromReservePool(reviews, forceWalkDelayIfUnwalked);
+        int replacedStubBots = replaceStubBotsWithAvailableAccounts(reviews, forceWalkDelayIfUnwalked);
         if (replacedStubBots > 0) {
-            log.warn("Заменено {} ботов-заглушек резервными аккаунтами из общего пула", replacedStubBots);
+            log.warn("Заменено {} ботов-заглушек реальными аккаунтами", replacedStubBots);
         }
 
         long stubBotCount = reviews.stream()
@@ -435,7 +435,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
     }
 
-    private int replaceStubBotsFromReservePool(List<Review> reviews, boolean forceWalkDelayIfUnwalked) {
+    private int replaceStubBotsWithAvailableAccounts(List<Review> reviews, boolean forceWalkDelayIfUnwalked) {
         Set<Long> usedBotIds = reviews.stream()
                 .map(Review::getBot)
                 .filter(Objects::nonNull)
@@ -467,13 +467,13 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
             usedBotIds.addAll(getUsedBotIdsInCompany(filial));
             usedBotIds.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
-            Bot reserveBot = claimReserveBot(filial, usedBotIds, reviewIndex);
-            if (reserveBot == null || STUB_BOT_ID.equals(reserveBot.getId())) {
+            Bot replacementBot = claimReplacementBotForStub(filial, usedBotIds, reviewIndex);
+            if (replacementBot == null || STUB_BOT_ID.equals(replacementBot.getId())) {
                 continue;
             }
 
-            review.setBot(reserveBot);
-            updateReviewVigulBasedOnBotCounter(review, reserveBot);
+            review.setBot(replacementBot);
+            updateReviewVigulBasedOnBotCounter(review, replacementBot);
             accountWalkScheduleService.synchronizeAfterAccountChange(review);
             changedReviews.add(review);
         }
@@ -483,6 +483,24 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
 
         return changedReviews.size();
+    }
+
+    private Bot claimReplacementBotForStub(Filial filial, Set<Long> usedBotIds, int reviewIndex) {
+        if (filial != null
+                && filial.getCity() != null
+                && OWN_CITY_NEW_ACCOUNT_CITY_IDS.contains(filial.getCity().getId())) {
+            Bot ownCityBot = claimFreshWalkAccount(filial, usedBotIds, reviewIndex);
+            if (ownCityBot != null) {
+                Bot lockedOwnCityBot = lockEligibleCandidate(ownCityBot, filial);
+                if (lockedOwnCityBot != null) {
+                    return lockedOwnCityBot;
+                }
+                log.warn("Аккаунт из своего города для замены заглушки отзыва {} не прошел повторную проверку",
+                        reviewIndex + 1);
+            }
+        }
+
+        return claimReserveBot(filial, usedBotIds, reviewIndex);
     }
 
     private boolean hasStubBot(Review review) {

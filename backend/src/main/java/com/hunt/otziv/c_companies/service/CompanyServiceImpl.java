@@ -563,11 +563,36 @@ public class CompanyServiceImpl implements CompanyService{
     @Override
     public Optional<Company> findByGroupId(String groupId) {
         List<Company> companies = companyRepository.findAllByGroupId(groupId);
-        if (companies.size() > 1) {
-            log.warn("Найдено {} компаний с одинаковым WhatsApp groupId={}. Для общей обработки выбрана первая: id={}",
-                    companies.size(), groupId, companies.getFirst().getId());
+        if (companies.isEmpty()) {
+            return Optional.empty();
         }
-        return companies.stream().findFirst();
+        Company selected = companies.stream()
+                .min(Comparator
+                        .comparing((Company company) -> !activeNonBanned(company))
+                        .thenComparing(
+                                company -> Optional.ofNullable(company.getStatusChangedAt())
+                                        .orElse(LocalDateTime.MIN),
+                                Comparator.reverseOrder()
+                        )
+                        .thenComparing(
+                                Company::getId,
+                                Comparator.nullsLast(Comparator.naturalOrder())
+                        ))
+                .orElse(companies.getFirst());
+        if (companies.size() > 1) {
+            log.warn("Найдено {} компаний с одинаковым WhatsApp groupId={}. Для общей обработки выбрана наиболее актуальная: id={}",
+                    companies.size(), groupId, selected.getId());
+        }
+        return Optional.of(selected);
+    }
+
+    private boolean activeNonBanned(Company company) {
+        if (company == null || !company.isActive()) {
+            return false;
+        }
+        CompanyStatus status = company.getStatus();
+        String title = status == null ? "" : status.getTitle();
+        return title == null || !title.trim().equalsIgnoreCase("бан");
     }
 
     private Manager operatorManager(Operator operator) {

@@ -21,9 +21,12 @@ import com.hunt.otziv.common_billing.dto.CommonInvoiceManualCardPaymentRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceNextCycleResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceOrderResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRefResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeContextResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentInitCheckRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse;
 import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
+import com.hunt.otziv.common_billing.dto.InvoicePaymentModeChangeRequest;
 import com.hunt.otziv.common_billing.dto.PublicCommonInvoiceResponse;
 import com.hunt.otziv.common_billing.model.CommonBillingAccount;
 import com.hunt.otziv.common_billing.model.CommonBillingAccountCompany;
@@ -68,8 +71,10 @@ import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
 import com.hunt.otziv.payments.dto.PaymentRouteSelection;
+import com.hunt.otziv.payments.dto.PaymentRouteChangeTarget;
 import com.hunt.otziv.payments.dto.TbankCancelCommand;
 import com.hunt.otziv.payments.dto.TbankCancelResponse;
+import com.hunt.otziv.payments.dto.TbankGetStateResponse;
 import com.hunt.otziv.payments.dto.TbankInitCommand;
 import com.hunt.otziv.payments.dto.TbankInitResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
@@ -78,11 +83,13 @@ import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.model.PaymentMethod;
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.PaymentIssueReminderService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
@@ -274,6 +281,7 @@ public class CommonBillingService {
     private static final String PAYMENT_METHOD_TBANK = "TBANK";
     private static final String PAYMENT_METHOD_MANUAL = "MANUAL";
     private static final String PAYMENT_METHOD_MIXED = "MIXED";
+    private static final String PAYMENT_METHOD_OWNER_PAPER_INVOICE = "OWNER_PAPER_INVOICE";
     private static final String PAYMENT_REF_INIT_PREPARED = "INIT_PREPARED";
     private static final String PAYMENT_REF_INIT_CONFLICT = "INIT_CONFLICT";
     private static final String PAYMENT_REF_CURRENT = "CURRENT";
@@ -443,6 +451,7 @@ public class CommonBillingService {
     private final ObjectProvider<OrderDeletionService> orderDeletionServiceProvider;
     private final PaymentLinkRepository paymentLinkRepository;
     private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+    private final PaymentIssueReminderService paymentIssueReminderService;
     private final ManualPaymentTaskService manualPaymentTaskService;
     private final OrderDtoMapper orderDtoMapper;
     private final OrderStatusService orderStatusService;
@@ -1041,16 +1050,24 @@ public class CommonBillingService {
         );
         int sent = 0;
         for (CommonInvoice candidate : invoices) {
-            PreparedCommonInvoiceMessage prepared = writeTransaction(() ->
-                    preparePaymentMessage(candidate.getId(), false, false, false, null, false)
-            );
-            if (prepared == null) {
-                continue;
-            }
-            ClientMessageSendResult result = sendPreparedPaymentMessage(prepared);
-            boolean delivered = writeTransaction(() -> finishPaymentMessageSend(prepared, result));
-            if (delivered) {
-                sent++;
+            try {
+                PreparedCommonInvoiceMessage prepared = writeTransaction(() ->
+                        preparePaymentMessage(candidate.getId(), false, false, false, null, false)
+                );
+                if (prepared == null) {
+                    continue;
+                }
+                ClientMessageSendResult result = sendPreparedPaymentMessage(prepared);
+                boolean delivered = writeTransaction(() -> finishPaymentMessageSend(prepared, result));
+                if (delivered) {
+                    sent++;
+                }
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "Common billing unsent invoice skipped; other invoices will continue: invoiceId={}, failure={}",
+                        candidate == null ? null : candidate.getId(),
+                        readableException(exception)
+                );
             }
         }
         return sent;
@@ -1855,6 +1872,854 @@ public class CommonBillingService {
                     "Заказ связан с общим счетом, который уже содержит платежные данные; нужна ручная проверка"
             );
         }
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CommonInvoiceDetailsResponse changeInvoicePaymentMode(
+            Long invoiceId,
+            InvoicePaymentModeChangeRequest request,
+            Principal principal
+    ) {
+        InvoicePaymentMode requestedMode = request == null ? null : request.mode();
+        if (requestedMode == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите способ оплаты общего счёта");
+        }
+        if (request == null || !request.confirmedUnpaid()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Подтвердите, что клиент не оплатил по ранее отправленному способу"
+            );
+        }
+
+        String actor = principal == null ? "system" : normalize(principal.getName());
+        PreparedInvoicePaymentModeChange prepared = writeTransaction(() ->
+                prepareInvoicePaymentModeChange(invoiceId, requestedMode, actor)
+        );
+        if (prepared.providerPaymentRefId() == null) {
+            return writeTransaction(() -> invoiceAfterOrderPrelude(invoiceId));
+        }
+
+        PaperInvoiceBankResolution resolution = resolvePaperInvoiceBankSession(prepared);
+        PaperInvoiceModeSwitchResult result = writeTransaction(() ->
+                finishInvoicePaymentModeChange(prepared, resolution)
+        );
+        if (!result.switched()) {
+            throw new ResponseStatusException(result.failureStatus(), result.failureMessage());
+        }
+        return writeTransaction(() -> invoiceAfterOrderPrelude(invoiceId));
+    }
+
+    @Transactional(readOnly = true)
+    public CommonInvoicePaymentRouteChangeContextResponse commonInvoicePaymentRouteChangeContext(
+            Long invoiceId
+    ) {
+        CommonInvoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        List<CommonInvoicePaymentRef> paymentRefs = paymentRefRepository
+                .findByInvoiceIdOrderByCreatedAtAsc(invoiceId);
+        String blockReason = commonInvoiceRouteChangeBlockReason(invoice, paymentRefs);
+        return new CommonInvoicePaymentRouteChangeContextResponse(
+                commonInvoiceRouteLabel(invoice),
+                isTbankCommonRoute(invoice)
+                        ? PaymentRouteChangeTarget.OWNER_TBANK
+                        : PaymentRouteChangeTarget.EMPLOYEE_REQUISITES,
+                commonInvoiceRouteRecipient(invoice),
+                invoice.getStatus() == null ? "UNKNOWN" : invoice.getStatus().name(),
+                blockReason == null,
+                blockReason == null ? "" : blockReason,
+                commonInvoiceRouteChangeToken(invoice, paymentRefs)
+        );
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public CommonInvoiceDetailsResponse changeCommonInvoicePaymentRoute(
+            Long invoiceId,
+            CommonInvoicePaymentRouteChangeRequest request,
+            Principal principal
+    ) {
+        if (request == null || request.target() == null
+                || (request.target() != PaymentRouteChangeTarget.EMPLOYEE_REQUISITES
+                && request.target() != PaymentRouteChangeTarget.OWNER_TBANK)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Для общего счёта можно выбрать реквизиты сотрудника или ссылку T-Bank владельца"
+            );
+        }
+        if (!request.confirmedUnpaid()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Подтвердите, что клиент ещё не оплатил по прежнему способу"
+            );
+        }
+        String actor = principal == null ? "system" : normalize(principal.getName());
+        boolean changed = writeTransaction(() -> replaceCommonInvoicePaymentRouteLocked(
+                invoiceId,
+                request,
+                actor
+        ));
+        return changed
+                ? sendInvoice(invoiceId, true)
+                : writeTransaction(() -> invoiceAfterOrderPrelude(invoiceId));
+    }
+
+    private boolean replaceCommonInvoicePaymentRouteLocked(
+            Long invoiceId,
+            CommonInvoicePaymentRouteChangeRequest request,
+            String actor
+    ) {
+        CommonInvoice invoice = lockedInvoice(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        List<CommonInvoicePaymentRef> paymentRefs = paymentRefRepository.findByInvoiceIdForUpdate(invoiceId);
+        String expectedToken = normalize(request.expectedPaymentEvidenceToken());
+        String currentToken = commonInvoiceRouteChangeToken(invoice, paymentRefs);
+        if (expectedToken.isBlank() || !MessageDigest.isEqual(
+                expectedToken.getBytes(StandardCharsets.UTF_8),
+                currentToken.getBytes(StandardCharsets.UTF_8)
+        )) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Способ оплаты общего счёта уже изменился. Обновите карточку и повторите"
+            );
+        }
+        String blockReason = commonInvoiceRouteChangeBlockReason(invoice, paymentRefs);
+        if (blockReason != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, blockReason);
+        }
+        boolean currentlyOwnerTbank = isTbankCommonRoute(invoice);
+        if ((request.target() == PaymentRouteChangeTarget.OWNER_TBANK && currentlyOwnerTbank)
+                || (request.target() == PaymentRouteChangeTarget.EMPLOYEE_REQUISITES
+                && !currentlyOwnerTbank)) {
+            return false;
+        }
+
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        refreshInvoiceAmounts(invoice, items);
+        long remaining = remainingKopecks(invoice);
+        if (remaining <= 0 || !Objects.equals(invoice.getPaymentRouteAmountKopecks(), remaining)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сумма общего счёта изменилась. Обновите счёт перед сменой способа оплаты"
+            );
+        }
+        List<Order> routeOrders = items.stream()
+                .map(CommonInvoiceOrder::getOrder)
+                .filter(Objects::nonNull)
+                .toList();
+        Manager routeManager = manager(invoice);
+        String reason = "Способ оплаты общего счёта изменён по просьбе клиента";
+        if (invoice.getPaymentRouteManualSource() == ManualPaymentSource.MANUAL_TASK) {
+            taskReceiptIntegrationService.release(invoice, reason);
+        } else if (invoice.getContractorAllocationId() != null) {
+            contractorPaymentLiveRoutingService.releaseCommonInvoiceRouteForReplacement(
+                    invoice,
+                    reason,
+                    "LIVE_COMMON:ROUTE_REPLACED"
+            );
+        }
+
+        clearCommonPaymentRouteForModeSwitch(invoice);
+        invoice.setSentAt(null);
+        invoice.setLastReminderAt(null);
+        invoice.setNextReminderAt(null);
+        invoice.setLastError(null);
+
+        PaymentRouteSelection route;
+        ContractorPaymentAllocation allocation = null;
+        if (request.target() == PaymentRouteChangeTarget.EMPLOYEE_REQUISITES) {
+            Optional<PaymentRouteSelection> taskRoute = paymentLinkService().selectCommonInvoiceTaskRoute(
+                    invoice,
+                    routeManager,
+                    remaining
+            );
+            if (taskRoute.isPresent()) {
+                route = taskRoute.get();
+            } else {
+                allocation = requireLiveCommonInvoiceAllocation(
+                        invoice,
+                        contractorPaymentLiveRoutingService.reserveContractorForCommonInvoice(
+                                invoice,
+                                routeOrders,
+                                routeManager,
+                                remaining
+                        )
+                );
+                if (!isContractorRecipient(allocation)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Не удалось выбрать специалиста или менеджера для общего счёта"
+                    );
+                }
+                route = contractorCommonPaymentRoute(invoice, allocation);
+            }
+        } else {
+            allocation = requireLiveCommonInvoiceAllocation(
+                    invoice,
+                    contractorPaymentLiveRoutingService.reserveOwnerForCommonInvoice(
+                            invoice,
+                            routeOrders,
+                            routeManager,
+                            remaining
+                    )
+            );
+            route = paymentLinkService().selectCommonInvoiceOwnerAcquiringRoute(routeManager, remaining);
+        }
+        applyCommonPaymentRoute(invoice, route, remaining);
+        if (allocation != null) {
+            invoice.setContractorAllocationId(allocation.getId());
+            if (isContractorRecipient(allocation)) {
+                invoice.setPaymentRouteManualPhone(null);
+                invoice.setPaymentRouteManualRecipient(null);
+                invoice.setPaymentRouteManualBankName(limit(allocation.getBankNameSnapshot(), 120));
+                invoice.setPaymentRouteManualComment(null);
+                invoice.setPaymentRouteInstructionText(null);
+            }
+        }
+        invoiceRepository.save(invoice);
+        log.info(
+                "Common invoice payment route replaced: invoiceId={}, target={}, actor={}, allocationId={}",
+                invoiceId,
+                request.target(),
+                actor,
+                invoice.getContractorAllocationId()
+        );
+        return true;
+    }
+
+    private String commonInvoiceRouteChangeBlockReason(
+            CommonInvoice invoice,
+            List<CommonInvoicePaymentRef> paymentRefs
+    ) {
+        if (invoice == null || invoice.getId() == null) {
+            return "Общий счёт не найден";
+        }
+        if (invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE) {
+            return "Для счёта включён бумажный режим. Сначала верните автоматическое распределение";
+        }
+        if (!hasFrozenCommonPaymentRoute(invoice)) {
+            return "Способ оплаты общего счёта ещё не сформирован";
+        }
+        if (!SEND_INVOICE_STATUSES.contains(invoice.getStatus())) {
+            return "Общий счёт уже закрыт или требует отдельной сверки";
+        }
+        if (invoice.getPaidKopecks() > 0 || invoice.getClientReportedAt() != null
+                || invoice.getManualConfirmedAt() != null) {
+            return "По общему счёту уже есть признаки оплаты; сначала выполните сверку";
+        }
+        if (hasCurrentTbankPaymentBinding(invoice)
+                || !normalize(invoice.getPaymentUrl()).isBlank()
+                || PAYMENT_INIT_IN_PROGRESS.equals(normalize(invoice.getLastError()))) {
+            return "Клиент уже открыл банковскую оплату; автоматическая смена получателя заблокирована"
+                    + " до сверки T-Bank";
+        }
+        boolean unresolvedProviderAttempt = (paymentRefs == null
+                ? List.<CommonInvoicePaymentRef>of()
+                : paymentRefs).stream()
+                .filter(Objects::nonNull)
+                .map(this::paymentRefStatus)
+                .anyMatch(status -> !MANUAL_COMMON_PAYMENT_SAFE_REF_STATUSES.contains(status));
+        if (unresolvedProviderAttempt) {
+            return "По общему счёту есть незавершённая банковская попытка; нужна сверка T-Bank";
+        }
+        if (invoice.getContractorAllocationId() != null
+                && contractorPaymentLiveRoutingService.frozenCommonRouteAction(
+                        invoice.getId(), invoice.getContractorAllocationId()) != FrozenCommonRouteAction.KEEP) {
+            return "Резерв прежнего получателя уже изменился и требует ручной сверки";
+        }
+        return null;
+    }
+
+    private String commonInvoiceRouteLabel(CommonInvoice invoice) {
+        if (isTbankCommonRoute(invoice)) {
+            return "Ссылка T-Bank владельца";
+        }
+        if (isManualMobileBankCommonRoute(invoice)) {
+            return "Оплата по реквизитам";
+        }
+        return normalize(invoice == null ? null : invoice.getPaymentRouteType()).isBlank()
+                ? "Не сформирован"
+                : normalize(invoice.getPaymentRouteType());
+    }
+
+    private String commonInvoiceRouteRecipient(CommonInvoice invoice) {
+        if (isTbankCommonRoute(invoice)) {
+            return "Владелец";
+        }
+        String recipient = normalize(invoice == null ? null : invoice.getPaymentRouteProfileName());
+        if (recipient.isBlank() && invoice != null && invoice.getContractorAllocationId() != null) {
+            try {
+                recipient = normalize(requiredPreparedCommonContractorRequisites(invoice).recipientName());
+            } catch (RuntimeException ignored) {
+                // Context remains readable; mutation still performs strict locked validation.
+            }
+        }
+        return recipient;
+    }
+
+    private String commonInvoiceRouteChangeToken(
+            CommonInvoice invoice,
+            List<CommonInvoicePaymentRef> paymentRefs
+    ) {
+        StringBuilder snapshot = new StringBuilder(512);
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getId());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getStatus());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getInvoicePaymentMode());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getPaidKopecks());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getPaymentRouteType());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getPaymentRouteSelectedAt());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getPaymentRouteAmountKopecks());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getContractorAllocationId());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getPaymentRouteManualTaskId());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getPaymentRouteManualTaskGeneration());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getTbankOrderId());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getTbankPaymentId());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getTbankTerminalKey());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getTbankPaymentAmountKopecks());
+        appendEvidenceField(snapshot, invoice == null ? null : invoice.getPaymentUrl());
+        for (CommonInvoicePaymentRef ref : paymentRefs == null
+                ? List.<CommonInvoicePaymentRef>of()
+                : paymentRefs) {
+            if (ref == null) {
+                continue;
+            }
+            appendEvidenceField(snapshot, ref.getId());
+            appendEvidenceField(snapshot, ref.getStatus());
+            appendEvidenceField(snapshot, ref.getTbankPaymentId());
+            appendEvidenceField(snapshot, ref.getAmountKopecks());
+        }
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
+                    snapshot.toString().getBytes(StandardCharsets.UTF_8)
+            ));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private PreparedInvoicePaymentModeChange prepareInvoicePaymentModeChange(
+            Long invoiceId,
+            InvoicePaymentMode requestedMode,
+            String actor
+    ) {
+        CommonInvoice invoice = lockedInvoice(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        if (invoice.getStatus() == CommonInvoiceStatus.PAID
+                || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED
+                || invoice.getStatus() == CommonInvoiceStatus.DISABLED
+                || invoice.getStatus() == CommonInvoiceStatus.BAN) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Закрытый общий счёт изменить нельзя");
+        }
+        if (invoice.getInvoicePaymentMode() == requestedMode) {
+            return PreparedInvoicePaymentModeChange.completed(invoiceId, requestedMode, actor);
+        }
+        if (requestedMode == InvoicePaymentMode.AUTO_ROUTING && invoice.getPaperInvoiceIssuedAt() != null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Бумажный счёт уже отправлен клиенту. Сначала проверьте его оплату вручную"
+            );
+        }
+        ensurePaperModeSwitchHasNoFinancialEvidence(invoice);
+
+        if (requestedMode == InvoicePaymentMode.OWNER_PAPER_INVOICE && hasCurrentTbankPaymentBinding(invoice)) {
+            CommonInvoicePaymentRef paymentRef = currentPaymentRefForPaperModeSwitch(invoice);
+            String refStatus = normalize(paymentRef.getStatus()).toUpperCase(Locale.ROOT);
+            if (isPaperModeSwitchSafeTerminalStatus(refStatus)) {
+                recordCurrentPaymentRef(invoice, refStatus, "paper_invoice_mode_switch_provider_already_closed");
+                applyInvoicePaymentModeChange(invoice, requestedMode, actor);
+                return PreparedInvoicePaymentModeChange.completed(invoiceId, requestedMode, actor);
+            }
+            if (isPaperModeSwitchFinancialStatus(refStatus)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "T-Bank уже зафиксировал платёжный статус " + refStatus
+                                + ". Бумажный режим не включён; нужна сверка оплаты"
+                );
+            }
+            if (!canCancelInitializedPaymentRef(paymentRef)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Банковская попытка заполнена не полностью. Бумажный режим не включён; нужна сверка T-Bank"
+                );
+            }
+            if (PAYMENT_REF_CANCELING.equals(refStatus) && !isStaleArchivedPaymentCancel(paymentRef)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Отмена прежней T-Bank-сессии уже выполняется. Повторите после обновления счёта"
+                );
+            }
+
+            paymentRef.setStatus(PAYMENT_REF_CANCELING);
+            paymentRef.setCancelAttempts(cancelAttempts(paymentRef) + 1);
+            paymentRef.setReason(limit("paper_invoice_mode_switch_canceling", 160));
+            paymentRefRepository.save(paymentRef);
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setLastError(limit(
+                    "paper_invoice_mode_switch_in_progress: отменяется прежняя T-Bank-сессия",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            return new PreparedInvoicePaymentModeChange(
+                    invoiceId,
+                    requestedMode,
+                    actor,
+                    paymentRef.getId(),
+                    normalize(paymentRef.getTbankOrderId()),
+                    normalize(paymentRef.getTbankPaymentId()),
+                    normalize(paymentRef.getTbankTerminalKey()),
+                    paymentRef.getAmountKopecks()
+            );
+        }
+
+        ensurePaperModeSwitchHasNoUnresolvedProviderEvidence(invoice);
+        applyInvoicePaymentModeChange(invoice, requestedMode, actor);
+        return PreparedInvoicePaymentModeChange.completed(invoiceId, requestedMode, actor);
+    }
+
+    private PaperInvoiceBankResolution resolvePaperInvoiceBankSession(
+            PreparedInvoicePaymentModeChange prepared
+    ) {
+        PaymentProfile profile = paymentProfileService.findByTerminalKey(prepared.terminalKey())
+                .orElse(null);
+        if (profile == null) {
+            return PaperInvoiceBankResolution.ambiguous(
+                    HttpStatus.CONFLICT,
+                    "Не найден платёжный профиль прежней T-Bank-сессии. Бумажный режим не включён"
+            );
+        }
+        TbankPaymentProfile runtimeProfile = paymentProfileService.toRuntimeForTerminal(
+                profile,
+                prepared.terminalKey()
+        );
+        if (!runtimeProfile.hasCredentials()) {
+            return PaperInvoiceBankResolution.ambiguous(
+                    HttpStatus.CONFLICT,
+                    "Для прежней T-Bank-сессии недоступны банковские реквизиты. Бумажный режим не включён"
+            );
+        }
+
+        TbankGetStateResponse state;
+        try {
+            state = tbankClient.getState(runtimeProfile, prepared.paymentId());
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "Не удалось сверить T-Bank перед включением бумажного общего счёта: invoiceId={}, paymentId={}",
+                    prepared.invoiceId(),
+                    maskPaymentId(prepared.paymentId()),
+                    failure
+            );
+            return PaperInvoiceBankResolution.ambiguous(
+                    HttpStatus.BAD_GATEWAY,
+                    "T-Bank не подтвердил состояние прежней ссылки. Ничего не переключено; повторите позже"
+            );
+        }
+        String stateMismatch = paperModeSwitchStateMismatch(prepared, state, runtimeProfile);
+        if (stateMismatch != null) {
+            return PaperInvoiceBankResolution.ambiguous(HttpStatus.CONFLICT, stateMismatch);
+        }
+
+        String providerStatus = normalize(state.status()).toUpperCase(Locale.ROOT);
+        if (isPaperModeSwitchSafeTerminalStatus(providerStatus)) {
+            return PaperInvoiceBankResolution.safe(providerStatus);
+        }
+        if (isPaperModeSwitchFinancialStatus(providerStatus)) {
+            return PaperInvoiceBankResolution.blockedByPayment(providerStatus);
+        }
+        if (!"NEW".equals(providerStatus) && !"FORM_SHOWED".equals(providerStatus)) {
+            return PaperInvoiceBankResolution.ambiguous(
+                    HttpStatus.CONFLICT,
+                    "T-Bank вернул неоднозначный статус " + readableProviderStatus(providerStatus)
+                            + ". Бумажный режим не включён; нужна сверка"
+            );
+        }
+
+        try {
+            TbankCancelResponse response = tbankClient.cancel(
+                    runtimeProfile,
+                    new TbankCancelCommand(prepared.paymentId(), prepared.amountKopecks())
+            );
+            String cancelMismatch = paperModeSwitchCancelMismatch(prepared, response, runtimeProfile);
+            if (cancelMismatch != null) {
+                return PaperInvoiceBankResolution.ambiguous(HttpStatus.CONFLICT, cancelMismatch);
+            }
+            String cancelStatus = normalize(response.status()).toUpperCase(Locale.ROOT);
+            if (PAYMENT_REF_CANCELED.equals(cancelStatus)) {
+                return PaperInvoiceBankResolution.safe(cancelStatus);
+            }
+            if (isPaperModeSwitchFinancialStatus(cancelStatus)) {
+                return PaperInvoiceBankResolution.blockedByPayment(cancelStatus);
+            }
+            return PaperInvoiceBankResolution.ambiguous(
+                    HttpStatus.CONFLICT,
+                    "T-Bank не подтвердил отмену прежней ссылки: статус "
+                            + readableProviderStatus(cancelStatus) + ". Бумажный режим не включён"
+            );
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "Исход отмены T-Bank перед включением бумажного общего счёта неоднозначен: invoiceId={}, paymentId={}",
+                    prepared.invoiceId(),
+                    maskPaymentId(prepared.paymentId()),
+                    failure
+            );
+            return PaperInvoiceBankResolution.ambiguous(
+                    HttpStatus.BAD_GATEWAY,
+                    "T-Bank не подтвердил отмену прежней ссылки. Счёт заблокирован для безопасной повторной сверки"
+            );
+        }
+    }
+
+    private PaperInvoiceModeSwitchResult finishInvoicePaymentModeChange(
+            PreparedInvoicePaymentModeChange prepared,
+            PaperInvoiceBankResolution resolution
+    ) {
+        CommonInvoice invoice = lockedInvoice(prepared.invoiceId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        CommonInvoicePaymentRef paymentRef = paymentRefRepository
+                .findByIdForUpdate(prepared.providerPaymentRefId())
+                .orElse(null);
+        if (!paperModeSwitchBindingUnchanged(invoice, paymentRef, prepared)) {
+            if (paymentRef != null && resolution.switchAllowed()) {
+                paymentRef.setStatus(limit(resolution.providerStatus(), 32));
+                paymentRef.setReason(limit("paper_invoice_mode_switch_canceled_but_state_changed", 160));
+                paymentRefRepository.save(paymentRef);
+            }
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError(limit(
+                    "paper_invoice_mode_switch_state_changed: состояние счёта изменилось во время сверки; обновите данные",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            return PaperInvoiceModeSwitchResult.failed(
+                    HttpStatus.CONFLICT,
+                    "Состояние общего счёта изменилось во время сверки. Обновите карточку; повторная оплата не создана"
+            );
+        }
+
+        if (!resolution.switchAllowed()) {
+            paymentRef.setStatus(limit(resolution.durableRefStatus(), 32));
+            paymentRef.setReason(limit("paper_invoice_mode_switch_blocked:" + resolution.providerStatus(), 160));
+            paymentRefRepository.save(paymentRef);
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            String failurePrefix = isPaperModeSwitchFinancialStatus(resolution.providerStatus())
+                    ? "paper_invoice_mode_switch_payment_detected: "
+                    : "paper_invoice_mode_switch_retry: ";
+            invoice.setLastError(limit(
+                    failurePrefix + resolution.failureMessage(),
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            return PaperInvoiceModeSwitchResult.failed(
+                    resolution.failureStatus(),
+                    resolution.failureMessage()
+            );
+        }
+
+        paymentRef.setStatus(limit(resolution.providerStatus(), 32));
+        paymentRef.setReason(limit("paper_invoice_mode_switch_provider_closed", 160));
+        paymentRefRepository.save(paymentRef);
+        clearCurrentPaymentRef(invoice);
+        applyInvoicePaymentModeChange(invoice, prepared.requestedMode(), prepared.actor());
+        return PaperInvoiceModeSwitchResult.switchedSuccessfully();
+    }
+
+    private void applyInvoicePaymentModeChange(
+            CommonInvoice invoice,
+            InvoicePaymentMode requestedMode,
+            String actor
+    ) {
+        Long invoiceId = invoice.getId();
+
+        if (invoice.getContractorAllocationId() != null) {
+            contractorPaymentLiveRoutingService.releaseCommonInvoiceRouteForPaperInvoice(invoice);
+        }
+        clearCommonPaymentRouteForModeSwitch(invoice);
+        invoice.setInvoicePaymentMode(requestedMode);
+        invoice.setPaperInvoiceIssuedAt(null);
+        invoice.setSentAt(null);
+        invoice.setLastReminderAt(null);
+        invoice.setNextReminderAt(null);
+        invoice.setLastError(null);
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        invoice.setStatus(areInvoiceItemsReady(items)
+                ? CommonInvoiceStatus.READY
+                : CommonInvoiceStatus.COLLECTING);
+        CommonBillingAccount account = invoice.getAccount();
+        account.setInvoicePaymentMode(requestedMode);
+        accountRepository.save(account);
+        invoiceRepository.save(invoice);
+        log.info("Common invoice payment mode changed: invoiceId={}, mode={}, actor={}",
+                invoiceId, requestedMode, actor);
+    }
+
+    @Transactional
+    public CommonInvoiceDetailsResponse markPaperInvoiceIssued(Long invoiceId, Principal principal) {
+        CommonInvoice invoice = lockedInvoice(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счёт не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        if (!isOwnerPaperInvoice(invoice)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Для общего счёта не включён бумажный счёт");
+        }
+        if (invoice.getSentAt() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сначала отправьте клиенту уведомление о завершении общего счёта"
+            );
+        }
+        if (invoice.getPaperInvoiceIssuedAt() == null) {
+            LocalDateTime now = LocalDateTime.now();
+            invoice.setPaperInvoiceIssuedAt(now);
+            invoice.setNextReminderAt(now.plusDays(REMINDER_INTERVAL_DAYS));
+            invoice.setLastError(null);
+            invoiceRepository.save(invoice);
+            log.info("Common paper invoice marked issued: invoiceId={}, actor={}",
+                    invoiceId, principal == null ? "system" : principal.getName());
+        }
+        return invoiceAfterOrderPrelude(invoiceId);
+    }
+
+    @Transactional
+    public CommonInvoiceDetailsResponse markPaperInvoicePaid(
+            Long invoiceId,
+            ManualPaymentConfirmationRequest request,
+            Principal principal
+    ) {
+        LockedInvoicePaymentPrelude paymentPrelude = lockedInvoiceAfterStandalonePaymentPrelude(invoiceId);
+        CommonInvoice invoice = paymentPrelude.invoice();
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        if (!isOwnerPaperInvoice(invoice) || invoice.getPaperInvoiceIssuedAt() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Подтвердить оплату можно только после отправки бумажного счёта"
+            );
+        }
+        ensureCommonInvoiceNotNeedsAttention(invoice);
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        refreshInvoiceAmounts(invoice, items);
+        promoteCollectingInvoiceToReadyIfPossible(invoice, items);
+        ensureCommonInvoiceCanBeMarkedPaid(invoice);
+        ensurePaperModeSwitchHasNoFinancialEvidence(invoice);
+        ensurePaperModeSwitchHasNoUnresolvedProviderEvidence(invoice);
+        applyManualPaymentEvidence(invoice, items, request, principal);
+        invoice.setPaymentMethod(PAYMENT_METHOD_OWNER_PAPER_INVOICE);
+        items.forEach(item -> item.setPaymentMethod(PAYMENT_METHOD_OWNER_PAPER_INVOICE));
+        invoiceOrderRepository.saveAll(items);
+        archiveAndClearCurrentPaymentRef(invoice, "owner_paper_invoice_paid");
+        closePaidInvoice(invoice, items);
+        return invoiceAfterOrderPrelude(invoiceId);
+    }
+
+    private void ensurePaperModeSwitchHasNoFinancialEvidence(CommonInvoice invoice) {
+        boolean providerEvidence = invoice.getClientReportedAt() != null
+                || invoice.getPaidKopecks() > 0
+                || invoice.getManualConfirmedAt() != null;
+        if (providerEvidence) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "По общему счёту уже есть признаки оплаты; сначала выполните сверку"
+            );
+        }
+    }
+
+    private void ensurePaperModeSwitchHasNoUnresolvedProviderEvidence(CommonInvoice invoice) {
+        boolean incompleteCurrentBinding = !normalize(invoice.getTbankOrderId()).isBlank()
+                || !normalize(invoice.getTbankPaymentId()).isBlank()
+                || !normalize(invoice.getTbankTerminalKey()).isBlank()
+                || invoice.getTbankPaymentAmountKopecks() != null
+                || invoice.getTbankPaymentCreatedAt() != null
+                || !normalize(invoice.getPaymentUrl()).isBlank();
+        boolean unresolvedRegistry = paymentRefRepository.existsByInvoice_IdAndStatusIn(
+                invoice.getId(),
+                Set.of(
+                        PAYMENT_REF_INIT_PREPARED,
+                        PAYMENT_REF_INIT_CONFLICT,
+                        PAYMENT_REF_CURRENT,
+                        PAYMENT_REF_CANCEL_PENDING,
+                        PAYMENT_REF_CANCELING,
+                        PAYMENT_REF_CANCEL_FAILED,
+                        PAYMENT_REF_CANCEL_FAILED_FINAL,
+                        PAYMENT_REF_CONFIRMED,
+                        PAYMENT_REF_PREPAID,
+                        PAYMENT_REF_APPLYING,
+                        PAYMENT_REF_APPLIED
+                )
+        );
+        if (incompleteCurrentBinding || unresolvedRegistry) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "По общему счёту есть незавершённая банковская попытка. Бумажный режим не включён; нужна сверка"
+            );
+        }
+    }
+
+    private boolean hasCurrentTbankPaymentBinding(CommonInvoice invoice) {
+        return invoice != null
+                && !normalize(invoice.getTbankPaymentId()).isBlank()
+                && !normalize(invoice.getTbankTerminalKey()).isBlank()
+                && invoice.getTbankPaymentAmountKopecks() != null
+                && invoice.getTbankPaymentAmountKopecks() > 0;
+    }
+
+    private CommonInvoicePaymentRef currentPaymentRefForPaperModeSwitch(CommonInvoice invoice) {
+        CommonInvoicePaymentRef paymentRef = lockedPaymentRefByProviderBinding(
+                invoice.getTbankOrderId(),
+                invoice.getTbankPaymentId()
+        ).orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "У прежней T-Bank-сессии отсутствует запись реестра. Бумажный режим не включён; нужна сверка"
+        ));
+        if (!Objects.equals(invoice.getId(), paymentRefInvoiceId(paymentRef))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Прежняя T-Bank-сессия относится к другому общему счёту; нужна сверка"
+            );
+        }
+        return paymentRef;
+    }
+
+    private boolean paperModeSwitchBindingUnchanged(
+            CommonInvoice invoice,
+            CommonInvoicePaymentRef paymentRef,
+            PreparedInvoicePaymentModeChange prepared
+    ) {
+        return invoice != null
+                && paymentRef != null
+                && invoice.getInvoicePaymentMode() != prepared.requestedMode()
+                && invoice.getPaidKopecks() == 0
+                && invoice.getClientReportedAt() == null
+                && invoice.getManualConfirmedAt() == null
+                && prepared.tbankOrderId().equals(normalize(invoice.getTbankOrderId()))
+                && prepared.paymentId().equals(normalize(invoice.getTbankPaymentId()))
+                && prepared.terminalKey().equals(normalize(invoice.getTbankTerminalKey()))
+                && Objects.equals(prepared.amountKopecks(), invoice.getTbankPaymentAmountKopecks())
+                && prepared.tbankOrderId().equals(normalize(paymentRef.getTbankOrderId()))
+                && prepared.paymentId().equals(normalize(paymentRef.getTbankPaymentId()))
+                && prepared.terminalKey().equals(normalize(paymentRef.getTbankTerminalKey()))
+                && Objects.equals(prepared.amountKopecks(), paymentRef.getAmountKopecks());
+    }
+
+    private String paperModeSwitchStateMismatch(
+            PreparedInvoicePaymentModeChange prepared,
+            TbankGetStateResponse state,
+            TbankPaymentProfile runtimeProfile
+    ) {
+        if (state == null || !state.success()) {
+            return "T-Bank не подтвердил состояние прежней ссылки. Бумажный режим не включён";
+        }
+        if (!normalize(state.paymentId()).isBlank()
+                && !prepared.paymentId().equals(normalize(state.paymentId()))) {
+            return "PaymentId ответа T-Bank не совпал с общим счётом. Бумажный режим не включён";
+        }
+        if (!normalize(state.orderId()).isBlank()
+                && !prepared.tbankOrderId().isBlank()
+                && !prepared.tbankOrderId().equals(normalize(state.orderId()))) {
+            return "OrderId ответа T-Bank не совпал с общим счётом. Бумажный режим не включён";
+        }
+        if (!normalize(state.terminalKey()).isBlank()
+                && !normalize(runtimeProfile.terminalKey()).equals(normalize(state.terminalKey()))) {
+            return "TerminalKey ответа T-Bank не совпал с общим счётом. Бумажный режим не включён";
+        }
+        if (state.amount() != null && state.amount() != prepared.amountKopecks()) {
+            return "Сумма ответа T-Bank не совпала с общим счётом. Бумажный режим не включён";
+        }
+        return null;
+    }
+
+    private String paperModeSwitchCancelMismatch(
+            PreparedInvoicePaymentModeChange prepared,
+            TbankCancelResponse response,
+            TbankPaymentProfile runtimeProfile
+    ) {
+        if (response == null || !response.success()) {
+            return "T-Bank не подтвердил отмену прежней ссылки. Бумажный режим не включён";
+        }
+        if (!normalize(response.paymentId()).isBlank()
+                && !prepared.paymentId().equals(normalize(response.paymentId()))) {
+            return "PaymentId отмены T-Bank не совпал с общим счётом. Бумажный режим не включён";
+        }
+        if (!normalize(response.orderId()).isBlank()
+                && !prepared.tbankOrderId().isBlank()
+                && !prepared.tbankOrderId().equals(normalize(response.orderId()))) {
+            return "OrderId отмены T-Bank не совпал с общим счётом. Бумажный режим не включён";
+        }
+        if (!normalize(response.terminalKey()).isBlank()
+                && !normalize(runtimeProfile.terminalKey()).equals(normalize(response.terminalKey()))) {
+            return "TerminalKey отмены T-Bank не совпал с общим счётом. Бумажный режим не включён";
+        }
+        if (response.amount() != null && response.amount() != prepared.amountKopecks()) {
+            return "Сумма отмены T-Bank не совпала с общим счётом. Бумажный режим не включён";
+        }
+        return null;
+    }
+
+    private boolean isPaperModeSwitchSafeTerminalStatus(String status) {
+        String normalizedStatus = normalize(status).toUpperCase(Locale.ROOT);
+        return PAYMENT_REF_CANCELED.equals(normalizedStatus)
+                || "REJECTED".equals(normalizedStatus)
+                || "DEADLINE_EXPIRED".equals(normalizedStatus);
+    }
+
+    private boolean isPaperModeSwitchFinancialStatus(String status) {
+        String normalizedStatus = normalize(status).toUpperCase(Locale.ROOT);
+        return PAYMENT_REF_CONFIRMED.equals(normalizedStatus)
+                || "AUTHORIZED".equals(normalizedStatus)
+                || PAYMENT_REF_PREPAID.equals(normalizedStatus)
+                || PAYMENT_REF_APPLYING.equals(normalizedStatus)
+                || PAYMENT_REF_APPLIED.equals(normalizedStatus)
+                || "REFUNDED".equals(normalizedStatus)
+                || "PARTIAL_REFUNDED".equals(normalizedStatus)
+                || "REVERSED".equals(normalizedStatus)
+                || "PARTIAL_REVERSED".equals(normalizedStatus);
+    }
+
+    private String readableProviderStatus(String status) {
+        String normalizedStatus = normalize(status).toUpperCase(Locale.ROOT);
+        return normalizedStatus.isBlank() ? "UNKNOWN" : normalizedStatus;
+    }
+
+    private String maskPaymentId(String paymentId) {
+        String clean = normalize(paymentId);
+        if (clean.isBlank()) {
+            return "—";
+        }
+        if (clean.length() <= 4) {
+            return "****";
+        }
+        return "****" + clean.substring(clean.length() - 4);
+    }
+
+    private void clearCommonPaymentRouteForModeSwitch(CommonInvoice invoice) {
+        invoice.setPaymentRouteType(null);
+        invoice.setPaymentRouteProfileId(null);
+        invoice.setPaymentRouteProfileCode(null);
+        invoice.setPaymentRouteProfileName(null);
+        invoice.setContractorAllocationId(null);
+        invoice.setPaymentRouteTerminalKey(null);
+        invoice.setPaymentRouteManualSource(null);
+        invoice.setPaymentRouteManualTaskId(null);
+        invoice.setPaymentRouteManualTaskSourceGeneration(null);
+        invoice.setPaymentRouteManualTaskGeneration(null);
+        invoice.setPaymentRouteManualTaskAccountingMode(null);
+        invoice.setPaymentRouteManualType(null);
+        invoice.setPaymentRouteManualPhone(null);
+        invoice.setPaymentRouteManualRecipient(null);
+        invoice.setPaymentRouteManualBankName(null);
+        invoice.setPaymentRouteManualUrl(null);
+        invoice.setPaymentRouteManualButton(null);
+        invoice.setPaymentRouteManualComment(null);
+        invoice.setPaymentRouteInstructionText(null);
+        invoice.setPaymentRouteAmountKopecks(null);
+        invoice.setPaymentRouteSelectedAt(null);
+    }
+
+    private boolean isOwnerPaperInvoice(CommonInvoice invoice) {
+        return invoice != null && invoice.getInvoicePaymentMode() == InvoicePaymentMode.OWNER_PAPER_INVOICE;
     }
 
     @Transactional
@@ -6074,6 +6939,9 @@ public class CommonBillingService {
     private CommonInvoice createInvoice(CommonBillingAccount account) {
         CommonInvoice invoice = new CommonInvoice();
         invoice.setAccount(account);
+        invoice.setInvoicePaymentMode(account == null || account.getInvoicePaymentMode() == null
+                ? InvoicePaymentMode.AUTO_ROUTING
+                : account.getInvoicePaymentMode());
         invoice.setToken(randomToken());
         invoice.setTitle(account.getName() + " - общий счет");
         invoice.setStatus(CommonInvoiceStatus.COLLECTING);
@@ -6180,7 +7048,9 @@ public class CommonBillingService {
             return null;
         }
 
-        ensureCommonPaymentRouteSelected(invoice, remainingKopecks(invoice));
+        if (!isOwnerPaperInvoice(invoice)) {
+            ensureCommonPaymentRouteSelected(invoice, remainingKopecks(invoice));
+        }
         Company chatCompany = chatCompany(invoice);
         Manager manager = manager(invoice);
         invoice.setLastError(MESSAGE_SEND_IN_PROGRESS);
@@ -6241,7 +7111,9 @@ public class CommonBillingService {
                 invoice.setSentAt(LocalDateTime.now());
                 markInvoiceOrdersToPay(invoice);
             }
-            invoice.setNextReminderAt(LocalDateTime.now().plusDays(REMINDER_INTERVAL_DAYS));
+            invoice.setNextReminderAt(isOwnerPaperInvoice(invoice) && invoice.getPaperInvoiceIssuedAt() == null
+                    ? null
+                    : LocalDateTime.now().plusDays(REMINDER_INTERVAL_DAYS));
             invoice.setLastError(null);
             invoiceRepository.save(invoice);
             return true;
@@ -6447,7 +7319,9 @@ public class CommonBillingService {
     }
 
     private boolean canAcceptPublicPayment(CommonInvoice invoice) {
-        return invoice != null && PUBLIC_PAYABLE_STATUSES.contains(invoice.getStatus());
+        return invoice != null
+                && !isOwnerPaperInvoice(invoice)
+                && PUBLIC_PAYABLE_STATUSES.contains(invoice.getStatus());
     }
 
     private void ensureCommonInvoiceReadyForInvoiceSend(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
@@ -6466,6 +7340,12 @@ public class CommonBillingService {
         }
         if (!REMINDER_STATUSES.contains(invoice.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Напоминание можно отправить только по уже выставленному счету");
+        }
+        if (isOwnerPaperInvoice(invoice) && invoice.getPaperInvoiceIssuedAt() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сначала отметьте, что бумажный счёт отправлен клиенту"
+            );
         }
         ensureAllItemsReady(items, "Общий счет еще собирается: не все заказы готовы к напоминанию");
     }
@@ -7270,13 +8150,21 @@ public class CommonBillingService {
 
     private String paymentSuccessMessage(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         String payerEmail = normalize(invoice.getPayerEmail());
-        return new StringBuilder()
-                .append("Оплата прошла успешно.")
-                .append("\n\nОбщий счет: ").append(invoice.getAccount().getName())
+        boolean manualRequisites = isManualMobileBankCommonRoute(invoice);
+        StringBuilder message = new StringBuilder()
+                .append(manualRequisites
+                        ? "Оплата по реквизитам подтверждена."
+                        : "Оплата прошла успешно.");
+        if (manualRequisites) {
+            message.append("\n\nМенеджер сверил перевод по реквизитам. Заказы приняты в работу.");
+        }
+        message.append("\n\nОбщий счет: ").append(invoice.getAccount().getName())
                 .append("\nЗаказов: ").append(items == null ? 0 : items.size())
-                .append("\nСумма: ").append(money(amountRubles(invoice.getPaidKopecks()))).append(" руб.")
-                .append("\nСтраница оплаты: ").append(publicInvoiceUrl(invoice))
-                .append("\n\n")
+                .append("\nСумма: ").append(money(amountRubles(invoice.getPaidKopecks()))).append(" руб.");
+        if (!manualRequisites) {
+            message.append("\nСтраница оплаты: ").append(publicInvoiceUrl(invoice));
+        }
+        return message.append("\n\n")
                 .append(payerEmail.isBlank()
                         ? "Чек будет отправлен на e-mail."
                         : "Чек будет отправлен на e-mail: " + payerEmail + ".")
@@ -7742,7 +8630,10 @@ public class CommonBillingService {
                 account.getInvoiceCompany() == null ? null : account.getInvoiceCompany().getId(),
                 account.getInvoiceCompany() == null ? null : account.getInvoiceCompany().getTitle(),
                 companyLinks.stream().map(this::toCompanyResponse).toList(),
-                current
+                current,
+                (account.getInvoicePaymentMode() == null
+                        ? InvoicePaymentMode.AUTO_ROUTING
+                        : account.getInvoicePaymentMode()).name()
         );
     }
 
@@ -7862,7 +8753,11 @@ public class CommonBillingService {
                 isFrozenLiveContractorSource(invoice),
                 invoice.getPaymentRouteSelectedAt(),
                 normalize(invoice.getInvoicePurpose()),
-                invoice.getSupersedesInvoice() == null ? null : invoice.getSupersedesInvoice().getId()
+                invoice.getSupersedesInvoice() == null ? null : invoice.getSupersedesInvoice().getId(),
+                (invoice.getInvoicePaymentMode() == null
+                        ? InvoicePaymentMode.AUTO_ROUTING
+                        : invoice.getInvoicePaymentMode()).name(),
+                invoice.getPaperInvoiceIssuedAt()
         );
     }
 
@@ -8453,7 +9348,18 @@ public class CommonBillingService {
         builder.append(reminder ? "Напоминаем об оплате общего счета." : "Все заказы из общего счета выполнены.");
         builder.append("\n\nЗаказов: ").append(items.size());
         builder.append("\nК оплате: ").append(money(amountRubles(remainingKopecks(invoice)))).append(" руб.");
-        if (isManagerTextCommonRoute(invoice) || isManualMobileBankCommonRoute(invoice)) {
+        if (isOwnerPaperInvoice(invoice)) {
+            builder.append("\n\n");
+            if (reminder) {
+                builder.append("Напоминаем об оплате по выставленному бумажному счёту.");
+            } else {
+                builder.append("Оплата производится по выставленному счёту. Документ будет отправлен в этот чат.");
+            }
+            builder.append("\nПосле оплаты отправьте платёжное поручение в этот чат.");
+        } else if (isManualMobileBankCommonRoute(invoice)) {
+            builder.append("\n\n").append(commonPaymentInstructionText(invoice));
+            builder.append("\n\nПосле оплаты отправьте чек в этот чат.");
+        } else if (isManagerTextCommonRoute(invoice)) {
             builder.append("\n\n").append(commonPaymentInstructionText(invoice));
             builder.append("\nСтраница общего счета: ").append(publicInvoiceUrl(invoice));
         } else {
@@ -8476,12 +9382,19 @@ public class CommonBillingService {
         if (invoice != null
                 && invoice.getContractorAllocationId() != null
                 && invoice.getPaymentRouteManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE) {
-            return contractorPaymentLiveRoutingService.activeCommonInvoiceRequisites(
-                    invoice,
-                    remainingKopecks(invoice)
-            ).map(snapshot -> commonContractorPaymentInstruction(snapshot)).orElse("");
+            return commonContractorPaymentInstruction(requiredPreparedCommonContractorRequisites(invoice));
         }
         return normalize(invoice == null ? null : invoice.getPaymentRouteInstructionText());
+    }
+
+    private ContractorPaymentRequisitesSnapshot requiredPreparedCommonContractorRequisites(CommonInvoice invoice) {
+        return contractorPaymentLiveRoutingService.activeCommonInvoiceRequisites(
+                invoice,
+                remainingKopecks(invoice)
+        ).orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Реквизиты получателя общего счета не удалось безопасно получить; сообщение не отправлено"
+        ));
     }
 
     private String commonContractorPaymentInstruction(ContractorPaymentRequisitesSnapshot snapshot) {
@@ -8489,10 +9402,7 @@ public class CommonBillingService {
             return "";
         }
         String transfer = normalize(snapshot.paymentPhone());
-        String label = transfer.matches("[0-9]{16,19}")
-                ? "Оплата по номеру карты: "
-                : "Оплата по мобильному банку: ";
-        StringBuilder instruction = new StringBuilder(label).append(transfer)
+        StringBuilder instruction = new StringBuilder("Оплата по мобильному банку: ").append(transfer)
                 .append("\nПолучатель: ").append(normalize(snapshot.recipientName()));
         if (!normalize(snapshot.bankName()).isBlank()) {
             instruction.append("\nБанк: ").append(normalize(snapshot.bankName()));
@@ -8510,10 +9420,7 @@ public class CommonBillingService {
         String value;
         if (invoice.getContractorAllocationId() != null
                 && invoice.getPaymentRouteManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE) {
-            value = contractorPaymentLiveRoutingService.activeCommonInvoiceRequisites(
-                    invoice,
-                    remainingKopecks(invoice)
-            ).map(ContractorPaymentRequisitesSnapshot::paymentPhone).orElse(null);
+            value = requiredPreparedCommonContractorRequisites(invoice).paymentPhone();
         } else {
             value = invoice.getPaymentRouteManualPhone();
         }
@@ -8549,13 +9456,23 @@ public class CommonBillingService {
                 .filter(Objects::nonNull)
                 .toList();
         Manager routeManager = manager(invoice);
-        contractorPaymentShadowService.prepareCommonInvoiceSource(
-                invoice,
-                routeOrders,
-                routeManager,
-                remainingKopecks,
-                LocalDateTime.now()
-        );
+        if (contractorPaymentLiveRoutingService.enabledForNewRoutes()) {
+            contractorPaymentShadowService.prepareLiveCommonInvoiceSource(
+                    invoice,
+                    routeOrders,
+                    routeManager,
+                    remainingKopecks,
+                    LocalDateTime.now()
+            );
+        } else {
+            contractorPaymentShadowService.prepareCommonInvoiceSource(
+                    invoice,
+                    routeOrders,
+                    routeManager,
+                    remainingKopecks,
+                    LocalDateTime.now()
+            );
+        }
 
         PaymentRouteSelection route;
         ContractorPaymentAllocation liveAllocation = null;
@@ -8567,17 +9484,34 @@ public class CommonBillingService {
             route = legacyTbankRoute(invoice, remainingKopecks);
         } else if (taskRoute.isPresent()) {
             route = taskRoute.get();
-        } else if (contractorPaymentLiveRoutingService.enabledForNewRoutes()
-                && invoice.isShadowRouteContractorEligible()) {
-            liveAllocation = contractorPaymentLiveRoutingService.reserveForCommonInvoice(
-                    invoice,
-                    routeOrders,
-                    routeManager,
-                    remainingKopecks
+        } else if (contractorPaymentLiveRoutingService.enabledForNewRoutes()) {
+            try {
+                liveAllocation = requireLiveCommonInvoiceAllocation(
+                        invoice,
+                        contractorPaymentLiveRoutingService.reserveForCommonInvoice(
+                                invoice,
+                                routeOrders,
+                                routeManager,
+                                remainingKopecks
+                        )
+                );
+                route = isContractorRecipient(liveAllocation)
+                        ? contractorCommonPaymentRoute(invoice, liveAllocation)
+                        : paymentLinkService().selectCommonInvoiceOwnerAcquiringRoute(
+                                routeManager,
+                                remainingKopecks
+                        );
+            } catch (RuntimeException exception) {
+                notifyCommonInvoiceRoutingFailure(invoice, routeOrders, exception);
+                throw exception;
+            }
+        } else if (contractorPaymentLiveRoutingService.configuredButBlockedForNewRoutes()) {
+            ResponseStatusException exception = new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Новая система оплат включена, но LIVE-маршрут общего счета временно недоступен"
             );
-            route = isContractorRecipient(liveAllocation)
-                    ? contractorCommonPaymentRoute(invoice, liveAllocation)
-                    : paymentLinkService().selectCommonInvoiceRoute(routeManager, remainingKopecks);
+            notifyCommonInvoiceRoutingFailure(invoice, routeOrders, exception);
+            throw exception;
         } else {
             route = paymentLinkService().selectCommonInvoiceRoute(routeManager, remainingKopecks);
         }
@@ -8612,6 +9546,44 @@ public class CommonBillingService {
         return allocation != null
                 && (allocation.getRecipientType() == ContractorRecipientType.SPECIALIST
                 || allocation.getRecipientType() == ContractorRecipientType.MANAGER);
+    }
+    private ContractorPaymentAllocation requireLiveCommonInvoiceAllocation(
+            CommonInvoice invoice,
+            ContractorPaymentAllocation allocation
+    ) {
+        if (allocation != null && allocation.getId() != null) {
+            return allocation;
+        }
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Новая система оплат не зафиксировала получателя общего счета №"
+                        + (invoice == null || invoice.getId() == null ? "-" : invoice.getId())
+                        + "; счет не отправлен"
+        );
+    }
+
+    private void notifyCommonInvoiceRoutingFailure(
+            CommonInvoice invoice,
+            List<Order> routeOrders,
+            RuntimeException exception
+    ) {
+        Long invoiceId = invoice == null ? null : invoice.getId();
+        String details = readableException(exception);
+        (routeOrders == null ? List.<Order>of() : routeOrders).stream()
+                .filter(Objects::nonNull)
+                .map(Order::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .forEach(orderId -> paymentIssueReminderService.notifyOrderIssue(
+                        orderId,
+                        PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED,
+                        invoiceId,
+                        "Общий счёт требует внимания: №" + (invoiceId == null ? "-" : invoiceId),
+                        "Система остановила отправку общего счёта: LIVE-маршрут оплаты не зафиксирован."
+                                + "\nОбщий счёт: №" + (invoiceId == null ? "-" : invoiceId)
+                                + "\nПричина: " + details
+                                + "\nКлиенту сомнительные реквизиты не отправлены."
+                ));
     }
 
     private PaymentRouteSelection contractorCommonPaymentRoute(
@@ -8890,7 +9862,7 @@ public class CommonBillingService {
         invoice.setPaymentRouteManualType(enumValue(ManualPaymentType.class, route.manualPaymentType()));
         invoice.setPaymentRouteManualPhone(limit(route.manualPhone(), 32));
         invoice.setPaymentRouteManualRecipient(limit(route.manualRecipientName(), 160));
-        invoice.setPaymentRouteManualBankName(null);
+        invoice.setPaymentRouteManualBankName(limit(route.manualBankName(), 120));
         invoice.setPaymentRouteManualUrl(limit(route.manualPaymentUrl(), 512));
         invoice.setPaymentRouteManualButton(limit(route.manualPaymentButtonLabel(), 80));
         invoice.setPaymentRouteManualComment(limit(route.manualComment(), 255));
@@ -10219,6 +11191,91 @@ public class CommonBillingService {
             boolean reminder,
             boolean manual
     ) {
+    }
+
+    private record PreparedInvoicePaymentModeChange(
+            Long invoiceId,
+            InvoicePaymentMode requestedMode,
+            String actor,
+            Long providerPaymentRefId,
+            String tbankOrderId,
+            String paymentId,
+            String terminalKey,
+            long amountKopecks
+    ) {
+        private static PreparedInvoicePaymentModeChange completed(
+                Long invoiceId,
+                InvoicePaymentMode requestedMode,
+                String actor
+        ) {
+            return new PreparedInvoicePaymentModeChange(
+                    invoiceId,
+                    requestedMode,
+                    actor,
+                    null,
+                    "",
+                    "",
+                    "",
+                    0L
+            );
+        }
+    }
+
+    private record PaperInvoiceBankResolution(
+            boolean switchAllowed,
+            String providerStatus,
+            String durableRefStatus,
+            HttpStatus failureStatus,
+            String failureMessage
+    ) {
+        private static PaperInvoiceBankResolution safe(String providerStatus) {
+            String cleanStatus = providerStatus == null || providerStatus.isBlank()
+                    ? PAYMENT_REF_CANCELED
+                    : providerStatus;
+            return new PaperInvoiceBankResolution(true, cleanStatus, cleanStatus, null, "");
+        }
+
+        private static PaperInvoiceBankResolution blockedByPayment(String providerStatus) {
+            String cleanStatus = providerStatus == null || providerStatus.isBlank()
+                    ? PAYMENT_REF_CONFIRMED
+                    : providerStatus;
+            return new PaperInvoiceBankResolution(
+                    false,
+                    cleanStatus,
+                    cleanStatus,
+                    HttpStatus.CONFLICT,
+                    "T-Bank сообщил статус " + cleanStatus
+                            + ": по прежней ссылке есть платёжное движение. Бумажный режим не включён; нужна сверка"
+            );
+        }
+
+        private static PaperInvoiceBankResolution ambiguous(HttpStatus status, String message) {
+            return new PaperInvoiceBankResolution(
+                    false,
+                    "UNKNOWN",
+                    PAYMENT_REF_CANCEL_FAILED,
+                    status == null ? HttpStatus.CONFLICT : status,
+                    message
+            );
+        }
+    }
+
+    private record PaperInvoiceModeSwitchResult(
+            boolean switched,
+            HttpStatus failureStatus,
+            String failureMessage
+    ) {
+        private static PaperInvoiceModeSwitchResult switchedSuccessfully() {
+            return new PaperInvoiceModeSwitchResult(true, null, "");
+        }
+
+        private static PaperInvoiceModeSwitchResult failed(HttpStatus status, String message) {
+            return new PaperInvoiceModeSwitchResult(
+                    false,
+                    status == null ? HttpStatus.CONFLICT : status,
+                    message
+            );
+        }
     }
 
     private record PreparedCommonPaymentInit(

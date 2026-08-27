@@ -1729,7 +1729,13 @@ public class ContractorActualPaymentAttributionService {
                 isOriginal
         );
         String key = recipientKey(candidate.type(), candidate.profileId());
-        if (!target.containsKey(key) || isOriginal) {
+        // The client-facing candidate is added first and can carry the bank
+        // recipient snapshot (for example, the contractor is Victoria while
+        // the card holder shown to the client is Anastasia). Re-adding the
+        // assigned contractor with the same accounting key must not replace
+        // that immutable bank-facing name with the contractor's FIO.
+        ManualCardPaymentRecipientResponse existing = target.get(key);
+        if (existing == null || (isOriginal && !existing.original())) {
             target.put(key, response);
         }
     }

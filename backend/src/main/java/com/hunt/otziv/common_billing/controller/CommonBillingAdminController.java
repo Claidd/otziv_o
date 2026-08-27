@@ -6,8 +6,11 @@ import com.hunt.otziv.common_billing.dto.CommonInvoiceArchivePreviewResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceManualCardPaymentRequest;
+import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeContextResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentRouteChangeRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoicePaymentInitCheckRequest;
 import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
+import com.hunt.otziv.common_billing.dto.InvoicePaymentModeChangeRequest;
 import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.contractor_payments.service.ContractorActualPaymentAttributionFlowPolicy;
@@ -103,6 +106,58 @@ public class CommonBillingAdminController {
     public CommonInvoiceDetailsResponse sendInvoice(@PathVariable Long invoiceId) {
         requireCanMutateInvoice(invoiceId);
         return commonBillingService.sendInvoice(invoiceId, true);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/payment-mode")
+    public CommonInvoiceDetailsResponse changePaymentMode(
+            @PathVariable Long invoiceId,
+            @Valid @RequestBody InvoicePaymentModeChangeRequest request,
+            Principal principal
+    ) {
+        requireCanMutateInvoice(invoiceId);
+        return commonBillingService.changeInvoicePaymentMode(invoiceId, request, principal);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @GetMapping("/api/common-billing/invoices/{invoiceId}/payment-route-change-context")
+    public CommonInvoicePaymentRouteChangeContextResponse paymentRouteChangeContext(
+            @PathVariable Long invoiceId
+    ) {
+        requireCanMutateInvoice(invoiceId);
+        return commonBillingService.commonInvoicePaymentRouteChangeContext(invoiceId);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/payment-route-change")
+    public CommonInvoiceDetailsResponse changePaymentRoute(
+            @PathVariable Long invoiceId,
+            @Valid @RequestBody CommonInvoicePaymentRouteChangeRequest request,
+            Principal principal
+    ) {
+        requireCanMutateInvoice(invoiceId);
+        return commonBillingService.changeCommonInvoicePaymentRoute(invoiceId, request, principal);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/paper-invoice/issued")
+    public CommonInvoiceDetailsResponse markPaperInvoiceIssued(
+            @PathVariable Long invoiceId,
+            Principal principal
+    ) {
+        requireCanMutateInvoice(invoiceId);
+        return commonBillingService.markPaperInvoiceIssued(invoiceId, principal);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/paper-invoice/paid")
+    public CommonInvoiceDetailsResponse markPaperInvoicePaid(
+            @PathVariable Long invoiceId,
+            @RequestBody ManualPaymentConfirmationRequest request,
+            Principal principal
+    ) {
+        requireCanMutateInvoice(invoiceId);
+        return commonBillingService.markPaperInvoicePaid(invoiceId, request, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

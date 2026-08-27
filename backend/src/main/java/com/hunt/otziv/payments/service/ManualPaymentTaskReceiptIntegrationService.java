@@ -532,7 +532,6 @@ public class ManualPaymentTaskReceiptIntegrationService {
                 ManualPaymentTaskAccountingTargetKind.UNRESOLVED, null, "", null,
                 "", "", "", "", amount, null, "");
     }
-
     private void requireLegacyAwareBinding(
             ManualPaymentTaskRouteSnapshot snapshot, Long taskId, long sourceGeneration, long amount
     ) {
@@ -555,12 +554,12 @@ public class ManualPaymentTaskReceiptIntegrationService {
                         ? link.getManualPaymentType() : snapshot.manualPaymentType(),
                 fallback(snapshot.manualPhone(), link.getManualPhone()),
                 fallback(snapshot.bankRecipientName(), link.getManualRecipientName()),
+                fallback(snapshot.bankName(), link.getManualBankName()),
                 fallback(snapshot.manualPaymentUrl(), link.getManualPaymentUrl()),
                 fallback(snapshot.manualPaymentButtonLabel(), link.getManualPaymentButtonLabel()),
                 snapshot.reservedAmountKopecks(), snapshot.targetOverrunAcknowledgedAt(),
                 snapshot.targetOverrunAcknowledgedBy());
     }
-
     private ManualPaymentTaskRouteSnapshot sourceFacing(
             ManualPaymentTaskRouteSnapshot snapshot, CommonInvoice invoice
     ) {
@@ -571,12 +570,12 @@ public class ManualPaymentTaskReceiptIntegrationService {
                         ? invoice.getPaymentRouteManualType() : snapshot.manualPaymentType(),
                 fallback(snapshot.manualPhone(), invoice.getPaymentRouteManualPhone()),
                 fallback(snapshot.bankRecipientName(), invoice.getPaymentRouteManualRecipient()),
+                fallback(snapshot.bankName(), invoice.getPaymentRouteManualBankName()),
                 fallback(snapshot.manualPaymentUrl(), invoice.getPaymentRouteManualUrl()),
                 fallback(snapshot.manualPaymentButtonLabel(), invoice.getPaymentRouteManualButton()),
                 snapshot.reservedAmountKopecks(), snapshot.targetOverrunAcknowledgedAt(),
                 snapshot.targetOverrunAcknowledgedBy());
     }
-
     private String fallback(String ledgerValue, String sourceValue) {
         return normalize(ledgerValue).isBlank() ? normalize(sourceValue) : normalize(ledgerValue);
     }
@@ -632,20 +631,6 @@ public class ManualPaymentTaskReceiptIntegrationService {
         });
         return candidate;
     }
-
-    private void requireBinding(
-            ManualPaymentTaskRouteSnapshot snapshot,
-            Long taskId,
-            long taskGeneration,
-            long amountKopecks
-    ) {
-        if (!Objects.equals(snapshot.taskId(), taskId)
-                || snapshot.taskGeneration() != taskGeneration
-                || snapshot.reservedAmountKopecks() != amountKopecks) {
-            throw ManualPaymentTaskRouteErrors.stale();
-        }
-    }
-
     private ManualPaymentTaskSourceRef paymentLinkSource(PaymentLink link) {
         return new ManualPaymentTaskSourceRef(
                 ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK,

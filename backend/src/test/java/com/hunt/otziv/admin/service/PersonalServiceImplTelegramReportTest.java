@@ -56,6 +56,35 @@ class PersonalServiceImplTelegramReportTest {
                 .doesNotContain("`");
     }
 
+    @Test
+    void displayResultToManagerHidesCompanyFinanceAndWorkerPay() {
+        Map<String, UserData> result = new LinkedHashMap<>();
+        result.put("Вика_Ц.", manager("Вика_Ц."));
+        result.put("Люба Р.", worker("Люба Р."));
+        result.put("SMM <One>", marketolog("SMM <One>"));
+
+        String report = service.displayResultToManager(result);
+
+        assertThat(report)
+                .startsWith("📊 <b>Отчёт за месяц</b>")
+                .contains("<b>Менеджер</b>")
+                .contains("👤 <b>Вика_Ц.</b>")
+                .contains("Начислено: <b>9 524 руб.</b>")
+                .contains("<b>Специалисты</b>")
+                .contains("👷 <b>Люба Р.</b>")
+                .contains("Заказы: новые <b>1</b>, коррекция <b>0</b>")
+                .contains("Выгул: <b>1</b> | публикация: <b>148</b>")
+                .doesNotContain("<b>Итоги</b>")
+                .doesNotContain("<b>Рейтинг менеджеров</b>")
+                .doesNotContain("Выручка")
+                .doesNotContain("Вознаграждения")
+                .doesNotContain("85 756 руб.")
+                .doesNotContain("119 050 руб.")
+                .doesNotContain("14 542 руб.")
+                .doesNotContain("<b>СММ</b>")
+                .doesNotContain("SMM &lt;One&gt;");
+    }
+
     private UserData manager(String fio) {
         return UserData.builder()
                 .fio(fio)

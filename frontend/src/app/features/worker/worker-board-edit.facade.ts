@@ -8,7 +8,7 @@ import type {
   OrderReviewItem,
   OrderUpdateRequest
 } from '../../core/manager.api';
-import type { WorkerBoard, WorkerReviewItem } from '../../core/worker.api';
+import type { WorkerApi, WorkerBoard, WorkerReviewItem } from '../../core/worker.api';
 import type { ToastService } from '../../shared/toast.service';
 import type { ReviewEditDraft, ReviewEditItem } from './worker-board.config';
 import type { WorkerOrderEditDraftChange } from './worker-order-edit-modal.component';
@@ -26,10 +26,13 @@ type WorkerBoardEditApi = Pick<
   | 'uploadOrderReviewPhoto'
 >;
 
+type WorkerBoardRecoveryTaskApi = Pick<WorkerApi, 'updateRecoveryTask'>;
+
 type WorkerBoardEditToast = Pick<ToastService, 'success' | 'error'>;
 
 export type WorkerBoardEditFacadeDeps = {
   managerApi: WorkerBoardEditApi;
+  workerApi: WorkerBoardRecoveryTaskApi;
   toastService: WorkerBoardEditToast;
   loadBoard: () => void;
   board?: Signal<WorkerBoard | null>;
@@ -171,6 +174,11 @@ export class WorkerBoardEditFacade {
       return;
     }
 
+    if (this.isRecoveryTaskReview(review)) {
+      this.openRecoveryTaskEdit(review);
+      return;
+    }
+
     this.reviewEditLoading.set(true);
     this.reviewEditError.set(null);
     this.reviewEditSaving.set(false);
@@ -197,6 +205,23 @@ export class WorkerBoardEditFacade {
         this.deps.toastService.error('Отзыв не открыт', message);
       }
     });
+  }
+
+  private openRecoveryTaskEdit(review: WorkerReviewItem): void {
+    const currentReview: WorkerReviewItem = {
+      ...review,
+      publishedDate: review.recoveryTaskScheduledDate || review.publishedDate || ''
+    };
+
+    this.reviewEditLoading.set(false);
+    this.reviewEditError.set(null);
+    this.reviewEditSaving.set(false);
+    this.reviewEditDeleting.set(false);
+    this.reviewEditUploading.set(false);
+    this.reviewEditNewAccountSaving.set(false);
+    this.reviewEditDetails.set(null);
+    this.editReview.set(currentReview);
+    this.reviewEditDraft.set(this.toReviewEditDraft(currentReview));
   }
 
   closeReviewEdit(): void {
@@ -249,6 +274,10 @@ export class WorkerBoardEditFacade {
     this.reviewEditError.set(null);
 
     const request = this.reviewEditRequest(review, draft);
+    if (this.isRecoveryTaskReview(review)) {
+      this.saveRecoveryTaskEdit(review, request);
+      return;
+    }
 
     this.deps.managerApi.updateOrderReview(review.orderId, review.id, request).subscribe({
       next: (updatedReview) => {
@@ -273,10 +302,54 @@ export class WorkerBoardEditFacade {
     });
   }
 
+  private saveRecoveryTaskEdit(review: ReviewEditItem, request: ReviewEditDraft): void {
+    const taskId = this.recoveryTaskId(review);
+    if (!taskId) {
+      this.reviewEditSaving.set(false);
+      this.reviewEditError.set('Задача восстановления не найдена');
+      return;
+    }
+
+    this.deps.workerApi.updateRecoveryTask(
+      taskId,
+      request.text,
+      request.publishedDate,
+      request.answer
+    ).subscribe({
+      next: () => {
+        this.patchRecoveryTaskCard(taskId, {
+          text: request.text,
+          answer: request.answer,
+          scheduledDate: request.publishedDate || ''
+        });
+        this.deps.clearReviewEditDrafts(review.id);
+        this.reviewEditSaving.set(false);
+        this.editReview.set(null);
+        this.reviewEditDraft.set(null);
+        this.deps.toastService.success('Восстановление сохранено', `Задача #${taskId} обновлена`);
+        this.deps.loadBoard();
+      },
+      error: (err) => {
+        const message = this.deps.errorMessage(err, 'Не удалось сохранить восстановление');
+        this.reviewEditError.set(message);
+        this.reviewEditSaving.set(false);
+        this.deps.toastService.error(
+          message.includes('Плановую дату задачи может менять только менеджер')
+            ? 'Дата не изменена'
+            : 'Восстановление не сохранено',
+          message
+        );
+      }
+    });
+  }
+
   deleteReviewEdit(): void {
     const review = this.editReview();
 
     if (!review || this.reviewEditDeleting()) {
+      return;
+    }
+    if (this.isRecoveryTaskReview(review)) {
       return;
     }
 
@@ -313,6 +386,9 @@ export class WorkerBoardEditFacade {
     if (!review) {
       return;
     }
+    if (this.isRecoveryTaskReview(review)) {
+      return;
+    }
 
     this.reviewEditUploading.set(true);
     this.reviewEditError.set(null);
@@ -345,6 +421,9 @@ export class WorkerBoardEditFacade {
     const review = this.editReview();
 
     if (!review || this.reviewEditNewAccountSaving()) {
+      return;
+    }
+    if (this.isRecoveryTaskReview(review)) {
       return;
     }
 
@@ -495,6 +574,28 @@ export class WorkerBoardEditFacade {
     }));
   }
 
+  private patchRecoveryTaskCard(
+    taskId: number,
+    patch: { text: string; answer: string; scheduledDate: string }
+  ): void {
+    this.patchBoard((board) => ({
+      ...board,
+      reviews: {
+        ...board.reviews,
+        content: board.reviews.content.map((review) => review.recoveryTaskId === taskId
+          ? {
+              ...review,
+              text: patch.text,
+              answer: patch.answer,
+              publishedDate: patch.scheduledDate,
+              recoveryTaskScheduledDate: patch.scheduledDate
+            }
+          : review
+        )
+      }
+    }));
+  }
+
   private removeReviewCard(reviewId: number): void {
     this.patchBoard((board) => ({
       ...board,
@@ -512,5 +613,15 @@ export class WorkerBoardEditFacade {
 
     const board = this.deps.board();
     this.deps.setBoardPatch(board ? updater(board) : board);
+  }
+
+  private isRecoveryTaskReview(review: ReviewEditItem | WorkerReviewItem | null): boolean {
+    const taskReview = review as WorkerReviewItem | null;
+    return !!taskReview?.recoveryTask && !!taskReview.recoveryTaskId;
+  }
+
+  private recoveryTaskId(review: ReviewEditItem | WorkerReviewItem | null): number | null {
+    const taskReview = review as WorkerReviewItem | null;
+    return taskReview?.recoveryTaskId ?? null;
   }
 }

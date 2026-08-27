@@ -11,6 +11,7 @@ public record PaymentRouteSelection(
         String manualPaymentType,
         String manualPhone,
         String manualRecipientName,
+        String manualBankName,
         String manualPaymentUrl,
         String manualPaymentButtonLabel,
         String manualComment,
@@ -27,7 +28,7 @@ public record PaymentRouteSelection(
     ) {
         this(routeType, paymentProfileId, paymentProfileCode, paymentProfileName,
                 paymentProfileTerminalKey, manualSource, manualTaskId, manualPaymentType,
-                manualPhone, manualRecipientName, manualPaymentUrl, manualPaymentButtonLabel,
+                manualPhone, manualRecipientName, null, manualPaymentUrl, manualPaymentButtonLabel,
                 manualComment, instructionText, null, null);
     }
 }

@@ -3,6 +3,7 @@ package com.hunt.otziv.common_billing.model;
 import com.hunt.otziv.contractor_payments.model.ContractorAllocationMode;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.ManualPaymentType;
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -48,6 +49,14 @@ public class CommonInvoice {
 
     @Column(name = "invoice_purpose", nullable = false, length = 32)
     private String invoicePurpose = "STANDARD";
+
+    /** Immutable route policy captured when the invoice cycle is created. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "invoice_payment_mode", nullable = false, length = 32)
+    private InvoicePaymentMode invoicePaymentMode = InvoicePaymentMode.AUTO_ROUTING;
+
+    @Column(name = "paper_invoice_issued_at")
+    private LocalDateTime paperInvoiceIssuedAt;
 
     @Column(name = "cycle_idempotency_key", length = 160)
     private String cycleIdempotencyKey;

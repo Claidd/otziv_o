@@ -169,6 +169,7 @@ class ContractorPaymentSystemAdminControllerTest {
                 true,
                 true,
                 List.of(),
+                List.of(),
                 null,
                 0L,
                 true,

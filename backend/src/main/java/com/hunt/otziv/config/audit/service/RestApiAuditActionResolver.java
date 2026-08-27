@@ -381,6 +381,8 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/manager/overdue-orders", "проверка заказов, которые давно не менялись");
         put(actions, "POST", "/api/manager/orders/{orderId}/status", "смена статуса заказа на \"{status}\"");
         put(actions, "GET", "/api/manager/orders/{orderId}/edit", "загрузка редактирования заказа {orderId}");
+        put(actions, "GET", "/api/manager/orders/{orderId}/payment-route-change-context", "проверка смены способа оплаты заказа {orderId}");
+        put(actions, "POST", "/api/manager/orders/{orderId}/payment-route-change", "смена способа оплаты заказа {orderId} на {target}");
         put(actions, "PUT", "/api/manager/orders/{orderId}", "редактирование заказа {orderId}");
         put(actions, "DELETE", "/api/manager/orders/{orderId}", "удаление заказа {orderId}");
         put(actions, "GET", "/api/manager/orders/{orderId}/details", "загрузка деталей заказа {orderId}");
@@ -416,6 +418,8 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/manager/archive/orders", "загрузка архива заказов");
         put(actions, "GET", "/api/manager/archive/orders/{orderId}", "загрузка архивного заказа {orderId}");
         put(actions, "POST", "/api/manager/archive/orders/{orderId}/restore", "восстановление архивного заказа {orderId}");
+        put(actions, "GET", "/api/common-billing/invoices/{invoiceId}/payment-route-change-context", "проверка смены способа оплаты общего счета {invoiceId}");
+        put(actions, "POST", "/api/common-billing/invoices/{invoiceId}/payment-route-change", "смена способа оплаты общего счета {invoiceId} на {target}");
         put(actions, "GET", "/api/common-billing/invoices/{invoiceId}/archive-preview", "проверка архивирования общего счета {invoiceId}");
         put(actions, "POST", "/api/common-billing/invoices/{invoiceId}/archive", "архивирование общего счета {invoiceId} со всеми заказами");
         put(actions, "POST", "/api/common-billing/invoices/{invoiceId}/ban", "перевод общего счета {invoiceId} в Бан");

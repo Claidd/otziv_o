@@ -7,6 +7,7 @@ import {
   ApiService,
   CommonInvoiceDetailsResponse,
   CommonInvoiceOrderResponse,
+  CommonInvoicePaymentRouteChangeTarget,
   CommonInvoiceSummaryResponse,
   CommonManualPaymentMode,
   ManualPaymentConfirmationRequest,
@@ -38,6 +39,9 @@ type InvoiceAction =
   | 'paid'
   | 'unpaid'
   | 'ban'
+  | 'repair-payment-route'
+  | 'resolve-technical-tail'
+  | 'resolve-payment-notification'
   | 'retry'
   | 'resolve'
   | 'late-payment'
@@ -99,7 +103,46 @@ type InvoiceAction =
               </article>
             </section>
 
+            @if (invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+              <section class="invoice-mode-card invoice-mode-card--paper">
+                <span class="material-icons-sharp" aria-hidden="true">description</span>
+                <div>
+                  <strong>Бумажный счёт владельца</strong>
+                  <p>Реквизиты сотрудников и ссылка T-Bank не отправляются. После передачи документа отметьте «Счёт отправлен».</p>
+                </div>
+              </section>
+            } @else if (invoice.paymentRouteSelectedAt) {
+              <section class="invoice-mode-card">
+                <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
+                <div>
+                  <strong>{{ paymentRouteLabel(invoice) }}</strong>
+                  <p>Текущий способ оплаты общего счёта.</p>
+                </div>
+              </section>
+            }
+
             <section class="invoice-actions" aria-label="Действия общего счета">
+              @if (invoice.status !== 'NEEDS_ATTENTION'
+                && invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
+                && invoice.paymentRouteSelectedAt
+                && invoice.status !== 'PAID') {
+                <button type="button" (click)="changePaymentRoute()" [disabled]="!!mutating()">Сменить способ оплаты</button>
+              }
+              @if (canManagePaperInvoices()
+                && (invoice.status !== 'NEEDS_ATTENTION' || paperModeSwitchNeedsRetry(invoice))
+                && invoice.status !== 'PAID') {
+                <button type="button" (click)="changePaperInvoiceMode()" [disabled]="!!mutating()">
+                  {{ invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+                    ? 'Вернуть авто-распределение'
+                    : (paperModeSwitchNeedsRetry(invoice) ? 'Повторить бумажный счёт' : 'Бумажный счёт') }}
+                </button>
+              }
+              @if (canManagePaperInvoices()
+                && invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+                && invoice.sentAt
+                && !invoice.paperInvoiceIssuedAt) {
+                <button type="button" class="success" (click)="markPaperInvoiceIssued()" [disabled]="!!mutating()">Счёт отправлен</button>
+              }
               @if (invoice.status === 'NEEDS_ATTENTION') {
                 @if (attentionPolicy(invoice).latePayment) {
                   <button type="button" (click)="runInvoiceAction('late-payment')" [disabled]="!!mutating()">Поздняя оплата</button>
@@ -112,6 +155,7 @@ type InvoiceAction =
                   <p class="invoice-action-hint">{{ paymentInitNoPaymentActionHint }}</p>
                 }
                 @if (attentionPolicy(invoice).standaloneRouteConflict) {
+                  <button type="button" (click)="runInvoiceAction('repair-payment-route')" [disabled]="!!mutating()">Починить маршрут</button>
                   <button type="button" class="success" (click)="reportManualCardPayment()" [disabled]="!!mutating() || manualAttributionRequired() == null">
                     Оплата переводом
                   </button>
@@ -122,13 +166,26 @@ type InvoiceAction =
                   <button type="button" (click)="runInvoiceAction('resolve')" [disabled]="!!mutating()">Закрыть проверку</button>
                 }
               } @else {
-                <button type="button" (click)="runInvoiceAction('send')" [disabled]="!!mutating() || !canSendInvoice(invoice)">Отправить</button>
-                <button type="button" (click)="copyPublicUrl(invoice)" [disabled]="!invoice.publicUrl">Ссылка</button>
+                @if (canResolveTechnicalTail(invoice)) {
+                  <button type="button" class="success" (click)="runInvoiceAction('resolve-technical-tail')" [disabled]="!!mutating()">Закрыть хвост</button>
+                } @else if (canResolvePaymentNotification(invoice)) {
+                  <button type="button" class="success" (click)="runInvoiceAction('resolve-payment-notification')" [disabled]="!!mutating()">Уведомление обработано</button>
+                } @else {
+                  <button type="button" (click)="runInvoiceAction('send')" [disabled]="!!mutating() || !canSendInvoice(invoice)">Отправить</button>
+                }
+                <button type="button" (click)="copyPublicUrl(invoice)" [disabled]="!invoice.publicUrl || invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE'">Ссылка</button>
                 <button type="button" (click)="runInvoiceAction('approve-review-orders')" [disabled]="!!mutating() || !canApproveReviewOrders()">Одобрить все</button>
-                <button type="button" class="success" (click)="runInvoiceAction('paid')" [disabled]="!!mutating() || !canMarkInvoicePaid(invoice)">Оплачен</button>
+                @if (invoice.contractorPaymentRoute) {
+                  <button type="button" class="success" (click)="confirmContractorPaymentSource()" [disabled]="!!mutating() || !canConfirmContractorSource(invoice)">Сверить поступление</button>
+                } @else {
+                  <button type="button" class="success" (click)="runInvoiceAction('paid')" [disabled]="!!mutating() || !canMarkInvoicePaid(invoice)">Оплачен</button>
+                }
                 <button type="button" class="danger" (click)="runInvoiceAction('unpaid')" [disabled]="!!mutating() || !canMarkInvoiceUnpaid(invoice)">Не оплачен</button>
                 <button type="button" (click)="runInvoiceAction('remind')" [disabled]="!!mutating() || !canRemindInvoice(invoice)">Напомнить</button>
                 <button type="button" class="danger" (click)="runInvoiceAction('ban')" [disabled]="!!mutating() || !canMarkInvoiceBan(invoice)">Бан</button>
+                @if (canArchiveInvoice(invoice)) {
+                  <button type="button" class="danger" (click)="archiveInvoice()" [disabled]="!!mutating()">В архив</button>
+                }
                 @if (canDeleteInvoiceWithOrders(invoice)) {
                   <button type="button" class="danger" (click)="deleteInvoiceWithOrders(invoice)" [disabled]="!!mutating()">Удалить</button>
                 }
@@ -138,19 +195,28 @@ type InvoiceAction =
               }
             </section>
 
-            @if (invoice.sentAt || invoice.lastReminderAt || invoice.nextReminderAt || invoice.lastError) {
+            @if (invoice.paymentRouteSelectedAt || invoice.sentAt || invoice.paperInvoiceIssuedAt || invoice.lastReminderAt || invoice.nextReminderAt || invoice.lastError || invoice.paymentSuccessNotificationError) {
               <section class="invoice-timeline">
+                @if (invoice.paymentRouteSelectedAt) {
+                  <span>Маршрут: {{ paymentRouteLabel(invoice) }} · {{ dateTime(invoice.paymentRouteSelectedAt) }}</span>
+                }
                 @if (invoice.sentAt) {
                   <span>Отправлен: {{ dateTime(invoice.sentAt) }}</span>
                 }
                 @if (invoice.lastReminderAt) {
                   <span>Напоминание: {{ dateTime(invoice.lastReminderAt) }}</span>
                 }
+                @if (invoice.paperInvoiceIssuedAt) {
+                  <span>Бумажный документ отправлен: {{ dateTime(invoice.paperInvoiceIssuedAt) }}</span>
+                }
                 @if (invoice.nextReminderAt) {
                   <span>Следующее: {{ dateTime(invoice.nextReminderAt) }}</span>
                 }
                 @if (invoice.lastError) {
                   <span class="error-line">{{ invoice.lastError }}</span>
+                }
+                @if (invoice.paymentSuccessNotificationError) {
+                  <span class="error-line">Уведомление: {{ invoice.paymentSuccessNotificationError }}</span>
                 }
               </section>
             }
@@ -259,6 +325,7 @@ type InvoiceAction =
     .state-card,
     .invoice-hero,
     .invoice-stats,
+    .invoice-mode-card,
     .invoice-actions,
     .invoice-timeline,
     .payment-evidence,
@@ -338,6 +405,41 @@ type InvoiceAction =
     .invoice-stats strong {
       color: var(--otziv-dark);
       font: 1000 1rem/1 var(--otziv-card-title-font);
+    }
+
+    .invoice-mode-card {
+      display: grid;
+      grid-template-columns: 2.2rem minmax(0, 1fr);
+      align-items: start;
+      gap: 0.6rem;
+      padding: 0.72rem;
+      color: var(--otziv-dark);
+    }
+
+    .invoice-mode-card > span {
+      display: grid;
+      width: 2.2rem;
+      height: 2.2rem;
+      place-items: center;
+      border-radius: 0.72rem;
+      color: var(--otziv-accent, #df432f);
+      background: var(--otziv-tone-warning-surface);
+    }
+
+    .invoice-mode-card strong {
+      display: block;
+      font: 1000 0.8rem/1.2 var(--otziv-card-title-font);
+    }
+
+    .invoice-mode-card p {
+      margin: 0.2rem 0 0;
+      color: var(--otziv-info);
+      font: 800 0.66rem/1.3 var(--otziv-card-title-font);
+    }
+
+    .invoice-mode-card--paper {
+      border-color: rgba(223, 67, 47, 0.22);
+      background: linear-gradient(145deg, var(--otziv-white) 0%, var(--otziv-tone-correction-surface) 100%);
     }
 
     .invoice-actions,
@@ -504,6 +606,7 @@ type InvoiceAction =
     :host-context(body.otziv-dark-theme) .state-card,
     :host-context(body.otziv-dark-theme) .invoice-hero,
     :host-context(body.otziv-dark-theme) .invoice-stats,
+    :host-context(body.otziv-dark-theme) .invoice-mode-card,
     :host-context(body.otziv-dark-theme) .invoice-actions,
     :host-context(body.otziv-dark-theme) .invoice-timeline,
     :host-context(body.otziv-dark-theme) .invoice-orders {
@@ -516,6 +619,11 @@ type InvoiceAction =
     :host-context(body.otziv-dark-theme) .invoice-order-card {
       border-color: rgba(163, 189, 204, 0.16);
       background: linear-gradient(145deg, rgba(37, 43, 47, 0.98) 0%, rgba(27, 32, 36, 0.98) 100%);
+    }
+
+    :host-context(body.otziv-dark-theme) .invoice-mode-card--paper {
+      border-color: rgba(255, 128, 93, 0.28);
+      background: linear-gradient(145deg, rgba(60, 35, 34, 0.96) 0%, rgba(31, 29, 31, 0.98) 100%);
     }
 
     :host-context(body.otziv-dark-theme) .invoice-actions button,
@@ -641,6 +749,21 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       return;
     }
     if (action === 'paid') {
+      if (invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+        const evidence = await this.requestManualPaymentEvidence(
+          'Подтверждение оплаты бумажного счёта',
+          `Подтвердите поступление денег по бумажному счёту №${invoiceId}. Заказы будут закрыты без начисления получателю реквизитов.`
+        );
+        if (!evidence || !this.routeGuard.accepts(ticket)) {
+          return;
+        }
+        await this.runOrderMutation(
+          ticket,
+          'paper-invoice-paid',
+          () => this.api.markCommonInvoicePaperInvoicePaid(invoiceId, evidence)
+        );
+        return;
+      }
       const required = this.manualAttributionRequired();
       if (required == null) {
         this.error.set('Режим учёта получателей не загружен. Обновите карточку счёта.');
@@ -747,6 +870,198 @@ export class CommonBillingPage implements OnInit, OnDestroy {
       'manual-card-paid',
       () => this.api.reportCommonInvoiceManualCardPayment(invoiceId, reason)
     );
+  }
+
+  async changePaymentRoute(): Promise<void> {
+    const invoice = this.summary();
+    const invoiceId = this.invoiceId();
+    const ticket = this.routeGuard.capture();
+    if (!invoice || !invoiceId || !ticket || this.mutating()
+      || invoice.status === 'NEEDS_ATTENTION'
+      || invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+      return;
+    }
+
+    this.readRun += 1;
+    this.mutating.set('load-payment-route-change');
+    try {
+      const context = await firstValueFrom(this.api.getCommonInvoicePaymentRouteChangeContext(invoiceId));
+      if (!this.routeGuard.accepts(ticket)) {
+        return;
+      }
+      if (!context.canChange) {
+        this.error.set(context.blockReason || 'Способ оплаты нельзя изменить без ручной сверки.');
+        return;
+      }
+      const target: CommonInvoicePaymentRouteChangeTarget = context.currentTarget === 'OWNER_TBANK'
+        ? 'EMPLOYEE_REQUISITES'
+        : 'OWNER_TBANK';
+      const destination = target === 'EMPLOYEE_REQUISITES'
+        ? 'реквизиты специалиста или менеджера'
+        : 'ссылку T-Bank владельца';
+      const recipient = context.currentRecipient?.trim()
+        ? ` Получатель сейчас: ${context.currentRecipient}.`
+        : '';
+      const confirmed = await this.confirm.confirm({
+        title: 'Смена способа оплаты',
+        message: `Переключить общий счёт на ${destination}?${recipient} Старый резерв будет освобождён, новый маршрут создан заново, клиенту уйдёт обновлённое сообщение. Продолжайте только если клиент ещё не платил.`,
+        danger: true
+      });
+      if (!confirmed || !this.routeGuard.accepts(ticket)) {
+        return;
+      }
+      this.mutating.set('change-payment-route');
+      const details = await firstValueFrom(this.api.changeCommonInvoicePaymentRoute(
+        invoiceId,
+        target,
+        context.paymentEvidenceToken
+      ));
+      if (this.routeGuard.accepts(ticket)) {
+        this.details.set(details);
+        this.error.set(null);
+      }
+    } catch (error) {
+      if (this.routeGuard.accepts(ticket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось изменить способ оплаты.'));
+      }
+    } finally {
+      if (this.routeGuard.accepts(ticket)) {
+        this.mutating.set(null);
+      }
+    }
+  }
+
+  async changePaperInvoiceMode(): Promise<void> {
+    const invoice = this.summary();
+    const invoiceId = this.invoiceId();
+    const ticket = this.routeGuard.capture();
+    if (!invoice || !invoiceId || !ticket || this.mutating() || !this.canManagePaperInvoices()) {
+      return;
+    }
+    const paperEnabled = invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE';
+    const confirmed = await this.confirm.confirm({
+      title: paperEnabled ? 'Вернуть авто-распределение' : 'Бумажный счёт владельца',
+      message: paperEnabled
+        ? 'Вернуть распределение специалист → менеджер → владелец? Делайте это только если бумажный счёт не отправлялся и оплаты по нему нет.'
+        : 'Включить бумажный счёт владельца? Система безопасно отменит прежний маршрут и освободит резерв. Продолжайте только если клиент ещё не платил.',
+      danger: true
+    });
+    if (!confirmed || !this.routeGuard.accepts(ticket)) {
+      return;
+    }
+    await this.runOrderMutation(
+      ticket,
+      'change-paper-invoice-mode',
+      () => this.api.changeCommonInvoicePaymentMode(
+        invoiceId,
+        paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE'
+      )
+    );
+  }
+
+  async markPaperInvoiceIssued(): Promise<void> {
+    const invoice = this.summary();
+    const invoiceId = this.invoiceId();
+    const ticket = this.routeGuard.capture();
+    if (!invoice || !invoiceId || !ticket || this.mutating() || !this.canManagePaperInvoices()
+      || invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE' || invoice.paperInvoiceIssuedAt) {
+      return;
+    }
+    const confirmed = await this.confirm.confirm({
+      title: 'Бумажный счёт отправлен',
+      message: 'Подтвердить, что документ уже передан клиенту? После отметки начнутся автоматические напоминания.'
+    });
+    if (!confirmed || !this.routeGuard.accepts(ticket)) {
+      return;
+    }
+    await this.runOrderMutation(
+      ticket,
+      'paper-invoice-issued',
+      () => this.api.markCommonInvoicePaperInvoiceIssued(invoiceId)
+    );
+  }
+
+  async confirmContractorPaymentSource(): Promise<void> {
+    const invoice = this.summary();
+    const invoiceId = this.invoiceId();
+    const ticket = this.routeGuard.capture();
+    if (!invoice || !invoiceId || !ticket || this.mutating() || !this.canConfirmContractorSource(invoice)) {
+      return;
+    }
+    const confirmed = await this.confirm.confirm({
+      title: 'Сверка поступления',
+      message: 'Подтвердите только после проверки выписки именно того сотрудника, чьи реквизиты указаны в этом счёте.'
+    });
+    if (!confirmed || !this.routeGuard.accepts(ticket)) {
+      return;
+    }
+    const rawAmount = window.prompt('Подтверждённая сумма по этому источнику накопительным итогом, ₽:');
+    if (rawAmount === null) {
+      return;
+    }
+    const confirmedTotalKopecks = Math.round(Number(rawAmount.replace(',', '.')) * 100);
+    if (!Number.isSafeInteger(confirmedTotalKopecks) || confirmedTotalKopecks <= 0) {
+      this.error.set('Укажите корректную положительную сумму поступления.');
+      return;
+    }
+    const reason = window.prompt('Основание сверки:', 'Поступление найдено в выписке получателя')?.trim() ?? '';
+    if (!reason) {
+      this.error.set('Укажите основание сверки поступления.');
+      return;
+    }
+    await this.runOrderMutation(
+      ticket,
+      'contractor-source-confirmation',
+      () => this.api.confirmCommonInvoiceContractorSource(invoiceId, {
+        recipientStatementChecked: true,
+        paymentReceived: true,
+        confirmedTotalKopecks,
+        reason
+      })
+    );
+  }
+
+  async archiveInvoice(): Promise<void> {
+    const invoice = this.summary();
+    const invoiceId = this.invoiceId();
+    const ticket = this.routeGuard.capture();
+    if (!invoice || !invoiceId || !ticket || this.mutating() || !this.canArchiveInvoice(invoice)) {
+      return;
+    }
+    this.readRun += 1;
+    this.mutating.set('archive-preview');
+    try {
+      const preview = await firstValueFrom(this.api.getCommonInvoiceArchivePreview(invoiceId));
+      if (!this.routeGuard.accepts(ticket)) {
+        return;
+      }
+      if (!preview.allowed) {
+        this.error.set(preview.blockers.join('; ') || 'Общий счёт сейчас нельзя архивировать.');
+        return;
+      }
+      const confirmed = await this.confirm.confirm({
+        title: 'Архив общего счёта',
+        message: `Архивировать общий счёт №${invoiceId} и ${preview.totalOrders} заказов внутри?`,
+        danger: true
+      });
+      if (!confirmed || !this.routeGuard.accepts(ticket)) {
+        return;
+      }
+      this.mutating.set('archive-invoice');
+      const details = await firstValueFrom(this.api.archiveCommonInvoice(invoiceId));
+      if (this.routeGuard.accepts(ticket)) {
+        this.details.set(details);
+        this.error.set(null);
+      }
+    } catch (error) {
+      if (this.routeGuard.accepts(ticket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось архивировать общий счёт.'));
+      }
+    } finally {
+      if (this.routeGuard.accepts(ticket)) {
+        this.mutating.set(null);
+      }
+    }
   }
 
   async detachOrder(order: CommonInvoiceOrderResponse): Promise<void> {
@@ -975,12 +1290,48 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     }
   }
 
+  paymentRouteLabel(invoice: CommonInvoiceSummaryResponse): string {
+    if (invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+      return 'Бумажный счёт владельца';
+    }
+    const profile = invoice.paymentRouteProfileName?.trim();
+    switch (invoice.paymentRouteType) {
+      case 'TBANK_LINK':
+        return profile ? `T-Bank · ${profile}` : 'T-Bank владельца';
+      case 'MANUAL_EXTERNAL_LINK':
+        return invoice.paymentRouteManualTaskId
+          ? `Внешняя ссылка · задание #${invoice.paymentRouteManualTaskId}`
+          : 'Внешняя ссылка';
+      case 'MANUAL_MOBILE_BANK':
+        return invoice.paymentRouteManualTaskId
+          ? `Реквизиты сотрудника · задание #${invoice.paymentRouteManualTaskId}`
+          : (profile ? `Реквизиты сотрудника · ${profile}` : 'Реквизиты сотрудника');
+      case 'MANAGER_TEXT':
+        return 'Текст менеджера';
+      default:
+        return 'Маршрут не выбран';
+    }
+  }
+
+  canManagePaperInvoices(): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  }
+
+  paperModeSwitchNeedsRetry(invoice: CommonInvoiceSummaryResponse): boolean {
+    const error = (invoice.lastError ?? '').trim().toLowerCase();
+    return error.startsWith('paper_invoice_mode_switch_retry:')
+      || error.startsWith('paper_invoice_mode_switch_in_progress:')
+      || error.startsWith('paper_invoice_mode_switch_state_changed:');
+  }
+
   canSendInvoice(invoice: CommonInvoiceSummaryResponse): boolean {
     return this.allOrdersReady(invoice) && ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID'].includes(invoice.status);
   }
 
   canRemindInvoice(invoice: CommonInvoiceSummaryResponse): boolean {
-    return this.allOrdersReady(invoice) && ['INVOICED', 'REMINDER', 'PARTIALLY_PAID'].includes(invoice.status);
+    return this.allOrdersReady(invoice)
+      && (invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE' || Boolean(invoice.paperInvoiceIssuedAt))
+      && ['INVOICED', 'REMINDER', 'PARTIALLY_PAID'].includes(invoice.status);
   }
 
   canMarkInvoicePaid(invoice: CommonInvoiceSummaryResponse): boolean {
@@ -996,6 +1347,31 @@ export class CommonBillingPage implements OnInit, OnDestroy {
 
   canMarkInvoiceBan(invoice: CommonInvoiceSummaryResponse): boolean {
     return invoice.status === 'UNPAID';
+  }
+
+  canConfirmContractorSource(invoice: CommonInvoiceSummaryResponse): boolean {
+    return invoice.contractorPaymentRoute
+      && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+      && ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID', 'UNPAID'].includes(invoice.status);
+  }
+
+  canArchiveInvoice(invoice: CommonInvoiceSummaryResponse): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+      && invoice.status === 'COLLECTING'
+      && invoice.totalOrders > 0
+      && invoice.paidKopecks <= 0
+      && invoice.paidOrders <= 0;
+  }
+
+  canResolveTechnicalTail(invoice: CommonInvoiceSummaryResponse): boolean {
+    const error = (invoice.lastError ?? '').trim().toLowerCase();
+    return invoice.status === 'DISABLED'
+      && invoice.paidOrders >= invoice.totalOrders
+      && (error.startsWith('disabled:') || error.startsWith('empty:') || error.startsWith('merged_into:'));
+  }
+
+  canResolvePaymentNotification(invoice: CommonInvoiceSummaryResponse): boolean {
+    return Boolean(invoice.paymentSuccessNotificationError?.trim());
   }
 
   canDeleteInvoiceWithOrders(invoice: CommonInvoiceSummaryResponse): boolean {
@@ -1194,6 +1570,12 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         return this.api.markCommonInvoiceUnpaid(invoiceId);
       case 'ban':
         return this.api.markCommonInvoiceBan(invoiceId);
+      case 'repair-payment-route':
+        return this.api.repairCommonInvoicePaymentRoute(invoiceId);
+      case 'resolve-technical-tail':
+        return this.api.resolveCommonInvoiceTechnicalTail(invoiceId);
+      case 'resolve-payment-notification':
+        return this.api.resolveCommonInvoicePaymentNotification(invoiceId);
       case 'retry':
         return this.api.retryCommonInvoiceAttention(invoiceId);
       case 'resolve':
@@ -1256,6 +1638,12 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         return 'Отметить общий счет не оплаченным?';
       case 'ban':
         return 'Перевести общий счет в бан?';
+      case 'repair-payment-route':
+        return 'Перепроверить и восстановить единый платежный маршрут общего счета?';
+      case 'resolve-technical-tail':
+        return 'Закрыть технический хвост после проверки связи и переноса заказов?';
+      case 'resolve-payment-notification':
+        return 'Закрыть ошибку только после ручной отправки уведомления или исправления её причины?';
       case 'retry':
         return 'Повторить обработку общего счета?';
       case 'resolve':

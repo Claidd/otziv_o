@@ -149,6 +149,30 @@ function createFacade(config: {
           payDay: '',
           canCancelPayment: false
         });
+      },
+      getPaymentRouteChangeContext: (orderId: number) => {
+        calls.push(`get-payment-route:${orderId}`);
+        return of({
+          paymentLinkId: 71,
+          currentRoute: 'Эквайринг Т-Банк',
+          currentRecipient: 'Владелец',
+          status: 'CREATED',
+          canChange: true,
+          blockReason: ''
+        });
+      },
+      changePaymentRoute: (orderId, request) => {
+        calls.push(`change-payment-route:${orderId}:${request.target}:${request.expectedPaymentLinkId}`);
+        return of({
+          previousPaymentLinkId: request.expectedPaymentLinkId,
+          paymentLinkId: 72,
+          target: request.target,
+          clientNotificationScheduled: true
+        });
+      },
+      markPaperInvoiceIssued: (orderId: number) => {
+        calls.push(`paper-invoice-issued:${orderId}`);
+        return of(void 0);
       }
     },
     toastService: {
@@ -265,5 +289,22 @@ describe('ManagerBoardOrderFacade', () => {
     expect(state.facade.editOrder()?.canCancelPayment).toBe(false);
     expect(state.toastMessages).toContain('success:Оплата отменена:Заказ #30 возвращен в Напоминание');
     expect(state.calls).toContain('load-board');
+  });
+
+  it('changes only the current unpaid payment route after explicit confirmation', () => {
+    const state = createFacade();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    state.facade.openOrderEdit(order({ id: 30 }));
+    state.facade.openPaymentRouteChange();
+    state.facade.changePaymentRoute('EMPLOYEE_REQUISITES');
+
+    expect(state.calls).toContain('get-payment-route:30');
+    expect(state.calls).toContain('change-payment-route:30:EMPLOYEE_REQUISITES:71');
+    expect(state.calls).toContain('load-board');
+    expect(state.facade.paymentRouteContext()).toBeNull();
+    expect(state.toastMessages).toContain(
+      'success:Способ оплаты изменен:Клиенту отправляется новый способ оплаты по заказу #30'
+    );
   });
 });

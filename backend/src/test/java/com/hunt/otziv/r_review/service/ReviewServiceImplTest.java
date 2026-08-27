@@ -13,6 +13,7 @@ import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.service.OrderDetailsService;
 import com.hunt.otziv.p_products.service.OrderStatusCheckerService;
@@ -276,6 +277,59 @@ class ReviewServiceImplTest {
 
         assertEquals(false, review.isVigul());
         verify(reviewRepository, never()).save(review);
+    }
+
+    @Test
+    void updateReviewDoesNotRunPayableGuardForTextOnlyChange() {
+        Review review = reviewWithOrder(91L);
+        review.setText("Старый текст");
+        ReviewDTO dto = ReviewDTO.builder()
+                .id(17L)
+                .text("Новый текст")
+                .answer("")
+                .url("")
+                .build();
+
+        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
+
+        reviewService.updateReview("ROLE_MANAGER", dto, 17L);
+
+        assertEquals("Новый текст", review.getText());
+        verify(contractorRouteAssignmentGuard, never()).requirePayableMutationAllowed(91L);
+        verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void updateReviewRunsPayableGuardForProductChange() {
+        Review review = reviewWithOrder(91L);
+        Product currentProduct = new Product();
+        currentProduct.setId(1L);
+        currentProduct.setPrice(java.math.BigDecimal.valueOf(250));
+        review.setProduct(currentProduct);
+        review.setPrice(currentProduct.getPrice());
+
+        Product requestedProductRef = new Product();
+        requestedProductRef.setId(2L);
+        Product loadedProduct = new Product();
+        loadedProduct.setId(2L);
+        loadedProduct.setPrice(java.math.BigDecimal.valueOf(200));
+        ReviewDTO dto = ReviewDTO.builder()
+                .id(17L)
+                .text("Текст отзыва")
+                .answer("")
+                .url("")
+                .product(requestedProductRef)
+                .build();
+
+        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
+        when(productService.findById(2L)).thenReturn(loadedProduct);
+
+        reviewService.updateReview("ROLE_MANAGER", dto, 17L);
+
+        verify(contractorRouteAssignmentGuard).requirePayableMutationAllowed(91L);
+        assertSame(loadedProduct, review.getProduct());
+        assertEquals(java.math.BigDecimal.valueOf(200), review.getPrice());
+        verify(reviewRepository).save(review);
     }
 
     @Test
@@ -670,6 +724,17 @@ class ReviewServiceImplTest {
                 .id(id)
                 .text("Готовый текст отзыва " + id)
                 .build();
+    }
+
+    private Review reviewWithOrder(Long orderId) {
+        Order order = new Order();
+        order.setId(orderId);
+        OrderDetails details = new OrderDetails();
+        details.setId(UUID.randomUUID());
+        details.setOrder(order);
+        Review review = reviewForVigulUpdate(false);
+        review.setOrderDetails(details);
+        return review;
     }
 
     private Review reviewForVigulUpdate(boolean vigul) {

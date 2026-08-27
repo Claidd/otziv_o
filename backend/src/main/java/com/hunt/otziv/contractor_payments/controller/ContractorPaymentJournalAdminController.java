@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequiredArgsConstructor
@@ -59,12 +61,26 @@ public class ContractorPaymentJournalAdminController {
             @Valid @RequestBody ContractorReturnAmountRequest request
     ) {
         targetAccessPolicy.requireCanManageAllocationRecipient(allocationId);
-        shadowService.recordObservedReturnAmount(
-                allocationId,
-                request.returnedTotalKopecks(),
-                request.effectiveAt() == null ? LocalDateTime.now() : request.effectiveAt(),
-                "MANUAL_RETURN_TOTAL:" + request.returnedTotalKopecks(),
-                request.reason()
-        );
+        try {
+            shadowService.recordObservedReturnAmount(
+                    allocationId,
+                    request.returnedTotalKopecks(),
+                    request.effectiveAt() == null ? LocalDateTime.now() : request.effectiveAt(),
+                    "MANUAL_RETURN_TOTAL:" + request.returnedTotalKopecks(),
+                    request.reason()
+            );
+        } catch (IllegalArgumentException ex) {
+            throw returnAmountFailure(ex);
+        }
+    }
+
+    private ResponseStatusException returnAmountFailure(IllegalArgumentException failure) {
+        String message = failure.getMessage() == null || failure.getMessage().isBlank()
+                ? "Невозможно скорректировать возврат для этого назначения"
+                : failure.getMessage();
+        HttpStatus status = message.contains("не найдено") || message.contains("больше не существует")
+                ? HttpStatus.NOT_FOUND
+                : HttpStatus.CONFLICT;
+        return new ResponseStatusException(status, message, failure);
     }
 }

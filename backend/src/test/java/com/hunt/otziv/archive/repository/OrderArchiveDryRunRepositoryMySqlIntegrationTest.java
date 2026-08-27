@@ -363,6 +363,7 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                     bank_init_nonce VARCHAR(64) NULL,
                     bank_cancel_nonce VARCHAR(64) NULL,
                     bank_cancel_origin_status VARCHAR(32) NULL,
+                    last_error VARCHAR(1024) NULL,
                     receipt_status VARCHAR(32) NULL,
                     payment_success_notified_at DATETIME(6) NULL,
                     payment_success_notification_retry_eligible TINYINT(1) NOT NULL DEFAULT 0,

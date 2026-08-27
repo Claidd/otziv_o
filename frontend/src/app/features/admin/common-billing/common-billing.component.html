@@ -78,6 +78,7 @@
                 <div class="invoice-order-card-toolbar">
                   <button
                     type="button"
+                    class="toolbar-action toolbar-action--detach"
                     title="Отключить заказ от общего счета"
                     (click)="invoiceOrder && detachOrder(invoiceOrder)"
                     [disabled]="!!mutating() || invoiceNeedsAttention() || !invoiceOrder?.detachable"
@@ -86,7 +87,7 @@
                   </button>
                   <span>{{ formatKopecks(invoiceOrder?.amountKopecks) }}</span>
                   <a
-                    class="order-details-link"
+                    class="order-details-link toolbar-action toolbar-action--details"
                     [routerLink]="['/orders', order.companyId, order.id]"
                     title="Открыть детали заказа"
                   >
@@ -94,6 +95,7 @@
                   </a>
                   <button
                     type="button"
+                    class="toolbar-action toolbar-action--complete"
                     [title]="manualAttributionRequired() === false ? 'Отметить этот заказ оплаченным внутри общего счета' : 'В TEST/LIVE ручную оплату фиксируйте целиком через «Оплачен» с выбором получателей'"
                     (click)="invoiceOrder && markOrderPaid(invoiceOrder)"
                     [disabled]="manualAttributionRequired() !== false || !!mutating() || invoiceNeedsAttention() || !invoiceOrder || invoiceOrder.paid"
@@ -221,6 +223,16 @@
           </div>
         </section>
 
+        @if (invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+          <section class="invoice-problem" aria-label="Режим бумажного счёта">
+            <span class="material-icons-sharp" aria-hidden="true">description</span>
+            <div>
+              <strong>Бумажный счёт владельца</strong>
+              <p>Реквизиты сотрудников и ссылка T‑Bank не выдаются. Напоминания начнутся после отметки об отправке документа.</p>
+            </div>
+          </section>
+        }
+
         @if (invoiceProblem()) {
           <section class="invoice-problem" aria-label="Проблема общего счета">
             <span class="material-icons-sharp" aria-hidden="true">report_problem</span>
@@ -284,6 +296,34 @@
         }
 
         <div class="invoice-actions">
+          @if (!invoiceNeedsAttention()
+            && invoice?.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
+            && invoice?.paymentRouteSelectedAt
+            && invoice?.status !== 'PAID') {
+            <button type="button" class="secondary" (click)="changeCommonInvoicePaymentRoute()" [disabled]="!!mutating()">
+              <span class="material-icons-sharp" aria-hidden="true">swap_horiz</span>
+              Сменить способ оплаты
+            </button>
+          }
+          @if (canManagePaperInvoices()
+            && (!invoiceNeedsAttention() || paperModeSwitchNeedsRetry())
+            && invoice?.status !== 'PAID') {
+            <button type="button" class="secondary" (click)="changePaperInvoiceMode()" [disabled]="!!mutating()">
+              <span class="material-icons-sharp" aria-hidden="true">{{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' ? 'account_tree' : 'description' }}</span>
+              {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+                ? 'Вернуть авто-распределение'
+                : (paperModeSwitchNeedsRetry() ? 'Повторить переход на бумажный счёт' : 'Бумажный счёт') }}
+            </button>
+          }
+          @if (canManagePaperInvoices()
+            && invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+            && invoice?.sentAt
+            && !invoice?.paperInvoiceIssuedAt) {
+            <button type="button" class="success" (click)="markPaperInvoiceIssued()" [disabled]="!!mutating()">
+              <span class="material-icons-sharp" aria-hidden="true">mark_email_read</span>
+              Счёт отправлен
+            </button>
+          }
           @if (invoiceNeedsAttention()) {
             @if (attentionHasLatePayment()) {
               <button type="button" class="success" (click)="applyLatePayment()" [disabled]="!!mutating()">
@@ -314,7 +354,7 @@
               </button>
             }
             @if (attentionRetryEnabled()) {
-              <button type="button" (click)="retryAttention()" [disabled]="!!mutating()">
+              <button type="button" class="primary" (click)="retryAttention()" [disabled]="!!mutating()">
                 <span class="material-icons-sharp" aria-hidden="true">restart_alt</span>
                 Повторить
               </button>
@@ -336,17 +376,17 @@
               Уведомление обработано
             </button>
           } @else {
-            <button type="button" (click)="sendInvoice()" [disabled]="!!mutating() || !readyForSending()">
+            <button type="button" class="primary" (click)="sendInvoice()" [disabled]="!!mutating() || !readyForSending()">
               <span class="material-icons-sharp" aria-hidden="true">send</span>
               Отправить
             </button>
           }
-          <button type="button" (click)="copyPublicUrl()" [disabled]="!invoice?.publicUrl">
+          <button type="button" class="secondary" (click)="copyPublicUrl()" [disabled]="!invoice?.publicUrl || invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'">
             <span class="material-icons-sharp" aria-hidden="true">{{ copied() === 'public-url' ? 'check' : 'content_copy' }}</span>
             Ссылка
           </button>
           @if (!invoiceNeedsAttention()) {
-            <button type="button" (click)="approveReviewOrders()" [disabled]="!!mutating() || !canApproveReviewOrders()">
+            <button type="button" class="review" (click)="approveReviewOrders()" [disabled]="!!mutating() || !canApproveReviewOrders()">
               <span class="material-icons-sharp" aria-hidden="true">playlist_add_check</span>
               Одобрить все
             </button>
@@ -361,7 +401,7 @@
                 Оплачен
               </button>
             }
-            <button type="button" class="danger" (click)="markInvoiceUnpaid()" [disabled]="!!mutating() || !canMarkUnpaid()">
+            <button type="button" class="warning" (click)="markInvoiceUnpaid()" [disabled]="!!mutating() || !canMarkUnpaid()">
               <span class="material-icons-sharp" aria-hidden="true">money_off</span>
               Не оплачен
             </button>
@@ -386,13 +426,16 @@
           }
         </div>
 
-        @if (invoice?.paymentRouteSelectedAt || invoice?.sentAt || invoice?.lastReminderAt || invoice?.nextReminderAt || invoice?.lastError || invoice?.paymentSuccessNotificationError) {
+        @if (invoice?.paymentRouteSelectedAt || invoice?.sentAt || invoice?.paperInvoiceIssuedAt || invoice?.lastReminderAt || invoice?.nextReminderAt || invoice?.lastError || invoice?.paymentSuccessNotificationError) {
           <div class="invoice-timeline">
             @if (invoice?.paymentRouteSelectedAt && invoice) {
               <span>Маршрут: {{ paymentRouteLabel(invoice) }} · {{ invoice.paymentRouteSelectedAt | date:'dd.MM HH:mm' }}</span>
             }
             @if (invoice?.sentAt) {
               <span>Отправлен {{ invoice?.sentAt | date:'dd.MM HH:mm' }}</span>
+            }
+            @if (invoice?.paperInvoiceIssuedAt) {
+              <span>Бумажный документ отправлен {{ invoice?.paperInvoiceIssuedAt | date:'dd.MM HH:mm' }}</span>
             }
             @if (invoice?.lastReminderAt) {
               <span>Напоминание {{ invoice?.lastReminderAt | date:'dd.MM HH:mm' }}</span>
@@ -434,7 +477,12 @@
               <span class="material-icons-sharp" aria-hidden="true">{{ account.enabled ? 'account_tree' : 'pause_circle' }}</span>
               <div>
                 <strong>{{ account.name }}</strong>
-                <small>{{ accountCompaniesLabel(account) }} · {{ statusLabel(account.currentInvoice?.status) }}</small>
+                <small>
+                  {{ accountCompaniesLabel(account) }} · {{ statusLabel(account.currentInvoice?.status) }}
+                  @if (account.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+                    · бумажный счёт
+                  }
+                </small>
               </div>
             </button>
           } @empty {
@@ -627,12 +675,21 @@
       [saving]="orderSaving()"
       [deleting]="orderDeleting()"
       [cancelingPayment]="orderCancelingPayment()"
+      [allowPaymentRouteChange]="true"
+      [allowPaperInvoiceMode]="canManagePaperInvoices()"
+      [paymentRouteContext]="paymentRouteContext()"
+      [paymentRouteContextLoading]="paymentRouteContextLoading()"
+      [paymentRouteChanging]="paymentRouteChanging()"
       [error]="orderError()"
       (closed)="closeOrderEdit()"
       (submitted)="saveOrderEdit()"
       (deleted)="deleteOrderEdit()"
       (paymentCanceled)="cancelOrderPayment()"
       (draftChange)="handleOrderEditDraftChange($event)"
+      (paymentRouteChangeOpened)="openPaymentRouteChange()"
+      (paymentRouteChangeClosed)="closePaymentRouteChange()"
+      (paymentRouteChanged)="changePaymentRoute($event)"
+      (paperInvoiceIssued)="markOrderPaperInvoiceIssued()"
     />
   }
 </app-admin-layout>

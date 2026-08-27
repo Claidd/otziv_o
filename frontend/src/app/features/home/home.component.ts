@@ -147,6 +147,7 @@ export class HomeComponent {
   readonly manualTaskPaymentType = signal<ManualPaymentType>(DEFAULT_MANUAL_PAYMENT_TYPE);
   readonly manualTaskPhone = signal('');
   readonly manualTaskRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
+  readonly manualTaskBankName = signal('');
   readonly manualTaskPaymentUrl = signal(DEFAULT_MANUAL_PAYMENT_URL);
   readonly manualTaskPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly manualTaskAmountRubles = signal('');
@@ -159,6 +160,7 @@ export class HomeComponent {
   readonly manualTaskEditPaymentType = signal<ManualPaymentType>(DEFAULT_MANUAL_PAYMENT_TYPE);
   readonly manualTaskEditPhone = signal('');
   readonly manualTaskEditRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
+  readonly manualTaskEditBankName = signal('');
   readonly manualTaskEditPaymentUrl = signal(DEFAULT_MANUAL_PAYMENT_URL);
   readonly manualTaskEditPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly manualTaskEditAmountRubles = signal('');
@@ -835,6 +837,10 @@ export class HomeComponent {
     this.manualTaskRecipient.set(value ?? '');
   }
 
+  setManualTaskBankName(value: string): void {
+    this.manualTaskBankName.set(value ?? '');
+  }
+
   setManualTaskPaymentUrl(value: string): void {
     this.manualTaskPaymentUrl.set(value ?? '');
   }
@@ -876,6 +882,10 @@ export class HomeComponent {
     this.manualTaskEditRecipient.set(value ?? '');
   }
 
+  setManualTaskEditBankName(value: string): void {
+    this.manualTaskEditBankName.set(value ?? '');
+  }
+
   setManualTaskEditPaymentUrl(value: string): void {
     this.manualTaskEditPaymentUrl.set(value ?? '');
   }
@@ -910,6 +920,7 @@ export class HomeComponent {
     this.manualTaskEditPaymentType.set(this.normalizeManualPaymentType(task.manualPaymentType));
     this.manualTaskEditPhone.set(task.manualPhone ?? '');
     this.manualTaskEditRecipient.set(this.manualRecipientOrDefault(task.manualRecipientName));
+    this.manualTaskEditBankName.set(task.manualBankName ?? '');
     this.manualTaskEditPaymentUrl.set(this.manualPaymentUrlFromResponse(task.manualPaymentUrl));
     this.manualTaskEditPaymentButtonLabel.set(this.manualPaymentButtonLabelOrDefault(task.manualPaymentButtonLabel));
     this.manualTaskEditAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
@@ -960,6 +971,7 @@ export class HomeComponent {
       manualPaymentType: this.manualTaskPaymentType(),
       manualPhone: this.manualTaskPhone().trim(),
       manualRecipientName: this.manualTaskRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualBankName: this.manualTaskBankName().trim() || null,
       manualPaymentUrl: this.manualTaskPaymentUrl().trim(),
       manualPaymentButtonLabel: this.manualTaskPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
       targetAmountKopecks: this.manualTaskTargetKopecks(),
@@ -995,6 +1007,7 @@ export class HomeComponent {
     this.manualTaskPaymentType.set(DEFAULT_MANUAL_PAYMENT_TYPE);
     this.manualTaskPhone.set('');
     this.manualTaskRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
+    this.manualTaskBankName.set('');
     this.manualTaskPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
     this.manualTaskPaymentButtonLabel.set(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
     this.manualTaskAmountRubles.set('');
@@ -1037,6 +1050,7 @@ export class HomeComponent {
       manualPaymentType: this.manualTaskEditPaymentType(),
       manualPhone: this.manualTaskEditPhone().trim(),
       manualRecipientName: this.manualTaskEditRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualBankName: this.manualTaskEditBankName().trim() || null,
       manualPaymentUrl: this.manualTaskEditPaymentUrl().trim(),
       manualPaymentButtonLabel: this.manualTaskEditPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
       targetAmountKopecks: this.manualTaskEditTargetKopecks(),

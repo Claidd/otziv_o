@@ -847,6 +847,35 @@ export interface CommonBillingCompanyResponse {
   enabled: boolean;
 }
 
+export type InvoicePaymentMode = 'AUTO_ROUTING' | 'OWNER_PAPER_INVOICE';
+
+export type CommonInvoicePaymentRouteChangeTarget = 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK';
+
+export interface CommonInvoicePaymentRouteChangeContextResponse {
+  currentRoute: string;
+  currentTarget: CommonInvoicePaymentRouteChangeTarget;
+  currentRecipient: string;
+  status: string;
+  canChange: boolean;
+  blockReason: string;
+  paymentEvidenceToken: string;
+}
+
+export interface ContractorCommonSourceConfirmationRequest {
+  recipientStatementChecked: true;
+  paymentReceived: true;
+  confirmedTotalKopecks: number;
+  effectiveAt?: string | null;
+  reason: string;
+}
+
+export interface CommonInvoiceArchivePreviewResponse {
+  invoiceId: number;
+  allowed: boolean;
+  totalOrders: number;
+  blockers: string[];
+}
+
 export interface CommonInvoiceSummaryResponse {
   id: number;
   accountId: number;
@@ -867,12 +896,25 @@ export interface CommonInvoiceSummaryResponse {
   sentAt?: string | null;
   lastReminderAt?: string | null;
   nextReminderAt?: string | null;
+  closedAt?: string | null;
+  closedBy?: string | null;
+  closeReason?: string | null;
   lastError?: string | null;
+  paymentSuccessNotificationError?: string | null;
   tbankOrderId?: string | null;
   tbankPaymentId?: string | null;
   tbankPaymentAmountKopecks?: number | null;
   tbankTerminalLabel?: string | null;
   tbankTerminalKey?: string | null;
+  paymentRouteType?: string | null;
+  paymentRouteProfileName?: string | null;
+  paymentRouteManualTaskId?: number | null;
+  contractorPaymentRoute: boolean;
+  paymentRouteSelectedAt?: string | null;
+  invoicePurpose?: string | null;
+  supersedesInvoiceId?: number | null;
+  invoicePaymentMode?: InvoicePaymentMode | null;
+  paperInvoiceIssuedAt?: string | null;
 }
 
 export interface CommonBillingAccountResponse {
@@ -886,6 +928,7 @@ export interface CommonBillingAccountResponse {
   invoiceCompanyTitle?: string | null;
   companies: CommonBillingCompanyResponse[];
   currentInvoice?: CommonInvoiceSummaryResponse | null;
+  invoicePaymentMode?: InvoicePaymentMode | null;
 }
 
 export interface CommonBillingAccountRequest {
@@ -911,12 +954,27 @@ export interface CommonInvoiceOrderResponse {
   unpaid: boolean;
   detachable: boolean;
   paidAt?: string | null;
+  paymentMethod?: 'TBANK' | 'MANUAL' | 'MIXED' | 'MANUAL_LEGACY' | 'OWNER_PAPER_INVOICE' | null;
+  paidBy?: string | null;
+  paymentComment?: string | null;
+  paymentReceiptUrl?: string | null;
+}
+
+export interface CommonInvoiceNextCycleResponse {
+  sourceOrderId: number;
+  orderId: number;
+  invoiceId?: number | null;
+  invoiceStatus?: string | null;
+  companyTitle: string;
+  filialTitle?: string | null;
+  orderStatus: string;
 }
 
 export interface CommonInvoiceDetailsResponse {
   summary: CommonInvoiceSummaryResponse;
   orders: CommonInvoiceOrderResponse[];
   orderCards: OrderItem[];
+  nextCycleOrders?: CommonInvoiceNextCycleResponse[];
   paymentRefs?: Array<{
     id: number;
     status: string;
@@ -4264,6 +4322,52 @@ export class ApiService {
     );
   }
 
+  changeCommonInvoicePaymentMode(
+    invoiceId: number,
+    mode: InvoicePaymentMode
+  ): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-mode`),
+      { mode, confirmedUnpaid: true }
+    );
+  }
+
+  getCommonInvoicePaymentRouteChangeContext(
+    invoiceId: number
+  ): Observable<CommonInvoicePaymentRouteChangeContextResponse> {
+    return this.http.get<CommonInvoicePaymentRouteChangeContextResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-route-change-context`)
+    );
+  }
+
+  changeCommonInvoicePaymentRoute(
+    invoiceId: number,
+    target: CommonInvoicePaymentRouteChangeTarget,
+    expectedPaymentEvidenceToken: string
+  ): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-route-change`),
+      { target, confirmedUnpaid: true, expectedPaymentEvidenceToken }
+    );
+  }
+
+  markCommonInvoicePaperInvoiceIssued(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/paper-invoice/issued`),
+      {}
+    );
+  }
+
+  markCommonInvoicePaperInvoicePaid(
+    invoiceId: number,
+    request: ManualPaymentConfirmationRequest
+  ): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/paper-invoice/paid`),
+      request
+    );
+  }
+
   remindCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/remind`),
@@ -4315,6 +4419,37 @@ export class ApiService {
     );
   }
 
+  confirmCommonInvoiceContractorSource(
+    invoiceId: number,
+    request: ContractorCommonSourceConfirmationRequest
+  ): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/contractor-confirmation`),
+      request
+    );
+  }
+
+  repairCommonInvoicePaymentRoute(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/repair-payment-route`),
+      {}
+    );
+  }
+
+  resolveCommonInvoiceTechnicalTail(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/technical-tail/resolve`),
+      {}
+    );
+  }
+
+  resolveCommonInvoicePaymentNotification(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-notification/resolve`),
+      {}
+    );
+  }
+
   markCommonInvoiceUnpaid(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/unpaid`),
@@ -4326,6 +4461,19 @@ export class ApiService {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/ban`),
       {}
+    );
+  }
+
+  getCommonInvoiceArchivePreview(invoiceId: number): Observable<CommonInvoiceArchivePreviewResponse> {
+    return this.http.get<CommonInvoiceArchivePreviewResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/archive-preview`)
+    );
+  }
+
+  archiveCommonInvoice(invoiceId: number, comment = ''): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/archive`),
+      { confirm: true, comment }
     );
   }
 

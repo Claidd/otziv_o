@@ -628,7 +628,7 @@ public class ScheduledClientMessageService {
         }
 
         LocalDateTime nowStorage = databaseTimestamp(LocalDateTime.now(clock));
-        String targetKey = paymentReturnTargetKey(order.getId(), orderStatusChangedAt(order));
+        String targetKey = orderTargetKey(order.getId(), orderStatusChangedAt(order));
         Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKeyForUpdate(
                 ClientMessageScenario.PAYMENT_REMINDER,
                 targetKey
@@ -3022,6 +3022,13 @@ public class ScheduledClientMessageService {
         String frozenTransferNumber = null;
         if (requiresTbankPaymentLink(template)) {
             ManagerPaymentLinkResponse link = createTbankPaymentLink(order);
+            if ("OWNER_PAPER_INVOICE".equals(link.paymentMethod())
+                    && "CREATED".equals(link.status())) {
+                throw new PaymentInstructionException(
+                        "Бумажный счёт ещё не отмечен как отправленный клиенту",
+                        null
+                );
+            }
             paymentLink = link.url();
             tbankPaymentCopyText = link.copyText();
             frozenTransferNumber = link.telegramCopyTransferNumber();

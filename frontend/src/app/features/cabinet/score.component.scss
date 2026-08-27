@@ -189,13 +189,10 @@ dd {
 }
 .card-finance {
   display: grid;
-  gap: 0.55rem;
-  border: 1px solid rgba(103, 116, 131, 0.14);
-  border-radius: 0.95rem;
-  padding: 0.72rem;
-  background:
-    radial-gradient(circle at top right, rgba(49, 164, 145, 0.1), transparent 9rem),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 248, 253, 0.9));
+  gap: 0.5rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .card-finance.muted {
@@ -207,6 +204,7 @@ dd {
   min-width: 0;
   align-items: center;
   gap: 0.35rem;
+  padding: 0 0.1rem;
   color: var(--otziv-info);
 }
 

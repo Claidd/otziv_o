@@ -355,6 +355,178 @@ public interface WorkloadShadowEventRepository
             @Param("now") LocalDateTime now
     );
 
+    @Modifying
+    @Query(value = """
+            INSERT INTO workload_shadow_events (
+                deduplication_key,
+                severity,
+                event_type,
+                manager_id,
+                worker_id,
+                company_id,
+                transfer_case_id,
+                title,
+                message,
+                target_group_type,
+                target_group_chat_id,
+                delivery_status,
+                delivery_attempts,
+                occurrence_count,
+                first_seen_at,
+                last_seen_at,
+                next_attempt_at,
+                active
+            )
+            SELECT CONCAT(
+                       'LIVE_EXHAUSTED_QUEUE_FORCED:',
+                       workflow.workload_transfer_workflow_id
+                   ),
+                   'WARNING',
+                   'LIVE_EXHAUSTED_QUEUE_FORCED',
+                   workflow.manager_id,
+                   workflow.accepted_worker_id,
+                   workflow.company_id,
+                   workflow.shadow_case_id,
+                   'Очередь получателей исчерпана — применена жеребьёвка',
+                   CONCAT(
+                       'LIVE. Все кандидаты по компании «',
+                       COALESCE(workflow.company_title, CONCAT('#', workflow.company_id)),
+                       '» отказались или не ответили. Система выбрала жеребьёвкой специалиста ',
+                       COALESCE(
+                         NULLIF(TRIM(target_user.fio), ''),
+                         target_user.username,
+                         CONCAT('#', workflow.accepted_worker_id)
+                       ),
+                       ' из очереди лучших доступных получателей и принудительно передала весь связанный заказный пакет. ',
+                       'Задачи без связанного заказа не передаются. ',
+                       'Нужно проверить загрузку команды и подключить ещё одного получателя нагрузки для менеджера ',
+                       COALESCE(
+                         NULLIF(TRIM(manager_user.fio), ''),
+                         manager_user.username,
+                         CONCAT('#', workflow.manager_id)
+                       ),
+                       '.'
+                   ),
+                   'ADMIN_OWNER_MONITORING',
+                   :notificationGroupChatId,
+                   CASE
+                       WHEN :notificationsEnabled = FALSE THEN 'SKIPPED'
+                       WHEN :notificationGroupChatId IS NULL
+                         OR :notificationGroupChatId >= 0
+                           THEN 'MISSING_GROUP_BINDING'
+                       ELSE 'PENDING'
+                   END,
+                   0,
+                   1,
+                   :now,
+                   :now,
+                   CASE
+                       WHEN :notificationsEnabled = TRUE
+                        AND :notificationGroupChatId IS NOT NULL
+                        AND :notificationGroupChatId < 0
+                           THEN :now
+                       ELSE NULL
+                   END,
+                   TRUE
+            FROM workload_transfer_workflows workflow
+            JOIN workload_transfer_offers offer
+              ON offer.workload_transfer_offer_id = workflow.current_offer_id
+             AND offer.workflow_id = workflow.workload_transfer_workflow_id
+             AND offer.candidate_worker_id = workflow.accepted_worker_id
+            JOIN workers target_worker
+              ON target_worker.worker_id = workflow.accepted_worker_id
+            JOIN users target_user
+              ON target_user.id = target_worker.user_id
+            JOIN managers manager
+              ON manager.manager_id = workflow.manager_id
+            JOIN users manager_user
+              ON manager_user.id = manager.user_id
+            WHERE workflow.active = TRUE
+              AND workflow.status = 'ACCEPTED'
+              AND workflow.last_transition_at = :transitionedAt
+              AND offer.status = 'ACCEPTED'
+              AND offer.response_reason = :reason
+            ON DUPLICATE KEY UPDATE
+                severity = 'WARNING',
+                event_type = 'LIVE_EXHAUSTED_QUEUE_FORCED',
+                manager_id = VALUES(manager_id),
+                worker_id = VALUES(worker_id),
+                company_id = VALUES(company_id),
+                transfer_case_id = VALUES(transfer_case_id),
+                title = VALUES(title),
+                message = VALUES(message),
+                target_group_type = 'ADMIN_OWNER_MONITORING',
+                target_group_chat_id = VALUES(target_group_chat_id),
+                delivery_attempts = CASE
+                    WHEN workload_shadow_events.active = FALSE THEN 0
+                    WHEN workload_shadow_events.delivery_status IN (
+                        'PENDING',
+                        'RETRY',
+                        'PROCESSING',
+                        'SENT'
+                    ) THEN workload_shadow_events.delivery_attempts
+                    ELSE 0
+                END,
+                next_attempt_at = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                      OR VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                        THEN NULL
+                    WHEN workload_shadow_events.active = TRUE
+                     AND workload_shadow_events.delivery_status IN (
+                        'PENDING',
+                        'RETRY',
+                        'PROCESSING',
+                        'SENT'
+                     ) THEN workload_shadow_events.next_attempt_at
+                    ELSE VALUES(next_attempt_at)
+                END,
+                delivery_status = CASE
+                    WHEN workload_shadow_events.active = TRUE
+                     AND workload_shadow_events.delivery_status IN (
+                        'PENDING',
+                        'RETRY',
+                        'PROCESSING',
+                        'SENT'
+                     ) THEN workload_shadow_events.delivery_status
+                    ELSE VALUES(delivery_status)
+                END,
+                processing_started_at = CASE
+                    WHEN workload_shadow_events.delivery_status = 'PROCESSING'
+                        THEN workload_shadow_events.processing_started_at
+                    ELSE NULL
+                END,
+                processing_lease_until = CASE
+                    WHEN workload_shadow_events.delivery_status = 'PROCESSING'
+                        THEN workload_shadow_events.processing_lease_until
+                    ELSE NULL
+                END,
+                last_error_code = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'NOTIFICATIONS_DISABLED'
+                    WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                        THEN 'MISSING_GROUP_BINDING'
+                    ELSE workload_shadow_events.last_error_code
+                END,
+                last_error = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'Telegram-уведомления SHADOW выключены; событие доступно только в мониторинге'
+                    WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                        THEN 'Не настроена общая Telegram-группа администраторов и владельцев'
+                    ELSE workload_shadow_events.last_error
+                END,
+                occurrence_count = workload_shadow_events.occurrence_count + 1,
+                last_seen_at = :now,
+                active = TRUE,
+                resolved_at = NULL
+            """, nativeQuery = true)
+    int upsertExhaustedQueueForcedTransferEvents(
+            @Param("transitionedAt") LocalDateTime transitionedAt,
+            @Param("reason") String reason,
+            @Param("notificationsEnabled") boolean notificationsEnabled,
+            @Param("notificationGroupChatId") Long notificationGroupChatId,
+            @Param("now") LocalDateTime now
+    );
+
     @Query(value = """
             SELECT workload_shadow_event_id
             FROM workload_shadow_events

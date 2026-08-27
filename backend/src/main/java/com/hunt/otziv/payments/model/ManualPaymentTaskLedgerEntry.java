@@ -110,6 +110,10 @@ public class ManualPaymentTaskLedgerEntry {
     private String bankRecipientNameSnapshot;
 
     @Convert(converter = EncryptedCredentialConverter.class)
+    @Column(name = "manual_bank_name_snapshot", columnDefinition = "TEXT")
+    private String manualBankNameSnapshot;
+
+    @Convert(converter = EncryptedCredentialConverter.class)
     @Column(name = "manual_payment_url_snapshot", columnDefinition = "TEXT")
     private String manualPaymentUrlSnapshot;
 

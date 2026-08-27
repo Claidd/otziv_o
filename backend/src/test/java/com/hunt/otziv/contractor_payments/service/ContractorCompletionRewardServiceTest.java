@@ -129,6 +129,33 @@ class ContractorCompletionRewardServiceTest {
     }
 
     @Test
+    void paymentDoesNotReopenLegacyBridgeAfterPostCutoverCompletionWasFrozen() {
+        LocalDate completedOn = LocalDate.of(2026, 8, 2);
+        when(markerRepository.findByOrderIdAndLogicalSource(any(), any()))
+                .thenAnswer(invocation -> {
+                    String source = invocation.getArgument(1);
+                    ContractorCompletionRewardMarker marker = new ContractorCompletionRewardMarker();
+                    marker.setOrderId(91L);
+                    marker.setLogicalSource(source);
+                    marker.setOccurredOn(completedOn);
+                    return Optional.of(marker);
+                });
+        Zp managerReward = new Zp();
+        managerReward.setSource(ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER);
+        Zp specialistReward = new Zp();
+        specialistReward.setSource(ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST);
+        when(zpRepository.findByOrderIdAndActiveTrue(91L))
+                .thenReturn(List.of(managerReward, specialistReward));
+
+        assertThat(service.ensureOrderPaymentAccrual(91L)).isZero();
+
+        verify(zpRepository, never()).save(any(Zp.class));
+        verify(productRewardService, never()).accrueForPreCutoffPaymentLocked(any(), any(), any());
+        verify(ledgerService).synchronizeCompletionSourcesCanonical(
+                List.of(managerReward, specialistReward)
+        );
+    }
+    @Test
     void preCutoffWorkFreezesLogicalSourcesWithoutInspectingOrComplementingPartialLegacy() {
         service.ensureOrderCompletionAccrual(91L);
 
@@ -547,6 +574,18 @@ class ContractorCompletionRewardServiceTest {
         )).thenReturn(Optional.empty());
         when(badReviewTaskRepository.findByIdForMutation(707L)).thenReturn(Optional.of(task));
         when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 21));
+        when(profileService.applySystemOpeningBalanceDelta(
+                18L,
+                ContractorRole.MANAGER,
+                -5_000L,
+                "Автокорректировка переходящего остатка: плохая задача #707 удалена из счета заказа #91"
+        )).thenReturn(-5_000L);
+        when(profileService.applySystemOpeningBalanceDelta(
+                17L,
+                ContractorRole.SPECIALIST,
+                -15_000L,
+                "Автокорректировка переходящего остатка: плохая задача #707 удалена из счета заказа #91"
+        )).thenReturn(-15_000L);
 
         assertThat(service.adjustCanceledBadReviewTaskAccrual(91L, 707L)).isEqualTo(2);
 

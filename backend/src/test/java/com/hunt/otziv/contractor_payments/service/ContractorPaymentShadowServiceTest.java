@@ -19,6 +19,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.c_companies.model.Company;
@@ -96,6 +97,8 @@ class ContractorPaymentShadowServiceTest {
     private final CommonInvoicePaymentRefRepository commonInvoicePaymentRefRepository =
             mock(CommonInvoicePaymentRefRepository.class);
     private final AppSettingService appSettingService = mock(AppSettingService.class);
+    private final ContractorPaymentAccountingPhaseService accountingPhaseService =
+            mock(ContractorPaymentAccountingPhaseService.class);
     private final EntityManager entityManager = mock(EntityManager.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final ContractorOrderManagerResolver orderManagerResolver =
@@ -116,6 +119,7 @@ class ContractorPaymentShadowServiceTest {
             commonInvoiceOrderRepository,
             commonInvoicePaymentRefRepository,
             appSettingService,
+            accountingPhaseService,
             entityManager,
             userRepository,
             orderManagerResolver
@@ -130,6 +134,7 @@ class ContractorPaymentShadowServiceTest {
                 .thenReturn(LocalDateTime.of(2026, 8, 7, 12, 0));
         when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
                 .thenReturn(true);
+        when(accountingPhaseService.current()).thenReturn(ContractorAllocationMode.SHADOW);
         when(allocationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(userRepository.lockContractorActiveFlag(anyLong())).thenReturn(Optional.of(true));
         when(userRepository.lockContractorRoleIds(anyLong(), anyString())).thenReturn(List.of(1));
@@ -153,6 +158,22 @@ class ContractorPaymentShadowServiceTest {
                         .map(discoveredProfiles::get)
                         .filter(java.util.Objects::nonNull)
                         .toList());
+    }
+
+    @Test
+    void liveAccountingPhaseStopsShadowPreparationWithoutDisablingReadinessFlag() {
+        when(accountingPhaseService.current()).thenReturn(ContractorAllocationMode.LIVE);
+        PaymentLink link = paymentLink(
+                9_011L,
+                order(9_012L, worker(9_013L, 9_014L), manager(9_015L, 9_016L)),
+                10_000L
+        );
+
+        assertNull(service.preparePaymentLinkSource(link, LocalDateTime.of(2026, 8, 20, 21, 3)));
+
+        verify(appSettingService, never()).getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true);
+        verifyNoInteractions(orderRepository);
+        assertNull(link.getShadowRouteGeneration());
     }
 
     @Test
@@ -182,6 +203,33 @@ class ContractorPaymentShadowServiceTest {
         assertNull(invoice.getShadowRouteAmountKopecks());
         verify(orderManagerResolver, never()).resolveForRouting(any(Order.class));
         verify(commonInvoicePaymentRefRepository, never()).findIdsByInvoiceIdForUpdate(anyLong());
+    }
+
+    @Test
+    void liveCommonPreparationCapturesImmutableSnapshotWhenShadowIsDisabled() {
+        when(appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true))
+                .thenReturn(false);
+        Worker worker = worker(9_031L, 9_032L);
+        Manager manager = manager(9_033L, 9_034L);
+        Order order = order(9_035L, worker, manager);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(9_036L);
+        LocalDateTime preparedAt = LocalDateTime.of(2026, 8, 24, 20, 39);
+
+        String generation = service.prepareLiveCommonInvoiceSource(
+                invoice,
+                List.of(order),
+                manager,
+                400_000L,
+                preparedAt
+        );
+
+        assertTrue(generation != null && !generation.isBlank());
+        assertEquals(generation, invoice.getShadowRouteGeneration());
+        assertEquals(400_000L, invoice.getShadowRouteAmountKopecks());
+        assertEquals(preparedAt, invoice.getShadowRoutePreparedAt());
+        assertEquals(worker.getId(), invoice.getShadowRouteWorkerId());
+        assertEquals(manager.getId(), invoice.getShadowRouteManagerId());
     }
 
     @Test

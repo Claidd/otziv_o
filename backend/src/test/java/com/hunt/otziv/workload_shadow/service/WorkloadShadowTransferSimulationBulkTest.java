@@ -253,6 +253,39 @@ class WorkloadShadowTransferSimulationBulkTest {
     }
 
     @Test
+    void rotatesFirstOfferCandidateAcrossSelectedRecommendations()
+            throws Exception {
+        RecipientProjection first = recipient(
+                true,
+                11L,
+                2L,
+                "Альфия Л.",
+                BigDecimal.valueOf(90)
+        );
+        RecipientProjection second = recipient(
+                true,
+                11L,
+                3L,
+                "Катя К.",
+                BigDecimal.valueOf(86)
+        );
+
+        SimulationPayload result = simulateTransferGraphs(
+                List.of(
+                        transferGraph(701L, false, 0, List.of()),
+                        transferGraph(702L, false, 0, List.of())
+                ),
+                List.of(first, second),
+                100,
+                2
+        );
+
+        assertEquals(4, result.candidates().size());
+        assertEquals(3L, firstCandidateWorker(result.candidates(), "1:701"));
+        assertEquals(2L, firstCandidateWorker(result.candidates(), "1:702"));
+    }
+
+    @Test
     void recommendationUsesWorkerNamesAndParagraphsInsteadOfTechnicalIds()
             throws Exception {
         RecipientProjection candidate = recipient(true, 11L);
@@ -286,11 +319,27 @@ class WorkloadShadowTransferSimulationBulkTest {
     }
 
     private RecipientProjection recipient(boolean eligible, long managerId) {
+        return recipient(
+                eligible,
+                managerId,
+                2L,
+                "Альфия Л.",
+                BigDecimal.valueOf(90)
+        );
+    }
+
+    private RecipientProjection recipient(
+            boolean eligible,
+            long managerId,
+            long workerId,
+            String workerName,
+            BigDecimal rating
+    ) {
         RecipientProjection value = mock(RecipientProjection.class);
-        when(value.getWorkerId()).thenReturn(2L);
+        when(value.getWorkerId()).thenReturn(workerId);
         when(value.getManagerId()).thenReturn(managerId);
-        when(value.getWorkerName()).thenReturn("Альфия Л.");
-        when(value.getRating()).thenReturn(BigDecimal.valueOf(90));
+        when(value.getWorkerName()).thenReturn(workerName);
+        when(value.getRating()).thenReturn(rating);
         when(value.getHundredPercentDays()).thenReturn(14);
         when(value.getFailureDays()).thenReturn(0);
         when(value.getEstimatedRemainingMinutes()).thenReturn(0L);
@@ -380,6 +429,16 @@ class WorkloadShadowTransferSimulationBulkTest {
         throw new AssertionError("Кейс со статусом " + status + " не найден");
     }
 
+    private long firstCandidateWorker(JsonNode candidates, String caseKey) {
+        for (JsonNode candidate : candidates) {
+            if (caseKey.equals(candidate.get("caseKey").asText())
+                    && candidate.get("sequenceNumber").asInt() == 1) {
+                return candidate.get("workerId").asLong();
+            }
+        }
+        throw new AssertionError("Первый кандидат для " + caseKey + " не найден");
+    }
+
     private SimulationPayload simulateTransferGraphs(
             List<WorkloadTransferCompanyGraph> graphs
     ) throws Exception {
@@ -390,6 +449,15 @@ class WorkloadShadowTransferSimulationBulkTest {
             List<WorkloadTransferCompanyGraph> graphs,
             List<RecipientProjection> recipients
     ) throws Exception {
+        return simulateTransferGraphs(graphs, recipients, 15, 1);
+    }
+
+    private SimulationPayload simulateTransferGraphs(
+            List<WorkloadTransferCompanyGraph> graphs,
+            List<RecipientProjection> recipients,
+            int transferPercent,
+            int maxCompanies
+    ) throws Exception {
         WorkloadShadowTransferRepository repository =
                 mock(WorkloadShadowTransferRepository.class);
         WorkloadShadowSettingsService settingsService =
@@ -399,8 +467,8 @@ class WorkloadShadowTransferSimulationBulkTest {
         WorkloadShadowSettingsResponse settings = mock(WorkloadShadowSettingsResponse.class);
         when(settingsService.current()).thenReturn(settings);
         when(settings.allowedFailureDays()).thenReturn(3);
-        when(settings.fourthFailurePercent()).thenReturn(15);
-        when(settings.fourthFailureMaxCompanies()).thenReturn(1);
+        when(settings.fourthFailurePercent()).thenReturn(transferPercent);
+        when(settings.fourthFailureMaxCompanies()).thenReturn(maxCompanies);
         when(settings.newMinutesPerCard()).thenReturn(5);
         SourceWorkerProjection source = source(1L, 11L);
         when(repository.findSourceWorkers(3)).thenReturn(List.of(source));
@@ -420,11 +488,20 @@ class WorkloadShadowTransferSimulationBulkTest {
 
         ArgumentCaptor<String> casesJson = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> eventsJson = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> candidatesJson = ArgumentCaptor.forClass(String.class);
         verify(repository).upsertTransferCases(casesJson.capture(), anyLong(), any());
+        if (recipients.isEmpty()) {
+            verify(repository, never()).upsertCandidates(anyString());
+        } else {
+            verify(repository).upsertCandidates(candidatesJson.capture());
+        }
         verify(repository).upsertEvents(eventsJson.capture(), any(), any());
         return new SimulationPayload(
                 objectMapper.readTree(casesJson.getValue()),
-                objectMapper.readTree(eventsJson.getValue())
+                objectMapper.readTree(eventsJson.getValue()),
+                recipients.isEmpty()
+                        ? objectMapper.createArrayNode()
+                        : objectMapper.readTree(candidatesJson.getValue())
         );
     }
 
@@ -567,6 +644,6 @@ class WorkloadShadowTransferSimulationBulkTest {
     private record ScenarioResult(JsonNode transferCase, JsonNode events) {
     }
 
-    private record SimulationPayload(JsonNode cases, JsonNode events) {
+    private record SimulationPayload(JsonNode cases, JsonNode events, JsonNode candidates) {
     }
 }

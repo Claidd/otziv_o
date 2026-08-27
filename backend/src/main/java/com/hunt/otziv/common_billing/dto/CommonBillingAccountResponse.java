@@ -12,6 +12,15 @@ public record CommonBillingAccountResponse(
         Long invoiceCompanyId,
         String invoiceCompanyTitle,
         List<CommonBillingCompanyResponse> companies,
-        CommonInvoiceSummaryResponse currentInvoice
+        CommonInvoiceSummaryResponse currentInvoice,
+        String invoicePaymentMode
 ) {
+    public CommonBillingAccountResponse(
+            Long id, String name, boolean enabled, boolean autoRepeatOrders,
+            Long managerId, String managerName, Long invoiceCompanyId, String invoiceCompanyTitle,
+            List<CommonBillingCompanyResponse> companies, CommonInvoiceSummaryResponse currentInvoice
+    ) {
+        this(id, name, enabled, autoRepeatOrders, managerId, managerName, invoiceCompanyId,
+                invoiceCompanyTitle, companies, currentInvoice, "AUTO_ROUTING");
+    }
 }

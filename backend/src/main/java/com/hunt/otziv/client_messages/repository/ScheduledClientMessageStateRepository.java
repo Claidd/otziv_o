@@ -58,6 +58,31 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
 
     long countByStatus(ScheduledMessageStateStatus status);
 
+    @Query("""
+        SELECT DISTINCT s.orderId
+        FROM ScheduledClientMessageState s
+        WHERE s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_INVOICE_RETRY
+          AND s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE
+          AND s.orderId IS NOT NULL
+          AND LOWER(COALESCE(s.lastErrorMessage, '')) LIKE '%configured_but_blocked%'
+        ORDER BY s.orderId ASC
+    """)
+    List<Long> findLiveRoutingBlockedPaymentOrderIds(Pageable pageable);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE ScheduledClientMessageState s
+        SET s.nextAttemptAt = :now,
+            s.updatedAt = :now,
+            s.lockedUntil = NULL
+        WHERE s.scenario = com.hunt.otziv.client_messages.model.ClientMessageScenario.PAYMENT_INVOICE_RETRY
+          AND s.status = com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.ACTIVE
+          AND LOWER(COALESCE(s.lastErrorMessage, '')) LIKE '%configured_but_blocked%'
+          AND (s.nextAttemptAt IS NULL OR s.nextAttemptAt > :now)
+          AND (s.lockedUntil IS NULL OR s.lockedUntil < :now)
+    """)
+    int expediteLiveRoutingBlockedPaymentRetries(@Param("now") LocalDateTime now);
+
     @Query(value = """
         SELECT state.state_id
         FROM scheduled_client_message_state state

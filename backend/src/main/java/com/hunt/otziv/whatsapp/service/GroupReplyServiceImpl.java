@@ -14,6 +14,7 @@ import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -45,6 +46,7 @@ public class GroupReplyServiceImpl implements GroupReplyService {
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
 
     @Override
+    @Transactional
     public void processGroupReply(WhatsAppGroupReplyDTO reply) {
         if (isSystemNotificationPlaceholder(reply)) {
             log.info("WhatsApp system notification ignored: groupId={}, message={}",

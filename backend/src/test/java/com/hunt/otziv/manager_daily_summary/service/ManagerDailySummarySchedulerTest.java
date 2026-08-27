@@ -9,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.never;
@@ -84,5 +85,14 @@ class ManagerDailySummarySchedulerTest {
         verify(summaryService).calculate(date.capture(), org.mockito.ArgumentMatchers.eq(false));
         assertEquals(LocalDate.now(ZoneId.of("Asia/Irkutsk")), date.getValue());
         verify(personalDayResultService).send(date.getValue(), List.<ManagerDailySummaryResponse>of());
+    }
+
+    @Test
+    void personalDeliveryDefaultCronRunsFiveMinutesAfterGroupSummary() throws Exception {
+        Scheduled scheduled = ManagerDailySummaryScheduler.class
+                .getDeclaredMethod("calculateCurrentDayAndSendPersonalResults")
+                .getAnnotation(Scheduled.class);
+
+        assertEquals("${manager.summary.personal-delivery-cron:0 5 22 * * *}", scheduled.cron());
     }
 }

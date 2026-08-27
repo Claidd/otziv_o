@@ -373,6 +373,32 @@ class BotAssignmentServiceImplTest {
     }
 
     @Test
+    void checkAndNotifyAboutStubBotsUsesOwnCityAccountForReserveDenylistedCity() {
+        BotAssignmentServiceImpl service = service();
+        City city = city(320L, "ВКонтакте");
+        Filial filial = filial(20L, company(10L), city);
+        Bot stubBot = bot(1L, "Нет доступных аккаунтов", 0);
+        Bot ownCityBot = bot(900L, "Впиши Имя Фамилию", 0);
+
+        Review stubReview = new Review();
+        stubReview.setId(2L);
+        stubReview.setFilial(filial);
+        stubReview.setBot(stubBot);
+
+        when(botService.claimNewAccountFromOwnCity(eq(city), anyCollection()))
+                .thenReturn(Optional.of(ownCityBot));
+
+        service.checkAndNotifyAboutStubBots(List.of(stubReview));
+
+        verify(botService).claimNewAccountFromOwnCity(eq(city), anyCollection());
+        verify(botService, never()).claimReserveBotForCity(any(), anyCollection());
+        assertSame(ownCityBot, stubReview.getBot());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(stubReview);
+        verify(reviewRepository).saveAll(List.of(stubReview));
+        verify(telegramService, never()).sendAlertToAdmins(anyString());
+    }
+
+    @Test
     void checkAndNotifyAboutStubBotsAlwaysChecksWalkDelayWhenReserveAssigned() {
         BotAssignmentServiceImpl service = service();
         City city = city(5L, "Иркутск");

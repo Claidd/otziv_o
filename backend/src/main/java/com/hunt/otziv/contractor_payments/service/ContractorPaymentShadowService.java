@@ -115,6 +115,7 @@ public class ContractorPaymentShadowService {
     private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
     private final CommonInvoicePaymentRefRepository commonInvoicePaymentRefRepository;
     private final AppSettingService appSettingService;
+    private final ContractorPaymentAccountingPhaseService accountingPhaseService;
     private final EntityManager entityManager;
     private final UserRepository userRepository;
     private final ContractorOrderManagerResolver orderManagerResolver;
@@ -136,6 +137,24 @@ public class ContractorPaymentShadowService {
             );
             return null;
         }
+        return preparePaymentLinkSourceSnapshot(link, preparedAt, "SHADOW");
+    }
+
+    /**
+     * LIVE routing uses the same immutable source snapshot as SHADOW routing,
+     * but it must not depend on whether background shadow simulations are
+     * enabled. Without this snapshot the live allocator cannot safely expose
+     * contractor requisites to a client.
+     */
+    public String prepareLivePaymentLinkSource(PaymentLink link, LocalDateTime preparedAt) {
+        return preparePaymentLinkSourceSnapshot(link, preparedAt, "LIVE");
+    }
+
+    private String preparePaymentLinkSourceSnapshot(
+            PaymentLink link,
+            LocalDateTime preparedAt,
+            String mode
+    ) {
         if (link == null || link.getOrder() == null) {
             return null;
         }
@@ -147,7 +166,8 @@ public class ContractorPaymentShadowService {
             manager = effectiveManager(order);
         } catch (RuntimeException exception) {
             log.error(
-                    "Contractor SHADOW payment-link snapshot failed; legacy route continues: linkId={}, code={}",
+                    "Contractor {} payment-link snapshot failed; route continues fail-closed when required: linkId={}, code={}",
+                    mode,
                     link.getId(),
                     exception.getClass().getSimpleName()
             );
@@ -188,6 +208,31 @@ public class ContractorPaymentShadowService {
             );
             return null;
         }
+        return prepareCommonInvoiceSourceSnapshot(invoice, orders, manager, amount, preparedAt, "SHADOW");
+    }
+
+    /**
+     * LIVE common-invoice routing must capture the same immutable inputs even
+     * when background SHADOW simulations are disabled.
+     */
+    public String prepareLiveCommonInvoiceSource(
+            CommonInvoice invoice,
+            List<Order> orders,
+            Manager manager,
+            long amount,
+            LocalDateTime preparedAt
+    ) {
+        return prepareCommonInvoiceSourceSnapshot(invoice, orders, manager, amount, preparedAt, "LIVE");
+    }
+
+    private String prepareCommonInvoiceSourceSnapshot(
+            CommonInvoice invoice,
+            List<Order> orders,
+            Manager manager,
+            long amount,
+            LocalDateTime preparedAt,
+            String mode
+    ) {
         if (invoice == null || invoice.getId() == null || amount <= 0) {
             return null;
         }
@@ -222,7 +267,8 @@ public class ContractorPaymentShadowService {
                             .isEmpty();
         } catch (RuntimeException exception) {
             log.error(
-                    "Contractor SHADOW common-invoice snapshot failed; legacy route continues: invoiceId={}, code={}",
+                    "Contractor {} common-invoice snapshot failed; route continues fail-closed when required: invoiceId={}, code={}",
+                    mode,
                     invoice.getId(),
                     exception.getClass().getSimpleName()
             );
@@ -2309,6 +2355,9 @@ public class ContractorPaymentShadowService {
     }
 
     private boolean shadowEnabled() {
+        if (accountingPhaseService.current() == ContractorAllocationMode.LIVE) {
+            return false;
+        }
         return appSettingService.getBoolean(AppSettingService.CONTRACTOR_PAYMENTS_SHADOW_ENABLED, true);
     }
 

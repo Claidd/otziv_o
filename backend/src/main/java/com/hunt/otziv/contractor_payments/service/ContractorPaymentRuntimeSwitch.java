@@ -123,6 +123,43 @@ public class ContractorPaymentRuntimeSwitch {
         );
     }
 
+    /** Human-readable fresh diagnostics for fail-closed cards and runtime monitoring. */
+    public List<String> liveRoutingBlockers() {
+        RuntimeStatus status = status();
+        List<String> blockers = new ArrayList<>();
+        if (!status.liveRoutingMasterEnabled()) {
+            blockers.add("deployment master routing выключен");
+        }
+        if (!status.liveRoutingDatabaseEnabled()) {
+            blockers.add("DB-флаг routing выключен");
+        }
+        if (!status.rewardAttributionMasterEnabled()) {
+            blockers.add("deployment master нового учёта выключен");
+        }
+        if (!status.rewardAttributionDatabaseEnabled()) {
+            blockers.add("DB-флаг нового учёта выключен");
+        }
+        if (!status.rewardAttributionLiveEnabled()) {
+            blockers.add("не подтверждена необратимая граница нового учёта");
+        }
+        if (!safeRoutingRequested()) {
+            blockers.add("выдача реквизитов не запрошена в durable rollout state");
+        }
+        if (!safeFresh(AppSettingService.CONTRACTOR_PAYMENTS_LIVE_READINESS_CONFIRMED)) {
+            blockers.add("не подтверждена готовность LIVE-routing");
+        }
+        try {
+            blockers.addAll(completionRoutingReadinessService.hardRuntimeBlockers());
+        } catch (RuntimeException exception) {
+            blockers.add("не удалось прочитать финансовую runtime-готовность");
+        }
+        blockers.addAll(routingConfigurationBlockers());
+        if (!status.liveRoutingEnabled() && blockers.isEmpty()) {
+            blockers.add("эффективный LIVE-routing не подтверждён");
+        }
+        return List.copyOf(blockers);
+    }
+
     private boolean rewardAttributionConfigurationReady() {
         if (!rewardAttributionMasterEnabled
                 || !safeFresh(AppSettingService.CONTRACTOR_PAYMENTS_REWARD_ATTRIBUTION_LIVE_ENABLED)) {

@@ -48,6 +48,10 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
         List<Executable> mutations = List.of(
                 () -> controller.deleteInvoice(INVOICE_ID, null),
                 () -> controller.sendInvoice(INVOICE_ID),
+                () -> controller.changePaymentMode(INVOICE_ID, null, null),
+                () -> controller.changePaymentRoute(INVOICE_ID, null, null),
+                () -> controller.markPaperInvoiceIssued(INVOICE_ID, null),
+                () -> controller.markPaperInvoicePaid(INVOICE_ID, null, null),
                 () -> controller.remind(INVOICE_ID),
                 () -> controller.markPaid(INVOICE_ID, null, null),
                 () -> controller.confirmContractorPaymentSource(
@@ -88,6 +92,21 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
         }
 
         verify(targetAccessPolicy, times(mutations.size())).requireCanManageCommonInvoice(INVOICE_ID);
+        verifyNoInteractions(commonBillingService, approvalFailureMarker);
+    }
+
+    @Test
+    void paymentRouteContextAuthorizesInvoiceBeforeReadingBusinessData() {
+        doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"))
+                .when(targetAccessPolicy)
+                .requireCanManageCommonInvoice(INVOICE_ID);
+
+        assertThatThrownBy(() -> controller.paymentRouteChangeContext(INVOICE_ID))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+                        .isEqualTo(HttpStatus.NOT_FOUND));
+
+        verify(targetAccessPolicy).requireCanManageCommonInvoice(INVOICE_ID);
         verifyNoInteractions(commonBillingService, approvalFailureMarker);
     }
 

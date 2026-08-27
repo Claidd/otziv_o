@@ -173,6 +173,7 @@ public class ManualPaymentTaskService {
         task.setManualPaymentType(type);
         task.setManualPhone(limit(request == null ? null : request.manualPhone(), 32));
         task.setManualRecipientName(recipientOrDefault(request == null ? null : request.manualRecipientName()));
+        task.setManualBankName(limit(request == null ? null : request.manualBankName(), 120));
         task.setManualPaymentUrl(paymentUrlOrDefault(request == null ? null : request.manualPaymentUrl()));
         task.setManualPaymentButtonLabel(buttonLabelOrDefault(request == null ? null : request.manualPaymentButtonLabel()));
         validatePaymentTarget(task);
@@ -374,6 +375,7 @@ public class ManualPaymentTaskService {
         task.setManualPaymentType(type);
         task.setManualPhone(limit(request == null ? null : request.manualPhone(), 32));
         task.setManualRecipientName(recipientOrDefault(request == null ? null : request.manualRecipientName()));
+        task.setManualBankName(limit(request == null ? null : request.manualBankName(), 120));
         boolean quarantinedPaymentUrlPreserved = applyManualPaymentUrlUpdate(task, request);
         task.setManualPaymentButtonLabel(buttonLabelOrDefault(request == null ? null : request.manualPaymentButtonLabel()));
         validatePaymentTarget(task, quarantinedPaymentUrlPreserved);
@@ -585,6 +587,7 @@ public class ManualPaymentTaskService {
                 manualPaymentType(task).name(),
                 normalize(task.getManualPhone()),
                 recipientOrDefault(task.getManualRecipientName()),
+                normalize(task.getManualBankName()),
                 paymentUrlForRead(task.getManualPaymentUrl()),
                 buttonLabelOrDefault(task.getManualPaymentButtonLabel()),
                 task.getTargetAmountKopecks(),
@@ -874,6 +877,7 @@ public class ManualPaymentTaskService {
             updateDigest(digest, request == null ? null : normalize(request.manualPaymentType()).toUpperCase(Locale.ROOT));
             updateDigest(digest, request == null ? null : normalize(request.manualPhone()));
             updateDigest(digest, request == null ? null : normalize(request.manualRecipientName()));
+            updateDigest(digest, request == null ? null : normalize(request.manualBankName()));
             updateDigest(digest, request == null ? null : normalize(request.manualPaymentUrl()));
             updateDigest(digest, request == null ? null : normalize(request.manualPaymentButtonLabel()));
             updateDigest(digest, request == null ? null : request.targetAmountKopecks());

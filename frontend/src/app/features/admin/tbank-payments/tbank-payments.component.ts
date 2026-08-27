@@ -121,6 +121,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly adminTaskPaymentType = signal<ManualPaymentType>('MOBILE_BANK');
   readonly adminTaskPhone = signal('');
   readonly adminTaskRecipient = signal(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+  readonly adminTaskBankName = signal('');
   readonly adminTaskPaymentUrl = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
   readonly adminTaskPaymentButtonLabel = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly adminTaskAmountRubles = signal('');
@@ -141,6 +142,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly editTaskPaymentType = signal<ManualPaymentType>('MOBILE_BANK');
   readonly editTaskPhone = signal('');
   readonly editTaskRecipient = signal(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+  readonly editTaskBankName = signal('');
   readonly editTaskPaymentUrl = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
   readonly editTaskPaymentButtonLabel = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly editTaskAmountRubles = signal('');
@@ -1104,6 +1106,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.editTaskPaymentType.set(this.normalizeManualPaymentType(task.manualPaymentType));
     this.editTaskPhone.set(task.manualPhone ?? '');
     this.editTaskRecipient.set(task.manualRecipientName || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+    this.editTaskBankName.set(task.manualBankName ?? '');
     this.editTaskPaymentUrl.set(task.manualPaymentUrl?.trim() ?? '');
     this.editTaskPaymentButtonLabel.set(task.manualPaymentButtonLabel || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
     this.editTaskAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
@@ -1135,6 +1138,10 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   setEditTaskRecipient(value: string | null): void {
     this.editTaskRecipient.set(value ?? '');
+  }
+
+  setEditTaskBankName(value: string | null): void {
+    this.editTaskBankName.set(value ?? '');
   }
 
   setEditTaskPaymentUrl(value: string | null): void {
@@ -1192,6 +1199,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       manualPaymentType: this.editTaskPaymentType(),
       manualPhone: this.editTaskPhone().trim(),
       manualRecipientName: this.editTaskRecipient().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualBankName: this.editTaskBankName().trim() || null,
       manualPaymentUrl: this.editTaskPaymentUrl().trim(),
       manualPaymentButtonLabel: this.editTaskPaymentButtonLabel().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
       targetAmountKopecks: this.editTaskTargetKopecks(),
@@ -1239,6 +1247,10 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.adminTaskRecipient.set(value ?? '');
   }
 
+  setAdminTaskBankName(value: string | null): void {
+    this.adminTaskBankName.set(value ?? '');
+  }
+
   setAdminTaskPaymentUrl(value: string | null): void {
     this.adminTaskPaymentUrl.set(value ?? '');
   }
@@ -1280,6 +1292,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       manualPaymentType: this.adminTaskPaymentType(),
       manualPhone: this.adminTaskPhone().trim(),
       manualRecipientName: this.adminTaskRecipient().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualBankName: this.adminTaskBankName().trim() || null,
       manualPaymentUrl: this.adminTaskPaymentUrl().trim(),
       manualPaymentButtonLabel: this.adminTaskPaymentButtonLabel().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
       targetAmountKopecks: this.adminTaskTargetKopecks(),
@@ -1308,6 +1321,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     }
     this.adminTaskPhone.set('');
     this.adminTaskRecipient.set(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+    this.adminTaskBankName.set('');
     this.adminTaskPaymentType.set('MOBILE_BANK');
     this.adminTaskPaymentUrl.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
     this.adminTaskPaymentButtonLabel.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);

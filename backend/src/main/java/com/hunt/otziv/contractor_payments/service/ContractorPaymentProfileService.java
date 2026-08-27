@@ -276,6 +276,32 @@ public class ContractorPaymentProfileService {
                         "Платёжный профиль для автоматической корректировки остатка не найден"
                 ));
         long oldBalance = profile.getOpeningBalanceKopecks();
+        String adjustmentReason = normalize(reason);
+        if (adjustmentReason.isBlank()) {
+            adjustmentReason = "Автокорректировка переходящего остатка";
+        }
+        if (deltaKopecks < 0L && oldBalance == 0L) {
+            // A pre-cutover completion marker may exist even when the legacy
+            // work was never imported into the signed opening balance. There
+            // is then nothing financial to subtract; keep the cancellation
+            // idempotent and leave an explicit audit trail instead of forcing
+            // an administrator to invent a positive opening balance first.
+            businessAuditService.recordRequiredInCurrentTransaction(
+                    "AUTO_ADJUST_CONTRACTOR_OPENING_BALANCE_NOT_REQUIRED",
+                    "CONTRACTOR_PAYMENT_PROFILE",
+                    profile.getId(),
+                    null,
+                    null,
+                    Map.of("openingBalanceKopecks", oldBalance),
+                    Map.of(
+                            "openingBalanceKopecks", oldBalance,
+                            "requestedDeltaKopecks", deltaKopecks,
+                            "reason", adjustmentReason
+                    ),
+                    "userId=" + userId + ", role=" + role
+            );
+            return 0L;
+        }
         long newBalance;
         try {
             newBalance = Math.addExact(oldBalance, deltaKopecks);
@@ -294,10 +320,6 @@ public class ContractorPaymentProfileService {
         }
         profile.setOpeningBalanceKopecks(newBalance);
         ContractorPaymentProfile saved = profileRepository.saveAndFlush(profile);
-        String adjustmentReason = normalize(reason);
-        if (adjustmentReason.isBlank()) {
-            adjustmentReason = "Автокорректировка переходящего остатка";
-        }
         recordOpeningAdjustment(saved, oldBalance, newBalance, adjustmentReason, currentActor());
         businessAuditService.recordRequiredInCurrentTransaction(
                 "AUTO_ADJUST_CONTRACTOR_OPENING_BALANCE",

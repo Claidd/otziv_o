@@ -136,8 +136,13 @@ public class WorkloadTransferWorkflowService {
                     graphs.get(group.sourceWorkerId()),
                     group.companyId()
             );
-            if (graph == null
-                    || WorkloadTransferGraphDiagnostics.from(graph).errorCount() > 0) {
+            if (graph == null) {
+                graphRejected++;
+                continue;
+            }
+            WorkloadTransferGraphDiagnostics diagnostics =
+                    WorkloadTransferGraphDiagnostics.from(graph);
+            if (diagnostics.errorCount() > 0 || WorkloadTransferPlan.from(graph).empty()) {
                 graphRejected++;
                 continue;
             }

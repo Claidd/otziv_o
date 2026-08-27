@@ -763,6 +763,7 @@ public class ManualPaymentTaskLedgerService {
         entry.setManualPaymentType(source.getManualPaymentType());
         entry.setManualPhoneSnapshot(source.getManualPhoneSnapshot());
         entry.setBankRecipientNameSnapshot(source.getBankRecipientNameSnapshot());
+        entry.setManualBankNameSnapshot(source.getManualBankNameSnapshot());
         entry.setManualPaymentUrlSnapshot(source.getManualPaymentUrlSnapshot());
         entry.setManualPaymentButtonSnapshot(source.getManualPaymentButtonSnapshot());
         entry.setTargetOverrunAcknowledgedAt(source.getTargetOverrunAcknowledgedAt());
@@ -781,6 +782,7 @@ public class ManualPaymentTaskLedgerService {
                 ? ManualPaymentType.MOBILE_BANK : task.getManualPaymentType());
         entry.setManualPhoneSnapshot(normalize(task.getManualPhone()));
         entry.setBankRecipientNameSnapshot(normalize(task.getManualRecipientName()));
+        entry.setManualBankNameSnapshot(limit(task.getManualBankName(), 120));
         entry.setManualPaymentUrlSnapshot(PaymentUrlPolicy.safe(
                 task.getManualPaymentUrl(), PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL));
         entry.setManualPaymentButtonSnapshot(limit(task.getManualPaymentButtonLabel(), 80));
@@ -800,6 +802,7 @@ public class ManualPaymentTaskLedgerService {
                 entry.getManualPaymentType(),
                 normalize(entry.getManualPhoneSnapshot()),
                 normalize(entry.getBankRecipientNameSnapshot()),
+                normalize(entry.getManualBankNameSnapshot()),
                 PaymentUrlPolicy.safe(entry.getManualPaymentUrlSnapshot(), PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL),
                 normalize(entry.getManualPaymentButtonSnapshot()),
                 reserved,
@@ -807,7 +810,6 @@ public class ManualPaymentTaskLedgerService {
                 normalize(entry.getTargetOverrunAcknowledgedBy())
         );
     }
-
     private ManualPaymentTaskRouteSnapshot assertReserveReplay(
             ManualPaymentTaskLedgerEntry entry,
             ManualPaymentTaskReserveCommand command

@@ -29,6 +29,7 @@ public interface WorkloadShadowTransferRepository
             LEFT JOIN users worker_user
               ON worker_user.id = current.worker_user_id
             WHERE current.failure_days > :allowedFailureDays
+              AND current.last_day_reached_100 = FALSE
               AND current.diagnostic_status = 'OK'
             ORDER BY current.worker_id
             """, nativeQuery = true)

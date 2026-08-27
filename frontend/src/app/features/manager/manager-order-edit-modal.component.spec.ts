@@ -121,6 +121,38 @@ describe('ManagerOrderEditModalComponent', () => {
     expect(paymentCanceled).toBe(true);
   });
 
+  it('offers a safe route replacement only when manager access enables it', () => {
+    const fixture = TestBed.createComponent(ManagerOrderEditModalComponent);
+    const component = fixture.componentInstance;
+    const selectedTargets: string[] = [];
+    component.order = order();
+    component.draft = draft();
+    component.allowPaymentRouteChange = true;
+    component.paymentRouteContext = {
+      paymentLinkId: 81,
+      currentRoute: 'Эквайринг Т-Банк',
+      currentRecipient: 'Владелец',
+      status: 'CREATED',
+      canChange: true,
+      blockReason: ''
+    };
+    component.paymentRouteChanged.subscribe((target) => selectedTargets.push(target));
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const routeSection = element.querySelector('.payment-route-change');
+    expect(routeSection?.textContent).toContain('Эквайринг Т-Банк');
+    const employeeButton = Array.from(routeSection?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+      .find((button) => button.textContent?.includes('Реквизиты сотрудника'));
+    employeeButton?.click();
+    expect(selectedTargets).toEqual(['EMPLOYEE_REQUISITES']);
+
+    component.allowPaymentRouteChange = false;
+    fixture.detectChanges();
+    expect(element.querySelector('.payment-route-change')).toBeNull();
+  });
+
   it('emits typed draft changes', () => {
     const fixture = TestBed.createComponent(ManagerOrderEditModalComponent);
     const component = fixture.componentInstance;

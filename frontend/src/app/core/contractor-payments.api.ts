@@ -194,6 +194,7 @@ export interface ContractorPaymentSystemStatus {
   completionBacklogReady: boolean;
   activationAvailable: boolean;
   activationBlockedReasons: string[];
+  runtimeWarnings?: string[];
   attributionStartDate: string | null;
   revision: number;
   liveRoutingMasterEnabled: boolean;

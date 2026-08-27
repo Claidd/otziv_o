@@ -371,11 +371,7 @@ export const routes: Routes = [
   {
     path: 'manager/control',
     redirectTo: 'admin/manager-control',
-    pathMatch: 'full',
-    canActivate: [roleGuard],
-    data: {
-      roles: ['ADMIN', 'OWNER']
-    }
+    pathMatch: 'full'
   },
   {
     path: 'admin/tbank-payments',

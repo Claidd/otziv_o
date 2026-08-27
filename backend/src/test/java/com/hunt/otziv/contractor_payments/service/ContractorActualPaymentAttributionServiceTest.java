@@ -46,6 +46,7 @@ import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -247,6 +248,43 @@ class ContractorActualPaymentAttributionServiceTest {
 
         assertThat(candidates.keySet()).containsExactly(task.candidateKey());
         assertThat(candidates.values()).noneMatch(value -> "PROFILE:1".equals(value.key()));
+    }
+
+    @Test
+    void manualCardContextKeepsBankRecipientNameWhenAssignedWorkerUsesSameProfile() {
+        Order order = new Order();
+        order.setId(ORDER_ID);
+        Worker worker = new Worker();
+        worker.setId(31L);
+        worker.setUser(specialist.getUser());
+        order.setWorker(worker);
+
+        PaymentLink link = new PaymentLink();
+        link.setId(SOURCE_ID);
+        link.setOrder(order);
+        link.setAmountKopecks(2_000L);
+        link.setManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+
+        ContractorPaymentAllocation original = sourceAllocation(
+                100L, ContractorAllocationMode.LIVE, specialist, ContractorAllocationStatus.RESERVED
+        );
+        original.setRecipientNameSnapshot("Анастасия");
+        link.setContractorAllocationId(original.getId());
+
+        when(profileRepository.findIdByUserIdAndRole(
+                specialist.getUser().getId(), ContractorRole.SPECIALIST
+        )).thenReturn(Optional.of(specialist.getId()));
+        when(targetAccessPolicy.canManageUser(specialist.getUser().getId())).thenReturn(true);
+
+        ManualCardPaymentContextResponse context = service.manualCardPaymentContext(order, link);
+
+        assertThat(context.originalRecipient().key()).isEqualTo("PROFILE:" + specialist.getId());
+        assertThat(context.originalRecipient().displayName()).isEqualTo("Анастасия");
+        assertThat(context.candidates()).filteredOn(candidate ->
+                        candidate.key().equals("PROFILE:" + specialist.getId()))
+                .singleElement()
+                .extracting(ManualCardPaymentRecipientResponse::displayName)
+                .isEqualTo("Анастасия");
     }
 
     @Test

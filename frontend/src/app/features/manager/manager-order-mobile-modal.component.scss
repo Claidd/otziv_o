@@ -71,6 +71,65 @@
   margin: 0;
 }
 
+:host .payment-route-change {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid rgba(214, 71, 47, 0.22);
+  border-radius: 0.85rem;
+  padding: 0.8rem;
+  background: color-mix(in srgb, var(--otziv-muted-surface, #f6f8fc) 86%, white);
+}
+
+:host .payment-route-change__head,
+:host .payment-route-change__options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+:host .payment-route-change__head > div,
+:host .payment-route-change__body {
+  display: grid;
+  gap: 0.3rem;
+}
+
+:host .payment-route-change small,
+:host .payment-route-change p {
+  margin: 0;
+  color: var(--otziv-info, #6d788a);
+}
+
+:host .payment-route-change__warning {
+  border: 1px solid rgba(255, 0, 96, 0.28);
+  border-radius: 0.7rem;
+  padding: 0.65rem;
+  color: #a6003f;
+  background: rgba(255, 0, 96, 0.06);
+}
+
+:host .payment-route-change__close {
+  justify-self: end;
+  border: 0;
+  padding: 0.25rem 0;
+  color: var(--otziv-info, #6d788a);
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (max-width: 620px) {
+  :host .payment-route-change__head,
+  :host .payment-route-change__options {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  :host .payment-route-change__head button,
+  :host .payment-route-change__options button {
+    width: 100%;
+  }
+}
+
 @media (max-width: 860px) {
   :host .lead-edit-backdrop {
     display: block;

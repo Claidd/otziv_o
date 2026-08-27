@@ -866,6 +866,8 @@ VALUES
   ('payments.tbank.tpay-enabled', 'false', NOW(6)),
   ('payments.tbank.sberpay-enabled', 'false', NOW(6)),
   ('payments.tbank.mirpay-enabled', 'false', NOW(6)),
+  ('workload.live.mode', 'SHADOW', NOW(6)),
+  ('workload.live.apply-enabled', 'false', NOW(6)),
   ('client.messages.payment-instruction-source', 'MANAGER_TEXT', NOW(6))
 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at);
 
@@ -893,6 +895,8 @@ WHERE setting_key IN (
   'payments.tbank.tpay-enabled',
   'payments.tbank.sberpay-enabled',
   'payments.tbank.mirpay-enabled',
+  'workload.live.mode',
+  'workload.live.apply-enabled',
   'client.messages.payment-instruction-source'
 )
 ORDER BY setting_key;
@@ -3143,12 +3147,23 @@ SELECT CONCAT('ACCOUNTING_SHADOW=', COUNT(*))
 FROM contractor_payment_accounting_phase
 WHERE id = 1 AND phase = 'SHADOW';
 
+SELECT CONCAT('ACCOUNTING_LIVE=', COUNT(*))
+FROM contractor_payment_accounting_phase
+WHERE id = 1 AND phase = 'LIVE';
+
 SELECT CONCAT('ROLLOUT_LEGACY=', COUNT(*))
 FROM contractor_payment_rollout_state
 WHERE id = 1
   AND accounting_authority = 'LEGACY'
   AND routing_requested = FALSE
   AND attribution_start_date IS NULL;
+
+SELECT CONCAT('ROLLOUT_COMPLETION=', COUNT(*))
+FROM contractor_payment_rollout_state
+WHERE id = 1
+  AND accounting_authority = 'COMPLETION'
+  AND routing_requested = TRUE
+  AND attribution_start_date IS NOT NULL;
 
 SELECT CONCAT('LIVE_ALLOCATIONS=', COUNT(*))
 FROM contractor_payment_allocations
@@ -3538,10 +3553,6 @@ WHERE setting_key = 'client.messages.payment-overdue-days'
         "FUTURE_EXPIRY_EVENTS=0",
         "REQUIRED_TABLES=8",
         "SAFE_SETTINGS=5",
-        "ACCOUNTING_SHADOW=1",
-        "ROLLOUT_LEGACY=1",
-        "LIVE_ALLOCATIONS=0",
-        "CUTOVER_ROWS=0",
         "REPAIR_ROWS=0",
         "CUTOVER_CHECK=1",
         "COMPLETION_KEY=1",
@@ -3567,6 +3578,51 @@ WHERE setting_key = 'client.messages.payment-overdue-days'
         if ($schemaFacts -notcontains $expectedFact) {
             throw "Contractor payment schema invariant '$expectedFact' is missing. Actual: $($schemaFacts -join ', ')."
         }
+    }
+
+    $factValues = @{}
+    foreach ($schemaFact in $schemaFacts) {
+        $parts = $schemaFact.Split("=", 2)
+        if ($parts.Count -eq 2) {
+            $factValues[$parts[0]] = [int]$parts[1]
+        }
+    }
+    foreach ($requiredStateFact in @(
+        "ACCOUNTING_SHADOW",
+        "ACCOUNTING_LIVE",
+        "ROLLOUT_LEGACY",
+        "ROLLOUT_COMPLETION",
+        "LIVE_ALLOCATIONS",
+        "CUTOVER_ROWS"
+    )) {
+        if (-not $factValues.ContainsKey($requiredStateFact)) {
+            throw "Contractor payment schema fact '$requiredStateFact' is missing. Actual: $($schemaFacts -join ', ')."
+        }
+    }
+
+    $legacyShadowState = (
+        $factValues["ACCOUNTING_SHADOW"] -eq 1 -and
+        $factValues["ACCOUNTING_LIVE"] -eq 0 -and
+        $factValues["ROLLOUT_LEGACY"] -eq 1 -and
+        $factValues["ROLLOUT_COMPLETION"] -eq 0 -and
+        $factValues["LIVE_ALLOCATIONS"] -eq 0 -and
+        $factValues["CUTOVER_ROWS"] -eq 0
+    )
+    $completionLiveState = (
+        $factValues["ACCOUNTING_SHADOW"] -eq 0 -and
+        $factValues["ACCOUNTING_LIVE"] -eq 1 -and
+        $factValues["ROLLOUT_LEGACY"] -eq 0 -and
+        $factValues["ROLLOUT_COMPLETION"] -eq 1 -and
+        $factValues["LIVE_ALLOCATIONS"] -ge 0 -and
+        $factValues["CUTOVER_ROWS"] -eq 1
+    )
+    if (-not ($legacyShadowState -or $completionLiveState)) {
+        throw "Contractor payment rollout state is neither pre-cutover LEGACY/SHADOW nor post-cutover COMPLETION/LIVE. Actual: $($schemaFacts -join ', ')."
+    }
+    if ($completionLiveState) {
+        $rolloutStateDescription = "COMPLETION/LIVE with $($factValues["LIVE_ALLOCATIONS"]) live allocation(s)"
+    } else {
+        $rolloutStateDescription = "LEGACY/SHADOW with no live allocations"
     }
 
     $completionGapFacts = @(
@@ -3597,7 +3653,7 @@ WHERE setting_key = 'client.messages.payment-overdue-days'
         }
     }
 
-    Write-Host "Contractor payment SHADOW safety smoke OK: V217-V232 plus V237/V240/V241/V248 are complete, common successor and durable-delivery schemas are present, payment overdue is 30 days, completion repair queues were measured, expiry events stay on the observed business timeline, company payment-routing defaults and source snapshots are present, accounting/routing remain LEGACY/SHADOW, completion cutover is unset, and both deployment masters are false."
+    Write-Host "Contractor payment rollout safety smoke OK: V217-V232 plus V237/V240/V241/V248 are complete, common successor and durable-delivery schemas are present, payment overdue is 30 days, completion repair queues were measured, expiry events stay on the observed business timeline, company payment-routing defaults and source snapshots are present, accounting/routing state is $rolloutStateDescription, and both deployment masters are false."
 }
 
 function Invoke-WorkloadShadowSmoke {

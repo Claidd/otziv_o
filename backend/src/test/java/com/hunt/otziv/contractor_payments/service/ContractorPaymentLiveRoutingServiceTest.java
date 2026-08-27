@@ -191,7 +191,7 @@ class ContractorPaymentLiveRoutingServiceTest {
     }
 
     @Test
-    void ordinaryLiveRouteFallsBackToOwnerWhenImmutableSourceSnapshotIsMissing() {
+    void ordinaryLiveRouteFailsClosedWhenImmutableSourceSnapshotIsMissing() {
         when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
         Worker worker = worker(501L, 601L);
         Manager manager = manager(502L, 602L);
@@ -199,15 +199,15 @@ class ContractorPaymentLiveRoutingServiceTest {
         link.setShadowRouteGeneration(null);
         link.setShadowRoutePreparedAt(null);
 
-        ContractorPaymentAllocation allocation = service.reserveForPaymentLink(link);
-
-        assertEquals(ContractorRecipientType.OWNER, allocation.getRecipientType());
-        assertEquals(ContractorAllocationStatus.OWNER_FALLBACK, allocation.getStatus());
-        assertEquals(
-                ContractorRoutingDecisionReason.SOURCE_SNAPSHOT_NOT_READY,
-                allocation.getRoutingDecisionReason()
+        ResponseStatusException failure = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveForPaymentLink(link)
         );
+
+        assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
+        assertTrue(failure.getReason().contains("payment_link_source_snapshot_not_ready"));
         verify(profileRepository, never()).findAllByIdForUpdate(any());
+        verify(allocationRepository, never()).save(any());
     }
 
     @Test
@@ -229,6 +229,44 @@ class ContractorPaymentLiveRoutingServiceTest {
                 allocation.getRoutingDecisionReason()
         );
         verify(profileRepository, never()).findIdByUserIdAndRole(anyLong(), any());
+    }
+
+    @Test
+    void explicitOwnerRouteDoesNotConsumeAvailableSpecialistLimit() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(20_001L, 20_101L);
+        Manager manager = manager(20_002L, 20_102L);
+
+        ContractorPaymentAllocation allocation = service.reserveOwnerForPaymentLink(
+                paymentLink(20_004L, order(20_005L, worker, manager), 100_000L)
+        );
+
+        assertEquals(ContractorRecipientType.OWNER, allocation.getRecipientType());
+        assertEquals(ContractorAllocationStatus.OWNER_FALLBACK, allocation.getStatus());
+        assertEquals(
+                ContractorRoutingDecisionReason.CLIENT_REQUEST_OWNER_TBANK,
+                allocation.getRoutingDecisionReason()
+        );
+        verify(profileRepository, never()).findByUserIdAndRoleForUpdate(anyLong(), any());
+        verify(profileService, never()).available(any(), any());
+    }
+
+    @Test
+    void explicitEmployeeRouteFailsClosedInsteadOfFallingBackToOwner() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(21_001L, 21_101L);
+        Manager manager = manager(21_002L, 21_102L);
+        Order order = order(21_003L, worker, manager);
+        order.getCompany().setContractorPaymentRoutingEnabled(false);
+
+        ResponseStatusException failure = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveContractorForPaymentLink(paymentLink(21_004L, order, 100_000L))
+        );
+
+        assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
+        assertTrue(failure.getReason().contains("специалист"));
+        verify(allocationRepository, never()).save(any());
     }
 
     @Test
@@ -408,6 +446,33 @@ class ContractorPaymentLiveRoutingServiceTest {
                 ContractorRoutingDecisionReason.INSUFFICIENT_AVAILABLE_BALANCE,
                 allocation.getManagerRejectionReason()
         );
+    }
+
+    @Test
+    void commonInvoiceWithoutImmutableSourceSnapshotFailsClosedBeforeAllocation() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        CommonInvoice invoice = invoice(14_001L, 100_000L, 0L);
+        invoice.setShadowRouteGeneration(null);
+        invoice.setShadowRouteAmountKopecks(null);
+        invoice.setShadowRoutePreparedAt(null);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveForCommonInvoice(
+                        invoice,
+                        List.of(order(
+                                14_002L,
+                                worker(14_003L, 14_004L),
+                                manager(14_005L, 14_006L)
+                        )),
+                        null,
+                        100_000L
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("common_invoice_source_snapshot_not_ready"));
+        verify(allocationRepository, never()).save(any());
     }
 
     @Test
@@ -709,8 +774,10 @@ class ContractorPaymentLiveRoutingServiceTest {
         Order accountPaymentOrder = order(12_004L, worker, manager);
         accountPaymentOrder.getCompany().setContractorPaymentRoutingEnabled(false);
 
+        CommonInvoice invoice = invoice(12_005L, 200_000L, 0L);
+        invoice.setShadowRouteCompanyRoutingAllowed(false);
         ContractorPaymentAllocation allocation = service.reserveForCommonInvoice(
-                invoice(12_005L, 200_000L, 0L),
+                invoice,
                 List.of(linkPaymentOrder, accountPaymentOrder),
                 manager,
                 200_000L
@@ -730,6 +797,7 @@ class ContractorPaymentLiveRoutingServiceTest {
         Worker worker = worker(14L, 114L);
         Manager manager = manager(24L, 124L);
         CommonInvoice invoice = invoice(51L, 300_000L, 100_000L);
+        invoice.setShadowRouteContractorEligible(false);
 
         ContractorPaymentAllocation allocation = service.reserveForCommonInvoice(
                 invoice,
@@ -780,6 +848,143 @@ class ContractorPaymentLiveRoutingServiceTest {
         assertEquals(2, retried.getAttemptNo());
         assertEquals(ContractorAllocationStatus.RESERVED, retried.getStatus());
         assertEquals(ContractorRecipientType.SPECIALIST, retried.getRecipientType());
+    }
+
+    @Test
+    void explicitCommonContractorReplacementCreatesNextAttemptAfterCanceledRoute() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(35L, 135L);
+        Manager manager = manager(45L, 145L);
+        ContractorPaymentProfile specialist = profile(56L, worker.getUser(), ContractorRole.SPECIALIST);
+        CommonInvoice invoice = invoice(142L, 100_000L, 0L);
+        ContractorPaymentAllocation previous = commonAllocation(
+                190L,
+                invoice.getId(),
+                ContractorAllocationStatus.CANCELED
+        );
+        previous.setAttemptNo(1);
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE,
+                ContractorAllocationSourceType.COMMON_INVOICE,
+                invoice.getId()
+        )).thenReturn(Optional.of(previous));
+        when(profileRepository.findByUserIdAndRoleForUpdate(135L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(specialist));
+        when(profileService.available(specialist, ContractorAllocationMode.LIVE)).thenReturn(100_000L);
+
+        ContractorPaymentAllocation replacement = service.reserveContractorForCommonInvoice(
+                invoice,
+                List.of(order(135L, worker, manager)),
+                manager,
+                100_000L
+        );
+
+        assertEquals(2, replacement.getAttemptNo());
+        assertEquals(ContractorAllocationStatus.RESERVED, replacement.getStatus());
+        assertEquals(ContractorRecipientType.SPECIALIST, replacement.getRecipientType());
+        assertEquals(135L, replacement.getRecipientUserId());
+    }
+
+    @Test
+    void explicitCommonOwnerReplacementDoesNotSelectEligibleContractor() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(36L, 136L);
+        Manager manager = manager(46L, 146L);
+        CommonInvoice invoice = invoice(143L, 100_000L, 0L);
+
+        ContractorPaymentAllocation replacement = service.reserveOwnerForCommonInvoice(
+                invoice,
+                List.of(order(136L, worker, manager)),
+                manager,
+                100_000L
+        );
+
+        assertEquals(ContractorAllocationStatus.OWNER_FALLBACK, replacement.getStatus());
+        assertEquals(ContractorRecipientType.OWNER, replacement.getRecipientType());
+        assertEquals(
+                ContractorRoutingDecisionReason.CLIENT_REQUEST_OWNER_TBANK,
+                replacement.getRoutingDecisionReason()
+        );
+        verify(profileRepository, never()).findIdByUserIdAndRole(anyLong(), any());
+    }
+
+    @Test
+    void explicitCommonContractorReplacementFailsClosedWhenNoEmployeeCanAcceptAmount() {
+        when(runtimeSwitch.liveRoutingEnabled()).thenReturn(true);
+        Worker worker = worker(37L, 137L);
+        Manager manager = manager(47L, 147L);
+        ContractorPaymentProfile specialist = profile(57L, worker.getUser(), ContractorRole.SPECIALIST);
+        ContractorPaymentProfile managerProfile = profile(58L, manager.getUser(), ContractorRole.MANAGER);
+        CommonInvoice invoice = invoice(144L, 100_000L, 0L);
+        when(profileRepository.findByUserIdAndRoleForUpdate(137L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(specialist));
+        when(profileRepository.findByUserIdAndRoleForUpdate(147L, ContractorRole.MANAGER))
+                .thenReturn(Optional.of(managerProfile));
+        when(profileService.available(specialist, ContractorAllocationMode.LIVE)).thenReturn(99_999L);
+        when(profileService.available(managerProfile, ContractorAllocationMode.LIVE)).thenReturn(99_999L);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reserveContractorForCommonInvoice(
+                        invoice,
+                        List.of(order(137L, worker, manager)),
+                        manager,
+                        100_000L
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(allocationRepository, never()).save(any());
+    }
+
+    @Test
+    void commonRouteReplacementRejectsClientReportedReservationBeforeRelease() {
+        CommonInvoice invoice = invoice(145L, 100_000L, 0L);
+        ContractorPaymentAllocation allocation = commonAllocation(
+                191L,
+                invoice.getId(),
+                ContractorAllocationStatus.CLIENT_REPORTED
+        );
+        invoice.setContractorAllocationId(allocation.getId());
+        when(allocationRepository.findRecipientProfileIdById(allocation.getId())).thenReturn(Optional.empty());
+        when(allocationRepository.findByIdForUpdate(allocation.getId())).thenReturn(Optional.of(allocation));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.releaseCommonInvoiceRouteForReplacement(
+                        invoice,
+                        "Смена способа оплаты",
+                        "LIVE_COMMON:ROUTE_REPLACED"
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertEquals(ContractorAllocationStatus.CLIENT_REPORTED, allocation.getStatus());
+        verify(eventRepository, never()).save(any());
+    }
+
+    @Test
+    void commonRouteReplacementClosesOwnerFallbackBeforeEmployeeRouteIsCreated() {
+        CommonInvoice invoice = invoice(146L, 100_000L, 0L);
+        ContractorPaymentAllocation allocation = commonAllocation(
+                192L,
+                invoice.getId(),
+                ContractorAllocationStatus.OWNER_FALLBACK
+        );
+        invoice.setContractorAllocationId(allocation.getId());
+        when(allocationRepository.findRecipientProfileIdById(allocation.getId())).thenReturn(Optional.empty());
+        when(allocationRepository.findByIdForUpdate(allocation.getId())).thenReturn(Optional.of(allocation));
+
+        boolean released = service.releaseCommonInvoiceRouteForReplacement(
+                invoice,
+                "Смена способа оплаты",
+                "LIVE_COMMON:ROUTE_REPLACED"
+        );
+
+        assertTrue(released);
+        assertEquals(ContractorAllocationStatus.CANCELED, allocation.getStatus());
+        verify(eventRepository).save(any(ContractorPaymentAllocationEvent.class));
+        verify(allocationRepository).save(allocation);
     }
 
     @Test
@@ -1413,6 +1618,11 @@ class ContractorPaymentLiveRoutingServiceTest {
         invoice.setId(id);
         invoice.setAmountKopecks(amountKopecks);
         invoice.setPaidKopecks(paidKopecks);
+        invoice.setShadowRouteGeneration("generation-" + id);
+        invoice.setShadowRouteAmountKopecks(Math.max(0L, amountKopecks - paidKopecks));
+        invoice.setShadowRoutePreparedAt(LocalDateTime.of(2026, 8, 24, 20, 0));
+        invoice.setShadowRouteContractorEligible(true);
+        invoice.setShadowRouteCompanyRoutingAllowed(true);
         return invoice;
     }
 

@@ -81,6 +81,23 @@ class PaymentReturnOrderRecoveryServiceTest {
     }
 
     @Test
+    void historicalReturnDoesNotReopenOrderWhenNewerManualPaidClosureExists() throws Exception {
+        Order order = order(42L, "Оплачено");
+        PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
+        LocalDateTime returnedAt = LocalDateTime.of(2026, 5, 26, 1, 5);
+        link.setPaidAt(returnedAt);
+        when(paymentLinkRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.existsNewerManualPaidClosure(42L, 7L, returnedAt)).thenReturn(true);
+
+        assertEquals(Optional.empty(), service().reopenAfterFullReturn(
+                new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
+                        7L, PaymentLinkStatus.REFUNDED)));
+
+        verify(orderStatusTransitionService, never()).changeStatusAfterPaymentReturn(42L, "Напоминание");
+        verify(paymentLinkService, never()).createForOrder(42L);
+    }
+
+    @Test
     void disabledPaymentLinksStillLeaveReminderForRetry() throws Exception {
         when(paymentLinkService.createForOrder(42L)).thenThrow(new ResponseStatusException(
                 HttpStatus.CONFLICT,

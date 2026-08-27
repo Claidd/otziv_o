@@ -818,7 +818,10 @@ public class WorkloadShadowProjectionService {
                 monthStats.failureDays(),
                 settings.recipientMinimumRating(),
                 settings.recipientMinimumHundredPercentRate(),
-                settings.recipientMaximumFailureDays()
+                Math.max(
+                        settings.recipientMaximumFailureDays(),
+                        settings.allowedFailureDays()
+                )
         );
         String diagnosticStatus = worker.managerLinkCount() != 1
                 ? "AMBIGUOUS_MANAGER_LINK"
@@ -1300,14 +1303,17 @@ public class WorkloadShadowProjectionService {
         BigDecimal safeHundredRate = finalizedHundredPercentRate == null
                 ? BigDecimal.ZERO
                 : finalizedHundredPercentRate;
+        boolean withinFailureGrace = monthFailureDays <= Math.max(0, maximumFailureDays);
         return acceptsCompanyTransfers
                 && workerGroupConnected
                 && evaluatedDays > 0
                 && finalizedHundredPercentDays > 0
-                && lastDayReached100
                 && safeRating.compareTo(BigDecimal.valueOf(minimumRating)) >= 0
-                && safeHundredRate.compareTo(BigDecimal.valueOf(minimumHundredPercentRate)) >= 0
-                && monthFailureDays <= maximumFailureDays;
+                && (withinFailureGrace
+                        || lastDayReached100
+                        && safeHundredRate.compareTo(
+                                BigDecimal.valueOf(minimumHundredPercentRate)
+                        ) >= 0);
     }
 
     private void persistSnapshots(

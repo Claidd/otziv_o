@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -126,7 +127,15 @@ public class WorkloadShadowTransferSimulationService {
                 int selectionRank = graphBlocked
                         ? ++diagnosticRank
                         : ++recommendationRank;
-                boolean staffingRequired = !graphBlocked && rankedRecipients.isEmpty();
+                List<Recipient> offerQueue = graphBlocked
+                        ? List.of()
+                        : rotateOfferQueue(
+                                rankedRecipients,
+                                date,
+                                source,
+                                selectionRank
+                        );
+                boolean staffingRequired = !graphBlocked && offerQueue.isEmpty();
                 Long fallbackReviewId = !graphBlocked
                         ? emergencyReviewId(selectedProblem.graph())
                         : null;
@@ -148,14 +157,14 @@ public class WorkloadShadowTransferSimulationService {
                         selectedProblem,
                         tier,
                         selectionRank,
-                        graphBlocked ? 0 : rankedRecipients.size(),
+                        offerQueue.size(),
                         graphBlocked,
                         staffingRequired,
                         fallbackWorkerId,
                         fallbackReviewId
                 ));
                 int sequence = 0;
-                for (Recipient recipient : graphBlocked ? List.<Recipient>of() : rankedRecipients) {
+                for (Recipient recipient : offerQueue) {
                     sequence++;
                     candidateWrites.add(new TransferCandidateWrite(
                             caseKey,
@@ -234,7 +243,7 @@ public class WorkloadShadowTransferSimulationService {
                             selectedProblem.graph().companyId(),
                             caseKey,
                             "Подготовлена теневая рекомендация передачи компании",
-                            recommendationMessage(source, selectedProblem, tier, rankedRecipients),
+                            recommendationMessage(source, selectedProblem, tier, offerQueue),
                             observedAt
                     ));
                 }
@@ -315,6 +324,30 @@ public class WorkloadShadowTransferSimulationService {
                 CompanyProblem::problemUnits,
                 problem -> problem.graph().companyId()
         );
+    }
+
+    private List<Recipient> rotateOfferQueue(
+            List<Recipient> rankedRecipients,
+            LocalDate date,
+            SourceWorker source,
+            int selectionRank
+    ) {
+        if (rankedRecipients.size() < 2) {
+            return rankedRecipients;
+        }
+        List<Recipient> rotated = new ArrayList<>(rankedRecipients);
+        int offset = Math.floorMod(
+                (int) date.toEpochDay()
+                        + Long.hashCode(source.managerId())
+                        + Long.hashCode(source.workerId())
+                        + selectionRank
+                        - 1,
+                rotated.size()
+        );
+        if (offset != 0) {
+            Collections.rotate(rotated, -offset);
+        }
+        return rotated;
     }
 
     private Tier tier(int failureDays, WorkloadShadowSettingsResponse settings) {

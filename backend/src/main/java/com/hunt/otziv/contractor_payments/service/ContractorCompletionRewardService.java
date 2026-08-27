@@ -108,7 +108,8 @@ public class ContractorCompletionRewardService {
                 orderId,
                 BadReviewTaskStatus.DONE
         );
-        if (!paymentTrigger && allCompletionMarkersPresent(orderId, completedTasks)) {
+        boolean allMarkersPresent = allCompletionMarkersPresent(orderId, completedTasks);
+        if (!paymentTrigger && allMarkersPresent) {
             // Immutable markers are the authoritative idempotency boundary.
             // A retry must never re-read today's manager/review composition
             // after every logical source was already frozen.
@@ -120,6 +121,15 @@ public class ContractorCompletionRewardService {
         if (attributionStart == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Не задана дата начала учета выполненных работ");
         }
+        if (paymentTrigger && allMarkersPresent
+                && hasPostCutoverCompletionEvidence(orderId, attributionStart)) {
+            // A post-cutover completion transition already froze the obligation date and recipients.
+            // A later payment must not reinterpret historical review dates through the legacy bridge
+            // and create a second manager/specialist accrual for the same completed work.
+            synchronizeCompletionSources(orderId);
+            return 0;
+        }
+
         LocalDate occurredOn = forcedOccurredOn != null
                 ? forcedOccurredOn
                 : resolveOrderCompletionDate(order, attributionStart);
@@ -756,14 +766,14 @@ public class ContractorCompletionRewardService {
         if (amountKopecks <= 0L) {
             return 0;
         }
-        profileService.applySystemOpeningBalanceDelta(
+        long appliedDeltaKopecks = profileService.applySystemOpeningBalanceDelta(
                 user.getId(),
                 role,
                 -amountKopecks,
                 "Автокорректировка переходящего остатка: плохая задача #" + taskId
                         + " удалена из счета заказа #" + orderId
         );
-        return 1;
+        return appliedDeltaKopecks == 0L ? 0 : 1;
     }
 
     private int ensureAdjustment(Zp original, String source, LocalDate occurredOn) {
@@ -898,6 +908,27 @@ public class ContractorCompletionRewardService {
             }
         }
         return true;
+    }
+
+    private boolean hasPostCutoverCompletionEvidence(Long orderId, LocalDate attributionStart) {
+        ContractorCompletionRewardMarker managerMarker = marker(
+                orderId,
+                ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER
+        );
+        ContractorCompletionRewardMarker specialistMarker = marker(
+                orderId,
+                ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST
+        );
+        boolean postCutoverMarkers = managerMarker != null
+                && specialistMarker != null
+                && managerMarker.getOccurredOn() != null
+                && specialistMarker.getOccurredOn() != null
+                && !managerMarker.getOccurredOn().isBefore(attributionStart)
+                && !specialistMarker.getOccurredOn().isBefore(attributionStart);
+        return postCutoverMarkers
+                || hasActiveSource(orderId, ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER)
+                || hasActiveSource(orderId, ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST)
+                || hasActiveSource(orderId, ContractorRewardSourceCodes.PERFORMER_PRODUCT_COMPLETION);
     }
 
     private void freezePreCutoffBaseSources(Long orderId, LocalDate occurredOn) {

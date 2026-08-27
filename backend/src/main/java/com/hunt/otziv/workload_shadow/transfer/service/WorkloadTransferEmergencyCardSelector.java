@@ -6,7 +6,6 @@ import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferCompanyGraph.
 import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferCompanyGraph.ReviewStage;
 import java.util.Comparator;
 import java.util.Objects;
-import java.util.stream.Stream;
 
 /**
  * Chooses the concrete review card that must receive an emergency fallback worker.
@@ -19,13 +18,10 @@ public final class WorkloadTransferEmergencyCardSelector {
     }
 
     public static Long select(WorkloadTransferCompanyGraph graph) {
-        Stream<Candidate> owned = graph.orders().stream()
+        return graph.orders().stream()
                 .filter(order -> !order.waitingForClient())
                 .flatMap(order -> order.reviews().stream()
-                        .map(review -> candidate(review, isNew(order))));
-        Stream<Candidate> detached = graph.detachedReviews().stream()
-                .map(review -> candidate(review, false));
-        return Stream.concat(owned, detached)
+                        .map(review -> candidate(review, isNew(order))))
                 .filter(Objects::nonNull)
                 .sorted(Comparator
                         .comparingInt(Candidate::priority)

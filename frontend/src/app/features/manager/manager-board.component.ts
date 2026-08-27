@@ -24,6 +24,7 @@ import {
   ManagerOption,
   ManagerPage,
   ManagerSection,
+  type PaymentRouteChangeTarget,
   OrderCardItem
 } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
@@ -265,6 +266,9 @@ export class ManagerBoardComponent implements OnDestroy {
   readonly orderError = this.orderFacade.orderError;
   readonly orderDeleting = this.orderFacade.orderDeleting;
   readonly orderCancelingPayment = this.orderFacade.orderCancelingPayment;
+  readonly paymentRouteContext = this.orderFacade.paymentRouteContext;
+  readonly paymentRouteContextLoading = this.orderFacade.paymentRouteContextLoading;
+  readonly paymentRouteChanging = this.orderFacade.paymentRouteChanging;
   readonly createOrderPayload = this.orderFacade.createOrderPayload;
   readonly createOrderDraft = this.orderFacade.createOrderDraft;
   readonly createOrderLoading = this.orderFacade.createOrderLoading;
@@ -1033,6 +1037,26 @@ export class ManagerBoardComponent implements OnDestroy {
 
   cancelOrderPayment(): void {
     this.orderFacade.cancelOrderPayment();
+  }
+
+  openPaymentRouteChange(): void {
+    this.orderFacade.openPaymentRouteChange();
+  }
+
+  closePaymentRouteChange(): void {
+    this.orderFacade.closePaymentRouteChange();
+  }
+
+  changePaymentRoute(target: PaymentRouteChangeTarget): void {
+    this.orderFacade.changePaymentRoute(target);
+  }
+
+  canManagePaperInvoices(): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  }
+
+  markPaperInvoiceIssued(): void {
+    this.orderFacade.markPaperInvoiceIssued();
   }
 
   updateCompanyStatus(company: CompanyCardItem, action: StatusAction): void {

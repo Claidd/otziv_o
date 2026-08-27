@@ -56,6 +56,7 @@ class WorkloadLiveRuntimeSafetyContractTest {
                 .contains("workflow.status = 'APPLYING'")
                 .contains("transfer_case.status = 'SHADOW_PENDING'")
                 .contains("source_current.diagnostic_status = 'OK'")
+                .contains("source_current.last_day_reached_100 = FALSE")
                 .contains("workflow.shadow_settings_revision")
                 .contains("FOR UPDATE");
     }

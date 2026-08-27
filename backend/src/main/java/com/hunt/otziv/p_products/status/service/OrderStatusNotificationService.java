@@ -129,8 +129,24 @@ public class OrderStatusNotificationService {
             String message,
             String actionTitle
     ) {
+        return sendInformationalMessageToClientChat(
+                order, clientId, groupId, message, actionTitle, null
+        );
+    }
+
+    public boolean sendInformationalMessageToClientChat(
+            Order order,
+            String clientId,
+            String groupId,
+            String message,
+            String actionTitle,
+            String frozenTransferNumber
+    ) {
         log.info("📨 Отправка клиентского уведомления: {}", actionTitle);
-        String sentChannel = sendToActiveClientChat(order, clientId, groupId, message);
+        String sentChannel = sendToActiveClientChat(
+                order, clientId, groupId, message,
+                TelegramTransferCopyButton.fromFrozenTransferNumber(frozenTransferNumber).orElse(null)
+        );
         if (sentChannel != null) {
             log.info("✅ Клиентское уведомление \"{}\" отправлено через {}", actionTitle, sentChannel);
             return true;

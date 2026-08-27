@@ -742,6 +742,38 @@ class ContractorPaymentProfileServiceTest {
     }
 
     @Test
+    void systemOpeningBalanceDeltaSkipsUnrepresentedPreCutoffWorkAtZeroBalance() {
+        User user = userWithRole(47L, "ROLE_WORKER");
+        profile.setUser(user);
+        profile.setRole(ContractorRole.SPECIALIST);
+        profile.setOpeningBalanceKopecks(0L);
+        when(profileRepository.findByUserIdAndRoleForUpdate(47L, ContractorRole.SPECIALIST))
+                .thenReturn(Optional.of(profile));
+
+        long delta = service.applySystemOpeningBalanceDelta(
+                47L,
+                ContractorRole.SPECIALIST,
+                -2_500L,
+                "Автокорректировка плохой задачи"
+        );
+
+        assertThat(delta).isZero();
+        assertThat(profile.getOpeningBalanceKopecks()).isZero();
+        verify(profileRepository, never()).saveAndFlush(any());
+        verify(adjustmentRepository, never()).save(any());
+        verify(businessAuditService).recordRequiredInCurrentTransaction(
+                eq("AUTO_ADJUST_CONTRACTOR_OPENING_BALANCE_NOT_REQUIRED"),
+                eq("CONTRACTOR_PAYMENT_PROFILE"),
+                eq(7L),
+                eq(null),
+                eq(null),
+                any(),
+                any(),
+                eq("userId=47, role=SPECIALIST")
+        );
+    }
+
+    @Test
     void systemOpeningBalanceDeltaCannotMakeHistoricalBalanceNegative() {
         User user = userWithRole(46L, "ROLE_WORKER");
         profile.setUser(user);

@@ -391,7 +391,7 @@ class WorkloadTransferGraphAssemblerTest {
     }
 
     @Test
-    void actionableWorkloadExcludesWaitingFutureUnreadyAndSuppressedNodes() {
+    void actionableWorkloadExcludesWaitingFutureUnreadySuppressedAndDetachedNodes() {
         OrderRow waitingCorrection = new OrderRow(
                 11L,
                 1L,
@@ -478,12 +478,12 @@ class WorkloadTransferGraphAssemblerTest {
 
         assertEquals(2, actionable.newUnits());
         assertEquals(1, actionable.correctionUnits());
-        assertEquals(2, actionable.nagulUnits());
+        assertEquals(1, actionable.nagulUnits());
         assertEquals(1, actionable.publishUnits());
-        assertEquals(1, actionable.recoveryUnits());
-        assertEquals(1, actionable.badUnits());
-        assertEquals(8, actionable.problemUnits());
-        assertEquals(51, actionable.estimatedMinutes());
+        assertEquals(0, actionable.recoveryUnits());
+        assertEquals(0, actionable.badUnits());
+        assertEquals(5, actionable.problemUnits());
+        assertEquals(27, actionable.estimatedMinutes());
     }
 
     @Test
@@ -558,6 +558,13 @@ class WorkloadTransferGraphAssemblerTest {
         assertEquals(1, graph.totals().recoveryUnits());
         assertEquals(1, graph.totals().badUnits());
         assertEquals(20, graph.totals().estimatedMinutes());
+
+        WorkloadTransferActionableWorkload actionable = WorkloadTransferActionableWorkload.calculate(
+                graph,
+                new WorkloadTransferActionableWorkload.EstimateRates(5, 10, 4, 3, 10, 10)
+        );
+        assertEquals(0, actionable.problemUnits());
+        assertEquals(0, actionable.estimatedMinutes());
 
         WorkloadTransferGraphDiagnostics diagnostics = WorkloadTransferGraphDiagnostics.from(graph);
         assertEquals(3, diagnostics.warningCount());

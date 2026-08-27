@@ -378,6 +378,8 @@ VALUES
   ('contractor-payments.reward-attribution-live-enabled', 'false', NOW(6)),
   ('contractor-payments.live-readiness-confirmed', 'false', NOW(6)),
   ('contractor-payments.completion-attribution-start-date', '', NOW(6)),
+  ('workload.live.mode', 'SHADOW', NOW(6)),
+  ('workload.live.apply-enabled', 'false', NOW(6)),
   ('client.messages.payment-instruction-source', 'MANAGER_TEXT', NOW(6))
 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at);
 "@

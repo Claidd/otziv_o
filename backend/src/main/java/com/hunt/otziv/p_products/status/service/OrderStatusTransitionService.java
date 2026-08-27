@@ -4,6 +4,7 @@ import com.hunt.otziv.p_products.status.event.OrderStatusChangedEvent;
 import com.hunt.otziv.p_products.status.policy.OrderManualArchivePolicy;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
+import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
@@ -108,6 +109,11 @@ public class OrderStatusTransitionService {
             STATUS_NOT_PAID,
             STATUS_BAN,
             STATUS_WAITING_COMMON_INVOICE
+    );
+    private static final int CORRECTION_NOTE_TELEGRAM_LIMIT = 3000;
+    private static final List<String> REVIEW_ANSWER_PLACEHOLDER_PREFIXES = List.of(
+            "впишите сюда замечания к отзыву",
+            "ответ на отзыв или замечание"
     );
 
     private final OrderRepository orderRepository;
@@ -951,7 +957,7 @@ public class OrderStatusTransitionService {
                 if (detail == null) {
                     continue;
                 }
-                addCorrectionNote(notes, detail.getComment());
+                addCorrectionNote(notes, "Коррекция", detail.getComment());
                 if (detail.getReviews() == null) {
                     continue;
                 }
@@ -959,8 +965,8 @@ public class OrderStatusTransitionService {
                     if (review == null) {
                         continue;
                     }
-                    String answer = safeString(review.getAnswer());
-                    if (!answer.isBlank()) {
+                    String answer = normalizeCorrectionText(review.getAnswer());
+                    if (!isBlankOrPlaceholderReviewAnswer(answer)) {
                         addCorrectionNote(
                                 notes,
                                 review.getId() == null ? answer : "Отзыв #" + review.getId() + ": " + answer
@@ -969,14 +975,38 @@ public class OrderStatusTransitionService {
                 }
             }
         }
-        return limitTelegramText(String.join("\n", notes), 3000);
+        addCorrectionNote(notes, "Заметка заказа", order == null ? null : order.getZametka());
+        Company company = order == null ? null : order.getCompany();
+        addCorrectionNote(notes, "Заметка компании", company == null ? null : company.getCommentsCompany());
+        return limitTelegramText(String.join("\n", notes), CORRECTION_NOTE_TELEGRAM_LIMIT);
     }
 
     private void addCorrectionNote(Set<String> notes, String value) {
-        String normalized = safeString(value);
+        String normalized = normalizeCorrectionText(value);
         if (!normalized.isBlank()) {
             notes.add(normalized);
         }
+    }
+
+    private void addCorrectionNote(Set<String> notes, String label, String value) {
+        String normalized = normalizeCorrectionText(value);
+        if (!normalized.isBlank()) {
+            notes.add(label + ":\n" + normalized);
+        }
+    }
+
+    private boolean isBlankOrPlaceholderReviewAnswer(String value) {
+        String normalized = normalizeCorrectionText(value);
+        if (normalized.isBlank()) {
+            return true;
+        }
+
+        String compact = normalized.replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+        return REVIEW_ANSWER_PLACEHOLDER_PREFIXES.stream().anyMatch(compact::startsWith);
+    }
+
+    private String normalizeCorrectionText(String value) {
+        return safeString(value).trim();
     }
 
     private String limitTelegramText(String value, int maxLength) {

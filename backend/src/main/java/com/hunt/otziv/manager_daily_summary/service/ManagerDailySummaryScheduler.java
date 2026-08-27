@@ -2,6 +2,8 @@ package com.hunt.otziv.manager_daily_summary.service;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -17,11 +19,15 @@ public class ManagerDailySummaryScheduler {
     private final ManagerDailySummaryService summaryService;
     private final ManagerSummaryNotificationService notificationService;
     private final ManagerPersonalDayResultService personalDayResultService;
+    private final ReentrantLock calculationLock = new ReentrantLock();
 
     @Scheduled(cron = "${manager.summary.snapshot-cron:0 55 21 * * *}", zone = "${manager.summary.zone:Asia/Irkutsk}")
     public void calculateSnapshot() {
         try {
-            summaryService.calculate(LocalDate.now(SUMMARY_ZONE), false);
+            withCalculationLock(() -> {
+                summaryService.calculate(LocalDate.now(SUMMARY_ZONE), false);
+                return null;
+            });
         } catch (RuntimeException exception) {
             log.error("Manager daily summary snapshot failed", exception);
         }
@@ -31,7 +37,7 @@ public class ManagerDailySummaryScheduler {
     public void calculateAndSendCurrentDay() {
         try {
             LocalDate date = LocalDate.now(SUMMARY_ZONE);
-            var summaries = summaryService.calculate(date, false);
+            var summaries = withCalculationLock(() -> summaryService.calculate(date, false));
             int sent = notificationService.send(date, summaries);
             log.info("Manager daily summary sent at 22:00: date={}, managers={}, recipients={}",
                     date, summaries.size(), sent);
@@ -41,13 +47,13 @@ public class ManagerDailySummaryScheduler {
     }
 
     @Scheduled(
-            cron = "${manager.summary.personal-delivery-cron:5 0 22 * * *}",
+            cron = "${manager.summary.personal-delivery-cron:0 5 22 * * *}",
             zone = "${manager.summary.zone:Asia/Irkutsk}"
     )
     public void calculateCurrentDayAndSendPersonalResults() {
         LocalDate date = LocalDate.now(SUMMARY_ZONE);
         try {
-            var summaries = summaryService.calculate(date, false);
+            var summaries = withCalculationLock(() -> summaryService.calculate(date, false));
             int sent = personalDayResultService.send(date, summaries);
             log.info("Manager personal day results sent: date={}, managers={}, recipients={}",
                     date, summaries.size(), sent);
@@ -63,11 +69,20 @@ public class ManagerDailySummaryScheduler {
     public void finalizePreviousDay() {
         LocalDate date = LocalDate.now(SUMMARY_ZONE).minusDays(1);
         try {
-            var summaries = summaryService.calculate(date, true);
+            var summaries = withCalculationLock(() -> summaryService.calculate(date, true));
             log.info("Manager daily summary finalized without repeat delivery: date={}, managers={}",
                     date, summaries.size());
         } catch (RuntimeException exception) {
             log.error("Manager daily summary finalization failed for {}", date, exception);
+        }
+    }
+
+    private <T> T withCalculationLock(Supplier<T> action) {
+        calculationLock.lock();
+        try {
+            return action.get();
+        } finally {
+            calculationLock.unlock();
         }
     }
 }

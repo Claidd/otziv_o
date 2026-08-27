@@ -1196,6 +1196,86 @@ class ScheduledClientMessageServiceTest {
     }
 
     @Test
+    void paymentReturnReminderReusesCanonicalOrderCycle() {
+        LocalDateTime changedAt = LocalDateTime.of(2026, 8, 17, 13, 15, 56);
+        Company company = new Company();
+        company.setId(797L);
+        Order order = new Order();
+        order.setId(22382L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Напоминание").build());
+        order.setStatusChangedAt(changedAt);
+
+        ScheduledClientMessageState existing = ScheduledClientMessageState.builder()
+                .id(1669786L)
+                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:22382:2026-08-17T13:15:56")
+                .orderId(22382L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+
+        when(orderRepository.findByIdForMutation(22382L)).thenReturn(Optional.of(order));
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.PAYMENT_REMINDER,
+                "order:22382:2026-08-17T13:15:56"
+        )).thenReturn(Optional.of(existing));
+
+        assertTrue(service.enqueuePaymentReminderAfterFullReturn(22382L));
+
+        assertEquals("order:22382:2026-08-17T13:15:56", existing.getTargetKey());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, existing.getStatus());
+        assertEquals(ClientMessageTargetType.ORDER, existing.getTargetType());
+        assertEquals(797L, existing.getCompanyId());
+        assertEquals(22382L, existing.getOrderId());
+        assertEquals("payment_return_reopened", existing.getLastErrorCode());
+        assertNotNull(existing.getNextAttemptAt());
+        assertNull(existing.getLockedUntil());
+        verify(stateRepository).save(existing);
+        verify(stateRepository, never()).findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.PAYMENT_REMINDER,
+                "payment-return:22382:2026-08-17T13:15:56"
+        );
+    }
+
+    @Test
+    void paymentReturnReminderCreatesCanonicalOrderCycleWhenMissing() {
+        LocalDateTime changedAt = LocalDateTime.of(2026, 8, 17, 13, 15, 56);
+        Company company = new Company();
+        company.setId(797L);
+        Order order = new Order();
+        order.setId(22382L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Напоминание").build());
+        order.setStatusChangedAt(changedAt);
+
+        when(orderRepository.findByIdForMutation(22382L)).thenReturn(Optional.of(order));
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.PAYMENT_REMINDER,
+                "order:22382:2026-08-17T13:15:56"
+        )).thenReturn(Optional.empty());
+
+        assertTrue(service.enqueuePaymentReminderAfterFullReturn(22382L));
+
+        ArgumentCaptor<ScheduledClientMessageState> stateCaptor =
+                ArgumentCaptor.forClass(ScheduledClientMessageState.class);
+        verify(stateRepository).save(stateCaptor.capture());
+        ScheduledClientMessageState saved = stateCaptor.getValue();
+        assertEquals(ClientMessageScenario.PAYMENT_REMINDER, saved.getScenario());
+        assertEquals("order:22382:2026-08-17T13:15:56", saved.getTargetKey());
+        assertEquals(ClientMessageTargetType.ORDER, saved.getTargetType());
+        assertEquals(797L, saved.getCompanyId());
+        assertEquals(22382L, saved.getOrderId());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, saved.getStatus());
+        assertEquals("payment_return_reopened", saved.getLastErrorCode());
+        assertNotNull(saved.getNextAttemptAt());
+        verify(stateRepository, never()).findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.PAYMENT_REMINDER,
+                "payment-return:22382:2026-08-17T13:15:56"
+        );
+    }
+
+    @Test
     void retryNowReconcilesPaymentBeforeProcessingFailedPaymentTask() {
         ScheduledClientMessageState state = ScheduledClientMessageState.builder()
                 .id(501L)
