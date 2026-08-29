@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -38,6 +39,16 @@ public interface ContractorRewardLedgerRepository extends JpaRepository<Contract
     List<ContractorRewardLedgerEntry> findAllBySourceZpIdAndProfileId(Long sourceZpId, Long profileId);
 
     List<ContractorRewardLedgerEntry> findAllBySourceZpId(Long sourceZpId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+        UPDATE contractor_reward_ledger
+        SET active = FALSE,
+            updated_at = CURRENT_TIMESTAMP(6)
+        WHERE order_id = :orderId
+          AND active = TRUE
+    """, nativeQuery = true)
+    int deactivateActiveByOrderId(@Param("orderId") Long orderId);
 
     @Query("""
         SELECT COALESCE(SUM(e.amountKopecks), 0)

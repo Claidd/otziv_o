@@ -25,6 +25,8 @@ public class ManualCardPaymentReviewNotificationService {
     public static final String REMINDER_SOURCE = "MANAGER_REPORTED_MANUAL_CARD_PAYMENT";
     public static final String COMMON_INVOICE_REMINDER_SOURCE =
             "MANAGER_REPORTED_COMMON_INVOICE_CARD_PAYMENT";
+    public static final String OWNER_APPROVAL_REMINDER_SOURCE =
+            "OWNER_MANUAL_CARD_PAYMENT_APPROVAL";
 
     private final UserService userService;
     private final PersonalReminderService personalReminderService;
@@ -44,6 +46,22 @@ public class ManualCardPaymentReviewNotificationService {
             return;
         }
         runAfterCommit(() -> notifyCommonInvoiceNow(request));
+    }
+
+    public void notifyOwnerApprovalAfterCommit(OwnerApprovalRequest request) {
+        if (request == null || request.approvalId() == null || request.orderId() == null) {
+            return;
+        }
+        runAfterCommit(() -> notifyOwnerApprovalNow(request));
+    }
+
+    public void closeOwnerApprovalReminders(Long approvalId) {
+        if (approvalId != null) {
+            personalReminderService.deleteSystemRemindersBySource(
+                    OWNER_APPROVAL_REMINDER_SOURCE,
+                    approvalId
+            );
+        }
     }
 
     private void runAfterCommit(Runnable notification) {
@@ -174,6 +192,65 @@ public class ManualCardPaymentReviewNotificationService {
         }
     }
 
+    private void notifyOwnerApprovalNow(OwnerApprovalRequest request) {
+        String text = ownerApprovalNotificationText(request);
+        String title = "Подтвердить поступление владельцу по заказу №" + request.orderId();
+        String callbackData = OwnerManualCardPaymentApprovalCallbackData.encode(
+                request.approvalId(),
+                request.callbackToken()
+        );
+        for (User recipient : recipients().values()) {
+            try {
+                if (!personalReminderService.hasOpenSystemReminder(
+                        recipient,
+                        OWNER_APPROVAL_REMINDER_SOURCE,
+                        request.approvalId()
+                )) {
+                    personalReminderService.createSystemReminderDueNow(
+                            recipient,
+                            title,
+                            limit(text, 1000),
+                            OWNER_APPROVAL_REMINDER_SOURCE,
+                            request.approvalId(),
+                            request.orderId()
+                    );
+                }
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "Не удалось создать запрос подтверждения владельца approvalId={}, userId={}",
+                        request.approvalId(),
+                        recipient.getId(),
+                        exception
+                );
+            }
+            if (recipient.getTelegramChatId() == null) {
+                continue;
+            }
+            try {
+                telegramService.sendMessageWithInlineButton(
+                        recipient.getTelegramChatId(),
+                        text,
+                        "✅ Подтвердить поступление владельцу",
+                        callbackData
+                );
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "Не удалось отправить Telegram-запрос approvalId={}, userId={}",
+                        request.approvalId(),
+                        recipient.getId(),
+                        exception
+                );
+            }
+        }
+        paymentIssueReminderService.notifyOrderIssue(
+                request.orderId(),
+                OWNER_APPROVAL_REMINDER_SOURCE,
+                request.approvalId(),
+                title,
+                limit(text, 1000)
+        );
+    }
+
     private Map<Long, User> recipients() {
         Map<Long, User> recipients = new LinkedHashMap<>();
         addRecipients(recipients, userService.getAllOwners("ROLE_OWNER"));
@@ -227,6 +304,22 @@ public class ManualCardPaymentReviewNotificationService {
                 + "\nПроверьте поступление в выписке.";
     }
 
+    private String ownerApprovalNotificationText(OwnerApprovalRequest request) {
+        String company = valueOrDefault(request.companyTitle(), "не указана");
+        return "Менеджер сообщает: клиент оплатил по реквизитам владельца, но текущий платёжный маршрут "
+                + "не подтверждает это поступление автоматически."
+                + "\nЗаказ: №" + request.orderId()
+                + "\nКомпания: " + company
+                + "\nСумма: " + rubles(request.amountKopecks()) + " ₽"
+                + "\nМенеджер: " + valueOrDefault(request.actor(), "не указан")
+                + "\nПричина: " + valueOrDefault(request.reason(), "не указана")
+                + "\nТекущий платёжный источник: №" + request.paymentLinkId()
+                + ", текущий статус " + valueOrDefault(request.linkStatus(), "неизвестен")
+                + "\n\nНажмите кнопку только после проверки поступления на счёт владельца. "
+                + "Система повторно проверит источник, безопасно закроет его при необходимости "
+                + "и затем однократно отметит заказ оплаченным.";
+    }
+
     private String paymentIdSuffix(String paymentId) {
         String value = clean(paymentId);
         if (value.isBlank()) {
@@ -278,6 +371,19 @@ public class ManualCardPaymentReviewNotificationService {
             String reason,
             List<Long> orderIds,
             List<Long> closedRouteIds
+    ) {
+    }
+
+    public record OwnerApprovalRequest(
+            Long approvalId,
+            String callbackToken,
+            Long paymentLinkId,
+            Long orderId,
+            String companyTitle,
+            long amountKopecks,
+            String actor,
+            String reason,
+            String linkStatus
     ) {
     }
 }

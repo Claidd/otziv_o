@@ -32,12 +32,12 @@ class PerformerProductRewardZpListenerTest {
     }
 
     @Test
-    void livePublicationUsesRequiresNewRepairRunnerAfterCommit() {
+    void livePublicationDoesNotCreateOrRepairSalary() {
         when(runtimeSwitch.rewardAttributionLiveEnabled()).thenReturn(true);
 
         listener.onOrderPaid(new OrderStatusChangedEvent(92L, "Новый", "Опубликовано", "Опубликовано"));
 
-        verify(completionRepairTransactionService).repairOrder(92L);
+        verify(completionRepairTransactionService, never()).repairOrder(92L);
         verify(rewardZpService, never()).accrueForPaidOrder(92L);
     }
 

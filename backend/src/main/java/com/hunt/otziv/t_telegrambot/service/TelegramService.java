@@ -14,6 +14,7 @@ import com.hunt.otziv.manager_control.service.ManagerControlWorkerTaskTelegramCa
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewTelegramService;
 import com.hunt.otziv.performers.service.PerformerTelegramCallbackService;
 import com.hunt.otziv.performers.service.PerformerTelegramLinkService;
+import com.hunt.otziv.payments.service.OwnerManualCardPaymentApprovalTelegramCallbackService;
 import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
@@ -95,6 +96,8 @@ public class TelegramService extends TelegramLongPollingBot {
     private final ObjectProvider<ManagerReportReviewTelegramService> managerReportReviewTelegramServiceProvider;
     private ObjectProvider<WorkloadTransferTelegramCallbackService>
             workloadTransferTelegramCallbackServiceProvider;
+    private ObjectProvider<OwnerManualCardPaymentApprovalTelegramCallbackService>
+            ownerManualCardPaymentApprovalTelegramCallbackServiceProvider;
     private final TelegramChatMigrationService telegramChatMigrationService;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
     private final HttpClient richMessageHttpClient;
@@ -136,6 +139,13 @@ public class TelegramService extends TelegramLongPollingBot {
             ObjectProvider<WorkloadTransferTelegramCallbackService> provider
     ) {
         this.workloadTransferTelegramCallbackServiceProvider = provider;
+    }
+
+    @Autowired(required = false)
+    void setOwnerManualCardPaymentApprovalTelegramCallbackServiceProvider(
+            ObjectProvider<OwnerManualCardPaymentApprovalTelegramCallbackService> provider
+    ) {
+        this.ownerManualCardPaymentApprovalTelegramCallbackServiceProvider = provider;
     }
 
     @Autowired
@@ -444,6 +454,19 @@ public class TelegramService extends TelegramLongPollingBot {
             if (reviewAnswer.isPresent()) {
                 log.info("Manager report review Telegram callback handled answer='{}'", reviewAnswer.get());
                 answerCallback(callbackQuery.getId(), reviewAnswer.get());
+                return;
+            }
+        }
+
+        OwnerManualCardPaymentApprovalTelegramCallbackService ownerPaymentApprovalService =
+                ownerManualCardPaymentApprovalTelegramCallbackServiceProvider == null
+                        ? null
+                        : ownerManualCardPaymentApprovalTelegramCallbackServiceProvider.getIfAvailable();
+        if (ownerPaymentApprovalService != null) {
+            Optional<String> ownerPaymentAnswer = ownerPaymentApprovalService.handle(callbackQuery);
+            if (ownerPaymentAnswer.isPresent()) {
+                log.info("Owner payment approval Telegram callback handled answer='{}'", ownerPaymentAnswer.get());
+                answerCallback(callbackQuery.getId(), ownerPaymentAnswer.get());
                 return;
             }
         }

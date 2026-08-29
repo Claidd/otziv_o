@@ -101,9 +101,15 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         boolean wasAlreadyPaid = order != null
                 && order.getStatus() != null
                 && STATUS_PAYMENT.equals(order.getStatus().getTitle());
+        ContractorPaymentAccountingAuthority accountingAuthority =
+                contractorPaymentRolloutStateService.lockAccountingAuthority();
+        boolean paymentAccounting = accountingAuthority != null && accountingAuthority.paymentBased();
 
-        if (!order.isComplete() && order.getCounter() >= order.getAmount()) {
-            log.info("Заказ не выполнен и счетчик достиг плана");
+        if (!wasAlreadyPaid) {
+            if (!paymentAccounting && order.getCounter() < order.getAmount()) {
+                throw new IllegalStateException("Нельзя оплатить заказ до фактического выполнения всех работ");
+            }
+            log.info("Первичная фиксация оплаты заказа {}", order.getId());
 
             BadReviewTaskSummary badReviewSummary = badReviewTaskService.getSummaryForOrder(order.getId());
             BigDecimal baseSum = safeMoney(order.getSum());
@@ -121,18 +127,22 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
                     payableAmount
             );
 
-            boolean rewardsReady;
-            ContractorPaymentAccountingAuthority accountingAuthority =
-                    contractorPaymentRolloutStateService.lockAccountingAuthority();
-            if (accountingAuthority == ContractorPaymentAccountingAuthority.COMPLETION) {
-                contractorCompletionRewardService.ensureOrderPaymentAccrual(order.getId());
-                rewardsReady = true;
-            } else {
-                rewardsReady = zpService.save(order, payableSum, payableAmount);
-            }
+            // Salary rows are protected at database level: an active order
+            // accrual may only be inserted while the order is visibly paid.
+            // The whole method is transactional, so any later failure rolls
+            // this status change back together with the financial writes.
+            order.setComplete(true);
+            order.setPayDay(LocalDate.now());
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PAYMENT));
+            orderRepository.saveAndFlush(order);
+
+            boolean rewardsReady = paymentAccounting
+                    || zpService.save(order, payableSum, payableAmount);
 
             if (rewardsReady) {
-                log.info("Сохранили начисления");
+                log.info(paymentAccounting
+                        ? "Подготовили оплату для канонического начисления"
+                        : "Сохранили начисления");
                 paymentCheckService.save(order, payableSum);
                 log.info("Сохранили чек");
 
@@ -140,10 +150,6 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
                 company.setCounterPay(company.getCounterPay() + payableAmount);
                 company.setSumTotal(safeMoney(company.getSumTotal()).add(payableSum));
 
-                order.setComplete(true);
-                order.setPayDay(LocalDate.now());
-
-                orderRepository.save(order);
                 companyService.save(checkStatusToCompany(company));
                 badReviewTaskService.cancelPendingTasksForOrder(order);
                 if (createNextOrder) {
@@ -157,11 +163,20 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
                 }
             } else {
                 log.error("Проблемы при сохранении начислений");
+                throw new IllegalStateException("Не удалось создать начисления по оплаченному заказу");
             }
         }
 
-        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PAYMENT));
-        orderRepository.save(order);
+        // A repeated provider callback or a repeated manual confirmation is a
+        // reconciliation request, not a second financial operation. The first
+        // transition above writes the check and company totals atomically;
+        // later calls may only restore a missing canonical salary row.
+        if (paymentAccounting) {
+            // The database guard accepts an active order salary only after the
+            // paid status is visible. Any reward failure rolls this entire
+            // payment transaction back, including status/check/company totals.
+            contractorCompletionRewardService.ensureOrderPaymentAccrual(order.getId());
+        }
         if (!wasAlreadyPaid) {
             gamificationEventService.recordOrderPaid(order);
             mobilePushBusinessNotificationService.notifyOwnersOrderPaid(order);

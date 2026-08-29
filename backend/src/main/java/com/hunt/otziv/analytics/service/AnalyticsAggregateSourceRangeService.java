@@ -27,14 +27,14 @@ public class AnalyticsAggregateSourceRangeService {
     public Optional<AnalyticsSourceRange> findSourceRange() {
         return jdbc.query("""
                 WITH source_ranges AS (
-                    SELECT MIN(z.zp_date) AS first_date, MAX(z.zp_date) AS last_date
-                    FROM zp z
-                    WHERE z.zp_date BETWEEN :minimumSourceDate AND :maximumSourceDate
+                    SELECT MIN(salary.metric_date) AS first_date, MAX(salary.metric_date) AS last_date
+                    FROM analytics_salary_source salary
+                    WHERE salary.metric_date BETWEEN :minimumSourceDate AND :maximumSourceDate
 
                     UNION ALL
 
                     SELECT MIN(pc.check_date) AS first_date, MAX(pc.check_date) AS last_date
-                    FROM payment_check pc
+                    FROM analytics_payment_source pc
                     WHERE pc.check_date BETWEEN :minimumSourceDate AND :maximumSourceDate
                       AND pc.check_active = 1
 

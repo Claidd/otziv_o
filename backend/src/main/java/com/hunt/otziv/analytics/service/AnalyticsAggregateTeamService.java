@@ -25,6 +25,9 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
+import com.hunt.otziv.analytics.service.AnalyticsSalarySourceService.SalaryTotal;
+import com.hunt.otziv.analytics.service.AnalyticsFinancialSourceService.PaymentTotal;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -33,6 +36,8 @@ public class AnalyticsAggregateTeamService {
     private static final long DEFAULT_IMAGE_ID = 1L;
 
     private final AnalyticsAggregateReadService readService;
+    private final AnalyticsSalarySourceService salarySourceService;
+    private final AnalyticsFinancialSourceService financialSourceService;
 
     public Optional<AggregateTeam> buildTeam(
             LocalDate selectedDate,
@@ -57,16 +62,20 @@ public class AnalyticsAggregateTeamService {
             fullMonthRows = readService.dailyUsers(userIds, monthStart, monthEnd);
         }
 
-        List<AnalyticsUserMetricAggregate> partialPaymentRows = readService.dailyUsers(userIds, monthStart, selectedDate).stream()
-                .map(AnalyticsUserMetricAggregate.class::cast)
-                .toList();
+        Map<Long, SalaryTotal> currentSalary = salarySourceService.totalsForUsers(
+                userIds, monthStart, selectedDate
+        );
+        Map<Long, PaymentTotal> currentPayments = financialSourceService.paymentTotalsForUsers(
+                userIds, monthStart, selectedDate
+        );
 
-        if (fullMonthRows.isEmpty() && partialPaymentRows.isEmpty()) {
+        if (fullMonthRows.isEmpty() && currentSalary.isEmpty() && currentPayments.isEmpty()) {
             return Optional.empty();
         }
 
         Map<Long, TeamAccumulator> metrics = aggregateFullMonth(fullMonthRows);
-        Map<Long, Long> managerPayments = aggregatePartialPayments(partialPaymentRows);
+        applyCanonicalSalary(metrics, userIds, currentSalary);
+        Map<Long, Long> managerPayments = canonicalPayments(currentPayments);
 
         return Optional.of(new AggregateTeam(
                 mapManagers(managers, metrics, managerPayments),
@@ -116,15 +125,22 @@ public class AnalyticsAggregateTeamService {
         return metrics;
     }
 
-    private Map<Long, Long> aggregatePartialPayments(List<AnalyticsUserMetricAggregate> rows) {
+    private Map<Long, Long> canonicalPayments(Map<Long, PaymentTotal> totals) {
         Map<Long, Long> payments = new LinkedHashMap<>();
-        for (AnalyticsUserMetricAggregate row : rows) {
-            if (row.getUser() == null || row.getUser().getId() == null) {
-                continue;
-            }
-            payments.merge(row.getUser().getId(), toLong(row.getPaymentSum()), Long::sum);
-        }
+        totals.forEach((userId, total) -> payments.put(userId, toLong(total.paymentSum())));
         return payments;
+    }
+
+    private void applyCanonicalSalary(
+            Map<Long, TeamAccumulator> metrics,
+            Collection<Long> userIds,
+            Map<Long, SalaryTotal> currentSalary
+    ) {
+        userIds.forEach(userId -> metrics
+                .computeIfAbsent(userId, ignored -> new TeamAccumulator())
+                .replaceSalary(currentSalary.getOrDefault(
+                        userId, new SalaryTotal(BigDecimal.ZERO, 0L, 0L)
+                )));
     }
 
     private List<ManagersListDTO> mapManagers(
@@ -274,6 +290,12 @@ public class AnalyticsAggregateTeamService {
             salaryReviews += row.getSalaryReviewCount();
             leadsNew += row.getLeadsNewCount();
             leadsInWork += row.getLeadsInWorkCount();
+        }
+
+        private void replaceSalary(SalaryTotal total) {
+            salary = toLong(total.salarySum());
+            salaryEntries = total.salaryEntryCount();
+            salaryReviews = total.salaryReviewCount();
         }
     }
 

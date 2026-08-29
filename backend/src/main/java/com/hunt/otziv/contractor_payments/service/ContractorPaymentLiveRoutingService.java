@@ -371,6 +371,35 @@ public class ContractorPaymentLiveRoutingService {
         }
         ContractorPaymentAllocation allocation = lockAllocationProfileFirst(allocationId)
                 .orElse(null);
+        return evaluateFrozenCommonRouteAction(invoiceId, allocationId, invoice, allocation);
+    }
+
+    /**
+     * Read-only preview used by GET/context endpoints. The mutating route-change
+     * command always repeats the same decision under source/profile/allocation
+     * locks before releasing a reservation or creating a replacement.
+     */
+    @Transactional(readOnly = true)
+    public FrozenCommonRouteAction previewFrozenCommonRouteAction(Long invoiceId, Long allocationId) {
+        if (allocationId == null) {
+            return FrozenCommonRouteAction.KEEP;
+        }
+        CommonInvoice invoice = commonInvoiceRepository.findById(invoiceId)
+                .orElse(null);
+        ContractorPaymentAllocation allocation = allocationRepository.findById(allocationId)
+                .orElse(null);
+        return evaluateFrozenCommonRouteAction(invoiceId, allocationId, invoice, allocation);
+    }
+
+    private FrozenCommonRouteAction evaluateFrozenCommonRouteAction(
+            Long invoiceId,
+            Long allocationId,
+            CommonInvoice invoice,
+            ContractorPaymentAllocation allocation
+    ) {
+        if (invoice == null || !Objects.equals(invoice.getContractorAllocationId(), allocationId)) {
+            return FrozenCommonRouteAction.BLOCK_RECONCILIATION;
+        }
         if (allocation == null
                 || allocation.getMode() != ContractorAllocationMode.LIVE
                 || allocation.getSourceType() != ContractorAllocationSourceType.COMMON_INVOICE

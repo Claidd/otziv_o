@@ -47,13 +47,14 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
         FROM PaymentLink link
         WHERE link.order.id = :orderId
           AND link.id <> :returnedLinkId
-          AND link.status = com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED
-          AND COALESCE(link.manualConfirmedAt, link.paidAt, link.createdAt) > :returnedAt
+          AND link.status IN (
+              com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED,
+              com.hunt.otziv.payments.model.PaymentLinkStatus.AMOUNT_MISMATCH
+          )
     """)
-    boolean existsNewerConfirmedPayment(
+    boolean existsOtherConfirmedPayment(
             @Param("orderId") Long orderId,
-            @Param("returnedLinkId") Long returnedLinkId,
-            @Param("returnedAt") LocalDateTime returnedAt
+            @Param("returnedLinkId") Long returnedLinkId
     );
 
     @Query("""

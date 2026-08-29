@@ -96,7 +96,6 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
             return;
         }
         if (currentOrder.getAmount() <= currentOrder.getCounter() && !recoveryGateService.hasActiveRecoveryTasks(currentOrder.getId())) {
-            contractorCompletionRewardService.ensureOrderCompletionAccrualNow(currentOrder.getId());
             String newStatus = handlePublicStatus(currentOrder);
             log.info("Счётчик достиг лимита. Статус заказа {} изменён на {}", currentOrder.getId(), newStatus);
         } else if (currentOrder.getAmount() <= currentOrder.getCounter()) {

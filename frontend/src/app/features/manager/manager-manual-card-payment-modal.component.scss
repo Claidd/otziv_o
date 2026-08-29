@@ -239,6 +239,88 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+:host-context(body.otziv-dark-theme) .manual-payment-backdrop {
+  background: rgba(4, 10, 16, 0.76);
+}
+
+:host-context(body.otziv-dark-theme) .manual-payment-modal {
+  border-color: #45535d;
+  color: #f1f5f7;
+  background: #20272b;
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.52);
+}
+
+:host-context(body.otziv-dark-theme) header small,
+:host-context(body.otziv-dark-theme) label em,
+:host-context(body.otziv-dark-theme) label small,
+:host-context(body.otziv-dark-theme) .manual-payment-summary dt,
+:host-context(body.otziv-dark-theme) .recipient-capacity dt {
+  color: #b8c4cc;
+}
+
+:host-context(body.otziv-dark-theme) .icon-button,
+:host-context(body.otziv-dark-theme) button.secondary {
+  border: 1px solid #4a5862;
+  color: #f1f5f7;
+  background: #303a40;
+}
+
+:host-context(body.otziv-dark-theme) .manual-payment-state,
+:host-context(body.otziv-dark-theme) .manual-payment-summary div {
+  border: 1px solid #3d4a52;
+  color: #f1f5f7;
+  background: #2a3338;
+}
+
+:host-context(body.otziv-dark-theme) .recipient-capacity div {
+  border: 1px solid #365c57;
+  color: #e6fbf7;
+  background: #203b38;
+}
+
+:host-context(body.otziv-dark-theme) select,
+:host-context(body.otziv-dark-theme) textarea,
+:host-context(body.otziv-dark-theme) input {
+  border-color: #5a6973;
+  color: #f7fafb;
+  background: #151b1f;
+  color-scheme: dark;
+}
+
+:host-context(body.otziv-dark-theme) select option,
+:host-context(body.otziv-dark-theme) select optgroup {
+  color: #f7fafb;
+  background: #151b1f;
+}
+
+:host-context(body.otziv-dark-theme) textarea::placeholder,
+:host-context(body.otziv-dark-theme) input::placeholder {
+  color: #aab6be;
+  opacity: 1;
+}
+
+:host-context(body.otziv-dark-theme) .recipient-change,
+:host-context(body.otziv-dark-theme) .manual-payment-impact {
+  border: 1px solid #78662e;
+  color: #ffe7a0;
+  background: #3c341d;
+}
+
+:host-context(body.otziv-dark-theme) .anomaly,
+:host-context(body.otziv-dark-theme) .manual-payment-error,
+:host-context(body.otziv-dark-theme) .error-state {
+  border: 1px solid #794052;
+  color: #ffb9c7;
+  background: #3b222a;
+}
+
+:host-context(body.otziv-dark-theme) select:focus-visible,
+:host-context(body.otziv-dark-theme) textarea:focus-visible,
+:host-context(body.otziv-dark-theme) input:focus-visible,
+:host-context(body.otziv-dark-theme) button:focus-visible {
+  outline-color: rgba(112, 181, 255, 0.72);
+}
+
 @media (max-width: 640px) {
   .manual-payment-backdrop {
     align-items: end;

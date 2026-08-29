@@ -5,6 +5,8 @@ import com.hunt.otziv.admin.dto.personal.OperatorsListDTO;
 import com.hunt.otziv.analytics.model.AnalyticsDailyUser;
 import com.hunt.otziv.analytics.model.AnalyticsMonthlyUser;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService.AggregateTeam;
+import com.hunt.otziv.analytics.service.AnalyticsSalarySourceService.SalaryTotal;
+import com.hunt.otziv.analytics.service.AnalyticsFinancialSourceService.PaymentTotal;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Operator;
@@ -18,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,11 +39,17 @@ class AnalyticsAggregateTeamServiceTest {
     @Mock
     private AnalyticsAggregateReadService readService;
 
+    @Mock
+    private AnalyticsSalarySourceService salarySourceService;
+
+    @Mock
+    private AnalyticsFinancialSourceService financialSourceService;
+
     private AnalyticsAggregateTeamService service;
 
     @BeforeEach
     void setUp() {
-        service = new AnalyticsAggregateTeamService(readService);
+        service = new AnalyticsAggregateTeamService(readService, salarySourceService, financialSourceService);
     }
 
     @Test
@@ -52,12 +61,15 @@ class AnalyticsAggregateTeamServiceTest {
 
         AnalyticsMonthlyUser managerMonthly = monthlyUser(managerUser, "100.00", "999.00", 3, 7, 0, 0);
         AnalyticsMonthlyUser operatorMonthly = monthlyUser(operatorUser, "20.00", "0.00", 1, 2, 5, 2);
-        AnalyticsDailyUser managerPartialPayment = dailyUser(managerUser, "250.00", "0.00", 0, 0, 0, 0);
-
         when(readService.monthlyUsers(anyCollection(), eq(MONTH_START), eq(MONTH_START)))
                 .thenReturn(List.of(managerMonthly, operatorMonthly));
-        when(readService.dailyUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
-                .thenReturn(List.of(managerPartialPayment));
+        when(salarySourceService.totalsForUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
+                .thenReturn(Map.of(
+                        10L, new SalaryTotal(new BigDecimal("90.00"), 4, 8),
+                        20L, new SalaryTotal(new BigDecimal("30.00"), 2, 3)
+                ));
+        when(financialSourceService.paymentTotalsForUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
+                .thenReturn(Map.of(10L, new PaymentTotal(new BigDecimal("250.00"), 1)));
 
         Optional<AggregateTeam> result = service.buildTeam(
                 DATE,
@@ -74,15 +86,15 @@ class AnalyticsAggregateTeamServiceTest {
         assertEquals("Manager One", managerDto.getFio());
         assertEquals("manager", managerDto.getLogin());
         assertEquals(55L, managerDto.getImageId());
-        assertEquals(100, managerDto.getSum1Month());
-        assertEquals(3, managerDto.getOrder1Month());
-        assertEquals(7, managerDto.getReview1Month());
+        assertEquals(90, managerDto.getSum1Month());
+        assertEquals(4, managerDto.getOrder1Month());
+        assertEquals(8, managerDto.getReview1Month());
         assertEquals(250, managerDto.getPayment1Month());
 
         OperatorsListDTO operatorDto = result.get().operators().getFirst();
-        assertEquals(20, operatorDto.getSum1Month());
-        assertEquals(1, operatorDto.getOrder1Month());
-        assertEquals(2, operatorDto.getReview1Month());
+        assertEquals(30, operatorDto.getSum1Month());
+        assertEquals(2, operatorDto.getOrder1Month());
+        assertEquals(3, operatorDto.getReview1Month());
         assertEquals(5L, operatorDto.getLeadsNew());
         assertEquals(2L, operatorDto.getLeadsInWork());
         assertEquals(40L, operatorDto.getPercentInWork());
@@ -100,8 +112,10 @@ class AnalyticsAggregateTeamServiceTest {
                 .thenReturn(List.of());
         when(readService.dailyUsers(anyCollection(), eq(MONTH_START), eq(MONTH_END)))
                 .thenReturn(List.of(firstDay, secondDay));
-        when(readService.dailyUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
-                .thenReturn(List.of(firstDay));
+        when(salarySourceService.totalsForUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
+                .thenReturn(Map.of(10L, new SalaryTotal(new BigDecimal("100.00"), 3, 5)));
+        when(financialSourceService.paymentTotalsForUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
+                .thenReturn(Map.of(10L, new PaymentTotal(new BigDecimal("10.00"), 1)));
 
         Optional<AggregateTeam> result = service.buildTeam(
                 DATE,

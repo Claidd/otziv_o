@@ -1865,10 +1865,85 @@ class OtzivOApplicationTests {
 	}
 
 	@Test
+	@Transactional
+	void salaryDatabaseGuardRejectsUnpaidActivationAndPrematureStatusRemoval() {
+		Long paidStatusId = jdbcTemplate.queryForObject("""
+			SELECT order_status_id
+			FROM salary_paid_order_status_guard
+			WHERE singleton_id = 1
+			""", Long.class);
+		Long unpaidStatusId = jdbcTemplate.queryForObject("""
+			SELECT order_status_id
+			FROM order_statuses
+			WHERE order_status_title <> 'Оплачено'
+			ORDER BY order_status_id
+			LIMIT 1
+			""", Long.class);
+
+		jdbcTemplate.update("""
+			INSERT INTO orders (
+			    order_created, order_changed, order_status, order_amount,
+			    order_counter, order_sum, order_complete, order_waiting_for_client
+			)
+			VALUES (CURRENT_DATE(), CURRENT_DATE(), ?, 1, 1, 100.00, 1, 0)
+			""", unpaidStatusId);
+		Long unpaidOrderId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+
+		org.junit.jupiter.api.Assertions.assertThrows(
+				org.springframework.dao.DataIntegrityViolationException.class,
+				() -> jdbcTemplate.update("""
+					INSERT INTO zp (
+					    zp_fio, zp_sum, zp_user, zp_profession,
+					    zp_order, zp_payment_status_guard,
+					    zp_amount, zp_date, zp_active
+					)
+					VALUES ('Unpaid Guard Test', 100.00, 1, 1, ?, ?, 1, CURRENT_DATE(), 1)
+					""", unpaidOrderId, paidStatusId)
+		);
+
+		jdbcTemplate.update("""
+			INSERT INTO orders (
+			    order_created, order_changed, order_pay_day, order_status,
+			    order_amount, order_counter, order_sum, order_complete,
+			    order_waiting_for_client
+			)
+			VALUES (CURRENT_DATE(), CURRENT_DATE(), CURRENT_DATE(), ?, 1, 1, 100.00, 1, 0)
+			""", paidStatusId);
+		Long paidOrderId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+		jdbcTemplate.update("""
+			INSERT INTO zp (
+			    zp_fio, zp_sum, zp_user, zp_profession,
+			    zp_order, zp_payment_status_guard,
+			    zp_amount, zp_date, zp_active
+			)
+			VALUES ('Paid Guard Test', 100.00, 1, 1, ?, ?, 1, CURRENT_DATE(), 1)
+			""", paidOrderId, paidStatusId);
+
+		org.junit.jupiter.api.Assertions.assertThrows(
+				org.springframework.dao.DataIntegrityViolationException.class,
+				() -> jdbcTemplate.update(
+						"UPDATE orders SET order_status = ? WHERE order_id = ?",
+						unpaidStatusId,
+						paidOrderId
+				)
+		);
+
+		jdbcTemplate.update("UPDATE zp SET zp_active = 0 WHERE zp_order = ?", paidOrderId);
+		assertThat(jdbcTemplate.update(
+				"UPDATE orders SET order_status = ? WHERE order_id = ?",
+				unpaidStatusId,
+				paidOrderId
+		)).isEqualTo(1);
+	}
+
+	@Test
 	void orderArchiveLiveRunCopiesAndDeletesSelectedRows() {
 		LocalDate archiveDate = LocalDate.of(1900, 1, 1);
-		jdbcTemplate.update("INSERT INTO order_statuses (order_status_title) VALUES ('Оплачено')");
-		Long paidStatusId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+		Long paidStatusId = jdbcTemplate.queryForObject("""
+			SELECT order_status_id
+			FROM salary_paid_order_status_guard
+			WHERE singleton_id = 1
+			""", Long.class);
 
 		jdbcTemplate.update("""
 			INSERT INTO orders (
@@ -1914,24 +1989,26 @@ class OtzivOApplicationTests {
 			    zp_user,
 			    zp_profession,
 			    zp_order,
+			    zp_payment_status_guard,
 			    zp_amount,
 			    zp_date,
 			    zp_active
 			)
-			VALUES ('Archive Test', 100.00, 1, 1, ?, 1, ?, 1)
-		""", orderId, archiveDate);
+			VALUES ('Archive Test', 100.00, 1, 1, ?, ?, 1, ?, 1)
+			""", orderId, paidStatusId, archiveDate);
 		Long zpId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
 		jdbcTemplate.update("""
 			INSERT INTO payment_check (
 			    check_title,
 			    check_company,
 			    check_order,
+			    check_payment_status_guard,
 			    check_date,
 			    check_sum,
 			    check_active
 			)
-			VALUES ('archive integration check', 1, ?, ?, 100.00, 1)
-		""", orderId, archiveDate);
+			VALUES ('archive integration check', 1, ?, ?, ?, 100.00, 1)
+		""", orderId, paidStatusId, archiveDate);
 		Long checkId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
 		jdbcTemplate.update("""
 			INSERT INTO analytics_monthly_total (
@@ -1991,6 +2068,11 @@ class OtzivOApplicationTests {
 		assertThat(countById("order_details", "order_detail_id", detailId)).isEqualTo(1);
 		assertThat(countById("reviews", "review_id", reviewId)).isEqualTo(1);
 		assertThat(countById("zp", "zp_id", zpId)).isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT zp_active FROM zp WHERE zp_id = ?",
+				Boolean.class,
+				zpId
+		)).as("salary restored with a reopened, non-paid order must stay inactive").isFalse();
 		assertThat(countById("payment_check", "check_id", checkId)).isEqualTo(1);
 		assertThat(countById("archive_orders", "order_id", orderId)).isEqualTo(1);
 		assertThat(jdbcTemplate.queryForObject(

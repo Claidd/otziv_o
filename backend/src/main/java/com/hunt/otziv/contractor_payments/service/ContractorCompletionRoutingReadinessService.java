@@ -64,6 +64,9 @@ public class ContractorCompletionRoutingReadinessService {
         if (zpRepository.countActiveIncompatibleContractorRewardSources() > 0L) {
             blockers.add("Обнаружены несовместимые активные источники начислений");
         }
+        if (orderRepository.countUnpaidOrdersWithActiveSalary() > 0L) {
+            blockers.add("Обнаружена активная зарплата по заказам без статуса оплаты");
+        }
         if (cutoverStateService.lockedStartDate().isEmpty()) {
             blockers.add("Не зафиксирована дата перехода на новый учёт");
         }
@@ -88,6 +91,11 @@ public class ContractorCompletionRoutingReadinessService {
         }
 
         var now = businessClock.now();
+        long unpaidSalaryOrders = orderRepository.countUnpaidOrdersWithActiveSalary();
+        if (unpaidSalaryOrders > 0L) {
+            warnings.add("Активная ЗП не совпадает со статусами оплаты: заказов — "
+                    + unpaidSalaryOrders);
+        }
         if (!orderRepository.findCompletionRewardRepairOrderIds(
                 ContractorCompletionRewardRepairService.DATED_COMPLETION_STATUSES,
                 ContractorRewardSourceCodes.REQUIRED_ORDER_COMPLETION_MARKERS,

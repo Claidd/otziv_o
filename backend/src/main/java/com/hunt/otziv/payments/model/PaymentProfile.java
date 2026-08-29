@@ -13,6 +13,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -33,6 +34,7 @@ import lombok.Setter;
 public class PaymentProfile {
 
     public static final String PROVIDER_TBANK = "T_BANK";
+    public static final String PROVIDER_TOCHKA = "TOCHKA";
     public static final long DEFAULT_MANUAL_MONTHLY_LIMIT_KOPECKS = 19_100_000L;
 
     @Id
@@ -100,6 +102,7 @@ public class PaymentProfile {
 
     @PrePersist
     void onCreate() {
+        provider = normalizeProvider(provider);
         LocalDateTime now = LocalDateTime.now();
         createdAt = now;
         updatedAt = now;
@@ -107,6 +110,22 @@ public class PaymentProfile {
 
     @PreUpdate
     void onUpdate() {
+        provider = normalizeProvider(provider);
         updatedAt = LocalDateTime.now();
+    }
+
+    public String normalizedProvider() {
+        return normalizeProvider(provider);
+    }
+
+    public static String normalizeProvider(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            return PROVIDER_TBANK;
+        }
+        if (PROVIDER_TBANK.equals(normalized) || PROVIDER_TOCHKA.equals(normalized)) {
+            return normalized;
+        }
+        throw new IllegalArgumentException("Неподдерживаемый платежный провайдер: " + normalized);
     }
 }

@@ -67,8 +67,6 @@ set_env() {
 }
 
 BASE_URL="$(env_value OTZIV_APP_BASE_URL)"
-KEYCLOAK_CLIENT_ID="$(env_value KEYCLOAK_ADMIN_CLIENT_ID)"
-KEYCLOAK_CLIENT_SECRET="$(env_value KEYCLOAK_ADMIN_CLIENT_SECRET)"
 ```
 
 Сделать свежий backup БД до backfill. Если ежедневный backup уже включен, убедиться, что последний
@@ -109,6 +107,17 @@ compose exec -T mysql sh -c \
 - `analytics_monthly_total`
 - `analytics_monthly_user`
 
+Также должны существовать view `analytics_salary_source` и `analytics_payment_source`. Они являются
+каноническими archive-aware источниками финансов: live-строка имеет приоритет, а закрытая история
+дочитывается из `archive_zp`/`archive_payment_check`. Пересборка закрытого месяца только по live-
+таблицам запрещена, потому что после retention она занулит корректный агрегат. После деплоя
+изменения источника необходимо пересобрать затронутые месяцы штатным rebuild API; страницы
+текущего месяца при этом уже читают актуальные персональные суммы одним пакетным запросом.
+
+Миграция `V1_10_269` повторно ставит durable-флаг финансового repair. Фоновый repair сравнивает
+`ADMIN:ALL` с обеими archive-aware view, пересобирает месяцы с финансовыми расхождениями и снимает
+флаг только после успешной верификации каждого месяца.
+
 ## 4. Временно включить rebuild API
 
 Включить служебный API только на время backfill и compare:
@@ -122,18 +131,56 @@ compose up -d app
 curl -fsS "$BASE_URL/actuator/health"
 ```
 
-Получить service-account token. Токен не печатать в чатах и логах.
+Получить токен реального активного пользователя с ролью `ADMIN`. Токен не печатать в чатах и
+логах. Production по умолчанию не освобождает service account от проверки локального состояния
+пользователя (`OTZIV_SECURITY_LOCAL_STATE_EXEMPT_CLIENT_IDS` пуст), поэтому
+`client_credentials` для `KEYCLOAK_ADMIN_CLIENT_ID` будет отклонён с `401`, даже если в токене
+есть realm-role `ADMIN`. Не включать exemption ради пересборки.
+
+Если интерактивного admin-токена нет и требуется пересобрать один конкретный месяц, использовать
+одноразовый startup-rebuild из подраздела ниже.
 
 ```bash
-TOKEN="$(
-  curl -fsS -X POST "$BASE_URL/keycloak/realms/otziv/protocol/openid-connect/token" \
-    -d grant_type=client_credentials \
-    -d client_id="$KEYCLOAK_CLIENT_ID" \
-    -d client_secret="$KEYCLOAK_CLIENT_SECRET" \
-  | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'
-)"
-
+read -rsp 'Admin access token: ' TOKEN
+printf '\n'
 test -n "$TOKEN"
+```
+
+### Одноразовая пересборка месяца без rebuild API
+
+Этот способ не ослабляет JWT-защиту и сам выполняет `compare-admin-month`. Сначала сохранить
+текущие значения флагов, затем временно включить startup-runner:
+
+```bash
+ORIG_ANALYTICS_READ="$(env_value OTZIV_ANALYTICS_AGGREGATES_READ_ENABLED)"
+ORIG_ANALYTICS_SCHEDULE="$(env_value OTZIV_ANALYTICS_REBUILD_SCHEDULE_ENABLED)"
+
+set_env OTZIV_ANALYTICS_AGGREGATES_READ_ENABLED false
+set_env OTZIV_ANALYTICS_REBUILD_API_ENABLED false
+set_env OTZIV_ANALYTICS_REBUILD_SCHEDULE_ENABLED false
+set_env OTZIV_ANALYTICS_REBUILD_STARTUP_ENABLED true
+set_env OTZIV_ANALYTICS_REBUILD_STARTUP_MONTH 2026-08
+set_env OTZIV_ANALYTICS_REBUILD_STARTUP_CLOSED false
+
+compose up -d app
+compose logs --tail=500 app | grep -E \
+  'Analytics aggregate rebuild result:|Analytics aggregate admin comparison:'
+```
+
+В строке `Analytics aggregate admin comparison` должно быть `matches=true`. Сразу после этого
+выключить одноразовый runner, очистить месяц, вернуть прежние значения чтения и scheduler и снова
+перезапустить приложение:
+
+```bash
+set_env OTZIV_ANALYTICS_REBUILD_STARTUP_ENABLED false
+set_env OTZIV_ANALYTICS_REBUILD_STARTUP_MONTH '""'
+set_env OTZIV_ANALYTICS_REBUILD_STARTUP_CLOSED false
+set_env OTZIV_ANALYTICS_REBUILD_API_ENABLED false
+set_env OTZIV_ANALYTICS_AGGREGATES_READ_ENABLED "$ORIG_ANALYTICS_READ"
+set_env OTZIV_ANALYTICS_REBUILD_SCHEDULE_ENABLED "$ORIG_ANALYTICS_SCHEDULE"
+
+compose up -d app
+curl -fsS "$BASE_URL/actuator/health"
 ```
 
 ## 5. Backfill агрегатов

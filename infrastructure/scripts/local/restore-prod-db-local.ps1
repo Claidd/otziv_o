@@ -501,6 +501,68 @@ SET @sanitize_contractor_allocation_comment = IF(
 PREPARE sanitize_contractor_allocation_comment_statement FROM @sanitize_contractor_allocation_comment;
 EXECUTE sanitize_contractor_allocation_comment_statement;
 DEALLOCATE PREPARE sanitize_contractor_allocation_comment_statement;
+
+SET @has_payment_link_actual_encrypted_snapshots = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'payment_links'
+      AND column_name IN (
+          'manual_actual_original_recipient_name_snapshot',
+          'manual_actual_recipient_name_snapshot',
+          'manual_actual_receipt_url'
+      )
+);
+SET @sanitize_payment_link_actual_encrypted_snapshots = IF(
+    @has_payment_link_actual_encrypted_snapshots = 3,
+    'UPDATE payment_links SET manual_actual_original_recipient_name_snapshot = NULL, manual_actual_recipient_name_snapshot = NULL, manual_actual_receipt_url = NULL',
+    'SELECT 1'
+);
+PREPARE sanitize_payment_link_actual_encrypted_snapshots_statement FROM @sanitize_payment_link_actual_encrypted_snapshots;
+EXECUTE sanitize_payment_link_actual_encrypted_snapshots_statement;
+DEALLOCATE PREPARE sanitize_payment_link_actual_encrypted_snapshots_statement;
+
+SET @has_manual_payment_ledger_encrypted_snapshots = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'manual_payment_task_ledger_entries'
+      AND column_name IN (
+          'accounting_target_label_snapshot',
+          'manual_phone_snapshot',
+          'bank_recipient_name_snapshot',
+          'manual_bank_name_snapshot',
+          'manual_payment_url_snapshot'
+      )
+);
+SET @sanitize_manual_payment_ledger_encrypted_snapshots = IF(
+    @has_manual_payment_ledger_encrypted_snapshots = 5,
+    'UPDATE manual_payment_task_ledger_entries SET accounting_target_label_snapshot = NULL, manual_phone_snapshot = NULL, bank_recipient_name_snapshot = NULL, manual_bank_name_snapshot = NULL, manual_payment_url_snapshot = NULL',
+    'SELECT 1'
+);
+PREPARE sanitize_manual_payment_ledger_encrypted_snapshots_statement FROM @sanitize_manual_payment_ledger_encrypted_snapshots;
+EXECUTE sanitize_manual_payment_ledger_encrypted_snapshots_statement;
+DEALLOCATE PREPARE sanitize_manual_payment_ledger_encrypted_snapshots_statement;
+
+SET @has_actual_attribution_encrypted_snapshots = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'contractor_actual_payment_attributions'
+      AND column_name IN (
+          'original_recipient_name_snapshot',
+          'actual_recipient_name_snapshot',
+          'receipt_url'
+      )
+);
+SET @sanitize_actual_attribution_encrypted_snapshots = IF(
+    @has_actual_attribution_encrypted_snapshots = 3,
+    'UPDATE contractor_actual_payment_attributions SET original_recipient_name_snapshot = NULL, actual_recipient_name_snapshot = NULL, receipt_url = NULL',
+    'SELECT 1'
+);
+PREPARE sanitize_actual_attribution_encrypted_snapshots_statement FROM @sanitize_actual_attribution_encrypted_snapshots;
+EXECUTE sanitize_actual_attribution_encrypted_snapshots_statement;
+DEALLOCATE PREPARE sanitize_actual_attribution_encrypted_snapshots_statement;
 "@
 
     Invoke-External -FilePath 'docker' -Arguments ($ComposeArguments + @(

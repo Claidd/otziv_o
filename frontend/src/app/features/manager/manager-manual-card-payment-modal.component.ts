@@ -7,11 +7,13 @@ import {
   type ManualCardPaymentConfirmationRequest,
   type ManualCardPaymentContext,
   type ManualCardPaymentRecipientOption,
+  type ManagerManualCardPaymentResult,
   type OrderCardItem
 } from '../../core/manager.api';
 import {
   isManualPaymentTaskRecipient,
   isRetryablePaymentRouteError,
+  manualPaymentBankRecipientName,
   manualPaymentRecipientEffect,
   manualPaymentRecipientKey as taskAwareRecipientKey,
   manualPaymentRecipientLabel,
@@ -21,6 +23,7 @@ import {
 export interface ManagerManualCardPaymentCompleted {
   context: ManualCardPaymentContext;
   recipient: ManualCardPaymentRecipientOption;
+  result: ManagerManualCardPaymentResult;
 }
 
 export function manualCardRecipientKey(candidate: ManualCardPaymentRecipientOption): string {
@@ -90,6 +93,7 @@ export class ManagerManualCardPaymentModalComponent implements OnInit {
   @Output() readonly completed = new EventEmitter<ManagerManualCardPaymentCompleted>();
   readonly recipientKey = manualCardRecipientKey;
   readonly recipientEffect = manualPaymentRecipientEffect;
+  readonly bankRecipientName = manualPaymentBankRecipientName;
   readonly isTaskRecipient = isManualPaymentTaskRecipient;
 
   readonly context = signal<ManualCardPaymentContext | null>(null);
@@ -112,6 +116,8 @@ export class ManagerManualCardPaymentModalComponent implements OnInit {
     return Boolean(context && selected
       && manualCardRecipientKey(context.originalRecipient) !== manualCardRecipientKey(selected));
   });
+
+  readonly ownerSelected = computed(() => this.selectedRecipient()?.recipientType === 'OWNER');
 
   readonly selectedAnomalyWarning = computed(() => {
     const context = this.context();
@@ -230,8 +236,8 @@ export class ManagerManualCardPaymentModalComponent implements OnInit {
     this.saving.set(true);
     this.error.set(null);
     try {
-      await firstValueFrom(this.managerApi.confirmManualCardPayment(this.order.id, request));
-      this.completed.emit({ context, recipient: submission.recipient });
+      const result = await firstValueFrom(this.managerApi.confirmManualCardPayment(this.order.id, request));
+      this.completed.emit({ context, recipient: submission.recipient, result });
     } catch (error) {
       if (isRetryablePaymentRouteError(error)) {
         await this.loadContext(true);

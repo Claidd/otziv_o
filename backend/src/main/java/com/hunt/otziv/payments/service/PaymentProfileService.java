@@ -191,17 +191,41 @@ public class PaymentProfileService {
         return clean.isBlank() ? Optional.empty() : paymentProfileRepository.findByCode(clean);
     }
 
+    public String provider(PaymentProfile profile) {
+        try {
+            return profile == null
+                    ? PaymentProfile.PROVIDER_TBANK
+                    : profile.normalizedProvider();
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Платежный профиль содержит неподдерживаемого провайдера",
+                    exception
+            );
+        }
+    }
+
+    public boolean isTbankProvider(PaymentProfile profile) {
+        return PaymentProfile.PROVIDER_TBANK.equals(provider(profile));
+    }
+
+    public boolean isTochkaProvider(PaymentProfile profile) {
+        return PaymentProfile.PROVIDER_TOCHKA.equals(provider(profile));
+    }
+
     @Transactional(readOnly = true)
     public Optional<PaymentProfile> findByTerminalKey(String terminalKey) {
         String clean = normalize(terminalKey);
         if (clean.isBlank()) {
             return Optional.empty();
         }
-        Optional<PaymentProfile> byStoredTerminal = paymentProfileRepository.findByTerminalKey(clean);
+        Optional<PaymentProfile> byStoredTerminal = paymentProfileRepository.findByTerminalKey(clean)
+                .filter(this::isTbankProvider);
         if (byStoredTerminal.isPresent()) {
             return byStoredTerminal;
         }
         return paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc().stream()
+                .filter(this::isTbankProvider)
                 .filter(profile -> properties.matchesAnyTerminal(profile, clean))
                 .findFirst();
     }
@@ -222,6 +246,9 @@ public class PaymentProfileService {
         List<PaymentProfile> profiles = paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc();
         Map<String, PaymentProfile> resolved = new HashMap<>();
         for (PaymentProfile profile : profiles) {
+            if (!isTbankProvider(profile)) {
+                continue;
+            }
             String storedTerminal = normalize(profile == null ? null : profile.getTerminalKey());
             if (cleanKeys.contains(storedTerminal)) {
                 resolved.putIfAbsent(storedTerminal, profile);
@@ -232,6 +259,7 @@ public class PaymentProfileService {
                 continue;
             }
             profiles.stream()
+                    .filter(this::isTbankProvider)
                     .filter(profile -> properties.matchesAnyTerminal(profile, terminalKey))
                     .findFirst()
                     .ifPresent(profile -> resolved.put(terminalKey, profile));
@@ -244,6 +272,7 @@ public class PaymentProfileService {
     }
 
     public TbankPaymentProfile toRuntimeForTerminal(PaymentProfile profile, String terminalKey) {
+        requireTbankProvider(profile);
         return properties.runtimeProfileForTerminal(profile, terminalKey);
     }
 
@@ -255,6 +284,7 @@ public class PaymentProfileService {
         if (profile == null) {
             return properties.defaultProfile(runtimeMode);
         }
+        requireTbankProvider(profile);
         String terminalKey = properties.terminalKeyFor(profile, runtimeMode);
         return new TbankPaymentProfile(
                 profile.getId(),
@@ -265,6 +295,15 @@ public class PaymentProfileService {
                 properties.passwordFor(profile, runtimeMode),
                 runtimeMode.isTest() || profile.isTestMode() || properties.isTestMode(terminalKey)
         );
+    }
+
+    private void requireTbankProvider(PaymentProfile profile) {
+        if (!isTbankProvider(profile)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Профиль Точки нельзя использовать для запроса в T-Bank"
+            );
+        }
     }
 
     private List<PaymentProfileResponse> profileResponses() {
@@ -280,7 +319,17 @@ public class PaymentProfileService {
     }
 
     private PaymentProfileResponse profileResponse(PaymentProfile profile) {
-        TbankPaymentProfile runtimeProfile = toRuntime(profile);
+        String normalizedProvider = provider(profile);
+        TbankPaymentProfile runtimeProfile = PaymentProfile.PROVIDER_TBANK.equals(normalizedProvider)
+                ? toRuntime(profile)
+                : null;
+        String runtimeTerminalKey = runtimeProfile == null
+                ? normalize(profile.getTerminalKey())
+                : runtimeProfile.terminalKey();
+        boolean runtimeTestMode = runtimeProfile == null
+                ? profile.isTestMode()
+                : runtimeProfile.testMode();
+        boolean hasRuntimeCredentials = runtimeProfile != null && runtimeProfile.hasCredentials();
         LocalDateTime periodStart = currentMonthStart();
         LocalDateTime periodEnd = periodStart.plusMonths(1);
         long manualUsed = manualMonthlyUsed(profile, periodStart, periodEnd);
@@ -290,14 +339,14 @@ public class PaymentProfileService {
         return new PaymentProfileResponse(
                 profile.getId(),
                 profile.getCode(),
-                profile.getProvider(),
+                normalizedProvider,
                 profile.getName(),
-                runtimeProfile.terminalKey(),
+                runtimeTerminalKey,
                 profile.getPasswordEnvKey(),
                 profile.isEnabled(),
                 profile.isDefaultProfile(),
-                runtimeProfile.testMode(),
-                runtimeProfile.hasCredentials(),
+                runtimeTestMode,
+                hasRuntimeCredentials,
                 paymentPolicy(profile).name(),
                 manualPaymentType(profile).name(),
                 normalize(profile.getManualPhone()),

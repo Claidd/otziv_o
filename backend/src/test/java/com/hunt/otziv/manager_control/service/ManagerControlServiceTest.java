@@ -1069,6 +1069,74 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void repairAutomationFailureExplainsUnsupportedVkChatWithoutRetrying() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        ManagerDailyControl control = control();
+        control.setManager(manager);
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(
+                control,
+                parent,
+                ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE
+        );
+        concrete.setEntityId(502L);
+        Company company = Company.builder()
+                .id(2924L)
+                .title("AnRiFit")
+                .urlChat("https://vk.me/join/example")
+                .manager(manager)
+                .build();
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(502L)
+                .companyId(2924L)
+                .scenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER)
+                .lastErrorCode("chat_platform_unknown")
+                .lastErrorMessage("Ссылка на чат не распознана или не указана")
+                .build();
+        ManagerAutomationFailureService.AutomationFailureIssue issue =
+                new ManagerAutomationFailureService.AutomationFailureIssue(
+                        "AUTOMATION_FAILURE:502",
+                        ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE,
+                        502L,
+                        502L,
+                        null,
+                        "AnRiFit",
+                        "Предложение повторного заказа",
+                        "Ошибка автоматизации · 2",
+                        "chat_platform_unknown · Ссылка на чат не распознана",
+                        "/orders",
+                        company.getUrlChat(),
+                        ClientMessageScenario.ARCHIVE_REORDER_OFFER,
+                        2,
+                        LocalDateTime.now().minusHours(5),
+                        LocalDateTime.now().minusMinutes(1),
+                        LocalDateTime.now().plusDays(1)
+                );
+
+        when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(managerAutomationFailureService.findIssue(
+                manager,
+                ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE,
+                502L
+        )).thenReturn(Optional.of(issue));
+        when(scheduledClientMessageStateRepository.findById(502L)).thenReturn(Optional.of(state));
+        when(companyRepository.findById(2924L)).thenReturn(Optional.of(company));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.repairConcreteItem(concrete.getId(), principal(), adminAuth())
+        );
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertTrue(exception.getReason().contains("AnRiFit"));
+        assertTrue(exception.getReason().contains("https://vk.me/join/example"));
+        assertTrue(exception.getReason().contains("WhatsApp, Telegram и MAX"));
+        verify(scheduledClientMessageService, never()).retryNow(anyLong());
+    }
+
+    @Test
     void repairCollectingInvoiceRemovesHealthyInProgressInvoiceFromRemarks() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);

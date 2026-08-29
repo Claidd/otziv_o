@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
@@ -43,6 +44,7 @@ public class PaymentReturnOrderRecoveryService {
     private final OrderRepository orderRepository;
     private final OrderStatusTransitionService orderStatusTransitionService;
     private final PaymentLinkService paymentLinkService;
+    private final ContractorCompletionRewardService contractorCompletionRewardService;
 
     /**
      * Returns the order id when a new payment cycle was opened.  Partial
@@ -72,9 +74,8 @@ public class PaymentReturnOrderRecoveryService {
             // A cancellation before any money was confirmed is not a refund.
             return Optional.empty();
         }
-        if (paymentLinkRepository.existsNewerConfirmedPayment(
-                order.getId(), link.getId(), returnedAt(link))) {
-            log.info("Ignoring historical provider return because order has a newer confirmed payment: orderId={}, returnedLinkId={}",
+        if (paymentLinkRepository.existsOtherConfirmedPayment(order.getId(), link.getId())) {
+            log.info("Ignoring provider return because order still has another confirmed payment: orderId={}, returnedLinkId={}",
                     order.getId(), link.getId());
             return Optional.empty();
         }
@@ -86,6 +87,10 @@ public class PaymentReturnOrderRecoveryService {
         }
 
         if (!STATUS_REMINDER.equals(statusTitle(order))) {
+            contractorCompletionRewardService.deactivateOrderPaymentAccruals(
+                    order.getId(),
+                    "provider_full_return:" + link.getStatus()
+            );
             try {
                 orderStatusTransitionService.changeStatusAfterPaymentReturn(order.getId(), STATUS_REMINDER);
             } catch (Exception e) {

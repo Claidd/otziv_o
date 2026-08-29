@@ -118,15 +118,15 @@ class OrderPaymentCancellationServiceTest {
 
         service.cancelPayment(11L, principal);
 
-        var financialOrder = inOrder(zpRepository, contractorRewardLedgerService, paymentLinkService);
-        financialOrder.verify(zpRepository).saveAll(List.of(reward));
-        financialOrder.verify(contractorRewardLedgerService).synchronizeSources(List.of(reward));
+        var financialOrder = inOrder(contractorRewardLedgerService, contractorCompletionRewardService, paymentLinkService);
+        financialOrder.verify(contractorRewardLedgerService).requireCancellationRepresentable(List.of(reward));
+        financialOrder.verify(contractorCompletionRewardService)
+                .deactivateOrderPaymentAccruals(11L, "manual_payment_cancellation");
         financialOrder.verify(paymentLinkService).createForOrder(11L);
-        assertEquals(false, reward.isActive());
     }
 
     @Test
-    void legacyEarnedRewardRemainsActiveWhenClientPaymentIsCanceled() {
+    void everyActiveOrderRewardIsDeactivatedWhenClientPaymentIsCanceled() {
         Order source = order(14L, "Оплачено");
         source.setAmount(2);
         Zp legacy = new Zp();
@@ -139,14 +139,12 @@ class OrderPaymentCancellationServiceTest {
         when(paymentCheckRepository.findByOrderIdAndActiveTrue(14L)).thenReturn(List.of());
         when(zpRepository.findByOrderIdAndActiveTrue(14L)).thenReturn(List.of(legacy));
         when(orderStatusService.getOrderStatusByTitle("Напоминание")).thenReturn(status("Напоминание"));
-        when(contractorPaymentRuntimeSwitch.rewardAttributionLiveEnabled()).thenReturn(true);
-
         service.cancelPayment(14L, () -> "admin");
 
-        assertEquals(true, legacy.isActive());
-        verify(contractorRewardLedgerService, never()).requireCancellationRepresentable(List.of(legacy));
-        verify(contractorRewardLedgerService, never()).synchronizeSources(List.of(legacy));
-        verify(contractorCompletionRewardService).migrateLegacyRewardsBeforePaymentCancellation(14L);
+        verify(contractorRewardLedgerService).requireCancellationRepresentable(List.of(legacy));
+        verify(contractorCompletionRewardService)
+                .deactivateOrderPaymentAccruals(14L, "manual_payment_cancellation");
+        verify(contractorCompletionRewardService, never()).migrateLegacyRewardsBeforePaymentCancellation(14L);
     }
 
     @Test
@@ -166,9 +164,9 @@ class OrderPaymentCancellationServiceTest {
 
         service.cancelPayment(15L, () -> "admin");
 
-        assertEquals(false, legacy.isActive());
         verify(contractorRewardLedgerService).requireCancellationRepresentable(List.of(legacy));
-        verify(contractorRewardLedgerService).synchronizeSources(List.of(legacy));
+        verify(contractorCompletionRewardService)
+                .deactivateOrderPaymentAccruals(15L, "manual_payment_cancellation");
         verify(contractorCompletionRewardService, never()).migrateLegacyRewardsBeforePaymentCancellation(15L);
     }
 

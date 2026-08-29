@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.dto.personal_stat.StatDTO;
 import com.hunt.otziv.analytics.model.AnalyticsDailyTotal;
 import com.hunt.otziv.analytics.model.AnalyticsMonthlyTotal;
+import com.hunt.otziv.analytics.service.AnalyticsFinancialSourceService.DailyFinancial;
 import com.hunt.otziv.analytics.repository.AnalyticsDailyTotalRepository;
 import com.hunt.otziv.analytics.repository.AnalyticsMonthlyTotalRepository;
 import com.hunt.otziv.u_users.model.User;
@@ -24,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,6 +40,9 @@ class AnalyticsAggregateStatsServiceTest {
     @Mock
     private AnalyticsMonthlyTotalRepository monthlyTotalRepository;
 
+    @Mock
+    private AnalyticsFinancialSourceService financialSourceService;
+
     private AnalyticsAggregateStatsService service;
     private ObjectMapper objectMapper;
 
@@ -50,11 +55,11 @@ class AnalyticsAggregateStatsServiceTest {
                 null,
                 monthlyTotalRepository
         );
-        service = new AnalyticsAggregateStatsService(readService, objectMapper);
+        service = new AnalyticsAggregateStatsService(readService, financialSourceService, objectMapper);
     }
 
     @Test
-    void buildsAdminStatsFromMonthlyAndDailyTotals() throws Exception {
+    void combinesClosedMonthlyAggregatesWithLiveCurrentMonth() throws Exception {
         List<AnalyticsDailyTotal> dailyRows = List.of(
                 daily(LocalDate.of(2026, 5, 1), "200.00", "80.00", 2, 4, 1, 1),
                 daily(LocalDate.of(2026, 5, 7), "50.00", "20.00", 1, 1, 0, 0),
@@ -67,6 +72,14 @@ class AnalyticsAggregateStatsServiceTest {
         );
         stubDailyRows(dailyRows);
         stubMonthlyRows(monthlyRows);
+        when(financialSourceService.dailyForScope(
+                eq(SCOPE_KEY), eq(SELECTED_DATE.withDayOfMonth(1)), eq(SELECTED_DATE)
+        ))
+                .thenReturn(List.of(
+                        financial(LocalDate.of(2026, 5, 1), "200.00", "80.00", 2, 4),
+                        financial(LocalDate.of(2026, 5, 7), "50.00", "20.00", 1, 1),
+                        financial(LocalDate.of(2026, 5, 8), "100.00", "40.00", 1, 1)
+                ));
 
         User admin = User.builder().id(1L).build();
         Optional<StatDTO> result = service.buildStats(SELECTED_DATE, admin, "ROLE_ADMIN");
@@ -102,13 +115,19 @@ class AnalyticsAggregateStatsServiceTest {
     }
 
     @Test
-    void limitsMonthlyChartsToRequestedPeriod() throws Exception {
+    void keepsHistoricalMonthlyAggregatesWhenLiveSourceOnlyHasCurrentMonth() throws Exception {
         stubDailyRows(List.of(daily(LocalDate.of(2026, 5, 8), "100.00", "40.00", 1, 1, 0, 0)));
         stubMonthlyRows(List.of(
                 monthly(LocalDate.of(2024, 1, 1), "100.00", "50.00", 1, 1, 0, 0),
                 monthly(LocalDate.of(2025, 6, 1), "200.00", "75.00", 2, 2, 0, 0),
                 monthly(LocalDate.of(2026, 4, 1), "300.00", "125.00", 3, 3, 0, 0)
         ));
+        when(financialSourceService.dailyForScope(
+                eq(SCOPE_KEY), eq(SELECTED_DATE.withDayOfMonth(1)), eq(SELECTED_DATE)
+        ))
+                .thenReturn(List.of(
+                        financial(LocalDate.of(2026, 5, 8), "100.00", "40.00", 1, 1)
+                ));
 
         User admin = User.builder().id(1L).build();
         Optional<StatDTO> result = service.buildStats(
@@ -124,6 +143,33 @@ class AnalyticsAggregateStatsServiceTest {
         assertNull(monthlyPaymentMap.get("2024"));
         assertEquals(200, monthlyPaymentMap.get("2025").get("6").asInt());
         assertEquals(300, monthlyPaymentMap.get("2026").get("4").asInt());
+        assertEquals(100, monthlyPaymentMap.get("2026").get("5").asInt());
+    }
+
+    @Test
+    void usesDailyAggregatesForAClosedSelectedMonth() throws Exception {
+        stubDailyRows(List.of(
+                daily(LocalDate.of(2026, 5, 1), "200.00", "80.00", 2, 4, 0, 0),
+                daily(LocalDate.of(2026, 5, 8), "100.00", "40.00", 1, 1, 0, 0)
+        ));
+        AnalyticsMonthlyTotal april = monthly(
+                LocalDate.of(2026, 4, 1), "1000.00", "500.00", 10, 20, 0, 0
+        );
+        AnalyticsMonthlyTotal may = monthly(
+                LocalDate.of(2026, 5, 1), "1500.00", "750.00", 15, 30, 0, 0
+        );
+        may.setPeriodClosed(true);
+        stubMonthlyRows(List.of(april, may));
+
+        User admin = User.builder().id(1L).build();
+        Optional<StatDTO> result = service.buildStats(SELECTED_DATE, admin, "ROLE_ADMIN");
+
+        assertTrue(result.isPresent());
+        StatDTO stats = result.get();
+        assertEquals(300, stats.getSum1MonthPay());
+        assertEquals(100, objectMapper.readTree(stats.getOrderPayMap()).get("8").asInt());
+        assertEquals(300, objectMapper.readTree(stats.getOrderPayMapMonth()).get("2026").get("5").asInt());
+        verifyNoInteractions(financialSourceService);
     }
 
     private void stubDailyRows(List<AnalyticsDailyTotal> rows) {
@@ -188,5 +234,22 @@ class AnalyticsAggregateStatsServiceTest {
         total.setLeadsNewCount(leadsNew);
         total.setLeadsInWorkCount(leadsInWork);
         return total;
+    }
+
+    private DailyFinancial financial(
+            LocalDate metricDate,
+            String paymentSum,
+            String salarySum,
+            long paymentCount,
+            long salaryCount
+    ) {
+        return new DailyFinancial(
+                metricDate,
+                new BigDecimal(salarySum),
+                salaryCount,
+                0L,
+                new BigDecimal(paymentSum),
+                paymentCount
+        );
     }
 }

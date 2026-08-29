@@ -626,6 +626,8 @@ function Assert-ScheduledMessageReconciliationHealthy {
     }
     if ($appLogs -match "Illegal mix of collations" `
             -or $appLogs -match "Contractor shadow route backfill failed" `
+            -or $appLogs -match "Contractor allocation quarantined for retry:.*code=JpaSystemException" `
+            -or $appLogs -match "Credential encryption key is unavailable" `
             -or $appLogs -match "Не удалось восстановить начисления завершенного заказа" `
             -or $appLogs -match "Unexpected error occurred in scheduled task") {
         throw "Contractor payment background processing failed in prod-like backend logs."
@@ -3116,6 +3118,16 @@ FROM flyway_schema_history
 WHERE version IN ('1.10.237', '1.10.240', '1.10.241', '1.10.248', '1.10.249')
   AND success = 1;
 
+SELECT CONCAT('PAYMENT_SALARY_MIGRATION=', COUNT(*))
+FROM flyway_schema_history
+WHERE version = '1.10.267'
+  AND success = 1;
+
+SELECT CONCAT('PAYMENT_CHECK_MIGRATION=', COUNT(*))
+FROM flyway_schema_history
+WHERE version = '1.10.268'
+  AND success = 1;
+
 SELECT CONCAT('FUTURE_EXPIRY_EVENTS=', COUNT(*))
 FROM contractor_payment_allocation_events
 WHERE event_type = 'EXPIRED'
@@ -3164,6 +3176,107 @@ WHERE id = 1
   AND accounting_authority = 'COMPLETION'
   AND routing_requested = TRUE
   AND attribution_start_date IS NOT NULL;
+
+SELECT CONCAT('ROLLOUT_PAYMENT=', COUNT(*))
+FROM contractor_payment_rollout_state
+WHERE id = 1
+  AND accounting_authority = 'PAYMENT'
+  AND routing_requested = TRUE
+  AND attribution_start_date IS NOT NULL;
+
+SELECT CONCAT('SALARY_PAID_GUARD=', COUNT(*))
+FROM salary_paid_order_status_guard paid_guard
+JOIN order_statuses paid_status
+  ON paid_status.order_status_id = paid_guard.order_status_id
+ AND paid_status.salary_paid_guard = paid_guard.paid_guard
+WHERE paid_guard.singleton_id = 1
+  AND paid_guard.paid_guard = 1
+  AND BINARY paid_status.order_status_title = BINARY 'Оплачено';
+
+SELECT CONCAT('ACTIVE_UNPAID_ZP=', COUNT(*))
+FROM zp reward
+LEFT JOIN orders source_order ON source_order.order_id = reward.zp_order
+LEFT JOIN order_statuses source_status ON source_status.order_status_id = source_order.order_status
+WHERE reward.zp_active = 1
+  AND reward.zp_order IS NOT NULL
+  AND reward.zp_order > 0
+  AND (source_order.order_id IS NULL
+       OR BINARY source_status.order_status_title <> BINARY 'Оплачено');
+
+SELECT CONCAT('ACTIVE_UNPAID_LEDGER=', COUNT(*))
+FROM contractor_reward_ledger ledger
+LEFT JOIN orders source_order ON source_order.order_id = ledger.order_id
+LEFT JOIN order_statuses source_status ON source_status.order_status_id = source_order.order_status
+WHERE ledger.active = 1
+  AND ledger.order_id IS NOT NULL
+  AND ledger.order_id > 0
+  AND (source_order.order_id IS NULL
+       OR BINARY source_status.order_status_title <> BINARY 'Оплачено');
+
+SELECT CONCAT('ACTIVE_PAYMENT_CHECK_GUARD_VIOLATIONS=', COUNT(*))
+FROM payment_check payment
+LEFT JOIN orders source_order ON source_order.order_id = payment.check_order
+LEFT JOIN salary_paid_order_status_guard paid_guard
+  ON paid_guard.order_status_id = payment.check_payment_status_guard
+WHERE payment.check_active = 1
+  AND (source_order.order_id IS NULL
+       OR paid_guard.order_status_id IS NULL
+       OR source_order.order_status <> payment.check_payment_status_guard);
+
+SELECT CONCAT('DUPLICATE_ACTIVE_PAYMENT_CHECKS=', COUNT(*))
+FROM (
+  SELECT payment.check_order
+  FROM payment_check payment
+  WHERE payment.check_active = 1
+  GROUP BY payment.check_order
+  HAVING COUNT(*) > 1
+) duplicates;
+
+SELECT CONCAT('PAYMENT_ANALYTICS_REPAIR_PENDING=', COUNT(*))
+FROM app_settings
+WHERE setting_key = 'financial-integrity.v268-analytics-rebuild-pending'
+  AND LOWER(TRIM(setting_value)) <> 'false';
+
+SELECT CONCAT(
+  'CURRENT_PAYMENT_ANALYTICS_DELTA_KOPECKS=',
+  CAST(ROUND(ABS(
+    COALESCE((
+      SELECT monthly.payment_sum
+      FROM analytics_monthly_total monthly
+      WHERE monthly.month_start = DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+        AND monthly.scope_type = 'ADMIN'
+        AND monthly.scope_key = 'ADMIN:ALL'
+      LIMIT 1
+    ), 0.00)
+    - COALESCE((
+      SELECT SUM(payment.check_sum)
+      FROM payment_check payment
+      WHERE payment.check_active = 1
+        AND payment.check_date >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+        AND payment.check_date < DATE_FORMAT(CURRENT_DATE() + INTERVAL 1 MONTH, '%Y-%m-01')
+    ), 0.00)
+  ) * 100) AS UNSIGNED)
+);
+
+SELECT CONCAT(
+  'CURRENT_SALARY_ANALYTICS_DELTA_KOPECKS=',
+  CAST(ROUND(ABS(
+    COALESCE((
+      SELECT monthly.salary_sum
+      FROM analytics_monthly_total monthly
+      WHERE monthly.month_start = DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+        AND monthly.scope_type = 'ADMIN'
+        AND monthly.scope_key = 'ADMIN:ALL'
+      LIMIT 1
+    ), 0.00)
+    - COALESCE((
+      SELECT SUM(salary.salary_sum)
+      FROM analytics_salary_source salary
+      WHERE salary.metric_date >= DATE_FORMAT(CURRENT_DATE(), '%Y-%m-01')
+        AND salary.metric_date < DATE_FORMAT(CURRENT_DATE() + INTERVAL 1 MONTH, '%Y-%m-01')
+    ), 0.00)
+  ) * 100) AS UNSIGNED)
+);
 
 SELECT CONCAT('LIVE_ALLOCATIONS=', COUNT(*))
 FROM contractor_payment_allocations
@@ -3550,9 +3663,17 @@ WHERE setting_key = 'client.messages.payment-overdue-days'
     foreach ($expectedFact in @(
         "MIGRATIONS=16",
         "HARDENING_MIGRATIONS=5",
+        "PAYMENT_SALARY_MIGRATION=1",
+        "PAYMENT_CHECK_MIGRATION=1",
         "FUTURE_EXPIRY_EVENTS=0",
         "REQUIRED_TABLES=8",
         "SAFE_SETTINGS=5",
+        "SALARY_PAID_GUARD=1",
+        "ACTIVE_UNPAID_ZP=0",
+        "ACTIVE_UNPAID_LEDGER=0",
+        "ACTIVE_PAYMENT_CHECK_GUARD_VIOLATIONS=0",
+        "DUPLICATE_ACTIVE_PAYMENT_CHECKS=0",
+        "PAYMENT_ANALYTICS_REPAIR_PENDING=0",
         "REPAIR_ROWS=0",
         "CUTOVER_CHECK=1",
         "COMPLETION_KEY=1",
@@ -3592,12 +3713,23 @@ WHERE setting_key = 'client.messages.payment-overdue-days'
         "ACCOUNTING_LIVE",
         "ROLLOUT_LEGACY",
         "ROLLOUT_COMPLETION",
+        "ROLLOUT_PAYMENT",
         "LIVE_ALLOCATIONS",
-        "CUTOVER_ROWS"
+        "CUTOVER_ROWS",
+        "CURRENT_PAYMENT_ANALYTICS_DELTA_KOPECKS",
+        "CURRENT_SALARY_ANALYTICS_DELTA_KOPECKS"
     )) {
         if (-not $factValues.ContainsKey($requiredStateFact)) {
             throw "Contractor payment schema fact '$requiredStateFact' is missing. Actual: $($schemaFacts -join ', ')."
         }
+    }
+    $paymentAnalyticsLag = $factValues["CURRENT_PAYMENT_ANALYTICS_DELTA_KOPECKS"]
+    $salaryAnalyticsLag = $factValues["CURRENT_SALARY_ANALYTICS_DELTA_KOPECKS"]
+    if ($paymentAnalyticsLag -gt 0 -or $salaryAnalyticsLag -gt 0) {
+        Write-Warning ((
+            "Nightly analytics cache trails current canonical rows: payments={0} kopecks, salary={1} kopecks. " +
+            "Financial UI reads canonical active sources directly; the scheduled aggregate rebuild may catch up later."
+        ) -f $paymentAnalyticsLag, $salaryAnalyticsLag)
     }
 
     $legacyShadowState = (
@@ -3605,22 +3737,24 @@ WHERE setting_key = 'client.messages.payment-overdue-days'
         $factValues["ACCOUNTING_LIVE"] -eq 0 -and
         $factValues["ROLLOUT_LEGACY"] -eq 1 -and
         $factValues["ROLLOUT_COMPLETION"] -eq 0 -and
+        $factValues["ROLLOUT_PAYMENT"] -eq 0 -and
         $factValues["LIVE_ALLOCATIONS"] -eq 0 -and
         $factValues["CUTOVER_ROWS"] -eq 0
     )
-    $completionLiveState = (
+    $paymentLiveState = (
         $factValues["ACCOUNTING_SHADOW"] -eq 0 -and
         $factValues["ACCOUNTING_LIVE"] -eq 1 -and
         $factValues["ROLLOUT_LEGACY"] -eq 0 -and
-        $factValues["ROLLOUT_COMPLETION"] -eq 1 -and
+        $factValues["ROLLOUT_COMPLETION"] -eq 0 -and
+        $factValues["ROLLOUT_PAYMENT"] -eq 1 -and
         $factValues["LIVE_ALLOCATIONS"] -ge 0 -and
         $factValues["CUTOVER_ROWS"] -eq 1
     )
-    if (-not ($legacyShadowState -or $completionLiveState)) {
-        throw "Contractor payment rollout state is neither pre-cutover LEGACY/SHADOW nor post-cutover COMPLETION/LIVE. Actual: $($schemaFacts -join ', ')."
+    if (-not ($legacyShadowState -or $paymentLiveState)) {
+        throw "Contractor payment rollout state is neither pre-cutover LEGACY/SHADOW nor post-cutover PAYMENT/LIVE. Actual: $($schemaFacts -join ', ')."
     }
-    if ($completionLiveState) {
-        $rolloutStateDescription = "COMPLETION/LIVE with $($factValues["LIVE_ALLOCATIONS"]) live allocation(s)"
+    if ($paymentLiveState) {
+        $rolloutStateDescription = "PAYMENT/LIVE with $($factValues["LIVE_ALLOCATIONS"]) live allocation(s)"
     } else {
         $rolloutStateDescription = "LEGACY/SHADOW with no live allocations"
     }
@@ -3653,7 +3787,7 @@ WHERE setting_key = 'client.messages.payment-overdue-days'
         }
     }
 
-    Write-Host "Contractor payment rollout safety smoke OK: V217-V232 plus V237/V240/V241/V248 are complete, common successor and durable-delivery schemas are present, payment overdue is 30 days, completion repair queues were measured, expiry events stay on the observed business timeline, company payment-routing defaults and source snapshots are present, accounting/routing state is $rolloutStateDescription, and both deployment masters are false."
+    Write-Host "Contractor payment rollout safety smoke OK: V217-V232 plus V237/V240/V241/V248/V249 and financial migrations V267/V268 are complete, active order salary/checks are paid-only, canonical salary/check sources are valid (nightly cache lag is reported separately), declarative paid-status guards are present, common successor and durable-delivery schemas are present, payment overdue is 30 days, completion repair queues were measured, expiry events stay on the observed business timeline, company payment-routing defaults and source snapshots are present, accounting/routing state is $rolloutStateDescription, and both deployment masters are false."
 }
 
 function Invoke-WorkloadShadowSmoke {

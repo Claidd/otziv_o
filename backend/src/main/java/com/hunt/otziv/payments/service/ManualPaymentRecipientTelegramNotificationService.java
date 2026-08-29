@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
@@ -111,6 +112,62 @@ public class ManualPaymentRecipientTelegramNotificationService {
         }
     }
 
+    /**
+     * Synchronous provider attempt used by the durable common-invoice outbox.
+     * The caller owns retry and fencing; this method only resolves the internal
+     * recipient chat and reports the Telegram result.
+     */
+    public ClientMessageSendResult notifyCommonInvoiceRecipient(
+            CommonInvoiceRecipientNotification request
+    ) {
+        if (request == null
+                || request.invoiceId() == null
+                || request.invoiceId() <= 0
+                || request.recipientUserId() == null
+                || request.recipientType() == null
+                || request.amountKopecks() <= 0) {
+            return ClientMessageSendResult.failed(
+                    "common_invoice_recipient_invalid",
+                    "Данные получателя общего счёта неполны"
+            );
+        }
+        try {
+            Optional<User> userOpt = userRepository.findById(request.recipientUserId());
+            if (userOpt.isEmpty()) {
+                return ClientMessageSendResult.failed(
+                        "recipient_user_missing",
+                        "Пользователь получателя не найден"
+                );
+            }
+            User user = userOpt.get();
+            Long chatId = resolveChatId(request.recipientType(), user);
+            if (chatId == null) {
+                return ClientMessageSendResult.failed(
+                        "recipient_telegram_chat_missing",
+                        "У получателя не задан внутренний Telegram-чат"
+                );
+            }
+            boolean sent = telegramService.sendMessage(
+                    chatId,
+                    buildCommonInvoiceMessage(request, user)
+            );
+            return sent
+                    ? ClientMessageSendResult.sent("Telegram")
+                    : ClientMessageSendResult.failed(
+                            "recipient_telegram_not_sent",
+                            "Telegram не подтвердил отправку получателю"
+                    );
+        } catch (Exception exception) {
+            String message = exception.getMessage();
+            return ClientMessageSendResult.failed(
+                    "recipient_telegram_exception",
+                    message == null || message.isBlank()
+                            ? exception.getClass().getSimpleName()
+                            : message
+            );
+        }
+    }
+
     private Optional<NotificationRequest> buildRequest(PaymentLink link) {
         if (link == null
                 || link.getId() == null
@@ -168,6 +225,33 @@ public class ManualPaymentRecipientTelegramNotificationService {
         String company = companyLine(request.companyTitle(), request.filialTitle());
         if (!company.isBlank()) {
             message.append("Компания: ").append(company).append('\n');
+        }
+        String actorDisplayName = resolveActorDisplayName(request.actor());
+        if (hasText(actorDisplayName)) {
+            message.append("Подтвердил: ").append(actorDisplayName).append('\n');
+        }
+        if (request.confirmedAt() != null) {
+            message.append("Время: ").append(DATE_TIME_FORMAT.format(request.confirmedAt())).append('\n');
+        }
+        message.append('\n').append("Зачтено в расчёт получателя.");
+        return message.toString();
+    }
+
+    private String buildCommonInvoiceMessage(
+            CommonInvoiceRecipientNotification request,
+            User user
+    ) {
+        StringBuilder message = new StringBuilder();
+        message.append("💳 Оплата по реквизитам подтверждена\n\n");
+        message.append("Получатель: ").append(displayName(user)).append('\n');
+        message.append("Сумма: ").append(formatMoney(request.amountKopecks())).append('\n');
+        message.append("Общий счёт №").append(request.invoiceId());
+        if (hasText(request.invoiceTitle())) {
+            message.append(": ").append(request.invoiceTitle().trim());
+        }
+        message.append('\n');
+        if (request.orderCount() != null && request.orderCount() > 0) {
+            message.append("Заказов: ").append(request.orderCount()).append('\n');
         }
         String actorDisplayName = resolveActorDisplayName(request.actor());
         if (hasText(actorDisplayName)) {
@@ -238,6 +322,18 @@ public class ManualPaymentRecipientTelegramNotificationService {
             Long orderId,
             String companyTitle,
             String filialTitle,
+            long amountKopecks,
+            ContractorRecipientType recipientType,
+            Long recipientUserId,
+            String actor,
+            LocalDateTime confirmedAt
+    ) {
+    }
+
+    public record CommonInvoiceRecipientNotification(
+            Long invoiceId,
+            String invoiceTitle,
+            Integer orderCount,
             long amountKopecks,
             ContractorRecipientType recipientType,
             Long recipientUserId,

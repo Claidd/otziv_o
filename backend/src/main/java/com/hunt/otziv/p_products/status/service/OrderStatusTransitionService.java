@@ -1046,8 +1046,6 @@ public class OrderStatusTransitionService {
 
             orderBotLifecycleService.assignBotsIfNeeded(order);
             orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_PUBLIC);
-            contractorCompletionRewardService.ensureOrderCompletionAccrualNow(order.getId());
-
             String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
             String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;
 

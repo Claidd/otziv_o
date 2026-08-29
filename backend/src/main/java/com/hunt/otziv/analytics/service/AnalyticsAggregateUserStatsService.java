@@ -3,11 +3,9 @@ package com.hunt.otziv.analytics.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
-import com.hunt.otziv.analytics.model.AnalyticsDailyUser;
-import com.hunt.otziv.analytics.model.AnalyticsUserMetricAggregate;
+import com.hunt.otziv.analytics.service.AnalyticsSalarySourceService.DailySalary;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.z_zp.service.ZpService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,9 +31,8 @@ public class AnalyticsAggregateUserStatsService {
     private static final long DEFAULT_IMAGE_ID = 1L;
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
 
-    private final AnalyticsAggregateReadService readService;
+    private final AnalyticsSalarySourceService salarySourceService;
     private final ObjectMapper objectMapper;
-    private final ZpService zpService;
 
     public Optional<UserStatDTO> buildUserStats(LocalDate selectedDate, User user) {
         if (selectedDate == null || user == null || user.getId() == null) {
@@ -43,13 +40,14 @@ public class AnalyticsAggregateUserStatsService {
         }
 
         LocalDate historyStart = selectedDate.minusYears(1).withDayOfYear(1);
-        LocalDate firstDayOfMonth = selectedDate.withDayOfMonth(1);
-        boolean hasAggregateData = !readService.monthlyUsers(List.of(user.getId()), historyStart, selectedDate).isEmpty()
-                || !readService.dailyUsers(List.of(user.getId()), firstDayOfMonth, selectedDate).isEmpty();
-        if (!hasAggregateData) {
+        List<DailySalary> salaryRows = salarySourceService.dailyForUsers(
+                List.of(user.getId()), historyStart, selectedDate
+        );
+        if (salaryRows.isEmpty()) {
             return Optional.empty();
         }
 
+        LocalDate firstDayOfMonth = selectedDate.withDayOfMonth(1);
         LocalDate firstDayOfPreviousMonth = firstDayOfMonth.minusMonths(1);
         LocalDate firstDayOfTwoMonthsAgo = firstDayOfMonth.minusMonths(2);
         LocalDate lastDayOfPreviousMonth = firstDayOfPreviousMonth.withDayOfMonth(firstDayOfPreviousMonth.lengthOfMonth());
@@ -64,26 +62,21 @@ public class AnalyticsAggregateUserStatsService {
         stats.setImageId(imageId(user));
         stats.setCoefficient(user.getCoefficient());
 
-        BigDecimal salary1Day = liveSalaryForDay(user.getId(), selectedDate);
-        long salary1DayCount = liveSalaryEntryCountForDay(user.getId(), selectedDate);
-        BigDecimal salary2Day = liveSalaryForDay(user.getId(), selectedDate.minusDays(1));
-        BigDecimal salary7Day = sumDecimal(user.getId(), selectedDate.minusDays(7), selectedDate, selectedDate, AnalyticsUserMetricAggregate::getSalarySum, salary1Day);
-        BigDecimal salary14Day = sumDecimal(user.getId(), selectedDate.minusDays(14), selectedDate.minusDays(8), selectedDate, AnalyticsUserMetricAggregate::getSalarySum, salary1Day);
-        BigDecimal salaryCurrentMonth = sumDecimal(user.getId(), firstDayOfMonth, selectedDate, selectedDate, AnalyticsUserMetricAggregate::getSalarySum, salary1Day);
-        BigDecimal salaryPreviousMonth = sumDecimal(user.getId(), firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsUserMetricAggregate::getSalarySum, salary1Day);
-        BigDecimal salaryCurrentYear = sumDecimal(user.getId(), firstDayOfYear, selectedDate, selectedDate, AnalyticsUserMetricAggregate::getSalarySum, salary1Day);
-        BigDecimal salaryPreviousYear = sumDecimal(user.getId(), firstDayOfPreviousYear, sameDayPreviousYear, selectedDate, AnalyticsUserMetricAggregate::getSalarySum, salary1Day);
+        BigDecimal salary1Day = sumDecimal(salaryRows, selectedDate, selectedDate, DailySalary::salarySum);
+        BigDecimal salary2Day = sumDecimal(salaryRows, selectedDate.minusDays(1), selectedDate.minusDays(1), DailySalary::salarySum);
+        BigDecimal salary7Day = sumDecimal(salaryRows, selectedDate.minusDays(7), selectedDate, DailySalary::salarySum);
+        BigDecimal salary14Day = sumDecimal(salaryRows, selectedDate.minusDays(14), selectedDate.minusDays(8), DailySalary::salarySum);
+        BigDecimal salaryCurrentMonth = sumDecimal(salaryRows, firstDayOfMonth, selectedDate, DailySalary::salarySum);
+        BigDecimal salaryPreviousMonth = sumDecimal(salaryRows, firstDayOfPreviousMonth, lastDayOfPreviousMonth, DailySalary::salarySum);
+        BigDecimal salaryCurrentYear = sumDecimal(salaryRows, firstDayOfYear, selectedDate, DailySalary::salarySum);
+        BigDecimal salaryPreviousYear = sumDecimal(salaryRows, firstDayOfPreviousYear, sameDayPreviousYear, DailySalary::salarySum);
 
-        long salaryCurrentMonthCount = sumLong(user.getId(), firstDayOfMonth, selectedDate, selectedDate, AnalyticsUserMetricAggregate::getSalaryEntryCount, salary1DayCount);
-        long salaryPreviousMonthCount = sumLong(user.getId(), firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsUserMetricAggregate::getSalaryEntryCount, salary1DayCount);
-        long salaryTwoMonthsAgoCount = sumLong(user.getId(), firstDayOfTwoMonthsAgo, lastDayOfTwoMonthsAgo, selectedDate, AnalyticsUserMetricAggregate::getSalaryEntryCount, salary1DayCount);
+        long salaryCurrentMonthCount = sumLong(salaryRows, firstDayOfMonth, selectedDate, DailySalary::salaryEntryCount);
+        long salaryPreviousMonthCount = sumLong(salaryRows, firstDayOfPreviousMonth, lastDayOfPreviousMonth, DailySalary::salaryEntryCount);
+        long salaryTwoMonthsAgoCount = sumLong(salaryRows, firstDayOfTwoMonthsAgo, lastDayOfTwoMonthsAgo, DailySalary::salaryEntryCount);
 
-        stats.setZpPayMap(toJson(dailySalaryMap(
-                user.getId(), firstDayOfMonth, selectedDate, selectedDate.lengthOfMonth(), salary1Day
-        )));
-        stats.setZpPayMapMonth(toJson(monthlySalaryMap(
-                user.getId(), historyStart, selectedDate, salary1Day, salary1DayCount
-        )));
+        stats.setZpPayMap(toJson(dailySalaryMap(salaryRows, firstDayOfMonth, selectedDate, selectedDate.lengthOfMonth())));
+        stats.setZpPayMapMonth(toJson(monthlySalaryMap(salaryRows)));
 
         stats.setSum1Day(salary1Day.intValue());
         stats.setSum1Week(salary7Day.intValue());
@@ -101,74 +94,35 @@ public class AnalyticsAggregateUserStatsService {
         return Optional.of(stats);
     }
 
-    private BigDecimal liveSalaryForDay(Long userId, LocalDate date) {
-        return zpService.sumByUserAndCreated(userId, date);
-    }
-
-    private long liveSalaryEntryCountForDay(Long userId, LocalDate date) {
-        return zpService.countByUserAndCreated(userId, date);
-    }
-
     private BigDecimal sumDecimal(
-            Long userId,
+            List<DailySalary> rows,
             LocalDate fromInclusive,
             LocalDate toInclusive,
-            LocalDate selectedDate,
-            Function<AnalyticsUserMetricAggregate, BigDecimal> metric,
-            BigDecimal liveSelectedDateValue
+            Function<DailySalary, BigDecimal> metric
     ) {
-        BigDecimal aggregateValue = aggregateRange(userId, fromInclusive, toInclusive, selectedDate)
-                .stream()
-                .filter(row -> !isDailyRowForDate(row, selectedDate))
+        return rows.stream()
+                .filter(row -> includes(fromInclusive, toInclusive, row.metricDate()))
                 .map(metric)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return includes(fromInclusive, toInclusive, selectedDate)
-                ? aggregateValue.add(liveSelectedDateValue)
-                : aggregateValue;
     }
 
     private long sumLong(
-            Long userId,
+            List<DailySalary> rows,
             LocalDate fromInclusive,
             LocalDate toInclusive,
-            LocalDate selectedDate,
-            ToLongFunction<AnalyticsUserMetricAggregate> metric,
-            long liveSelectedDateValue
+            ToLongFunction<DailySalary> metric
     ) {
-        long aggregateValue = aggregateRange(userId, fromInclusive, toInclusive, selectedDate)
-                .stream()
-                .filter(row -> !isDailyRowForDate(row, selectedDate))
+        return rows.stream()
+                .filter(row -> includes(fromInclusive, toInclusive, row.metricDate()))
                 .mapToLong(metric)
                 .sum();
-        return includes(fromInclusive, toInclusive, selectedDate)
-                ? Math.addExact(aggregateValue, liveSelectedDateValue)
-                : aggregateValue;
-    }
-
-    private List<AnalyticsUserMetricAggregate> aggregateRange(
-            Long userId,
-            LocalDate fromInclusive,
-            LocalDate toInclusive,
-            LocalDate selectedDate
-    ) {
-        AnalyticsAggregateReadService.AggregatePeriod period = readService.splitPeriod(fromInclusive, toInclusive, selectedDate);
-        List<AnalyticsUserMetricAggregate> rows = period.monthlyRanges().stream()
-                .flatMap(range -> readService.monthlyUsers(List.of(userId), range.fromInclusive(), range.toInclusive()).stream())
-                .map(AnalyticsUserMetricAggregate.class::cast)
-                .collect(Collectors.toList());
-        period.dailyRanges().stream()
-                .flatMap(range -> readService.dailyUsers(List.of(userId), range.fromInclusive(), range.toInclusive()).stream())
-                .map(AnalyticsUserMetricAggregate.class::cast)
-                .forEach(rows::add);
-        return rows;
     }
 
     private Map<Integer, BigDecimal> dailySalaryMap(
-            Long userId,
+            List<DailySalary> rows,
             LocalDate fromInclusive,
             LocalDate toInclusive,
-            int daysInMonth,
-            BigDecimal liveSelectedDateSalary
+            int daysInMonth
     ) {
         Map<Integer, BigDecimal> result = IntStream.rangeClosed(1, daysInMonth)
                 .boxed()
@@ -178,55 +132,23 @@ public class AnalyticsAggregateUserStatsService {
                         (left, right) -> left,
                         LinkedHashMap::new
                 ));
-        readService.dailyUsers(List.of(userId), fromInclusive, toInclusive)
-                .stream()
-                .filter(row -> !row.getMetricDate().equals(toInclusive))
-                .forEach(row -> result.merge(row.getMetricDate().getDayOfMonth(), row.getSalarySum(), BigDecimal::add));
-        result.put(toInclusive.getDayOfMonth(), liveSelectedDateSalary);
+        rows.stream()
+                .filter(row -> includes(fromInclusive, toInclusive, row.metricDate()))
+                .forEach(row -> result.merge(row.metricDate().getDayOfMonth(), row.salarySum(), BigDecimal::add));
         return result;
     }
 
-    private Map<Integer, Map<Integer, BigDecimal>> monthlySalaryMap(
-            Long userId,
-            LocalDate fromInclusive,
-            LocalDate selectedDate,
-            BigDecimal liveSelectedDateSalary,
-            long liveSelectedDateCount
-    ) {
-        AnalyticsAggregateReadService.AggregatePeriod period = readService.splitPeriod(fromInclusive, selectedDate, selectedDate);
+    private Map<Integer, Map<Integer, BigDecimal>> monthlySalaryMap(List<DailySalary> rows) {
         Map<Integer, Map<Integer, BigDecimal>> result = new TreeMap<>();
-
-        period.monthlyRanges().stream()
-                .flatMap(range -> readService.monthlyUsers(List.of(userId), range.fromInclusive(), range.toInclusive()).stream())
-                .filter(this::hasSalaryData)
-                .forEach(row -> addMonthlyValue(result, row.getMonthStart(), row.getSalarySum()));
-        period.dailyRanges().stream()
-                .flatMap(range -> readService.dailyUsers(List.of(userId), range.fromInclusive(), range.toInclusive()).stream())
-                .filter(row -> !row.getMetricDate().equals(selectedDate))
-                .filter(this::hasSalaryData)
-                .forEach(row -> addMonthlyValue(result, row.getMetricDate(), row.getSalarySum()));
-        if (liveSelectedDateCount > 0 || liveSelectedDateSalary.compareTo(BigDecimal.ZERO) != 0) {
-            addMonthlyValue(result, selectedDate, liveSelectedDateSalary);
-        }
-
+        rows.stream()
+                .filter(row -> row.salaryEntryCount() > 0 || row.salarySum().compareTo(BigDecimal.ZERO) != 0)
+                .forEach(row -> result.computeIfAbsent(row.metricDate().getYear(), ignored -> new TreeMap<>())
+                        .merge(row.metricDate().getMonthValue(), row.salarySum(), BigDecimal::add));
         return result;
-    }
-
-    private boolean isDailyRowForDate(AnalyticsUserMetricAggregate row, LocalDate date) {
-        return row instanceof AnalyticsDailyUser daily && daily.getMetricDate().equals(date);
     }
 
     private boolean includes(LocalDate fromInclusive, LocalDate toInclusive, LocalDate date) {
         return !date.isBefore(fromInclusive) && !date.isAfter(toInclusive);
-    }
-
-    private boolean hasSalaryData(AnalyticsUserMetricAggregate row) {
-        return row.getSalaryEntryCount() > 0 || row.getSalarySum().compareTo(BigDecimal.ZERO) != 0;
-    }
-
-    private void addMonthlyValue(Map<Integer, Map<Integer, BigDecimal>> result, LocalDate date, BigDecimal value) {
-        result.computeIfAbsent(date.getYear(), ignored -> new TreeMap<>())
-                .merge(date.getMonthValue(), value, BigDecimal::add);
     }
 
     private String toJson(Object value) {

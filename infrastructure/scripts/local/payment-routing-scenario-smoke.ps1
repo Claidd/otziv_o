@@ -500,7 +500,7 @@ function Publish-TestOrderAndGetPaymentLink {
     } while ([DateTime]::UtcNow -lt $deadline)
     Assert-True (-not [string]::IsNullOrWhiteSpace([string]$linkId)) 'Published order did not create a payment link.'
     $token = Get-SqlScalar -Sql "SELECT token FROM payment_links WHERE id=$linkId;"
-    return [pscustomobject]@{ Id = [long]$linkId; Api = [pscustomobject]@{ token = [string]$token } }
+    return [pscustomobject]@{ Id = [long]$linkId; Api = ([pscustomobject]@{} | Add-Member -NotePropertyName 'token' -NotePropertyValue ([string]$token) -PassThru) }
 }
 
 function Publish-TestOrderAndGetPaymentLinkUtf8 {
@@ -884,7 +884,7 @@ WHERE a.order_id IN ($($script:testOrderIds -join ','));
         }
     }
 
-    Write-Host "Payment routing scenario smoke PASSED: orders=$($script:testOrderIds -join ','), deleted=$deletedOrders, allocationEvents=$eventCount."
+    Write-Host "Payment routing scenario smoke completed successfully. orders=$($script:testOrderIds -join ','), deleted=$deletedOrders, allocationEvents=$eventCount."
 } catch {
     Write-Warning "Payment routing scenario failed before local state restoration: $($_.Exception.Message)"
     docker logs --since 10m otziv-prod-local-app-1 2>&1 | Select-Object -Last 250

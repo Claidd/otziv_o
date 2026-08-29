@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isRetryablePaymentRouteError,
+  manualPaymentBankRecipientName,
   manualPaymentRecipientEffect,
   manualPaymentRecipientKey,
   manualPaymentRecipientLabel,
@@ -33,6 +34,28 @@ describe('manual payment task routing', () => {
     expect(manualPaymentRecipientEffect(external)).toMatch(/только в платёжное задание/i);
     expect(manualPaymentRecipientEffect(external)).toMatch(/не изменятся/i);
   });
+
+  it('shows the accounting employee separately from a shared bank recipient', () => {
+    const maxim = {
+      key: 'PROFILE:4',
+      recipientType: 'SPECIALIST' as const,
+      recipientProfileId: 4,
+      displayName: 'Максим Р.',
+      bankRecipientName: 'Мария Олеговна Р.'
+    };
+    const anotherSpecialist = {
+      ...maxim,
+      key: 'PROFILE:9',
+      recipientProfileId: 9,
+      displayName: 'Другой специалист'
+    };
+
+    expect(manualPaymentRecipientLabel(maxim)).toBe('Специалист · Максим Р.');
+    expect(manualPaymentBankRecipientName(maxim)).toBe('Мария Олеговна Р.');
+    expect(manualPaymentRecipientKey(maxim)).toBe('PROFILE:4');
+    expect(manualPaymentRecipientKey(anotherSpecialist)).toBe('PROFILE:9');
+  });
+
   it('renders pre-cutover historical manual payment as a standalone settlement choice', () => {
     const historical = {
       key: 'LEGACY_PRE_CUTOVER_MANUAL_CARD',

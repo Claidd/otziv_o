@@ -30,6 +30,7 @@ import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkSummaryResponse;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
+import com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse;
 import com.hunt.otziv.payments.dto.PaymentRouteChangeContextResponse;
 import com.hunt.otziv.payments.dto.PaymentRouteChangeTarget;
 import com.hunt.otziv.payments.dto.PaymentLinkAdminSummary;
@@ -60,13 +61,21 @@ import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import com.hunt.otziv.payments.model.PaymentPolicy;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.PaymentReceiptStatus;
+import com.hunt.otziv.payments.model.OwnerManualCardPaymentApproval;
+import com.hunt.otziv.payments.model.OwnerManualCardPaymentApprovalStatus;
 import com.hunt.otziv.payments.model.TbankPaymentPageMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import com.hunt.otziv.payments.repository.OwnerManualCardPaymentApprovalRepository;
+import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Role;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URI;
 import java.security.SecureRandom;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -274,6 +283,7 @@ public class PaymentLinkService {
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
     private final ManagerAccessService managerAccessService;
     private final ManualCardPaymentReviewNotificationService manualCardPaymentReviewNotificationService;
+    private final OwnerManualCardPaymentApprovalRepository ownerManualCardPaymentApprovalRepository;
     private final ContractorPaymentLiveRoutingService contractorPaymentLiveRoutingService;
     private final ContractorPaymentShadowService contractorPaymentShadowService;
     private final ContractorPaymentRuntimeSwitch contractorPaymentRuntimeSwitch;
@@ -367,10 +377,8 @@ public class PaymentLinkService {
             InvoicePaymentMode configuredMode = invoicePaymentMode(order);
             return new PaymentRouteChangeContextResponse(
                     null,
-                    configuredMode == InvoicePaymentMode.OWNER_PAPER_INVOICE
-                            ? "Бумажный счёт владельца"
-                            : "Автоматическое распределение",
-                    configuredMode == InvoicePaymentMode.OWNER_PAPER_INVOICE ? "Владелец" : "",
+                    configuredPaymentModeLabel(configuredMode),
+                    configuredPaymentModeRecipient(configuredMode),
                     "NOT_CREATED",
                     true,
                     "",
@@ -428,9 +436,7 @@ public class PaymentLinkService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Активный счет уже изменился. Обновите заказ и повторите");
             }
-            InvoicePaymentMode mode = target == PaymentRouteChangeTarget.OWNER_PAPER_INVOICE
-                    ? InvoicePaymentMode.OWNER_PAPER_INVOICE
-                    : InvoicePaymentMode.AUTO_ROUTING;
+            InvoicePaymentMode mode = paymentModeForTarget(target);
             order.setInvoicePaymentMode(mode);
             orderRepository.save(order);
             log.info("Invoice payment mode configured before invoice creation: orderId={}, mode={}, actor={}",
@@ -474,9 +480,7 @@ public class PaymentLinkService {
                 : paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
         PaymentLink replacement = paymentLinkRepository.saveAndFlush(newPaymentLink(order, amountKopecks, now));
 
-        order.setInvoicePaymentMode(target == PaymentRouteChangeTarget.OWNER_PAPER_INVOICE
-                ? InvoicePaymentMode.OWNER_PAPER_INVOICE
-                : InvoicePaymentMode.AUTO_ROUTING);
+        order.setInvoicePaymentMode(paymentModeForTarget(target));
         orderRepository.save(order);
 
         if (target == PaymentRouteChangeTarget.OWNER_PAPER_INVOICE) {
@@ -664,7 +668,8 @@ public class PaymentLinkService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "У заказа нет суммы к оплате");
         }
 
-        if (invoicePaymentMode(order) == InvoicePaymentMode.OWNER_PAPER_INVOICE) {
+        InvoicePaymentMode configuredMode = invoicePaymentMode(order);
+        if (configuredMode == InvoicePaymentMode.OWNER_PAPER_INVOICE) {
             return prepareOwnerPaperInvoice(order, lockedOrderLinks, amountKopecks, now);
         }
 
@@ -703,6 +708,22 @@ public class PaymentLinkService {
                 }
                 retireStaleReusableLink(link);
                 contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
+            } else if (isExplicitElectronicPaymentMode(configuredMode)) {
+                if (canReuseExplicitPaymentRoute(link, configuredMode, amountKopecks)) {
+                    return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
+                }
+                if (canRetireStaleLink(link)) {
+                    retireStaleReusableLink(link);
+                    if (link.getContractorAllocationId() != null) {
+                        contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
+                    }
+                } else {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "У заказа уже есть платеж в процессе по другому способу оплаты. "
+                                    + "Проверьте платеж в журнале перед созданием нового счета."
+                    );
+                }
             } else if (isFrozenContractorRoute(link)) {
                 if (canReuseContractorLink(link, amountKopecks)) {
                     return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
@@ -759,15 +780,44 @@ public class PaymentLinkService {
         }
 
         PaymentLink link = paymentLinkRepository.save(newPaymentLink(order, amountKopecks, now));
+        profile = paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
+        if (configuredMode == InvoicePaymentMode.OWNER_TBANK) {
+            requireLiveRouteChangeEnabled();
+            prepareLivePaymentLinkSourceOrFail(link, now);
+            ContractorPaymentAllocation allocation = requireLiveRoutingAllocation(
+                    link,
+                    contractorPaymentLiveRoutingService.reserveOwnerForPaymentLink(link),
+                    "explicit_owner_tbank_returned_null"
+            );
+            applyPaymentProfile(link, profile);
+            applyBankPaymentRoute(link);
+            link.setContractorAllocationId(allocation.getId());
+            link = paymentLinkRepository.save(link);
+            return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), true);
+        }
+
         boolean typedActualRecipientEnabled =
                 actualPaymentAttributionService.actualRecipientAccountingEnabled();
-        profile = paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
         Optional<ManualPaymentTaskRouteSnapshot> taskRoute = typedActualRecipientEnabled
                 ? taskReceiptIntegrationService.reserveForPaymentLink(
                         link, manager.getId(), profile.getId())
                 : Optional.empty();
         if (taskRoute.isPresent()) {
             applyManualTaskPayment(link, taskRoute.get());
+            link = paymentLinkRepository.save(link);
+        } else if (configuredMode == InvoicePaymentMode.EMPLOYEE_REQUISITES) {
+            requireLiveRouteChangeEnabled();
+            prepareLivePaymentLinkSourceOrFail(link, now);
+            ContractorPaymentAllocation allocation = requireLiveRoutingAllocation(
+                    link,
+                    contractorPaymentLiveRoutingService.reserveContractorForPaymentLink(link),
+                    "explicit_employee_requisites_returned_null"
+            );
+            if (!isContractorRecipient(allocation)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Не удалось выбрать специалиста или менеджера для оплаты");
+            }
+            applyContractorPaymentRoute(link, allocation);
             link = paymentLinkRepository.save(link);
         } else {
             boolean liveRoutingEnabled = contractorPaymentLiveRoutingService.enabledForNewRoutes();
@@ -896,6 +946,56 @@ public class PaymentLinkService {
         return order == null || order.getInvoicePaymentMode() == null
                 ? InvoicePaymentMode.AUTO_ROUTING
                 : order.getInvoicePaymentMode();
+    }
+
+    private InvoicePaymentMode paymentModeForTarget(PaymentRouteChangeTarget target) {
+        return switch (target) {
+            case EMPLOYEE_REQUISITES -> InvoicePaymentMode.EMPLOYEE_REQUISITES;
+            case OWNER_TBANK -> InvoicePaymentMode.OWNER_TBANK;
+            case OWNER_PAPER_INVOICE -> InvoicePaymentMode.OWNER_PAPER_INVOICE;
+        };
+    }
+
+    private String configuredPaymentModeLabel(InvoicePaymentMode mode) {
+        return switch (mode) {
+            case EMPLOYEE_REQUISITES -> "Реквизиты специалиста/менеджера";
+            case OWNER_TBANK -> "Эквайринг Т-Банк владельца";
+            case OWNER_PAPER_INVOICE -> "Бумажный счёт владельца";
+            case AUTO_ROUTING -> "Автоматическое распределение";
+        };
+    }
+
+    private String configuredPaymentModeRecipient(InvoicePaymentMode mode) {
+        return switch (mode) {
+            case EMPLOYEE_REQUISITES -> "Специалист/менеджер";
+            case OWNER_TBANK, OWNER_PAPER_INVOICE -> "Владелец";
+            case AUTO_ROUTING -> "";
+        };
+    }
+
+    private boolean isExplicitElectronicPaymentMode(InvoicePaymentMode mode) {
+        return mode == InvoicePaymentMode.EMPLOYEE_REQUISITES
+                || mode == InvoicePaymentMode.OWNER_TBANK;
+    }
+
+    private boolean canReuseExplicitPaymentRoute(
+            PaymentLink link,
+            InvoicePaymentMode mode,
+            long currentAmountKopecks
+    ) {
+        if (link == null
+                || link.getAmountKopecks() != currentAmountKopecks
+                || (link.getReservedAmountKopecks() != null
+                && link.getReservedAmountKopecks() != currentAmountKopecks)) {
+            return false;
+        }
+        if (mode == InvoicePaymentMode.OWNER_TBANK) {
+            return link.getPaymentMethod() == PaymentMethod.BANK_FORM
+                    || link.getPaymentMethod() == PaymentMethod.SBP_QR;
+        }
+        return mode == InvoicePaymentMode.EMPLOYEE_REQUISITES
+                && (link.getManualSource() == ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE
+                || link.getManualSource() == ManualPaymentSource.MANUAL_TASK);
     }
 
     private boolean isPaperInvoice(PaymentLink link) {
@@ -1879,6 +1979,7 @@ public class PaymentLinkService {
             validateTbankPayment(link);
 
             PaymentProfile profile = resolvePaymentProfile(link);
+            requireActivatedPublicBankProvider(profile, BankInitMode.SBP_QR);
             return new SbpBankListRequest(
                     runtimeProfileForLink(profile, link),
                     new TbankGetQrBankListCommand(
@@ -2177,6 +2278,362 @@ public class PaymentLinkService {
                 recipientProfileId,
                 recipientKey
         );
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public ManagerManualCardPaymentResultResponse submitManagerManualCardPaymentForOrder(
+            Long orderId,
+            String reason,
+            String receiptUrl,
+            ContractorRecipientType recipientType,
+            Long recipientProfileId,
+            String recipientKey,
+            String actor,
+            Authentication authentication
+    ) {
+        String cleanReason = normalize(reason);
+        if (cleanReason.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите причину ручной оплаты");
+        }
+        if (cleanReason.length() > 500) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Причина не должна превышать 500 символов");
+        }
+        String cleanReceiptUrl = validatedReceiptUrl(receiptUrl);
+        if (cleanReceiptUrl.length() > 1024) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ссылка на чек не должна превышать 1024 символа");
+        }
+        String cleanActor = normalize(actor);
+        OrderManualCardRoute route = selectManualCardPaymentRouteForOrder(orderId, authentication);
+        PaymentLink snapshot = paymentLinkRepository.findByIdWithOrder(route.linkId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Платежная ссылка не найдена"
+                ));
+        if (!isCompletedManualCardPayment(snapshot)
+                && recipientType == ContractorRecipientType.OWNER) {
+            return requestOwnerManualCardPaymentApproval(
+                    orderId,
+                    route,
+                    cleanReason,
+                    cleanReceiptUrl,
+                    recipientType,
+                    recipientProfileId,
+                    recipientKey,
+                    cleanActor,
+                    authentication
+            );
+        }
+        AdminPaymentLinkResponse completed = confirmPaidByManualCardTransferInternal(
+                route.linkId(),
+                route.amountKopecks(),
+                "Причина менеджера: " + cleanReason,
+                cleanReceiptUrl,
+                cleanActor,
+                authentication,
+                new ManualCardPaymentContext(ManualCardPaymentMode.MANAGER_REPORTED, cleanReason),
+                recipientType,
+                recipientProfileId,
+                recipientKey
+        );
+        return ManagerManualCardPaymentResultResponse.completed(orderId, completed.id());
+    }
+
+    private ManagerManualCardPaymentResultResponse requestOwnerManualCardPaymentApproval(
+            Long orderId,
+            OrderManualCardRoute route,
+            String reason,
+            String receiptUrl,
+            ContractorRecipientType recipientType,
+            Long recipientProfileId,
+            String recipientKey,
+            String actor,
+            Authentication authentication
+    ) {
+        return transactionExecutor.required(() -> {
+            Order order = orderRepository.findByIdForCounterUpdate(orderId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+            managerAccessService.requireOrderAccess(orderId, authentication);
+            ensureOrderNotCoveredByActiveCommonInvoice(orderId);
+            PaymentLink link = paymentLinkRepository.findByIdForUpdate(route.linkId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Платежная ссылка не найдена"
+                    ));
+            if (!hasOrderBinding(link, orderId)
+                    || link.getAmountKopecks() != route.amountKopecks()
+                    || !isOwnerApprovalEligibleRoute(link)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Маршрут оплаты изменился. Запрос владельцу не отправлен."
+                );
+            }
+            requireManualCardPaymentLocalEligibility(order, link, orderId);
+            if (actor.isBlank() || actor.length() > 150) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный исполнитель операции");
+            }
+            freezeActualRecipientIntentIfRequired(
+                    order,
+                    link,
+                    recipientType,
+                    recipientProfileId,
+                    recipientKey,
+                    reason,
+                    receiptUrl,
+                    actor
+            );
+            if (link.getManualActualRecipientType() != ContractorRecipientType.OWNER
+                    || link.getManualActualRecipientProfileId() != null
+                    || link.getManualActualCashDestinationKind() != ContractorCashDestinationKind.OWNER) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Для подтверждения владельца должен быть выбран именно владелец"
+                );
+            }
+
+            String callbackToken = newOwnerApprovalToken();
+            OwnerManualCardPaymentApproval approval = ownerManualCardPaymentApprovalRepository
+                    .findByPaymentLinkIdForUpdate(link.getId())
+                    .orElseGet(OwnerManualCardPaymentApproval::new);
+            approval.setPaymentLinkId(link.getId());
+            approval.setOrderId(orderId);
+            approval.setAmountKopecks(link.getAmountKopecks());
+            approval.setRecipientKey(normalize(recipientKey));
+            approval.setRecipientType(ContractorRecipientType.OWNER);
+            approval.setRecipientProfileId(null);
+            approval.setReason(reason);
+            approval.setReceiptUrl(receiptUrl);
+            approval.setRequestedBy(actor);
+            approval.setCallbackTokenHash(ownerApprovalTokenHash(callbackToken));
+            approval.setStatus(OwnerManualCardPaymentApprovalStatus.PENDING);
+            approval.setRequestedAt(LocalDateTime.now());
+            approval.setAttemptCount(0);
+            approval.setLastAttemptAt(null);
+            approval.setLastError(null);
+            approval.setApprovedByUserId(null);
+            approval.setApprovedBy(null);
+            approval.setApprovedAt(null);
+            approval = ownerManualCardPaymentApprovalRepository.saveAndFlush(approval);
+            paymentLinkRepository.save(link);
+
+            Company company = order.getCompany();
+            manualCardPaymentReviewNotificationService.notifyOwnerApprovalAfterCommit(
+                    new ManualCardPaymentReviewNotificationService.OwnerApprovalRequest(
+                            approval.getId(),
+                            callbackToken,
+                            link.getId(),
+                            orderId,
+                            company == null ? null : company.getTitle(),
+                            link.getAmountKopecks(),
+                            actor,
+                            reason,
+                            link.getStatus() == null ? null : link.getStatus().name()
+                    )
+            );
+            return ManagerManualCardPaymentResultResponse.ownerApprovalPending(orderId, link.getId());
+        });
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public OwnerManualCardPaymentApprovalOutcome approveOwnerManualCardPayment(
+            Long approvalId,
+            String callbackToken,
+            User approver,
+            Authentication authentication
+    ) {
+        requireOwnerManualCardPaymentApprover(approver, authentication);
+        OwnerManualCardPaymentApprovalCommand command = transactionExecutor.required(() ->
+                prepareOwnerManualCardPaymentApproval(approvalId, callbackToken));
+        if (command.alreadyCompleted()) {
+            return command.outcome(true);
+        }
+        try {
+            confirmPaidByManualCardTransferInternal(
+                    command.paymentLinkId(),
+                    command.amountKopecks(),
+                    "Причина менеджера: " + command.reason(),
+                    command.receiptUrl(),
+                    command.requestedBy(),
+                    authentication,
+                    new ManualCardPaymentContext(ManualCardPaymentMode.MANAGER_REPORTED, command.reason()),
+                    command.recipientType(),
+                    command.recipientProfileId(),
+                    command.recipientKey()
+            );
+        } catch (RuntimeException exception) {
+            transactionExecutor.requiredNoRollback(() -> {
+                recordOwnerApprovalFailure(approvalId, callbackToken, exception);
+                return null;
+            });
+            throw exception;
+        }
+        transactionExecutor.required(() -> {
+            OwnerManualCardPaymentApproval approval = requireOwnerApproval(approvalId, callbackToken);
+            if (approval.getStatus() != OwnerManualCardPaymentApprovalStatus.CONFIRMED) {
+                approval.setStatus(OwnerManualCardPaymentApprovalStatus.CONFIRMED);
+                approval.setApprovedByUserId(approver == null ? null : approver.getId());
+                approval.setApprovedBy(approver == null ? null : limit(normalize(approver.getUsername()), 150));
+                approval.setApprovedAt(LocalDateTime.now());
+                approval.setLastError(null);
+                ownerManualCardPaymentApprovalRepository.save(approval);
+            }
+            return null;
+        });
+        return command.outcome(false);
+    }
+
+    private void requireOwnerManualCardPaymentApprover(User approver, Authentication authentication) {
+        boolean privileged = approver != null
+                && approver.getId() != null
+                && approver.isActive()
+                && approver.getRoles() != null
+                && approver.getRoles().stream()
+                        .map(Role::getName)
+                        .filter(Objects::nonNull)
+                        .map(value -> value.trim().toUpperCase(Locale.ROOT))
+                        .anyMatch(value -> "ROLE_OWNER".equals(value) || "ROLE_ADMIN".equals(value));
+        boolean sameAuthenticatedUser = authentication != null
+                && !normalize(authentication.getName()).isBlank()
+                && normalize(authentication.getName()).equalsIgnoreCase(normalize(
+                        approver == null ? null : approver.getUsername()
+                ));
+        if (!privileged || !sameAuthenticatedUser) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Подтвердить поступление может только активный владелец или администратор"
+            );
+        }
+    }
+
+    private OwnerManualCardPaymentApprovalCommand prepareOwnerManualCardPaymentApproval(
+            Long approvalId,
+            String callbackToken
+    ) {
+        OwnerManualCardPaymentApproval approval = requireOwnerApproval(approvalId, callbackToken);
+        if (approval.getStatus() == OwnerManualCardPaymentApprovalStatus.CONFIRMED) {
+            return OwnerManualCardPaymentApprovalCommand.from(approval, true);
+        }
+        if (approval.getStatus() != OwnerManualCardPaymentApprovalStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Запрос уже не действует");
+        }
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(approval.getPaymentLinkId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "T-Bank-ссылка больше не существует. Оплата не зачислена."
+                ));
+        if (!hasOrderBinding(link, approval.getOrderId())
+                || link.getAmountKopecks() != approval.getAmountKopecks()
+                || !isOwnerApprovalEligibleRoute(link)
+                || link.getManualActualRecipientFrozenAt() == null
+                || link.getManualActualRecipientType() != ContractorRecipientType.OWNER
+                || link.getManualActualRecipientProfileId() != null
+                || link.getManualActualCashDestinationKind() != ContractorCashDestinationKind.OWNER) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Счёт или получатель изменился после запроса. Оплата не зачислена."
+            );
+        }
+        approval.setAttemptCount(approval.getAttemptCount() + 1);
+        approval.setLastAttemptAt(LocalDateTime.now());
+        approval.setLastError(null);
+        ownerManualCardPaymentApprovalRepository.save(approval);
+        return OwnerManualCardPaymentApprovalCommand.from(approval, false);
+    }
+
+    private OwnerManualCardPaymentApproval requireOwnerApproval(Long approvalId, String callbackToken) {
+        OwnerManualCardPaymentApproval approval = ownerManualCardPaymentApprovalRepository
+                .findByIdForUpdate(approvalId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Запрос подтверждения не найден"));
+        byte[] expected = approval.getCallbackTokenHash() == null
+                ? new byte[0]
+                : approval.getCallbackTokenHash().getBytes(StandardCharsets.US_ASCII);
+        byte[] actual = ownerApprovalTokenHash(normalize(callbackToken)).getBytes(StandardCharsets.US_ASCII);
+        if (!MessageDigest.isEqual(expected, actual)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Запрос подтверждения недействителен");
+        }
+        return approval;
+    }
+
+    private void recordOwnerApprovalFailure(Long approvalId, String callbackToken, RuntimeException exception) {
+        try {
+            OwnerManualCardPaymentApproval approval = requireOwnerApproval(approvalId, callbackToken);
+            if (approval.getStatus() == OwnerManualCardPaymentApprovalStatus.PENDING) {
+                String message = exception instanceof ResponseStatusException response
+                        ? response.getReason()
+                        : exception.getMessage();
+                approval.setLastError(limit(normalize(message), 512));
+                ownerManualCardPaymentApprovalRepository.save(approval);
+            }
+        } catch (RuntimeException auditFailure) {
+            log.warn("Не удалось записать ошибку подтверждения владельца approvalId={}", approvalId, auditFailure);
+        }
+    }
+
+    private String newOwnerApprovalToken() {
+        byte[] token = new byte[18];
+        secureRandom.nextBytes(token);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(token);
+    }
+
+    private String ownerApprovalTokenHash(String token) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(normalize(token).getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 недоступен", impossible);
+        }
+    }
+
+    public record OwnerManualCardPaymentApprovalOutcome(
+            Long approvalId,
+            Long orderId,
+            Long paymentLinkId,
+            long amountKopecks,
+            boolean alreadyCompleted
+    ) {
+    }
+
+    private record OwnerManualCardPaymentApprovalCommand(
+            Long approvalId,
+            Long orderId,
+            Long paymentLinkId,
+            long amountKopecks,
+            String recipientKey,
+            ContractorRecipientType recipientType,
+            Long recipientProfileId,
+            String reason,
+            String receiptUrl,
+            String requestedBy,
+            boolean alreadyCompleted
+    ) {
+        private static OwnerManualCardPaymentApprovalCommand from(
+                OwnerManualCardPaymentApproval approval,
+                boolean alreadyCompleted
+        ) {
+            return new OwnerManualCardPaymentApprovalCommand(
+                    approval.getId(),
+                    approval.getOrderId(),
+                    approval.getPaymentLinkId(),
+                    approval.getAmountKopecks(),
+                    approval.getRecipientKey(),
+                    approval.getRecipientType(),
+                    approval.getRecipientProfileId(),
+                    approval.getReason(),
+                    approval.getReceiptUrl(),
+                    approval.getRequestedBy(),
+                    alreadyCompleted
+            );
+        }
+
+        private OwnerManualCardPaymentApprovalOutcome outcome(boolean replay) {
+            return new OwnerManualCardPaymentApprovalOutcome(
+                    approvalId,
+                    orderId,
+                    paymentLinkId,
+                    amountKopecks,
+                    replay
+            );
+        }
     }
 
     private ManualCardPaymentContextResponse manualCardPaymentContextForRoute(Order order, PaymentLink link) {
@@ -3642,6 +4099,18 @@ public class PaymentLinkService {
                     || link.getPaymentMethod() == PaymentMethod.SBP_QR);
     }
 
+    /**
+     * Owner receipt is never self-proving: the customer can transfer to an
+     * old owner account while the current client instruction points either to
+     * T-Bank or to a contractor. In both cases the manager only reports the
+     * receipt; an owner/admin must confirm it before the order is settled.
+     */
+    private boolean isOwnerApprovalEligibleRoute(PaymentLink link) {
+        return isBankPaymentRoute(link)
+                || isDirectManualAttributionRoute(link)
+                || isRecoverableExpiredManualRoute(link);
+    }
+
     private boolean isUnstartedCreatedBankRoute(PaymentLink link) {
         return link != null
                 && (link.getPaymentMethod() == PaymentMethod.BANK_FORM
@@ -4788,6 +5257,7 @@ public class PaymentLinkService {
         validatePayable(link);
         validateTbankPayment(link);
         PaymentProfile profile = ensurePaymentProfile(link);
+        requireActivatedPublicBankProvider(profile, mode);
         TbankPaymentProfile runtimeProfile = normalize(link.getTbankPaymentId()).isBlank()
                 ? paymentProfileService.toRuntime(profile)
                 : runtimeProfileForLink(profile, link);
@@ -6449,6 +6919,16 @@ public class PaymentLinkService {
         }
     }
 
+    private void requireActivatedPublicBankProvider(PaymentProfile profile, BankInitMode mode) {
+        if (!paymentProfileService.isTochkaProvider(profile)) {
+            return;
+        }
+        String reason = mode == BankInitMode.SBP_QR
+                ? "СБП через Точку пока не активировано. Платеж в банк не отправлен."
+                : "Интернет-эквайринг Точки пока не активирован на платежной странице.";
+        throw new ResponseStatusException(HttpStatus.CONFLICT, reason);
+    }
+
     private void ensureManualPayment(PaymentLink link) {
         if (!isManualPayment(link)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Это не ручной платеж");
@@ -6567,6 +7047,8 @@ public class PaymentLinkService {
         boolean payable = isPayable(link, requisites);
         boolean contractorRequisitesVisible = !requisites.contractorRoute()
                 || (requisites.available() && payable);
+        String provider = publicPaymentProvider(link);
+        boolean tochkaProvider = PaymentProfile.PROVIDER_TOCHKA.equals(provider);
         return new PublicPaymentLinkResponse(
                 link.getToken(),
                 order == null ? null : order.getId(),
@@ -6579,12 +7061,14 @@ public class PaymentLinkService {
                 "",
                 link.getStatus().name(),
                 paymentMethodName(link),
+                provider,
                 link.getExpiresAt(),
                 payable,
-                paymentPageModeName(),
-                runtimeSettingsService.isTpayEnabled(),
-                runtimeSettingsService.isSberpayEnabled(),
-                runtimeSettingsService.isMirpayEnabled(),
+                tochkaProvider ? TbankPaymentPageMode.BANK_ONLY.name() : paymentPageModeName(),
+                !tochkaProvider,
+                !tochkaProvider && runtimeSettingsService.isTpayEnabled(),
+                !tochkaProvider && runtimeSettingsService.isSberpayEnabled(),
+                !tochkaProvider && runtimeSettingsService.isMirpayEnabled(),
                 manualPaymentTypeName(link),
                 contractorRequisitesVisible ? requisites.phone() : "",
                 contractorRequisitesVisible ? requisites.recipientName() : "",
@@ -6613,6 +7097,13 @@ public class PaymentLinkService {
     private String paymentPageModeName() {
         TbankPaymentPageMode mode = runtimeSettingsService.paymentPageMode();
         return (mode == null ? TbankRuntimeSettingsService.DEFAULT_PAYMENT_PAGE_MODE : mode).name();
+    }
+
+    private String publicPaymentProvider(PaymentLink link) {
+        PaymentProfile linkedProfile = link == null ? null : link.getPaymentProfile();
+        return linkedProfile == null
+                ? PaymentProfile.PROVIDER_TBANK
+                : paymentProfileService.provider(linkedProfile);
     }
 
     private ManagerPaymentLinkResponse toManagerResponse(PaymentLink link) {

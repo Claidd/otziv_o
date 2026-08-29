@@ -236,6 +236,75 @@ class PaymentProfileServiceTest {
         verify(paymentProfileRepository, never()).findByTerminalKey("terminal-two");
     }
 
+    @Test
+    void tbankRuntimeConversionRejectsTochkaProfile() {
+        PaymentProfile tochka = profile();
+        tochka.setProvider(" tochka ");
+        when(runtimeSettingsService.runtimeMode()).thenReturn(TbankRuntimeMode.LIVE);
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService
+        );
+
+        ResponseStatusException runtimeError = assertThrows(
+                ResponseStatusException.class,
+                () -> service.toRuntime(tochka)
+        );
+        ResponseStatusException terminalError = assertThrows(
+                ResponseStatusException.class,
+                () -> service.toRuntimeForTerminal(tochka, "merchant-id")
+        );
+
+        assertEquals(409, runtimeError.getStatusCode().value());
+        assertEquals(409, terminalError.getStatusCode().value());
+        assertEquals(PaymentProfile.PROVIDER_TOCHKA, service.provider(tochka));
+        assertTrue(service.isTochkaProvider(tochka));
+    }
+
+    @Test
+    void managementStateDoesNotTreatTochkaProfileAsTbankCredentials() {
+        PaymentProfile tochka = profile();
+        tochka.setProvider(PaymentProfile.PROVIDER_TOCHKA);
+        tochka.setTerminalKey("tochka-profile-key");
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(tochka));
+        when(managerRepository.findAllForPaymentProfileAssignments()).thenReturn(List.of());
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService
+        );
+
+        var response = service.managementState().profiles().getFirst();
+
+        assertEquals(PaymentProfile.PROVIDER_TOCHKA, response.provider());
+        assertEquals("tochka-profile-key", response.terminalKey());
+        assertFalse(response.hasPassword());
+        verify(runtimeSettingsService, never()).runtimeMode();
+    }
+
+    @Test
+    void tbankTerminalLookupDoesNotReturnTochkaProfile() {
+        PaymentProfile tochka = profile();
+        tochka.setProvider(PaymentProfile.PROVIDER_TOCHKA);
+        tochka.setTerminalKey("merchant-id");
+        when(paymentProfileRepository.findByTerminalKey("merchant-id")).thenReturn(Optional.of(tochka));
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService
+        );
+
+        assertTrue(service.findByTerminalKey("merchant-id").isEmpty());
+    }
+
     private Manager manager(PaymentProfile profile) {
         User user = new User();
         user.setId(10L);

@@ -1620,6 +1620,24 @@ public class ManagerControlService {
                 .findById(issue.stateId())
                 .orElse(null);
         Company company = automationFailureCompany(state);
+        String errorCode = safe(state == null ? null : state.getLastErrorCode())
+                .trim()
+                .toLowerCase(Locale.ROOT);
+        if (company != null && "chat_platform_unknown".equals(errorCode)) {
+            String chat = safe(company.getUrlChat()).trim();
+            String companyName = safe(company.getTitle()).trim();
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "У компании"
+                            + (companyName.isBlank() ? "" : " «" + companyName + "»")
+                            + (chat.isBlank()
+                            ? " не указана ссылка на клиентский чат. "
+                            : " указана неподдерживаемая ссылка на чат: " + chat + ". ")
+                            + "Автоматическая отправка работает только с WhatsApp, Telegram и MAX. "
+                            + "Замените ссылку на поддерживаемый чат либо обработайте предложение вручную; "
+                            + "после изменения ссылки нажмите «Починить» ещё раз."
+            );
+        }
         if (company == null
                 || !isTelegramChat(safe(company.getUrlChat()).toLowerCase(Locale.ROOT))
                 || company.getTelegramGroupChatId() != null) {

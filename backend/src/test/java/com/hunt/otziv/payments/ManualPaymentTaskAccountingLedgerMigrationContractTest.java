@@ -103,6 +103,6 @@ class ManualPaymentTaskAccountingLedgerMigrationContractTest {
                         "db/migration/V1_10_251__manual_payment_task_accounting_ledger.sql"
                 )).readAllBytes(),
                 StandardCharsets.UTF_8
-        );
+        ).replace("\r\n", "\n").replace('\r', '\n');
     }
 }

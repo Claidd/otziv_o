@@ -105,21 +105,9 @@ public class OrderPaymentCancellationService {
         order = orderRepository.findByIdForMutation(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден после отката следующего заказа"));
 
-        ContractorPaymentAccountingAuthority accountingAuthority =
-                rolloutStateService.lockAccountingAuthority();
-        boolean completionAttributionEnabled =
-                accountingAuthority == ContractorPaymentAccountingAuthority.COMPLETION
-                        || contractorPaymentRuntimeSwitch.rewardAttributionLiveEnabled();
-        if (completionAttributionEnabled) {
-            contractorCompletionRewardService.migrateLegacyRewardsBeforePaymentCancellation(orderId);
-        }
         List<PaymentCheck> activeChecks = paymentCheckRepository.findByOrderIdAndActiveTrue(orderId);
         List<Zp> activeZp = zpRepository.findByOrderIdAndActiveTrue(orderId);
-        List<Zp> paymentDependentZp = activeZp.stream()
-                .filter(zp -> !ContractorCompletionRewardService.isCompletionBasedSource(zp.getSource()))
-                .filter(zp -> !completionAttributionEnabled
-                        || !ContractorRewardSourceCodes.isLegacyEarnedReward(zp.getSource()))
-                .toList();
+        List<Zp> paymentDependentZp = List.copyOf(activeZp);
         contractorRewardLedgerService.requireCancellationRepresentable(paymentDependentZp);
 
         BigDecimal canceledSum = activeChecks.stream()
@@ -132,13 +120,11 @@ public class OrderPaymentCancellationService {
                 .orElse(order.getAmount());
 
         activeChecks.forEach(check -> check.setActive(false));
-        paymentDependentZp.forEach(zp -> zp.setActive(false));
         paymentCheckRepository.saveAll(activeChecks);
-        zpRepository.saveAll(paymentDependentZp);
-        // Deactivation must reach the contractor ledger in this transaction.
-        // Otherwise released capacity could be routed while the old reward is
-        // still counted, or vice versa. A failure deliberately aborts cancel.
-        contractorRewardLedgerService.synchronizeSources(paymentDependentZp);
+        int deactivatedSalary = contractorCompletionRewardService.deactivateOrderPaymentAccruals(
+                orderId,
+                "manual_payment_cancellation"
+        );
 
         rollbackCompanyTotals(order, canceledSum, canceledAmount);
 
@@ -161,7 +147,7 @@ public class OrderPaymentCancellationService {
                 STATUS_REMINDER,
                 "checks=" + activeChecks.size()
                         + ";zp=" + paymentDependentZp.size()
-                        + ";completionRewardsPreserved=" + (activeZp.size() - paymentDependentZp.size())
+                        + ";salaryDeactivated=" + deactivatedSalary
                         + ";sum=" + canceledSum
                         + ";amount=" + canceledAmount
                         + ";paymentLink=restored"

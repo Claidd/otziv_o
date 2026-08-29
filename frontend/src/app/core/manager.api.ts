@@ -365,6 +365,7 @@ export interface ManualCardPaymentRecipientOption {
   taskRecipientName?: string | null;
   accountingTargetLabel?: string | null;
   effectText?: string | null;
+  bankRecipientName?: string | null;
 }
 
 export interface ManualCardPaymentContext {
@@ -387,6 +388,15 @@ export interface ManualCardPaymentConfirmationRequest {
   recipientKey: string;
   recipientType?: ManualCardPaymentRecipientType | null;
   recipientProfileId?: number | null;
+}
+
+export type ManagerManualCardPaymentResultStatus = 'COMPLETED' | 'OWNER_APPROVAL_PENDING';
+
+export interface ManagerManualCardPaymentResult {
+  status: ManagerManualCardPaymentResultStatus;
+  orderId: number;
+  paymentLinkId: number;
+  message: string;
 }
 
 export interface FilialDeletionPreview {
@@ -554,7 +564,7 @@ export interface PaymentRouteChangeContext {
   status: string;
   canChange: boolean;
   blockReason: string;
-  configuredMode?: 'AUTO_ROUTING' | 'OWNER_PAPER_INVOICE' | string;
+  configuredMode?: 'AUTO_ROUTING' | 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE' | string;
   paperInvoiceIssued?: boolean;
 }
 
@@ -1217,8 +1227,8 @@ export class ManagerApi {
   confirmManualCardPayment(
     orderId: number,
     request: ManualCardPaymentConfirmationRequest
-  ): Observable<void> {
-    return this.http.post<void>(
+  ): Observable<ManagerManualCardPaymentResult> {
+    return this.http.post<ManagerManualCardPaymentResult>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/confirm-manual-card-payment`,
       request
     );

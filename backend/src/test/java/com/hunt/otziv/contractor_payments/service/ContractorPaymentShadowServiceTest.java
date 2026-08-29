@@ -1146,6 +1146,113 @@ class ContractorPaymentShadowServiceTest {
     }
 
     @Test
+    void paidLinkCannotReconfirmSupersededOriginalRecipientAndRepairsExistingTail() {
+        LocalDateTime paidAt = LocalDateTime.of(2026, 8, 28, 23, 39, 56);
+        Order order = order(24_808L, null, null);
+        PaymentLink link = paymentLink(7_259L, order, 200_000L);
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaidAt(paidAt);
+        link.setConfirmedAmountKopecks(200_000L);
+
+        ContractorPaymentProfile originalProfile = profile(
+                5L, user(5L), ContractorRole.SPECIALIST);
+        ContractorPaymentAllocation original = new ContractorPaymentAllocation();
+        original.setId(988L);
+        original.setMode(ContractorAllocationMode.LIVE);
+        original.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        original.setSourceId(link.getId());
+        original.setOrderId(order.getId());
+        original.setAttemptNo(1);
+        original.setRecipientType(ContractorRecipientType.SPECIALIST);
+        original.setRecipientProfile(originalProfile);
+        original.setAmountKopecks(200_000L);
+        original.setConfirmedKopecks(200_000L);
+        original.setConfirmedAt(paidAt.plusSeconds(29));
+        original.setStatus(ContractorAllocationStatus.LATE_PAYMENT_AFTER_RELEASE);
+
+        ContractorActualPaymentAttribution ownerAttribution = paymentLinkAttribution(
+                134L, link, original, null, ContractorRecipientType.OWNER,
+                ContractorCashDestinationKind.OWNER, null, 200_000L
+        );
+        when(actualPaymentAttributionRepository
+                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
+                        ContractorActualPaymentSourceKind.PAYMENT_LINK, link.getId()))
+                .thenReturn(List.of(ownerAttribution));
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE,
+                ContractorAllocationSourceType.PAYMENT_LINK,
+                link.getId()
+        )).thenReturn(Optional.of(original));
+        when(profileRepository.findByIdForUpdate(originalProfile.getId()))
+                .thenReturn(Optional.of(originalProfile));
+        ManualPaymentTaskContractorReturnBridge.Binding binding =
+                mock(ManualPaymentTaskContractorReturnBridge.Binding.class);
+        when(taskReturnBridge.lockPaymentLinkBinding(original, link)).thenReturn(binding);
+        registerReconciliation(original);
+
+        assertEquals(1, service.reconcilePaymentLinkId(link.getId()));
+        assertEquals(0, service.reconcilePaymentLinkId(link.getId()));
+
+        assertEquals(ContractorAllocationStatus.RETURNED, original.getStatus());
+        assertEquals(200_000L, original.getConfirmedKopecks());
+        assertEquals(200_000L, original.getReturnedKopecks());
+        verify(taskReturnBridge, times(1)).recordReturn(binding, original);
+        ArgumentCaptor<ContractorPaymentAllocationEvent> event =
+                ArgumentCaptor.forClass(ContractorPaymentAllocationEvent.class);
+        verify(eventRepository).save(event.capture());
+        assertEquals(ContractorAllocationEventType.RETURNED, event.getValue().getEventType());
+        assertEquals(200_000L, event.getValue().getAmountKopecks());
+    }
+
+    @Test
+    void paidOwnerAttributionLeavesAlreadyCanceledOriginalRecipientReleased() {
+        Order order = order(24_809L, null, null);
+        PaymentLink link = paymentLink(7_260L, order, 200_000L);
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaidAt(LocalDateTime.of(2026, 8, 28, 23, 45));
+        link.setConfirmedAmountKopecks(200_000L);
+
+        ContractorPaymentProfile originalProfile = profile(
+                15L, user(15L), ContractorRole.SPECIALIST);
+        ContractorPaymentAllocation original = new ContractorPaymentAllocation();
+        original.setId(989L);
+        original.setMode(ContractorAllocationMode.LIVE);
+        original.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        original.setSourceId(link.getId());
+        original.setOrderId(order.getId());
+        original.setAttemptNo(1);
+        original.setRecipientType(ContractorRecipientType.SPECIALIST);
+        original.setRecipientProfile(originalProfile);
+        original.setAmountKopecks(200_000L);
+        original.setStatus(ContractorAllocationStatus.CANCELED);
+
+        ContractorActualPaymentAttribution ownerAttribution = paymentLinkAttribution(
+                135L, link, original, null, ContractorRecipientType.OWNER,
+                ContractorCashDestinationKind.OWNER, null, 200_000L
+        );
+        when(actualPaymentAttributionRepository
+                .findAllBySourceKindAndSourceIdOrderByEffectiveAtAscIdAsc(
+                        ContractorActualPaymentSourceKind.PAYMENT_LINK, link.getId()))
+                .thenReturn(List.of(ownerAttribution));
+        when(allocationRepository.findFirstByModeAndSourceTypeAndSourceIdOrderByAttemptNoDescIdDesc(
+                ContractorAllocationMode.LIVE,
+                ContractorAllocationSourceType.PAYMENT_LINK,
+                link.getId()
+        )).thenReturn(Optional.of(original));
+        when(profileRepository.findByIdForUpdate(originalProfile.getId()))
+                .thenReturn(Optional.of(originalProfile));
+        registerReconciliation(original);
+
+        assertEquals(0, service.reconcilePaymentLinkId(link.getId()));
+
+        assertEquals(ContractorAllocationStatus.CANCELED, original.getStatus());
+        assertEquals(0L, original.getConfirmedKopecks());
+        assertEquals(0L, original.getReturnedKopecks());
+        verify(taskReturnBridge, never()).lockPaymentLinkBinding(original, link);
+        verify(eventRepository, never()).save(any());
+    }
+
+    @Test
     void taskRedirectedProfilePartialRefundMarksOnlyActualAllocationPendingViaDurableRetry() {
         LocalDateTime paidAt = LocalDateTime.of(2026, 8, 7, 10, 0);
         Order order = order(61_001L, null, null);

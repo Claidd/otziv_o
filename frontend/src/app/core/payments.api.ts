@@ -6,6 +6,8 @@ import { SKIP_AUTH_REDIRECT_ON_401, SKIP_AUTH_TOKEN } from './auth-http-context'
 
 export interface PublicPaymentLink {
   token: string;
+  provider?: 'T_BANK' | 'TOCHKA' | string | null;
+  sbpBankSelectionSupported?: boolean | null;
   orderId?: number | null;
   companyTitle: string;
   filialTitle: string;

@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
  *
  * <p>The mutable application settings remain deployment gates. They are not
  * allowed to return accounting to {@link ContractorPaymentAccountingAuthority#LEGACY}
- * after the completion boundary was accepted.</p>
+ * after the payment-accounting boundary was accepted.</p>
  */
 @Entity
 @Getter
@@ -58,7 +58,7 @@ public class ContractorPaymentRolloutState {
     private long rowVersion;
 
     public boolean completionAccountingActive() {
-        return accountingAuthority == ContractorPaymentAccountingAuthority.COMPLETION;
+        return accountingAuthority != null && accountingAuthority.paymentBased();
     }
 
     public void activateCompletionAccounting(LocalDate startDate, String actor, LocalDateTime now) {
@@ -75,7 +75,7 @@ public class ContractorPaymentRolloutState {
                 || now == null) {
             throw new IllegalStateException("Invalid contractor accounting activation");
         }
-        accountingAuthority = ContractorPaymentAccountingAuthority.COMPLETION;
+        accountingAuthority = ContractorPaymentAccountingAuthority.PAYMENT;
         routingRequested = false;
         attributionStartDate = startDate;
         activatedAt = now;

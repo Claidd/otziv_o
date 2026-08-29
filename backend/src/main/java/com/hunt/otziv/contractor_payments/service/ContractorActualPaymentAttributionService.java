@@ -1719,21 +1719,29 @@ public class ContractorActualPaymentAttributionService {
         ContractorPaymentProfile profile = candidate.profileId() == null
                 ? null : profiles.get(candidate.profileId());
         long available = profile == null ? 0L : capacity(profile, mode, original, false);
+        String accountingRecipientName = profile == null
+                ? candidate.name()
+                : recipientName(profile, candidate.type());
+        String bankRecipientName = profile == null
+                ? ""
+                : isOriginal
+                        ? firstNonBlank(candidate.name(), profile.getRecipientName())
+                        : normalize(profile.getRecipientName());
         ManualCardPaymentRecipientResponse response = new ManualCardPaymentRecipientResponse(
                 candidate.type(),
                 candidate.profileId(),
                 candidate.userId(),
-                candidate.name(),
+                accountingRecipientName,
                 available,
                 profile == null ? 0L : Math.max(0L, amount - available),
-                isOriginal
+                isOriginal,
+                bankRecipientName
         );
         String key = recipientKey(candidate.type(), candidate.profileId());
-        // The client-facing candidate is added first and can carry the bank
-        // recipient snapshot (for example, the contractor is Victoria while
-        // the card holder shown to the client is Anastasia). Re-adding the
-        // assigned contractor with the same accounting key must not replace
-        // that immutable bank-facing name with the contractor's FIO.
+        // The accounting identity and the bank card holder are deliberately
+        // separate. Several contractors may use the same bank requisites, but
+        // reservations, confirmations and notifications remain keyed by the
+        // contractor profile/user rather than by the card holder name.
         ManualCardPaymentRecipientResponse existing = target.get(key);
         if (existing == null || (isOriginal && !existing.original())) {
             target.put(key, response);
@@ -1778,7 +1786,8 @@ public class ContractorActualPaymentAttributionService {
                 snapshot.candidateKey(), ContractorCashDestinationKind.MANUAL_PAYMENT_TASK,
                 snapshot.taskId(), snapshot.taskGeneration(), snapshot.accountingTargetKind(),
                 snapshot.bankRecipientName(), snapshot.accountingTargetLabel(),
-                "Сумма будет зачтена в платёжное задание"
+                "Сумма будет зачтена в платёжное задание",
+                snapshot.bankRecipientName()
         ));
     }
 

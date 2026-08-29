@@ -3,6 +3,8 @@ package com.hunt.otziv.analytics.service;
 import com.hunt.otziv.admin.dto.personal.UserData;
 import com.hunt.otziv.analytics.model.AnalyticsDailyUser;
 import com.hunt.otziv.analytics.model.AnalyticsMonthlyUser;
+import com.hunt.otziv.analytics.service.AnalyticsSalarySourceService.SalaryTotal;
+import com.hunt.otziv.analytics.service.AnalyticsFinancialSourceService.PaymentTotal;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.User;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,11 +16,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class AnalyticsAggregateScoreServiceTest {
@@ -30,11 +35,17 @@ class AnalyticsAggregateScoreServiceTest {
     @Mock
     private AnalyticsAggregateReadService readService;
 
+    @Mock
+    private AnalyticsSalarySourceService salarySourceService;
+
+    @Mock
+    private AnalyticsFinancialSourceService financialSourceService;
+
     private AnalyticsAggregateScoreService service;
 
     @BeforeEach
     void setUp() {
-        service = new AnalyticsAggregateScoreService(readService);
+        service = new AnalyticsAggregateScoreService(readService, salarySourceService, financialSourceService);
     }
 
     @Test
@@ -73,6 +84,13 @@ class AnalyticsAggregateScoreServiceTest {
                 0
         );
         when(readService.monthlyUsers(MONTH_START, MONTH_START)).thenReturn(List.of(manager, operator, owner));
+        when(salarySourceService.totalsForUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
+                .thenReturn(Map.of(
+                        10L, new SalaryTotal(new BigDecimal("90.00"), 4, 8),
+                        20L, new SalaryTotal(new BigDecimal("20.00"), 2, 2)
+                ));
+        when(financialSourceService.paymentTotalsForUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
+                .thenReturn(Map.of(10L, new PaymentTotal(new BigDecimal("500.00"), 1)));
 
         Optional<List<UserData>> result = service.buildScore(DATE);
 
@@ -82,12 +100,12 @@ class AnalyticsAggregateScoreServiceTest {
         UserData managerScore = result.get().getFirst();
         assertEquals("Manager One", managerScore.getFio());
         assertEquals("ROLE_MANAGER", managerScore.getRole());
-        assertEquals(100L, managerScore.getSalary());
+        assertEquals(90L, managerScore.getSalary());
         assertEquals(500L, managerScore.getTotalSum());
-        assertEquals(1110L, managerScore.getZpTotal());
+        assertEquals(110L, managerScore.getZpTotal());
         assertEquals(2L, managerScore.getNewCompanies());
-        assertEquals(3L, managerScore.getOrder1Month());
-        assertEquals(7L, managerScore.getReview1Month());
+        assertEquals(4L, managerScore.getOrder1Month());
+        assertEquals(8L, managerScore.getReview1Month());
         assertEquals(0L, managerScore.getLeadsNew());
         assertEquals(55L, managerScore.getImageId());
         assertEquals(10L, managerScore.getUserId());
@@ -108,6 +126,8 @@ class AnalyticsAggregateScoreServiceTest {
 
         when(readService.monthlyUsers(MONTH_START, MONTH_START)).thenReturn(List.of());
         when(readService.dailyUsers(MONTH_START, MONTH_END)).thenReturn(List.of(firstDay, secondDay));
+        when(salarySourceService.totalsForUsers(anyCollection(), eq(MONTH_START), eq(DATE)))
+                .thenReturn(Map.of(11L, new SalaryTotal(new BigDecimal("100.00"), 3, 5)));
 
         Optional<List<UserData>> result = service.buildScore(DATE);
 

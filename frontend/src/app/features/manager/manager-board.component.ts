@@ -1080,6 +1080,14 @@ export class ManagerBoardComponent implements OnDestroy {
   completeManualCardPayment(result: ManagerManualCardPaymentCompleted): void {
     const order = this.manualCardPaymentOrder();
     this.manualCardPaymentOrder.set(null);
+    if (result.result.status === 'OWNER_APPROVAL_PENDING') {
+      this.toastService.warning(
+        'Ожидается подтверждение владельца',
+        result.result.message
+      );
+      this.loadBoard();
+      return;
+    }
     this.toastService.success(
       'Оплата отмечена',
       `${order?.companyTitle || `Заказ #${result.context.orderId}`}: получатель — ${this.manualCardPaymentRecipientLabel(result)}`

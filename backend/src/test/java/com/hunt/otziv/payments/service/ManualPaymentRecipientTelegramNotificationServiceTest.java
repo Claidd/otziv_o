@@ -21,6 +21,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -106,6 +107,45 @@ class ManualPaymentRecipientTelegramNotificationServiceTest {
         service.notifyAfterCommit(link);
 
         verifyNoInteractions(userRepository, managerRepository, telegramService);
+    }
+
+    @Test
+    void sendsCommonInvoiceReceiptToActualSpecialistChat() {
+        User specialist = new User();
+        specialist.setId(15L);
+        specialist.setFio("Максим Р.");
+        specialist.setWorkerTelegramGroupChatId(-10015L);
+        when(userRepository.findById(15L)).thenReturn(Optional.of(specialist));
+
+        User confirmer = new User();
+        confirmer.setUsername("vika");
+        confirmer.setFio("Виктория Ц.");
+        when(userRepository.findByUsername("vika")).thenReturn(Optional.of(confirmer));
+        when(telegramService.sendMessage(eq(-10015L), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(true);
+
+        var result = service.notifyCommonInvoiceRecipient(
+                new ManualPaymentRecipientTelegramNotificationService.CommonInvoiceRecipientNotification(
+                        146L,
+                        "Пластек - общий счет",
+                        3,
+                        425_000L,
+                        ContractorRecipientType.SPECIALIST,
+                        15L,
+                        "vika",
+                        LocalDateTime.of(2026, 8, 28, 21, 1)
+                )
+        );
+
+        assertTrue(result.sent());
+        assertEquals("Telegram", result.channel());
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessage(eq(-10015L), message.capture());
+        assertTrue(message.getValue().contains("Оплата по реквизитам подтверждена"));
+        assertTrue(message.getValue().contains("Сумма: 4 250 ₽"));
+        assertTrue(message.getValue().contains("Общий счёт №146: Пластек - общий счет"));
+        assertTrue(message.getValue().contains("Заказов: 3"));
+        assertTrue(message.getValue().contains("Подтвердил: Виктория Ц."));
     }
 
     private PaymentLink confirmedManualLink() {

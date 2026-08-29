@@ -923,6 +923,14 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   completeJournalManualCardPayment(result: ManagerManualCardPaymentCompleted): void {
     this.journalManualCardPaymentOrder.set(null);
+    if (result.result.status === 'OWNER_APPROVAL_PENDING') {
+      this.toastService.warning(
+        'Ожидается подтверждение владельца',
+        result.result.message
+      );
+      this.loadPaymentLinks();
+      return;
+    }
     this.toastService.success(
       'Ручная оплата подтверждена',
       `Получатель: ${manualPaymentRecipientLabel(result.recipient)}`

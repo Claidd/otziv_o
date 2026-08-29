@@ -3,7 +3,9 @@ import {
   PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL,
   commonInvoicePaymentEvidence,
   commonInvoicePaymentEvidenceSnapshot,
+  commonInvoiceStatusProblem,
   isIncompletePartiallyPaidInvoice,
+  isManualTbankReconciliationRetryError,
   isMigrationPaymentRegistryError,
   isPaymentInitManualCheckError,
   paymentInitNoPaymentActionLabel,
@@ -11,6 +13,34 @@ import {
   paymentInitNoPaymentInstructions
 } from './common-billing.component';
 import type { CommonInvoiceDetailsResponse } from '../../../core/common-billing.api';
+
+describe('commonInvoiceStatusProblem', () => {
+  it.each(['INVOICED', 'REMINDER', 'PARTIALLY_PAID', 'PAID'])(
+    'does not show a false warning for the normal %s lifecycle state',
+    (status) => {
+      expect(commonInvoiceStatusProblem(status)).toBe('');
+    }
+  );
+
+  it('keeps actionable warnings for states that require intervention', () => {
+    expect(commonInvoiceStatusProblem('READY')).toContain('готов к отправке');
+    expect(commonInvoiceStatusProblem('NEEDS_ATTENTION')).toContain('ручного разбора');
+  });
+});
+
+describe('isManualTbankReconciliationRetryError', () => {
+  it('allows retry only for an unfinished or ambiguous old-route reconciliation', () => {
+    expect(isManualTbankReconciliationRetryError(
+      'manual_payment_tbank_reconciliation_in_progress:INVOICED'
+    )).toBe(true);
+    expect(isManualTbankReconciliationRetryError(
+      'manual_payment_tbank_reconciliation_retry:INVOICED: timeout'
+    )).toBe(true);
+    expect(isManualTbankReconciliationRetryError(
+      'manual_payment_tbank_payment_detected:INVOICED: CONFIRMED'
+    )).toBe(false);
+  });
+});
 
 describe('isIncompletePartiallyPaidInvoice', () => {
   it('recognizes a partially paid invoice that is still being collected', () => {

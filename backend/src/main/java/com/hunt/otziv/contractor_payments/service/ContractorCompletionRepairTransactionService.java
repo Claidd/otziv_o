@@ -20,7 +20,16 @@ public class ContractorCompletionRepairTransactionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void repairOrder(Long orderId) {
-        completionRewardService.ensureOrderCompletionAccrual(orderId);
+        completionRewardService.ensureOrderPaymentAccrual(orderId);
+        repairStateRepository.deleteById(orderId);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void reconcileUnpaidOrder(Long orderId) {
+        completionRewardService.deactivateOrderPaymentAccruals(
+                orderId,
+                "automatic_status_salary_reconciliation"
+        );
         repairStateRepository.deleteById(orderId);
     }
 

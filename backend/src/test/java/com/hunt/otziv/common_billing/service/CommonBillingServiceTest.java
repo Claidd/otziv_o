@@ -31,6 +31,7 @@ import com.hunt.otziv.common_billing.repository.CommonBillingAccountRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceBoardQueryRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
+import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentNotificationOutboxRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.config.settings.service.AppSettingService;
@@ -171,6 +172,8 @@ class CommonBillingServiceTest {
     private CommonInvoiceOrderRepository invoiceOrderRepository;
     @Mock
     private CommonInvoicePaymentRefRepository paymentRefRepository;
+    @Mock
+    private CommonInvoicePaymentNotificationOutboxRepository paymentNotificationOutboxRepository;
     @Mock
     private CompanyRepository companyRepository;
     @Mock
@@ -684,8 +687,47 @@ class CommonBillingServiceTest {
                 service, "commonInvoiceRouteChangeBlockReason", invoice, List.of());
 
         assertNotNull(reason);
-        assertTrue(reason.contains("открыл банковскую оплату"));
+        assertTrue(reason.contains("активная сессия T-Bank"));
+        assertTrue(reason.contains("«Оплачен»"));
         verifyNoInteractions(contractorPaymentLiveRoutingService);
+    }
+
+    @Test
+    void changedPaymentRouteMessageExplicitlyInvalidatesPreviousInstructions() {
+        String message = ReflectionTestUtils.invokeMethod(
+                service,
+                "paymentRouteChangedMessage",
+                "Новый способ оплаты"
+        );
+
+        assertNotNull(message);
+        assertTrue(message.contains("Способ оплаты изменён"));
+        assertTrue(message.contains("Не оплачивайте по ранее отправленным реквизитам или ссылке"));
+        assertTrue(message.endsWith("Новый способ оплаты"));
+    }
+
+    @Test
+    void commonInvoiceRouteChangeContextUsesReadOnlyFrozenRoutePreview() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaymentRouteType(PaymentMethod.MANUAL_MOBILE_BANK.name());
+        invoice.setPaymentRouteManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+        invoice.setPaymentRouteAmountKopecks(100_000L);
+        invoice.setPaymentRouteSelectedAt(LocalDateTime.of(2026, 8, 27, 19, 0));
+        invoice.setContractorAllocationId(801L);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentRefRepository.findByInvoiceIdOrderByCreatedAtAsc(invoice.getId()))
+                .thenReturn(List.of());
+        when(contractorPaymentLiveRoutingService.previewFrozenCommonRouteAction(invoice.getId(), 801L))
+                .thenReturn(FrozenCommonRouteAction.KEEP);
+
+        var context = service.commonInvoicePaymentRouteChangeContext(invoice.getId());
+
+        assertTrue(context.canChange());
+        verify(contractorPaymentLiveRoutingService)
+                .previewFrozenCommonRouteAction(invoice.getId(), 801L);
+        verify(contractorPaymentLiveRoutingService, never())
+                .frozenCommonRouteAction(anyLong(), anyLong());
     }
 
     @Test
@@ -1184,7 +1226,7 @@ class CommonBillingServiceTest {
 
 
     @Test
-    void attributedMarkPaidRejectsActiveCommonTbankLinkBeforeCreditingRecipient() throws Exception {
+    void attributedMarkPaidCancelsUnpaidTbankSessionBeforeCreditingActualRecipient() throws Exception {
         CommonInvoice invoice = invoice(account());
         invoice.setStatus(CommonInvoiceStatus.READY);
         invoice.setAmountKopecks(100_000L);
@@ -1195,11 +1237,238 @@ class CommonBillingServiceTest {
         invoice.setPaymentUrl("https://pay.example/active");
         Order order = order(101L);
         CommonInvoiceOrder invoiceItem = item(invoice, order);
+        CommonInvoicePaymentRef ref = paymentRef(
+                811L,
+                invoice,
+                "CURRENT",
+                "active-order",
+                "active-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(ref.getId(), ref);
         stubLockedInvoice(invoice, invoiceItem, order);
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(invoiceItem));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(paymentProfile()));
+        when(paymentProfileService.toRuntimeForTerminal(any(), eq("terminal"))).thenReturn(runtimeProfile());
+        when(tbankClient.getState(any(), eq("active-payment"))).thenReturn(new TbankGetStateResponse(
+                true, "0", null, null, "terminal", "FORM_SHOWED",
+                "active-payment", "active-order", 100_000L
+        ));
+        when(tbankClient.cancel(any(), any())).thenReturn(new TbankCancelResponse(
+                true, "0", null, null, "terminal", "CANCELED",
+                "active-payment", "active-order", 100_000L, 100_000L, 0L
+        ));
         CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
                 "active-tbank",
+                true,
+                true,
+                LocalDateTime.of(2026, 8, 15, 12, 0),
+                "Клиент перевёл другому получателю",
+                "",
+                List.of(new CommonManualPaymentAttributionRowRequest(
+                        "owner",
+                        ContractorRecipientType.OWNER,
+                        null,
+                        100_000L
+                ))
+        );
+
+        CommonInvoiceDetailsResponse response = service.markPaidWithAttributions(
+                10L,
+                request,
+                () -> "manager"
+        );
+
+        assertNotNull(response);
+        assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        assertTrue(invoiceItem.isPaid());
+        assertEquals("CANCELED", ref.getStatus());
+        assertNull(invoice.getTbankPaymentId());
+        assertNull(invoice.getPaymentUrl());
+        verify(commonManualPaymentAttributionCoordinator).recordFinalReceipt(
+                eq(invoice), eq(List.of(invoiceItem)), eq(100_000L), eq(request), any()
+        );
+        verify(paymentNotificationOutboxRepository).enqueueRecipients(10L);
+        verify(paymentNotificationOutboxRepository).enqueueClient(10L);
+        var bankOrder = inOrder(tbankClient);
+        bankOrder.verify(tbankClient).getState(any(), eq("active-payment"));
+        bankOrder.verify(tbankClient).cancel(any(), any());
+    }
+
+    @Test
+    void attributedMarkPaidAcceptsConcurrentCanceledWebhookBeforeCreditingActualRecipient() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.INVOICED);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setTbankOrderId("active-order");
+        invoice.setTbankPaymentId("active-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setPaymentUrl("https://pay.example/active");
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        CommonInvoicePaymentRef ref = paymentRef(
+                815L,
+                invoice,
+                "CURRENT",
+                "active-order",
+                "active-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(ref.getId(), ref);
+        stubLockedInvoice(invoice, invoiceItem, order);
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(invoiceItem));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(paymentProfile()));
+        when(paymentProfileService.toRuntimeForTerminal(any(), eq("terminal"))).thenReturn(runtimeProfile());
+        when(tbankClient.getState(any(), eq("active-payment"))).thenReturn(new TbankGetStateResponse(
+                true, "0", null, null, "terminal", "FORM_SHOWED",
+                "active-payment", "active-order", 100_000L
+        ));
+        when(tbankClient.cancel(any(), any())).thenAnswer(ignored -> {
+            assertTrue(invoice.getLastError().startsWith("manual_payment_tbank_reconciliation_in_progress:INVOICED"));
+            ref.setStatus("CANCELED");
+            invoice.setTbankOrderId(null);
+            invoice.setTbankPaymentId(null);
+            invoice.setTbankTerminalKey(null);
+            invoice.setTbankPaymentAmountKopecks(null);
+            invoice.setPaymentUrl(null);
+            return new TbankCancelResponse(
+                    true, "0", null, null, "terminal", "CANCELED",
+                    "active-payment", "active-order", 100_000L, 100_000L, 0L
+            );
+        });
+        CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
+                "concurrent-canceled-webhook",
+                true,
+                true,
+                LocalDateTime.of(2026, 8, 28, 15, 31),
+                "Клиент перевёл специалисту",
+                "",
+                List.of(new CommonManualPaymentAttributionRowRequest(
+                        "specialist-1",
+                        ContractorRecipientType.SPECIALIST,
+                        1L,
+                        100_000L
+                ))
+        );
+
+        CommonInvoiceDetailsResponse response = service.markPaidWithAttributions(
+                10L,
+                request,
+                () -> "manager"
+        );
+
+        assertNotNull(response);
+        assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        assertTrue(invoiceItem.isPaid());
+        assertEquals("CANCELED", ref.getStatus());
+        assertNull(invoice.getTbankPaymentId());
+        verify(commonManualPaymentAttributionCoordinator).recordFinalReceipt(
+                eq(invoice), eq(List.of(invoiceItem)), eq(100_000L), eq(request), any()
+        );
+    }
+
+    @Test
+    void attributedMarkPaidDoesNotOverwriteConcurrentConfirmedWebhookWithCanceledState() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.INVOICED);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setTbankOrderId("active-order");
+        invoice.setTbankPaymentId("active-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setPaymentUrl("https://pay.example/active");
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        CommonInvoicePaymentRef ref = paymentRef(
+                814L,
+                invoice,
+                "CURRENT",
+                "active-order",
+                "active-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(ref.getId(), ref);
+        stubLockedInvoice(invoice, invoiceItem, order);
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(paymentProfile()));
+        when(paymentProfileService.toRuntimeForTerminal(any(), eq("terminal"))).thenReturn(runtimeProfile());
+        when(tbankClient.getState(any(), eq("active-payment"))).thenReturn(new TbankGetStateResponse(
+                true, "0", null, null, "terminal", "FORM_SHOWED",
+                "active-payment", "active-order", 100_000L
+        ));
+        when(tbankClient.cancel(any(), any())).thenAnswer(ignored -> {
+            ref.setStatus("CONFIRMED");
+            return new TbankCancelResponse(
+                    true, "0", null, null, "terminal", "CANCELED",
+                    "active-payment", "active-order", 100_000L, 100_000L, 0L
+            );
+        });
+        CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
+                "concurrent-confirmed-webhook",
+                true,
+                true,
+                LocalDateTime.of(2026, 8, 15, 12, 0),
+                "Клиент оплатил по прежним реквизитам",
+                "",
+                List.of(new CommonManualPaymentAttributionRowRequest(
+                        "owner",
+                        ContractorRecipientType.OWNER,
+                        null,
+                        100_000L
+                ))
+        );
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markPaidWithAttributions(10L, request, () -> "manager")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith("manual_payment_tbank_payment_detected:INVOICED"));
+        assertEquals("CONFIRMED", ref.getStatus());
+        assertFalse(invoiceItem.isPaid());
+        verify(commonManualPaymentAttributionCoordinator, never()).recordFinalReceipt(
+                any(), anyList(), anyLong(), any(), any()
+        );
+    }
+
+    @Test
+    void attributedMarkPaidStopsWhenTbankReportsFinancialMovement() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setTbankOrderId("active-order");
+        invoice.setTbankPaymentId("active-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setPaymentUrl("https://pay.example/active");
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        CommonInvoicePaymentRef ref = paymentRef(
+                812L,
+                invoice,
+                "CURRENT",
+                "active-order",
+                "active-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(ref.getId(), ref);
+        stubLockedInvoice(invoice, invoiceItem, order);
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(paymentProfile()));
+        when(paymentProfileService.toRuntimeForTerminal(any(), eq("terminal"))).thenReturn(runtimeProfile());
+        when(tbankClient.getState(any(), eq("active-payment"))).thenReturn(new TbankGetStateResponse(
+                true, "0", null, null, "terminal", "CONFIRMED",
+                "active-payment", "active-order", 100_000L
+        ));
+        CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
+                "active-tbank-confirmed",
                 true,
                 true,
                 LocalDateTime.of(2026, 8, 15, 12, 0),
@@ -1219,10 +1488,72 @@ class CommonBillingServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertTrue(exception.getReason().contains("платёжное движение"));
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals("CONFIRMED", ref.getStatus());
+        assertFalse(invoiceItem.isPaid());
+        verify(tbankClient, never()).cancel(any(), any());
         verify(commonManualPaymentAttributionCoordinator, never()).recordFinalReceipt(
                 any(), anyList(), anyLong(), any(), any()
         );
         verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void attributedMarkPaidResumesAfterBackgroundCancellationClosedTheTbankSession() throws Exception {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("manual_payment_tbank_reconciliation_retry:INVOICED: timeout");
+        invoice.setAmountKopecks(100_000L);
+        invoice.setTbankOrderId("active-order");
+        invoice.setTbankPaymentId("active-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        Order order = order(101L);
+        CommonInvoiceOrder invoiceItem = item(invoice, order);
+        CommonInvoicePaymentRef ref = paymentRef(
+                813L,
+                invoice,
+                "CANCELED",
+                "active-order",
+                "active-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(ref.getId(), ref);
+        stubLockedInvoice(invoice, invoiceItem, order);
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(invoiceItem));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        CommonManualPaymentAttributionRequest request = new CommonManualPaymentAttributionRequest(
+                "retry-after-background-cancel",
+                true,
+                true,
+                LocalDateTime.of(2026, 8, 15, 12, 0),
+                "Клиент оплатил по прежним реквизитам",
+                "",
+                List.of(new CommonManualPaymentAttributionRowRequest(
+                        "owner",
+                        ContractorRecipientType.OWNER,
+                        null,
+                        100_000L
+                ))
+        );
+
+        CommonInvoiceDetailsResponse response = service.markPaidWithAttributions(
+                10L,
+                request,
+                () -> "manager"
+        );
+
+        assertNotNull(response);
+        assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        assertTrue(invoiceItem.isPaid());
+        assertEquals("CANCELED", ref.getStatus());
+        assertNull(invoice.getTbankPaymentId());
+        verifyNoInteractions(tbankClient);
+        verify(commonManualPaymentAttributionCoordinator).recordFinalReceipt(
+                eq(invoice), eq(List.of(invoiceItem)), eq(100_000L), eq(request), any()
+        );
     }
 
     @Test
@@ -3220,6 +3551,7 @@ class CommonBillingServiceTest {
         assertEquals(null, invoice.getPaymentSuccessNotificationError());
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
         verify(messageSender).send(eq(company), eq("whatsapp_vika"), eq("120363@test"), messageCaptor.capture());
+        verify(paymentNotificationOutboxRepository).enqueueClient(10L);
         assertTrue(messageCaptor.getValue().contains("Оплата прошла успешно."));
         assertTrue(messageCaptor.getValue().contains("Общий счет: Общий плательщик"));
         assertTrue(messageCaptor.getValue().contains("Сумма: 1000 руб."));
@@ -3248,6 +3580,54 @@ class CommonBillingServiceTest {
         assertTrue(message.contains("Сумма: 1000 руб."));
         assertFalse(message.contains("Страница оплаты:"));
         assertFalse(message.contains("/pay/"));
+    }
+
+    @Test
+    void outboxClientDeliverySendsPaidInvoiceFromCommittedSnapshot() {
+        CommonBillingAccount account = account();
+        Manager manager = manager(7L);
+        manager.setClientId("whatsapp_vika");
+        Company company = company();
+        company.setGroupId("120363@test");
+        company.setManager(manager);
+        account.setInvoiceCompany(company);
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaidKopecks(100_000L);
+        CommonInvoiceOrder item = item(invoice, order(101L));
+        item.setPaid(true);
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+                .thenReturn(true);
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        when(messageSender.send(eq(company), eq("whatsapp_vika"), eq("120363@test"), any()))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+
+        var attempt = service.deliverPaymentSuccessNotificationFromOutbox(10L);
+
+        assertTrue(attempt.sent());
+        assertFalse(attempt.skipped());
+        assertEquals("WhatsApp", attempt.channel());
+        assertNull(invoice.getPaymentSuccessNotifiedAt());
+    }
+
+    @Test
+    void outboxClientDeliverySkipsInvoiceAlreadyNotifiedInline() {
+        CommonInvoice invoice = invoice(account());
+        invoice.setStatus(CommonInvoiceStatus.PAID);
+        invoice.setAmountKopecks(100_000L);
+        invoice.setPaidKopecks(100_000L);
+        invoice.setPaymentSuccessNotifiedAt(LocalDateTime.of(2026, 8, 28, 21, 1));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+
+        var attempt = service.deliverPaymentSuccessNotificationFromOutbox(10L);
+
+        assertTrue(attempt.skipped());
+        assertEquals("already_notified", attempt.error());
+        verify(messageSender, never()).send(any(), any(), any(), any());
     }
 
     @Test
@@ -6592,6 +6972,49 @@ class CommonBillingServiceTest {
         assertEquals(null, invoice.getTbankPaymentId());
         assertEquals(null, invoice.getPaymentUrl());
         assertEquals("tbank_payment_terminal: 51", invoice.getLastError());
+    }
+
+    @Test
+    void canceledCurrentWebhookDuringManualPaymentReconciliationPreservesControlMarker() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setLastError("manual_payment_tbank_reconciliation_in_progress:INVOICED");
+        invoice.setTbankOrderId("old-order");
+        invoice.setTbankPaymentId("old-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setPaymentUrl("https://pay/old");
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("Success", "true");
+        payload.put("Status", "CANCELED");
+        payload.put("ErrorCode", "0");
+        CommonInvoicePaymentRef currentRef = paymentRef(
+                46L,
+                invoice,
+                "CANCELING",
+                "old-order",
+                "old-payment",
+                "terminal",
+                100_000L
+        );
+        paymentRefStore.put(currentRef.getId(), currentRef);
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        assertEquals("CANCELED", currentRef.getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertEquals("manual_payment_tbank_reconciliation_in_progress:INVOICED", invoice.getLastError());
+        assertNull(invoice.getTbankOrderId());
+        assertNull(invoice.getTbankPaymentId());
+        assertNull(invoice.getPaymentUrl());
     }
 
     @Test

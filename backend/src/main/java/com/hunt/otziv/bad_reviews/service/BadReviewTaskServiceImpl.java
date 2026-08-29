@@ -536,17 +536,17 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                     "Статус дополнительной задачи изменился. Обновите страницу и повторите действие"
             );
         }
-        PreparedTaskPayableChange preparedChange = task.getStatus() == BadReviewTaskStatus.DONE
+        boolean paidOrder = isPaid(task);
+        PreparedTaskPayableChange preparedChange = task.getStatus() == BadReviewTaskStatus.DONE && !paidOrder
                 ? prepareTaskPayableChangeLocked(
                         taskId,
                         observedOrderId,
                         "Отмена выполненной дополнительной задачи изменила сумму счета"
                 )
                 : null;
-        Long preparedOrderId = preparedChange == null ? null : preparedChange.orderId();
-        if (isPaid(task)) {
-            throw new IllegalStateException("После оплаты заказа отмена плохих задач не пересчитывает чек и начисления");
-        }
+        Long preparedOrderId = preparedChange == null
+                ? task.getOrder() == null ? null : task.getOrder().getId()
+                : preparedChange.orderId();
 
         boolean wasNew = task.getStatus() == BadReviewTaskStatus.NEW;
         task.setStatus(BadReviewTaskStatus.CANCELED);
@@ -557,7 +557,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (!wasNew) {
             Long orderId = savedTask.getOrder() == null ? preparedOrderId : savedTask.getOrder().getId();
             contractorCompletionRewardService.adjustCanceledBadReviewTaskAccrual(orderId, savedTask.getId());
-            applyLinkedCommonInvoiceChange(preparedChange, savedTask.getId());
+            if (!paidOrder) {
+                applyLinkedCommonInvoiceChange(preparedChange, savedTask.getId());
+            }
             auditTaskCanceled(savedTask);
         }
         Order order = savedTask.getOrder();
@@ -986,7 +988,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private boolean isPaid(BadReviewTask task) {
         Order order = task != null ? task.getOrder() : null;
         String status = order != null && order.getStatus() != null ? order.getStatus().getTitle() : "";
-        return order != null && (order.isComplete() || "Оплачено".equals(status));
+        return order != null && "Оплачено".equals(status);
     }
 
     private BotSelection pickReplacementBot(BadReviewTask task) {

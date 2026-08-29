@@ -70,7 +70,10 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
     @Query(value = """
         SELECT task.bad_review_task_id
         FROM bad_review_tasks task
+        JOIN orders source_order ON source_order.order_id = task.bad_review_task_order
+        JOIN order_statuses source_status ON source_status.order_status_id = source_order.order_status
         WHERE task.bad_review_task_status = :completedStatus
+          AND source_status.order_status_title = 'Оплачено'
           AND NOT EXISTS (
               SELECT marker.id
               FROM contractor_completion_reward_markers marker
@@ -101,7 +104,10 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
     @Query(value = """
         SELECT task.bad_review_task_id
         FROM bad_review_tasks task
+        JOIN orders source_order ON source_order.order_id = task.bad_review_task_order
+        JOIN order_statuses source_status ON source_status.order_status_id = source_order.order_status
         WHERE task.bad_review_task_status = :canceledStatus
+          AND source_status.order_status_title = 'Оплачено'
           AND NOT EXISTS (
               SELECT cancel_marker.id
               FROM contractor_completion_reward_markers cancel_marker

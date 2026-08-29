@@ -29,8 +29,11 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,7 +68,7 @@ public class PerformerProductRewardZpService {
         // owns this source. Never create the legacy paid-only aggregate.
         ContractorPaymentAccountingAuthority accountingAuthority =
                 rolloutStateService.lockAccountingAuthority();
-        if (accountingAuthority == ContractorPaymentAccountingAuthority.COMPLETION
+        if ((accountingAuthority != null && accountingAuthority.paymentBased())
                 || contractorPaymentRuntimeSwitch.rewardAttributionLiveEnabled()) {
             return 0;
         }
@@ -127,7 +130,8 @@ public class PerformerProductRewardZpService {
     ) {
         if (!contractorPaymentRuntimeSwitch.rewardAttributionLiveEnabled()
                 || suppliedOrder == null
-                || suppliedOrder.getId() == null) {
+                || suppliedOrder.getId() == null
+                || !isPaid(suppliedOrder)) {
             return 0;
         }
         boolean rewardEnabled = appSettingService.getBoolean(
@@ -157,7 +161,8 @@ public class PerformerProductRewardZpService {
     ) {
         if (!contractorPaymentRuntimeSwitch.rewardAttributionLiveEnabled()
                 || suppliedOrder == null
-                || suppliedOrder.getId() == null) {
+                || suppliedOrder.getId() == null
+                || !isPaid(suppliedOrder)) {
             return 0;
         }
         Long orderId = suppliedOrder.getId();
@@ -171,10 +176,10 @@ public class PerformerProductRewardZpService {
             return 0;
         }
         List<Zp> existing = zpRepository.findByOrderIdAndSourceAndActiveTrue(orderId, COMPLETION_SOURCE);
-        if (markerExists && !(convertLegacySource && existing.isEmpty())) {
+        if (!convertLegacySource && markerExists) {
             return 0;
         }
-        if (!existing.isEmpty()) {
+        if (!convertLegacySource && !existing.isEmpty()) {
             if (!markerExists) {
                 ContractorCompletionRewardMarker marker = new ContractorCompletionRewardMarker();
                 marker.setOrderId(orderId);
@@ -186,12 +191,16 @@ public class PerformerProductRewardZpService {
         }
 
         if (!appSettingService.getBoolean(AppSettingService.ZP_PRODUCT_REWARD_PERCENT_ENABLED, false)) {
+            int deactivated = deactivateUnexpectedRewards(orderId, ContractorRole.MANAGER, Set.of())
+                    + deactivateUnexpectedRewards(orderId, ContractorRole.SPECIALIST, Set.of());
             ContractorCompletionRewardMarker marker = new ContractorCompletionRewardMarker();
-            marker.setOrderId(orderId);
-            marker.setLogicalSource(COMPLETION_SOURCE);
-            marker.setOccurredOn(occurredOn == null ? businessClock.today() : occurredOn);
-            completionMarkerRepository.save(marker);
-            return 0;
+            if (!markerExists) {
+                marker.setOrderId(orderId);
+                marker.setLogicalSource(COMPLETION_SOURCE);
+                marker.setOccurredOn(occurredOn == null ? businessClock.today() : occurredOn);
+                completionMarkerRepository.save(marker);
+            }
+            return deactivated;
         }
 
         Order order = orderRepository.findByIdForOrderDto(orderId).orElse(suppliedOrder);
@@ -202,7 +211,9 @@ public class PerformerProductRewardZpService {
                 reviewRepository.getAllByOrderId(orderId)
         );
         int saved = 0;
+        Set<Long> expectedManagers = new LinkedHashSet<>();
         if (totals.managerAmount().signum() > 0) {
+            expectedManagers.add(effectiveManager.getId());
             saved += saveManagerReward(
                     order,
                     effectiveManager,
@@ -212,7 +223,12 @@ public class PerformerProductRewardZpService {
                     occurredOn
             );
         }
+        Set<Long> expectedSpecialists = specialistRewards.stream()
+                .map(ProductSpecialistReward::workerId)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         saved += saveCompletionSpecialistRewards(order, specialistRewards, occurredOn);
+        saved += deactivateUnexpectedRewards(orderId, ContractorRole.MANAGER, expectedManagers);
+        saved += deactivateUnexpectedRewards(orderId, ContractorRole.SPECIALIST, expectedSpecialists);
         if (!markerExists) {
             ContractorCompletionRewardMarker marker = new ContractorCompletionRewardMarker();
             marker.setOrderId(orderId);
@@ -327,7 +343,7 @@ public class PerformerProductRewardZpService {
             log.debug("Вознаграждение менеджера по продуктам не начислено: у заказа {} нет менеджера", order.getId());
             return 0;
         }
-        Zp saved = zpRepository.save(toZp(
+        Zp desired = toZp(
                 order,
                 manager.getUser(),
                 manager.getId(),
@@ -336,9 +352,12 @@ public class PerformerProductRewardZpService {
                 ContractorRole.MANAGER,
                 source,
                 occurredOn
-        ));
-        synchronize(saved, synchronousLedger);
-        return 1;
+        );
+        desired.setAttributionFinal(true);
+        desired.setRewardBasis(totals.managerAmount());
+        UpsertResult result = upsert(desired);
+        synchronize(result.row(), synchronousLedger);
+        return result.changed() ? 1 : 0;
     }
 
     private int saveLegacySpecialistReward(
@@ -394,10 +413,66 @@ public class PerformerProductRewardZpService {
                     occurredOn
             );
             row.setAttributionFinal(true);
-            zpRepository.save(row);
-            saved++;
+            row.setRewardBasis(BigDecimal.valueOf(reward.amountKopecks(), 2));
+            UpsertResult result = upsert(row);
+            synchronize(result.row(), true);
+            if (result.changed()) {
+                saved++;
+            }
         }
         return saved;
+    }
+
+    private UpsertResult upsert(Zp desired) {
+        Zp existing = zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
+                desired.getOrderId(),
+                desired.getSource(),
+                desired.getContractorRole(),
+                desired.getProfessionId()
+        ).orElse(null);
+        if (existing == null) {
+            return new UpsertResult(zpRepository.save(desired), true);
+        }
+        boolean changed = !existing.isActive()
+                || !Objects.equals(existing.getFio(), desired.getFio())
+                || !Objects.equals(existing.getUserId(), desired.getUserId())
+                || existing.getSum() == null
+                || existing.getSum().compareTo(desired.getSum()) != 0
+                || existing.getAmount() != desired.getAmount()
+                || !Objects.equals(existing.getCreated(), desired.getCreated())
+                || !existing.isAttributionFinal()
+                || existing.getRewardBasis() == null
+                || existing.getRewardBasis().compareTo(desired.getRewardBasis()) != 0;
+        if (!changed) {
+            return new UpsertResult(existing, false);
+        }
+        existing.setFio(desired.getFio());
+        existing.setSum(desired.getSum());
+        existing.setUserId(desired.getUserId());
+        existing.setAmount(desired.getAmount());
+        existing.setCreated(desired.getCreated());
+        existing.setPaymentStatusGuardId(desired.getPaymentStatusGuardId());
+        existing.setActive(true);
+        existing.setAttributionFinal(true);
+        existing.setRewardBasis(desired.getRewardBasis());
+        return new UpsertResult(zpRepository.save(existing), true);
+    }
+
+    private record UpsertResult(Zp row, boolean changed) {
+    }
+
+    private int deactivateUnexpectedRewards(Long orderId, ContractorRole role, Set<Long> expectedProfessions) {
+        List<Zp> unexpected = zpRepository.findByOrderIdAndSourceAndActiveTrue(orderId, COMPLETION_SOURCE).stream()
+                .filter(reward -> reward.getContractorRole() == role)
+                .filter(reward -> !expectedProfessions.contains(reward.getProfessionId()))
+                .toList();
+        if (unexpected.isEmpty()) {
+            return 0;
+        }
+        unexpected.forEach(reward -> reward.setActive(false));
+        zpRepository.saveAllAndFlush(unexpected);
+        contractorRewardLedgerService.synchronizeSources(unexpected);
+        return unexpected.size();
     }
 
     private List<ContractorRewardAttributionService.SpecialistShare> immutableSpecialistShares(
@@ -585,6 +660,7 @@ public class PerformerProductRewardZpService {
         zp.setFio(user.getFio());
         zp.setSum(money(sum));
         zp.setOrderId(order.getId());
+        zp.setPaymentStatusGuardId(order.getStatus().getId());
         zp.setUserId(user.getId());
         zp.setProfessionId(professionId);
         zp.setAmount(amount);

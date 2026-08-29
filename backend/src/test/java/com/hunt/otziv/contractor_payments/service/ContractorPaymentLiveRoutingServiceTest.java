@@ -1165,6 +1165,29 @@ class ContractorPaymentLiveRoutingServiceTest {
     }
 
     @Test
+    void commonRoutePreviewUsesOnlyNonLockingReads() {
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(55L);
+        invoice.setContractorAllocationId(95L);
+        ContractorPaymentAllocation allocation = commonAllocation(
+                95L,
+                55L,
+                ContractorAllocationStatus.OWNER_FALLBACK
+        );
+        when(commonInvoiceRepository.findById(55L)).thenReturn(Optional.of(invoice));
+        when(allocationRepository.findById(95L)).thenReturn(Optional.of(allocation));
+
+        assertEquals(
+                ContractorPaymentLiveRoutingService.FrozenCommonRouteAction.KEEP,
+                service.previewFrozenCommonRouteAction(55L, 95L)
+        );
+
+        verify(commonInvoiceRepository, never()).findByIdForUpdate(anyLong());
+        verify(allocationRepository, never()).findByIdForUpdate(anyLong());
+        verify(profileRepository, never()).findByIdForUpdate(anyLong());
+    }
+
+    @Test
     void commonClientReportIsIdempotentAndKeepsMoneyUnconfirmedAndReserved() {
         ContractorPaymentProfile recipient = profile(15L, user(215L), ContractorRole.SPECIALIST);
         ContractorPaymentAllocation allocation = reportAllocation(

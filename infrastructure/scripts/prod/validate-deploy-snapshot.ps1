@@ -92,44 +92,62 @@ $hasWhatsAppChanges = @($changedFiles | Where-Object { $_ -like 'whatsapp/*' }).
 $hasExternalWorkerChanges = @($changedFiles | Where-Object { $_ -like 'backend/external-review-worker/*' }).Count -gt 0
 $hasFlywayMigrationChanges = @($changedFiles | Where-Object { $_ -like 'backend/src/main/resources/db/migration/*' }).Count -gt 0
 
+$corepackCommand = Get-Command -Name 'corepack' -CommandType Application -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if ($null -ne $corepackCommand) {
+    $npmFilePath = $corepackCommand.Source
+    $npmArgumentPrefix = @('npm')
+} else {
+    $npmCommand = Get-Command -Name 'npm.cmd' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $npmCommand) {
+        $npmCommand = Get-Command -Name 'npm' -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+    if ($null -eq $npmCommand) {
+        throw 'Neither corepack nor npm is available for JavaScript snapshot validation.'
+    }
+    $npmFilePath = $npmCommand.Source
+    $npmArgumentPrefix = @()
+    Write-Warning 'corepack is unavailable; using the installed npm executable for snapshot validation.'
+}
+
 if ($hasFrontendChanges) {
     $frontend = Join-Path $root 'frontend'
     Invoke-SnapshotCheck -Name 'frontend dependency install' -WorkingDirectory $frontend `
-        -FilePath 'corepack' -Arguments @('npm', 'ci', '--no-audit', '--no-fund')
+        -FilePath $npmFilePath -Arguments ($npmArgumentPrefix + @('ci', '--no-audit', '--no-fund'))
     Invoke-SnapshotCheck -Name 'frontend unit tests' -WorkingDirectory $frontend `
-        -FilePath 'corepack' -Arguments @('npm', 'test', '--', '--watch=false')
+        -FilePath $npmFilePath -Arguments ($npmArgumentPrefix + @('test', '--', '--watch=false'))
     Invoke-SnapshotCheck -Name 'frontend production build' -WorkingDirectory $frontend `
-        -FilePath 'corepack' -Arguments @('npm', 'run', 'build', '--', '--configuration', 'production')
+        -FilePath $npmFilePath -Arguments ($npmArgumentPrefix + @('run', 'build', '--', '--configuration', 'production'))
 }
 
 if ($hasMobileChanges) {
     $mobile = Join-Path $root 'mobile'
     Invoke-SnapshotCheck -Name 'mobile dependency install' -WorkingDirectory $mobile `
-        -FilePath 'corepack' -Arguments @('npm', 'ci', '--no-audit', '--no-fund')
+        -FilePath $npmFilePath -Arguments ($npmArgumentPrefix + @('ci', '--no-audit', '--no-fund'))
     Invoke-SnapshotCheck -Name 'mobile unit tests' -WorkingDirectory $mobile `
-        -FilePath 'corepack' -Arguments @('npm', 'run', 'test:unit')
+        -FilePath $npmFilePath -Arguments ($npmArgumentPrefix + @('run', 'test:unit'))
     Invoke-SnapshotCheck -Name 'mobile production build' -WorkingDirectory $mobile `
-        -FilePath 'corepack' -Arguments @('npm', 'run', 'build:prod')
+        -FilePath $npmFilePath -Arguments ($npmArgumentPrefix + @('run', 'build:prod'))
 }
 
 if ($hasWhatsAppChanges) {
     $whatsApp = Join-Path $root 'whatsapp'
     Invoke-SnapshotCheck -Name 'WhatsApp dependency install' -WorkingDirectory $whatsApp `
-        -FilePath 'corepack' -Arguments @('npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund')
+        -FilePath $npmFilePath -Arguments ($npmArgumentPrefix + @('ci', '--ignore-scripts', '--no-audit', '--no-fund'))
     Invoke-SnapshotCheck -Name 'WhatsApp tests' -WorkingDirectory $whatsApp `
-        -FilePath 'corepack' -Arguments @('npm', 'test')
+        -FilePath $npmFilePath -Arguments ($npmArgumentPrefix + @('test'))
 }
 
 if ($hasExternalWorkerChanges) {
     $externalWorker = Join-Path $root 'backend\external-review-worker'
     Invoke-SnapshotCheck -Name 'external worker dependency install' -WorkingDirectory $externalWorker `
-        -FilePath 'corepack' -Arguments @('npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund')
+        -FilePath $npmFilePath -Arguments ($npmArgumentPrefix + @('ci', '--ignore-scripts', '--no-audit', '--no-fund'))
     Get-ChildItem -LiteralPath (Join-Path $externalWorker 'src') -Recurse -File -Filter '*.js' | ForEach-Object {
         Invoke-SnapshotCheck -Name "external worker syntax $($_.Name)" -WorkingDirectory $externalWorker `
             -FilePath 'node' -Arguments @('--check', $_.FullName)
     }
     Invoke-SnapshotCheck -Name 'external worker tests' -WorkingDirectory $externalWorker `
-        -FilePath 'corepack' -Arguments @('npm', 'test')
+        -FilePath $npmFilePath -Arguments ($npmArgumentPrefix + @('test'))
 }
 
 if ($hasBackendChanges) {

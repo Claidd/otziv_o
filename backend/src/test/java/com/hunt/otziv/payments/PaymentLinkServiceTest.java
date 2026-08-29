@@ -10,6 +10,7 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentRequisitesSnapshot;
 import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAllocation;
+import com.hunt.otziv.contractor_payments.model.ContractorCashDestinationKind;
 import com.hunt.otziv.contractor_payments.model.ContractorRecipientType;
 import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.model.Order;
@@ -25,6 +26,7 @@ import com.hunt.otziv.payments.dto.PaymentLinkAdminSummary;
 import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
 import com.hunt.otziv.payments.dto.PublicPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.PublicSbpBankResponse;
+import com.hunt.otziv.payments.dto.PaymentRouteChangeTarget;
 import com.hunt.otziv.payments.dto.TbankCancelCommand;
 import com.hunt.otziv.payments.dto.TbankCancelResponse;
 import com.hunt.otziv.payments.dto.TbankGetQrBankListCommand;
@@ -46,9 +48,12 @@ import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentPolicy;
 import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.PaymentReceiptStatus;
+import com.hunt.otziv.payments.model.OwnerManualCardPaymentApproval;
+import com.hunt.otziv.payments.model.OwnerManualCardPaymentApprovalStatus;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.repository.ManualPaymentTaskRepository;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import com.hunt.otziv.payments.repository.OwnerManualCardPaymentApprovalRepository;
 import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.ManualPaymentRecipientTelegramNotificationService;
@@ -71,6 +76,7 @@ import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Role;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -184,6 +190,9 @@ class PaymentLinkServiceTest {
     private ManualCardPaymentReviewNotificationService manualCardPaymentReviewNotificationService;
 
     @Mock
+    private OwnerManualCardPaymentApprovalRepository ownerManualCardPaymentApprovalRepository;
+
+    @Mock
     private ContractorPaymentLiveRoutingService contractorPaymentLiveRoutingService;
 
     @Mock
@@ -237,6 +246,128 @@ class PaymentLinkServiceTest {
         verify(contractorPaymentLiveRoutingService, never()).reserveForPaymentLink(any(PaymentLink.class));
         verify(contractorPaymentShadowService, never()).reserveForPaymentLinkId(anyLong(), any());
         verify(paymentProfileService, never()).selectForManager(any());
+    }
+
+    @Test
+    void explicitOwnerTbankLinkSurvivesImmediateBackgroundPreparation() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_808L, "Вита-мед", BigDecimal.valueOf(2_000));
+        order.setInvoicePaymentMode(InvoicePaymentMode.OWNER_TBANK);
+        PaymentLink tbank = payableLink(order, "explicit-owner-tbank", 200_000L);
+        tbank.setId(7_258L);
+        tbank.setReservedAmountKopecks(200_000L);
+        tbank.setPaymentMethod(PaymentMethod.BANK_FORM);
+        tbank.setContractorAllocationId(987L);
+
+        when(orderRepository.findByIdForCounterUpdate(24_808L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24_808L)).thenReturn(List.of(tbank));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(24_808L), anyCollection(), any(LocalDateTime.class)
+        )).thenReturn(Optional.of(tbank));
+        when(contractorPaymentLiveRoutingService.frozenPaymentLinkAction(7_258L, 987L))
+                .thenReturn(ContractorPaymentLiveRoutingService.FrozenPaymentLinkAction.KEEP);
+
+        ManagerPaymentLinkResponse response = service.createForOrder(24_808L);
+
+        assertEquals("explicit-owner-tbank", response.token());
+        assertEquals(PaymentMethod.BANK_FORM.name(), response.paymentMethod());
+        assertEquals(PaymentLinkStatus.CREATED, tbank.getStatus());
+        verify(paymentProfileService, never()).selectForManager(any());
+        verify(contractorPaymentLiveRoutingService, never()).reserveForPaymentLink(any());
+        verify(contractorPaymentLiveRoutingService, never()).reserveContractorForPaymentLink(any());
+        verify(contractorPaymentLiveRoutingService, never()).reserveOwnerForPaymentLink(any());
+        verify(paymentLinkRepository, never()).save(tbank);
+    }
+
+    @Test
+    void explicitEmployeeTaskRequisitesSurviveImmediateBackgroundPreparation() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_810L, "Вита-мед", BigDecimal.valueOf(2_000));
+        order.setInvoicePaymentMode(InvoicePaymentMode.EMPLOYEE_REQUISITES);
+        PaymentLink manual = payableLink(order, "explicit-employee-requisites", 200_000L);
+        manual.setId(7_260L);
+        manual.setReservedAmountKopecks(200_000L);
+        manual.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        manual.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        manual.setManualSource(ManualPaymentSource.MANUAL_TASK);
+        manual.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
+
+        when(orderRepository.findByIdForCounterUpdate(24_810L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24_810L)).thenReturn(List.of(manual));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(24_810L), anyCollection(), any(LocalDateTime.class)
+        )).thenReturn(Optional.of(manual));
+
+        ManagerPaymentLinkResponse response = service.createForOrder(24_810L);
+
+        assertEquals("explicit-employee-requisites", response.token());
+        assertEquals(PaymentMethod.MANUAL_MOBILE_BANK.name(), response.paymentMethod());
+        assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, manual.getStatus());
+        verify(paymentProfileService, never()).selectForManager(any());
+        verify(contractorPaymentLiveRoutingService, never()).reserveForPaymentLink(any());
+        verify(contractorPaymentLiveRoutingService, never()).reserveOwnerForPaymentLink(any());
+        verify(paymentLinkRepository, never()).save(manual);
+    }
+
+    @Test
+    void explicitOwnerTbankModeCreatesOnlyOwnerAcquiringRoute() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_809L, "Вита-мед", BigDecimal.valueOf(2_000));
+        order.setInvoicePaymentMode(InvoicePaymentMode.OWNER_TBANK);
+        ContractorPaymentAllocation owner = new ContractorPaymentAllocation();
+        owner.setId(988L);
+        owner.setRecipientType(ContractorRecipientType.OWNER);
+
+        when(orderRepository.findByIdForCounterUpdate(24_809L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24_809L)).thenReturn(List.of());
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(24_809L), anyCollection(), any(LocalDateTime.class)
+        )).thenReturn(Optional.empty());
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> {
+            PaymentLink saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(7_259L);
+            }
+            return saved;
+        });
+        when(contractorPaymentLiveRoutingService.enabledForNewRoutes()).thenReturn(true);
+        when(contractorPaymentLiveRoutingService.reserveOwnerForPaymentLink(any(PaymentLink.class)))
+                .thenReturn(owner);
+
+        ManagerPaymentLinkResponse response = service.createForOrder(24_809L);
+
+        assertEquals(PaymentMethod.BANK_FORM.name(), response.paymentMethod());
+        ArgumentCaptor<PaymentLink> saved = ArgumentCaptor.forClass(PaymentLink.class);
+        verify(paymentLinkRepository, times(2)).save(saved.capture());
+        PaymentLink link = saved.getAllValues().getLast();
+        assertEquals(988L, link.getContractorAllocationId());
+        assertEquals(PaymentMethod.BANK_FORM, link.getPaymentMethod());
+        assertNull(link.getManualSource());
+        verify(contractorPaymentLiveRoutingService).reserveOwnerForPaymentLink(link);
+        verify(contractorPaymentLiveRoutingService, never()).reserveForPaymentLink(any());
+        verify(contractorPaymentLiveRoutingService, never()).reserveContractorForPaymentLink(any());
+    }
+
+    @Test
+    void paymentRouteTargetsMapToDurableOrderModes() {
+        PaymentLinkService service = service(properties());
+
+        assertEquals(
+                InvoicePaymentMode.EMPLOYEE_REQUISITES,
+                ReflectionTestUtils.invokeMethod(
+                        service,
+                        "paymentModeForTarget",
+                        PaymentRouteChangeTarget.EMPLOYEE_REQUISITES
+                )
+        );
+        assertEquals(
+                InvoicePaymentMode.OWNER_TBANK,
+                ReflectionTestUtils.invokeMethod(
+                        service,
+                        "paymentModeForTarget",
+                        PaymentRouteChangeTarget.OWNER_TBANK
+                )
+        );
     }
 
     @Test
@@ -5153,6 +5284,297 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void managerOwnerSelectionCreatesApprovalWithoutReadingOrCancelingTbank() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25270L, "Старые реквизиты владельца", BigDecimal.valueOf(1000));
+        PaymentLink link = initiatedBankLink(5370L, order, 100_000L);
+        when(orderRepository.findByIdForCounterUpdate(25270L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25270L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(5370L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(5370L)).thenReturn(Optional.of(link));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            PaymentLink frozen = invocation.getArgument(1);
+            frozen.setManualActualRecipientType(ContractorRecipientType.OWNER);
+            frozen.setManualActualRecipientProfileId(null);
+            frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.OWNER);
+            frozen.setManualActualReason(invocation.getArgument(5));
+            frozen.setManualActualReceiptUrl(invocation.getArgument(6));
+            frozen.setManualActualActor(invocation.getArgument(7));
+            frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
+            return null;
+        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), any(), anyString(), any(), anyString()
+        );
+        when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(5370L))
+                .thenReturn(Optional.empty());
+        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
+                .thenAnswer(invocation -> {
+                    OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
+                    approval.setId(91L);
+                    return approval;
+                });
+
+        var result = service.submitManagerManualCardPaymentForOrder(
+                25270L,
+                "Проверить перевод на старый Альфа-Банк владельца",
+                null,
+                ContractorRecipientType.OWNER,
+                null,
+                "OWNER",
+                "manager@example.ru",
+                authentication
+        );
+
+        assertEquals("OWNER_APPROVAL_PENDING", result.status());
+        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
+        assertNull(link.getBankCancelNonce());
+        verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
+        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+        ArgumentCaptor<ManualCardPaymentReviewNotificationService.OwnerApprovalRequest> request =
+                ArgumentCaptor.forClass(ManualCardPaymentReviewNotificationService.OwnerApprovalRequest.class);
+        verify(manualCardPaymentReviewNotificationService).notifyOwnerApprovalAfterCommit(request.capture());
+        assertEquals(91L, request.getValue().approvalId());
+        assertFalse(request.getValue().callbackToken().isBlank());
+    }
+
+    @Test
+    void ownerTelegramApprovalRechecksCancelsAndCompletesOnlyOnce() throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(25271L, "Подтверждение владельца", BigDecimal.valueOf(1000));
+        PaymentLink link = initiatedBankLink(5371L, order, 100_000L);
+        java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(orderRepository.findByIdForCounterUpdate(25271L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25271L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(5371L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(5371L)).thenReturn(Optional.of(link));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            PaymentLink frozen = invocation.getArgument(1);
+            if (frozen.getManualActualRecipientFrozenAt() == null) {
+                frozen.setManualActualRecipientType(ContractorRecipientType.OWNER);
+                frozen.setManualActualRecipientProfileId(null);
+                frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.OWNER);
+                frozen.setManualActualReason(invocation.getArgument(5));
+                frozen.setManualActualReceiptUrl(invocation.getArgument(6));
+                frozen.setManualActualActor(invocation.getArgument(7));
+                frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
+            }
+            return null;
+        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), any(), anyString(), any(), anyString()
+        );
+        when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(5371L))
+                .thenReturn(Optional.empty());
+        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
+                .thenAnswer(invocation -> {
+                    OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
+                    approval.setId(92L);
+                    approvalRef.set(approval);
+                    return approval;
+                });
+        when(ownerManualCardPaymentApprovalRepository.findByIdForUpdate(92L))
+                .thenAnswer(invocation -> Optional.ofNullable(approvalRef.get()));
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5371")))
+                .thenReturn(tbankState("NEW", "payment-5371", "order-5371", 100_000L));
+        when(tbankClient.cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class)))
+                .thenReturn(new TbankCancelResponse(
+                        true, "0", null, null, "terminal", "CANCELED",
+                        "payment-5371", "order-5371", 100_000L, 100_000L, 0L
+                ));
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+
+        service.submitManagerManualCardPaymentForOrder(
+                25271L, "Поступило владельцу", null,
+                ContractorRecipientType.OWNER, null, "OWNER",
+                "manager@example.ru", authentication
+        );
+        ArgumentCaptor<ManualCardPaymentReviewNotificationService.OwnerApprovalRequest> request =
+                ArgumentCaptor.forClass(ManualCardPaymentReviewNotificationService.OwnerApprovalRequest.class);
+        verify(manualCardPaymentReviewNotificationService).notifyOwnerApprovalAfterCommit(request.capture());
+        User owner = new User();
+        owner.setId(7L);
+        owner.setUsername("owner@example.ru");
+        owner.setActive(true);
+        Role ownerRole = new Role();
+        ownerRole.setName("ROLE_OWNER");
+        owner.setRoles(List.of(ownerRole));
+        when(authentication.getName()).thenReturn("owner@example.ru");
+
+        var first = service.approveOwnerManualCardPayment(
+                92L, request.getValue().callbackToken(), owner, authentication);
+        var replay = service.approveOwnerManualCardPayment(
+                92L, request.getValue().callbackToken(), owner, authentication);
+
+        assertFalse(first.alreadyCompleted());
+        assertTrue(replay.alreadyCompleted());
+        assertEquals(OwnerManualCardPaymentApprovalStatus.CONFIRMED, approvalRef.get().getStatus());
+        assertEquals(PaymentLinkStatus.CANCELED, link.getStatus());
+        verify(tbankClient, times(1)).getState(any(TbankPaymentProfile.class), eq("payment-5371"));
+        verify(tbankClient, times(1)).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(orderTransactionService, times(1)).handlePaymentStatus(order);
+    }
+
+    @Test
+    void managerOwnerSelectionOnSpecialistRequisitesStillRequiresOwnerApproval() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25273L, "Клиент оплатил старые реквизиты владельца", BigDecimal.valueOf(1000));
+        PaymentLink link = contractorManualLink(
+                5373L, order, 100_000L, PaymentLinkStatus.MANUAL_REPORTED, 802L);
+        when(orderRepository.findByIdForCounterUpdate(25273L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25273L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(5373L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(5373L)).thenReturn(Optional.of(link));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            PaymentLink frozen = invocation.getArgument(1);
+            frozen.setManualActualRecipientType(ContractorRecipientType.OWNER);
+            frozen.setManualActualRecipientProfileId(null);
+            frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.OWNER);
+            frozen.setManualActualReason(invocation.getArgument(5));
+            frozen.setManualActualActor(invocation.getArgument(7));
+            frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
+            return null;
+        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), any(), anyString(), any(), anyString()
+        );
+        when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(5373L))
+                .thenReturn(Optional.empty());
+        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
+                .thenAnswer(invocation -> {
+                    OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
+                    approval.setId(93L);
+                    return approval;
+                });
+
+        var result = service.submitManagerManualCardPaymentForOrder(
+                25273L, "Поступило на старый Альфа-Банк владельца", null,
+                ContractorRecipientType.OWNER, null, "OWNER",
+                "manager@example.ru", authentication
+        );
+
+        assertEquals("OWNER_APPROVAL_PENDING", result.status());
+        assertEquals(PaymentLinkStatus.MANUAL_REPORTED, link.getStatus());
+        verify(manualCardPaymentReviewNotificationService).notifyOwnerApprovalAfterCommit(any());
+        verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
+        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+    }
+
+    @Test
+    void ownerTelegramApprovalCompletesSpecialistRequisitesRouteWithoutTbankCall() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25274L, "Старый счет владельца", BigDecimal.valueOf(1000));
+        PaymentLink link = contractorManualLink(
+                5374L, order, 100_000L, PaymentLinkStatus.MANUAL_REPORTED, 803L);
+        java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(orderRepository.findByIdForCounterUpdate(25274L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25274L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(5374L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(5374L)).thenReturn(Optional.of(link));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            PaymentLink frozen = invocation.getArgument(1);
+            if (frozen.getManualActualRecipientFrozenAt() == null) {
+                frozen.setManualActualRecipientType(ContractorRecipientType.OWNER);
+                frozen.setManualActualRecipientProfileId(null);
+                frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.OWNER);
+                frozen.setManualActualReason(invocation.getArgument(5));
+                frozen.setManualActualActor(invocation.getArgument(7));
+                frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
+            }
+            return null;
+        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), any(), anyString(), any(), anyString()
+        );
+        when(ownerManualCardPaymentApprovalRepository.findByPaymentLinkIdForUpdate(5374L))
+                .thenReturn(Optional.empty());
+        when(ownerManualCardPaymentApprovalRepository.saveAndFlush(any(OwnerManualCardPaymentApproval.class)))
+                .thenAnswer(invocation -> {
+                    OwnerManualCardPaymentApproval approval = invocation.getArgument(0);
+                    approval.setId(94L);
+                    approvalRef.set(approval);
+                    return approval;
+                });
+        when(ownerManualCardPaymentApprovalRepository.findByIdForUpdate(94L))
+                .thenAnswer(invocation -> Optional.ofNullable(approvalRef.get()));
+        when(paymentLinkRepository.saveAndFlush(link)).thenReturn(link);
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+
+        service.submitManagerManualCardPaymentForOrder(
+                25274L, "Поступило на старый счет владельца", null,
+                ContractorRecipientType.OWNER, null, "OWNER",
+                "manager@example.ru", authentication
+        );
+        ArgumentCaptor<ManualCardPaymentReviewNotificationService.OwnerApprovalRequest> request =
+                ArgumentCaptor.forClass(ManualCardPaymentReviewNotificationService.OwnerApprovalRequest.class);
+        verify(manualCardPaymentReviewNotificationService).notifyOwnerApprovalAfterCommit(request.capture());
+        User owner = new User();
+        owner.setId(8L);
+        owner.setUsername("owner@example.ru");
+        owner.setActive(true);
+        Role ownerRole = new Role();
+        ownerRole.setName("ROLE_OWNER");
+        owner.setRoles(List.of(ownerRole));
+        when(authentication.getName()).thenReturn("owner@example.ru");
+
+        var result = service.approveOwnerManualCardPayment(
+                94L, request.getValue().callbackToken(), owner, authentication);
+
+        assertFalse(result.alreadyCompleted());
+        assertEquals(OwnerManualCardPaymentApprovalStatus.CONFIRMED, approvalRef.get().getStatus());
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
+        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(orderTransactionService).handlePaymentStatus(order);
+    }
+
+    @Test
+    void managerSpecialistRequisitesStillConfirmDirectlyWithoutOwnerApproval() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(25272L, "Реквизиты специалиста", BigDecimal.valueOf(1000));
+        PaymentLink link = contractorManualLink(
+                5372L, order, 100_000L, PaymentLinkStatus.MANUAL_REPORTED, 801L);
+        when(orderRepository.findByIdForCounterUpdate(25272L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(25272L)).thenReturn(List.of(link));
+        when(paymentLinkRepository.findByIdWithOrder(5372L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(5372L)).thenReturn(Optional.of(link));
+        when(actualPaymentAttributionService.actualRecipientAccountingEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            PaymentLink frozen = invocation.getArgument(1);
+            frozen.setManualActualRecipientType(ContractorRecipientType.SPECIALIST);
+            frozen.setManualActualRecipientProfileId(25L);
+            frozen.setManualActualCashDestinationKind(ContractorCashDestinationKind.CONTRACTOR_PROFILE);
+            frozen.setManualActualReason(invocation.getArgument(5));
+            frozen.setManualActualActor(invocation.getArgument(7));
+            frozen.setManualActualRecipientFrozenAt(LocalDateTime.now());
+            return null;
+        }).when(actualPaymentAttributionService).freezePaymentLinkRecipientIntent(
+                any(), any(), any(), any(), any(), anyString(), any(), anyString()
+        );
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+        when(paymentLinkRepository.saveAndFlush(link)).thenReturn(link);
+
+        var result = service.submitManagerManualCardPaymentForOrder(
+                25272L, "Специалист подтвердил поступление", null,
+                ContractorRecipientType.SPECIALIST, 25L, "SPECIALIST:25",
+                "manager@example.ru", authentication
+        );
+
+        assertEquals("COMPLETED", result.status());
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        verifyNoInteractions(ownerManualCardPaymentApprovalRepository);
+        verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
+        verify(tbankClient, never()).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
+        verify(orderTransactionService).handlePaymentStatus(order);
+    }
+
+    @Test
     void manualCardPaymentPrefersLiveManualRouteOverExpiredReminderHistory() {
         PaymentLinkService service = service(properties());
         Order order = order(25246L, "Автокар", BigDecimal.valueOf(1000));
@@ -5680,6 +6102,90 @@ class PaymentLinkServiceTest {
         assertTrue(response.get(0).featured());
         assertEquals("bank-other", response.get(1).bankId());
         assertFalse(response.get(1).featured());
+    }
+
+    @Test
+    void tochkaPublicLinkExposesOnlyFailClosedBankCapabilities() {
+        PaymentLinkService service = service(properties());
+        Order order = order(35L, "ООО Точка", BigDecimal.valueOf(321));
+        PaymentProfile tochka = profile(3L, "tochka-primary", "Точка Банк", "tochka-profile");
+        tochka.setProvider(PaymentProfile.PROVIDER_TOCHKA);
+        PaymentLink link = payableLink(order, "tochka-public", 32_100L);
+        link.setId(35L);
+        link.setPaymentProfile(tochka);
+        link.setPaymentProfileCode(tochka.getCode());
+        link.setPaymentProfileName(tochka.getName());
+
+        when(paymentLinkRepository.findByTokenWithOrder("tochka-public")).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByTokenForUpdate("tochka-public")).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(35L)).thenReturn(Optional.of(order));
+        PublicPaymentLinkResponse response = service.publicLink("tochka-public");
+
+        assertEquals(PaymentProfile.PROVIDER_TOCHKA, response.provider());
+        assertEquals("BANK_ONLY", response.paymentPageMode());
+        assertFalse(response.sbpBankSelectionSupported());
+        assertFalse(response.tpayEnabled());
+        assertFalse(response.sberpayEnabled());
+        assertFalse(response.mirpayEnabled());
+        verifyNoInteractions(tbankClient);
+    }
+
+    @Test
+    void tochkaPublicBankActionsFailBeforeAnyTbankCall() {
+        PaymentLinkService service = service(properties());
+        Order order = order(36L, "ООО Точка", BigDecimal.valueOf(321));
+        PaymentProfile tochka = profile(3L, "tochka-primary", "Точка Банк", "tochka-profile");
+        tochka.setProvider(PaymentProfile.PROVIDER_TOCHKA);
+        PaymentLink link = payableLink(order, "tochka-actions", 32_100L);
+        link.setId(36L);
+        link.setPaymentProfile(tochka);
+        link.setPaymentProfileCode(tochka.getCode());
+        link.setPaymentProfileName(tochka.getName());
+
+        when(paymentLinkRepository.findByTokenWithOrder("tochka-actions")).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByTokenForUpdate("tochka-actions")).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByOrderIdForUpdate(36L)).thenReturn(List.of(link));
+        when(orderRepository.findByIdForCounterUpdate(36L)).thenReturn(Optional.of(order));
+
+        ResponseStatusException bankForm = assertThrows(ResponseStatusException.class, () -> service.init(
+                "tochka-actions", "payer@example.ru", true, true, true, "203.0.113.7", "JUnit UA"
+        ));
+        ResponseStatusException sbp = assertThrows(ResponseStatusException.class, () -> service.initSbp(
+                "tochka-actions", "payer@example.ru", true, true, true, null, "203.0.113.7", "JUnit UA"
+        ));
+        ResponseStatusException banks = assertThrows(ResponseStatusException.class, () ->
+                service.publicSbpBanks("tochka-actions", "mobile", "Android")
+        );
+
+        assertEquals(409, bankForm.getStatusCode().value());
+        assertTrue(bankForm.getReason().contains("пока не активирован"));
+        assertEquals(409, sbp.getStatusCode().value());
+        assertTrue(sbp.getReason().contains("СБП через Точку"));
+        assertEquals(409, banks.getStatusCode().value());
+        assertTrue(banks.getReason().contains("СБП через Точку"));
+        verifyNoInteractions(tbankClient);
+    }
+
+    @Test
+    void publicPaperInvoiceDoesNotResolveItsSpecialProfileCodeAsBankProvider() {
+        PaymentLinkService service = service(properties());
+        Order order = order(37L, "ООО Бумажный счёт", BigDecimal.valueOf(321));
+        PaymentLink link = payableLink(order, "paper-public", 32_100L);
+        link.setId(37L);
+        link.setPaymentMethod(PaymentMethod.OWNER_PAPER_INVOICE);
+        link.setPaymentProfile(null);
+        link.setPaymentProfileCode("OWNER_PAPER_INVOICE");
+        link.setPaymentProfileName("Бумажный счёт владельца");
+
+        when(paymentLinkRepository.findByTokenWithOrder("paper-public")).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByTokenForUpdate("paper-public")).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(37L)).thenReturn(Optional.of(order));
+
+        PublicPaymentLinkResponse response = service.publicLink("paper-public");
+
+        assertEquals(PaymentProfile.PROVIDER_TBANK, response.provider());
+        verify(paymentProfileService, never()).findByCode("OWNER_PAPER_INVOICE");
+        verifyNoInteractions(tbankClient);
     }
 
     @Test
@@ -6779,6 +7285,7 @@ class PaymentLinkServiceTest {
                 orderPaymentIntegrityService,
                 managerAccessService,
                 manualCardPaymentReviewNotificationService,
+                ownerManualCardPaymentApprovalRepository,
                 contractorPaymentLiveRoutingService,
                 contractorPaymentShadowService,
                 contractorPaymentRuntimeSwitch,
@@ -6811,6 +7318,12 @@ class PaymentLinkServiceTest {
         org.mockito.Mockito.lenient().when(runtimeSettingsService.isApplyConfirmedPayments()).thenAnswer(invocation -> properties.isApplyConfirmedPayments());
         org.mockito.Mockito.lenient().when(paymentProfileService.selectForManager(any())).thenReturn(defaultProfile);
         org.mockito.Mockito.lenient().when(paymentProfileService.lockForRouting(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        org.mockito.Mockito.lenient().when(paymentProfileService.provider(any(PaymentProfile.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0, PaymentProfile.class).normalizedProvider());
+        org.mockito.Mockito.lenient().when(paymentProfileService.isTochkaProvider(any(PaymentProfile.class)))
+                .thenAnswer(invocation -> PaymentProfile.PROVIDER_TOCHKA.equals(
+                        invocation.getArgument(0, PaymentProfile.class).normalizedProvider()
+                ));
         org.mockito.Mockito.lenient().when(manualPaymentTaskService.findRoutableTask(
                         any(),
                         any(),

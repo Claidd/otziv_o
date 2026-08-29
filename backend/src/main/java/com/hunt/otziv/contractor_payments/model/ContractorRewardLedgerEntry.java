@@ -42,6 +42,9 @@ public class ContractorRewardLedgerEntry {
     @Column(name = "order_id")
     private Long orderId;
 
+    @Column(name = "payment_status_guard")
+    private Long paymentStatusGuardId;
+
     @Column(name = "amount_kopecks", nullable = false)
     private long amountKopecks;
 

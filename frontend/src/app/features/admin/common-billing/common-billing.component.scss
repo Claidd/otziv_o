@@ -2,6 +2,9 @@
   display: block;
   min-width: 0;
 
+  --otziv-text: #1f2430;
+  --otziv-muted: #77808d;
+
   --billing-action-text: #263248;
   --billing-action-muted: #67758a;
   --billing-action-surface: #f5f7fa;
@@ -52,6 +55,8 @@
 }
 
 :host-context(body.otziv-dark-theme) {
+  --otziv-text: #f2f5f8;
+  --otziv-muted: #aeb8c3;
   --billing-action-text: #e8edf3;
   --billing-action-muted: #a6b1bd;
   --billing-action-surface: #2a3137;

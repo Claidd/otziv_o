@@ -211,6 +211,29 @@ export function isIncompletePartiallyPaidInvoice(
   );
 }
 
+export function commonInvoiceStatusProblem(status: string | null | undefined): string {
+  switch (status) {
+    case 'NEEDS_ATTENTION':
+      return 'Счет требует ручного разбора.';
+    case 'UNPAID':
+      return 'Счет переведен в неоплаченные. Проверьте, что заказы обработаны корректно.';
+    case 'BAN':
+      return 'Счет в бане. Нужна проверка дальнейших действий по заказам.';
+    case 'DISABLED':
+      return 'Общий счет отключен. Проверьте, почему неоплаченные заказы остались в отключенной связке.';
+    case 'READY':
+      return 'Счет готов к отправке. Проверьте, не завис ли он без выставления клиенту.';
+    default:
+      return '';
+  }
+}
+
+export function isManualTbankReconciliationRetryError(error: string | null | undefined): boolean {
+  const normalized = (error ?? '').trim().toLowerCase();
+  return normalized.startsWith('manual_payment_tbank_reconciliation_in_progress:')
+    || normalized.startsWith('manual_payment_tbank_reconciliation_retry:');
+}
+
 @Component({
   selector: 'app-common-billing',
   imports: [
@@ -321,6 +344,10 @@ export class CommonBillingComponent implements OnDestroy {
   });
   readonly attentionHasFinalCancelFailure = computed(() => this.attentionError().startsWith('payment_cancel_failed_final'));
   readonly attentionHasStandaloneRouteConflict = computed(() => this.attentionError().startsWith('standalone_payment_route_conflict'));
+  readonly attentionHasManualTbankReconciliationRetry = computed(() =>
+    isManualTbankReconciliationRetryError(this.attentionError()));
+  readonly attentionHasManualTbankPaymentDetected = computed(() =>
+    this.attentionError().startsWith('manual_payment_tbank_payment_detected:'));
   readonly attentionHasPaymentInitCheck = computed(() => isPaymentInitManualCheckError(this.attentionError()));
   readonly attentionIsMigrationPaymentRegistry = computed(() => isMigrationPaymentRegistryError(this.attentionError()));
   readonly attentionPaymentEvidence = computed(() => {
@@ -382,24 +409,7 @@ export class CommonBillingComponent implements OnDestroy {
     if (isIncompletePartiallyPaidInvoice(invoice)) {
       return '';
     }
-    switch (invoice.status) {
-      case 'NEEDS_ATTENTION':
-        return 'Счет требует ручного разбора.';
-      case 'UNPAID':
-        return 'Счет переведен в неоплаченные. Проверьте, что заказы обработаны корректно.';
-      case 'BAN':
-        return 'Счет в бане. Нужна проверка дальнейших действий по заказам.';
-      case 'DISABLED':
-        return 'Общий счет отключен. Проверьте, почему неоплаченные заказы остались в отключенной связке.';
-      case 'READY':
-        return 'Счет готов к отправке. Проверьте, не завис ли он без выставления клиенту.';
-      case 'INVOICED':
-      case 'REMINDER':
-      case 'PARTIALLY_PAID':
-        return 'Счет ожидает оплаты. Проверьте, не завис ли платеж или напоминание.';
-      default:
-        return '';
-    }
+    return commonInvoiceStatusProblem(invoice.status);
   });
   readonly invoiceProblemSteps = computed(() => this.commonInvoiceProblemSteps());
   readonly invoiceProblemActionLabel = computed(() => {
@@ -415,6 +425,12 @@ export class CommonBillingComponent implements OnDestroy {
     }
     if (this.attentionHasPaymentInitCheck()) {
       return paymentInitNoPaymentActionLabel();
+    }
+    if (this.attentionHasManualTbankReconciliationRetry()) {
+      return 'Нажмите «Повторить сверку оплаты»: система ещё раз проверит T‑Bank и закроет счёт только после безопасной отмены ссылки.';
+    }
+    if (this.attentionHasManualTbankPaymentDetected()) {
+      return 'По ссылке T‑Bank есть движение денег. Не подтверждайте перевод повторно: сначала сверьте обе оплаты с администратором.';
     }
     if (this.invoiceNeedsAttention()) {
       return 'После проверки используйте зеленое действие ниже или повторите обработку.';
@@ -439,11 +455,15 @@ export class CommonBillingComponent implements OnDestroy {
   readonly attentionRetryEnabled = computed(() => this.invoiceNeedsAttention()
     && !this.attentionRequiresManualCheck()
     && !this.attentionHasStandaloneRouteConflict()
+    && !this.attentionHasManualTbankReconciliationRetry()
+    && !this.attentionHasManualTbankPaymentDetected()
     && !this.invoiceProblemRaw().toLowerCase().startsWith('paper_invoice_mode_switch_'));
   readonly attentionResolveEnabled = computed(() => {
     return this.invoiceNeedsAttention()
       && !this.attentionRequiresManualCheck()
       && !this.attentionHasStandaloneRouteConflict()
+      && !this.attentionHasManualTbankReconciliationRetry()
+      && !this.attentionHasManualTbankPaymentDetected()
       && !this.invoiceProblemRaw().toLowerCase().startsWith('paper_invoice_mode_switch_');
   });
   readonly readyForSending = computed(() => {
@@ -869,7 +889,9 @@ export class CommonBillingComponent implements OnDestroy {
       return;
     }
     if (this.manualAttributionRequired()) {
-      this.manualAttributionMode.set('STANDARD');
+      this.manualAttributionMode.set(
+        invoice.paymentRouteType === 'TBANK_LINK' ? 'TBANK_ROUTE_FALLBACK' : 'STANDARD'
+      );
       return;
     }
     const evidence = this.requestManualPaymentEvidence(
@@ -1697,6 +1719,17 @@ export class CommonBillingComponent implements OnDestroy {
     this.orderFacade.openPaymentRouteChange();
   }
 
+  retryManualTbankReconciliation(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice
+      || invoice.status !== 'NEEDS_ATTENTION'
+      || !this.attentionHasManualTbankReconciliationRetry()
+      || this.mutating()) {
+      return;
+    }
+    this.manualAttributionMode.set('TBANK_ROUTE_FALLBACK');
+  }
+
   closePaymentRouteChange(): void {
     this.orderFacade.closePaymentRouteChange();
   }
@@ -1906,6 +1939,13 @@ export class CommonBillingComponent implements OnDestroy {
       || normalized.startsWith('paper_invoice_mode_switch_state_changed:')) {
       return 'Прежняя T-Bank-сессия ещё не закрыта однозначно. Оплата по ссылке остановлена в интерфейсе; повторите включение бумажного счёта после обновления.';
     }
+    if (normalized.startsWith('manual_payment_tbank_reconciliation_in_progress:')
+      || normalized.startsWith('manual_payment_tbank_reconciliation_retry:')) {
+      return 'T‑Bank пока не подтвердил безопасное закрытие ссылки. Деньги по прежним реквизитам не зачислены повторно; можно повторить автоматическую сверку.';
+    }
+    if (normalized.startsWith('manual_payment_tbank_payment_detected:')) {
+      return 'T‑Bank обнаружил движение денег по ссылке. Ручной перевод по прежним реквизитам не зачислен, чтобы не создать двойную оплату.';
+    }
     if (normalized.includes('t-bank') || normalized.includes('tbank') || normalized.includes('payment')) {
       return 'Есть ошибка платежа или T-Bank. Проверьте состояние оплаты в правой панели и повторите действие только после сверки.';
     }
@@ -1969,6 +2009,20 @@ export class CommonBillingComponent implements OnDestroy {
     }
     if (this.attentionHasPaymentInitCheck()) {
       return paymentInitNoPaymentInstructions();
+    }
+    if (this.attentionHasManualTbankReconciliationRetry()) {
+      return [
+        'Убедитесь, что в чате есть чек перевода по прежним реквизитам.',
+        'Нажмите «Повторить сверку оплаты» и снова укажите фактического получателя.',
+        'Система сама проверит T‑Bank; вручную менять платёжный маршрут не нужно.'
+      ];
+    }
+    if (this.attentionHasManualTbankPaymentDetected()) {
+      return [
+        'Не закрывайте счёт ручной оплатой и не отправляйте клиенту новую ссылку.',
+        'Сверьте платёж по ссылке T‑Bank и перевод по прежним реквизитам.',
+        'После определения лишнего платежа оформите возврат или отдельную административную корректировку.'
+      ];
     }
     if (commonError.startsWith('whatsapp_group_missing')) {
       return [

@@ -3,6 +3,7 @@ package com.hunt.otziv.contractor_payments.service;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
 import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.contractor_payments.model.ContractorCompletionRewardMarker;
 import com.hunt.otziv.contractor_payments.model.ContractorRole;
 import com.hunt.otziv.contractor_payments.repository.ContractorCompletionRewardMarkerRepository;
@@ -22,10 +23,12 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -59,6 +62,7 @@ public class ContractorCompletionRewardService {
     private final ContractorLegacyRewardGuard legacyRewardGuard;
     private final ContractorLegacyRewardReconciliationService legacyRewardReconciliationService;
     private final ContractorPaymentProfileService profileService;
+    private final BusinessAuditService businessAuditService;
 
     /**
      * Ensures every completion source for an order. This method is used by the
@@ -96,47 +100,50 @@ public class ContractorCompletionRewardService {
         // rollout singleton. Keep that canonical order here as well so repair
         // cannot deadlock a concurrent payment transition. The rollout lock
         // still serializes the decision with one-way activation.
-        if (rolloutStateService.lockAccountingAuthority()
-                != com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority.COMPLETION) {
+        var accountingAuthority = rolloutStateService.lockAccountingAuthority();
+        if (accountingAuthority == null || !accountingAuthority.paymentBased()) {
             return 0;
         }
         Order order = orderRepository.findByIdForOrderDto(orderId).orElse(null);
         if (order == null) {
             return 0;
         }
+        if (!isPaid(order)) {
+            if (paymentTrigger) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Начисление возможно только после подтвержденного статуса \"Оплачено\""
+                );
+            }
+            // Completion/publication is invoice readiness, not salary.
+            return 0;
+        }
+        // Every paid invocation uses payment semantics even when it arrived
+        // through a legacy completion-repair entry point.
+        paymentTrigger = true;
         List<BadReviewTask> completedTasks = badReviewTaskRepository.findAllByOrderIdAndStatus(
                 orderId,
                 BadReviewTaskStatus.DONE
         );
-        boolean allMarkersPresent = allCompletionMarkersPresent(orderId, completedTasks);
-        if (!paymentTrigger && allMarkersPresent) {
-            // Immutable markers are the authoritative idempotency boundary.
-            // A retry must never re-read today's manager/review composition
-            // after every logical source was already frozen.
-            synchronizeCompletionSources(orderId);
-            return 0;
-        }
         requireActuallyCompleted(order);
         LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
         if (attributionStart == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Не задана дата начала учета выполненных работ");
         }
-        if (paymentTrigger && allMarkersPresent
-                && hasPostCutoverCompletionEvidence(orderId, attributionStart)) {
-            // A post-cutover completion transition already froze the obligation date and recipients.
-            // A later payment must not reinterpret historical review dates through the legacy bridge
-            // and create a second manager/specialist accrual for the same completed work.
-            synchronizeCompletionSources(orderId);
-            return 0;
-        }
-
-        LocalDate occurredOn = forcedOccurredOn != null
+        LocalDate completedOn = forcedOccurredOn != null
                 ? forcedOccurredOn
                 : resolveOrderCompletionDate(order, attributionStart);
-        if (occurredOn == null) {
+        if (completedOn == null) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Дата выполнения заказа не подтверждена. Нужен датированный перенос начислений"
+            );
+        }
+        LocalDate occurredOn = order.getPayDay() == null ? businessClock.today() : order.getPayDay();
+        if (occurredOn == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Дата подтвержденной оплаты не указана; начисление остановлено"
             );
         }
 
@@ -147,13 +154,13 @@ public class ContractorCompletionRewardService {
         requireValidPostCutoffCompletedTasks(postCutoffTasks);
 
         int changed = 0;
-        if (occurredOn.isBefore(attributionStart)) {
+        if (completedOn.isBefore(attributionStart)) {
             if (paymentTrigger) {
                 return ensurePreCutoffPaymentAccrual(
                         order,
                         completedTasks,
                         postCutoffTasks,
-                        occurredOn,
+                        completedOn,
                         attributionStart
                 );
             }
@@ -206,7 +213,7 @@ public class ContractorCompletionRewardService {
         List<ContractorRewardAttributionService.SpecialistShare> specialistShares =
                 attributionService.attributeCompletedBaseWork(order);
         performerProductRewardZpService.validateCompletedOrderEvidence(order);
-        changed += ensureBaseOrderRewards(order, effectiveManager, occurredOn, false, specialistShares);
+        changed += ensureBaseOrderRewards(order, effectiveManager, occurredOn, true, specialistShares);
         for (BadReviewTask task : completedTasks) {
             changed += ensureCompletedBadReviewTaskLocked(order, effectiveManager, task, false);
         }
@@ -214,7 +221,7 @@ public class ContractorCompletionRewardService {
                 order,
                 effectiveManager,
                 occurredOn,
-                false
+                true
         );
         synchronizeCompletionSources(orderId);
         return changed;
@@ -234,11 +241,14 @@ public class ContractorCompletionRewardService {
         if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
             return 0;
         }
-        if (rolloutStateService.lockAccountingAuthority()
-                != com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority.COMPLETION) {
+        var accountingAuthority = rolloutStateService.lockAccountingAuthority();
+        if (accountingAuthority == null || !accountingAuthority.paymentBased()) {
             return 0;
         }
         Order order = orderRepository.findByIdForOrderDto(orderId).orElse(task.getOrder());
+        if (!isPaid(order)) {
+            return 0;
+        }
         LocalDate attributionStart = runtimeSwitch.completionAttributionStartDate().orElse(null);
         boolean postCutoffTask = attributionStart != null
                 && task.getCompletedDate() != null
@@ -280,8 +290,12 @@ public class ContractorCompletionRewardService {
         if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
             return 0;
         }
-        if (rolloutStateService.lockAccountingAuthority()
-                != com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority.COMPLETION) {
+        var accountingAuthority = rolloutStateService.lockAccountingAuthority();
+        if (accountingAuthority == null || !accountingAuthority.paymentBased()) {
+            return 0;
+        }
+        Order paidOrder = orderRepository.findByIdForOrderDto(orderId).orElse(null);
+        if (!isPaid(paidOrder)) {
             return 0;
         }
         String markerSource = ContractorRewardSourceCodes.badReviewCancelMarker(taskId);
@@ -345,8 +359,8 @@ public class ContractorCompletionRewardService {
         if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
             return 0;
         }
-        if (rolloutStateService.lockAccountingAuthority()
-                != com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority.COMPLETION) {
+        var accountingAuthority = rolloutStateService.lockAccountingAuthority();
+        if (accountingAuthority == null || !accountingAuthority.paymentBased()) {
             return 0;
         }
         Order order = orderRepository.findByIdForOrderDto(orderId).orElse(null);
@@ -436,7 +450,7 @@ public class ContractorCompletionRewardService {
                 .map(BadReviewTask::getPrice)
                 .map(this::money)
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
-        LocalDate paymentDate = businessClock.today();
+        LocalDate paymentDate = order.getPayDay() == null ? businessClock.today() : order.getPayDay();
         int changed = ensureReward(
                 order,
                 frozenManager.getUser(),
@@ -524,37 +538,35 @@ public class ContractorCompletionRewardService {
             List<ContractorRewardAttributionService.SpecialistShare> specialistShares
     ) {
         int changed = 0;
-        if (marker(order.getId(), ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER) != null
-                && !(overrideEmptyMarker && !hasActiveSource(
-                        order.getId(), ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER))) {
-            synchronizeActiveSource(order.getId(), ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER);
-        } else {
-            if (effectiveManager != null) {
-                BigDecimal gross = money(order.getSum());
-                changed += ensureReward(
-                        order,
-                        effectiveManager.getUser(),
-                        effectiveManager.getId(),
-                        gross.multiply(coefficient(effectiveManager.getUser())),
-                        Math.max(0, order.getAmount()),
-                        ContractorRole.MANAGER,
-                        ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER,
-                        gross,
-                        occurredOn
-                );
-            }
-            saveMarker(order.getId(), ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER, occurredOn);
+        Set<Long> managerProfessions = new LinkedHashSet<>();
+        if (effectiveManager != null) {
+            BigDecimal gross = money(order.getSum());
+            managerProfessions.add(effectiveManager.getId());
+            changed += ensureReward(
+                    order,
+                    effectiveManager.getUser(),
+                    effectiveManager.getId(),
+                    gross.multiply(coefficient(effectiveManager.getUser())),
+                    Math.max(0, order.getAmount()),
+                    ContractorRole.MANAGER,
+                    ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER,
+                    gross,
+                    occurredOn
+            );
         }
+        saveMarker(order.getId(), ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER, occurredOn);
+        changed += deactivateUnexpectedSourceRewards(
+                order.getId(),
+                ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER,
+                ContractorRole.MANAGER,
+                managerProfessions,
+                "manager_or_order_amount_changed"
+        );
 
-        if (marker(order.getId(), ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST) != null
-                && !(overrideEmptyMarker && !hasActiveSource(
-                        order.getId(), ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST))) {
-            synchronizeActiveSource(order.getId(), ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST);
-            return changed;
-        }
         if (specialistShares == null || specialistShares.isEmpty()) {
             throw unverifiableCompletedTaskWorker();
         }
+        Set<Long> specialistProfessions = new LinkedHashSet<>();
         for (ContractorRewardAttributionService.SpecialistShare share : specialistShares) {
             if (share == null
                     || share.user() == null
@@ -562,6 +574,7 @@ public class ContractorCompletionRewardService {
                     || share.workerId() == null) {
                 throw unverifiableCompletedTaskWorker();
             }
+            specialistProfessions.add(share.workerId());
             changed += ensureReward(
                     order,
                     share.user(),
@@ -575,6 +588,13 @@ public class ContractorCompletionRewardService {
             );
         }
         saveMarker(order.getId(), ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST, occurredOn);
+        changed += deactivateUnexpectedSourceRewards(
+                order.getId(),
+                ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST,
+                ContractorRole.SPECIALIST,
+                specialistProfessions,
+                "specialist_work_composition_changed"
+        );
         return changed;
     }
 
@@ -607,13 +627,13 @@ public class ContractorCompletionRewardService {
             return 0;
         }
         requireValidPostCutoffCompletedTasks(List.of(task));
-        if (marker(order.getId(), markerSource) != null) {
-            synchronizeActiveSource(order.getId(), ContractorRewardSourceCodes.badReviewManager(task.getId()));
-            synchronizeActiveSource(order.getId(), ContractorRewardSourceCodes.badReviewSpecialist(task.getId()));
-            return 0;
-        }
+        boolean markerExists = marker(order.getId(), markerSource) != null;
         BigDecimal gross = money(task.getPrice());
         int changed = 0;
+        LocalDate rewardOccurredOn = order.getPayDay() != null
+                && order.getPayDay().isAfter(occurredOn)
+                ? order.getPayDay()
+                : occurredOn;
         if (effectiveManager != null) {
             changed += ensureReward(
                     order,
@@ -624,7 +644,7 @@ public class ContractorCompletionRewardService {
                     ContractorRole.MANAGER,
                     ContractorRewardSourceCodes.badReviewManager(task.getId()),
                     gross,
-                    occurredOn
+                    rewardOccurredOn
             );
         }
         Worker taskWorker = task.getWorker();
@@ -638,11 +658,64 @@ public class ContractorCompletionRewardService {
                     ContractorRole.SPECIALIST,
                     ContractorRewardSourceCodes.badReviewSpecialist(task.getId()),
                     gross,
-                    occurredOn
+                    rewardOccurredOn
             );
         }
-        saveMarker(order.getId(), markerSource, occurredOn);
+        if (!markerExists) {
+            saveMarker(order.getId(), markerSource, rewardOccurredOn);
+        }
         return changed;
+    }
+
+    /**
+     * Removes every order-bound salary row before payment is canceled or
+     * returned. Rows stay in ZP as inactive audit history and ledger capacity
+     * is updated in the same transaction. Re-payment reuses the same unique
+     * rows and activates them on the new payment date.
+     */
+    @Transactional
+    public int deactivateOrderPaymentAccruals(Long orderId, String reason) {
+        if (orderId == null || orderId <= 0) {
+            return 0;
+        }
+        if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+            return 0;
+        }
+        List<Zp> active = zpRepository.findByOrderIdAndActiveTrue(orderId);
+        String auditReason = reason == null || reason.isBlank()
+                ? "payment_status_not_paid"
+                : reason.trim();
+        for (Zp reward : active) {
+            businessAuditService.recordRequiredInCurrentTransaction(
+                    "ORDER_SALARY_DEACTIVATED",
+                    "ZP",
+                    reward.getId(),
+                    orderId,
+                    null,
+                    salaryAuditValue(reward),
+                    "active=false",
+                    auditReason
+            );
+            reward.setActive(false);
+        }
+        if (!active.isEmpty()) {
+            zpRepository.saveAllAndFlush(active);
+            rewardLedgerService.synchronizeSources(active);
+        }
+        int orphanedLedgerRows = rewardLedgerService.deactivateActiveOrderEntries(orderId);
+        if (orphanedLedgerRows > 0) {
+            businessAuditService.recordRequiredInCurrentTransaction(
+                    "ORDER_SALARY_LEDGER_RECONCILED",
+                    "ORDER",
+                    orderId,
+                    orderId,
+                    null,
+                    "active_ledger_rows=" + orphanedLedgerRows,
+                    "active_ledger_rows=0",
+                    auditReason
+            );
+        }
+        return active.size();
     }
 
     private void requireDatedCompletedTasks(List<BadReviewTask> completedTasks) {
@@ -800,6 +873,7 @@ public class ContractorCompletionRewardService {
         adjustment.setFio(original.getFio());
         adjustment.setSum(money(original.getSum()).negate());
         adjustment.setOrderId(original.getOrderId());
+        adjustment.setPaymentStatusGuardId(original.getPaymentStatusGuardId());
         adjustment.setUserId(original.getUserId());
         adjustment.setProfessionId(original.getProfessionId());
         adjustment.setAmount(-Math.abs(original.getAmount()));
@@ -841,19 +915,51 @@ public class ContractorCompletionRewardService {
                 )
                 .orElse(null);
         if (existing != null) {
-            if (!existing.isActive()) {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Историческое начисление было скорректировано и не может быть восстановлено автоматически"
-                );
+            String oldValue = salaryAuditValue(existing);
+            BigDecimal normalizedAmount = money(amount);
+            BigDecimal normalizedBasis = money(grossBasis);
+            boolean changed = !existing.isActive()
+                    || !Objects.equals(existing.getUserId(), user.getId())
+                    || !Objects.equals(existing.getFio(), user.getFio())
+                    || existing.getSum() == null
+                    || existing.getSum().compareTo(normalizedAmount) != 0
+                    || existing.getAmount() != Math.max(0, workUnits)
+                    || existing.getCreated() == null
+                    || !existing.getCreated().equals(occurredOn)
+                    || existing.getRewardBasis() == null
+                    || existing.getRewardBasis().compareTo(normalizedBasis) != 0
+                    || !existing.isAttributionFinal();
+            if (!changed) {
+                return 0;
             }
-            return 0;
+            existing.setFio(user.getFio());
+            existing.setSum(normalizedAmount);
+            existing.setUserId(user.getId());
+            existing.setAmount(Math.max(0, workUnits));
+            existing.setPaymentStatusGuardId(order.getStatus().getId());
+            existing.setActive(true);
+            existing.setAttributionFinal(true);
+            existing.setRewardBasis(normalizedBasis);
+            existing.setCreated(occurredOn);
+            zpRepository.save(existing);
+            businessAuditService.recordRequiredInCurrentTransaction(
+                    "ORDER_SALARY_RECONCILED",
+                    "ZP",
+                    existing.getId(),
+                    order.getId(),
+                    null,
+                    oldValue,
+                    salaryAuditValue(existing),
+                    "paid_order_expected_state"
+            );
+            return 1;
         }
 
         Zp reward = new Zp();
         reward.setFio(user.getFio());
         reward.setSum(money(amount));
         reward.setOrderId(order.getId());
+        reward.setPaymentStatusGuardId(order.getStatus().getId());
         reward.setUserId(user.getId());
         reward.setProfessionId(professionId);
         reward.setAmount(Math.max(0, workUnits));
@@ -868,10 +974,42 @@ public class ContractorCompletionRewardService {
         // LIVE routing may execute later in the same transaction. Therefore
         // the ledger must be materialized synchronously, not in afterCommit.
         log.info(
-                "Создано начисление за выполненную работу: orderId={}, source={}, role={}, professionId={}",
+                "Создано начисление по оплаченному заказу: orderId={}, source={}, role={}, professionId={}",
                 order.getId(), source, role, professionId
         );
         return 1;
+    }
+
+    private int deactivateUnexpectedSourceRewards(
+            Long orderId,
+            String source,
+            ContractorRole role,
+            Set<Long> expectedProfessions,
+            String reason
+    ) {
+        List<Zp> unexpected = zpRepository.findByOrderIdAndSourceAndActiveTrue(orderId, source).stream()
+                .filter(reward -> reward.getContractorRole() == role)
+                .filter(reward -> !expectedProfessions.contains(reward.getProfessionId()))
+                .toList();
+        if (unexpected.isEmpty()) {
+            return 0;
+        }
+        for (Zp reward : unexpected) {
+            businessAuditService.recordRequiredInCurrentTransaction(
+                    "ORDER_SALARY_COMPOSITION_REMOVED",
+                    "ZP",
+                    reward.getId(),
+                    orderId,
+                    null,
+                    salaryAuditValue(reward),
+                    "active=false",
+                    reason
+            );
+            reward.setActive(false);
+        }
+        zpRepository.saveAllAndFlush(unexpected);
+        rewardLedgerService.synchronizeSources(unexpected);
+        return unexpected.size();
     }
 
     private boolean hasLegacyAggregateReward(Long orderId) {
@@ -1048,6 +1186,26 @@ public class ContractorCompletionRewardService {
                     "Начисление возможно только после фактического завершения всех работ"
             );
         }
+    }
+
+    private boolean isPaid(Order order) {
+        return order != null
+                && order.getStatus() != null
+                && "Оплачено".equals(order.getStatus().getTitle());
+    }
+
+    private String salaryAuditValue(Zp reward) {
+        if (reward == null) {
+            return "null";
+        }
+        return "active=" + reward.isActive()
+                + ";date=" + reward.getCreated()
+                + ";sum=" + reward.getSum()
+                + ";amount=" + reward.getAmount()
+                + ";user=" + reward.getUserId()
+                + ";profession=" + reward.getProfessionId()
+                + ";role=" + reward.getContractorRole()
+                + ";source=" + reward.getSource();
     }
 
     private record LegacySpecialistShare(

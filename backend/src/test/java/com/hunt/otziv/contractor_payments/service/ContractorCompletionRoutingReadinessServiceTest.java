@@ -160,7 +160,8 @@ class ContractorCompletionRoutingReadinessServiceTest {
 
         assertThat(service.readyForLiveRouting()).isFalse();
 
-        verifyNoInteractions(orderRepository, badReviewTaskRepository);
+        verify(orderRepository).countUnpaidOrdersWithActiveSalary();
+        verifyNoInteractions(badReviewTaskRepository);
     }
 
     @Test
@@ -187,7 +188,8 @@ class ContractorCompletionRoutingReadinessServiceTest {
 
         assertThat(service.readyForLiveRouting()).isFalse();
 
-        verifyNoInteractions(orderRepository, badReviewTaskRepository);
+        verify(orderRepository).countUnpaidOrdersWithActiveSalary();
+        verifyNoInteractions(badReviewTaskRepository);
     }
 
     @Test

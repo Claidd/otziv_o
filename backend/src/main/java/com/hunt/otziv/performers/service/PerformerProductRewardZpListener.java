@@ -15,8 +15,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class PerformerProductRewardZpListener {
 
     private static final String STATUS_PAID = "Оплачено";
-    private static final String STATUS_PUBLIC = "Опубликовано";
-
     private final PerformerProductRewardZpService rewardZpService;
     private final ContractorPaymentRuntimeSwitch runtimeSwitch;
     private final ContractorCompletionRepairTransactionService completionRepairTransactionService;
@@ -27,9 +25,7 @@ public class PerformerProductRewardZpListener {
             return;
         }
         if (runtimeSwitch.rewardAttributionLiveEnabled()) {
-            if (STATUS_PUBLIC.equals(event.requestedStatus())
-                    || STATUS_PUBLIC.equals(event.newStatus())
-                    || STATUS_PAID.equals(event.newStatus())) {
+            if (STATUS_PAID.equals(event.newStatus())) {
                 try {
                     completionRepairTransactionService.repairOrder(event.orderId());
                 } catch (RuntimeException exception) {

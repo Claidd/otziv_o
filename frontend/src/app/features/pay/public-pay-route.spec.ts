@@ -66,6 +66,87 @@ describe('public payment route isolation', () => {
     fixture.destroy();
   });
 
+  it('keeps legacy T-Bank bank selection enabled when the capability is absent', async () => {
+    const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
+    const current: PublicPaymentLink = {
+      ...payment('A'),
+      paymentPageMode: 'SBP_PRIMARY'
+    };
+    const banks = [{ bankId: '100000000004', name: 'Т-Банк', featured: true }];
+    const paymentsApi = {
+      getPublicPaymentLink: vi.fn(() => of(current)),
+      getPublicSbpBanks: vi.fn(() => of(banks)),
+      initPublicPayment: vi.fn(),
+      initPublicSbpPayment: vi.fn(),
+      reportPublicManualPayment: vi.fn()
+    };
+    await configure(PayPageComponent, params, paymentsApi);
+    const fixture = TestBed.createComponent(PayPageComponent);
+    const component = fixture.componentInstance;
+
+    expect(component.sbpBankSelectionSupported()).toBe(true);
+    expect(paymentsApi.getPublicSbpBanks).toHaveBeenCalledOnce();
+    expect(component.sbpBanks()).toEqual(banks);
+    expect(component.selectedSbpBankId()).toBe('100000000004');
+    fixture.destroy();
+  });
+
+  it('skips the bank picker and opens a safe hosted URL for Tochka SBP', async () => {
+    const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
+    const current: PublicPaymentLink = {
+      ...payment('A'),
+      provider: 'TOCHKA',
+      paymentPageMode: 'SBP_PRIMARY',
+      sbpBankSelectionSupported: false
+    };
+    const mutation = new Subject<PublicPaymentInitResponse>();
+    const paymentsApi = {
+      getPublicPaymentLink: vi.fn(() => of(current)),
+      getPublicSbpBanks: vi.fn(() => of([])),
+      initPublicPayment: vi.fn(),
+      initPublicSbpPayment: vi.fn(() => mutation),
+      reportPublicManualPayment: vi.fn()
+    };
+    await configure(PayPageComponent, params, paymentsApi);
+    const fixture = TestBed.createComponent(PayPageComponent);
+    const component = fixture.componentInstance;
+
+    expect(component.sbpBankSelectionSupported()).toBe(false);
+    expect(paymentsApi.getPublicSbpBanks).not.toHaveBeenCalled();
+
+    component.email.set('payer@example.com');
+    component.offerConsent.set(true);
+    component.privacyConsent.set(true);
+    component.receiptConsent.set(true);
+    const navigate = vi.spyOn(
+      component as unknown as { navigatePayment: (value: unknown, purpose: string) => boolean },
+      'navigatePayment'
+    ).mockReturnValue(true);
+
+    component.submitPrimaryPayment();
+    expect(paymentsApi.initPublicSbpPayment).toHaveBeenCalledWith(
+      'A',
+      'payer@example.com',
+      true,
+      true,
+      true,
+      null
+    );
+
+    const hostedUrl = 'https://merch.securepaytb.ru/order/?uuid=tochka-operation';
+    mutation.next({
+      paymentUrl: hostedUrl,
+      paymentId: 'tochka-operation',
+      status: 'CREATED',
+      method: 'SBP_QR'
+    });
+
+    expect(navigate).toHaveBeenCalledWith(hostedUrl, 'payment');
+    expect(component.sbpSubmitting()).toBe(false);
+    mutation.complete();
+    fixture.destroy();
+  });
+
   it('group payment cancels stale reads and suppresses a late init navigation without cancelling the write', async () => {
     const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
     const first = new Subject<PublicCommonInvoice>();

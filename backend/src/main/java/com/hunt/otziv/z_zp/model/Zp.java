@@ -34,6 +34,8 @@ public class Zp implements ZpStatView {
     private Long professionId;
     @Column(name = "zp_order")
     private Long orderId;
+    @Column(name = "zp_payment_status_guard")
+    private Long paymentStatusGuardId;
     @Column(name = "zp_amount")
     private int amount;
     @Column(name = "zp_date")

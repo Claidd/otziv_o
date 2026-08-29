@@ -34,6 +34,13 @@
           <dt>Изначальный маршрут</dt>
           <dd>{{ recipientLabel(paymentContext.originalRecipient) }}</dd>
         </div>
+        @if (!isTaskRecipient(paymentContext.originalRecipient)
+          && bankRecipientName(paymentContext.originalRecipient); as bankRecipient) {
+          <div>
+            <dt>Получатель по реквизитам</dt>
+            <dd>{{ bankRecipient }}</dd>
+          </div>
+        }
       </dl>
       @if (isTaskRecipient(paymentContext.originalRecipient)) {
         <p class="manual-payment-warning recipient-change" role="status">
@@ -66,6 +73,12 @@
         </label>
 
         @if (selectedRecipient(); as selected) {
+          @if (!isTaskRecipient(selected) && bankRecipientName(selected); as bankRecipient) {
+            <p class="manual-payment-warning recipient-change" role="status">
+              Учёт: {{ recipientLabel(selected) }}.<br>
+              Получатель по реквизитам: {{ bankRecipient }}.
+            </p>
+          }
           @if (selected.availableKopecks != null || selected.projectedOverrunKopecks != null) {
             <dl class="recipient-capacity" aria-label="Расчёт выбранного получателя">
               <div>
@@ -86,6 +99,12 @@
         @if (recipientChanged()) {
           <p class="manual-payment-warning recipient-change" role="status">
             Получатель отличается от исходного. Система скорректирует исходное назначение и учтёт оплату у выбранного человека.
+          </p>
+        }
+
+        @if (ownerSelected()) {
+          <p class="manual-payment-warning recipient-change" role="status">
+            При выборе владельца нажатие всегда отправляет владельцу запрос в Telegram. До его подтверждения текущий платёжный источник не закрывается и заказ не считается оплаченным.
           </p>
         }
 

@@ -3,13 +3,9 @@ package com.hunt.otziv.analytics.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
-import com.hunt.otziv.analytics.model.AnalyticsDailyUser;
-import com.hunt.otziv.analytics.model.AnalyticsMonthlyUser;
-import com.hunt.otziv.analytics.repository.AnalyticsDailyUserRepository;
-import com.hunt.otziv.analytics.repository.AnalyticsMonthlyUserRepository;
+import com.hunt.otziv.analytics.service.AnalyticsSalarySourceService.DailySalary;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.User;
-import com.hunt.otziv.z_zp.service.ZpService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,7 +15,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,13 +28,7 @@ class AnalyticsAggregateUserStatsServiceTest {
     private static final LocalDate DATE = LocalDate.of(2026, 5, 9);
 
     @Mock
-    private AnalyticsDailyUserRepository dailyUserRepository;
-
-    @Mock
-    private AnalyticsMonthlyUserRepository monthlyUserRepository;
-
-    @Mock
-    private ZpService zpService;
+    private AnalyticsSalarySourceService salarySourceService;
 
     private AnalyticsAggregateUserStatsService service;
     private ObjectMapper objectMapper;
@@ -47,40 +36,25 @@ class AnalyticsAggregateUserStatsServiceTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        AnalyticsAggregateReadService readService = new AnalyticsAggregateReadService(
-                null,
-                dailyUserRepository,
-                monthlyUserRepository,
-                null
-        );
-        service = new AnalyticsAggregateUserStatsService(readService, objectMapper, zpService);
+        service = new AnalyticsAggregateUserStatsService(salarySourceService, objectMapper);
     }
 
     @Test
-    void buildsUserStatsFromMonthlyAndDailyAggregates() throws Exception {
+    void buildsUserStatsFromCanonicalFinalAttribution() throws Exception {
         User user = user(10L, "Worker One", "1.25", 77L);
-        List<AnalyticsMonthlyUser> monthlyRows = List.of(
-                monthly(user, LocalDate.of(2025, 1, 1), "300.00", 3),
-                monthly(user, LocalDate.of(2025, 2, 1), "0.00", 0),
-                monthly(user, LocalDate.of(2025, 5, 1), "100.00", 1),
-                monthly(user, LocalDate.of(2026, 1, 1), "500.00", 5),
-                monthly(user, LocalDate.of(2026, 4, 1), "200.00", 2)
-        );
-        List<AnalyticsDailyUser> dailyRows = List.of(
-                daily(user, LocalDate.of(2026, 5, 1), "50.00", 1),
-                daily(user, LocalDate.of(2026, 5, 7), "25.00", 1),
-                daily(user, LocalDate.of(2026, 5, 8), "100.00", 2)
-        );
-        stubMonthlyRows(monthlyRows);
-        stubDailyRows(dailyRows);
-        when(zpService.sumByUserAndCreated(10L, DATE)).thenReturn(new BigDecimal("40.00"));
-        when(zpService.countByUserAndCreated(10L, DATE)).thenReturn(1L);
-        when(zpService.sumByUserAndCreated(10L, DATE.minusDays(1))).thenReturn(new BigDecimal("100.00"));
+        stubRows(List.of(
+                daily(LocalDate.of(2025, 1, 1), "300.00", 3),
+                daily(LocalDate.of(2025, 5, 1), "100.00", 1),
+                daily(LocalDate.of(2026, 1, 1), "500.00", 5),
+                daily(LocalDate.of(2026, 4, 1), "200.00", 2),
+                daily(LocalDate.of(2026, 5, 1), "50.00", 1),
+                daily(LocalDate.of(2026, 5, 7), "25.00", 1),
+                daily(LocalDate.of(2026, 5, 8), "100.00", 2),
+                daily(DATE, "40.00", 1)
+        ));
 
-        Optional<UserStatDTO> result = service.buildUserStats(DATE, user);
+        UserStatDTO stats = service.buildUserStats(DATE, user).orElseThrow();
 
-        assertTrue(result.isPresent());
-        UserStatDTO stats = result.get();
         assertEquals(10L, stats.getId());
         assertEquals("Worker One", stats.getFio());
         assertEquals(77L, stats.getImageId());
@@ -106,16 +80,12 @@ class AnalyticsAggregateUserStatsServiceTest {
     }
 
     @Test
-    void replacesStaleSelectedDayAggregateWithLiveSalaryAndCount() throws Exception {
+    void usesCorrectedPriorDayInsteadOfStaleAggregateSnapshot() throws Exception {
         User user = user(10L, "Worker One", "1.25", 77L);
-        stubMonthlyRows(List.of());
-        stubDailyRows(List.of(
-                daily(user, DATE.minusDays(1), "100.00", 2),
-                daily(user, DATE, "10.00", 1)
+        stubRows(List.of(
+                daily(DATE.minusDays(1), "100.00", 2),
+                daily(DATE, "40.00", 3)
         ));
-        when(zpService.sumByUserAndCreated(10L, DATE)).thenReturn(new BigDecimal("40.00"));
-        when(zpService.countByUserAndCreated(10L, DATE)).thenReturn(3L);
-        when(zpService.sumByUserAndCreated(10L, DATE.minusDays(1))).thenReturn(new BigDecimal("100.00"));
 
         UserStatDTO stats = service.buildUserStats(DATE, user).orElseThrow();
 
@@ -127,46 +97,13 @@ class AnalyticsAggregateUserStatsServiceTest {
         assertEquals(140, monthlyMap.get("2026").get("5").asInt());
     }
 
-    private void stubDailyRows(List<AnalyticsDailyUser> rows) {
-        when(dailyUserRepository.findByUserIdsInPeriod(anyCollection(), any(LocalDate.class), any(LocalDate.class)))
-                .thenAnswer(invocation -> {
-                    LocalDate from = invocation.getArgument(1);
-                    LocalDate to = invocation.getArgument(2);
-                    return rows.stream()
-                            .filter(row -> !row.getMetricDate().isBefore(from) && !row.getMetricDate().isAfter(to))
-                            .toList();
-                });
+    private void stubRows(List<DailySalary> rows) {
+        when(salarySourceService.dailyForUsers(anyCollection(), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(rows);
     }
 
-    private void stubMonthlyRows(List<AnalyticsMonthlyUser> rows) {
-        when(monthlyUserRepository.findByUserIdsInMonthPeriod(anyCollection(), any(LocalDate.class), any(LocalDate.class)))
-                .thenAnswer(invocation -> {
-                    LocalDate from = invocation.getArgument(1);
-                    LocalDate to = invocation.getArgument(2);
-                    return rows.stream()
-                            .filter(row -> !row.getMonthStart().isBefore(from) && !row.getMonthStart().isAfter(to))
-                            .toList();
-                });
-    }
-
-    private AnalyticsMonthlyUser monthly(User user, LocalDate monthStart, String salary, long salaryEntries) {
-        AnalyticsMonthlyUser row = new AnalyticsMonthlyUser();
-        row.setMonthStart(monthStart);
-        row.setUser(user);
-        row.setRoleName("ROLE_WORKER");
-        row.setSalarySum(new BigDecimal(salary));
-        row.setSalaryEntryCount(salaryEntries);
-        return row;
-    }
-
-    private AnalyticsDailyUser daily(User user, LocalDate metricDate, String salary, long salaryEntries) {
-        AnalyticsDailyUser row = new AnalyticsDailyUser();
-        row.setMetricDate(metricDate);
-        row.setUser(user);
-        row.setRoleName("ROLE_WORKER");
-        row.setSalarySum(new BigDecimal(salary));
-        row.setSalaryEntryCount(salaryEntries);
-        return row;
+    private DailySalary daily(LocalDate metricDate, String salary, long salaryEntries) {
+        return new DailySalary(metricDate, 10L, new BigDecimal(salary), salaryEntries, salaryEntries);
     }
 
     private User user(Long id, String fio, String coefficient, Long imageId) {

@@ -252,17 +252,17 @@ dd {
 
 .card-finance-grid > span.reserved {
   border-color: rgba(239, 177, 77, 0.34);
-  background: linear-gradient(135deg, rgba(239, 177, 77, 0.11), rgba(255, 255, 255, 0.95));
+  background: linear-gradient(135deg, rgba(239, 177, 77, 0.11), var(--otziv-white));
 }
 
 .card-finance-grid > span.paid {
   border-color: rgba(49, 164, 145, 0.28);
-  background: linear-gradient(135deg, rgba(49, 164, 145, 0.11), rgba(255, 255, 255, 0.95));
+  background: linear-gradient(135deg, rgba(49, 164, 145, 0.11), var(--otziv-white));
 }
 
 .card-finance-grid > span.transfers {
   border-color: rgba(79, 111, 181, 0.24);
-  background: linear-gradient(135deg, rgba(79, 111, 181, 0.1), rgba(255, 255, 255, 0.95));
+  background: linear-gradient(135deg, rgba(79, 111, 181, 0.1), var(--otziv-white));
 }
 
 .card-finance-grid small {

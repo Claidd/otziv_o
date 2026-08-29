@@ -1,6 +1,11 @@
 export type PaymentNavigationPurpose = 'manual' | 'payment' | 'sbp';
 
-const PAYMENT_PROVIDER_HOSTS = new Set(['securepay.tinkoff.ru', 'securepay.tbank.ru', 'pay.tbank.ru']);
+const PAYMENT_PROVIDER_HOSTS = new Set([
+  'securepay.tinkoff.ru',
+  'securepay.tbank.ru',
+  'pay.tbank.ru',
+  'merch.securepaytb.ru'
+]);
 const SBP_WEB_HOSTS = new Set(['qr.nspk.ru', 'www.tbank.ru', 'payzonaecom.com']);
 const SBP_CUSTOM_PATH = String.raw`(?:[/?#][A-Za-z0-9._~%!$&'()*+,;=:@/?#-]*)?`;
 const NSPK_BANK_TARGET = new RegExp(

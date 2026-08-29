@@ -9,7 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 
 @Repository
-public interface ZpRepository extends CrudRepository<Zp, Long>  {
+public interface ZpRepository extends JpaRepository<Zp, Long>  {
     @NotNull
     List<Zp> findAll();
 

@@ -31,6 +31,8 @@ public class PaymentCheck implements PaymentCheckStatView {
     private Long companyId;
     @Column(name = "check_order")
     private Long orderId;
+    @Column(name = "check_payment_status_guard")
+    private Long paymentStatusGuard;
     @Column(name = "check_manager")
     private Long managerId;
     @Column(name = "check_worker")

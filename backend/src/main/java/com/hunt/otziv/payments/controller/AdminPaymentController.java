@@ -9,6 +9,7 @@ import com.hunt.otziv.payments.dto.CloseManualPaymentUnpaidRequest;
 import com.hunt.otziv.payments.dto.ConfirmManualCardPaymentRequest;
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
+import com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskAccountingTargetOption;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
 import com.hunt.otziv.payments.dto.PaymentLinkArchiveRunResponse;
@@ -126,12 +127,12 @@ public class AdminPaymentController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/manager/orders/{orderId}/confirm-manual-card-payment")
-    public void confirmOrderManualCardPayment(
+    public ResponseEntity<ManagerManualCardPaymentResultResponse> confirmOrderManualCardPayment(
             @PathVariable Long orderId,
             @RequestBody ReportManualCardPaymentRequest request,
             Authentication authentication
     ) {
-        paymentLinkService.reportPaidByManualCardTransferForOrder(
+        ManagerManualCardPaymentResultResponse response = paymentLinkService.submitManagerManualCardPaymentForOrder(
                 orderId,
                 request == null ? null : request.reason(),
                 request == null ? null : request.receiptUrl(),
@@ -141,6 +142,10 @@ public class AdminPaymentController {
                 actor(authentication),
                 authentication
         );
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(response);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")

@@ -76,7 +76,7 @@ public class ContractorPaymentRolloutStateService {
             long revision
     ) {
         public boolean completionAccountingActive() {
-            return accountingAuthority == ContractorPaymentAccountingAuthority.COMPLETION;
+            return accountingAuthority != null && accountingAuthority.paymentBased();
         }
 
         public boolean legacyAccountingActive() {

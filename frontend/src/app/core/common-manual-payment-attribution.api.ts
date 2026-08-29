@@ -9,7 +9,7 @@ export interface CommonManualPaymentAttributionModeResponse {
 }
 
 export type CommonActualRecipientType = 'SPECIALIST' | 'MANAGER' | 'OWNER';
-export type CommonManualPaymentMode = 'STANDARD' | 'TBANK_FALLBACK';
+export type CommonManualPaymentMode = 'STANDARD' | 'TBANK_FALLBACK' | 'TBANK_ROUTE_FALLBACK';
 export type CommonPaymentCashDestinationKind = 'OWNER' | 'CONTRACTOR_PROFILE' | 'MANUAL_PAYMENT_TASK';
 export type CommonManualPaymentTaskTargetKind = 'EXTERNAL_TASK' | 'OWNER' | 'SPECIALIST' | 'MANAGER';
 

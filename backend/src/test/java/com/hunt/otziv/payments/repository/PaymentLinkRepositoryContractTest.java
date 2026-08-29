@@ -45,6 +45,27 @@ class PaymentLinkRepositoryContractTest {
         assertPrivilegedTargetFilter(summaryQuery.value());
     }
 
+    @Test
+    void remainingConfirmedPaymentGuardIsOrderWideAndNotTimeOrdered() throws NoSuchMethodException {
+        Method method = PaymentLinkRepository.class.getMethod(
+                "existsOtherConfirmedPayment",
+                Long.class,
+                Long.class
+        );
+
+        Query query = method.getAnnotation(Query.class);
+        String normalized = query.value().replaceAll("\\s+", " ");
+
+        assertThat(normalized)
+                .contains("link.order.id = :orderId")
+                .contains("link.id <> :returnedLinkId")
+                .contains("PaymentLinkStatus.CONFIRMED")
+                .contains("PaymentLinkStatus.AMOUNT_MISMATCH")
+                .doesNotContain("paidAt")
+                .doesNotContain("createdAt")
+                .doesNotContain("returnedAt");
+    }
+
     private static Method methodNamed(String name) {
         return Arrays.stream(PaymentLinkRepository.class.getDeclaredMethods())
                 .filter(method -> method.getName().equals(name))

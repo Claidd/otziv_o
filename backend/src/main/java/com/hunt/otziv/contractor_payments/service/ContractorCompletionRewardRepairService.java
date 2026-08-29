@@ -16,21 +16,14 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-/** Bounded, fail-safe repair for completed but still unpaid rollout orders. */
+/** Bounded, fail-safe reconciliation between paid order state and active salary. */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ContractorCompletionRewardRepairService {
 
-    static final List<String> DATED_COMPLETION_STATUSES = List.of(
-            "Опубликовано",
-            "Выставлен счет",
-            "Ожидает общего счета",
-            "Напоминание",
-            "Не оплачено",
-            "Бан",
-            "Оплачено"
-    );
+    static final String PAID_STATUS = "Оплачено";
+    static final List<String> DATED_COMPLETION_STATUSES = List.of(PAID_STATUS);
     private final ContractorPaymentRuntimeSwitch runtimeSwitch;
     private final OrderRepository orderRepository;
     private final BadReviewTaskRepository badReviewTaskRepository;
@@ -51,6 +44,7 @@ public class ContractorCompletionRewardRepairService {
         }
         int batchSize = Math.max(1, Math.min(100, configuredBatchSize));
         LocalDateTime now = businessClock.now();
+        reconcileUnpaidSalary(batchSize);
         LinkedHashSet<Long> orderIds = new LinkedHashSet<>(orderRepository.findCompletionRewardRepairOrderIds(
                 DATED_COMPLETION_STATUSES,
                 ContractorRewardSourceCodes.REQUIRED_ORDER_COMPLETION_MARKERS,
@@ -94,6 +88,29 @@ public class ContractorCompletionRewardRepairService {
 
         repairCompletedTaskGaps(completedTaskGapIds);
         repairCanceledTaskGaps(batchSize, now);
+    }
+
+    private void reconcileUnpaidSalary(int batchSize) {
+        for (Long orderId : orderRepository.findUnpaidOrderIdsWithActiveSalary(PageRequest.of(0, batchSize))) {
+            try {
+                repairTransactionService.reconcileUnpaidOrder(orderId);
+            } catch (RuntimeException exception) {
+                try {
+                    deferFailedOrder(orderId, exception);
+                } catch (RuntimeException stateFailure) {
+                    log.warn(
+                            "Не удалось обновить backoff сверки ЗП: orderId={}, code={}",
+                            orderId,
+                            stateFailure.getClass().getSimpleName()
+                    );
+                }
+                log.error(
+                        "Не удалось убрать начисления неоплаченного заказа: orderId={}, code={}",
+                        orderId,
+                        exception.getClass().getSimpleName()
+                );
+            }
+        }
     }
 
     private void repairCompletedTaskGaps(List<Long> taskIds) {

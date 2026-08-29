@@ -642,6 +642,17 @@
   white-space: nowrap;
 }
 
+:host-context(body.otziv-dark-theme) .order-card header .order-id-badge {
+  border-color: rgba(163, 189, 204, 0.32);
+  color: #eef4f8;
+  background: #343d45;
+  box-shadow: 0 0.35rem 0.8rem rgba(0, 0, 0, 0.28);
+}
+
+:host-context(body.otziv-dark-theme) .order-card--common .order-id-badge {
+  color: #8ee0cd;
+}
+
 :host-context(body.otziv-dark-theme) .chat-link-note {
   color: #9eacb3;
   border-color: rgba(158, 172, 179, 0.22);

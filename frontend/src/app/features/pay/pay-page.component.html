@@ -129,7 +129,7 @@
           </div>
 
           <form class="pay-form" (ngSubmit)="submitPrimaryPayment()" aria-label="Данные для оплаты">
-            @if (showSbpPayment()) {
+            @if (showSbpPayment() && sbpBankSelectionSupported()) {
               <section class="sbp-section" aria-label="Банк для оплаты через СБП">
                 @if (sbpBanksLoading()) {
                   <div class="sbp-bank-state">

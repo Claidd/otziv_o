@@ -6,6 +6,7 @@ import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.CloseManualPaymentUnpaidRequest;
 import com.hunt.otziv.payments.dto.ConfirmManualCardPaymentRequest;
 import com.hunt.otziv.payments.dto.ReportManualCardPaymentRequest;
+import com.hunt.otziv.payments.dto.ManagerManualCardPaymentResultResponse;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
@@ -107,7 +108,7 @@ class AdminPaymentControllerTest {
     }
 
     @Test
-    void confirmOrderManualCardPaymentPassesOnlyManagerReasonAndDoesNotReturnProviderData() {
+    void confirmOrderManualCardPaymentReturnsOnlyManagerWorkflowResult() {
         AdminPaymentController controller = new AdminPaymentController(
                 paymentLinkService,
                 paymentProfileService,
@@ -119,10 +120,23 @@ class AdminPaymentControllerTest {
                 "Клиент оплатил переводом по номеру телефона"
         );
         when(authentication.getName()).thenReturn("manager@example.ru");
+        ManagerManualCardPaymentResultResponse expected =
+                ManagerManualCardPaymentResultResponse.ownerApprovalPending(25047L, 7258L);
+        when(paymentLinkService.submitManagerManualCardPaymentForOrder(
+                25047L,
+                request.reason(),
+                null,
+                null,
+                null,
+                null,
+                "manager@example.ru",
+                authentication
+        )).thenReturn(expected);
 
-        controller.confirmOrderManualCardPayment(25047L, request, authentication);
+        var response = controller.confirmOrderManualCardPayment(25047L, request, authentication);
 
-        verify(paymentLinkService).reportPaidByManualCardTransferForOrder(
+        assertSame(expected, response.getBody());
+        verify(paymentLinkService).submitManagerManualCardPaymentForOrder(
                 25047L,
                 request.reason(),
                 null,

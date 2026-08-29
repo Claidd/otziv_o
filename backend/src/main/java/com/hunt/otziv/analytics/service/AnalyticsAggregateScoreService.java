@@ -17,6 +17,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import com.hunt.otziv.analytics.service.AnalyticsSalarySourceService.SalaryTotal;
+import com.hunt.otziv.analytics.service.AnalyticsFinancialSourceService.PaymentTotal;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -32,6 +35,8 @@ public class AnalyticsAggregateScoreService {
     private static final long DEFAULT_IMAGE_ID = 1L;
 
     private final AnalyticsAggregateReadService readService;
+    private final AnalyticsSalarySourceService salarySourceService;
+    private final AnalyticsFinancialSourceService financialSourceService;
 
     public Optional<List<UserData>> buildScore(LocalDate selectedDate) {
         if (selectedDate == null) {
@@ -53,6 +58,18 @@ public class AnalyticsAggregateScoreService {
             users.computeIfAbsent(row.getUser().getId(), ignored -> new ScoreAccumulator(row.getUser(), row.getRoleName()))
                     .add(row);
         }
+        Map<Long, SalaryTotal> currentSalary = salarySourceService.totalsForUsers(
+                users.keySet(), monthStart, selectedDate
+        );
+        users.forEach((userId, user) -> user.replaceSalary(currentSalary.getOrDefault(
+                userId, new SalaryTotal(BigDecimal.ZERO, 0L, 0L)
+        )));
+        Map<Long, PaymentTotal> currentPayments = financialSourceService.paymentTotalsForUsers(
+                users.keySet(), monthStart, selectedDate
+        );
+        users.forEach((userId, user) -> user.replacePayment(currentPayments.getOrDefault(
+                userId, new PaymentTotal(BigDecimal.ZERO, 0L)
+        )));
 
         long zpTotal = users.values().stream()
                 .mapToLong(ScoreAccumulator::salary)
@@ -117,6 +134,16 @@ public class AnalyticsAggregateScoreService {
                 leadsNew += row.getLeadsNewCount();
                 leadsInWork += row.getLeadsInWorkCount();
             }
+        }
+
+        private void replaceSalary(SalaryTotal total) {
+            salary = toLong(total.salarySum());
+            salaryEntries = total.salaryEntryCount();
+            salaryReviews = total.salaryReviewCount();
+        }
+
+        private void replacePayment(PaymentTotal total) {
+            payment = toLong(total.paymentSum());
         }
 
         private String fio() {

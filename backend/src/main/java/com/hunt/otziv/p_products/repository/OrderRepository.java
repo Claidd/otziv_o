@@ -18,14 +18,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.util.Pair;
 import org.springframework.lang.NonNullApi;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface OrderRepository extends CrudRepository<Order, Long> {
+public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Override
     List<Order> findAll();
@@ -303,6 +303,55 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
             @Param("dueAt") java.time.LocalDateTime dueAt,
             Pageable pageable
     );
+
+    @Query(value = """
+        SELECT salary_mismatch.order_id
+        FROM (
+            SELECT reward.zp_order AS order_id
+            FROM zp reward
+            JOIN orders source_order ON source_order.order_id = reward.zp_order
+            LEFT JOIN order_statuses source_status ON source_status.order_status_id = source_order.order_status
+            WHERE reward.zp_active = 1
+              AND reward.zp_order IS NOT NULL
+              AND reward.zp_order > 0
+              AND COALESCE(source_status.order_status_title, '') <> 'Оплачено'
+            UNION
+            SELECT ledger.order_id
+            FROM contractor_reward_ledger ledger
+            JOIN orders source_order ON source_order.order_id = ledger.order_id
+            LEFT JOIN order_statuses source_status ON source_status.order_status_id = source_order.order_status
+            WHERE ledger.active = 1
+              AND ledger.order_id IS NOT NULL
+              AND ledger.order_id > 0
+              AND COALESCE(source_status.order_status_title, '') <> 'Оплачено'
+        ) salary_mismatch
+        ORDER BY salary_mismatch.order_id
+    """, nativeQuery = true)
+    List<Long> findUnpaidOrderIdsWithActiveSalary(Pageable pageable);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM (
+            SELECT reward.zp_order AS order_id
+            FROM zp reward
+            JOIN orders source_order ON source_order.order_id = reward.zp_order
+            LEFT JOIN order_statuses source_status ON source_status.order_status_id = source_order.order_status
+            WHERE reward.zp_active = 1
+              AND reward.zp_order IS NOT NULL
+              AND reward.zp_order > 0
+              AND COALESCE(source_status.order_status_title, '') <> 'Оплачено'
+            UNION
+            SELECT ledger.order_id
+            FROM contractor_reward_ledger ledger
+            JOIN orders source_order ON source_order.order_id = ledger.order_id
+            LEFT JOIN order_statuses source_status ON source_status.order_status_id = source_order.order_status
+            WHERE ledger.active = 1
+              AND ledger.order_id IS NOT NULL
+              AND ledger.order_id > 0
+              AND COALESCE(source_status.order_status_title, '') <> 'Оплачено'
+        ) salary_mismatch
+    """, nativeQuery = true)
+    long countUnpaidOrdersWithActiveSalary();
 
     @Query("""
         SELECT COUNT(o.id)

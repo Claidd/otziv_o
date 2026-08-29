@@ -3,9 +3,9 @@ package com.hunt.otziv.analytics.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.dto.personal_stat.StatDTO;
-import com.hunt.otziv.analytics.model.AnalyticsDailyTotal;
 import com.hunt.otziv.analytics.model.AnalyticsMetricAggregate;
 import com.hunt.otziv.analytics.model.AnalyticsMonthlyTotal;
+import com.hunt.otziv.analytics.service.AnalyticsFinancialSourceService.DailyFinancial;
 import com.hunt.otziv.u_users.model.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,6 +35,7 @@ public class AnalyticsAggregateStatsService {
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
 
     private final AnalyticsAggregateReadService readService;
+    private final AnalyticsFinancialSourceService financialSourceService;
     private final ObjectMapper objectMapper;
 
     public Optional<StatDTO> buildStats(LocalDate selectedDate, User user, String role) {
@@ -59,9 +60,18 @@ public class AnalyticsAggregateStatsService {
         }
 
         LocalDate firstDayOfMonth = selectedDate.withDayOfMonth(1);
-        boolean hasAggregateData = !readService.monthlyTotals(scopeKey, ANALYTICS_START, selectedDate).isEmpty()
+        List<AnalyticsMonthlyTotal> aggregateMonths = readService.monthlyTotals(
+                scopeKey, ANALYTICS_START, selectedDate
+        );
+        boolean selectedMonthClosed = aggregateMonths.stream()
+                .anyMatch(total -> total.getMonthStart().equals(firstDayOfMonth) && total.isPeriodClosed());
+        LocalDate liveMonthStart = selectedMonthClosed ? selectedDate.plusDays(1) : firstDayOfMonth;
+        List<DailyFinancial> financialRows = selectedMonthClosed
+                ? List.of()
+                : financialSourceService.dailyForScope(scopeKey, firstDayOfMonth, selectedDate);
+        boolean hasAggregateData = !aggregateMonths.isEmpty()
                 || !readService.dailyTotals(scopeKey, firstDayOfMonth, selectedDate).isEmpty();
-        if (!hasAggregateData) {
+        if (!hasAggregateData && financialRows.isEmpty()) {
             return Optional.empty();
         }
 
@@ -74,47 +84,69 @@ public class AnalyticsAggregateStatsService {
         LocalDate sameDayPreviousYear = selectedDate.minusYears(1);
 
         StatDTO stats = new StatDTO();
-        stats.setOrderPayMap(toJson(dailyMetricMap(
+        stats.setOrderPayMap(toJson(selectedMonthClosed
+                ? dailyMetricMap(
+                        scopeKey,
+                        firstDayOfMonth,
+                        selectedDate,
+                        selectedDate.lengthOfMonth(),
+                        AnalyticsMetricAggregate::getPaymentSum
+                )
+                : dailyFinancialMap(
+                        financialRows,
+                        firstDayOfMonth,
+                        selectedDate,
+                        selectedDate.lengthOfMonth(),
+                        DailyFinancial::paymentSum
+                )));
+        stats.setOrderPayMapMonth(toJson(monthlyFinancialMap(
                 scopeKey,
-                firstDayOfMonth,
-                selectedDate,
-                selectedDate.lengthOfMonth(),
-                AnalyticsMetricAggregate::getPaymentSum
-        )));
-        stats.setOrderPayMapMonth(toJson(monthlyMetricMap(
-                scopeKey,
+                financialRows,
+                liveMonthStart,
                 chartPeriod.fromInclusive(),
                 chartPeriod.toInclusive(),
                 selectedDate,
-                AnalyticsMetricAggregate::getPaymentSum
+                AnalyticsMetricAggregate::getPaymentSum,
+                DailyFinancial::paymentSum
         )));
-        stats.setZpPayMap(toJson(dailyMetricMap(
+        stats.setZpPayMap(toJson(selectedMonthClosed
+                ? dailyMetricMap(
+                        scopeKey,
+                        firstDayOfMonth,
+                        selectedDate,
+                        selectedDate.lengthOfMonth(),
+                        AnalyticsMetricAggregate::getSalarySum
+                )
+                : dailyFinancialMap(
+                        financialRows,
+                        firstDayOfMonth,
+                        selectedDate,
+                        selectedDate.lengthOfMonth(),
+                        DailyFinancial::salarySum
+                )));
+        stats.setZpPayMapMonth(toJson(monthlyFinancialMap(
                 scopeKey,
-                firstDayOfMonth,
-                selectedDate,
-                selectedDate.lengthOfMonth(),
-                AnalyticsMetricAggregate::getSalarySum
-        )));
-        stats.setZpPayMapMonth(toJson(monthlyMetricMap(
-                scopeKey,
+                financialRows,
+                liveMonthStart,
                 chartPeriod.fromInclusive(),
                 chartPeriod.toInclusive(),
                 selectedDate,
-                AnalyticsMetricAggregate::getSalarySum
+                AnalyticsMetricAggregate::getSalarySum,
+                DailyFinancial::salarySum
         )));
 
-        BigDecimal payment1Day = sumDecimal(scopeKey, selectedDate.minusDays(1), selectedDate.minusDays(1), selectedDate, AnalyticsMetricAggregate::getPaymentSum);
-        BigDecimal payment2Day = sumDecimal(scopeKey, selectedDate.minusDays(2), selectedDate.minusDays(2), selectedDate, AnalyticsMetricAggregate::getPaymentSum);
-        BigDecimal payment7Day = sumDecimal(scopeKey, selectedDate.minusDays(7), selectedDate, selectedDate, AnalyticsMetricAggregate::getPaymentSum);
-        BigDecimal payment14Day = sumDecimal(scopeKey, selectedDate.minusDays(14), selectedDate.minusDays(8), selectedDate, AnalyticsMetricAggregate::getPaymentSum);
-        BigDecimal paymentCurrentMonth = sumDecimal(scopeKey, firstDayOfMonth, selectedDate, selectedDate, AnalyticsMetricAggregate::getPaymentSum);
-        BigDecimal paymentPreviousMonth = sumDecimal(scopeKey, firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsMetricAggregate::getPaymentSum);
-        BigDecimal paymentCurrentYear = sumDecimal(scopeKey, firstDayOfYear, selectedDate, selectedDate, AnalyticsMetricAggregate::getPaymentSum);
-        BigDecimal paymentPreviousYear = sumDecimal(scopeKey, firstDayOfPreviousYear, sameDayPreviousYear, selectedDate, AnalyticsMetricAggregate::getPaymentSum);
+        BigDecimal payment1Day = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, selectedDate.minusDays(1), selectedDate.minusDays(1), selectedDate, AnalyticsMetricAggregate::getPaymentSum, DailyFinancial::paymentSum);
+        BigDecimal payment2Day = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, selectedDate.minusDays(2), selectedDate.minusDays(2), selectedDate, AnalyticsMetricAggregate::getPaymentSum, DailyFinancial::paymentSum);
+        BigDecimal payment7Day = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, selectedDate.minusDays(7), selectedDate, selectedDate, AnalyticsMetricAggregate::getPaymentSum, DailyFinancial::paymentSum);
+        BigDecimal payment14Day = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, selectedDate.minusDays(14), selectedDate.minusDays(8), selectedDate, AnalyticsMetricAggregate::getPaymentSum, DailyFinancial::paymentSum);
+        BigDecimal paymentCurrentMonth = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, firstDayOfMonth, selectedDate, selectedDate, AnalyticsMetricAggregate::getPaymentSum, DailyFinancial::paymentSum);
+        BigDecimal paymentPreviousMonth = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsMetricAggregate::getPaymentSum, DailyFinancial::paymentSum);
+        BigDecimal paymentCurrentYear = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, firstDayOfYear, selectedDate, selectedDate, AnalyticsMetricAggregate::getPaymentSum, DailyFinancial::paymentSum);
+        BigDecimal paymentPreviousYear = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, firstDayOfPreviousYear, sameDayPreviousYear, selectedDate, AnalyticsMetricAggregate::getPaymentSum, DailyFinancial::paymentSum);
 
-        long paymentCurrentMonthCount = sumLong(scopeKey, firstDayOfMonth, selectedDate, selectedDate, AnalyticsMetricAggregate::getPaymentCount);
-        long paymentPreviousMonthCount = sumLong(scopeKey, firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsMetricAggregate::getPaymentCount);
-        long paymentThreeMonthsAgoCount = sumLong(scopeKey, firstDayOfThreeMonthsAgo, lastDayOfThreeMonthsAgo, selectedDate, AnalyticsMetricAggregate::getPaymentCount);
+        long paymentCurrentMonthCount = sumFinancialLong(scopeKey, financialRows, liveMonthStart, firstDayOfMonth, selectedDate, selectedDate, AnalyticsMetricAggregate::getPaymentCount, DailyFinancial::paymentCount);
+        long paymentPreviousMonthCount = sumFinancialLong(scopeKey, financialRows, liveMonthStart, firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsMetricAggregate::getPaymentCount, DailyFinancial::paymentCount);
+        long paymentThreeMonthsAgoCount = sumFinancialLong(scopeKey, financialRows, liveMonthStart, firstDayOfThreeMonthsAgo, lastDayOfThreeMonthsAgo, selectedDate, AnalyticsMetricAggregate::getPaymentCount, DailyFinancial::paymentCount);
         long leadsCurrentMonth = sumLong(scopeKey, firstDayOfMonth, firstDayOfMonth.withDayOfMonth(firstDayOfMonth.lengthOfMonth()), selectedDate, AnalyticsMetricAggregate::getLeadsNewCount);
         long leadsPreviousMonth = sumLong(scopeKey, firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsMetricAggregate::getLeadsNewCount);
         long leadsInWorkCurrentMonth = sumLong(scopeKey, firstDayOfMonth, firstDayOfMonth.withDayOfMonth(firstDayOfMonth.lengthOfMonth()), selectedDate, AnalyticsMetricAggregate::getLeadsInWorkCount);
@@ -137,17 +169,17 @@ public class AnalyticsAggregateStatsService {
         stats.setPercent1NewLeadsPay(calculatePercentageDifference(leadsCurrentMonth, leadsPreviousMonth));
         stats.setPercent2InWorkLeadsPay(calculatePercentageDifference(leadsInWorkCurrentMonth, leadsInWorkPreviousMonth));
 
-        BigDecimal salary1Day = sumDecimal(scopeKey, selectedDate.minusDays(1), selectedDate.minusDays(1), selectedDate, AnalyticsMetricAggregate::getSalarySum);
-        BigDecimal salary2Day = sumDecimal(scopeKey, selectedDate.minusDays(2), selectedDate.minusDays(2), selectedDate, AnalyticsMetricAggregate::getSalarySum);
-        BigDecimal salary7Day = sumDecimal(scopeKey, selectedDate.minusDays(7), selectedDate, selectedDate, AnalyticsMetricAggregate::getSalarySum);
-        BigDecimal salary14Day = sumDecimal(scopeKey, selectedDate.minusDays(14), selectedDate.minusDays(8), selectedDate, AnalyticsMetricAggregate::getSalarySum);
-        BigDecimal salaryCurrentMonth = sumDecimal(scopeKey, firstDayOfMonth, selectedDate, selectedDate, AnalyticsMetricAggregate::getSalarySum);
-        BigDecimal salaryPreviousMonth = sumDecimal(scopeKey, firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsMetricAggregate::getSalarySum);
-        BigDecimal salaryCurrentYear = sumDecimal(scopeKey, firstDayOfYear, selectedDate, selectedDate, AnalyticsMetricAggregate::getSalarySum);
-        BigDecimal salaryPreviousYear = sumDecimal(scopeKey, firstDayOfPreviousYear, sameDayPreviousYear, selectedDate, AnalyticsMetricAggregate::getSalarySum);
-        long salaryCurrentMonthCount = sumLong(scopeKey, firstDayOfMonth, selectedDate, selectedDate, AnalyticsMetricAggregate::getSalaryEntryCount);
-        long salaryPreviousMonthCount = sumLong(scopeKey, firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsMetricAggregate::getSalaryEntryCount);
-        long salaryThreeMonthsAgoCount = sumLong(scopeKey, firstDayOfThreeMonthsAgo, lastDayOfThreeMonthsAgo, selectedDate, AnalyticsMetricAggregate::getSalaryEntryCount);
+        BigDecimal salary1Day = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, selectedDate.minusDays(1), selectedDate.minusDays(1), selectedDate, AnalyticsMetricAggregate::getSalarySum, DailyFinancial::salarySum);
+        BigDecimal salary2Day = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, selectedDate.minusDays(2), selectedDate.minusDays(2), selectedDate, AnalyticsMetricAggregate::getSalarySum, DailyFinancial::salarySum);
+        BigDecimal salary7Day = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, selectedDate.minusDays(7), selectedDate, selectedDate, AnalyticsMetricAggregate::getSalarySum, DailyFinancial::salarySum);
+        BigDecimal salary14Day = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, selectedDate.minusDays(14), selectedDate.minusDays(8), selectedDate, AnalyticsMetricAggregate::getSalarySum, DailyFinancial::salarySum);
+        BigDecimal salaryCurrentMonth = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, firstDayOfMonth, selectedDate, selectedDate, AnalyticsMetricAggregate::getSalarySum, DailyFinancial::salarySum);
+        BigDecimal salaryPreviousMonth = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsMetricAggregate::getSalarySum, DailyFinancial::salarySum);
+        BigDecimal salaryCurrentYear = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, firstDayOfYear, selectedDate, selectedDate, AnalyticsMetricAggregate::getSalarySum, DailyFinancial::salarySum);
+        BigDecimal salaryPreviousYear = sumFinancialDecimal(scopeKey, financialRows, liveMonthStart, firstDayOfPreviousYear, sameDayPreviousYear, selectedDate, AnalyticsMetricAggregate::getSalarySum, DailyFinancial::salarySum);
+        long salaryCurrentMonthCount = sumFinancialLong(scopeKey, financialRows, liveMonthStart, firstDayOfMonth, selectedDate, selectedDate, AnalyticsMetricAggregate::getSalaryEntryCount, DailyFinancial::salaryEntryCount);
+        long salaryPreviousMonthCount = sumFinancialLong(scopeKey, financialRows, liveMonthStart, firstDayOfPreviousMonth, lastDayOfPreviousMonth, selectedDate, AnalyticsMetricAggregate::getSalaryEntryCount, DailyFinancial::salaryEntryCount);
+        long salaryThreeMonthsAgoCount = sumFinancialLong(scopeKey, financialRows, liveMonthStart, firstDayOfThreeMonthsAgo, lastDayOfThreeMonthsAgo, selectedDate, AnalyticsMetricAggregate::getSalaryEntryCount, DailyFinancial::salaryEntryCount);
 
         stats.setSum1Day(salary1Day.intValue());
         stats.setSum1Week(salary7Day.intValue());
@@ -175,17 +207,64 @@ public class AnalyticsAggregateStatsService {
         return null;
     }
 
-    private BigDecimal sumDecimal(
+    private BigDecimal sumFinancialDecimal(
             String scopeKey,
+            List<DailyFinancial> rows,
+            LocalDate currentMonthStart,
             LocalDate fromInclusive,
             LocalDate toInclusive,
             LocalDate selectedDate,
-            Function<AnalyticsMetricAggregate, BigDecimal> metric
+            Function<AnalyticsMetricAggregate, BigDecimal> aggregateMetric,
+            Function<DailyFinancial, BigDecimal> liveMetric
     ) {
-        return aggregateRange(scopeKey, fromInclusive, toInclusive, selectedDate)
-                .stream()
-                .map(metric)
+        BigDecimal aggregateSum = historicalRange(
+                scopeKey, currentMonthStart, fromInclusive, toInclusive, selectedDate
+        ).stream()
+                .map(aggregateMetric)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal liveSum = rows.stream()
+                .filter(row -> !row.metricDate().isBefore(currentMonthStart))
+                .filter(row -> includes(fromInclusive, toInclusive, row.metricDate()))
+                .map(liveMetric)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return aggregateSum.add(liveSum);
+    }
+
+    private long sumFinancialLong(
+            String scopeKey,
+            List<DailyFinancial> rows,
+            LocalDate currentMonthStart,
+            LocalDate fromInclusive,
+            LocalDate toInclusive,
+            LocalDate selectedDate,
+            ToLongFunction<AnalyticsMetricAggregate> aggregateMetric,
+            ToLongFunction<DailyFinancial> liveMetric
+    ) {
+        long aggregateSum = historicalRange(
+                scopeKey, currentMonthStart, fromInclusive, toInclusive, selectedDate
+        ).stream()
+                .mapToLong(aggregateMetric)
+                .sum();
+        long liveSum = rows.stream()
+                .filter(row -> !row.metricDate().isBefore(currentMonthStart))
+                .filter(row -> includes(fromInclusive, toInclusive, row.metricDate()))
+                .mapToLong(liveMetric)
+                .sum();
+        return Math.addExact(aggregateSum, liveSum);
+    }
+
+    private List<AnalyticsMetricAggregate> historicalRange(
+            String scopeKey,
+            LocalDate currentMonthStart,
+            LocalDate fromInclusive,
+            LocalDate toInclusive,
+            LocalDate selectedDate
+    ) {
+        LocalDate historicalTo = earlier(toInclusive, currentMonthStart.minusDays(1));
+        if (fromInclusive.isAfter(historicalTo)) {
+            return List.of();
+        }
+        return aggregateRange(scopeKey, fromInclusive, historicalTo, selectedDate);
     }
 
     private long sumLong(
@@ -226,7 +305,32 @@ public class AnalyticsAggregateStatsService {
             int daysInMonth,
             Function<AnalyticsMetricAggregate, BigDecimal> metric
     ) {
-        Map<Integer, BigDecimal> result = IntStream.rangeClosed(1, daysInMonth)
+        Map<Integer, BigDecimal> result = emptyDailyMap(daysInMonth);
+        readService.dailyTotals(scopeKey, fromInclusive, toInclusive)
+                .forEach(total -> result.merge(
+                        total.getMetricDate().getDayOfMonth(), metric.apply(total), BigDecimal::add
+                ));
+        return result;
+    }
+
+    private Map<Integer, BigDecimal> dailyFinancialMap(
+            List<DailyFinancial> rows,
+            LocalDate fromInclusive,
+            LocalDate toInclusive,
+            int daysInMonth,
+            Function<DailyFinancial, BigDecimal> metric
+    ) {
+        Map<Integer, BigDecimal> result = emptyDailyMap(daysInMonth);
+        rows.stream()
+                .filter(row -> includes(fromInclusive, toInclusive, row.metricDate()))
+                .forEach(row -> result.merge(
+                        row.metricDate().getDayOfMonth(), metric.apply(row), BigDecimal::add
+                ));
+        return result;
+    }
+
+    private Map<Integer, BigDecimal> emptyDailyMap(int daysInMonth) {
+        return IntStream.rangeClosed(1, daysInMonth)
                 .boxed()
                 .collect(Collectors.toMap(
                         Function.identity(),
@@ -234,8 +338,32 @@ public class AnalyticsAggregateStatsService {
                         (left, right) -> left,
                         LinkedHashMap::new
                 ));
-        readService.dailyTotals(scopeKey, fromInclusive, toInclusive)
-                .forEach(total -> result.merge(total.getMetricDate().getDayOfMonth(), metric.apply(total), BigDecimal::add));
+    }
+
+    private Map<Integer, Map<Integer, BigDecimal>> monthlyFinancialMap(
+            String scopeKey,
+            List<DailyFinancial> rows,
+            LocalDate currentMonthStart,
+            LocalDate fromInclusive,
+            LocalDate toInclusive,
+            LocalDate selectedDate,
+            Function<AnalyticsMetricAggregate, BigDecimal> aggregateMetric,
+            Function<DailyFinancial, BigDecimal> liveMetric
+    ) {
+        LocalDate historicalTo = earlier(toInclusive, currentMonthStart.minusDays(1));
+        Map<Integer, Map<Integer, BigDecimal>> result = fromInclusive.isAfter(historicalTo)
+                ? new TreeMap<>()
+                : monthlyMetricMap(
+                        scopeKey,
+                        fromInclusive,
+                        historicalTo,
+                        selectedDate,
+                        aggregateMetric
+                );
+        rows.stream()
+                .filter(row -> !row.metricDate().isBefore(currentMonthStart))
+                .filter(row -> includes(fromInclusive, toInclusive, row.metricDate()))
+                .forEach(row -> addMonthlyValue(result, row.metricDate(), liveMetric.apply(row)));
         return result;
     }
 
@@ -246,17 +374,31 @@ public class AnalyticsAggregateStatsService {
             LocalDate selectedDate,
             Function<AnalyticsMetricAggregate, BigDecimal> metric
     ) {
-        AnalyticsAggregateReadService.AggregatePeriod period = readService.splitPeriod(fromInclusive, toInclusive, selectedDate);
+        AnalyticsAggregateReadService.AggregatePeriod period = readService.splitPeriod(
+                fromInclusive, toInclusive, selectedDate
+        );
         Map<Integer, Map<Integer, BigDecimal>> result = new TreeMap<>();
 
         period.monthlyRanges().stream()
-                .flatMap(range -> readService.monthlyTotals(scopeKey, range.fromInclusive(), range.toInclusive()).stream())
+                .flatMap(range -> readService.monthlyTotals(
+                        scopeKey, range.fromInclusive(), range.toInclusive()
+                ).stream())
                 .forEach(total -> addMonthlyValue(result, total.getMonthStart(), metric.apply(total)));
         period.dailyRanges().stream()
-                .flatMap(range -> readService.dailyTotals(scopeKey, range.fromInclusive(), range.toInclusive()).stream())
+                .flatMap(range -> readService.dailyTotals(
+                        scopeKey, range.fromInclusive(), range.toInclusive()
+                ).stream())
                 .forEach(total -> addMonthlyValue(result, total.getMetricDate(), metric.apply(total)));
 
         return result;
+    }
+
+    private LocalDate earlier(LocalDate left, LocalDate right) {
+        return left.isBefore(right) ? left : right;
+    }
+
+    private boolean includes(LocalDate fromInclusive, LocalDate toInclusive, LocalDate date) {
+        return !date.isBefore(fromInclusive) && !date.isAfter(toInclusive);
     }
 
     public static LocalDate defaultChartFrom(LocalDate selectedDate) {

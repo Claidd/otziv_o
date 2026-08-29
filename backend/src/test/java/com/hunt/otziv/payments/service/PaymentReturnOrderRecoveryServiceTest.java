@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -37,6 +38,9 @@ class PaymentReturnOrderRecoveryServiceTest {
     @Mock
     private PaymentLinkService paymentLinkService;
 
+    @Mock
+    private ContractorCompletionRewardService contractorCompletionRewardService;
+
     @Test
     void fullRefundReopensOrderWithoutPreparingReplacementInsideStatusTransaction() throws Exception {
         Order order = order(42L, "Оплачено");
@@ -52,6 +56,8 @@ class PaymentReturnOrderRecoveryServiceTest {
                         7L, PaymentLinkStatus.REFUNDED))
         );
 
+        verify(contractorCompletionRewardService)
+                .deactivateOrderPaymentAccruals(42L, "provider_full_return:REFUNDED");
         verify(orderStatusTransitionService).changeStatusAfterPaymentReturn(42L, "Напоминание");
         verify(paymentLinkService, never()).createForOrder(42L);
     }
@@ -64,18 +70,20 @@ class PaymentReturnOrderRecoveryServiceTest {
     }
 
     @Test
-    void historicalReturnDoesNotReopenOrderWhenNewerPaymentIsAlreadyConfirmed() throws Exception {
+    void returnDoesNotReopenOrderWhenAnOlderPaymentRemainsConfirmed() throws Exception {
         Order order = order(42L, "Оплачено");
         PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
         LocalDateTime returnedAt = LocalDateTime.of(2026, 5, 26, 1, 5);
         link.setPaidAt(returnedAt);
         when(paymentLinkRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(link));
-        when(paymentLinkRepository.existsNewerConfirmedPayment(42L, 7L, returnedAt)).thenReturn(true);
+        when(paymentLinkRepository.existsOtherConfirmedPayment(42L, 7L)).thenReturn(true);
 
         assertEquals(Optional.empty(), service().reopenAfterFullReturn(
                 new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
                         7L, PaymentLinkStatus.REFUNDED)));
 
+        verify(contractorCompletionRewardService, never())
+                .deactivateOrderPaymentAccruals(42L, "provider_full_return:REFUNDED");
         verify(orderStatusTransitionService, never()).changeStatusAfterPaymentReturn(42L, "Напоминание");
         verify(paymentLinkService, never()).createForOrder(42L);
     }
@@ -190,7 +198,8 @@ class PaymentReturnOrderRecoveryServiceTest {
                 paymentLinkRepository,
                 orderRepository,
                 orderStatusTransitionService,
-                paymentLinkService
+                paymentLinkService,
+                contractorCompletionRewardService
         );
     }
 

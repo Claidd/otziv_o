@@ -74,7 +74,8 @@ public class ContractorPaymentReconciliationDispatcher {
                 log.error(
                         "Contractor allocation quarantined for retry: allocationId={}, code={}",
                         allocationId,
-                        failure.getClass().getSimpleName()
+                        failure.getClass().getSimpleName(),
+                        failure
                 );
             }
         }

@@ -74,6 +74,7 @@ export class PayPageComponent {
   readonly manualTransferDestinationLabel = computed(() => this.manualTransferDestination().fieldLabel);
   readonly statusLabel = computed(() => this.statusText(this.payment()?.status));
   readonly paymentPageMode = computed<TbankPaymentPageMode>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
+  readonly sbpBankSelectionSupported = computed(() => this.payment()?.sbpBankSelectionSupported !== false);
   readonly showSbpPayment = computed(() => !this.manualPayment() && this.paymentPageMode() !== 'BANK_ONLY');
   readonly showBankPayment = computed(() => !this.manualPayment()
     && this.paymentPageMode() !== 'SBP_ONLY'
@@ -285,8 +286,11 @@ export class PayPageComponent {
           return;
         }
         if (response.paymentUrl) {
-          this.message.set('Банк не вернул ссылку СБП. Можно открыть обычную форму оплаты.');
           this.sbpSubmitting.set(false);
+          if (this.navigatePayment(response.paymentUrl, 'payment')) {
+            return;
+          }
+          this.error.set('Банк вернул недопустимую ссылку оплаты. Переход отменен.');
           return;
         }
         this.message.set('Банк не вернул ссылку СБП. Попробуйте запасной способ оплаты.');
@@ -559,6 +563,7 @@ export class PayPageComponent {
       payment.payable &&
       !this.manualPayment() &&
       payment.paymentPageMode !== 'BANK_ONLY' &&
+      this.sbpBankSelectionSupported() &&
       !this.hasSbpBanks() &&
       !this.sbpBanksLoading()
     ) {
@@ -582,7 +587,7 @@ export class PayPageComponent {
   private loadSbpBanks(): void {
     const token = this.token();
     const routeTicket = this.captureRoute();
-    if (!token || !routeTicket) {
+    if (!token || !routeTicket || !this.sbpBankSelectionSupported()) {
       return;
     }
 

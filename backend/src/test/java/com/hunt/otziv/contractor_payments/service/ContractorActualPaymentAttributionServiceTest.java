@@ -251,7 +251,7 @@ class ContractorActualPaymentAttributionServiceTest {
     }
 
     @Test
-    void manualCardContextKeepsBankRecipientNameWhenAssignedWorkerUsesSameProfile() {
+    void manualCardContextSeparatesAccountingWorkerFromBankRecipient() {
         Order order = new Order();
         order.setId(ORDER_ID);
         Worker worker = new Worker();
@@ -279,12 +279,46 @@ class ContractorActualPaymentAttributionServiceTest {
         ManualCardPaymentContextResponse context = service.manualCardPaymentContext(order, link);
 
         assertThat(context.originalRecipient().key()).isEqualTo("PROFILE:" + specialist.getId());
-        assertThat(context.originalRecipient().displayName()).isEqualTo("Анастасия");
+        assertThat(context.originalRecipient().displayName()).isEqualTo("Анна Специалист");
+        assertThat(context.originalRecipient().bankRecipientName()).isEqualTo("Анастасия");
         assertThat(context.candidates()).filteredOn(candidate ->
                         candidate.key().equals("PROFILE:" + specialist.getId()))
                 .singleElement()
-                .extracting(ManualCardPaymentRecipientResponse::displayName)
-                .isEqualTo("Анастасия");
+                .satisfies(candidate -> {
+                    assertThat(candidate.displayName()).isEqualTo("Анна Специалист");
+                    assertThat(candidate.bankRecipientName()).isEqualTo("Анастасия");
+                });
+    }
+
+    @Test
+    void sharedBankRecipientDoesNotMergeDifferentSpecialistProfiles() {
+        specialist.setRecipientName("Мария Олеговна");
+        ContractorPaymentProfile secondSpecialist = profile(
+                3L, 33L, ContractorRole.SPECIALIST, "Борис Специалист");
+        secondSpecialist.setRecipientName("Мария Олеговна");
+        profiles.put(secondSpecialist.getId(), secondSpecialist);
+        available.put(specialist.getId(), 1_000L);
+        available.put(secondSpecialist.getId(), 6_000L);
+
+        ManualCardPaymentContextResponse first = contextForAssignedSpecialist(
+                ORDER_ID, SOURCE_ID, 100L, specialist);
+        ManualCardPaymentContextResponse second = contextForAssignedSpecialist(
+                21L, 11L, 101L, secondSpecialist);
+
+        assertThat(first.originalRecipient()).satisfies(candidate -> {
+            assertThat(candidate.key()).isEqualTo("PROFILE:1");
+            assertThat(candidate.recipientUserId()).isEqualTo(11L);
+            assertThat(candidate.displayName()).isEqualTo("Анна Специалист");
+            assertThat(candidate.bankRecipientName()).isEqualTo("Мария Олеговна");
+            assertThat(candidate.availableKopecks()).isEqualTo(2_000L);
+        });
+        assertThat(second.originalRecipient()).satisfies(candidate -> {
+            assertThat(candidate.key()).isEqualTo("PROFILE:3");
+            assertThat(candidate.recipientUserId()).isEqualTo(33L);
+            assertThat(candidate.displayName()).isEqualTo("Борис Специалист");
+            assertThat(candidate.bankRecipientName()).isEqualTo("Мария Олеговна");
+            assertThat(candidate.availableKopecks()).isEqualTo(7_000L);
+        });
     }
 
     @Test
@@ -871,6 +905,40 @@ class ContractorActualPaymentAttributionServiceTest {
                         snapshot.bankRecipientName(),
                         snapshot.accountingTargetLabel()
                 ));
+    }
+
+    private ManualCardPaymentContextResponse contextForAssignedSpecialist(
+            Long orderId,
+            Long sourceId,
+            Long allocationId,
+            ContractorPaymentProfile profile
+    ) {
+        Order order = new Order();
+        order.setId(orderId);
+        Worker worker = new Worker();
+        worker.setId(orderId + 100L);
+        worker.setUser(profile.getUser());
+        order.setWorker(worker);
+
+        PaymentLink link = new PaymentLink();
+        link.setId(sourceId);
+        link.setOrder(order);
+        link.setAmountKopecks(1_000L);
+        link.setManualSource(ManualPaymentSource.CONTRACTOR_PAYMENT_PROFILE);
+
+        ContractorPaymentAllocation allocation = sourceAllocation(
+                allocationId, ContractorAllocationMode.LIVE,
+                profile, ContractorAllocationStatus.RESERVED);
+        allocation.setSourceId(sourceId);
+        allocation.setOrderId(orderId);
+        allocation.setRecipientNameSnapshot(profile.getRecipientName());
+        link.setContractorAllocationId(allocation.getId());
+
+        when(profileRepository.findIdByUserIdAndRole(
+                profile.getUser().getId(), ContractorRole.SPECIALIST
+        )).thenReturn(Optional.of(profile.getId()));
+        when(targetAccessPolicy.canManageUser(profile.getUser().getId())).thenReturn(true);
+        return service.manualCardPaymentContext(order, link);
     }
 
     private ContractorPaymentProfile profile(Long id, Long userId, ContractorRole role, String name) {

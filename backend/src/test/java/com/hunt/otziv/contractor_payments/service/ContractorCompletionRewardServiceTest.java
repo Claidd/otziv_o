@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.contractor_payments.model.ContractorCompletionRewardMarker;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority;
@@ -35,6 +37,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,6 +65,7 @@ class ContractorCompletionRewardServiceTest {
     @Mock private ContractorLegacyRewardGuard legacyRewardGuard;
     @Mock private ContractorLegacyRewardReconciliationService legacyRewardReconciliationService;
     @Mock private ContractorPaymentProfileService profileService;
+    @Mock private BusinessAuditService businessAuditService;
 
     private ContractorCompletionRewardService service;
     private Order order;
@@ -84,12 +88,15 @@ class ContractorCompletionRewardServiceTest {
                 rolloutStateService,
                 legacyRewardGuard,
                 legacyRewardReconciliationService,
-                profileService
+                profileService,
+                businessAuditService
         );
         order = new Order();
         order.setId(91L);
         order.setAmount(1);
         order.setSum(new BigDecimal("1000.00"));
+        order.setStatus(OrderStatus.builder().title("Оплачено").build());
+        order.setPayDay(LocalDate.of(2026, 8, 10));
         User specialist = new User();
         specialist.setId(17L);
         specialist.setFio("Специалист");
@@ -110,7 +117,7 @@ class ContractorCompletionRewardServiceTest {
                 .publish(true)
                 .publishedDate(LocalDate.of(2026, 7, 31))
                 .build();
-        when(rolloutStateService.lockAccountingAuthority())
+        org.mockito.Mockito.lenient().when(rolloutStateService.lockAccountingAuthority())
                 .thenReturn(ContractorPaymentAccountingAuthority.COMPLETION);
         when(orderRepository.findByIdForCounterUpdate(91L)).thenReturn(Optional.of(order));
         org.mockito.Mockito.lenient().when(orderRepository.findByIdForOrderDto(91L))
@@ -131,6 +138,12 @@ class ContractorCompletionRewardServiceTest {
     @Test
     void paymentDoesNotReopenLegacyBridgeAfterPostCutoverCompletionWasFrozen() {
         LocalDate completedOn = LocalDate.of(2026, 8, 2);
+        Review postCutoffReview = Review.builder()
+                .id(501L)
+                .publish(true)
+                .publishedDate(completedOn)
+                .build();
+        when(reviewRepository.getAllByOrderId(91L)).thenReturn(List.of(postCutoffReview));
         when(markerRepository.findByOrderIdAndLogicalSource(any(), any()))
                 .thenAnswer(invocation -> {
                     String source = invocation.getArgument(1);
@@ -140,12 +153,27 @@ class ContractorCompletionRewardServiceTest {
                     marker.setOccurredOn(completedOn);
                     return Optional.of(marker);
                 });
-        Zp managerReward = new Zp();
-        managerReward.setSource(ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER);
+        Zp managerReward = existingReward(
+                ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER,
+                ContractorRole.MANAGER,
+                28L,
+                18L,
+                "Менеджер заказа",
+                "100.00",
+                "1000.00",
+                1,
+                LocalDate.of(2026, 8, 10)
+        );
         Zp specialistReward = new Zp();
         specialistReward.setSource(ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST);
         when(zpRepository.findByOrderIdAndActiveTrue(91L))
                 .thenReturn(List.of(managerReward, specialistReward));
+        when(zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
+                91L,
+                ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER,
+                ContractorRole.MANAGER,
+                28L
+        )).thenReturn(Optional.of(managerReward));
 
         assertThat(service.ensureOrderPaymentAccrual(91L)).isZero();
 
@@ -156,8 +184,8 @@ class ContractorCompletionRewardServiceTest {
         );
     }
     @Test
-    void preCutoffWorkFreezesLogicalSourcesWithoutInspectingOrComplementingPartialLegacy() {
-        service.ensureOrderCompletionAccrual(91L);
+    void paidPreCutoffWorkCreatesPaymentDatedSalaryAndFreezesLogicalSources() {
+        assertThat(service.ensureOrderCompletionAccrual(91L)).isEqualTo(1);
 
         ArgumentCaptor<ContractorCompletionRewardMarker> markers =
                 ArgumentCaptor.forClass(ContractorCompletionRewardMarker.class);
@@ -169,7 +197,7 @@ class ContractorCompletionRewardServiceTest {
                         ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST,
                         ContractorRewardSourceCodes.PERFORMER_PRODUCT_COMPLETION
                 );
-        verify(zpRepository, never()).save(any(Zp.class));
+        verify(zpRepository).save(any(Zp.class));
         verify(ledgerService, never()).synchronizeCompletionSourcesCanonical(any());
         verify(productRewardService, never()).accrueForCompletedOrderLocked(any(), any(), anyBoolean());
         verify(zpRepository, never()).existsByOrderIdAndSourceAndActiveTrue(
@@ -179,27 +207,27 @@ class ContractorCompletionRewardServiceTest {
     }
 
     @Test
-    void manualEvidenceOverridesFuturePlannedReviewDateAndCreatesNoNewBaseRows() {
+    void manualEvidenceOverridesFuturePlannedReviewDateAndCreatesPaymentSalary() {
         when(legacyRewardReconciliationService.authoritativeCompletedOn(
                 91L, LocalDate.of(2026, 8, 1)
         )).thenReturn(Optional.of(LocalDate.of(2026, 7, 31)));
 
-        assertThat(service.ensureOrderCompletionAccrual(91L)).isZero();
+        assertThat(service.ensureOrderCompletionAccrual(91L)).isEqualTo(1);
 
-        verify(zpRepository, never()).save(any(Zp.class));
+        verify(zpRepository).save(any(Zp.class));
         verify(markerRepository, org.mockito.Mockito.times(3)).save(any());
         verify(productRewardService, never()).accrueForCompletedOrderLocked(any(), any(), anyBoolean());
     }
 
     @Test
-    void manualEvidenceSuppliesNullPublishedDateAndFreezesPreCutoffBase() {
+    void manualEvidenceSuppliesNullPublishedDateAndCreatesPaymentSalary() {
         when(legacyRewardReconciliationService.authoritativeCompletedOn(
                 91L, LocalDate.of(2026, 8, 1)
         )).thenReturn(Optional.of(LocalDate.of(2026, 6, 21)));
 
-        assertThat(service.ensureOrderCompletionAccrual(91L)).isZero();
+        assertThat(service.ensureOrderCompletionAccrual(91L)).isEqualTo(1);
 
-        verify(zpRepository, never()).save(any(Zp.class));
+        verify(zpRepository).save(any(Zp.class));
         verify(markerRepository, org.mockito.Mockito.times(3)).save(any());
     }
 
@@ -216,21 +244,40 @@ class ContractorCompletionRewardServiceTest {
                 .build();
         when(badReviewTaskRepository.findAllByOrderIdAndStatus(91L, BadReviewTaskStatus.DONE))
                 .thenReturn(List.of(preCutoffTask));
-        when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 10));
-        Zp existing = new Zp();
-        existing.setActive(true);
+        Zp existingManager = existingReward(
+                ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER,
+                ContractorRole.MANAGER,
+                28L,
+                18L,
+                "Менеджер заказа",
+                "150.00",
+                "1500.00",
+                2,
+                LocalDate.of(2026, 8, 10)
+        );
+        Zp existingSpecialist = existingReward(
+                ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST,
+                ContractorRole.SPECIALIST,
+                27L,
+                17L,
+                "Специалист",
+                "450.00",
+                "1500.00",
+                2,
+                LocalDate.of(2026, 8, 10)
+        );
         when(zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
                 91L,
                 ContractorRewardSourceCodes.LEGACY_ORDER_MANAGER,
                 ContractorRole.MANAGER,
                 28L
-        )).thenReturn(Optional.empty(), Optional.of(existing));
+        )).thenReturn(Optional.empty(), Optional.of(existingManager));
         when(zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
                 91L,
                 ContractorRewardSourceCodes.LEGACY_ORDER_SPECIALIST,
                 ContractorRole.SPECIALIST,
                 27L
-        )).thenReturn(Optional.empty(), Optional.of(existing));
+        )).thenReturn(Optional.empty(), Optional.of(existingSpecialist));
         when(productRewardService.accrueForPreCutoffPaymentLocked(
                 order,
                 order.getManager(),
@@ -292,8 +339,6 @@ class ContractorCompletionRewardServiceTest {
                 .build();
         when(badReviewTaskRepository.findAllByOrderIdAndStatus(91L, BadReviewTaskStatus.DONE))
                 .thenReturn(List.of(postCutoffTask));
-        when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 10));
-
         assertThat(service.ensureOrderPaymentAccrual(91L)).isEqualTo(4);
 
         ArgumentCaptor<Zp> rewards = ArgumentCaptor.forClass(Zp.class);
@@ -408,6 +453,34 @@ class ContractorCompletionRewardServiceTest {
                 Optional.empty(),
                 Optional.of(marker(ContractorRewardSourceCodes.badReviewDoneMarker(704L)))
         );
+        Zp managerReward = existingReward(
+                ContractorRewardSourceCodes.badReviewManager(704L),
+                ContractorRole.MANAGER,
+                28L,
+                18L,
+                "Менеджер заказа",
+                "50.00",
+                "500.00",
+                1,
+                LocalDate.of(2026, 8, 10)
+        );
+        Zp specialistReward = existingReward(
+                ContractorRewardSourceCodes.badReviewSpecialist(704L),
+                ContractorRole.SPECIALIST,
+                27L,
+                17L,
+                "Специалист",
+                "150.00",
+                "500.00",
+                1,
+                LocalDate.of(2026, 8, 10)
+        );
+        when(zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
+                91L, ContractorRewardSourceCodes.badReviewManager(704L), ContractorRole.MANAGER, 28L
+        )).thenReturn(Optional.empty(), Optional.of(managerReward));
+        when(zpRepository.findFirstByOrderIdAndSourceAndContractorRoleAndProfessionId(
+                91L, ContractorRewardSourceCodes.badReviewSpecialist(704L), ContractorRole.SPECIALIST, 27L
+        )).thenReturn(Optional.empty(), Optional.of(specialistReward));
 
         assertThat(service.ensureCompletedBadReviewTask(task)).isEqualTo(2);
         assertThat(service.ensureCompletedBadReviewTask(task)).isZero();
@@ -649,8 +722,8 @@ class ContractorCompletionRewardServiceTest {
         verify(productRewardService).accrueForCompletedOrderLocked(
                 order,
                 order.getManager(),
-                LocalDate.of(2026, 8, 1),
-                false
+                LocalDate.of(2026, 8, 10),
+                true
         );
     }
 
@@ -663,7 +736,6 @@ class ContractorCompletionRewardServiceTest {
         order.setCompany(company);
         order.setDetails(List.of(detail("1000.00")));
         when(businessClock.today()).thenReturn(LocalDate.of(2026, 8, 7));
-
         service.ensureOrderCompletionAccrualNow(91L);
 
         ArgumentCaptor<Zp> rewards = ArgumentCaptor.forClass(Zp.class);
@@ -676,8 +748,8 @@ class ContractorCompletionRewardServiceTest {
         verify(productRewardService).accrueForCompletedOrderLocked(
                 order,
                 companyManager,
-                LocalDate.of(2026, 8, 7),
-                false
+                LocalDate.of(2026, 8, 10),
+                true
         );
     }
 
@@ -697,28 +769,13 @@ class ContractorCompletionRewardServiceTest {
     }
 
     @Test
-    void immutableCompleteRerunIgnoresChangedManagerAndReviewEvidence() {
+    void paymentReconciliationDoesNotTrustMarkersWhenRecipientIsInvalid() {
         order.setManager(null);
         Company company = new Company();
         company.setManager(manager(null, null));
         order.setCompany(company);
-        when(markerRepository.findByOrderIdAndLogicalSource(
-                91L,
-                ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER
-        )).thenReturn(Optional.of(marker(ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER)));
-        when(markerRepository.findByOrderIdAndLogicalSource(
-                91L,
-                ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST
-        )).thenReturn(Optional.of(marker(ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST)));
-        when(markerRepository.findByOrderIdAndLogicalSource(
-                91L,
-                ContractorRewardSourceCodes.PERFORMER_PRODUCT_COMPLETION
-        )).thenReturn(Optional.of(marker(ContractorRewardSourceCodes.PERFORMER_PRODUCT_COMPLETION)));
+        assertThrows(ResponseStatusException.class, () -> service.ensureOrderCompletionAccrual(91L));
 
-        assertThat(service.ensureOrderCompletionAccrual(91L)).isZero();
-
-        verify(reviewRepository, never()).countPublishedByOrderId(91L);
-        verify(attributionService, never()).attributeCompletedBaseWork(any());
         verify(productRewardService, never()).validateCompletedOrderEvidence(any());
         verify(markerRepository, never()).save(any());
         verify(zpRepository, never()).save(any());
@@ -829,14 +886,14 @@ class ContractorCompletionRewardServiceTest {
     }
 
     @Test
-    void nonPositiveAmountInCompletionStatusFailsBeforeAnyMarkerOrReward() {
+    void nonPaidCompletionStatusWithNonPositiveAmountStillCreatesNoSalary() {
         OrderStatus status = new OrderStatus();
         status.setTitle("Опубликовано");
         order.setStatus(status);
         order.setStatusChangedAt(LocalDateTime.of(2026, 8, 1, 12, 0));
         order.setAmount(0);
 
-        assertThrows(ResponseStatusException.class, () -> service.ensureOrderCompletionAccrual(91L));
+        assertThat(service.ensureOrderCompletionAccrual(91L)).isZero();
 
         verify(markerRepository, never()).save(any());
         verify(zpRepository, never()).save(any());
@@ -912,6 +969,94 @@ class ContractorCompletionRewardServiceTest {
         verify(productRewardService, never()).accrueForCompletedOrderLocked(any(), any(), anyBoolean());
     }
 
+    @Test
+    void publicationWithoutConfirmedPaymentCreatesNoSalaryOrMarkers() {
+        order.setStatus(OrderStatus.builder().title("Опубликовано").build());
+        order.setPayDay(null);
+
+        assertThat(service.ensureOrderCompletionAccrual(91L)).isZero();
+
+        verify(markerRepository, never()).save(any());
+        verify(zpRepository, never()).save(any());
+        verify(productRewardService, never()).accrueForCompletedOrderLocked(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void explicitPaymentAccrualFailsClosedWhenStatusIsNotPaid() {
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        order.setPayDay(null);
+
+        assertThrows(ResponseStatusException.class, () -> service.ensureOrderPaymentAccrual(91L));
+
+        verify(markerRepository, never()).save(any());
+        verify(zpRepository, never()).save(any());
+    }
+
+    @Test
+    void paymentCancellationDeactivatesEveryOrderSalaryAndSynchronizesLedger() {
+        Zp managerReward = existingReward(
+                ContractorRewardSourceCodes.ORDER_COMPLETION_MANAGER,
+                ContractorRole.MANAGER,
+                28L,
+                18L,
+                "Менеджер заказа",
+                "100.00",
+                "1000.00",
+                1,
+                LocalDate.of(2026, 8, 10)
+        );
+        Zp specialistReward = existingReward(
+                ContractorRewardSourceCodes.ORDER_COMPLETION_SPECIALIST,
+                ContractorRole.SPECIALIST,
+                27L,
+                17L,
+                "Специалист",
+                "300.00",
+                "1000.00",
+                1,
+                LocalDate.of(2026, 8, 10)
+        );
+        List<Zp> rewards = List.of(managerReward, specialistReward);
+        when(zpRepository.findByOrderIdAndActiveTrue(91L)).thenReturn(rewards);
+
+        assertThat(service.deactivateOrderPaymentAccruals(91L, "test_return")).isEqualTo(2);
+
+        assertThat(rewards).allSatisfy(reward -> assertThat(reward.isActive()).isFalse());
+        verify(businessAuditService, org.mockito.Mockito.times(2)).recordRequiredInCurrentTransaction(
+                eq("ORDER_SALARY_DEACTIVATED"),
+                eq("ZP"),
+                any(),
+                eq(91L),
+                any(),
+                any(),
+                eq("active=false"),
+                eq("test_return")
+        );
+        verify(zpRepository).saveAllAndFlush(rewards);
+        verify(ledgerService).synchronizeSources(rewards);
+        verify(ledgerService).deactivateActiveOrderEntries(91L);
+    }
+
+    @Test
+    void reconciliationDeactivatesOrphanedLedgerEvenWithoutActiveZp() {
+        when(zpRepository.findByOrderIdAndActiveTrue(91L)).thenReturn(List.of());
+        when(ledgerService.deactivateActiveOrderEntries(91L)).thenReturn(3);
+
+        assertThat(service.deactivateOrderPaymentAccruals(91L, "automatic_reconciliation")).isZero();
+
+        verify(businessAuditService).recordRequiredInCurrentTransaction(
+                "ORDER_SALARY_LEDGER_RECONCILED",
+                "ORDER",
+                91L,
+                91L,
+                null,
+                "active_ledger_rows=3",
+                "active_ledger_rows=0",
+                "automatic_reconciliation"
+        );
+        verify(zpRepository, never()).saveAllAndFlush(any());
+    }
+
     private OrderDetails detail(String price) {
         OrderDetails detail = new OrderDetails();
         detail.setPrice(new BigDecimal(price));
@@ -947,5 +1092,33 @@ class ContractorCompletionRewardServiceTest {
         marker.setLogicalSource(source);
         marker.setOccurredOn(occurredOn);
         return marker;
+    }
+
+    private Zp existingReward(
+            String source,
+            ContractorRole role,
+            Long professionId,
+            Long userId,
+            String fio,
+            String sum,
+            String basis,
+            int amount,
+            LocalDate created
+    ) {
+        Zp reward = new Zp();
+        reward.setId(Math.abs((long) Objects.hash(source, role, professionId)) + 1L);
+        reward.setOrderId(91L);
+        reward.setSource(source);
+        reward.setContractorRole(role);
+        reward.setProfessionId(professionId);
+        reward.setUserId(userId);
+        reward.setFio(fio);
+        reward.setSum(new BigDecimal(sum));
+        reward.setRewardBasis(new BigDecimal(basis));
+        reward.setAmount(amount);
+        reward.setCreated(created);
+        reward.setActive(true);
+        reward.setAttributionFinal(true);
+        return reward;
     }
 }

@@ -95,10 +95,7 @@ class ContractorCompletionRewardRepairServiceTest {
                 eq(now),
                 any(Pageable.class)
         );
-        assertThat(statuses.getValue()).contains(
-                "Опубликовано", "Ожидает общего счета", "Выставлен счет",
-                "Напоминание", "Не оплачено", "Бан", "Оплачено"
-        );
+        assertThat(statuses.getValue()).containsExactly("Оплачено");
         assertThat(markers.getValue()).containsExactlyInAnyOrderElementsOf(
                 ContractorRewardSourceCodes.REQUIRED_ORDER_COMPLETION_MARKERS
         );

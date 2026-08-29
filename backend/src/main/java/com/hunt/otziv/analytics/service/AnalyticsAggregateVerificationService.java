@@ -80,33 +80,33 @@ public class AnalyticsAggregateVerificationService {
         return jdbc.queryForMap("""
                 SELECT
                     (
-                        SELECT COALESCE(SUM(z.zp_sum), 0)
-                        FROM zp z
-                        WHERE z.zp_date >= :monthStart
-                          AND z.zp_date < :nextMonthStart
+                        SELECT COALESCE(SUM(salary.salary_sum), 0)
+                        FROM analytics_salary_source salary
+                        WHERE salary.metric_date >= :monthStart
+                          AND salary.metric_date < :nextMonthStart
                     ) AS salary_sum,
                     (
-                        SELECT COUNT(z.zp_id)
-                        FROM zp z
-                        WHERE z.zp_date >= :monthStart
-                          AND z.zp_date < :nextMonthStart
+                        SELECT COUNT(DISTINCT salary.source_zp_id)
+                        FROM analytics_salary_source salary
+                        WHERE salary.metric_date >= :monthStart
+                          AND salary.metric_date < :nextMonthStart
                     ) AS salary_entry_count,
                     (
-                        SELECT COALESCE(SUM(z.zp_amount), 0)
-                        FROM zp z
-                        WHERE z.zp_date >= :monthStart
-                          AND z.zp_date < :nextMonthStart
+                        SELECT COALESCE(SUM(salary.salary_review_count), 0)
+                        FROM analytics_salary_source salary
+                        WHERE salary.metric_date >= :monthStart
+                          AND salary.metric_date < :nextMonthStart
                     ) AS salary_review_count,
                     (
                         SELECT COALESCE(SUM(pc.check_sum), 0)
-                        FROM payment_check pc
+                        FROM analytics_payment_source pc
                         WHERE pc.check_date >= :monthStart
                           AND pc.check_date < :nextMonthStart
                           AND pc.check_active = 1
                     ) AS payment_sum,
                     (
                         SELECT COUNT(pc.check_id)
-                        FROM payment_check pc
+                        FROM analytics_payment_source pc
                         WHERE pc.check_date >= :monthStart
                           AND pc.check_date < :nextMonthStart
                           AND pc.check_active = 1

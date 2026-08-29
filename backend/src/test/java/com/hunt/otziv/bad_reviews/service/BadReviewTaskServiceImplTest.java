@@ -874,6 +874,33 @@ class BadReviewTaskServiceImplTest {
     }
 
     @Test
+    void cancelDoneTaskAfterPaymentCreatesSalaryAdjustmentWithoutRewritingInvoice() {
+        Order order = order(24L);
+        order.setStatus(com.hunt.otziv.p_products.model.OrderStatus.builder().title("Оплачено").build());
+        BadReviewTask task = BadReviewTask.builder()
+                .id(54L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        when(badReviewTaskRepository.findStatusById(54L)).thenReturn(Optional.of(BadReviewTaskStatus.DONE));
+        when(badReviewTaskRepository.findOrderIdById(54L)).thenReturn(Optional.of(24L));
+        when(badReviewTaskRepository.findByIdForMutation(54L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(24L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
+        ));
+
+        BadReviewTask canceled = service.cancelTask(54L);
+
+        assertEquals(BadReviewTaskStatus.CANCELED, canceled.getStatus());
+        verify(contractorCompletionRewardService).adjustCanceledBadReviewTaskAccrual(24L, 54L);
+        verify(orderRepository, never()).findByIdForCounterUpdate(24L);
+        verify(commonBillingService, never()).prepareLinkedOrderPayableChange(24L);
+    }
+
+    @Test
     void deletePendingTasksForOrderDeletesOnlyNewTasks() {
         Order order = order(21L);
 

@@ -150,26 +150,8 @@ public class OrderArchiveRestoreRepository {
                 params
         );
         long nextOrderRequests = restoreNextOrderRequests(params);
-        long zp = restoreTable(
-                "archive_zp",
-                "zp",
-                "az",
-                """
-                        FROM archive_zp az
-                        WHERE az.zp_order = :orderId
-                        """,
-                params
-        );
-        long paymentCheck = restoreTable(
-                "archive_payment_check",
-                "payment_check",
-                "apc",
-                """
-                        FROM archive_payment_check apc
-                        WHERE apc.check_order = :orderId
-                        """,
-                params
-        );
+        long zp = restoreZp(params);
+        long paymentCheck = restorePaymentCheck(params);
 
         return new ArchiveCandidateCounts(
                 orders,
@@ -320,6 +302,99 @@ public class OrderArchiveRestoreRepository {
                 FROM archive_next_order_requests anor
                 WHERE anor.source_order_id = :orderId
                 """, params);
+    }
+
+    /**
+     * Salary history follows an order out of the archive, but it may be active
+     * only when the requested restore status is exactly "Оплачено". This also
+     * keeps archive restore compatible with the database salary guard and
+     * prevents a reopened order from reappearing in current employee totals.
+     */
+    private long restoreZp(MapSqlParameterSource params) {
+        List<String> columns = commonColumns("archive_zp", "zp");
+        if (!columns.contains("zp_payment_status_guard")) {
+            columns = new java.util.ArrayList<>(columns);
+            columns.add("zp_payment_status_guard");
+        }
+        String selected = columns.stream()
+                .map(column -> "zp_active".equals(column)
+                        ? "CASE WHEN EXISTS ("
+                        + "SELECT 1 FROM order_statuses target_status "
+                        + "WHERE target_status.order_status_id = :targetStatusId "
+                        + "AND target_status.order_status_title = 'Оплачено'"
+                        + ") THEN az.`zp_active` ELSE 0 END"
+                        : "zp_payment_status_guard".equals(column)
+                        ? "CASE WHEN EXISTS ("
+                        + "SELECT 1 FROM order_statuses target_status "
+                        + "WHERE target_status.order_status_id = :targetStatusId "
+                        + "AND target_status.order_status_title = 'Оплачено'"
+                        + ") THEN :targetStatusId ELSE NULL END"
+                        : "az.`" + column + "`")
+                .reduce((left, right) -> left + ", " + right)
+                .orElseThrow(() -> new IllegalStateException("No columns available for archive ZP restore"));
+        long restored = jdbc.update(
+                "INSERT INTO zp (" + quoteList(columns) + ") "
+                        + "SELECT " + selected + " "
+                        + "FROM archive_zp az WHERE az.zp_order = :orderId",
+                params
+        );
+
+        // The durable contractor ledger is deliberately not archived. Keep
+        // its active flag and repair marker aligned with the restored source,
+        // otherwise canonical salary analytics could still count an inactive
+        // ZP row after the order was reopened.
+        jdbc.update("""
+                UPDATE contractor_reward_ledger ledger
+                JOIN zp reward ON reward.zp_id = ledger.source_zp_id
+                SET ledger.active = reward.zp_active,
+                    ledger.payment_status_guard = CASE
+                        WHEN reward.zp_active = 1 THEN :targetStatusId
+                        ELSE ledger.payment_status_guard
+                    END,
+                    ledger.occurred_on = reward.zp_date,
+                    ledger.updated_at = CURRENT_TIMESTAMP(6)
+                WHERE reward.zp_order = :orderId
+                """, params);
+        jdbc.update("""
+                UPDATE contractor_reward_sync_markers sync_marker
+                JOIN zp reward ON reward.zp_id = sync_marker.source_zp_id
+                SET sync_marker.source_active = reward.zp_active,
+                    sync_marker.source_updated_at = reward.zp_updated_at,
+                    sync_marker.processed_at = CURRENT_TIMESTAMP(6)
+                WHERE reward.zp_order = :orderId
+                """, params);
+        return restored;
+    }
+
+    /**
+     * A restored check is current revenue only when the order itself is
+     * restored as paid. Other restore targets retain the row as inactive
+     * history and therefore cannot bypass the database paid-order guard.
+     */
+    private long restorePaymentCheck(MapSqlParameterSource params) {
+        List<String> columns = commonColumns("archive_payment_check", "payment_check");
+        if (!columns.contains("check_payment_status_guard")) {
+            columns = new java.util.ArrayList<>(columns);
+            columns.add("check_payment_status_guard");
+        }
+        String targetIsPaid = "EXISTS (SELECT 1 FROM order_statuses target_status "
+                + "WHERE target_status.order_status_id = :targetStatusId "
+                + "AND target_status.order_status_title = 'Оплачено')";
+        String selected = columns.stream()
+                .map(column -> "check_active".equals(column)
+                        ? "CASE WHEN " + targetIsPaid + " THEN apc.`check_active` ELSE 0 END"
+                        : "check_payment_status_guard".equals(column)
+                        ? "CASE WHEN " + targetIsPaid + " AND apc.`check_active` = 1 "
+                        + "THEN :targetStatusId ELSE NULL END"
+                        : "apc.`" + column + "`")
+                .reduce((left, right) -> left + ", " + right)
+                .orElseThrow(() -> new IllegalStateException("No columns available for payment check restore"));
+        return jdbc.update(
+                "INSERT INTO payment_check (" + quoteList(columns) + ") "
+                        + "SELECT " + selected + " FROM archive_payment_check apc "
+                        + "WHERE apc.check_order = :orderId",
+                params
+        );
     }
 
     private List<String> commonColumns(String sourceTable, String targetTable) {

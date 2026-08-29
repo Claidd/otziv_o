@@ -257,6 +257,19 @@ public class ContractorRewardLedgerService {
     }
 
     /**
+     * Last-resort reconciliation for a derivative ledger row whose source ZP
+     * is already inactive or missing from the active set. Normal mutations
+     * synchronize the source rows; this closes historical/manual drift too.
+     */
+    @Transactional
+    public int deactivateActiveOrderEntries(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return 0;
+        }
+        return ledgerRepository.deactivateActiveByOrderId(orderId);
+    }
+
+    /**
      * A source at or before a profile cutover is represented only by the
      * manually entered opening balance, not by a reversible ledger row. Never
      * silently deactivate it: an administrator must first make an audited
@@ -745,6 +758,7 @@ public class ContractorRewardLedgerService {
         entry.setAttributedWorkerId(desired.workerId());
         entry.setAttributionKey(desired.attributionKey());
         entry.setOrderId(reward.getOrderId());
+        entry.setPaymentStatusGuardId(reward.getPaymentStatusGuardId());
         entry.setAmountKopecks(desired.amountKopecks());
         entry.setWorkUnits(desired.workUnits());
         entry.setOccurredOn(reward.getCreated() == null ? businessClock.today() : reward.getCreated());

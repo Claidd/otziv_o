@@ -190,6 +190,89 @@ class ManualCardPaymentReviewNotificationServiceTest {
         );
     }
 
+    @Test
+    void ownerApprovalUsesPrivateTelegramButtonAndDoesNotMarkPaymentComplete() {
+        User owner = user(10L, 100L, true);
+        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
+        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of());
+
+        service.notifyOwnerApprovalAfterCommit(
+                new ManualCardPaymentReviewNotificationService.OwnerApprovalRequest(
+                        91L,
+                        "callback-token",
+                        5370L,
+                        25270L,
+                        "Вита-мед",
+                        200_000L,
+                        "manager@example.ru",
+                        "Клиент оплатил на старый Альфа-Банк",
+                        "INITIATED"
+                )
+        );
+
+        verify(telegramService).sendMessageWithInlineButton(
+                eq(100L),
+                contains("Нажмите кнопку только после проверки поступления"),
+                eq("✅ Подтвердить поступление владельцу"),
+                eq("ompa:a:91:callback-token")
+        );
+        verify(personalReminderService).createSystemReminderDueNow(
+                eq(owner),
+                eq("Подтвердить поступление владельцу по заказу №25270"),
+                contains("Сумма: 2000 ₽"),
+                eq(ManualCardPaymentReviewNotificationService.OWNER_APPROVAL_REMINDER_SOURCE),
+                eq(91L),
+                eq(25270L)
+        );
+    }
+
+    @Test
+    void ownerApprovalForUnlinkedHuntIsDeliveredToLinkedAdminChat() {
+        User hunt = user(10L, null, true);
+        hunt.setUsername("hunt");
+        User admin = user(20L, 200L, true);
+        admin.setUsername("alex");
+        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of(hunt));
+        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of(admin));
+
+        service.notifyOwnerApprovalAfterCommit(
+                new ManualCardPaymentReviewNotificationService.OwnerApprovalRequest(
+                        92L,
+                        "callback-token",
+                        5371L,
+                        25271L,
+                        "Вита-мед",
+                        200_000L,
+                        "hunt",
+                        "Клиент оплатил на счёт владельца",
+                        "MANUAL_REPORTED"
+                )
+        );
+
+        verify(telegramService, times(1)).sendMessageWithInlineButton(
+                eq(200L),
+                contains("Менеджер: hunt"),
+                eq("✅ Подтвердить поступление владельцу"),
+                eq("ompa:a:92:callback-token")
+        );
+        verify(personalReminderService).createSystemReminderDueNow(
+                eq(hunt),
+                eq("Подтвердить поступление владельцу по заказу №25271"),
+                contains("Сумма: 2000 ₽"),
+                eq(ManualCardPaymentReviewNotificationService.OWNER_APPROVAL_REMINDER_SOURCE),
+                eq(92L),
+                eq(25271L)
+        );
+        verify(personalReminderService).createSystemReminderDueNow(
+                eq(admin),
+                eq("Подтвердить поступление владельцу по заказу №25271"),
+                contains("Сумма: 2000 ₽"),
+                eq(ManualCardPaymentReviewNotificationService.OWNER_APPROVAL_REMINDER_SOURCE),
+                eq(92L),
+                eq(25271L)
+        );
+    }
+
     private User user(Long id, Long telegramChatId, boolean active) {
         User user = new User();
         user.setId(id);

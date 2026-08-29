@@ -272,6 +272,7 @@ public class ZpServiceImpl implements ZpService{
             managerZp.setFio(order.getManager().getUser().getFio());
             managerZp.setSum(sum.multiply(order.getManager().getUser().getCoefficient()));
             managerZp.setOrderId(order.getId());
+            managerZp.setPaymentStatusGuardId(order.getStatus() == null ? null : order.getStatus().getId());
             managerZp.setUserId(order.getManager().getUser().getId());
             managerZp.setProfessionId(order.getManager().getId());
             managerZp.setAmount(amount);
@@ -303,6 +304,7 @@ public class ZpServiceImpl implements ZpService{
             workerZp.setFio(order.getWorker().getUser().getFio());
             workerZp.setSum(sum.multiply(order.getWorker().getUser().getCoefficient()));
             workerZp.setOrderId(order.getId());
+            workerZp.setPaymentStatusGuardId(order.getStatus() == null ? null : order.getStatus().getId());
             workerZp.setUserId(order.getWorker().getUser().getId());
             workerZp.setProfessionId(order.getWorker().getId());
             workerZp.setAmount(amount);
@@ -386,6 +388,7 @@ public class ZpServiceImpl implements ZpService{
             workerZp.setFio(user.getFio());
             workerZp.setSum(share.grossAmount().multiply(coefficient));
             workerZp.setOrderId(order.getId());
+            workerZp.setPaymentStatusGuardId(order.getStatus() == null ? null : order.getStatus().getId());
             workerZp.setUserId(user.getId());
             workerZp.setProfessionId(share.workerId());
             workerZp.setAmount(share.workUnits());

@@ -155,6 +155,11 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
             if (order == null || order.getId() == null) {
                 throw new IllegalArgumentException("Для чека нужен заказ с ID");
             }
+            if (order.getStatus() == null
+                    || order.getStatus().getId() == null
+                    || !"Оплачено".equals(order.getStatus().getTitle())) {
+                throw new IllegalStateException("Активный чек можно создать только для оплаченного заказа");
+            }
             BigDecimal expected = sum == null ? BigDecimal.ZERO : sum;
             List<PaymentCheck> existing = paymentCheckRepository.findByOrderIdAndActiveTrue(order.getId());
             if (!existing.isEmpty()) {
@@ -193,6 +198,7 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
         paymentCheck.setCompanyId(order.getCompany().getId());
         paymentCheck.setSum(sum);
         paymentCheck.setOrderId(order.getId());
+        paymentCheck.setPaymentStatusGuard(order.getStatus().getId());
         paymentCheck.setManagerId(order.getManager().getUser().getId());
         paymentCheck.setWorkerId(order.getManager().getUser().getId());
         paymentCheck.setActive(true);

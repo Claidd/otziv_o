@@ -82,7 +82,10 @@ export class CommonManualPaymentAttributionModalComponent implements OnInit {
 
   readonly title = computed(() => this.mode === 'TBANK_FALLBACK'
     ? 'Фактическое получение оплаты общего счёта'
-    : 'Ручное подтверждение общего счёта');
+    : this.mode === 'TBANK_ROUTE_FALLBACK'
+      ? 'Оплата по прежним реквизитам'
+      : 'Ручное подтверждение общего счёта');
+  readonly reconcilesCurrentTbank = computed(() => this.mode === 'TBANK_ROUTE_FALLBACK');
   readonly totalKopecks = computed(() => commonManualPaymentTotalKopecks(this.rows()));
   readonly differenceKopecks = computed(() => {
     const options = this.options();

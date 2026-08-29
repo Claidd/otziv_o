@@ -86,24 +86,23 @@ public class AnalyticsAggregateRebuildService {
                     updated_at
                 )
                 SELECT
-                    z.zp_date AS metric_date,
-                    z.zp_user AS user_id,
+                    salary.metric_date,
+                    salary.user_id,
                     COALESCE(role_map.role_name, 'ROLE_UNKNOWN') AS role_name,
-                    COALESCE(SUM(z.zp_sum), 0) AS salary_sum,
-                    COUNT(DISTINCT z.zp_id) AS salary_entry_count,
-                    COALESCE(SUM(z.zp_amount), 0) AS salary_review_count,
+                    COALESCE(SUM(salary.salary_sum), 0) AS salary_sum,
+                    COUNT(DISTINCT salary.source_zp_id) AS salary_entry_count,
+                    COALESCE(SUM(salary.salary_review_count), 0) AS salary_review_count,
                     :now AS created_at,
                     :now AS updated_at
-                FROM zp z
+                FROM analytics_salary_source salary
                 LEFT JOIN (
                     SELECT ur.user_id, MIN(r.name) AS role_name
                     FROM users_roles ur
                     JOIN roles r ON r.id = ur.role_id
                     GROUP BY ur.user_id
-                ) role_map ON role_map.user_id = z.zp_user
-                WHERE z.zp_date BETWEEN :fromInclusive AND :toInclusive
-                  AND z.zp_user IS NOT NULL
-                GROUP BY z.zp_date, z.zp_user, role_map.role_name
+                ) role_map ON role_map.user_id = salary.user_id
+                WHERE salary.metric_date BETWEEN :fromInclusive AND :toInclusive
+                GROUP BY salary.metric_date, salary.user_id, role_map.role_name
                 ON DUPLICATE KEY UPDATE
                     salary_sum = VALUES(salary_sum),
                     salary_entry_count = VALUES(salary_entry_count),
@@ -137,7 +136,7 @@ public class AnalyticsAggregateRebuildService {
                         pc.check_date AS metric_date,
                         pc.check_sum,
                         pc.check_manager AS user_id
-                    FROM payment_check pc
+                    FROM analytics_payment_source pc
                     WHERE pc.check_date BETWEEN :fromInclusive AND :toInclusive
                       AND pc.check_active = 1
                       AND pc.check_manager IS NOT NULL
@@ -149,7 +148,7 @@ public class AnalyticsAggregateRebuildService {
                         pc.check_date AS metric_date,
                         pc.check_sum,
                         pc.check_worker AS user_id
-                    FROM payment_check pc
+                    FROM analytics_payment_source pc
                     WHERE pc.check_date BETWEEN :fromInclusive AND :toInclusive
                       AND pc.check_active = 1
                       AND pc.check_worker IS NOT NULL
@@ -348,19 +347,19 @@ public class AnalyticsAggregateRebuildService {
                 WITH
                 metric_rows AS (
                     SELECT
-                        z.zp_date AS metric_date,
-                        COALESCE(SUM(z.zp_sum), 0) AS salary_sum,
-                        COUNT(z.zp_id) AS salary_entry_count,
-                        COALESCE(SUM(z.zp_amount), 0) AS salary_review_count,
+                        salary.metric_date,
+                        COALESCE(SUM(salary.salary_sum), 0) AS salary_sum,
+                        COUNT(DISTINCT salary.source_zp_id) AS salary_entry_count,
+                        COALESCE(SUM(salary.salary_review_count), 0) AS salary_review_count,
                         0 AS payment_sum,
                         0 AS payment_count,
                         0 AS new_companies_count,
                         0 AS published_reviews_count,
                         0 AS leads_new_count,
                         0 AS leads_in_work_count
-                    FROM zp z
-                    WHERE z.zp_date BETWEEN :fromInclusive AND :toInclusive
-                    GROUP BY z.zp_date
+                    FROM analytics_salary_source salary
+                    WHERE salary.metric_date BETWEEN :fromInclusive AND :toInclusive
+                    GROUP BY salary.metric_date
 
                     UNION ALL
 
@@ -375,7 +374,7 @@ public class AnalyticsAggregateRebuildService {
                         0 AS published_reviews_count,
                         0 AS leads_new_count,
                         0 AS leads_in_work_count
-                    FROM payment_check
+                    FROM analytics_payment_source payment_check
                     WHERE payment_check.check_date BETWEEN :fromInclusive AND :toInclusive
                       AND payment_check.check_active = 1
                     GROUP BY payment_check.check_date
@@ -597,10 +596,10 @@ public class AnalyticsAggregateRebuildService {
                 metric_rows AS (
                     SELECT
                         owner_visibility.owner_user_id,
-                        z.zp_date AS metric_date,
-                        COALESCE(SUM(z.zp_sum), 0) AS salary_sum,
-                        COUNT(z.zp_id) AS salary_entry_count,
-                        COALESCE(SUM(z.zp_amount), 0) AS salary_review_count,
+                        salary.metric_date,
+                        COALESCE(SUM(salary.salary_sum), 0) AS salary_sum,
+                        COUNT(DISTINCT salary.source_zp_id) AS salary_entry_count,
+                        COALESCE(SUM(salary.salary_review_count), 0) AS salary_review_count,
                         0 AS payment_sum,
                         0 AS payment_count,
                         0 AS new_companies_count,
@@ -608,9 +607,9 @@ public class AnalyticsAggregateRebuildService {
                         0 AS leads_new_count,
                         0 AS leads_in_work_count
                     FROM owner_visibility
-                    JOIN zp z ON z.zp_user = owner_visibility.visible_user_id
-                    WHERE z.zp_date BETWEEN :fromInclusive AND :toInclusive
-                    GROUP BY owner_visibility.owner_user_id, z.zp_date
+                    JOIN analytics_salary_source salary ON salary.user_id = owner_visibility.visible_user_id
+                    WHERE salary.metric_date BETWEEN :fromInclusive AND :toInclusive
+                    GROUP BY owner_visibility.owner_user_id, salary.metric_date
 
                     UNION ALL
 
@@ -627,7 +626,8 @@ public class AnalyticsAggregateRebuildService {
                         0 AS leads_new_count,
                         0 AS leads_in_work_count
                     FROM owner_managers
-                    JOIN payment_check ON payment_check.check_manager = owner_managers.manager_user_id
+                    JOIN analytics_payment_source payment_check
+                      ON payment_check.check_manager = owner_managers.manager_user_id
                     WHERE payment_check.check_date BETWEEN :fromInclusive AND :toInclusive
                       AND payment_check.check_active = 1
                     GROUP BY owner_managers.owner_user_id, payment_check.check_date
@@ -907,33 +907,33 @@ public class AnalyticsAggregateRebuildService {
                     ) AS source_user_count,
                     :sourceDaysCount AS source_days_count,
                     (
-                        SELECT COALESCE(SUM(z.zp_sum), 0)
-                        FROM zp z
-                        WHERE z.zp_date >= :monthStart
-                          AND z.zp_date < :nextMonthStart
+                        SELECT COALESCE(SUM(salary.salary_sum), 0)
+                        FROM analytics_salary_source salary
+                        WHERE salary.metric_date >= :monthStart
+                          AND salary.metric_date < :nextMonthStart
                     ) AS salary_sum,
                     (
-                        SELECT COUNT(z.zp_id)
-                        FROM zp z
-                        WHERE z.zp_date >= :monthStart
-                          AND z.zp_date < :nextMonthStart
+                        SELECT COUNT(DISTINCT salary.source_zp_id)
+                        FROM analytics_salary_source salary
+                        WHERE salary.metric_date >= :monthStart
+                          AND salary.metric_date < :nextMonthStart
                     ) AS salary_entry_count,
                     (
-                        SELECT COALESCE(SUM(z.zp_amount), 0)
-                        FROM zp z
-                        WHERE z.zp_date >= :monthStart
-                          AND z.zp_date < :nextMonthStart
+                        SELECT COALESCE(SUM(salary.salary_review_count), 0)
+                        FROM analytics_salary_source salary
+                        WHERE salary.metric_date >= :monthStart
+                          AND salary.metric_date < :nextMonthStart
                     ) AS salary_review_count,
                     (
                         SELECT COALESCE(SUM(pc.check_sum), 0)
-                        FROM payment_check pc
+                        FROM analytics_payment_source pc
                         WHERE pc.check_date >= :monthStart
                           AND pc.check_date < :nextMonthStart
                           AND pc.check_active = 1
                     ) AS payment_sum,
                     (
                         SELECT COUNT(pc.check_id)
-                        FROM payment_check pc
+                        FROM analytics_payment_source pc
                         WHERE pc.check_date >= :monthStart
                           AND pc.check_date < :nextMonthStart
                           AND pc.check_active = 1
@@ -1082,7 +1082,7 @@ public class AnalyticsAggregateRebuildService {
                         COALESCE(SUM(payment_check.check_sum), 0) AS payment_sum,
                         COUNT(payment_check.check_id) AS payment_count
                     FROM owner_managers
-                    JOIN payment_check
+                    JOIN analytics_payment_source payment_check
                       ON payment_check.check_manager = owner_managers.manager_user_id
                     WHERE payment_check.check_date >= :monthStart
                       AND payment_check.check_date < :nextMonthStart

@@ -27,7 +27,7 @@ class ContractorCompletionRepairTransactionServiceTest {
         service.repairOrder(91L);
 
         var ordered = inOrder(completionRewardService, repairStateRepository);
-        ordered.verify(completionRewardService).ensureOrderCompletionAccrual(91L);
+        ordered.verify(completionRewardService).ensureOrderPaymentAccrual(91L);
         ordered.verify(repairStateRepository).deleteById(91L);
     }
 
@@ -53,6 +53,18 @@ class ContractorCompletionRepairTransactionServiceTest {
 
         var ordered = inOrder(completionRewardService, repairStateRepository);
         ordered.verify(completionRewardService).adjustCanceledBadReviewTaskAccrual(91L, 17L);
+        ordered.verify(repairStateRepository).deleteById(91L);
+    }
+
+    @Test
+    void unpaidSalaryReconciliationAndStateCleanupShareOneOrderedOperation() {
+        service.reconcileUnpaidOrder(91L);
+
+        var ordered = inOrder(completionRewardService, repairStateRepository);
+        ordered.verify(completionRewardService).deactivateOrderPaymentAccruals(
+                91L,
+                "automatic_status_salary_reconciliation"
+        );
         ordered.verify(repairStateRepository).deleteById(91L);
     }
 }

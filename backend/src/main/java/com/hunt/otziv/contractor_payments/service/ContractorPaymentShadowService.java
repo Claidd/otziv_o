@@ -941,7 +941,7 @@ public class ContractorPaymentShadowService {
                 snapshots.add(snapshot);
             }
         }
-        if (RETURNED_LINK_STATUSES.contains(link.getStatus())) {
+        if (isFinalAttributedPaymentLink(link)) {
             PaymentLinkActualReturnPlan actualReturnPlan = paymentLinkActualReturnPlan(link, snapshots);
             if (actualReturnPlan.attributionPresent()) {
                 return reconcileAttributedPaymentLinkReturn(
@@ -1048,10 +1048,12 @@ public class ContractorPaymentShadowService {
                 );
             }
             PaymentLink link = sourcePrelude.link();
-            if (!RETURNED_LINK_STATUSES.contains(link.getStatus())) {
+            if (!isFinalAttributedPaymentLink(link)) {
                 return snapshot;
             }
-            taskReturnBridge.recordAuthoritativePaymentLinkReturn(link);
+            if (RETURNED_LINK_STATUSES.contains(link.getStatus())) {
+                taskReturnBridge.recordAuthoritativePaymentLinkReturn(link);
+            }
             List<ContractorPaymentAllocation> sourceSnapshots = paymentLinkSourceSnapshots(link.getId());
             PaymentLinkActualReturnPlan plan = paymentLinkActualReturnPlan(link, sourceSnapshots);
             Map<Long, ContractorPaymentAllocation> reconciled = reconcileAttributedPaymentLinkReturnLocked(
@@ -1068,8 +1070,10 @@ public class ContractorPaymentShadowService {
                 return null;
             }
             PaymentLink link = sourcePrelude.link();
-            if (link != null && RETURNED_LINK_STATUSES.contains(link.getStatus())) {
-                taskReturnBridge.recordAuthoritativePaymentLinkReturn(link);
+            if (isFinalAttributedPaymentLink(link)) {
+                if (RETURNED_LINK_STATUSES.contains(link.getStatus())) {
+                    taskReturnBridge.recordAuthoritativePaymentLinkReturn(link);
+                }
                 List<ContractorPaymentAllocation> sourceSnapshots = paymentLinkSourceSnapshots(link.getId());
                 PaymentLinkActualReturnPlan plan = paymentLinkActualReturnPlan(link, sourceSnapshots);
                 if (plan.attributionPresent()) {
@@ -1196,7 +1200,9 @@ public class ContractorPaymentShadowService {
         }
         Map<Long, ManualPaymentTaskContractorReturnBridge.Binding> bindings = new LinkedHashMap<>();
         for (ContractorPaymentAllocation snapshot : sourceSnapshots) {
-            if (plan.reusedSourceAllocationIds().contains(snapshot.getId())) {
+            if (plan.reusedSourceAllocationIds().contains(snapshot.getId())
+                    || plan.supersededSourceAllocationIds().contains(snapshot.getId())
+                    && requiresSupersededSourceCorrection(snapshot)) {
                 bindings.put(snapshot.getId(), taskReturnBridge.lockPaymentLinkBinding(snapshot, link));
             }
         }
@@ -1227,6 +1233,9 @@ public class ContractorPaymentShadowService {
             if (plan.reusedSourceAllocationIds().contains(allocation.getId())) {
                 applyLinkStatus(allocation, link, now);
                 taskReturnBridge.recordReturn(bindings.get(allocation.getId()), allocation);
+            } else if (plan.supersededSourceAllocationIds().contains(allocation.getId())
+                    && correctSupersededSourceAllocation(allocation, link, now)) {
+                taskReturnBridge.recordReturn(bindings.get(allocation.getId()), allocation);
             }
             clearReconciliationFailure(allocation);
             saved.put(allocation.getId(), allocationRepository.save(allocation));
@@ -1245,6 +1254,55 @@ public class ContractorPaymentShadowService {
             saved.put(allocation.getId(), allocationRepository.save(allocation));
         }
         return saved;
+    }
+
+    /**
+     * A final actual-recipient row is authoritative. Once the money is known
+     * to have reached somebody else, a delayed source-status reconciliation
+     * must never confirm the frozen original recipient again.
+     */
+    private boolean correctSupersededSourceAllocation(
+            ContractorPaymentAllocation allocation,
+            PaymentLink link,
+            LocalDateTime now
+    ) {
+        long netConfirmed = Math.max(
+                0L,
+                allocation.getConfirmedKopecks() - allocation.getReturnedKopecks()
+        );
+        if (netConfirmed > 0L) {
+            return accountingService.recordReturnTotal(
+                    allocation,
+                    allocation.getConfirmedKopecks(),
+                    paidAt(link, now),
+                    "Подтверждение исходному получателю отменено: деньги фактически получил другой получатель",
+                    "LINK:ACTUAL_RECIPIENT_SUPERSEDED:RETURNED:" + allocation.getConfirmedKopecks()
+            );
+        }
+        if (UNPAID_RELEASABLE_STATUSES.contains(allocation.getStatus())
+                || allocation.getStatus() == ContractorAllocationStatus.OWNER_FALLBACK) {
+            return accountingService.recordRelease(
+                    allocation,
+                    ContractorAllocationStatus.CANCELED,
+                    paidAt(link, now),
+                    "Исходное назначение отменено: деньги фактически получил другой получатель",
+                    "LINK:ACTUAL_RECIPIENT_SUPERSEDED:CANCELED"
+            );
+        }
+        return false;
+    }
+
+    private boolean requiresSupersededSourceCorrection(ContractorPaymentAllocation allocation) {
+        return allocation != null && (
+                allocation.getConfirmedKopecks() > allocation.getReturnedKopecks()
+                        || UNPAID_RELEASABLE_STATUSES.contains(allocation.getStatus())
+                        || allocation.getStatus() == ContractorAllocationStatus.OWNER_FALLBACK
+        );
+    }
+
+    private boolean isFinalAttributedPaymentLink(PaymentLink link) {
+        return link != null && (PAID_LINK_STATUSES.contains(link.getStatus())
+                || RETURNED_LINK_STATUSES.contains(link.getStatus()));
     }
 
     private PaymentLinkActualReturnPlan paymentLinkActualReturnPlan(

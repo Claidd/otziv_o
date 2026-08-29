@@ -28,6 +28,7 @@ export interface ManualPaymentRecipientLike {
   taskRecipientName?: string | null;
   accountingTargetLabel?: string | null;
   effectText?: string | null;
+  bankRecipientName?: string | null;
 }
 
 export interface ManualPaymentTaskAccountingTargetOptionLike {
@@ -173,6 +174,17 @@ export function manualPaymentRecipientEffect(candidate: ManualPaymentRecipientLi
     default:
       return 'Получатель задания не привязан. Подтверждение оплаты заблокировано.';
   }
+}
+
+export function manualPaymentBankRecipientName(candidate: ManualPaymentRecipientLike): string {
+  const bankRecipient = candidate.bankRecipientName?.trim()
+    || (isManualPaymentTaskRecipient(candidate) ? candidate.taskRecipientName?.trim() : '')
+    || '';
+  if (!bankRecipient) {
+    return '';
+  }
+  const accountingRecipient = candidate.displayName?.trim() || candidate.label?.trim() || '';
+  return bankRecipient === accountingRecipient ? '' : bankRecipient;
 }
 
 export function manualPaymentTaskTargetKey(option: ManualPaymentTaskAccountingTargetOptionLike): string {

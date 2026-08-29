@@ -82,9 +82,19 @@ describe('payment navigation policy', () => {
     expect(navigate).toHaveBeenCalledWith(target);
   });
 
+  it('allows the exact hosted payment domain returned by Tochka', () => {
+    const target = 'https://merch.securepaytb.ru/order/?uuid=tochka-test-operation';
+    const navigate = vi.fn();
+
+    expect(navigateToPaymentTarget(target, 'payment', navigate)).toBe(true);
+    expect(navigate).toHaveBeenCalledWith(target);
+  });
+
   it.each([
     'http://securepay.tinkoff.ru/pay',
     'https://securepay.tinkoff.ru.evil.test/pay',
+    'http://merch.securepaytb.ru/order/?uuid=example',
+    'https://merch.securepaytb.ru.evil.test/order/?uuid=example',
     'https://evil.test/pay'
   ])('rejects an untrusted generated payment URL %s', (target) => {
     expect(safePaymentNavigationTarget(target, 'payment')).toBeNull();

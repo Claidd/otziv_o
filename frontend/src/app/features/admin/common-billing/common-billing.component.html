@@ -325,6 +325,12 @@
             </button>
           }
           @if (invoiceNeedsAttention()) {
+            @if (attentionHasManualTbankReconciliationRetry()) {
+              <button type="button" class="success" (click)="retryManualTbankReconciliation()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">sync_lock</span>
+                Повторить сверку оплаты
+              </button>
+            }
             @if (attentionHasLatePayment()) {
               <button type="button" class="success" (click)="applyLatePayment()" [disabled]="!!mutating()">
                 <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
