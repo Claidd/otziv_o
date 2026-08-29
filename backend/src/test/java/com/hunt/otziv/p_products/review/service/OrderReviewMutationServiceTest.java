@@ -11,6 +11,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.service.OrderDetailsService;
+import com.hunt.otziv.p_products.service.ProductService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
@@ -51,6 +52,9 @@ class OrderReviewMutationServiceTest {
     private ReviewService reviewService;
 
     @Mock
+    private ProductService productService;
+
+    @Mock
     private CompanyService companyService;
 
     @Mock
@@ -74,7 +78,8 @@ class OrderReviewMutationServiceTest {
         Company company = company(2);
         Worker worker = worker(9L);
         Filial filial = filial();
-        Product product = product("100.00");
+        Product product = product(1L, "100.00");
+        Product addedProduct = product(2L, "250.00");
         Review existing = review(1L, "50.00");
         Order order = order(10L, company, worker, filial);
         OrderDetails detail = detail(order, product, new ArrayList<>(List.of(existing)));
@@ -82,6 +87,7 @@ class OrderReviewMutationServiceTest {
         Bot bot = bot(100L);
 
         when(orderAggregateMutationLockService.lock(10L)).thenReturn(order);
+        when(productService.findById(2L)).thenReturn(addedProduct);
         when(botAssignmentService.assignBotForReviewChange(any(), any(), any())).thenReturn(bot);
         when(reviewService.save(any(Review.class))).thenAnswer(invocation -> {
             Review review = invocation.getArgument(0);
@@ -104,17 +110,36 @@ class OrderReviewMutationServiceTest {
         assertSame(bot, created.getBot());
         assertSame(filial, created.getFilial());
         assertSame(worker, created.getWorker());
-        assertSame(product, created.getProduct());
-        assertEquals(new BigDecimal("100.00"), created.getPrice());
+        assertSame(addedProduct, created.getProduct());
+        assertEquals(new BigDecimal("250.00"), created.getPrice());
 
         assertEquals(2, detail.getAmount());
-        assertEquals(new BigDecimal("150.00"), detail.getPrice());
+        assertEquals(new BigDecimal("300.00"), detail.getPrice());
         assertEquals(2, order.getAmount());
-        assertEquals(new BigDecimal("150.00"), order.getSum());
+        assertEquals(new BigDecimal("300.00"), order.getSum());
         assertEquals(3, company.getCounterNoPay());
         verify(orderDetailsService).save(detail);
         verify(orderDetailsService).saveOrder(order);
         verify(companyService).save(company);
+    }
+
+    @Test
+    void addNewReviewReturnsFalseWhenDefaultProductIsUnavailable() {
+        OrderReviewMutationService service = service();
+        Company company = company(1);
+        Order order = order(14L, company, worker(4L), filial());
+        OrderDetails detail = detail(order, product(1L, "200.00"), new ArrayList<>());
+        order.setDetails(List.of(detail));
+
+        when(orderAggregateMutationLockService.lock(14L)).thenReturn(order);
+        when(productService.findById(2L)).thenReturn(null);
+
+        assertFalse(service.addNewReview(14L));
+
+        assertTrue(detail.getReviews().isEmpty());
+        assertEquals(1, company.getCounterNoPay());
+        verify(reviewService, never()).save(any());
+        verifyNoInteractions(botAssignmentService, orderDetailsService);
     }
 
     @Test
@@ -136,7 +161,7 @@ class OrderReviewMutationServiceTest {
         Order order = order(12L, company, worker(2L), filial());
         Review kept = review(1L, "80.00");
         Review removed = review(2L, "40.00");
-        OrderDetails detail = detail(order, product("80.00"), new ArrayList<>(List.of(kept, removed)));
+        OrderDetails detail = detail(order, product(1L, "80.00"), new ArrayList<>(List.of(kept, removed)));
         order.setDetails(List.of(detail));
 
         when(orderAggregateMutationLockService.lock(12L)).thenReturn(order);
@@ -161,7 +186,7 @@ class OrderReviewMutationServiceTest {
         OrderReviewMutationService service = service();
         Company company = company(1);
         Order order = order(13L, company, worker(3L), filial());
-        OrderDetails detail = detail(order, product("20.00"), new ArrayList<>());
+        OrderDetails detail = detail(order, product(1L, "20.00"), new ArrayList<>());
         order.setDetails(List.of(detail));
 
         when(orderAggregateMutationLockService.lock(13L)).thenReturn(order);
@@ -180,8 +205,8 @@ class OrderReviewMutationServiceTest {
         Order orderB = order(22L, companyB, worker(22L), filial());
         Review reviewA = review(101L, "50.00");
         Review reviewB = review(202L, "70.00");
-        OrderDetails detailA = detail(orderA, product("50.00"), new ArrayList<>(List.of(reviewA)));
-        OrderDetails detailB = detail(orderB, product("70.00"), new ArrayList<>(List.of(reviewB)));
+        OrderDetails detailA = detail(orderA, product(1L, "50.00"), new ArrayList<>(List.of(reviewA)));
+        OrderDetails detailB = detail(orderB, product(1L, "70.00"), new ArrayList<>(List.of(reviewB)));
         reviewA.setOrderDetails(detailA);
         reviewB.setOrderDetails(detailB);
         orderA.setDetails(List.of(detailA));
@@ -202,6 +227,7 @@ class OrderReviewMutationServiceTest {
         return new OrderReviewMutationService(
                 botAssignmentService,
                 reviewService,
+                productService,
                 companyService,
                 accountWalkScheduleService,
                 orderAggregateMutationLockService,
@@ -236,8 +262,9 @@ class OrderReviewMutationServiceTest {
         return detail;
     }
 
-    private Product product(String price) {
+    private Product product(Long id, String price) {
         Product product = new Product();
+        product.setId(id);
         product.setPrice(new BigDecimal(price));
         return product;
     }

@@ -7,6 +7,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.service.BotAssignmentService;
+import com.hunt.otziv.p_products.service.ProductService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
@@ -30,8 +31,11 @@ import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getFirstDetail;
 @RequiredArgsConstructor
 public class OrderReviewMutationService {
 
+    private static final long DEFAULT_ADDED_REVIEW_PRODUCT_ID = 2L;
+
     private final BotAssignmentService botAssignmentService;
     private final ReviewService reviewService;
+    private final ProductService productService;
     private final CompanyService companyService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
@@ -62,7 +66,17 @@ public class OrderReviewMutationService {
 
             log.info("2. Создаем новый отзыв");
 
-            Review draftReview = createNewReview(saveCompany, orderDetails, saveOrder);
+            Product product = productService.findById(DEFAULT_ADDED_REVIEW_PRODUCT_ID);
+            if (product == null || product.getPrice() == null) {
+                log.error(
+                        "Не удалось добавить отзыв к заказу {}: продукт {} отсутствует или не имеет цены",
+                        orderId,
+                        DEFAULT_ADDED_REVIEW_PRODUCT_ID
+                );
+                return false;
+            }
+
+            Review draftReview = createNewReview(saveCompany, orderDetails, saveOrder, product);
             var selectedBot = botAssignmentService.assignBotForReviewChange(
                     draftReview,
                     Set.of(),
@@ -147,9 +161,7 @@ public class OrderReviewMutationService {
         }
     }
 
-    private Review createNewReview(Company company, OrderDetails orderDetails, Order order) {
-        Product product = orderDetails != null ? orderDetails.getProduct() : null;
-
+    private Review createNewReview(Company company, OrderDetails orderDetails, Order order, Product product) {
         return Review.builder()
                 .category(company != null ? company.getCategoryCompany() : null)
                 .subCategory(company != null ? company.getSubCategory() : null)
