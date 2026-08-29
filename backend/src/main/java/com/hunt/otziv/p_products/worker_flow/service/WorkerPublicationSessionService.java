@@ -17,6 +17,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -41,6 +42,7 @@ public class WorkerPublicationSessionService {
     private final ReviewBoardQueryService reviewBoardQueryService;
     private final AppSettingService appSettingService;
     private final EntityManager entityManager;
+    private Clock clock = Clock.systemUTC();
 
     @Transactional
     public SessionDecision evaluateEntry(Worker worker, boolean startSessionIfAllowed) {
@@ -286,7 +288,11 @@ public class WorkerPublicationSessionService {
     }
 
     private ZonedDateTime now() {
-        return ZonedDateTime.now(businessZone());
+        return ZonedDateTime.now(clock).withZoneSameInstant(businessZone());
+    }
+
+    void setClock(Clock clock) {
+        this.clock = clock == null ? Clock.systemUTC() : clock;
     }
 
     private ZoneId businessZone() {

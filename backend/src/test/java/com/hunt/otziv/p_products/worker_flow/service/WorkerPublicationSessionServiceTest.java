@@ -16,6 +16,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -33,6 +35,10 @@ import static org.mockito.Mockito.lenient;
 class WorkerPublicationSessionServiceTest {
 
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
+    private static final Clock TEST_CLOCK = Clock.fixed(
+            Instant.parse("2026-08-29T04:00:00Z"),
+            BUSINESS_ZONE
+    );
 
     @Mock
     private WorkerPublicationSessionRepository repository;
@@ -49,6 +55,7 @@ class WorkerPublicationSessionServiceTest {
     @BeforeEach
     void setUp() {
         service = new WorkerPublicationSessionService(repository, reviewBoardQueryService, appSettingService, entityManager);
+        service.setClock(TEST_CLOCK);
         worker = new Worker();
         worker.setId(42L);
 
@@ -71,7 +78,7 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void blocksPublicationWhenNagulExistsBeforeSession() {
-        LocalDate lookahead = LocalDate.now(BUSINESS_ZONE).plusDays(60);
+        LocalDate lookahead = LocalDate.now(TEST_CLOCK).plusDays(60);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.empty());
         when(boardCount(ReviewBoardMode.VIGUL, lookahead)).thenReturn(2L);
 
@@ -85,7 +92,7 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void opensSessionWhenNagulIsEmptyAndPublicationIsAvailable() {
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(TEST_CLOCK);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.empty());
         when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(0L);
         when(boardCount(ReviewBoardMode.PUBLISH, today)).thenReturn(3L);
@@ -100,7 +107,7 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void newNagulDoesNotInterruptActiveSessionWhilePublicationRemains() {
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(TEST_CLOCK);
         WorkerPublicationSession session = activeSession(today);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
         when(boardCount(ReviewBoardMode.PUBLISH, today)).thenReturn(1L);
@@ -115,7 +122,7 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void closesSessionWhenOnlyNagulRemains() {
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(TEST_CLOCK);
         WorkerPublicationSession session = activeSession(today);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
         when(boardCount(ReviewBoardMode.PUBLISH, today)).thenReturn(0L);
@@ -131,9 +138,9 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void closesSessionAfterInactivity() {
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(TEST_CLOCK);
         WorkerPublicationSession session = activeSession(today);
-        session.setLastActivityAt(LocalDateTime.now(BUSINESS_ZONE).minusMinutes(46));
+        session.setLastActivityAt(LocalDateTime.now(TEST_CLOCK).minusMinutes(46));
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
         when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(1L);
         when(repository.save(session)).thenReturn(session);
@@ -147,7 +154,7 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void closesPreviousBusinessDaySession() {
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(TEST_CLOCK);
         WorkerPublicationSession session = activeSession(today.minusDays(1));
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
         when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(1L);
@@ -159,13 +166,49 @@ class WorkerPublicationSessionServiceTest {
         assertEquals(WorkerPublicationSessionCloseReason.DAY_END, session.getCloseReason());
     }
 
+    @Test
+    void keepsCurrentBusinessDaySessionActiveBeforeConfiguredBoundary() {
+        Clock beforeBoundary = Clock.fixed(Instant.parse("2026-08-29T15:58:59Z"), BUSINESS_ZONE);
+        service.setClock(beforeBoundary);
+        LocalDate calendarDate = LocalDate.of(2026, 8, 29);
+        WorkerPublicationSession session = activeSession(calendarDate, beforeBoundary);
+        when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
+        when(boardCount(ReviewBoardMode.PUBLISH, calendarDate)).thenReturn(1L);
+        when(boardCount(ReviewBoardMode.VIGUL, calendarDate.plusDays(60))).thenReturn(0L);
+
+        WorkerPublicationSessionService.SessionDecision decision = service.evaluateEntry(worker, true);
+
+        assertTrue(decision.allowed());
+        assertTrue(decision.state().active());
+    }
+
+    @Test
+    void closesSessionAtConfiguredBusinessDayBoundary() {
+        Clock atBoundary = Clock.fixed(Instant.parse("2026-08-29T15:59:00Z"), BUSINESS_ZONE);
+        service.setClock(atBoundary);
+        LocalDate calendarDate = LocalDate.of(2026, 8, 29);
+        WorkerPublicationSession session = activeSession(calendarDate, atBoundary);
+        when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
+        when(boardCount(ReviewBoardMode.VIGUL, calendarDate.plusDays(60))).thenReturn(1L);
+        when(repository.save(session)).thenReturn(session);
+
+        WorkerPublicationSessionService.SessionDecision decision = service.evaluateEntry(worker, true);
+
+        assertFalse(decision.allowed());
+        assertEquals(WorkerPublicationSessionCloseReason.DAY_END, session.getCloseReason());
+    }
+
     private WorkerPublicationSession activeSession(LocalDate businessDate) {
+        return activeSession(businessDate, TEST_CLOCK);
+    }
+
+    private WorkerPublicationSession activeSession(LocalDate businessDate, Clock clock) {
         WorkerPublicationSession session = new WorkerPublicationSession();
         session.setWorkerId(42L);
         session.setStatus(WorkerPublicationSessionStatus.ACTIVE);
         session.setBusinessDate(businessDate);
-        session.setStartedAt(LocalDateTime.now(BUSINESS_ZONE).minusMinutes(5));
-        session.setLastActivityAt(LocalDateTime.now(BUSINESS_ZONE).minusMinutes(1));
+        session.setStartedAt(LocalDateTime.now(clock).minusMinutes(5));
+        session.setLastActivityAt(LocalDateTime.now(clock).minusMinutes(1));
         return session;
     }
 
