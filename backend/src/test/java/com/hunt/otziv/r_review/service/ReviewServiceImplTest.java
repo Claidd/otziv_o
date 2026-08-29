@@ -15,6 +15,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
+import com.hunt.otziv.p_products.review.service.OrderPayableRecalculationService;
 import com.hunt.otziv.p_products.service.OrderDetailsService;
 import com.hunt.otziv.p_products.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.service.ProductService;
@@ -132,6 +133,9 @@ class ReviewServiceImplTest {
 
     @Mock
     private ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
+
+    @Mock
+    private OrderPayableRecalculationService payableRecalculationService;
 
     @InjectMocks
     private ReviewServiceImpl reviewService;
@@ -330,6 +334,7 @@ class ReviewServiceImplTest {
         assertSame(loadedProduct, review.getProduct());
         assertEquals(java.math.BigDecimal.valueOf(200), review.getPrice());
         verify(reviewRepository).save(review);
+        verify(payableRecalculationService).recalculate(review.getOrderDetails());
     }
 
     @Test

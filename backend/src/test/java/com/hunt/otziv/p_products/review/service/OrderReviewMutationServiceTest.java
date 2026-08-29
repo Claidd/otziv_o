@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -63,6 +64,9 @@ class OrderReviewMutationServiceTest {
 
     @Mock
     private ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @Test
     void addNewReviewCreatesReviewRecalculatesTotalsAndIncrementsCompanyCounter() {
@@ -196,14 +200,14 @@ class OrderReviewMutationServiceTest {
 
     private OrderReviewMutationService service() {
         return new OrderReviewMutationService(
-                orderDetailsService,
                 botAssignmentService,
                 reviewService,
                 companyService,
                 accountWalkScheduleService,
                 orderAggregateMutationLockService,
                 assignmentMutationGuardService,
-                contractorRouteAssignmentGuard
+                contractorRouteAssignmentGuard,
+                new OrderPayableRecalculationService(orderDetailsService, eventPublisher)
         );
     }
 

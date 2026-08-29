@@ -1273,6 +1273,59 @@ public class PaymentLinkService {
         );
     }
 
+    /**
+     * Reconciles an ordinary unpaid payment link after the order payable has
+     * changed. No provider request is made here. A pristine link is retired so
+     * its stable public URL can resolve to a freshly routed link with the new
+     * amount on the next open. A link with client/bank evidence is quarantined
+     * instead of being silently rewritten. Paid links are immutable.
+     */
+    @Transactional
+    public boolean refreshLinkedOrderAmount(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return false;
+        }
+        Order order = orderRepository.findByIdForCounterUpdate(orderId).orElse(null);
+        if (order == null) {
+            return false;
+        }
+        long payableKopecks = amountKopecks(payableSum(order));
+        List<PaymentLink> links = paymentLinkRepository.findByOrderIdForUpdate(orderId);
+        boolean linked = false;
+        LocalDateTime now = LocalDateTime.now();
+        for (PaymentLink link : links) {
+            if (link == null || !ROUTE_CHANGE_CURRENT_STATUSES.contains(link.getStatus())) {
+                continue;
+            }
+            linked = true;
+            if (PAID_STATUSES.contains(link.getStatus())
+                    || link.getPaidAt() != null
+                    || link.getConfirmedAmountKopecks() != null
+                    || link.getAmountKopecks() == payableKopecks) {
+                continue;
+            }
+            if (canRetireStaleLink(link)) {
+                expireIfAmountChanged(link);
+                if (link.getContractorAllocationId() != null) {
+                    contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
+                }
+                continue;
+            }
+            link.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+            link.setExpiresAt(now);
+            link.setLastError(limit(
+                    "Сумма заказа изменилась: было "
+                            + amountRubles(link.getAmountKopecks()).stripTrailingZeros().toPlainString()
+                            + " руб., стало "
+                            + amountRubles(payableKopecks).stripTrailingZeros().toPlainString()
+                            + " руб.; есть признаки платежного действия, нужна сверка",
+                    512
+            ));
+            paymentLinkRepository.save(link);
+        }
+        return linked;
+    }
+
     private PaymentLinkReconcileResult reconcileActiveLinkLocked(
             Long orderId,
             Long linkId,

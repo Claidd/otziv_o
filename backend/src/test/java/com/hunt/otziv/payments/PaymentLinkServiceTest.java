@@ -217,6 +217,70 @@ class PaymentLinkServiceTest {
     private Authentication authentication;
 
     @Test
+    void payableChangeExpiresPristineOrdinaryLinkAndReleasesItsAllocation() {
+        PaymentLinkService service = service(properties());
+        Order order = order(8_902L, "ООО Исправленный счёт", BigDecimal.valueOf(2_500));
+        PaymentLink link = payableLink(order, "stale-ordinary-link", 240_000L);
+        link.setId(89_021L);
+        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        link.setContractorAllocationId(451L);
+
+        when(orderRepository.findByIdForCounterUpdate(8_902L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(8_902L)).thenReturn(List.of(link));
+
+        assertTrue(service.refreshLinkedOrderAmount(8_902L));
+
+        assertEquals(PaymentLinkStatus.EXPIRED, link.getStatus());
+        assertTrue(link.getLastError().contains("2400 руб., стало 2500 руб."));
+        verify(taskReceiptIntegrationService)
+                .release(link, "Сумма заказа изменилась; старый резерв освобожден");
+        verify(contractorPaymentLiveRoutingService).releaseClosedPaymentLink(link);
+        verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
+    void payableChangeQuarantinesOrdinaryLinkWithPaymentEvidence() {
+        PaymentLinkService service = service(properties());
+        Order order = order(8_903L, "ООО Счёт со следами оплаты", BigDecimal.valueOf(2_500));
+        PaymentLink link = payableLink(order, "started-ordinary-link", 240_000L);
+        link.setId(89_031L);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.BANK_FORM);
+        link.setTbankPaymentId("payment-89031");
+
+        when(orderRepository.findByIdForCounterUpdate(8_903L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(8_903L)).thenReturn(List.of(link));
+
+        assertTrue(service.refreshLinkedOrderAmount(8_903L));
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertTrue(link.getLastError().contains("есть признаки платежного действия"));
+        verify(paymentLinkRepository).save(link);
+        verify(taskReceiptIntegrationService, never()).release(any(PaymentLink.class), anyString());
+        verify(contractorPaymentLiveRoutingService, never()).releaseClosedPaymentLink(any());
+    }
+
+    @Test
+    void payableChangeNeverMutatesPaidOrdinaryLink() {
+        PaymentLinkService service = service(properties());
+        Order order = order(8_904L, "ООО Оплаченный счёт", BigDecimal.valueOf(2_500));
+        PaymentLink link = payableLink(order, "paid-ordinary-link", 240_000L);
+        link.setId(89_041L);
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaidAt(LocalDateTime.now().minusHours(1));
+
+        when(orderRepository.findByIdForCounterUpdate(8_904L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(8_904L)).thenReturn(List.of(link));
+
+        assertFalse(service.refreshLinkedOrderAmount(8_904L));
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        verify(paymentLinkRepository, never()).save(link);
+        verifyNoInteractions(taskReceiptIntegrationService);
+        verify(contractorPaymentLiveRoutingService, never()).releaseClosedPaymentLink(any());
+    }
+
+    @Test
     void ownerPaperInvoiceDoesNotCreateBankPaymentOrContractorReserve() {
         PaymentLinkService service = service(properties());
         Order order = order(8_901L, "ООО Бумажный счёт", BigDecimal.valueOf(2_000));

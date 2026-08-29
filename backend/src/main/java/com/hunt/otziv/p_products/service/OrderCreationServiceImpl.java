@@ -75,17 +75,55 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     private static final Long STUB_BOT_ID = 1L;
     @Transactional
     public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) {
+        Product product = productService.findById(productId);
+        BigDecimal total = requiredPrice(product, "продукта " + productId)
+                .multiply(BigDecimal.valueOf(orderDTO.getAmount()));
+        return createNewOrderWithReviews(companyId, orderDTO, product, total, List.of());
+    }
+
+    @Override
+    @Transactional
+    public boolean createRepeatedOrderWithReviews(Order sourceOrder, OrderDTO orderDTO) {
+        RepeatOrderTerms repeatTerms = repeatOrderTerms(sourceOrder);
+        if (orderDTO.getAmount() != repeatTerms.reviews().size()) {
+            log.warn(
+                    "Количество отзывов исходного заказа {} исправлено для автоповтора: order.amount={}, reviews={}",
+                    sourceOrder.getId(),
+                    orderDTO.getAmount(),
+                    repeatTerms.reviews().size()
+            );
+            orderDTO.setAmount(repeatTerms.reviews().size());
+        }
+        Long companyId = sourceOrder.getCompany() != null ? sourceOrder.getCompany().getId() : null;
+        if (companyId == null) {
+            throw new IllegalStateException("У исходного заказа " + sourceOrder.getId() + " не найдена компания");
+        }
+        return createNewOrderWithReviews(
+                companyId,
+                orderDTO,
+                repeatTerms.summaryProduct(),
+                repeatTerms.total(),
+                repeatTerms.reviews()
+        );
+    }
+
+    private boolean createNewOrderWithReviews(Long companyId,
+                                              OrderDTO orderDTO,
+                                              Product summaryProduct,
+                                              BigDecimal total,
+                                              List<RepeatReviewTerm> repeatReviewTerms) {
         try {
-            Order order = saveOrder(orderDTO, productId);
+            Order order = saveOrder(orderDTO, summaryProduct, total);
             log.info("1. Сохранили ORDER");
 
             // 2. Создаём и сохраняем orderDetails без отзывов
-            OrderDetails orderDetails = toEntityOrderDetailFromDTO(orderDTO, order, productId);
+            OrderDetails orderDetails = toEntityOrderDetailFromDTO(orderDTO, order, summaryProduct, total);
             orderDetails = orderDetailsService.save(orderDetails);
             log.info("2. Сохранили ORDER-DETAIL без отзывов");
 
             // 3. Создаём и сохраняем отзывы с уникальными ботами (через новый сервис)
             List<Review> reviews = botAssignmentService.assignBotsToNewReviews(orderDTO, orderDetails);
+            applyRepeatReviewTerms(reviews, repeatReviewTerms);
             reviewService.saveAll(reviews);
             log.info("3. Сохранили {} отзывов с уникальными ботами", reviews.size());
 
@@ -115,6 +153,91 @@ public class OrderCreationServiceImpl implements OrderCreationService {
             log.error("Ошибка при создании нового заказа с отзывами", e);
             throw new RuntimeException("Ошибка при создании нового заказа с отзывами", e);
         }
+    }
+
+    private void applyRepeatReviewTerms(List<Review> reviews, List<RepeatReviewTerm> repeatReviewTerms) {
+        if (repeatReviewTerms == null || repeatReviewTerms.isEmpty()) {
+            return;
+        }
+        if (reviews == null || reviews.size() != repeatReviewTerms.size()) {
+            throw new IllegalStateException(
+                    "Автоповтор создал " + (reviews == null ? 0 : reviews.size())
+                            + " отзывов вместо " + repeatReviewTerms.size()
+            );
+        }
+        for (int index = 0; index < reviews.size(); index++) {
+            Review review = reviews.get(index);
+            RepeatReviewTerm term = repeatReviewTerms.get(index);
+            review.setProduct(term.product());
+            review.setPrice(term.price());
+        }
+    }
+
+    private RepeatOrderTerms repeatOrderTerms(Order sourceOrder) {
+        if (sourceOrder == null) {
+            throw new IllegalArgumentException("Исходный заказ автоповтора не указан");
+        }
+        List<Review> sourceReviews = orderedReviews(sourceOrder);
+        if (sourceReviews.isEmpty()) {
+            throw new IllegalStateException("У исходного заказа " + sourceOrder.getId() + " нет отзывов для повтора");
+        }
+
+        List<RepeatReviewTerm> terms = new ArrayList<>(sourceReviews.size());
+        for (Review sourceReview : sourceReviews) {
+            Product product = sourceReview.getProduct();
+            if (product == null || product.getId() == null) {
+                throw new IllegalStateException(
+                        "У отзыва " + sourceReview.getId() + " исходного заказа " + sourceOrder.getId() + " не найден продукт"
+                );
+            }
+            BigDecimal price = requiredPrice(sourceReview.getPrice(), "отзыва " + sourceReview.getId());
+            terms.add(new RepeatReviewTerm(product, price));
+        }
+
+        Product summaryProduct = homogeneousProduct(terms)
+                .orElseGet(() -> sourceSummaryProduct(sourceOrder, terms.getFirst().product()));
+        BigDecimal total = terms.stream()
+                .map(RepeatReviewTerm::price)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new RepeatOrderTerms(summaryProduct, total, List.copyOf(terms));
+    }
+
+    private Optional<Product> homogeneousProduct(List<RepeatReviewTerm> terms) {
+        Product first = terms.getFirst().product();
+        Long firstId = first.getId();
+        return terms.stream().allMatch(term -> Objects.equals(firstId, term.product().getId()))
+                ? Optional.of(first)
+                : Optional.empty();
+    }
+
+    private Product sourceSummaryProduct(Order sourceOrder, Product fallback) {
+        return Optional.ofNullable(sourceOrder.getDetails())
+                .orElse(Collections.emptyList())
+                .stream()
+                .filter(Objects::nonNull)
+                .map(OrderDetails::getProduct)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(fallback);
+    }
+
+    private BigDecimal requiredPrice(Product product, String source) {
+        return requiredPrice(product != null ? product.getPrice() : null, source);
+    }
+
+    private BigDecimal requiredPrice(BigDecimal price, String source) {
+        if (price == null) {
+            throw new IllegalStateException("Не указана цена " + source);
+        }
+        return price;
+    }
+
+    private record RepeatReviewTerm(Product product, BigDecimal price) {
+    }
+
+    private record RepeatOrderTerms(Product summaryProduct,
+                                    BigDecimal total,
+                                    List<RepeatReviewTerm> reviews) {
     }
 
 //    @Transactional
@@ -705,8 +828,8 @@ public class OrderCreationServiceImpl implements OrderCreationService {
 //                log.info("  {}: {} ботов", category, count));
 //        log.info("================================");
 //    }
-    private Order saveOrder(OrderDTO orderDTO, Long productId) {
-        Order order = toEntityOrderFromDTO(orderDTO, productId);
+    private Order saveOrder(OrderDTO orderDTO, Product product, BigDecimal total) {
+        Order order = toEntityOrderFromDTO(orderDTO, product, total);
         return orderRepository.save(order);
     }
 
@@ -747,8 +870,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         return filialService.getFilial(filialDTO.getId());
     } // Конвертер из DTO для филиала
 
-    private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId) { // Конвертер из DTO для заказа
-        Product product1 = productService.findById(productId);
+    private Order toEntityOrderFromDTO(OrderDTO orderDTO, Product product, BigDecimal total) { // Конвертер из DTO для заказа
         boolean waitingForClient = orderDTO.isWaitingForClient();
         boolean clientTextExpected = waitingForClient || orderDTO.isClientTextExpected();
         return Order.builder()
@@ -758,7 +880,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .company(convertCompanyDTOToCompany(orderDTO.getCompany()))
                 .manager(convertManagerDTOToManager(orderDTO.getManager()))
                 .filial(convertFilialDTOToFilial(orderDTO.getFilial()))
-                .sum(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
+                .sum(total)
                 .status(convertStatusDTOToStatus(orderDTO.getStatus()))
                 .waitingForClient(waitingForClient)
                 .waitingForClientChangedAt(waitingForClient ? LocalDateTime.now() : null)
@@ -766,13 +888,15 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .build();
     } // Конвертер из DTO для заказа
 
-    private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO, Order order, Long productId) { // Конвертер из DTO для деталей заказа
-        Product product1 = productService.findById(productId);
+    private OrderDetails toEntityOrderDetailFromDTO(OrderDTO orderDTO,
+                                                    Order order,
+                                                    Product product,
+                                                    BigDecimal total) { // Конвертер из DTO для деталей заказа
         return OrderDetails.builder()
                 .amount(orderDTO.getAmount())
-                .price(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
+                .price(total)
                 .order(order)
-                .product(product1)
+                .product(product)
                 .comment("")
                 .build();
     } // Конвертер из DTO для деталей заказа
@@ -789,7 +913,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         boolean clientTextExpected = order.isWaitingForClient() || order.isClientTextExpected();
         return OrderDTO.builder()
                 .id(order.getId())
-                .amount(order.getAmount())
+                .amount(repeatAmount(order))
                 .worker(convertToWorkerDTO(order.getWorker()))
                 .manager(convertToManagerDTO(order.getManager()))
                 .company(convertToCompanyDTO(order.getCompany()))
@@ -803,17 +927,25 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     } // Конвертер DTO для создания нового заказа после завершения предыдущего
 
     private List<Long> reviewFilialIds(Order order) {
+        return orderedReviews(order).stream()
+                .map(review -> review.getFilial() != null ? review.getFilial().getId() : null)
+                .toList();
+    }
+
+    private int repeatAmount(Order order) {
+        List<Review> reviews = orderedReviews(order);
+        return reviews.isEmpty() ? order.getAmount() : reviews.size();
+    }
+
+    private List<Review> orderedReviews(Order order) {
         if (order == null || order.getDetails() == null || order.getDetails().isEmpty()) {
             return List.of();
         }
-
         return order.getDetails().stream()
                 .filter(Objects::nonNull)
                 .flatMap(detail -> Optional.ofNullable(detail.getReviews()).orElse(Collections.emptyList()).stream())
                 .filter(Objects::nonNull)
                 .sorted(Comparator.comparing(Review::getId, Comparator.nullsLast(Long::compareTo)))
-                .map(review -> review.getFilial() != null ? review.getFilial().getId() : null)
-                .filter(Objects::nonNull)
                 .toList();
     }
 

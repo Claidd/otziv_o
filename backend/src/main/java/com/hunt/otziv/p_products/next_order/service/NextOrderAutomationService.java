@@ -5,7 +5,6 @@ import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.service.OrderCreationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,26 +67,12 @@ public class NextOrderAutomationService {
 
         requestService.markAttemptStarted(requestId);
 
-        Long productId = productId(sourceOrder);
         OrderDTO repeatOrder = creationService.convertToOrderDTOToRepeat(sourceOrder);
-        boolean created = creationService.createNewOrderWithReviews(companyId, productId, repeatOrder);
+        boolean created = creationService.createRepeatedOrderWithReviews(sourceOrder, repeatOrder);
         if (!created) {
-            throw new IllegalStateException("createNewOrderWithReviews вернул false для заявки " + requestId);
+            throw new IllegalStateException("createRepeatedOrderWithReviews вернул false для заявки " + requestId);
         }
 
         requestService.markCreatedIfOpen(requestId);
-    }
-
-    private Long productId(Order sourceOrder) {
-        if (sourceOrder.getDetails() == null || sourceOrder.getDetails().isEmpty()) {
-            throw new IllegalStateException("У исходного заказа " + sourceOrder.getId() + " нет деталей");
-        }
-
-        OrderDetails details = sourceOrder.getDetails().getFirst();
-        if (details == null || details.getProduct() == null || details.getProduct().getId() == null) {
-            throw new IllegalStateException("У исходного заказа " + sourceOrder.getId() + " не найден продукт");
-        }
-
-        return details.getProduct().getId();
     }
 }

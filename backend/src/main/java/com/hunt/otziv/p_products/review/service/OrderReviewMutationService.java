@@ -6,7 +6,6 @@ import com.hunt.otziv.contractor_payments.service.ContractorRouteAssignmentGuard
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.p_products.service.OrderDetailsService;
 import com.hunt.otziv.p_products.service.BotAssignmentService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
@@ -18,9 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -33,7 +30,6 @@ import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getFirstDetail;
 @RequiredArgsConstructor
 public class OrderReviewMutationService {
 
-    private final OrderDetailsService orderDetailsService;
     private final BotAssignmentService botAssignmentService;
     private final ReviewService reviewService;
     private final CompanyService companyService;
@@ -41,6 +37,7 @@ public class OrderReviewMutationService {
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
+    private final OrderPayableRecalculationService payableRecalculationService;
 
     @Transactional
     public boolean addNewReview(Long orderId) {
@@ -81,7 +78,7 @@ public class OrderReviewMutationService {
             newList.add(review);
             orderDetails.setReviews(newList);
 
-            recalculateOrderAndDetails(orderDetails);
+            payableRecalculationService.recalculate(orderDetails);
             log.info("4. Пересчитали детали и заказ");
 
             saveCompany.setCounterNoPay(saveCompany.getCounterNoPay() + 1);
@@ -134,7 +131,7 @@ public class OrderReviewMutationService {
             newList.remove(review);
             orderDetails.setReviews(newList);
 
-            recalculateOrderAndDetails(orderDetails);
+            payableRecalculationService.recalculate(orderDetails);
             log.info("2. Пересчитали детали и заказ");
 
             log.info("3. Удалили отзыв");
@@ -168,27 +165,4 @@ public class OrderReviewMutationService {
                 .build();
     }
 
-    private void recalculateOrderAndDetails(OrderDetails orderDetails) {
-        if (orderDetails == null) {
-            return;
-        }
-
-        List<Review> reviews = Optional.ofNullable(orderDetails.getReviews()).orElse(Collections.emptyList());
-
-        BigDecimal detailTotal = reviews.stream()
-                .map(Review::getPrice)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        orderDetails.setPrice(detailTotal);
-        orderDetails.setAmount(reviews.size());
-        orderDetailsService.save(orderDetails);
-
-        Order order = orderDetails.getOrder();
-        if (order != null) {
-            order.setSum(detailTotal);
-            order.setAmount(orderDetails.getAmount());
-            orderDetailsService.saveOrder(order);
-        }
-    }
 }

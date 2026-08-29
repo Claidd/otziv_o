@@ -16,6 +16,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
+import com.hunt.otziv.p_products.review.service.OrderPayableRecalculationService;
 import com.hunt.otziv.p_products.service.OrderDetailsService;
 import com.hunt.otziv.p_products.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.service.ProductService;
@@ -95,6 +96,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final OrderAggregateMutationLockService orderAggregateMutationLockService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final ContractorRouteAssignmentGuard contractorRouteAssignmentGuard;
+    private final OrderPayableRecalculationService payableRecalculationService;
 
     @Override
     public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(List<Long> workerIds, LocalDate localDate) {
@@ -726,7 +728,16 @@ public class ReviewServiceImpl implements ReviewService {
         if (review == null) {
             return false;
         }
+        Long orderId = orderId(review);
+        contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId);
+        OrderDetails orderDetails = review.getOrderDetails();
         reviewRepository.delete(review);
+        if (orderDetails != null) {
+            List<Review> remaining = new ArrayList<>(safeReviews(orderDetails));
+            remaining.removeIf(candidate -> Objects.equals(reviewId, candidate.getId()));
+            orderDetails.setReviews(remaining);
+            payableRecalculationService.recalculate(orderDetails);
+        }
         return true;
     }
 
@@ -896,9 +907,7 @@ public class ReviewServiceImpl implements ReviewService {
 
             reviewRepository.save(saveReview);
 
-            if (reviewDTO.getOrderDetailsId() != null) {
-                recalculateOrderAndDetailsPrice(reviewDTO.getOrderDetailsId());
-            }
+            payableRecalculationService.recalculate(saveReview.getOrderDetails());
         }
 
         if (publishFlagChanged) {
@@ -1094,24 +1103,6 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
-    private void recalculateOrderAndDetailsPrice(UUID orderDetailsId) {
-        OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailsId);
-
-        BigDecimal detailTotal = safeReviews(orderDetails).stream()
-                .map(Review::getPrice)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        orderDetails.setPrice(detailTotal);
-        orderDetailsService.save(orderDetails);
-
-        Order order = orderDetails.getOrder();
-        if (order != null) {
-            order.setSum(orderDetails.getPrice());
-            orderDetailsService.saveOrder(order);
-        }
-    }
-
     @Override
     public int findAllByReviewListStatus(String username) {
         Worker worker = workerService.getWorkerByUserId(userService.findByUserName(username).orElseThrow().getId());
@@ -1121,9 +1112,18 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Transactional
     public void deleteReviewsByOrderId(Long reviewId) {
+        orderAggregateMutationLockService.lockForReview(reviewId);
+        assignmentMutationGuardService.assertReview(reviewId);
         Review review = reviewRepository.findById(reviewId).orElse(null);
         contractorRouteAssignmentGuard.requirePayableMutationAllowed(orderId(review));
+        OrderDetails orderDetails = review != null ? review.getOrderDetails() : null;
         reviewRepository.deleteReviewByReviewId(reviewId);
+        if (orderDetails != null) {
+            List<Review> remaining = new ArrayList<>(safeReviews(orderDetails));
+            remaining.removeIf(candidate -> Objects.equals(reviewId, candidate.getId()));
+            orderDetails.setReviews(remaining);
+            payableRecalculationService.recalculate(orderDetails);
+        }
     }
 
     @Override
