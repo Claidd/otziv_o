@@ -91,11 +91,11 @@ function Get-StagedBlobLines {
 
     $objects = [System.Collections.Generic.List[string]]::new()
     foreach ($change in $changes) {
-        if ($change -notmatch '^:\d+ \d+ [0-9a-f]+ (?<oid>[0-9a-f]+) [ACMRT]\d*\t(?<path>.*)$') {
+        if ($change -notmatch '^:\d+ (?<newMode>\d+) [0-9a-f]+ (?<oid>[0-9a-f]+) [ACMRT]\d*\t(?<path>.*)$') {
             continue
         }
 
-        if ($Matches.oid -match '^0+$') {
+        if ($Matches.newMode -eq '160000' -or $Matches.oid -match '^0+$') {
             continue
         }
 
@@ -158,11 +158,11 @@ function Get-RangeBlobLines {
     $changes = @(Invoke-GitLines -Arguments @($gitArguments))
     $objects = [System.Collections.Generic.List[string]]::new()
     foreach ($change in $changes) {
-        if ($change -notmatch '^:\d+ \d+ [0-9a-f]+ (?<oid>[0-9a-f]+) [ACMRT]\d*\t(?<path>.*)$') {
+        if ($change -notmatch '^:\d+ (?<newMode>\d+) [0-9a-f]+ (?<oid>[0-9a-f]+) [ACMRT]\d*\t(?<path>.*)$') {
             continue
         }
 
-        if ($Matches.oid -match '^0+$') {
+        if ($Matches.newMode -eq '160000' -or $Matches.oid -match '^0+$') {
             continue
         }
 

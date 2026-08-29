@@ -32,6 +32,8 @@ import static org.mockito.Mockito.lenient;
 @ExtendWith(MockitoExtension.class)
 class WorkerPublicationSessionServiceTest {
 
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
+
     @Mock
     private WorkerPublicationSessionRepository repository;
     @Mock
@@ -69,7 +71,7 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void blocksPublicationWhenNagulExistsBeforeSession() {
-        LocalDate lookahead = LocalDate.now(ZoneId.of("Asia/Irkutsk")).plusDays(60);
+        LocalDate lookahead = LocalDate.now(BUSINESS_ZONE).plusDays(60);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.empty());
         when(boardCount(ReviewBoardMode.VIGUL, lookahead)).thenReturn(2L);
 
@@ -83,7 +85,7 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void opensSessionWhenNagulIsEmptyAndPublicationIsAvailable() {
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.empty());
         when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(0L);
         when(boardCount(ReviewBoardMode.PUBLISH, today)).thenReturn(3L);
@@ -98,7 +100,7 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void newNagulDoesNotInterruptActiveSessionWhilePublicationRemains() {
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
         WorkerPublicationSession session = activeSession(today);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
         when(boardCount(ReviewBoardMode.PUBLISH, today)).thenReturn(1L);
@@ -113,7 +115,7 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void closesSessionWhenOnlyNagulRemains() {
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
         WorkerPublicationSession session = activeSession(today);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
         when(boardCount(ReviewBoardMode.PUBLISH, today)).thenReturn(0L);
@@ -129,9 +131,9 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void closesSessionAfterInactivity() {
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
         WorkerPublicationSession session = activeSession(today);
-        session.setLastActivityAt(LocalDateTime.now().minusMinutes(46));
+        session.setLastActivityAt(LocalDateTime.now(BUSINESS_ZONE).minusMinutes(46));
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
         when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(1L);
         when(repository.save(session)).thenReturn(session);
@@ -145,7 +147,7 @@ class WorkerPublicationSessionServiceTest {
 
     @Test
     void closesPreviousBusinessDaySession() {
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
         WorkerPublicationSession session = activeSession(today.minusDays(1));
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
         when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(1L);
@@ -162,8 +164,8 @@ class WorkerPublicationSessionServiceTest {
         session.setWorkerId(42L);
         session.setStatus(WorkerPublicationSessionStatus.ACTIVE);
         session.setBusinessDate(businessDate);
-        session.setStartedAt(LocalDateTime.now().minusMinutes(5));
-        session.setLastActivityAt(LocalDateTime.now().minusMinutes(1));
+        session.setStartedAt(LocalDateTime.now(BUSINESS_ZONE).minusMinutes(5));
+        session.setLastActivityAt(LocalDateTime.now(BUSINESS_ZONE).minusMinutes(1));
         return session;
     }
 

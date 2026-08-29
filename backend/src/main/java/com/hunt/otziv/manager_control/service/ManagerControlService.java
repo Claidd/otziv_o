@@ -1623,8 +1623,12 @@ public class ManagerControlService {
         String errorCode = safe(state == null ? null : state.getLastErrorCode())
                 .trim()
                 .toLowerCase(Locale.ROOT);
-        if (company != null && "chat_platform_unknown".equals(errorCode)) {
-            String chat = safe(company.getUrlChat()).trim();
+        String chat = safe(company == null ? null : company.getUrlChat()).trim();
+        String normalizedChat = chat.toLowerCase(Locale.ROOT);
+        boolean supportedChat = isWhatsAppChat(normalizedChat)
+                || isTelegramChat(normalizedChat)
+                || isMaxChat(normalizedChat);
+        if (company != null && "chat_platform_unknown".equals(errorCode) && !supportedChat) {
             String companyName = safe(company.getTitle()).trim();
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -1639,7 +1643,7 @@ public class ManagerControlService {
             );
         }
         if (company == null
-                || !isTelegramChat(safe(company.getUrlChat()).toLowerCase(Locale.ROOT))
+                || !isTelegramChat(normalizedChat)
                 || company.getTelegramGroupChatId() != null) {
             return;
         }

@@ -1137,6 +1137,83 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void repairAutomationFailureRetriesWhenStaleUnknownErrorHasLinkedMaxChat() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        ManagerDailyControl control = control();
+        control.setManager(manager);
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(
+                control,
+                parent,
+                ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE
+        );
+        concrete.setEntityId(503L);
+        Company company = Company.builder()
+                .id(2924L)
+                .title("AnRiFit")
+                .urlChat("https://max.ru/join/example")
+                .maxGroupChatId(-78297536717431L)
+                .manager(manager)
+                .build();
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(503L)
+                .companyId(2924L)
+                .scenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER)
+                .lastErrorCode("chat_platform_unknown")
+                .lastErrorMessage("Ссылка на чат не распознана или не указана")
+                .build();
+        ManagerAutomationFailureService.AutomationFailureIssue issue =
+                new ManagerAutomationFailureService.AutomationFailureIssue(
+                        "AUTOMATION_FAILURE:503",
+                        ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE,
+                        503L,
+                        503L,
+                        null,
+                        "AnRiFit",
+                        "Предложение повторного заказа",
+                        "Ошибка автоматизации · 2",
+                        "chat_platform_unknown · Ссылка на чат не распознана",
+                        "/orders",
+                        company.getUrlChat(),
+                        ClientMessageScenario.ARCHIVE_REORDER_OFFER,
+                        2,
+                        LocalDateTime.now().minusHours(5),
+                        LocalDateTime.now().minusMinutes(1),
+                        LocalDateTime.now().plusDays(1)
+                );
+
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(managerAutomationFailureService.findIssue(
+                manager,
+                ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE,
+                503L
+        )).thenReturn(Optional.of(issue), Optional.empty());
+        when(scheduledClientMessageStateRepository.findById(503L)).thenReturn(Optional.of(state));
+        when(companyRepository.findById(2924L)).thenReturn(Optional.of(company));
+        when(scheduledClientMessageService.retryNow(503L)).thenReturn(
+                new ScheduledClientMessageService.ManualRetryResult(
+                        503L,
+                        true,
+                        ScheduledMessageStateStatus.DONE,
+                        null,
+                        null,
+                        0,
+                        null
+                )
+        );
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals("RESOLVED", response.itemStatus());
+        verify(scheduledClientMessageService).retryNow(503L);
+    }
+
+    @Test
     void repairCollectingInvoiceRemovesHealthyInProgressInvoiceFromRemarks() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);

@@ -35,6 +35,7 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 @ExtendWith(MockitoExtension.class)
 class WorkloadTransferTelegramCallbackServiceTest {
 
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
     private static final long GROUP_CHAT_ID = -100500L;
     private static final long ACTOR_TELEGRAM_ID = 9001L;
     private static final long MANAGER_ID = 71L;
@@ -298,14 +299,14 @@ class WorkloadTransferTelegramCallbackServiceTest {
         when(liveSettingsService.managerAllowed(settings, MANAGER_ID))
                 .thenReturn(true);
         when(shadowSettingsService.current()).thenReturn(null);
-        when(shadowSettingsService.zone(null)).thenReturn(ZoneId.of("Asia/Irkutsk"));
+        when(shadowSettingsService.zone(null)).thenReturn(BUSINESS_ZONE);
     }
 
     private void offeredProjection() {
         when(projection.getOfferStatus()).thenReturn("OFFERED");
         when(projection.getWorkflowStatus()).thenReturn("OFFERED");
         when(projection.getManagerId()).thenReturn(MANAGER_ID);
-        when(projection.getExpiresAt()).thenReturn(LocalDateTime.now().plusHours(1));
+        when(projection.getExpiresAt()).thenReturn(LocalDateTime.now(BUSINESS_ZONE).plusHours(1));
         lenient().when(projection.getCompanyTitle()).thenReturn("Тестовая компания");
     }
 

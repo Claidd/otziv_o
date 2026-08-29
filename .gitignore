@@ -32,6 +32,7 @@ backend/.idea
 !backend/docker/certs/russian_trusted_sub_ca_2024.crt
 .env
 .env.*
+*.env
 !.env.example
 !backend/.env.local.example
 !.env.prod.example
@@ -74,6 +75,7 @@ tmp-keycloak-login-check/
 ### Generated/repository-local artifacts (R10) ###
 **/node_modules/
 /.codex-tmp/
+/codex-tmp/
 /.codex-remote-attachments/
 /.release-worktree-*/
 /mobile/www/
