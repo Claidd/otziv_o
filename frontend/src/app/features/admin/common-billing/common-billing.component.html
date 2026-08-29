@@ -315,13 +315,13 @@
                 : (paperModeSwitchNeedsRetry() ? 'Повторить переход на бумажный счёт' : 'Бумажный счёт') }}
             </button>
           }
-          @if (canManagePaperInvoices()
+          @if (canMarkPaperInvoiceIssued()
             && invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
             && invoice?.sentAt
             && !invoice?.paperInvoiceIssuedAt) {
             <button type="button" class="success" (click)="markPaperInvoiceIssued()" [disabled]="!!mutating()">
               <span class="material-icons-sharp" aria-hidden="true">mark_email_read</span>
-              Счёт отправлен
+              Документ передан клиенту
             </button>
           }
           @if (invoiceNeedsAttention()) {
@@ -384,7 +384,7 @@
           } @else {
             <button type="button" class="primary" (click)="sendInvoice()" [disabled]="!!mutating() || !readyForSending()">
               <span class="material-icons-sharp" aria-hidden="true">send</span>
-              Отправить
+              {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' ? 'Отправить уведомление' : 'Отправить' }}
             </button>
           }
           <button type="button" class="secondary" (click)="copyPublicUrl()" [disabled]="!invoice?.publicUrl || invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'">

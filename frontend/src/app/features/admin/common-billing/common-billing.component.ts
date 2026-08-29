@@ -72,6 +72,7 @@ const MANUALLY_CONFIRMABLE_MIGRATION_PAYMENT_ERROR =
   'migration_common_payment_registry:nonterminal_or_unknown_payment_ref_on_invoice';
 
 export const PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL = 'В T‑Bank оплаты нет — продолжить';
+export const PAPER_INVOICE_ISSUED_ROLES = ['ADMIN', 'OWNER', 'MANAGER'] as const;
 
 export function paymentInitNoPaymentInstructions(): string[] {
   return [
@@ -478,6 +479,10 @@ export class CommonBillingComponent implements OnDestroy {
   readonly canManagePaperInvoices = computed(() => {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  });
+  readonly canMarkPaperInvoiceIssued = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole([...PAPER_INVOICE_ISSUED_ROLES]);
   });
   readonly canMarkPaid = computed(() => {
     const invoice = this.currentInvoice();
@@ -986,7 +991,7 @@ export class CommonBillingComponent implements OnDestroy {
   markPaperInvoiceIssued(): void {
     const invoice = this.currentInvoice();
     if (!invoice || invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
-      || invoice.paperInvoiceIssuedAt || !this.canManagePaperInvoices() || this.mutating()) {
+      || invoice.paperInvoiceIssuedAt || !this.canMarkPaperInvoiceIssued() || this.mutating()) {
       return;
     }
     if (!window.confirm('Подтвердить, что бумажный счёт уже отправлен клиенту? После этой отметки начнутся автоматические напоминания.')) {

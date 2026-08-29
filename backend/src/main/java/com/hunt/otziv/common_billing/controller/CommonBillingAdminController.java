@@ -139,7 +139,7 @@ public class CommonBillingAdminController {
         return commonBillingService.changeCommonInvoicePaymentRoute(invoiceId, request, principal);
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/paper-invoice/issued")
     public CommonInvoiceDetailsResponse markPaperInvoiceIssued(
             @PathVariable Long invoiceId,

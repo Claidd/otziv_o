@@ -124,4 +124,18 @@ class CommonBillingAdminControllerContractorTargetPolicyTest {
         assertThat(authorization).isNotNull();
         assertThat(authorization.value()).isEqualTo("hasAnyRole('ADMIN', 'OWNER')");
     }
+
+    @Test
+    void managerCanMarkVisiblePaperInvoiceAsIssued() throws Exception {
+        PreAuthorize authorization = CommonBillingAdminController.class
+                .getMethod(
+                        "markPaperInvoiceIssued",
+                        Long.class,
+                        java.security.Principal.class
+                )
+                .getAnnotation(PreAuthorize.class);
+
+        assertThat(authorization).isNotNull();
+        assertThat(authorization.value()).isEqualTo("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')");
+    }
 }

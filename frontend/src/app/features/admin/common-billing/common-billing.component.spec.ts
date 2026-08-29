@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL,
+  PAPER_INVOICE_ISSUED_ROLES,
   commonInvoicePaymentEvidence,
   commonInvoicePaymentEvidenceSnapshot,
   commonInvoiceStatusProblem,
@@ -13,6 +14,12 @@ import {
   paymentInitNoPaymentInstructions
 } from './common-billing.component';
 import type { CommonInvoiceDetailsResponse } from '../../../core/common-billing.api';
+
+describe('paper invoice issue access', () => {
+  it('lets a manager record document delivery without granting payment-mode administration', () => {
+    expect(PAPER_INVOICE_ISSUED_ROLES).toEqual(['ADMIN', 'OWNER', 'MANAGER']);
+  });
+});
 
 describe('commonInvoiceStatusProblem', () => {
   it.each(['INVOICED', 'REMINDER', 'PARTIALLY_PAID', 'PAID'])(
