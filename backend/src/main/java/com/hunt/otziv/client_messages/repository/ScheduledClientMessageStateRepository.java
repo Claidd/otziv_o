@@ -39,6 +39,23 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
 
     List<ScheduledClientMessageState> findByOrderIdIn(Collection<Long> orderIds);
 
+    @Query("""
+        SELECT s
+        FROM ScheduledClientMessageState s, Order o
+        JOIN o.status status
+        WHERE s.orderId = o.id
+          AND s.status = :status
+          AND s.scenario IN :scenarios
+          AND status.title IN :orderStatuses
+        ORDER BY s.id ASC
+    """)
+    List<ScheduledClientMessageState> findActiveOrderAutomationStatesByOrderStatuses(
+            @Param("scenarios") Collection<ClientMessageScenario> scenarios,
+            @Param("status") ScheduledMessageStateStatus status,
+            @Param("orderStatuses") Collection<String> orderStatuses,
+            Pageable pageable
+    );
+
     long countByStatus(ScheduledMessageStateStatus status);
 
     @Query(value = """

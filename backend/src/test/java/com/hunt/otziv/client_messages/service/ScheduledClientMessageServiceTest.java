@@ -533,7 +533,7 @@ class ScheduledClientMessageServiceTest {
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
                 ScheduledClientMessageService.DEFAULT_PAYMENT_INSTRUCTION_SOURCE
         )).thenReturn("TBANK_LINK");
-        when(paymentLinkService.createForOrder(15L)).thenReturn(new ManagerPaymentLinkResponse(
+        when(paymentLinkService.createForOrderInNewTransaction(15L)).thenReturn(new ManagerPaymentLinkResponse(
                 "token", "", 15L, BigDecimal.valueOf(1300), 130000, "CREATED", "MANUAL_MOBILE_BANK",
                 LocalDateTime.now().plusDays(90),
                 "Перевод по номеру телефона: 89001234567",
@@ -791,7 +791,7 @@ class ScheduledClientMessageServiceTest {
         assertNull(state.getNextAttemptAt());
         verify(stateRepository).save(state);
         verify(messageSender, never()).send(any(), any(), any(), any());
-        verify(paymentLinkService, never()).createForOrder(any());
+        verify(paymentLinkService, never()).createForOrderInNewTransaction(any());
     }
 
     @Test
@@ -1352,6 +1352,87 @@ class ScheduledClientMessageServiceTest {
 
         assertEquals(Boolean.FALSE, created);
         assertNull(state.getNextAttemptAt());
+    }
+
+    @Test
+    void reconciliationRearmsDoneStateThatNeverSentForCurrentCycle() {
+        LocalDateTime nextAttempt = LocalDateTime.of(2026, 8, 20, 14, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(5823L)
+                .scenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:24888:2026-07-23T11:23:13")
+                .companyId(100L)
+                .orderId(24_888L)
+                .status(ScheduledMessageStateStatus.DONE)
+                .sentCount(0)
+                .lastSuccessAt(null)
+                .lastErrorCode(null)
+                .build();
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.PAYMENT_INVOICE_RETRY,
+                state.getTargetKey()
+        )).thenReturn(Optional.of(state));
+
+        Boolean created = ReflectionTestUtils.invokeMethod(
+                service,
+                "ensureState",
+                ClientMessageScenario.PAYMENT_INVOICE_RETRY,
+                ClientMessageTargetType.ORDER,
+                state.getTargetKey(),
+                state.getCompanyId(),
+                state.getOrderId(),
+                null,
+                nextAttempt
+        );
+
+        assertEquals(Boolean.TRUE, created);
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals(nextAttempt, state.getNextAttemptAt());
+        assertNull(state.getLockedUntil());
+        verify(stateRepository).save(state);
+    }
+
+    @Test
+    void reconciliationClosesActivePaymentAutomationForClosedOrders() {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 20, 13, 40);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(5824L)
+                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:25430:2026-08-18T10:00")
+                .companyId(100L)
+                .orderId(25_430L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .nextAttemptAt(now.plusDays(1))
+                .build();
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_CLOSED_ORDER_STATUSES,
+                ScheduledClientMessageService.DEFAULT_CLOSED_ORDER_STATUSES
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_CLOSED_ORDER_STATUSES);
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_CANDIDATE_LIMIT,
+                ScheduledClientMessageService.DEFAULT_CANDIDATE_LIMIT
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_CANDIDATE_LIMIT);
+        when(stateRepository.findActiveOrderAutomationStatesByOrderStatuses(
+                any(),
+                eq(ScheduledMessageStateStatus.ACTIVE),
+                any(),
+                any()
+        )).thenReturn(List.of(state));
+
+        Integer closed = ReflectionTestUtils.invokeMethod(service, "closeInactivePaymentAutomationStates", now);
+
+        assertEquals(1, closed);
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        assertNull(state.getNextAttemptAt());
+        assertNull(state.getLockedUntil());
+        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
+                ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
+        assertEquals("order_closed", attemptCaptor.getValue().getErrorCode());
+        verify(stateRepository).save(state);
     }
 
     @Test
