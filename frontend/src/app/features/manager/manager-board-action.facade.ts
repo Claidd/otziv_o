@@ -89,7 +89,17 @@ export class ManagerBoardActionFacade {
     }
     const message = ManagerBoardActionFacade.apiErrorMessage(err);
     return message.trim() === ManagerBoardActionFacade.ACTIVE_BANK_PAYMENT_CONFLICT
+      || ManagerBoardActionFacade.isActiveBankPaymentConflict(message)
       || message.toLocaleLowerCase('ru-RU').includes(ManagerBoardActionFacade.ACTUAL_RECIPIENT_REQUIRED_HINT);
+  }
+
+  private static isActiveBankPaymentConflict(message: string): boolean {
+    const normalized = message.trim().toLocaleLowerCase('ru-RU');
+    return normalized.includes('незавершенн')
+      && normalized.includes('платеж')
+      && (normalized.includes('t-bank')
+        || normalized.includes('сбп')
+        || normalized.includes('банковск'));
   }
 
   private static apiErrorMessage(err: unknown): string {

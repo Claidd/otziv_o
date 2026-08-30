@@ -14,10 +14,16 @@ public final class ManualPaymentTaskRouteErrors {
     }
 
     public static CodedResponseStatusException actualRecipientRequired() {
+        return actualRecipientRequired(
+                "Выберите фактического получателя оплаты и обновите приложение, если список не отображается"
+        );
+    }
+
+    public static CodedResponseStatusException actualRecipientRequired(String reason) {
         return new CodedResponseStatusException(
                 HttpStatus.CONFLICT,
                 ACTUAL_RECIPIENT_REQUIRED,
-                "Выберите фактического получателя оплаты и обновите приложение, если список не отображается"
+                reason
         );
     }
 

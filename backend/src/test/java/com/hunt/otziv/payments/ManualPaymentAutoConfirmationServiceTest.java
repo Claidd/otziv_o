@@ -10,6 +10,8 @@ import com.hunt.otziv.payments.model.PaymentReceiptStatus;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
+import com.hunt.otziv.config.api.CodedResponseStatusException;
+import com.hunt.otziv.payments.service.ManualPaymentTaskRouteErrors;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
 import com.hunt.otziv.payments.service.PaymentSuccessNotificationDeliveryService;
@@ -24,6 +26,7 @@ import org.mockito.Mock;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -312,6 +315,11 @@ class ManualPaymentAutoConfirmationServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertInstanceOf(CodedResponseStatusException.class, exception);
+        assertEquals(
+                ManualPaymentTaskRouteErrors.ACTUAL_RECIPIENT_REQUIRED,
+                ((CodedResponseStatusException) exception).code()
+        );
         assertEquals(
                 "У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.",
                 exception.getReason()

@@ -157,6 +157,27 @@ describe('ManagerBoardActionFacade', () => {
     expect(toastMessages).toEqual([]);
   });
 
+  it('opens the manual-card modal for the current T-Bank/SBP conflict text', () => {
+    const { facade, calls, toastMessages } = createFacade({
+      orderStatusError: {
+        status: 409,
+        error: {
+          message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+        }
+      }
+    });
+
+    facade.updateOrderStatus(order({ id: 25443, sum: 1600 }), {
+      label: 'оплатили', status: 'Оплачено', icon: 'payments'
+    });
+
+    expect(calls).toEqual([
+      'order-status:25443:Оплачено',
+      'open-manual-card:25443'
+    ]);
+    expect(toastMessages).toEqual([]);
+  });
+
   it("opens the manual-card modal for actual-recipient conflict code", () => {
     const { facade, calls, toastMessages } = createFacade({
       orderStatusError: {

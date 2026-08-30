@@ -82,8 +82,7 @@ public class ManualPaymentAutoConfirmationService {
         }
 
         if (hasBankPaymentInProgress) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
+            throw ManualPaymentTaskRouteErrors.actualRecipientRequired(
                     "У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием."
             );
         }
