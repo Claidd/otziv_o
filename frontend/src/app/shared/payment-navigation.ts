@@ -75,7 +75,8 @@ export function safePaymentNavigationTarget(
         return target;
       }
       if (purpose === 'payment') {
-        return PAYMENT_PROVIDER_HOSTS.has(hostname) ? target : null;
+        const trustedPort = !url.port || url.port === '443';
+        return PAYMENT_PROVIDER_HOSTS.has(hostname) && trustedPort ? target : null;
       }
       return SBP_WEB_HOSTS.has(hostname) ? target : null;
     }

@@ -176,12 +176,12 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
   },
   {
     id: 'tbank',
-    label: 'Т Банк',
-    description: 'Платежи, чеки и профили',
+    label: 'Банк',
+    description: 'Платежи, чеки и банковские профили',
     icon: 'account_balance_wallet',
     active: 'tbank-payments',
     group: 'home',
-    routerLink: '/admin/tbank-payments',
+    routerLink: '/admin/bank-payments',
     roles: ['ADMIN', 'OWNER']
   },
   {

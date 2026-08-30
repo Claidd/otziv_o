@@ -1,19 +1,19 @@
-<app-admin-layout title="T-Bank платежи и чеки" active="tbank-payments" rightPanelMode="custom">
+<app-admin-layout title="Банк" active="tbank-payments" rightPanelMode="custom">
   <section class="analytics-toolbar">
     <div class="toolbar-heading">
-      <p class="eyebrow">ADMIN / T-BANK</p>
+      <p class="eyebrow">ADMIN / БАНК</p>
       <h2>Платежи, возвраты и чеки</h2>
       @if (status(); as bank) {
         <p class="toolbar-note">
-          {{ bank.enabled ? 'API включен' : 'API выключен' }} ·
-          {{ bank.testMode ? 'тестовый терминал' : 'боевой терминал' }} ·
+          {{ bank.enabled ? 'API T‑Bank включен' : 'API T‑Bank выключен' }} ·
+          {{ bank.testMode ? 'тестовый терминал T‑Bank' : 'боевой терминал T‑Bank' }} ·
           {{ bank.applyConfirmedPayments ? 'заказы переводятся автоматически' : 'заказы не переводятся автоматически' }}
         </p>
       }
     </div>
 
     <div class="toolbar-menu">
-      <nav class="toolbar-selects" aria-label="Меню T-Bank платежей">
+      <nav class="toolbar-selects" aria-label="Меню банковских платежей">
         <select [ngModel]="statusFilter()" (ngModelChange)="setStatusFilter($any($event))" aria-label="Статус платежей">
           @for (option of statusOptions; track trackStatusOption($index, option)) {
             <option [ngValue]="option.key">{{ option.label }}</option>
@@ -101,7 +101,7 @@
     </div>
   </section>
 
-  <section class="analytics-section compact-section" aria-label="Сводка T-Bank платежей">
+  <section class="analytics-section compact-section" aria-label="Сводка банковских платежей">
     <div class="metric-grid">
       @for (metric of metrics(); track trackMetric($index, metric)) {
         <article class="metric-card" [class]="metric.tone">
@@ -226,7 +226,7 @@
   }
 
   @if (error()) {
-    <app-load-error-card title="T-Bank платежи не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="load()" />
+    <app-load-error-card title="Банковские платежи не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="load()" />
   }
 
   <section class="analytics-section payments-panel">
@@ -309,7 +309,7 @@
                     </button>
                     <small>{{ link.manualRecipientName || 'Получатель не указан' }}</small>
                   }
-                  <small class="profile-line">{{ link.paymentProfileName || 'Профиль оплаты' }}</small>
+                  <small class="profile-line">{{ paymentProfileDisplayName(link) }}</small>
                   <small class="method-line">{{ paymentMethodLabel(link) }} · {{ link.manualComment || 'без комментария' }}</small>
                   <small class="method-line">{{ manualSourceLabel(link) }}</small>
                 } @else {
@@ -324,7 +324,7 @@
                   <strong>{{ link.tbankPaymentId || 'PaymentId не получен' }}</strong>
                 </button>
                 <small>{{ link.tbankOrderId || 'OrderId не создан' }}</small>
-                <small class="profile-line">{{ link.paymentProfileName || link.tbankTerminalKey || 'Основной магазин' }}</small>
+                <small class="profile-line">{{ paymentProfileDisplayName(link) }}</small>
                 <small class="method-line">{{ paymentMethodLabel(link) }}</small>
                 @if (link.payerEmail) {
                   <small class="email-line">{{ link.payerEmail }}</small>
@@ -454,7 +454,7 @@
                         class="refund-action"
                         (click)="cancel(link)"
                         [disabled]="!link.refundable || isMutating(link)"
-                        title="Сделать полный возврат через T-Bank"
+                        title="Сделать полный возврат через банк платежа"
                       >
                         <span class="material-icons-sharp" aria-hidden="true">undo</span>
                         {{ isMutating(link) ? 'Возвращаю' : 'Возврат' }}
@@ -507,7 +507,7 @@
     </div>
   </section>
 
-  <section admin-right-content class="tbank-side" aria-label="Настройки платежных профилей T-Bank">
+  <section admin-right-content class="tbank-side" aria-label="Настройки банковских платежных профилей">
     @if (runtimeSettings(); as settings) {
       <article class="side-card launch-panel">
         <div class="side-card-head compact-head">
@@ -526,7 +526,7 @@
         <div class="launch-section">
           <div class="launch-label">
             <span>1</span>
-            <strong>Контур T-Bank</strong>
+            <strong>Контур T‑Bank</strong>
           </div>
           <div class="launch-segment">
             <button
@@ -573,10 +573,10 @@
               (click)="setPaymentInstructionSource('TBANK_LINK')"
             >
               <span class="material-icons-sharp" aria-hidden="true">link</span>
-              T-Bank ссылки
+              Банковские ссылки
             </button>
           </div>
-          <small>Выбирает источник платежной инструкции в клиентских сообщениях: старый текст менеджера или /pay-ссылка с маршрутизацией T-Bank.</small>
+          <small>Выбирает источник платежной инструкции: старый текст менеджера или /pay-ссылка банка, назначенного менеджеру.</small>
         </div>
 
         <div class="launch-section">
@@ -656,9 +656,9 @@
         <div class="launch-section">
           <div class="launch-label">
             <span>5</span>
-            <strong>Быстрые методы банка</strong>
+            <strong>Дополнительные способы T‑Bank</strong>
           </div>
-          <div class="method-toggle-list" aria-label="Быстрые способы оплаты в форме банка">
+          <div class="method-toggle-list" aria-label="Дополнительные способы оплаты T-Bank">
             <label class="method-toggle-row">
               <span class="method-icon tpay">T</span>
               <span>
@@ -707,7 +707,7 @@
 
         <div class="mini-toggle-grid">
           <label>
-            <span>API</span>
+            <span>API T‑Bank</span>
             <input
               class="switch"
               type="checkbox"
@@ -748,7 +748,7 @@
       <article class="side-card bank-card">
         <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
         <div>
-          <p>Состояние T-Bank</p>
+          <p>Состояние T‑Bank</p>
           <h2>{{ bank.enabled ? 'API включен' : 'API выключен' }}</h2>
           <small>
             {{ activeRuntimeMode() === 'TEST' ? 'Тестовый терминал' : 'Боевой терминал' }} ·
@@ -764,7 +764,7 @@
           <h2>{{ bank.paymentLinksEnabled && bank.managerUiEnabled ? 'ссылки доступны' : 'проверьте настройки' }}</h2>
           <small>
             Автоответчик сможет использовать {{ bank.publicBaseUrl }}/pay/{{ '{token}' }},
-            когда здесь или в справочнике выбран источник T-Bank.
+            когда здесь или в справочнике выбран источник «Банковские ссылки».
           </small>
           <small>
             {{ bank.paymentLinksEnabled ? 'создание ссылок включено' : 'создание ссылок выключено' }} ·
@@ -1138,10 +1138,14 @@
                 </span>
                 <div>
                   <strong>{{ profile.name }}</strong>
-                  <small>{{ profile.defaultProfile ? 'По умолчанию' : 'Дополнительный' }} · {{ profilePolicyLabel(profile) }}</small>
+                  <small>
+                    {{ profile.defaultProfile ? 'По умолчанию' : 'Дополнительный' }}
+                    · {{ profileProviderLabel(profile) }}
+                    · {{ profilePolicyLabel(profile) }}
+                  </small>
                 </div>
                 <span [class]="profile.hasPassword ? 'status-pill paid' : 'status-pill failed'">
-                  {{ profile.hasPassword ? 'Секрет найден' : 'Нет секрета' }}
+                  {{ profile.hasPassword ? 'Реквизиты готовы' : 'Нет реквизитов' }}
                 </span>
               </div>
               <small class="profile-terminal">{{ profile.terminalKey }}</small>
@@ -1176,7 +1180,7 @@
                   (click)="setProfilePolicy(profile.id, $any('T_BANK_ONLY'))"
                 >
                   <span class="material-icons-sharp" aria-hidden="true">account_balance</span>
-                  Только T-Bank
+                  Только банк
                 </button>
                 <button
                   type="button"
@@ -1291,28 +1295,47 @@
       <div class="launch-section">
         <div class="launch-label">
           <span>3</span>
-          <strong>Менеджеры</strong>
+          <strong>Банк у менеджеров</strong>
         </div>
-        <small>Назначьте профиль тем, кто создает новые оплаты.</small>
+        <small>Выберите банк и профиль для новых оплат каждого менеджера. Изменение применяется после сохранения маршрутизации.</small>
+        @if (unreadyManagerBankProfiles().length) {
+          <small class="manual-task-accounting-warning" role="alert">
+            Нельзя включить банковские ссылки: проверьте профиль у {{ unreadyManagerBankProfiles().join(', ') }}.
+          </small>
+        }
 
         <div class="manager-profile-list routing-manager-list">
           @for (manager of managerProfiles(); track trackManagerProfile($index, manager)) {
-            <label class="manager-profile-row routing-manager-row">
+            <label class="manager-profile-row routing-manager-row" [class.changed]="managerProfileChanged(manager)">
               <span class="route-avatar">
                 <span class="material-icons-sharp" aria-hidden="true">person</span>
               </span>
               <span>
                 <strong>{{ manager.managerTitle }}</strong>
                 <small>ID {{ manager.managerId }} · {{ manager.username || 'без логина' }}</small>
+                @if (selectedManagerProfile(manager); as selectedProfile) {
+                  <small class="selected-bank">Выбран: {{ managerProfileOptionLabel(selectedProfile) }}</small>
+                } @else {
+                  <small class="selected-bank">Выбран профиль банка по умолчанию</small>
+                }
+                @if (managerProfileChanged(manager)) {
+                  <small class="pending-bank-change">Будет изменён после сохранения</small>
+                }
               </span>
               <select
                 [ngModel]="selectedProfileId(manager)"
                 (ngModelChange)="setManagerProfile(manager.managerId, $event)"
                 [attr.aria-label]="'Платежный профиль для ' + manager.managerTitle"
               >
-                <option [ngValue]="null">По умолчанию</option>
+                <option
+                  [ngValue]="null"
+                  [disabled]="!defaultManagerProfileReady() && selectedProfileId(manager) !== null"
+                >{{ defaultManagerProfileOptionLabel() }}</option>
                 @for (profile of profiles(); track trackProfile($index, profile)) {
-                  <option [ngValue]="profile.id">{{ profile.name }}</option>
+                  <option
+                    [ngValue]="profile.id"
+                    [disabled]="!bankProfileReady(profile) && selectedProfileId(manager) !== profile.id"
+                  >{{ managerProfileOptionLabel(profile) }}</option>
                 }
               </select>
             </label>

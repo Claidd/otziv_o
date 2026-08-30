@@ -374,13 +374,18 @@ export const routes: Routes = [
     pathMatch: 'full'
   },
   {
-    path: 'admin/tbank-payments',
+    path: 'admin/bank-payments',
     loadComponent: () => import('./features/admin/tbank-payments/tbank-payments.component')
       .then((m) => m.TbankPaymentsComponent),
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER']
     }
+  },
+  {
+    path: 'admin/tbank-payments',
+    redirectTo: 'admin/bank-payments',
+    pathMatch: 'full'
   },
   {
     path: 'admin/common-billing',

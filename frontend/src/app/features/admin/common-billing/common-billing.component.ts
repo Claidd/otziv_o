@@ -30,6 +30,10 @@ import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { MobileBottomPagerComponent } from '../../../shared/mobile/mobile-bottom-pager.component';
 import { ToastService } from '../../../shared/toast.service';
+import {
+  bankPaymentRouteLabel,
+  isBankPaymentRouteType
+} from '../../../shared/bank-payment-presentation';
 import { ManagerBoardOrderFacade } from '../../manager/manager-board-order.facade';
 import { ManagerOrderCardComponent } from '../../manager/manager-order-card.component';
 import type { ManagerOrderEditDraftChange } from '../../manager/manager-order-edit-modal.component';
@@ -71,13 +75,40 @@ const PAYMENT_INIT_MANUAL_CHECK_PREFIXES = [
 const MANUALLY_CONFIRMABLE_MIGRATION_PAYMENT_ERROR =
   'migration_common_payment_registry:nonterminal_or_unknown_payment_ref_on_invoice';
 
-export const PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL = 'В T‑Bank оплаты нет — продолжить';
+export const PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL = 'В банке оплаты нет — продолжить';
 export const PAPER_INVOICE_ISSUED_ROLES = ['ADMIN', 'OWNER', 'MANAGER'] as const;
+
+type CommonInvoicePaidEligibility = {
+  status: string;
+  totalOrders: number;
+  readyOrders: number;
+  invoicePaymentMode?: string | null;
+  paperInvoiceIssuedAt?: string | null;
+};
+
+export function paperInvoiceRequiresDeliveryConfirmation(
+  invoice: CommonInvoicePaidEligibility | null | undefined
+): boolean {
+  return Boolean(
+    invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+      && !invoice.paperInvoiceIssuedAt
+  );
+}
+
+export function canMarkCommonInvoicePaid(
+  invoice: CommonInvoicePaidEligibility | null | undefined
+): boolean {
+  if (!invoice || paperInvoiceRequiresDeliveryConfirmation(invoice)) {
+    return false;
+  }
+  return ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID', 'UNPAID'].includes(invoice.status)
+    || (invoice.status === 'COLLECTING' && invoice.totalOrders > 0 && invoice.readyOrders >= invoice.totalOrders);
+}
 
 export function paymentInitNoPaymentInstructions(): string[] {
   return [
-    'В T-Бизнесе откройте «Интернет-эквайринг → Операции». В поле «Номер заказа» вводите только OrderId.',
-    'PaymentId — это отдельный идентификатор платежа. Не вводите его в поле «Номер заказа»: переключите тип поиска на идентификатор платежа, если такой фильтр доступен, либо сверьте PaymentId в карточке найденной операции.',
+    'В кабинете банка, указанного в маршруте счёта, откройте операции и ищите платёж по OrderId.',
+    'PaymentId — это отдельный идентификатор платежа. Не подставляйте его вместо OrderId: выберите поиск по PaymentId, если он доступен, или сверьте PaymentId в карточке операции, найденной по OrderId.',
     'Если найден активный платёж — не создавайте новую ссылку и дождитесь его итога.',
     'Если найден успешный платёж или операция, которой нужна отмена/возврат, — не нажимайте кнопку ниже. Обработайте операцию по её фактическому статусу в разделе платежей.',
     `Только если ни один платёж не активен, не успешен и не требует отмены/возврата, нажмите «${PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL}».`
@@ -86,18 +117,18 @@ export function paymentInitNoPaymentInstructions(): string[] {
 
 export function paymentInitNoPaymentActionLabel(): string {
   return `«${PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL}» подтверждает только отсутствие оплаты `
-    + 'по перечисленным OrderId и PaymentId в T‑Bank и закрывает техническую ошибку. '
+    + 'по перечисленным OrderId и PaymentId в банке платежа и закрывает техническую ошибку. '
     + 'Счёт не будет отмечен оплаченным и не перейдёт в статус «Не оплачено». '
     + 'Если клиент оплатил переводом на обычную карту, после этого отдельным действием «Оплачено» '
     + 'зафиксируйте перевод и добавьте комментарий или чек.';
 }
 
 export function paymentInitNoPaymentConfirmation(evidenceText: string): string {
-  return 'РЕЗУЛЬТАТ ПРОВЕРКИ T‑BANK: ПО УКАЗАННЫМ ID ОПЛАТЫ НЕТ.\n\n'
-    + 'Подтвердите, что вы проверили в T‑Bank ВСЕ перечисленные OrderId и PaymentId и ни один платёж по ним '
+  return 'РЕЗУЛЬТАТ ПРОВЕРКИ БАНКА: ПО УКАЗАННЫМ ID ОПЛАТЫ НЕТ.\n\n'
+    + 'Подтвердите, что вы проверили в банке платежа ВСЕ перечисленные OrderId и PaymentId и ни один платёж по ним '
     + 'не активен, не успешен и не требует отмены или возврата.\n\n'
     + 'Если такой платёж найден, нажмите «Отмена» и не продолжайте.\n\n'
-    + 'Это действие означает ТОЛЬКО отсутствие оплаты по перечисленным T‑Bank ID. '
+    + 'Это действие означает ТОЛЬКО отсутствие оплаты по перечисленным банковским ID. '
     + 'Оно НЕ отмечает счёт оплаченным и НЕ переводит его в «Не оплачено», а только закрывает техническую ошибку.\n\n'
     + 'Если клиент оплатил переводом на обычную карту, после этого отдельным действием «Оплачено» '
     + 'зафиксируйте перевод и добавьте комментарий или чек.'
@@ -428,10 +459,10 @@ export class CommonBillingComponent implements OnDestroy {
       return paymentInitNoPaymentActionLabel();
     }
     if (this.attentionHasManualTbankReconciliationRetry()) {
-      return 'Нажмите «Повторить сверку оплаты»: система ещё раз проверит T‑Bank и закроет счёт только после безопасной отмены ссылки.';
+      return 'Нажмите «Повторить сверку оплаты»: система ещё раз проверит банк платежа и закроет счёт только после безопасной отмены ссылки.';
     }
     if (this.attentionHasManualTbankPaymentDetected()) {
-      return 'По ссылке T‑Bank есть движение денег. Не подтверждайте перевод повторно: сначала сверьте обе оплаты с администратором.';
+      return 'По банковской ссылке есть движение денег. Не подтверждайте перевод повторно: сначала сверьте обе оплаты с администратором.';
     }
     if (this.invoiceNeedsAttention()) {
       return 'После проверки используйте зеленое действие ниже или повторите обработку.';
@@ -484,15 +515,11 @@ export class CommonBillingComponent implements OnDestroy {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole([...PAPER_INVOICE_ISSUED_ROLES]);
   });
+  readonly paperInvoiceAwaitingDeliveryConfirmation = computed(() =>
+    paperInvoiceRequiresDeliveryConfirmation(this.currentInvoice())
+  );
   readonly canMarkPaid = computed(() => {
-    const invoice = this.currentInvoice();
-    return Boolean(
-      invoice
-        && (
-          ['READY', 'INVOICED', 'REMINDER', 'PARTIALLY_PAID', 'UNPAID'].includes(invoice.status)
-          || (invoice.status === 'COLLECTING' && invoice.totalOrders > 0 && invoice.readyOrders >= invoice.totalOrders)
-        )
-    );
+    return canMarkCommonInvoicePaid(this.currentInvoice());
   });
   readonly canConfirmContractorSource = computed(() => {
     this.auth.tokenParsed();
@@ -895,7 +922,7 @@ export class CommonBillingComponent implements OnDestroy {
     }
     if (this.manualAttributionRequired()) {
       this.manualAttributionMode.set(
-        invoice.paymentRouteType === 'TBANK_LINK' ? 'TBANK_ROUTE_FALLBACK' : 'STANDARD'
+        isBankPaymentRouteType(invoice.paymentRouteType) ? 'TBANK_ROUTE_FALLBACK' : 'STANDARD'
       );
       return;
     }
@@ -921,7 +948,7 @@ export class CommonBillingComponent implements OnDestroy {
     const nextMode = paperEnabled ? 'AUTO_ROUTING' : 'OWNER_PAPER_INVOICE';
     const confirmation = paperEnabled
       ? 'Вернуть автоматическое распределение специалист → менеджер → владелец? Продолжайте только если бумажный счёт ещё не отправлялся и оплаты по нему нет.'
-      : 'Включить бумажный счёт владельца? Система проверит прежнюю T‑Bank-ссылку и отменит её только при подтверждённом отсутствии оплаты. Текущий безопасный резерв будет освобождён, а будущие циклы этого общего счёта тоже станут бумажными. Продолжайте только если клиент ещё не платил.';
+      : 'Включить бумажный счёт владельца? Система проверит прежнюю банковскую ссылку и отменит её только при подтверждённом отсутствии оплаты. Текущий безопасный резерв будет освобождён, а будущие циклы этого общего счёта тоже станут бумажными. Продолжайте только если клиент ещё не платил.';
     if (!window.confirm(confirmation)) {
       return;
     }
@@ -956,7 +983,7 @@ export class CommonBillingComponent implements OnDestroy {
           : 'OWNER_TBANK';
         const destination = target === 'EMPLOYEE_REQUISITES'
           ? 'реквизиты специалиста или менеджера'
-          : 'ссылку T‑Bank владельца';
+          : 'банковскую ссылку владельца';
         const currentRecipient = context.currentRecipient?.trim()
           ? ` Получатель сейчас: ${context.currentRecipient}.`
           : '';
@@ -977,7 +1004,7 @@ export class CommonBillingComponent implements OnDestroy {
           ),
           target === 'EMPLOYEE_REQUISITES'
             ? 'Общий счёт переведён на реквизиты сотрудника'
-            : 'Общий счёт переведён на ссылку T‑Bank владельца'
+            : 'Общий счёт переведён на банковскую ссылку владельца'
         );
       },
       error: (err) => {
@@ -994,14 +1021,14 @@ export class CommonBillingComponent implements OnDestroy {
       || invoice.paperInvoiceIssuedAt || !this.canMarkPaperInvoiceIssued() || this.mutating()) {
       return;
     }
-    if (!window.confirm('Подтвердить, что бумажный счёт уже отправлен клиенту? После этой отметки начнутся автоматические напоминания.')) {
+    if (!window.confirm('Подтвердить, что счёт прикреплён и отправлен клиенту? После этой отметки начнутся автоматические напоминания.')) {
       return;
     }
     this.invoiceAction(
       invoice.id,
       'paper-invoice-issued',
       () => this.commonBillingApi.markPaperInvoiceIssued(invoice.id),
-      'Бумажный счёт отмечен как отправленный'
+      'Отправка счёта клиенту подтверждена'
     );
   }
 
@@ -1282,7 +1309,7 @@ export class CommonBillingComponent implements OnDestroy {
     if (!invoice || invoice.status !== 'NEEDS_ATTENTION' || !this.attentionHasLatePayment() || this.mutating()) {
       return;
     }
-    const confirmed = window.confirm('Распределить поздний T-Bank платеж по неоплаченным заказам общего счета?');
+    const confirmed = window.confirm('Распределить поздний банковский платеж по неоплаченным заказам общего счета?');
     if (!confirmed) {
       return;
     }
@@ -1299,7 +1326,7 @@ export class CommonBillingComponent implements OnDestroy {
     if (!invoice || invoice.status !== 'NEEDS_ATTENTION' || !this.attentionHasFinalCancelFailure() || this.mutating()) {
       return;
     }
-    const confirmed = window.confirm('Подтвердить, что старая T-Bank ссылка проверена вручную и больше не требует действий?');
+    const confirmed = window.confirm('Подтвердить, что старая банковская ссылка проверена вручную и больше не требует действий?');
     if (!confirmed) {
       return;
     }
@@ -1338,7 +1365,7 @@ export class CommonBillingComponent implements OnDestroy {
       .join('\n');
     const evidenceText = identifiers
       ? `\n\nПроверьте все записи:\n${identifiers}`
-      : '\n\nИдентификаторы платежа не сохранены: проверьте операцию по счету вручную в T-Bank.';
+      : '\n\nИдентификаторы платежа не сохранены: проверьте операцию по счету вручную в банке платежа.';
     const confirmed = window.confirm(paymentInitNoPaymentConfirmation(evidenceText));
     if (!confirmed) {
       return;
@@ -1347,7 +1374,7 @@ export class CommonBillingComponent implements OnDestroy {
       invoice.id,
       'confirm-payment-init-check',
       () => this.commonBillingApi.confirmPaymentInitCheck(invoice.id, snapshot.evidenceToken),
-      'В T‑Bank оплаты нет: техническая проверка закрыта'
+      'В банке оплаты нет: техническая проверка закрыта'
     );
   }
 
@@ -1374,7 +1401,11 @@ export class CommonBillingComponent implements OnDestroy {
   paymentMethodLabel(order: CommonInvoiceOrderResponse): string {
     switch (order.paymentMethod) {
       case 'TBANK':
-        return 'T-Bank';
+        return 'T‑Bank';
+      case 'TOCHKA':
+        return 'Точка Банк';
+      case 'BANK':
+        return 'Банк';
       case 'MANUAL':
       case 'MIXED':
         return 'Подтверждено вручную';
@@ -1391,10 +1422,14 @@ export class CommonBillingComponent implements OnDestroy {
     if (invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
       return 'Бумажный счёт владельца';
     }
-    const profile = invoice.paymentRouteProfileName?.trim();
+    if (isBankPaymentRouteType(invoice.paymentRouteType)) {
+      return bankPaymentRouteLabel(
+        invoice.paymentRouteType,
+        invoice.paymentRouteProfileName,
+        invoice.paymentRouteProvider
+      );
+    }
     switch (invoice.paymentRouteType) {
-      case 'TBANK_LINK':
-        return profile ? `T-Bank · ${profile}` : 'T-Bank';
       case 'MANUAL_EXTERNAL_LINK':
         return invoice.paymentRouteManualTaskId
           ? `Внешняя ссылка · задание #${invoice.paymentRouteManualTaskId}`
@@ -1937,22 +1972,22 @@ export class CommonBillingComponent implements OnDestroy {
       return 'Не найден чат WhatsApp для отправки общего счета. Проверьте связь компании с чатом или отправьте счет вручную.';
     }
     if (normalized.startsWith('paper_invoice_mode_switch_payment_detected:')) {
-      return 'T-Bank обнаружил платёжное движение по прежней ссылке. Бумажный режим не включён: сначала нужно сверить банковскую оплату.';
+      return 'Банк обнаружил платёжное движение по прежней ссылке. Бумажный режим не включён: сначала нужно сверить банковскую оплату.';
     }
     if (normalized.startsWith('paper_invoice_mode_switch_retry:')
       || normalized.startsWith('paper_invoice_mode_switch_in_progress:')
       || normalized.startsWith('paper_invoice_mode_switch_state_changed:')) {
-      return 'Прежняя T-Bank-сессия ещё не закрыта однозначно. Оплата по ссылке остановлена в интерфейсе; повторите включение бумажного счёта после обновления.';
+      return 'Прежняя банковская сессия ещё не закрыта однозначно. Оплата по ссылке остановлена в интерфейсе; повторите включение бумажного счёта после обновления.';
     }
     if (normalized.startsWith('manual_payment_tbank_reconciliation_in_progress:')
       || normalized.startsWith('manual_payment_tbank_reconciliation_retry:')) {
-      return 'T‑Bank пока не подтвердил безопасное закрытие ссылки. Деньги по прежним реквизитам не зачислены повторно; можно повторить автоматическую сверку.';
+      return 'Банк пока не подтвердил безопасное закрытие ссылки. Деньги по прежним реквизитам не зачислены повторно; можно повторить автоматическую сверку.';
     }
     if (normalized.startsWith('manual_payment_tbank_payment_detected:')) {
-      return 'T‑Bank обнаружил движение денег по ссылке. Ручной перевод по прежним реквизитам не зачислен, чтобы не создать двойную оплату.';
+      return 'Банк обнаружил движение денег по ссылке. Ручной перевод по прежним реквизитам не зачислен, чтобы не создать двойную оплату.';
     }
     if (normalized.includes('t-bank') || normalized.includes('tbank') || normalized.includes('payment')) {
-      return 'Есть ошибка платежа или T-Bank. Проверьте состояние оплаты в правой панели и повторите действие только после сверки.';
+      return 'Есть ошибка банковского платежа. Проверьте состояние оплаты в правой панели и повторите действие только после сверки.';
     }
     return `Ошибка общего счета: ${error}`;
   }
@@ -2009,7 +2044,7 @@ export class CommonBillingComponent implements OnDestroy {
     if (this.attentionIsMigrationPaymentRegistry()) {
       return [
         'Не используйте повторную отправку или закрытие проверки: миграционный конфликт остается в карантине.',
-        'Сохраните перечисленные идентификаторы и передайте их администратору для отдельной сверки T-Bank.'
+        'Сохраните перечисленные идентификаторы и передайте их администратору для отдельной сверки в банке.'
       ];
     }
     if (this.attentionHasPaymentInitCheck()) {
@@ -2019,13 +2054,13 @@ export class CommonBillingComponent implements OnDestroy {
       return [
         'Убедитесь, что в чате есть чек перевода по прежним реквизитам.',
         'Нажмите «Повторить сверку оплаты» и снова укажите фактического получателя.',
-        'Система сама проверит T‑Bank; вручную менять платёжный маршрут не нужно.'
+        'Система сама проверит банк платежа; вручную менять платёжный маршрут не нужно.'
       ];
     }
     if (this.attentionHasManualTbankPaymentDetected()) {
       return [
         'Не закрывайте счёт ручной оплатой и не отправляйте клиенту новую ссылку.',
-        'Сверьте платёж по ссылке T‑Bank и перевод по прежним реквизитам.',
+        'Сверьте платёж по банковской ссылке и перевод по прежним реквизитам.',
         'После определения лишнего платежа оформите возврат или отдельную административную корректировку.'
       ];
     }

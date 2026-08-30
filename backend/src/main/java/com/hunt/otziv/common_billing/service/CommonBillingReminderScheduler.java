@@ -36,6 +36,14 @@ public class CommonBillingReminderScheduler {
         }
     }
 
+    @Scheduled(fixedDelayString = "${common-billing.tochka-reconcile.fixed-delay:PT1M}")
+    public void reconcileTochkaPaymentRefs() {
+        int reconciled = commonBillingService.reconcileTochkaPaymentRefs(20);
+        if (reconciled > 0) {
+            log.info("Common billing Tochka payment reconciliations: {}", reconciled);
+        }
+    }
+
     @Scheduled(
             fixedDelayString = "${common-billing.company-reconcile.fixed-delay:PT1M}",
             initialDelayString = "${common-billing.company-reconcile.initial-delay:PT30S}"

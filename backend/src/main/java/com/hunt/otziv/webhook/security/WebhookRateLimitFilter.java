@@ -112,6 +112,7 @@ public class WebhookRateLimitFilter extends OncePerRequestFilter {
         paths.put("webhook", List.of(
                 "/webhook",
                 "/api/payments/tbank/webhook",
+                "/api/payments/tochka/webhook",
                 "/api/leads/import",
                 "/api/leads/modified",
                 "/api/leads/sync",

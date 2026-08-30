@@ -358,7 +358,7 @@ export interface AdminClientMessageSettings {
   clientTextReminderText: string;
   publicationStartedText: string;
   publicationProgressReportText: string;
-  paymentInstructionSource: 'MANAGER_TEXT' | 'TBANK_LINK';
+  paymentInstructionSource: 'MANAGER_TEXT' | 'TBANK_LINK' | 'BANK_LINK' | 'TOCHKA_LINK';
   paymentReminderText: string;
   paymentLinkCopyText: string;
   paymentSuccessText: string;
@@ -403,7 +403,7 @@ export interface AdminClientMessageMonitorQueueItem {
   consecutiveFailures: number;
   expectedChannel?: string | null;
   channelDetails?: string | null;
-  paymentInstructionSource?: 'MANAGER_TEXT' | 'TBANK_LINK' | string | null;
+  paymentInstructionSource?: 'MANAGER_TEXT' | 'TBANK_LINK' | 'BANK_LINK' | 'TOCHKA_LINK' | string | null;
   messagePreview?: string | null;
   readiness?: string | null;
   readinessLabel?: string | null;

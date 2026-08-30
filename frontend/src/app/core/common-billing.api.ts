@@ -44,6 +44,7 @@ export interface CommonInvoiceSummaryResponse {
   tbankTerminalKey?: string | null;
   paymentRouteType?: string | null;
   paymentRouteProfileName?: string | null;
+  paymentRouteProvider?: string | null;
   paymentRouteManualTaskId?: number | null;
   contractorPaymentRoute: boolean;
   paymentRouteSelectedAt?: string | null;
@@ -90,7 +91,7 @@ export interface CommonInvoiceOrderResponse {
   unpaid: boolean;
   detachable: boolean;
   paidAt?: string | null;
-  paymentMethod?: 'TBANK' | 'MANUAL' | 'MIXED' | 'MANUAL_LEGACY' | 'OWNER_PAPER_INVOICE' | null;
+  paymentMethod?: 'TBANK' | 'TOCHKA' | 'BANK' | 'MANUAL' | 'MIXED' | 'MANUAL_LEGACY' | 'OWNER_PAPER_INVOICE' | null;
   paidBy?: string | null;
   paymentComment?: string | null;
   paymentReceiptUrl?: string | null;
@@ -121,6 +122,7 @@ export interface ContractorCommonSourceConfirmationRequest {
 
 export interface CommonInvoicePaymentRefResponse {
   id: number;
+  provider?: string | null;
   status: string;
   orderId?: string | null;
   paymentId?: string | null;

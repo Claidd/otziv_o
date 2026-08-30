@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL,
   PAPER_INVOICE_ISSUED_ROLES,
+  canMarkCommonInvoicePaid,
   commonInvoicePaymentEvidence,
   commonInvoicePaymentEvidenceSnapshot,
   commonInvoiceStatusProblem,
@@ -11,13 +12,41 @@ import {
   isPaymentInitManualCheckError,
   paymentInitNoPaymentActionLabel,
   paymentInitNoPaymentConfirmation,
-  paymentInitNoPaymentInstructions
+  paymentInitNoPaymentInstructions,
+  paperInvoiceRequiresDeliveryConfirmation
 } from './common-billing.component';
 import type { CommonInvoiceDetailsResponse } from '../../../core/common-billing.api';
 
 describe('paper invoice issue access', () => {
   it('lets a manager record document delivery without granting payment-mode administration', () => {
     expect(PAPER_INVOICE_ISSUED_ROLES).toEqual(['ADMIN', 'OWNER', 'MANAGER']);
+  });
+
+  it('keeps paid disabled until paper-invoice delivery is confirmed', () => {
+    const invoice = {
+      status: 'INVOICED',
+      totalOrders: 8,
+      readyOrders: 8,
+      invoicePaymentMode: 'OWNER_PAPER_INVOICE',
+      paperInvoiceIssuedAt: null
+    } as const;
+
+    expect(paperInvoiceRequiresDeliveryConfirmation(invoice)).toBe(true);
+    expect(canMarkCommonInvoicePaid(invoice)).toBe(false);
+    expect(canMarkCommonInvoicePaid({
+      ...invoice,
+      paperInvoiceIssuedAt: '2026-08-30T12:00:00'
+    })).toBe(true);
+  });
+
+  it('does not add the paper-invoice gate to other payment modes', () => {
+    expect(canMarkCommonInvoicePaid({
+      status: 'INVOICED',
+      totalOrders: 8,
+      readyOrders: 8,
+      invoicePaymentMode: 'AUTO_ROUTING',
+      paperInvoiceIssuedAt: null
+    })).toBe(true);
   });
 });
 
@@ -223,10 +252,10 @@ describe('payment-init attention policy', () => {
 
 describe('payment-init manual-check copy', () => {
   it('names the action as a no-payment outcome without implying paid or unpaid status', () => {
-    expect(PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL).toBe('В T‑Bank оплаты нет — продолжить');
+    expect(PAYMENT_INIT_NO_PAYMENT_BUTTON_LABEL).toBe('В банке оплаты нет — продолжить');
 
     const helper = paymentInitNoPaymentActionLabel();
-    expect(helper).toContain('по перечисленным OrderId и PaymentId в T‑Bank');
+    expect(helper).toContain('по перечисленным OrderId и PaymentId в банке платежа');
     expect(helper).toContain('не будет отмечен оплаченным');
     expect(helper).toContain('не перейдёт в статус «Не оплачено»');
     expect(helper).toContain('отдельным действием «Оплачено»');
@@ -236,10 +265,11 @@ describe('payment-init manual-check copy', () => {
   it('branches explicitly for active, successful and cancel/refund payments', () => {
     const instructions = paymentInitNoPaymentInstructions().join(' ');
 
-    expect(instructions).toContain('поле «Номер заказа» вводите только OrderId');
+    expect(instructions).toContain('кабинете банка, указанного в маршруте счёта');
+    expect(instructions).toContain('ищите платёж по OrderId');
     expect(instructions).toContain('PaymentId — это отдельный идентификатор платежа');
-    expect(instructions).toContain('Не вводите его в поле «Номер заказа»');
-    expect(instructions).toContain('переключите тип поиска на идентификатор платежа');
+    expect(instructions).toContain('Не подставляйте его вместо OrderId');
+    expect(instructions).toContain('выберите поиск по PaymentId');
     expect(instructions).toContain('найден активный платёж');
     expect(instructions).toContain('найден успешный платёж');
     expect(instructions).toContain('отмена/возврат');
@@ -249,10 +279,10 @@ describe('payment-init manual-check copy', () => {
   it('makes the confirmation acknowledge only that no actionable payment exists', () => {
     const confirmation = paymentInitNoPaymentConfirmation('\n\nПроверьте: OrderId test');
 
-    expect(confirmation).toContain('РЕЗУЛЬТАТ ПРОВЕРКИ T‑BANK: ПО УКАЗАННЫМ ID ОПЛАТЫ НЕТ');
+    expect(confirmation).toContain('РЕЗУЛЬТАТ ПРОВЕРКИ БАНКА: ПО УКАЗАННЫМ ID ОПЛАТЫ НЕТ');
     expect(confirmation).toContain('ВСЕ перечисленные OrderId и PaymentId');
     expect(confirmation).toContain('не активен, не успешен');
-    expect(confirmation).toContain('ТОЛЬКО отсутствие оплаты по перечисленным T‑Bank ID');
+    expect(confirmation).toContain('ТОЛЬКО отсутствие оплаты по перечисленным банковским ID');
     expect(confirmation).toContain('НЕ отмечает счёт оплаченным');
     expect(confirmation).toContain('НЕ переводит его в «Не оплачено»');
     expect(confirmation).toContain('отдельным действием «Оплачено»');

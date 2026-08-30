@@ -10,6 +10,7 @@ import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewCheckInSe
 import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestrictionFilter;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.controller.PublicPaymentController;
+import com.hunt.otziv.payments.controller.TochkaWebhookController;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
@@ -196,6 +197,25 @@ class PublicCapabilitySecurityContractTest {
     }
 
     @Test
+    void onlyExactTochkaWebhookPostIsPublic() throws Exception {
+        mockMvc.perform(post("/api/payments/tochka/webhook")
+                        .contentType("text/plain")
+                        .content("signed-jwt-probe"))
+                .andExpect(status().isOk());
+        verify(context.getBean(PaymentLinkService.class))
+                .handleTochkaWebhook("signed-jwt-probe");
+
+        mockMvc.perform(get("/api/payments/tochka/webhook"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(put("/api/payments/tochka/webhook"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/payments/tochka/webhook/extra"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/payments/tochka/webhookevil"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void internalTbankStatusRequiresAdminOrOwnerAuthentication() throws Exception {
         mockMvc.perform(get("/api/payments/public/tbank-status"))
                 .andExpect(status().isNotFound());
@@ -373,6 +393,11 @@ class PublicCapabilitySecurityContractTest {
         }
 
         @Bean
+        TochkaWebhookController tochkaWebhookController(PaymentLinkService paymentLinkService) {
+            return new TochkaWebhookController(paymentLinkService);
+        }
+
+        @Bean
         WebhookClientIpResolver webhookClientIpResolver() {
             return new WebhookClientIpResolver("", 16, 2_048);
         }
@@ -448,5 +473,6 @@ class PublicCapabilitySecurityContractTest {
         Map<String, String> liveLogsHandshake() {
             return Map.of("status", "ok");
         }
+
     }
 }

@@ -100,6 +100,21 @@ import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.payments.service.ManualCardPaymentReviewNotificationService;
+import com.hunt.otziv.payments.tochka.dto.TochkaAcquiringInternetPaymentWebhook;
+import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.CreatePaymentResponse;
+import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.PaymentInfoResponse;
+import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.PaymentOperation;
+import com.hunt.otziv.payments.tochka.dto.TochkaCreatePaymentCommand;
+import com.hunt.otziv.payments.tochka.dto.TochkaPaymentProfile;
+import com.hunt.otziv.payments.tochka.dto.TochkaRefundCommand;
+import com.hunt.otziv.payments.tochka.model.TochkaPaymentMode;
+import com.hunt.otziv.payments.tochka.service.TochkaClient;
+import com.hunt.otziv.payments.tochka.service.TochkaPaymentOperationMapper;
+import com.hunt.otziv.payments.tochka.service.TochkaPaymentOperationMapper.ExpectedPayment;
+import com.hunt.otziv.payments.tochka.service.TochkaPaymentOperationMapper.MappedPayment;
+import com.hunt.otziv.payments.tochka.service.TochkaPaymentProfileResolver;
+import com.hunt.otziv.payments.tochka.service.TochkaProviderException;
+import com.hunt.otziv.payments.tochka.service.TochkaWebhookVerificationException;
 import com.hunt.otziv.review_recovery.service.ReviewRecoveryGateService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
@@ -280,12 +295,15 @@ public class CommonBillingService {
     private static final String PAYMENT_REF_CANCEL_FAILED = "CANCEL_FAILED";
     private static final String PAYMENT_REF_CANCEL_FAILED_FINAL = "CANCEL_FAILED_FINAL";
     private static final String PAYMENT_METHOD_TBANK = "TBANK";
+    private static final String PAYMENT_METHOD_TOCHKA = "TOCHKA";
     private static final String PAYMENT_METHOD_MANUAL = "MANUAL";
     private static final String PAYMENT_METHOD_MIXED = "MIXED";
     private static final String PAYMENT_METHOD_OWNER_PAPER_INVOICE = "OWNER_PAPER_INVOICE";
     private static final String PAYMENT_REF_INIT_PREPARED = "INIT_PREPARED";
     private static final String PAYMENT_REF_INIT_CONFLICT = "INIT_CONFLICT";
     private static final String PAYMENT_REF_CURRENT = "CURRENT";
+    private static final String PROVIDER_TBANK = PaymentProfile.PROVIDER_TBANK;
+    private static final String PROVIDER_TOCHKA = PaymentProfile.PROVIDER_TOCHKA;
     private static final String MANUAL_PAYMENT_TBANK_RECONCILIATION_IN_PROGRESS =
             "manual_payment_tbank_reconciliation_in_progress:";
     private static final String MANUAL_PAYMENT_TBANK_RECONCILIATION_RETRY =
@@ -307,6 +325,7 @@ public class CommonBillingService {
             PAYMENT_REF_CANCEL_FAILED,
             PAYMENT_REF_CANCEL_FAILED_FINAL,
             "REJECTED",
+            "EXPIRED",
             "REFUNDED",
             "PARTIAL_REFUNDED",
             "REVERSED",
@@ -317,6 +336,7 @@ public class CommonBillingService {
             PAYMENT_REF_INIT_CONFLICT,
             PAYMENT_REF_CANCELED,
             "REJECTED",
+            "EXPIRED",
             "REFUNDED",
             "REVERSED"
     );
@@ -385,6 +405,8 @@ public class CommonBillingService {
     private static final java.time.Duration COMPANY_RECONCILE_MAX_BACKOFF = java.time.Duration.ofMinutes(30);
     private static final java.time.Duration PAYMENT_REF_CANCEL_RETRY_DELAY = java.time.Duration.ofMinutes(10);
     private static final java.time.Duration PAYMENT_REF_CANCELING_TIMEOUT = java.time.Duration.ofMinutes(30);
+    private static final java.time.Duration TOCHKA_RECONCILIATION_DELAY = java.time.Duration.ofSeconds(20);
+    private static final String TOCHKA_REFUND_SUBMITTING_PREFIX = "tochka_refund_submitting:";
     private static final String MESSAGE_SEND_IN_PROGRESS = "message_send_in_progress";
     private static final String PAYMENT_INIT_IN_PROGRESS = "payment_init_in_progress";
     private static final String PAYMENT_INIT_STALE = "payment_init_stale";
@@ -398,6 +420,8 @@ public class CommonBillingService {
     private static final String PAYMENT_INIT_MANUALLY_CHECKED_REASON = "payment_init_manually_checked";
     private static final String PAYMENT_INIT_MANUALLY_CHECKED_BY_PREFIX =
             PAYMENT_INIT_MANUALLY_CHECKED_REASON + "_by=";
+    private static final String PAYMENT_CANCEL_MANUALLY_CHECKED_BY_PREFIX =
+            "payment_cancel_manually_checked_by=";
     private static final String INVOICE_MEMBERSHIP_CHANGED = "common_invoice_membership_changed";
     private static final String STANDALONE_PAYMENT_ROUTE_CONFLICT = "standalone_payment_route_conflict";
     private static final String BAD_REVIEW_SUPPLEMENT_REQUIRED = "bad_review_supplement_required:";
@@ -424,6 +448,7 @@ public class CommonBillingService {
             PAYMENT_REF_ARCHIVED,
             PAYMENT_REF_CANCELED,
             "REJECTED",
+            "EXPIRED",
             "REFUNDED",
             "REVERSED"
     );
@@ -492,6 +517,9 @@ public class CommonBillingService {
     private final TbankPaymentProperties properties;
     private final TbankClient tbankClient;
     private final TbankTokenSigner tokenSigner;
+    private final TochkaPaymentProfileResolver tochkaPaymentProfileResolver;
+    private final TochkaClient tochkaClient;
+    private final TochkaPaymentOperationMapper tochkaPaymentOperationMapper;
     private final ReviewRecoveryGateService recoveryGateService;
     private final CommonInvoicePublicationBlockerService publicationBlockerService;
     private final ObjectProvider<OrderPublicationApprovalService> publicationApprovalServiceProvider;
@@ -1094,6 +1122,7 @@ public class CommonBillingService {
 
     public int cancelPendingArchivedPayments(int limit) {
         List<CommonInvoicePaymentRef> refs = paymentRefRepository.findCancelableRefs(
+                PROVIDER_TBANK,
                 PAYMENT_REF_CANCEL_PENDING,
                 PAYMENT_REF_CANCEL_FAILED,
                 PAYMENT_REF_INIT_CONFLICT,
@@ -1120,6 +1149,664 @@ public class CommonBillingService {
             processed++;
         }
         return processed;
+    }
+
+    /**
+     * Reconciles Tochka attempts without ever inventing a local cancel. A CREATED payment remains
+     * blocking until GET reports EXPIRED. APPROVED cancellation attempts are refunded once and
+     * then observed through GET; an ambiguous Refund result is quarantined instead of retried.
+     */
+    public int reconcileTochkaPaymentRefs(int limit) {
+        List<CommonInvoicePaymentRef> candidates = paymentRefRepository.findProviderReconciliationCandidates(
+                PROVIDER_TOCHKA,
+                Set.of(
+                        PAYMENT_REF_INIT_PREPARED,
+                        PAYMENT_REF_INIT_CONFLICT,
+                        PAYMENT_REF_CURRENT,
+                        PAYMENT_REF_CANCEL_PENDING,
+                        PAYMENT_REF_CANCELING,
+                        PAYMENT_REF_CANCEL_FAILED
+                ),
+                LocalDateTime.now().minus(TOCHKA_RECONCILIATION_DELAY),
+                PageRequest.of(0, Math.max(1, limit))
+        );
+        int processed = 0;
+        for (CommonInvoicePaymentRef candidate : candidates) {
+            Long invoiceId = paymentRefInvoiceId(candidate);
+            PreparedTochkaReconciliation prepared;
+            try {
+                prepared = writeTransaction(() -> prepareTochkaReconciliation(candidate.getId(), invoiceId));
+            } catch (RuntimeException failure) {
+                log.warn(
+                        "Tochka common payment reconciliation prepare failed: ref={}, invoice={}, reason={}",
+                        candidate.getId(),
+                        invoiceId,
+                        readableException(failure)
+                );
+                continue;
+            }
+            if (prepared == null) {
+                continue;
+            }
+            TochkaReconciliationObservation observation = observeTochkaPaymentRef(prepared);
+            if (shouldSubmitTochkaRefund(prepared, observation)) {
+                try {
+                    PreparedTochkaReconciliation beforeClaim = prepared;
+                    TochkaReconciliationObservation beforeRefund = observation;
+                    PreparedTochkaReconciliation claimed = writeTransaction(() ->
+                            claimTochkaRefundSubmission(beforeClaim, beforeRefund)
+                    );
+                    if (claimed == null) {
+                        continue;
+                    }
+                    prepared = claimed;
+                    observation = submitClaimedTochkaRefund(prepared, observation);
+                } catch (RuntimeException failure) {
+                    log.warn(
+                            "Tochka common refund durable claim failed: ref={}, invoice={}, reason={}",
+                            prepared.refId(),
+                            prepared.invoiceId(),
+                            readableException(failure)
+                    );
+                    continue;
+                }
+            }
+            PreparedTochkaReconciliation finalPrepared = prepared;
+            TochkaReconciliationObservation finalObservation = observation;
+            try {
+                writeTransaction(() -> {
+                    finishTochkaReconciliation(finalPrepared, finalObservation);
+                    return null;
+                });
+                processed++;
+            } catch (RuntimeException failure) {
+                log.warn(
+                        "Tochka common payment reconciliation apply failed: ref={}, invoice={}, reason={}",
+                        finalPrepared.refId(),
+                        finalPrepared.invoiceId(),
+                        readableException(failure)
+                );
+            }
+        }
+        return processed;
+    }
+
+    private PreparedTochkaReconciliation prepareTochkaReconciliation(Long refId, Long expectedInvoiceId) {
+        if (refId == null || expectedInvoiceId == null) {
+            return null;
+        }
+        CommonInvoice invoice = lockedInvoice(expectedInvoiceId).orElse(null);
+        CommonInvoicePaymentRef ref = paymentRefRepository.findByIdForUpdate(refId).orElse(null);
+        if (invoice == null
+                || ref == null
+                || !Objects.equals(expectedInvoiceId, paymentRefInvoiceId(ref))
+                || !PROVIDER_TOCHKA.equals(normalizedPaymentProvider(ref))) {
+            return null;
+        }
+        String status = paymentRefStatus(ref);
+        if (!Set.of(
+                PAYMENT_REF_INIT_PREPARED,
+                PAYMENT_REF_INIT_CONFLICT,
+                PAYMENT_REF_CURRENT,
+                PAYMENT_REF_CANCEL_PENDING,
+                PAYMENT_REF_CANCELING,
+                PAYMENT_REF_CANCEL_FAILED
+        ).contains(status)) {
+            return null;
+        }
+        if (ref.getPaymentProfileId() == null
+                || providerOrderId(ref).isBlank()
+                || providerMerchantId(ref).isBlank()
+                || ref.getAmountKopecks() == null
+                || ref.getAmountKopecks() <= 0
+                || ref.getProviderExpiresAt() == null
+                || normalize(ref.getProviderPaymentMode()).isBlank()) {
+            quarantineTochkaReconciliationCandidate(
+                    invoice,
+                    ref,
+                    "tochka_reconciliation_binding_incomplete",
+                    null
+            );
+            return null;
+        }
+
+        PaymentProfile entityProfile;
+        TochkaPaymentProfile runtimeProfile;
+        List<TochkaPaymentMode> modes;
+        boolean profileMatches;
+        try {
+            entityProfile = paymentProfileService.lockByIdForRouting(ref.getPaymentProfileId());
+            runtimeProfile = tochkaPaymentProfileResolver.resolveForExistingPayment(entityProfile);
+            if (runtimeProfile == null) {
+                throw new IllegalStateException("Pinned Tochka runtime profile is missing");
+            }
+            modes = parseTochkaPaymentModes(ref.getProviderPaymentMode());
+            profileMatches = paymentProfileService.isTochkaProvider(entityProfile)
+                    && Objects.equals(runtimeProfile.id(), ref.getPaymentProfileId())
+                    && Objects.equals(
+                            normalize(runtimeProfile.merchantId()),
+                            providerMerchantId(ref)
+                    )
+                    && Objects.equals(runtimeProfile.testMode(), ref.getProviderTestMode());
+        } catch (RuntimeException failure) {
+            quarantineTochkaReconciliationCandidate(
+                    invoice,
+                    ref,
+                    "tochka_reconciliation_profile_unavailable",
+                    failure
+            );
+            return null;
+        }
+        if (!profileMatches) {
+            quarantineTochkaReconciliationCandidate(
+                    invoice,
+                    ref,
+                    "tochka_reconciliation_profile_changed",
+                    null
+            );
+            return null;
+        }
+        boolean cancellation = Set.of(
+                PAYMENT_REF_CANCEL_PENDING,
+                PAYMENT_REF_CANCELING,
+                PAYMENT_REF_CANCEL_FAILED
+        ).contains(status);
+        String reason = normalize(ref.getReason());
+        boolean refundSubmissionClaimed = isTochkaRefundSubmissionClaimed(reason);
+        return new PreparedTochkaReconciliation(
+                ref.getId(),
+                invoice.getId(),
+                status,
+                runtimeProfile,
+                modes,
+                providerOrderId(ref),
+                providerPaymentId(ref),
+                ref.getAmountKopecks(),
+                ref.getProviderExpiresAt(),
+                ref.getCreatedAt(),
+                ref.getUpdatedAt(),
+                cancellation,
+                refundSubmissionClaimed,
+                refundSubmissionClaimed ? tochkaRefundClaimedAt(reason, ref.getUpdatedAt()) : null
+        );
+    }
+
+    private void quarantineTochkaReconciliationCandidate(
+            CommonInvoice invoice,
+            CommonInvoicePaymentRef ref,
+            String reason,
+            RuntimeException failure
+    ) {
+        String cleanReason = normalize(reason).isBlank()
+                ? "tochka_reconciliation_unavailable"
+                : normalize(reason);
+        ref.setStatus(PAYMENT_REF_CANCEL_FAILED_FINAL);
+        setTochkaReasonUnlessRefundClaimed(
+                ref,
+                failure == null ? cleanReason : cleanReason + ":" + readableException(failure)
+        );
+        paymentRefRepository.save(ref);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setNextReminderAt(null);
+        invoice.setPaymentUrl(null);
+        invoice.setLastError(limit(
+                PAYMENT_CANCEL_FAILED_FINAL + ": платежная ссылка Точки требует ручной проверки банка ("
+                        + cleanReason
+                        + (failure == null ? "" : ": " + readableException(failure))
+                        + ")",
+                512
+        ));
+        invoiceRepository.save(invoice);
+    }
+
+    private TochkaReconciliationObservation observeTochkaPaymentRef(
+            PreparedTochkaReconciliation prepared
+    ) {
+        try {
+            PaymentOperation operation;
+            if (prepared.paymentId().isBlank()) {
+                LocalDate today = LocalDate.now(MOSCOW_ZONE);
+                LocalDate createdDate = prepared.createdAt() == null
+                        ? today.minusDays(1)
+                        : prepared.createdAt().toLocalDate();
+                LocalDate fromDate = createdDate.isBefore(today.minusDays(7))
+                        ? today.minusDays(7)
+                        : createdDate.minusDays(1);
+                Optional<PaymentOperation> recovered = tochkaClient.findPaymentByPaymentLinkId(
+                        prepared.runtimeProfile(),
+                        prepared.paymentLinkId(),
+                        prepared.amountKopecks(),
+                        fromDate,
+                        today
+                );
+                if (recovered.isEmpty()) {
+                    return TochkaReconciliationObservation.missing();
+                }
+                operation = recovered.get();
+            } else {
+                PaymentInfoResponse response = tochkaClient.getPaymentInfo(
+                        prepared.runtimeProfile(),
+                        prepared.paymentId()
+                );
+                operation = requireSingleTochkaCommonOperation(response, prepared.paymentId());
+            }
+            String operationId = normalize(operation.operationId());
+            TochkaPaymentMode observedMode = observedTochkaPaymentMode(
+                    operation.paymentType(),
+                    operation.status(),
+                    prepared.paymentModes()
+            );
+            MappedPayment mapped = tochkaPaymentOperationMapper.map(
+                    operation,
+                    new ExpectedPayment(
+                            operationId,
+                            prepared.paymentLinkId(),
+                            prepared.runtimeProfile().customerCode(),
+                            prepared.runtimeProfile().merchantId(),
+                            prepared.amountKopecks(),
+                            observedMode
+                    ),
+                    false
+            );
+            return TochkaReconciliationObservation.observed(operation, mapped);
+        } catch (RuntimeException failure) {
+            return TochkaReconciliationObservation.failed(failure);
+        }
+    }
+
+    private boolean shouldSubmitTochkaRefund(
+            PreparedTochkaReconciliation prepared,
+            TochkaReconciliationObservation observation
+    ) {
+        return prepared != null
+                && prepared.cancellation()
+                && !prepared.refundSubmissionClaimed()
+                && observation != null
+                && observation.failure() == null
+                && !observation.notFound()
+                && observation.mapped() != null
+                && observation.mapped().status() == PaymentLinkStatus.CONFIRMED;
+    }
+
+    /**
+     * Persists an at-most-once refund claim before the irreversible POST. The claim is never
+     * cleared or replaced by another retryable marker: after this commit all later workers may
+     * only observe GET state or send the case to manual reconciliation.
+     */
+    private PreparedTochkaReconciliation claimTochkaRefundSubmission(
+            PreparedTochkaReconciliation prepared,
+            TochkaReconciliationObservation observation
+    ) {
+        if (!shouldSubmitTochkaRefund(prepared, observation)
+                || observation.operation() == null) {
+            return null;
+        }
+        CommonInvoice invoice = lockedInvoice(prepared.invoiceId()).orElse(null);
+        CommonInvoicePaymentRef ref = paymentRefRepository.findByIdForUpdate(prepared.refId()).orElse(null);
+        if (invoice == null
+                || ref == null
+                || !Objects.equals(prepared.invoiceId(), paymentRefInvoiceId(ref))
+                || !PROVIDER_TOCHKA.equals(normalizedPaymentProvider(ref))
+                || !prepared.paymentLinkId().equals(providerOrderId(ref))
+                || !Objects.equals(prepared.amountKopecks(), ref.getAmountKopecks())
+                || !Set.of(
+                        PAYMENT_REF_CANCEL_PENDING,
+                        PAYMENT_REF_CANCELING,
+                        PAYMENT_REF_CANCEL_FAILED
+                ).contains(paymentRefStatus(ref))
+                || isTochkaRefundSubmissionClaimed(ref.getReason())) {
+            return null;
+        }
+
+        String operationId = normalize(observation.operation().operationId());
+        if (operationId.isBlank()
+                || (!providerPaymentId(ref).isBlank() && !providerPaymentId(ref).equals(operationId))) {
+            quarantineTochkaInit(invoice, ref, "tochka_refund_operation_changed");
+            return null;
+        }
+        Optional<CommonInvoicePaymentRef> foreign = paymentRefRepository
+                .findByProviderAndProviderPaymentId(PROVIDER_TOCHKA, operationId)
+                .filter(candidate -> !Objects.equals(candidate.getId(), ref.getId()));
+        if (foreign.isPresent()) {
+            quarantineTochkaInit(invoice, ref, "tochka_refund_operation_collision");
+            return null;
+        }
+
+        LocalDateTime claimedAt = LocalDateTime.now();
+        String claim = TOCHKA_REFUND_SUBMITTING_PREFIX
+                + System.currentTimeMillis()
+                + ":"
+                + randomToken();
+        ref.setProviderPaymentId(limit(operationId, 64));
+        ref.setProviderStatus(limit(observation.mapped().providerStatus(), 32));
+        ref.setStatus(PAYMENT_REF_CANCELING);
+        ref.setCancelAttempts(cancelAttempts(ref) + 1);
+        ref.setReason(limit(claim, 160));
+        paymentRefRepository.save(ref);
+        entityManager.flush();
+
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setNextReminderAt(null);
+        invoice.setPaymentUrl(null);
+        invoice.setLastError(limit(
+                "tochka_refund_submitting: возврат зафиксирован перед отправкой; "
+                        + "повторный Refund автоматически выполняться не будет",
+                512
+        ));
+        invoiceRepository.save(invoice);
+        return new PreparedTochkaReconciliation(
+                prepared.refId(),
+                prepared.invoiceId(),
+                PAYMENT_REF_CANCELING,
+                prepared.runtimeProfile(),
+                prepared.paymentModes(),
+                prepared.paymentLinkId(),
+                operationId,
+                prepared.amountKopecks(),
+                prepared.providerExpiresAt(),
+                prepared.createdAt(),
+                claimedAt,
+                true,
+                true,
+                claimedAt
+        );
+    }
+
+    private TochkaReconciliationObservation submitClaimedTochkaRefund(
+            PreparedTochkaReconciliation prepared,
+            TochkaReconciliationObservation observed
+    ) {
+        try {
+            tochkaClient.refund(
+                    prepared.runtimeProfile(),
+                    new TochkaRefundCommand(prepared.paymentId(), prepared.amountKopecks())
+            );
+            return observed.withRefundAttempt(true);
+        } catch (RuntimeException failure) {
+            return observed.withRefundFailure(failure);
+        }
+    }
+
+    private boolean isTochkaRefundSubmissionClaimed(String reason) {
+        String clean = normalize(reason);
+        return clean.startsWith(TOCHKA_REFUND_SUBMITTING_PREFIX)
+                || clean.startsWith("tochka_refund_requested")
+                || clean.startsWith("tochka_refund_in_progress")
+                || clean.startsWith("tochka_refund_observed_external")
+                || clean.startsWith("tochka_refund_outcome_unknown")
+                || clean.startsWith("tochka_refund_confirmation_timeout");
+    }
+
+    private boolean isTochkaCancellationLifecycleStatus(String status) {
+        return Set.of(
+                PAYMENT_REF_CANCEL_PENDING,
+                PAYMENT_REF_CANCELING,
+                PAYMENT_REF_CANCEL_FAILED,
+                PAYMENT_REF_CANCEL_FAILED_FINAL
+        ).contains(normalize(status).toUpperCase(Locale.ROOT));
+    }
+
+    private void setTochkaReasonUnlessRefundClaimed(
+            CommonInvoicePaymentRef ref,
+            String nextReason
+    ) {
+        if (ref == null || isTochkaRefundSubmissionClaimed(ref.getReason())) {
+            return;
+        }
+        ref.setReason(limit(nextReason, 160));
+    }
+
+    private LocalDateTime tochkaRefundClaimedAt(String reason, LocalDateTime fallback) {
+        String clean = normalize(reason);
+        if (clean.startsWith(TOCHKA_REFUND_SUBMITTING_PREFIX)) {
+            String encoded = clean.substring(TOCHKA_REFUND_SUBMITTING_PREFIX.length());
+            int separator = encoded.indexOf(':');
+            String epochMillis = separator < 0 ? encoded : encoded.substring(0, separator);
+            try {
+                return LocalDateTime.ofInstant(
+                        java.time.Instant.ofEpochMilli(Long.parseLong(epochMillis)),
+                        ZoneId.systemDefault()
+                );
+            } catch (RuntimeException ignored) {
+                // Legacy or malformed claim remains at-most-once; its row timestamp is the fallback.
+            }
+        }
+        return fallback;
+    }
+
+    private PaymentOperation requireSingleTochkaCommonOperation(
+            PaymentInfoResponse response,
+            String operationId
+    ) {
+        List<PaymentOperation> operations = response == null
+                || response.data() == null
+                || response.data().operations() == null
+                ? List.of()
+                : response.data().operations();
+        if (operations.size() != 1) {
+            throw new TochkaProviderException(
+                    "Точка вернула неоднозначный ответ при сверке operationId " + maskPaymentId(operationId),
+                    false,
+                    null
+            );
+        }
+        return operations.getFirst();
+    }
+
+    private void finishTochkaReconciliation(
+            PreparedTochkaReconciliation prepared,
+            TochkaReconciliationObservation observation
+    ) {
+        CommonInvoice invoice = lockedInvoice(prepared.invoiceId()).orElse(null);
+        CommonInvoicePaymentRef ref = paymentRefRepository.findByIdForUpdate(prepared.refId()).orElse(null);
+        if (invoice == null
+                || ref == null
+                || !Objects.equals(prepared.invoiceId(), paymentRefInvoiceId(ref))
+                || !PROVIDER_TOCHKA.equals(normalizedPaymentProvider(ref))
+                || !prepared.paymentLinkId().equals(providerOrderId(ref))
+                || !Objects.equals(prepared.amountKopecks(), ref.getAmountKopecks())) {
+            return;
+        }
+        if (observation.failure() != null) {
+            if (observation.refundAttempted()) {
+                // The durable claim was committed before invoking Refund. Even a locally
+                // classified failure is treated as potentially submitted: never issue POST again.
+                ref.setStatus(PAYMENT_REF_CANCEL_PENDING);
+                invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                invoice.setNextReminderAt(null);
+                invoice.setPaymentUrl(null);
+                invoice.setLastError(limit(
+                        "tochka_refund_outcome_unknown: исход возврата неизвестен; автоматический повтор "
+                                + "запрещён, дальнейшая обработка только через GET/ручную сверку ("
+                                + readableException(observation.failure()) + ")",
+                        512
+                ));
+            } else {
+                setTochkaReasonUnlessRefundClaimed(
+                        ref,
+                        "tochka_reconciliation_failed:" + readableException(observation.failure())
+                );
+                if (prepared.cancellation() || isTochkaRefundSubmissionClaimed(ref.getReason())) {
+                    invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                    invoice.setNextReminderAt(null);
+                    invoice.setPaymentUrl(null);
+                }
+                invoice.setLastError(limit(
+                        "tochka_reconciliation_failed: " + readableException(observation.failure()),
+                        512
+                ));
+            }
+            paymentRefRepository.save(ref);
+            invoiceRepository.save(invoice);
+            return;
+        }
+        if (observation.notFound()) {
+            boolean cancellationLifecycle = prepared.cancellation()
+                    || isTochkaCancellationLifecycleStatus(paymentRefStatus(ref))
+                    || isTochkaRefundSubmissionClaimed(ref.getReason());
+            if (prepared.providerExpiresAt() != null
+                    && !prepared.providerExpiresAt().isAfter(LocalDateTime.now())) {
+                // Absence from a complete bounded lookup is safe only after our requested TTL,
+                // and is used solely for a never-bound ambiguous POST. A known operation still
+                // requires an explicit provider terminal status.
+                if (prepared.paymentId().isBlank()) {
+                    ref.setStatus("EXPIRED");
+                    ref.setProviderStatus("NOT_FOUND_AFTER_TTL");
+                    ref.setReason("tochka_create_not_found_after_ttl");
+                    invoice.setPaymentUrl(null);
+                    invoice.setLastError(null);
+                }
+            } else if (cancellationLifecycle) {
+                if (!PAYMENT_REF_CANCEL_FAILED_FINAL.equals(paymentRefStatus(ref))) {
+                    ref.setStatus(PAYMENT_REF_CANCEL_PENDING);
+                }
+                setTochkaReasonUnlessRefundClaimed(ref, "tochka_cancel_recovery_not_found");
+                invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                invoice.setNextReminderAt(null);
+                invoice.setPaymentUrl(null);
+                invoice.setLastError(
+                        "tochka_cancel_recovery_not_found: платёж Точки остаётся на ручной сверке"
+                );
+            } else {
+                ref.setStatus(PAYMENT_REF_INIT_CONFLICT);
+                setTochkaReasonUnlessRefundClaimed(ref, "tochka_create_recovery_not_found");
+                invoice.setPaymentUrl(null);
+                invoice.setLastError("tochka_create_recovery_not_found: повторная сверка запланирована");
+            }
+            paymentRefRepository.save(ref);
+            invoiceRepository.save(invoice);
+            return;
+        }
+
+        PaymentOperation operation = observation.operation();
+        MappedPayment mapped = observation.mapped();
+        String operationId = normalize(operation.operationId());
+        Optional<CommonInvoicePaymentRef> foreign = paymentRefRepository
+                .findByProviderAndProviderPaymentId(PROVIDER_TOCHKA, operationId)
+                .filter(other -> !Objects.equals(other.getId(), ref.getId()));
+        if (foreign.isPresent()) {
+            quarantineTochkaInit(invoice, ref, "tochka_reconciliation_operation_collision");
+            return;
+        }
+        if (!providerPaymentId(ref).isBlank() && !providerPaymentId(ref).equals(operationId)) {
+            quarantineTochkaInit(invoice, ref, "tochka_reconciliation_operation_changed");
+            return;
+        }
+        ref.setProviderPaymentId(limit(operationId, 64));
+        ref.setProviderStatus(limit(mapped.providerStatus(), 32));
+        String safeUrl = PaymentUrlPolicy.safe(
+                operation.paymentLink(),
+                PaymentUrlPolicy.Purpose.TOCHKA_PAYMENT
+        );
+        if (!safeUrl.isBlank()) {
+            ref.setProviderPaymentUrl(safeUrl);
+        }
+        paymentRefRepository.save(ref);
+        entityManager.flush();
+
+        if (prepared.cancellation()) {
+            applyTochkaCancellationObservation(invoice, ref, prepared, observation);
+            return;
+        }
+        applyTochkaPaymentObservation(invoice, ref, mapped, safeUrl, "reconciliation");
+    }
+
+    private void applyTochkaCancellationObservation(
+            CommonInvoice invoice,
+            CommonInvoicePaymentRef ref,
+            PreparedTochkaReconciliation prepared,
+            TochkaReconciliationObservation observation
+    ) {
+        MappedPayment mapped = observation.mapped();
+        String providerStatus = normalize(mapped.providerStatus()).toUpperCase(Locale.ROOT);
+        if (mapped.status() == PaymentLinkStatus.EXPIRED || mapped.status() == PaymentLinkStatus.REFUNDED) {
+            ref.setStatus(PAYMENT_REF_CANCELED);
+            ref.setReason(limit("tochka_provider_terminal:" + providerStatus, 160));
+            paymentRefRepository.save(ref);
+            invoice.setPaymentUrl(null);
+            if (normalize(invoice.getLastError()).startsWith("tochka_")) {
+                invoice.setLastError(null);
+            }
+            invoiceRepository.save(invoice);
+            return;
+        }
+        if (mapped.status() == PaymentLinkStatus.PARTIAL_REFUNDED) {
+            ref.setStatus(PAYMENT_REF_CANCEL_FAILED_FINAL);
+            setTochkaReasonUnlessRefundClaimed(ref, "tochka_partial_refund_requires_attention");
+            paymentRefRepository.save(ref);
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError(
+                    PAYMENT_CANCEL_FAILED_FINAL
+                            + ": частичный возврат Точки требует ручной проверки банка"
+            );
+            invoiceRepository.save(invoice);
+            return;
+        }
+        if (observation.refundSubmitted()) {
+            ref.setStatus(PAYMENT_REF_CANCEL_PENDING);
+            paymentRefRepository.save(ref);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError("tochka_refund_requested: ожидается подтверждение возврата");
+            invoiceRepository.save(invoice);
+            return;
+        }
+        if (mapped.status() == PaymentLinkStatus.CONFIRMED && prepared.refundSubmissionClaimed()) {
+            boolean timedOut = prepared.refundClaimedAt() != null
+                    && !prepared.refundClaimedAt().plus(PAYMENT_REF_CANCELING_TIMEOUT)
+                    .isAfter(LocalDateTime.now());
+            ref.setStatus(timedOut ? PAYMENT_REF_CANCEL_FAILED_FINAL : PAYMENT_REF_CANCEL_PENDING);
+            paymentRefRepository.save(ref);
+            invoice.setPaymentUrl(null);
+            if (timedOut) {
+                invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                invoice.setNextReminderAt(null);
+                invoice.setLastError(
+                        PAYMENT_CANCEL_FAILED_FINAL
+                                + ": подтверждение возврата Точки не получено; проверьте банк вручную"
+                );
+            }
+            invoiceRepository.save(invoice);
+            return;
+        }
+        if ("ON-REFUND".equals(providerStatus)) {
+            ref.setStatus(PAYMENT_REF_CANCEL_PENDING);
+            if (!isTochkaRefundSubmissionClaimed(ref.getReason())) {
+                // A refund may have been initiated manually at the bank. Treat the observed
+                // provider state as an at-most-once claim so a later APPROVED snapshot cannot
+                // trigger a second automatic Refund.
+                ref.setReason("tochka_refund_observed_external:" + System.currentTimeMillis());
+            }
+            paymentRefRepository.save(ref);
+            invoice.setPaymentUrl(null);
+            invoiceRepository.save(invoice);
+            return;
+        }
+        // CREATED cannot be canceled in Tochka API. It remains blocking until GET reports EXPIRED.
+        if (mapped.status() == PaymentLinkStatus.INITIATED) {
+            if (!PAYMENT_REF_CANCEL_FAILED_FINAL.equals(paymentRefStatus(ref))) {
+                ref.setStatus(PAYMENT_REF_CANCEL_PENDING);
+            }
+            setTochkaReasonUnlessRefundClaimed(ref, "tochka_cancel_waiting_provider_expiry");
+            paymentRefRepository.save(ref);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError("tochka_cancel_waiting_provider_expiry: смена маршрута заблокирована до EXPIRED");
+            invoiceRepository.save(invoice);
+            return;
+        }
+        ref.setStatus(PAYMENT_REF_CANCEL_FAILED_FINAL);
+        setTochkaReasonUnlessRefundClaimed(ref, "tochka_cancel_ambiguous:" + providerStatus);
+        paymentRefRepository.save(ref);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setNextReminderAt(null);
+        invoice.setPaymentUrl(null);
+        invoice.setLastError(limit(
+                PAYMENT_CANCEL_FAILED_FINAL + ": статус Точки " + providerStatus
+                        + " требует ручной проверки банка",
+                512
+        ));
+        invoiceRepository.save(invoice);
     }
 
     public CommonInvoiceDetailsResponse sendManualReminder(Long invoiceId) {
@@ -2179,7 +2866,7 @@ public class CommonBillingService {
 
     private String commonInvoiceRouteLabel(CommonInvoice invoice) {
         if (isTbankCommonRoute(invoice)) {
-            return "Ссылка T-Bank владельца";
+            return "Банковская ссылка владельца";
         }
         if (isManualMobileBankCommonRoute(invoice)) {
             return "Оплата по реквизитам";
@@ -2233,6 +2920,15 @@ public class CommonBillingService {
             appendEvidenceField(snapshot, ref.getId());
             appendEvidenceField(snapshot, ref.getStatus());
             appendEvidenceField(snapshot, ref.getTbankPaymentId());
+            appendEvidenceField(snapshot, normalizedPaymentProvider(ref));
+            appendEvidenceField(snapshot, ref.getPaymentProfileId());
+            appendEvidenceField(snapshot, providerOrderId(ref));
+            appendEvidenceField(snapshot, providerPaymentId(ref));
+            appendEvidenceField(snapshot, providerMerchantId(ref));
+            appendEvidenceField(snapshot, ref.getProviderPaymentMode());
+            appendEvidenceField(snapshot, ref.getProviderTestMode());
+            appendEvidenceField(snapshot, ref.getProviderStatus());
+            appendEvidenceField(snapshot, ref.getProviderExpiresAt());
             appendEvidenceField(snapshot, ref.getAmountKopecks());
         }
         try {
@@ -2709,6 +3405,7 @@ public class CommonBillingService {
         String normalizedStatus = normalize(status).toUpperCase(Locale.ROOT);
         return PAYMENT_REF_CANCELED.equals(normalizedStatus)
                 || "REJECTED".equals(normalizedStatus)
+                || "EXPIRED".equals(normalizedStatus)
                 || "DEADLINE_EXPIRED".equals(normalizedStatus);
     }
 
@@ -3376,6 +4073,7 @@ public class CommonBillingService {
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureCommonInvoiceNeedsAttention(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        ensureNoUnresolvedPaymentRefsForGenericAttentionResolution(invoice);
         ensureAttentionCanBeResolved(invoice, items);
         resolveAttentionByCurrentItems(invoice, items);
         return invoiceAfterOrderPrelude(invoiceId);
@@ -3387,11 +4085,46 @@ public class CommonBillingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureCommonInvoiceNeedsAttention(invoice);
-        if (!attentionError(invoice).startsWith(PAYMENT_CANCEL_FAILED_FINAL)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "У общего счета нет финальной ошибки отмены T-Bank ссылки");
+        List<CommonInvoicePaymentRef> refs = paymentRefRepository.findByInvoiceIdForUpdate(invoiceId);
+        List<CommonInvoicePaymentRef> finalRefs = refs.stream()
+                .filter(ref -> PAYMENT_REF_CANCEL_FAILED_FINAL.equals(paymentRefStatus(ref)))
+                .toList();
+        if (!attentionError(invoice).startsWith(PAYMENT_CANCEL_FAILED_FINAL) && finalRefs.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "У общего счета нет финальной ошибки банковской платежной ссылки"
+            );
         }
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         ensureNoRecordedFullPaymentWithOpenItems(invoice, items);
+        for (CommonInvoicePaymentRef ref : finalRefs) {
+            ref.setStatus(PAYMENT_REF_ARCHIVED);
+            ref.setReason(manualPaymentCancelCheckAuditReason(ref.getReason()));
+        }
+        if (!finalRefs.isEmpty()) {
+            paymentRefRepository.saveAll(finalRefs);
+            Authentication authentication = currentAuthentication();
+            log.warn(
+                    "Common invoice {} final provider refs manually checked by {}: refs={}",
+                    invoice.getId(),
+                    authentication == null ? "unknown" : normalize(authentication.getName()),
+                    finalRefs.stream().map(CommonInvoicePaymentRef::getId).toList()
+            );
+        }
+        List<CommonInvoicePaymentRef> stillUnresolved = refs.stream()
+                .filter(ref -> PAYMENT_INIT_NEW_ATTEMPT_BLOCKING_REF_STATUSES.contains(paymentRefStatus(ref)))
+                .toList();
+        if (!stillUnresolved.isEmpty()) {
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setLastError(limit(
+                    PAYMENT_CANCEL_FAILED_FINAL
+                            + ": после ручной проверки остались незавершенные банковские операции",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            return invoiceAfterOrderPrelude(invoiceId);
+        }
         resolveAttentionByCurrentItems(invoice, items);
         return invoiceAfterOrderPrelude(invoiceId);
     }
@@ -4397,6 +5130,9 @@ public class CommonBillingService {
         if (prepared.cachedResponse() != null) {
             return prepared.cachedResponse();
         }
+        if (PROVIDER_TOCHKA.equals(prepared.provider())) {
+            return executeTochkaPaymentInit(prepared);
+        }
         TbankInitResponse response;
         try {
             response = tbankClient.init(prepared.runtimeProfile(), new TbankInitCommand(
@@ -4598,6 +5334,10 @@ public class CommonBillingService {
                     "Для общего счета выбран другой способ оплаты. Используйте реквизиты на странице счета."
             );
         }
+        PaymentProfile profile = lockedCommonPaymentProfile(invoice);
+        if (paymentProfileService.isTochkaProvider(profile)) {
+            return prepareTochkaPaymentInit(invoice, profile, cleanEmail, remaining);
+        }
         if (!runtimeSettingsService.isPaymentLinksEnabled() || !runtimeSettingsService.isTbankEnabled()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках");
         }
@@ -4706,7 +5446,6 @@ public class CommonBillingService {
 
         ensureNoBlockingPaymentRefsForNewInit(invoice);
 
-        PaymentProfile profile = lockedCommonPaymentProfile(invoice);
         TbankPaymentProfile runtimeProfile = normalize(invoice.getPaymentRouteTerminalKey()).isBlank()
                 ? paymentProfileService.toRuntime(profile)
                 : paymentProfileService.toRuntimeForTerminal(profile, invoice.getPaymentRouteTerminalKey());
@@ -4743,6 +5482,543 @@ public class CommonBillingService {
                 null,
                 null
         );
+    }
+
+    /**
+     * Reserves a Tochka attempt durably before the provider POST. The provider/profile/mode
+     * snapshot lives on the payment-ref row, so changing a manager assignment later can never
+     * reroute this in-flight payment to another bank.
+     */
+    private PreparedCommonPaymentInit prepareTochkaPaymentInit(
+            CommonInvoice invoice,
+            PaymentProfile entityProfile,
+            String cleanEmail,
+            long remaining
+    ) {
+        if (!runtimeSettingsService.isPaymentLinksEnabled()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках");
+        }
+        TochkaPaymentProfile runtimeProfile = tochkaPaymentProfileResolver.resolve(entityProfile);
+        List<TochkaPaymentMode> paymentModes = preferredCommonTochkaPaymentModes(runtimeProfile);
+        String canonicalPaymentModes = canonicalTochkaPaymentModes(paymentModes);
+        List<CommonInvoicePaymentRef> currentRefs = paymentRefRepository.findCurrentProviderRefsForUpdate(
+                invoice.getId(),
+                PROVIDER_TOCHKA,
+                PAYMENT_REF_CURRENT
+        );
+        if (currentRefs.size() > 1) {
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError(limit(
+                    "tochka_payment_registry_collision: у общего счёта несколько активных ссылок Точки",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "У общего счёта обнаружено несколько активных ссылок Точки; нужна ручная сверка"
+            );
+        }
+        if (!currentRefs.isEmpty()) {
+            CommonInvoicePaymentRef current = currentRefs.getFirst();
+            boolean bindingMatches = Objects.equals(current.getPaymentProfileId(), entityProfile.getId())
+                    && normalize(current.getProviderMerchantId()).equals(runtimeProfile.merchantId())
+                    && Objects.equals(current.getProviderTestMode(), runtimeProfile.testMode())
+                    && normalize(current.getProviderPaymentMode()).equals(canonicalPaymentModes)
+                    && Objects.equals(current.getAmountKopecks(), remaining);
+            String cachedUrl = PaymentUrlPolicy.safe(
+                    current.getProviderPaymentUrl(),
+                    PaymentUrlPolicy.Purpose.TOCHKA_PAYMENT
+            );
+            boolean stillAlive = current.getProviderExpiresAt() != null
+                    && current.getProviderExpiresAt().isAfter(LocalDateTime.now());
+            if (bindingMatches
+                    && stillAlive
+                    && !cachedUrl.isBlank()
+                    && !normalize(current.getProviderPaymentId()).isBlank()) {
+                invoice.setPaymentUrl(cachedUrl);
+                invoice.setPayerEmail(cleanEmail);
+                invoice.setLastError(null);
+                invoiceRepository.save(invoice);
+                return new PreparedCommonPaymentInit(
+                        invoice.getId(),
+                        current.getId(),
+                        cleanEmail,
+                        remaining,
+                        null,
+                        normalize(current.getProviderOrderId()),
+                        new PublicPaymentInitResponse(
+                                cachedUrl,
+                                current.getProviderPaymentId(),
+                                invoice.getStatus().name()
+                        ),
+                        null,
+                        PROVIDER_TOCHKA,
+                        runtimeProfile,
+                        paymentModes,
+                        current.getProviderExpiresAt()
+                );
+            }
+
+            current.setStatus(normalize(current.getProviderPaymentId()).isBlank()
+                    ? PAYMENT_REF_INIT_CONFLICT
+                    : PAYMENT_REF_CANCEL_PENDING);
+            current.setReason(limit(
+                    stillAlive ? "tochka_cached_binding_mismatch" : "tochka_link_expired_pending_reconciliation",
+                    160
+            ));
+            paymentRefRepository.save(current);
+            invoice.setPaymentUrl(null);
+            invoice.setNextReminderAt(null);
+            invoice.setLastError(limit(
+                    "tochka_payment_reconciliation_required: предыдущая ссылка Точки требует сверки",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            return new PreparedCommonPaymentInit(
+                    invoice.getId(),
+                    current.getId(),
+                    cleanEmail,
+                    remaining,
+                    null,
+                    normalize(current.getProviderOrderId()),
+                    null,
+                    "Предыдущая ссылка Точки требует сверки. Повторите через несколько минут.",
+                    PROVIDER_TOCHKA,
+                    runtimeProfile,
+                    paymentModes,
+                    current.getProviderExpiresAt()
+            );
+        }
+
+        ensureNoBlockingPaymentRefsForNewInit(invoice);
+        LocalDateTime expiresAt = LocalDateTime.now().plus(runtimeProfile.linkTtl());
+        String paymentLinkId = commonTochkaPaymentLinkId(invoice);
+        CommonInvoicePaymentRef preparedRef = new CommonInvoicePaymentRef();
+        preparedRef.setInvoice(invoice);
+        preparedRef.setProvider(PROVIDER_TOCHKA);
+        preparedRef.setPaymentProfileId(entityProfile.getId());
+        preparedRef.setProviderOrderId(paymentLinkId);
+        preparedRef.setProviderPaymentId(null);
+        preparedRef.setProviderMerchantId(limit(runtimeProfile.merchantId(), 64));
+        preparedRef.setProviderPaymentMode(canonicalPaymentModes);
+        preparedRef.setProviderTestMode(runtimeProfile.testMode());
+        preparedRef.setProviderStatus("CREATE_RESERVED");
+        preparedRef.setProviderExpiresAt(expiresAt);
+        preparedRef.setAmountKopecks(remaining);
+        preparedRef.setStatus(PAYMENT_REF_INIT_PREPARED);
+        preparedRef.setReason("provider_init_reserved");
+        paymentRefRepository.save(preparedRef);
+        entityManager.flush();
+
+        invoice.setPayerEmail(cleanEmail);
+        invoice.setPaymentUrl(null);
+        invoice.setLastError(PAYMENT_INIT_IN_PROGRESS);
+        invoiceRepository.save(invoice);
+        return new PreparedCommonPaymentInit(
+                invoice.getId(),
+                preparedRef.getId(),
+                cleanEmail,
+                remaining,
+                null,
+                paymentLinkId,
+                null,
+                null,
+                PROVIDER_TOCHKA,
+                runtimeProfile,
+                paymentModes,
+                expiresAt
+        );
+    }
+
+    private PublicPaymentInitResponse executeTochkaPaymentInit(PreparedCommonPaymentInit prepared) {
+        CreatePaymentResponse response = null;
+        try {
+            response = tochkaClient.createPaymentWithReceipt(
+                    prepared.tochkaProfile(),
+                    new TochkaCreatePaymentCommand(
+                            prepared.tbankOrderId(),
+                            prepared.remainingKopecks(),
+                            "Репутационные услуги",
+                            prepared.email(),
+                            properties.successUrl(),
+                            properties.failUrl(),
+                            prepared.tochkaPaymentModes()
+                    )
+            );
+            MappedPayment mapped = mapTochkaCreate(prepared, response);
+            if (mapped.status() != PaymentLinkStatus.INITIATED) {
+                throw new TochkaProviderException(
+                        "Точка вернула неожиданный статус создаваемой ссылки",
+                        true,
+                        null
+                );
+            }
+            String paymentUrl = PaymentUrlPolicy.require(
+                    response.data().paymentLink(),
+                    PaymentUrlPolicy.Purpose.TOCHKA_PAYMENT,
+                    HttpStatus.BAD_GATEWAY,
+                    "Точка вернула недопустимую ссылку оплаты"
+            );
+            CreatePaymentResponse finalResponse = response;
+            return writeTransaction(() -> finishTochkaPaymentInit(
+                    prepared,
+                    finalResponse,
+                    mapped,
+                    paymentUrl
+            ));
+        } catch (RuntimeException failure) {
+            CreatePaymentResponse responseEvidence = response;
+            writeTransaction(() -> {
+                failTochkaPaymentInit(prepared, responseEvidence, failure);
+                return null;
+            });
+            throw failure;
+        }
+    }
+
+    private MappedPayment mapTochkaCreate(
+            PreparedCommonPaymentInit prepared,
+            CreatePaymentResponse response
+    ) {
+        if (response == null || response.data() == null) {
+            throw new TochkaProviderException("Точка не вернула данные созданной ссылки", true, null);
+        }
+        if (prepared == null || prepared.tochkaProfile() == null) {
+            throw new TochkaProviderException("Не зафиксирован профиль создаваемой ссылки Точки", true, null);
+        }
+        String operationId = normalize(response.data().operationId());
+        if (operationId.isBlank()) {
+            throw new TochkaProviderException("Точка не вернула operationId созданной ссылки", true, null);
+        }
+        if (!normalize(prepared.tbankOrderId()).equals(normalize(response.data().paymentLinkId()))) {
+            throw new TochkaProviderException("Точка вернула другой paymentLinkId созданной ссылки", true, null);
+        }
+        if (!normalize(prepared.tochkaProfile().customerCode())
+                .equals(normalize(response.data().customerCode()))) {
+            throw new TochkaProviderException("Точка вернула другой customerCode созданной ссылки", true, null);
+        }
+        if (!normalize(prepared.tochkaProfile().merchantId())
+                .equals(normalize(response.data().merchantId()))) {
+            throw new TochkaProviderException("Точка вернула другой merchantId созданной ссылки", true, null);
+        }
+        BigDecimal expectedAmount = BigDecimal.valueOf(prepared.remainingKopecks(), 2);
+        if (response.data().amount() == null || expectedAmount.compareTo(response.data().amount()) != 0) {
+            throw new TochkaProviderException("Точка вернула другую сумму созданной ссылки", true, null);
+        }
+        List<String> returnedModes = response.data().paymentMode() == null
+                ? List.of()
+                : response.data().paymentMode().stream().map(this::normalize).toList();
+        List<String> expectedModes = prepared.tochkaPaymentModes().stream()
+                .map(TochkaPaymentMode::code)
+                .toList();
+        if (!expectedModes.equals(returnedModes)) {
+            throw new TochkaProviderException(
+                    "Точка вернула другой набор способов оплаты создаваемой ссылки",
+                    true,
+                    null
+            );
+        }
+        if (!"CREATED".equals(normalize(response.data().status()))) {
+            throw new TochkaProviderException(
+                    "Точка вернула другой статус создаваемой ссылки",
+                    true,
+                    null
+            );
+        }
+        return new MappedPayment(
+                PaymentLinkStatus.INITIATED,
+                PaymentMethod.SBP_QR,
+                "CREATED"
+        );
+    }
+
+    private PublicPaymentInitResponse finishTochkaPaymentInit(
+            PreparedCommonPaymentInit prepared,
+            CreatePaymentResponse response,
+            MappedPayment mapped,
+            String paymentUrl
+    ) {
+        CommonInvoice invoice = lockedInvoice(prepared.invoiceId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        CommonInvoicePaymentRef ref = paymentRefRepository.findByIdForUpdate(prepared.paymentRefId())
+                .orElseThrow(() -> invoiceMembershipChanged("не найдена durable-запись ссылки Точки"));
+        String operationId = normalize(response.data().operationId());
+        ref.setProviderPaymentId(limit(operationId, 64));
+        ref.setProviderPaymentUrl(limit(paymentUrl, 1024));
+        ref.setProviderStatus(mapped.providerStatus());
+        String refStatus = paymentRefStatus(ref);
+        boolean cancellationLifecycle = isTochkaCancellationLifecycleStatus(refStatus)
+                || isTochkaRefundSubmissionClaimed(ref.getReason());
+        if (!matchesPreparedTochkaPayment(ref, prepared)
+                || !Objects.equals(invoice.getPaymentRouteProfileId(), ref.getPaymentProfileId())) {
+            if (cancellationLifecycle) {
+                paymentRefRepository.save(ref);
+                markTochkaCreateCompletedAfterCancellationIntent(invoice, ref);
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Ссылка Точки создана после запроса закрытия счёта; нужна сверка банка"
+                );
+            }
+            quarantineTochkaInit(invoice, ref, "tochka_init_binding_changed");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Платёжный маршрут общего счёта изменился во время создания ссылки"
+            );
+        }
+        Optional<CommonInvoicePaymentRef> foreign = paymentRefRepository
+                .findByProviderAndProviderPaymentId(PROVIDER_TOCHKA, operationId)
+                .filter(candidate -> !Objects.equals(candidate.getId(), ref.getId()));
+        if (foreign.isPresent()) {
+            quarantineTochkaInit(invoice, ref, "tochka_operation_id_collision");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Точка вернула уже используемый operationId; нужна ручная сверка"
+            );
+        }
+        if (cancellationLifecycle) {
+            paymentRefRepository.save(ref);
+            markTochkaCreateCompletedAfterCancellationIntent(invoice, ref);
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ссылка Точки создана после запроса закрытия счёта; нужна сверка банка"
+            );
+        }
+        if (Set.of(PAYMENT_REF_CONFIRMED, PAYMENT_REF_PREPAID, PAYMENT_REF_APPLYING, PAYMENT_REF_APPLIED)
+                .contains(refStatus)) {
+            return new PublicPaymentInitResponse(paymentUrl, operationId, invoice.getStatus().name());
+        }
+        if (!PAYMENT_REF_INIT_PREPARED.equals(refStatus) && !PAYMENT_REF_INIT_CONFLICT.equals(refStatus)) {
+            quarantineTochkaInit(invoice, ref, "tochka_init_unexpected_ref_status:" + refStatus);
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Состояние ссылки Точки изменилось во время создания; нужна сверка"
+            );
+        }
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        refreshInvoiceAmounts(invoice, items);
+        if (!canAcceptPublicPayment(invoice) || remainingKopecks(invoice) != prepared.remainingKopecks()) {
+            quarantineTochkaInit(invoice, ref, "tochka_init_amount_changed");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Состав или сумма общего счёта изменились. Платёж отправлен на сверку."
+            );
+        }
+        ref.setStatus(PAYMENT_REF_CURRENT);
+        ref.setReason("provider_init_active");
+        paymentRefRepository.save(ref);
+        entityManager.flush();
+        invoice.setPayerEmail(prepared.email());
+        invoice.setPaymentUrl(paymentUrl);
+        invoice.setLastError(null);
+        invoiceRepository.save(invoice);
+        return new PublicPaymentInitResponse(paymentUrl, operationId, invoice.getStatus().name());
+    }
+
+    private void failTochkaPaymentInit(
+            PreparedCommonPaymentInit prepared,
+            CreatePaymentResponse response,
+            RuntimeException failure
+    ) {
+        if (prepared == null || prepared.paymentRefId() == null) {
+            return;
+        }
+        CommonInvoice invoice = lockedInvoice(prepared.invoiceId()).orElse(null);
+        CommonInvoicePaymentRef ref = paymentRefRepository.findByIdForUpdate(prepared.paymentRefId()).orElse(null);
+        if (invoice == null || ref == null || !matchesPreparedTochkaPayment(ref, prepared)) {
+            return;
+        }
+        String refStatus = paymentRefStatus(ref);
+        if (Set.of(PAYMENT_REF_CONFIRMED, PAYMENT_REF_PREPAID, PAYMENT_REF_APPLYING, PAYMENT_REF_APPLIED)
+                .contains(refStatus)) {
+            return;
+        }
+        boolean outcomeUnknown = response != null
+                || (failure instanceof TochkaProviderException providerFailure
+                && providerFailure.isOutcomeUnknown());
+        if (response != null && response.data() != null) {
+            String operationId = normalize(response.data().operationId());
+            if (!operationId.isBlank()) {
+                ref.setProviderPaymentId(limit(operationId, 64));
+            }
+            String paymentUrl = PaymentUrlPolicy.safe(
+                    response.data().paymentLink(),
+                    PaymentUrlPolicy.Purpose.TOCHKA_PAYMENT
+            );
+            if (!paymentUrl.isBlank()) {
+                ref.setProviderPaymentUrl(paymentUrl);
+            }
+            ref.setProviderStatus(limit(response.data().status(), 32));
+        }
+        if (isTochkaCancellationLifecycleStatus(refStatus)
+                || isTochkaRefundSubmissionClaimed(ref.getReason())) {
+            paymentRefRepository.save(ref);
+            markTochkaCreateCompletedAfterCancellationIntent(invoice, ref);
+            return;
+        }
+        ref.setStatus(outcomeUnknown ? PAYMENT_REF_INIT_CONFLICT : PAYMENT_REF_ARCHIVED);
+        ref.setReason(limit(
+                outcomeUnknown ? "tochka_create_outcome_unknown" : "tochka_create_not_started",
+                160
+        ));
+        paymentRefRepository.save(ref);
+        invoice.setPaymentUrl(null);
+        invoice.setLastError(limit(
+                (outcomeUnknown ? "tochka_create_ambiguous: " : "tochka_create_failed: ")
+                        + readableException(failure),
+                512
+        ));
+        invoiceRepository.save(invoice);
+    }
+
+    private void markTochkaCreateCompletedAfterCancellationIntent(
+            CommonInvoice invoice,
+            CommonInvoicePaymentRef ref
+    ) {
+        if (invoice == null || ref == null) {
+            return;
+        }
+        if (!isTochkaCancellationLifecycleStatus(paymentRefStatus(ref))) {
+            ref.setStatus(PAYMENT_REF_CANCEL_PENDING);
+        }
+        setTochkaReasonUnlessRefundClaimed(ref, "tochka_create_completed_after_cancel_intent");
+        paymentRefRepository.save(ref);
+        invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+        invoice.setNextReminderAt(null);
+        invoice.setPaymentUrl(null);
+        invoice.setLastError(limit(
+                "tochka_create_completed_after_cancel_intent: ссылка Точки могла быть создана; "
+                        + "до GET/возврата новая ссылка запрещена",
+                512
+        ));
+        invoiceRepository.save(invoice);
+    }
+
+    private void quarantineTochkaInit(
+            CommonInvoice invoice,
+            CommonInvoicePaymentRef ref,
+            String reason
+    ) {
+        if (ref != null) {
+            boolean cancellationLifecycle = isTochkaCancellationLifecycleStatus(paymentRefStatus(ref))
+                    || isTochkaRefundSubmissionClaimed(ref.getReason());
+            ref.setStatus(cancellationLifecycle
+                    ? PAYMENT_REF_CANCEL_FAILED_FINAL
+                    : PAYMENT_REF_INIT_CONFLICT);
+            setTochkaReasonUnlessRefundClaimed(ref, reason);
+            paymentRefRepository.save(ref);
+        }
+        if (invoice != null) {
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            boolean cancellationLifecycle = ref != null
+                    && isTochkaCancellationLifecycleStatus(paymentRefStatus(ref));
+            invoice.setLastError(limit(
+                    (cancellationLifecycle ? PAYMENT_CANCEL_FAILED_FINAL + ": " : "")
+                            + reason + ": платёж Точки требует ручной сверки",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+        }
+    }
+
+    private boolean matchesPreparedTochkaPayment(
+            CommonInvoicePaymentRef ref,
+            PreparedCommonPaymentInit prepared
+    ) {
+        return ref != null
+                && prepared != null
+                && Objects.equals(paymentRefInvoiceId(ref), prepared.invoiceId())
+                && PROVIDER_TOCHKA.equals(normalizedPaymentProvider(ref))
+                && Objects.equals(ref.getPaymentProfileId(), prepared.tochkaProfile().id())
+                && normalize(ref.getProviderOrderId()).equals(prepared.tbankOrderId())
+                && normalize(ref.getProviderMerchantId()).equals(prepared.tochkaProfile().merchantId())
+                && normalize(ref.getProviderPaymentMode()).equals(
+                        canonicalTochkaPaymentModes(prepared.tochkaPaymentModes())
+                )
+                && Objects.equals(ref.getProviderTestMode(), prepared.tochkaProfile().testMode())
+                && Objects.equals(ref.getAmountKopecks(), prepared.remainingKopecks());
+    }
+
+    private List<TochkaPaymentMode> preferredCommonTochkaPaymentModes(TochkaPaymentProfile profile) {
+        List<TochkaPaymentMode> modes = profile == null ? List.of() : profile.paymentModes();
+        List<TochkaPaymentMode> supported = new ArrayList<>(2);
+        if (modes.contains(TochkaPaymentMode.SBP)) {
+            supported.add(TochkaPaymentMode.SBP);
+        }
+        if (modes.contains(TochkaPaymentMode.CARD)) {
+            supported.add(TochkaPaymentMode.CARD);
+        }
+        if (!supported.isEmpty()) {
+            return List.copyOf(supported);
+        }
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Для профиля Точки общего счёта должны быть включены СБП или карта"
+        );
+    }
+
+    private String canonicalTochkaPaymentModes(List<TochkaPaymentMode> modes) {
+        return (modes == null ? List.<TochkaPaymentMode>of() : modes).stream()
+                .map(TochkaPaymentMode::code)
+                .distinct()
+                .collect(Collectors.joining(","));
+    }
+
+    private List<TochkaPaymentMode> parseTochkaPaymentModes(String value) {
+        List<TochkaPaymentMode> modes = java.util.Arrays.stream(normalize(value).split(","))
+                .map(String::trim)
+                .filter(mode -> !mode.isBlank())
+                .map(TochkaPaymentMode::fromCode)
+                .distinct()
+                .toList();
+        if (modes.isEmpty() || modes.stream().anyMatch(mode ->
+                mode != TochkaPaymentMode.SBP && mode != TochkaPaymentMode.CARD)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "В durable-записи Точки отсутствуют разрешённые способы оплаты"
+            );
+        }
+        return modes;
+    }
+
+    private TochkaPaymentMode observedTochkaPaymentMode(
+            String paymentType,
+            String providerStatus,
+            List<TochkaPaymentMode> allowedModes
+    ) {
+        List<TochkaPaymentMode> allowed = allowedModes == null ? List.of() : allowedModes;
+        String cleanType = normalize(paymentType).toLowerCase(Locale.ROOT);
+        if (cleanType.isBlank()
+                && Set.of("CREATED", "EXPIRED").contains(
+                normalize(providerStatus).toUpperCase(Locale.ROOT))) {
+            if (allowed.isEmpty()) {
+                throw new TochkaProviderException(
+                        "В платеже Точки не зафиксирован разрешённый способ оплаты",
+                        false,
+                        null
+                );
+            }
+            return allowed.getFirst();
+        }
+        TochkaPaymentMode observed = TochkaPaymentMode.fromCode(cleanType);
+        if (!allowed.contains(observed)) {
+            throw new TochkaProviderException(
+                    "Точка сообщила способ оплаты, не разрешённый durable-записью",
+                    false,
+                    null
+            );
+        }
+        return observed;
+    }
+
+    private String commonTochkaPaymentLinkId(CommonInvoice invoice) {
+        String invoiceId = String.valueOf(invoice == null || invoice.getId() == null ? 0 : invoice.getId());
+        String nonce = UUID.randomUUID().toString().replace("-", "");
+        int maxNonce = Math.max(8, 45 - 4 - invoiceId.length());
+        return "ci-" + invoiceId + "-" + nonce.substring(0, Math.min(maxNonce, nonce.length()));
     }
 
     private PaymentInitFinishResult finishPaymentInit(
@@ -4908,6 +6184,11 @@ public class CommonBillingService {
         }
         preparedRef.setTbankPaymentId(limit(response.paymentId(), 64));
         preparedRef.setTbankTerminalKey(limit(response.terminalKey(), 64));
+        preparedRef.setProvider(PROVIDER_TBANK);
+        preparedRef.setProviderPaymentId(limit(response.paymentId(), 64));
+        preparedRef.setProviderMerchantId(limit(response.terminalKey(), 64));
+        preparedRef.setProviderStatus(limit(response.status(), 32));
+        preparedRef.setProviderPaymentUrl(limit(response.paymentUrl(), 1024));
         preparedRef.setAmountKopecks(response.amount());
         preparedRef.setStatus(PAYMENT_REF_CURRENT);
         preparedRef.setReason("provider_init_active");
@@ -5125,6 +6406,386 @@ public class CommonBillingService {
             // Acknowledge a verified bank webhook after durable quarantine;
             // returning an error would cause endless provider retries.
             return true;
+        }
+    }
+
+    /** Applies an already signature-verified Tochka webhook to a common-invoice attempt. */
+    public boolean handleTochkaWebhook(TochkaAcquiringInternetPaymentWebhook claims) {
+        if (claims == null) {
+            return false;
+        }
+        String paymentLinkId = normalize(claims.paymentLinkId());
+        String operationId = normalize(claims.operationId());
+        if (paymentLinkId.isBlank() && operationId.isBlank()) {
+            return false;
+        }
+        return writeTransaction(() -> handleTochkaWebhookInTransaction(
+                claims,
+                paymentLinkId,
+                operationId
+        ));
+    }
+
+    private boolean handleTochkaWebhookInTransaction(
+            TochkaAcquiringInternetPaymentWebhook claims,
+            String paymentLinkId,
+            String operationId
+    ) {
+        Optional<CommonInvoicePaymentRef> candidate = paymentLinkId.isBlank()
+                ? Optional.empty()
+                : paymentRefRepository.findByProviderAndProviderOrderId(PROVIDER_TOCHKA, paymentLinkId);
+        if (candidate.isEmpty() && !operationId.isBlank()) {
+            candidate = paymentRefRepository.findByProviderAndProviderPaymentId(PROVIDER_TOCHKA, operationId);
+        }
+        if (candidate.isEmpty()) {
+            return false;
+        }
+        Long invoiceId = paymentRefInvoiceId(candidate.get());
+        CommonInvoice invoice = lockedInvoice(invoiceId).orElseThrow(() ->
+                new TochkaWebhookVerificationException("Tochka common-invoice binding disappeared")
+        );
+        CommonInvoicePaymentRef ref = paymentRefRepository.findByIdForUpdate(candidate.get().getId())
+                .orElseThrow(() -> new TochkaWebhookVerificationException(
+                        "Tochka common-invoice payment ref disappeared"
+                ));
+        if (!Objects.equals(invoiceId, paymentRefInvoiceId(ref))
+                || !PROVIDER_TOCHKA.equals(normalizedPaymentProvider(ref))
+                || (!paymentLinkId.isBlank()
+                && !paymentLinkId.equals(normalize(ref.getProviderOrderId())))
+                || (!operationId.isBlank()
+                && !normalize(ref.getProviderPaymentId()).isBlank()
+                && !operationId.equals(normalize(ref.getProviderPaymentId())))) {
+            throw new TochkaWebhookVerificationException(
+                    "Tochka common-invoice webhook identity does not match the durable ref"
+            );
+        }
+        Optional<CommonInvoicePaymentRef> foreignOperation = operationId.isBlank()
+                ? Optional.empty()
+                : paymentRefRepository.findByProviderAndProviderPaymentId(PROVIDER_TOCHKA, operationId)
+                .filter(other -> !Objects.equals(other.getId(), ref.getId()));
+        if (foreignOperation.isPresent()) {
+            quarantineTochkaInit(invoice, ref, "tochka_webhook_operation_collision");
+            return true;
+        }
+
+        PaymentProfile entityProfile;
+        TochkaPaymentProfile runtimeProfile;
+        List<TochkaPaymentMode> paymentModes;
+        try {
+            entityProfile = paymentProfileService.lockByIdForRouting(ref.getPaymentProfileId());
+            runtimeProfile = tochkaPaymentProfileResolver.resolveForExistingPayment(entityProfile);
+            paymentModes = parseTochkaPaymentModes(ref.getProviderPaymentMode());
+        } catch (RuntimeException failure) {
+            throw new TochkaWebhookVerificationException(
+                    "Pinned Tochka common-invoice profile cannot be resolved",
+                    failure
+            );
+        }
+        if (!paymentProfileService.isTochkaProvider(entityProfile)
+                || !Objects.equals(runtimeProfile.id(), ref.getPaymentProfileId())
+                || !runtimeProfile.merchantId().equals(normalize(ref.getProviderMerchantId()))
+                || !Objects.equals(runtimeProfile.testMode(), ref.getProviderTestMode())
+                || ref.getAmountKopecks() == null
+                || ref.getAmountKopecks() <= 0
+                || operationId.isBlank()
+                || paymentLinkId.isBlank()) {
+            throw new TochkaWebhookVerificationException(
+                    "Pinned Tochka common-invoice identity is incomplete or changed"
+            );
+        }
+
+        MappedPayment mapped;
+        try {
+            TochkaPaymentMode observedMode = observedTochkaPaymentMode(
+                    claims.paymentType(),
+                    claims.status(),
+                    paymentModes
+            );
+            mapped = tochkaPaymentOperationMapper.map(
+                    tochkaWebhookOperation(claims),
+                    new ExpectedPayment(
+                            operationId,
+                            paymentLinkId,
+                            runtimeProfile.customerCode(),
+                            runtimeProfile.merchantId(),
+                            ref.getAmountKopecks(),
+                            observedMode
+                    ),
+                    false
+            );
+        } catch (RuntimeException failure) {
+            throw new TochkaWebhookVerificationException(
+                    "Tochka common-invoice webhook payload does not match its durable ref",
+                    failure
+            );
+        }
+        ref.setProviderPaymentId(limit(operationId, 64));
+        ref.setProviderStatus(limit(mapped.providerStatus(), 32));
+        paymentRefRepository.save(ref);
+        entityManager.flush();
+        applyTochkaPaymentObservation(invoice, ref, mapped, null, "webhook");
+        return true;
+    }
+
+    private PaymentOperation tochkaWebhookOperation(TochkaAcquiringInternetPaymentWebhook claims) {
+        return new PaymentOperation(
+                claims.customerCode(),
+                null,
+                claims.paymentType(),
+                null,
+                claims.transactionId(),
+                null,
+                claims.amount(),
+                claims.status(),
+                claims.operationId(),
+                null,
+                claims.merchantId(),
+                null,
+                claims.paymentLinkId(),
+                List.of()
+        );
+    }
+
+    private void applyTochkaPaymentObservation(
+            CommonInvoice invoice,
+            CommonInvoicePaymentRef ref,
+            MappedPayment mapped,
+            String observedPaymentUrl,
+            String source
+    ) {
+        if (invoice == null || ref == null || mapped == null) {
+            return;
+        }
+        String previousStatus = paymentRefStatus(ref);
+        boolean cancellationLifecycle = isTochkaCancellationLifecycleStatus(previousStatus)
+                || isTochkaRefundSubmissionClaimed(ref.getReason());
+        ref.setProviderStatus(limit(mapped.providerStatus(), 32));
+        String safeUrl = PaymentUrlPolicy.safe(
+                observedPaymentUrl,
+                PaymentUrlPolicy.Purpose.TOCHKA_PAYMENT
+        );
+        if (!safeUrl.isBlank()) {
+            ref.setProviderPaymentUrl(safeUrl);
+        }
+        switch (mapped.status()) {
+            case INITIATED -> {
+                if (Set.of(
+                        PAYMENT_REF_CONFIRMED,
+                        PAYMENT_REF_PREPAID,
+                        PAYMENT_REF_APPLYING,
+                        PAYMENT_REF_APPLIED,
+                        "REFUNDED",
+                        "PARTIAL_REFUNDED"
+                ).contains(previousStatus)) {
+                    return;
+                }
+                if (cancellationLifecycle) {
+                    setTochkaReasonUnlessRefundClaimed(
+                            ref,
+                            "tochka_cancel_waiting_expiry:" + source
+                    );
+                    paymentRefRepository.save(ref);
+                    return;
+                }
+                ref.setStatus(PAYMENT_REF_CURRENT);
+                ref.setReason(limit("tochka_payment_created:" + source, 160));
+                paymentRefRepository.save(ref);
+                String persistedUrl = PaymentUrlPolicy.safe(
+                        ref.getProviderPaymentUrl(),
+                        PaymentUrlPolicy.Purpose.TOCHKA_PAYMENT
+                );
+                if (!persistedUrl.isBlank()) {
+                    invoice.setPaymentUrl(persistedUrl);
+                }
+                invoice.setLastError(null);
+                invoiceRepository.save(invoice);
+            }
+            case CONFIRMED -> applyConfirmedTochkaPayment(invoice, ref, previousStatus, source);
+            case EXPIRED -> {
+                ref.setStatus("EXPIRED");
+                ref.setReason(limit("tochka_payment_expired:" + source, 160));
+                paymentRefRepository.save(ref);
+                invoice.setPaymentUrl(null);
+                if (PAYMENT_INIT_IN_PROGRESS.equals(normalize(invoice.getLastError()))
+                        || normalize(invoice.getLastError()).startsWith("tochka_")) {
+                    invoice.setLastError(null);
+                }
+                invoiceRepository.save(invoice);
+            }
+            case REFUNDED -> {
+                ref.setStatus("REFUNDED");
+                ref.setReason(limit("tochka_payment_refunded:" + source, 160));
+                paymentRefRepository.save(ref);
+                invoice.setPaymentUrl(null);
+                if (invoice.getStatus() == CommonInvoiceStatus.PAID
+                        || PAYMENT_REF_APPLIED.equals(previousStatus)
+                        || PAYMENT_REF_PREPAID.equals(previousStatus)) {
+                    invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                    invoice.setNextReminderAt(null);
+                    invoice.setLastError(limit(
+                            "tochka_payment_refunded: оплаченный общий счёт получил возврат; нужна сверка",
+                            512
+                    ));
+                }
+                invoiceRepository.save(invoice);
+            }
+            case PARTIAL_REFUNDED -> {
+                ref.setStatus("PARTIAL_REFUNDED");
+                ref.setReason(limit("tochka_payment_partially_refunded:" + source, 160));
+                paymentRefRepository.save(ref);
+                invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                invoice.setNextReminderAt(null);
+                invoice.setPaymentUrl(null);
+                invoice.setLastError(limit(
+                        "tochka_payment_partially_refunded: частичный возврат требует ручной сверки",
+                        512
+                ));
+                invoiceRepository.save(invoice);
+            }
+            case AUTHORIZED, NEEDS_RECONCILIATION -> {
+                ref.setStatus(cancellationLifecycle
+                        ? PAYMENT_REF_CANCEL_FAILED_FINAL
+                        : PAYMENT_REF_INIT_CONFLICT);
+                setTochkaReasonUnlessRefundClaimed(
+                        ref,
+                        "tochka_payment_ambiguous:" + mapped.providerStatus() + ":" + source
+                );
+                paymentRefRepository.save(ref);
+                invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                invoice.setNextReminderAt(null);
+                invoice.setPaymentUrl(null);
+                invoice.setLastError(limit(
+                        (cancellationLifecycle ? PAYMENT_CANCEL_FAILED_FINAL + ": " : "")
+                                + "tochka_payment_ambiguous: статус " + mapped.providerStatus()
+                                + " требует ручной сверки",
+                        512
+                ));
+                invoiceRepository.save(invoice);
+            }
+            default -> {
+                ref.setStatus(cancellationLifecycle
+                        ? PAYMENT_REF_CANCEL_FAILED_FINAL
+                        : PAYMENT_REF_INIT_CONFLICT);
+                setTochkaReasonUnlessRefundClaimed(
+                        ref,
+                        "tochka_payment_unhandled:" + mapped.providerStatus()
+                );
+                paymentRefRepository.save(ref);
+                invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                invoice.setPaymentUrl(null);
+                invoice.setLastError(
+                        (cancellationLifecycle ? PAYMENT_CANCEL_FAILED_FINAL + ": " : "")
+                                + "tochka_payment_unhandled: нужна ручная сверка"
+                );
+                invoiceRepository.save(invoice);
+            }
+        }
+    }
+
+    private void applyConfirmedTochkaPayment(
+            CommonInvoice invoice,
+            CommonInvoicePaymentRef ref,
+            String previousStatus,
+            String source
+    ) {
+        if (PAYMENT_REF_APPLIED.equals(previousStatus) || PAYMENT_REF_PREPAID.equals(previousStatus)) {
+            return;
+        }
+        if (Set.of(
+                PAYMENT_REF_CANCEL_PENDING,
+                PAYMENT_REF_CANCELING,
+                PAYMENT_REF_CANCEL_FAILED,
+                PAYMENT_REF_CANCEL_FAILED_FINAL
+        ).contains(previousStatus) || isTochkaRefundSubmissionClaimed(ref.getReason())) {
+            // Preserve the cancellation lifecycle so reconciliation can claim exactly one Refund.
+            // Financial confirmation remains frozen in providerStatus/reason and is never applied
+            // to a route that was already being replaced.
+            if (!PAYMENT_REF_CANCEL_FAILED_FINAL.equals(previousStatus)) {
+                ref.setStatus(PAYMENT_REF_CANCEL_PENDING);
+            }
+            setTochkaReasonUnlessRefundClaimed(
+                    ref,
+                    "late_tochka_payment_after_cancel_request:" + source
+            );
+            paymentRefRepository.save(ref);
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError(limit(
+                    "late_tochka_payment: ссылка Точки оплачена после запроса смены маршрута; "
+                            + "нужна сверка и возврат",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            return;
+        }
+        if (invoice.getStatus() == CommonInvoiceStatus.PAID) {
+            ref.setStatus(PAYMENT_REF_APPLIED);
+            ref.setReason(limit("tochka_confirmed_after_paid:" + source, 160));
+            paymentRefRepository.save(ref);
+            return;
+        }
+        if (invoice.getStatus() == CommonInvoiceStatus.UNPAID
+                || invoice.getStatus() == CommonInvoiceStatus.BAN
+                || invoice.getStatus() == CommonInvoiceStatus.DISABLED
+                || invoice.getStatus() == CommonInvoiceStatus.ARCHIVED) {
+            ref.setStatus(PAYMENT_REF_CONFIRMED);
+            ref.setReason(limit("late_tochka_payment_after_terminal_invoice:" + source, 160));
+            paymentRefRepository.save(ref);
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError(limit(
+                    "late_tochka_payment: оплачена ссылка после закрытия общего счёта; нужна сверка",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            return;
+        }
+
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        refreshInvoiceAmounts(invoice, items);
+        long confirmedAmount = ref.getAmountKopecks() == null ? 0 : ref.getAmountKopecks();
+        if (confirmedAmount <= 0 || remainingKopecks(invoice) != confirmedAmount) {
+            ref.setStatus(PAYMENT_REF_CONFIRMED);
+            ref.setReason(limit("tochka_confirmed_amount_mismatch:" + source, 160));
+            paymentRefRepository.save(ref);
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError(limit(
+                    "payment_amount_changed_after_confirmation: Точка подтвердила "
+                            + amountRubles(confirmedAmount) + " руб., остаток счёта "
+                            + amountRubles(remainingKopecks(invoice)) + " руб.; нужна сверка",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            return;
+        }
+
+        mergeInvoicePaymentMethod(invoice, PAYMENT_METHOD_TOCHKA);
+        invoice.setPaymentUrl(null);
+        if (!allOrdersReady(items)) {
+            ref.setStatus(PAYMENT_REF_PREPAID);
+            ref.setReason(PREPAID_WAITING_COMMON_INVOICE_READY);
+            paymentRefRepository.save(ref);
+            long prepaid = confirmedCommonInvoicePrepaymentKopecks(invoice);
+            invoice.setPaidKopecks(Math.min(invoice.getAmountKopecks(), prepaid));
+            invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+            invoice.setNextReminderAt(null);
+            invoice.setLastError(null);
+            invoiceRepository.save(invoice);
+            return;
+        }
+
+        ref.setStatus(PAYMENT_REF_CONFIRMED);
+        ref.setReason(limit("tochka_payment_confirmed:" + source, 160));
+        paymentRefRepository.save(ref);
+        closePaidInvoice(invoice, items);
+        if (invoice.getStatus() == CommonInvoiceStatus.PAID) {
+            ref.setStatus(PAYMENT_REF_APPLIED);
+            ref.setReason(limit("tochka_payment_applied:" + source, 160));
+            paymentRefRepository.save(ref);
         }
     }
 
@@ -7923,7 +9584,7 @@ public class CommonBillingService {
         if (error.startsWith(PAYMENT_CANCEL_FAILED_FINAL)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Старую T-Bank ссылку не удалось отменить автоматически. Проверьте банк вручную."
+                    "Банковскую платежную ссылку не удалось завершить автоматически. Проверьте банк вручную."
             );
         }
         if (!error.startsWith("close_failed") && !error.startsWith("next_order_failed")) {
@@ -7951,7 +9612,7 @@ public class CommonBillingService {
         if (error.startsWith(PAYMENT_CANCEL_FAILED_FINAL)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Старую T-Bank ссылку не удалось отменить автоматически. Проверьте банк вручную."
+                    "Банковскую платежную ссылку не удалось завершить автоматически. Проверьте банк вручную."
             );
         }
         if (isPaymentInitManualCheckAttention(invoice)) {
@@ -7969,6 +9630,24 @@ public class CommonBillingService {
             );
         }
         ensureNoRecordedFullPaymentWithOpenItems(invoice, items);
+    }
+
+    private void ensureNoUnresolvedPaymentRefsForGenericAttentionResolution(CommonInvoice invoice) {
+        if (invoice == null || invoice.getId() == null) {
+            return;
+        }
+        List<CommonInvoicePaymentRef> unresolved = paymentRefRepository
+                .findByInvoiceIdForUpdate(invoice.getId())
+                .stream()
+                .filter(ref -> PAYMENT_INIT_NEW_ATTEMPT_BLOCKING_REF_STATUSES.contains(paymentRefStatus(ref)))
+                .toList();
+        if (!unresolved.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "У общего счета осталась незавершенная банковская операция. "
+                            + "Закройте ее через явную ручную проверку банка."
+            );
+        }
     }
 
     private void ensureCommonInvoiceTechnicalTailCanBeResolved(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
@@ -8238,6 +9917,26 @@ public class CommonBillingService {
 
     private String paymentRefStatus(CommonInvoicePaymentRef ref) {
         return normalize(ref == null ? null : ref.getStatus()).toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizedPaymentProvider(CommonInvoicePaymentRef ref) {
+        String provider = normalize(ref == null ? null : ref.getProvider()).toUpperCase(Locale.ROOT);
+        return provider.isBlank() ? PROVIDER_TBANK : provider;
+    }
+
+    private String providerOrderId(CommonInvoicePaymentRef ref) {
+        String value = normalize(ref == null ? null : ref.getProviderOrderId());
+        return value.isBlank() ? normalize(ref == null ? null : ref.getTbankOrderId()) : value;
+    }
+
+    private String providerPaymentId(CommonInvoicePaymentRef ref) {
+        String value = normalize(ref == null ? null : ref.getProviderPaymentId());
+        return value.isBlank() ? normalize(ref == null ? null : ref.getTbankPaymentId()) : value;
+    }
+
+    private String providerMerchantId(CommonInvoicePaymentRef ref) {
+        String value = normalize(ref == null ? null : ref.getProviderMerchantId());
+        return value.isBlank() ? normalize(ref == null ? null : ref.getTbankTerminalKey()) : value;
     }
 
     private String attentionError(CommonInvoice invoice) {
@@ -9038,6 +10737,8 @@ public class CommonBillingService {
                         isPreparedPaymentRef(ref)
                                 || !normalize(ref.getTbankOrderId()).isBlank()
                                 || !normalize(ref.getTbankPaymentId()).isBlank()
+                                || !providerOrderId(ref).isBlank()
+                                || !providerPaymentId(ref).isBlank()
                 ))
                 .toList();
     }
@@ -9050,13 +10751,15 @@ public class CommonBillingService {
                 .map(ref -> new CommonInvoicePaymentRefResponse(
                         ref.getId(),
                         paymentRefStatus(ref),
-                        normalize(ref.getTbankOrderId()).isBlank() ? null : ref.getTbankOrderId(),
-                        normalize(ref.getTbankPaymentId()).isBlank() ? null : ref.getTbankPaymentId(),
+                        providerOrderId(ref).isBlank() ? null : providerOrderId(ref),
+                        providerPaymentId(ref).isBlank() ? null : providerPaymentId(ref),
                         ref.getAmountKopecks(),
-                        terminalLabels == null
-                                ? null
-                                : terminalLabels.get(normalize(ref.getTbankTerminalKey())),
-                        normalize(ref.getTbankTerminalKey()).isBlank() ? null : ref.getTbankTerminalKey(),
+                        PROVIDER_TOCHKA.equals(normalizedPaymentProvider(ref))
+                                ? "Точка Банк"
+                                : terminalLabels == null
+                                        ? null
+                                        : terminalLabels.get(normalize(ref.getTbankTerminalKey())),
+                        providerMerchantId(ref).isBlank() ? null : providerMerchantId(ref),
                         normalize(ref.getReason()).isBlank() ? null : ref.getReason()
                 ))
                 .toList();
@@ -9125,6 +10828,15 @@ public class CommonBillingService {
             appendEvidenceField(evidence, ref.getTbankOrderId());
             appendEvidenceField(evidence, ref.getTbankPaymentId());
             appendEvidenceField(evidence, ref.getTbankTerminalKey());
+            appendEvidenceField(evidence, normalizedPaymentProvider(ref));
+            appendEvidenceField(evidence, ref.getPaymentProfileId());
+            appendEvidenceField(evidence, providerOrderId(ref));
+            appendEvidenceField(evidence, providerPaymentId(ref));
+            appendEvidenceField(evidence, providerMerchantId(ref));
+            appendEvidenceField(evidence, ref.getProviderPaymentMode());
+            appendEvidenceField(evidence, ref.getProviderTestMode());
+            appendEvidenceField(evidence, ref.getProviderStatus());
+            appendEvidenceField(evidence, ref.getProviderExpiresAt());
             appendEvidenceField(evidence, ref.getAmountKopecks());
             appendEvidenceField(evidence, ref.getReason());
         }
@@ -9357,6 +11069,7 @@ public class CommonBillingService {
                 normalize(tbankTerminalLabel).isBlank() ? null : tbankTerminalLabel,
                 normalize(invoice.getTbankTerminalKey()).isBlank() ? null : invoice.getTbankTerminalKey(),
                 normalize(invoice.getPaymentRouteType()),
+                frozenPaymentRouteProvider(invoice),
                 normalize(invoice.getPaymentRouteProfileName()),
                 invoice.getPaymentRouteManualTaskId(),
                 isFrozenLiveContractorSource(invoice),
@@ -9368,6 +11081,29 @@ public class CommonBillingService {
                         : invoice.getInvoicePaymentMode()).name(),
                 invoice.getPaperInvoiceIssuedAt()
         );
+    }
+
+    private String frozenPaymentRouteProvider(CommonInvoice invoice) {
+        if (invoice == null || !isTbankCommonRoute(invoice)) {
+            return null;
+        }
+        Long frozenProfileId = invoice.getPaymentRouteProfileId();
+        if (frozenProfileId != null) {
+            return paymentProfileService.findById(frozenProfileId)
+                    .map(paymentProfileService::provider)
+                    .orElse(null);
+        }
+        String routeType = normalize(invoice.getPaymentRouteType()).toUpperCase(Locale.ROOT);
+        if (TbankRuntimeSettingsService.PAYMENT_SOURCE_TOCHKA_LINK.equals(routeType)) {
+            return PROVIDER_TOCHKA;
+        }
+        if (TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK.equals(routeType)
+                || !normalize(invoice.getTbankTerminalKey()).isBlank()
+                || !normalize(invoice.getTbankOrderId()).isBlank()
+                || !normalize(invoice.getTbankPaymentId()).isBlank()) {
+            return PROVIDER_TBANK;
+        }
+        return null;
     }
 
     private OrderDTOList toManagerBoardCard(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
@@ -10507,9 +12243,11 @@ public class CommonBillingService {
     }
 
     private boolean isTbankCommonRoute(CommonInvoice invoice) {
-        return TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK.equals(
-                normalize(invoice == null ? null : invoice.getPaymentRouteType()).toUpperCase(Locale.ROOT)
-        );
+        String routeType = normalize(invoice == null ? null : invoice.getPaymentRouteType())
+                .toUpperCase(Locale.ROOT);
+        return TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK.equals(routeType)
+                || TbankRuntimeSettingsService.PAYMENT_SOURCE_BANK_LINK.equals(routeType)
+                || "TOCHKA_LINK".equals(routeType);
     }
 
     private String safeCommonManualPaymentUrl(CommonInvoice invoice) {
@@ -10713,6 +12451,12 @@ public class CommonBillingService {
     ) {
         CommonInvoicePaymentRef ref = new CommonInvoicePaymentRef();
         ref.setInvoice(invoice);
+        ref.setProvider(PROVIDER_TBANK);
+        ref.setPaymentProfileId(runtimeProfile == null ? null : runtimeProfile.id());
+        ref.setProviderOrderId(limit(tbankOrderId, 64));
+        ref.setProviderMerchantId(runtimeProfile == null ? null : limit(runtimeProfile.terminalKey(), 64));
+        ref.setProviderTestMode(runtimeProfile == null ? null : runtimeProfile.testMode());
+        ref.setProviderStatus("INIT_RESERVED");
         ref.setTbankOrderId(limit(tbankOrderId, 36));
         ref.setTbankTerminalKey(runtimeProfile == null ? null : limit(runtimeProfile.terminalKey(), 64));
         ref.setAmountKopecks(amountKopecks > 0 ? amountKopecks : null);
@@ -11187,9 +12931,46 @@ public class CommonBillingService {
         );
     }
 
+    private String manualPaymentCancelCheckAuditReason(String previousReason) {
+        Authentication authentication = currentAuthentication();
+        String actor = authentication == null ? "unknown" : normalize(authentication.getName());
+        String previous = normalize(previousReason);
+        return limit(
+                PAYMENT_CANCEL_MANUALLY_CHECKED_BY_PREFIX
+                        + limit(actor.isBlank() ? "unknown" : actor, 40)
+                        + (previous.isBlank() ? "" : "; previous=" + previous),
+                160
+        );
+    }
+
     private void archiveCurrentPaymentRef(CommonInvoice invoice, String reason) {
-        if (invoice == null
-                || (normalize(invoice.getTbankOrderId()).isBlank() && normalize(invoice.getTbankPaymentId()).isBlank())) {
+        if (invoice == null) {
+            return;
+        }
+        if (normalize(invoice.getTbankOrderId()).isBlank()
+                && normalize(invoice.getTbankPaymentId()).isBlank()) {
+            List<CommonInvoicePaymentRef> tochkaRefs = paymentRefRepository.findProviderRefsForUpdate(
+                    invoice.getId(),
+                    PROVIDER_TOCHKA,
+                    Set.of(
+                            PAYMENT_REF_INIT_PREPARED,
+                            PAYMENT_REF_INIT_CONFLICT,
+                            PAYMENT_REF_CURRENT
+                    )
+            );
+            for (CommonInvoicePaymentRef ref : tochkaRefs) {
+                // Tochka does not expose cancel for a CREATED payment. Keep the provider attempt
+                // unresolved and let GET reconciliation wait for EXPIRED (or refund APPROVED).
+                ref.setStatus(PAYMENT_REF_CANCEL_PENDING);
+                setTochkaReasonUnlessRefundClaimed(
+                        ref,
+                        "tochka_archive_pending:" + normalize(reason)
+                );
+                paymentRefRepository.save(ref);
+            }
+            if (!tochkaRefs.isEmpty()) {
+                invoice.setPaymentUrl(null);
+            }
             return;
         }
         Optional<CommonInvoicePaymentRef> existing = lockedPaymentRefByProviderBinding(
@@ -11395,6 +13176,7 @@ public class CommonBillingService {
             }
             copyCurrentPaymentBindingToRef(invoice, ref);
             ref.setStatus(limit(status, 32));
+            ref.setProviderStatus(limit(status, 32));
             ref.setReason(limit(reason, 160));
             paymentRefRepository.save(ref);
             flushPaymentRefProviderEvidence(ref);
@@ -11408,7 +13190,9 @@ public class CommonBillingService {
         ref.setTbankPaymentId(normalize(invoice.getTbankPaymentId()).isBlank() ? null : invoice.getTbankPaymentId());
         ref.setTbankTerminalKey(normalize(invoice.getTbankTerminalKey()).isBlank() ? null : invoice.getTbankTerminalKey());
         ref.setAmountKopecks(invoice.getTbankPaymentAmountKopecks());
+        copyCurrentPaymentBindingToRef(invoice, ref);
         ref.setStatus(limit(status, 32));
+        ref.setProviderStatus(limit(status, 32));
         ref.setReason(limit(reason, 160));
         paymentRefRepository.save(ref);
         flushPaymentRefProviderEvidence(ref);
@@ -11416,7 +13200,8 @@ public class CommonBillingService {
     }
 
     private void flushPaymentRefProviderEvidence(CommonInvoicePaymentRef ref) {
-        if (ref != null && !normalize(ref.getTbankPaymentId()).isBlank()) {
+        if (ref != null && (!normalize(ref.getTbankPaymentId()).isBlank()
+                || !providerPaymentId(ref).isBlank())) {
             entityManager.flush();
         }
     }
@@ -11474,14 +13259,21 @@ public class CommonBillingService {
         if (invoice == null || ref == null) {
             return;
         }
+        ref.setProvider(PROVIDER_TBANK);
         if (!normalize(invoice.getTbankOrderId()).isBlank()) {
             ref.setTbankOrderId(limit(invoice.getTbankOrderId(), 36));
+            ref.setProviderOrderId(limit(invoice.getTbankOrderId(), 64));
         }
         if (!normalize(invoice.getTbankPaymentId()).isBlank()) {
             ref.setTbankPaymentId(limit(invoice.getTbankPaymentId(), 64));
+            ref.setProviderPaymentId(limit(invoice.getTbankPaymentId(), 64));
         }
         if (!normalize(invoice.getTbankTerminalKey()).isBlank()) {
             ref.setTbankTerminalKey(limit(invoice.getTbankTerminalKey(), 64));
+            ref.setProviderMerchantId(limit(invoice.getTbankTerminalKey(), 64));
+        }
+        if (!normalize(invoice.getPaymentUrl()).isBlank()) {
+            ref.setProviderPaymentUrl(limit(invoice.getPaymentUrl(), 1024));
         }
         if (invoice.getTbankPaymentAmountKopecks() != null) {
             ref.setAmountKopecks(invoice.getTbankPaymentAmountKopecks());
@@ -11537,6 +13329,26 @@ public class CommonBillingService {
                 ? null
                 : limit(prepared.runtimeProfile().terminalKey(), 64))
                 : limit(responseTerminalKey, 64));
+        ref.setProvider(PROVIDER_TBANK);
+        if (ref.getPaymentProfileId() == null && prepared.runtimeProfile() != null) {
+            ref.setPaymentProfileId(prepared.runtimeProfile().id());
+        }
+        ref.setProviderOrderId(preparedOrderId.isBlank() ? null : limit(preparedOrderId, 64));
+        ref.setProviderPaymentId(paymentId.isBlank() ? null : limit(paymentId, 64));
+        ref.setProviderMerchantId(normalize(ref.getTbankTerminalKey()).isBlank()
+                ? null
+                : limit(ref.getTbankTerminalKey(), 64));
+        if (prepared.runtimeProfile() != null) {
+            ref.setProviderTestMode(prepared.runtimeProfile().testMode());
+        }
+        ref.setProviderStatus(limit(response.status(), 32));
+        String safeProviderUrl = PaymentUrlPolicy.safe(
+                response.paymentUrl(),
+                PaymentUrlPolicy.Purpose.TBANK_PAYMENT
+        );
+        if (!safeProviderUrl.isBlank()) {
+            ref.setProviderPaymentUrl(safeProviderUrl);
+        }
         ref.setAmountKopecks(response.amount() != null && response.amount() > 0
                 ? response.amount()
                 : (prepared.remainingKopecks() > 0 ? prepared.remainingKopecks() : null));
@@ -11958,8 +13770,108 @@ public class CommonBillingService {
             TbankPaymentProfile runtimeProfile,
             String tbankOrderId,
             PublicPaymentInitResponse cachedResponse,
-            String deferredFailure
+            String deferredFailure,
+            String provider,
+            TochkaPaymentProfile tochkaProfile,
+            List<TochkaPaymentMode> tochkaPaymentModes,
+            LocalDateTime providerExpiresAt
     ) {
+        private PreparedCommonPaymentInit(
+                Long invoiceId,
+                Long paymentRefId,
+                String email,
+                long remainingKopecks,
+                TbankPaymentProfile runtimeProfile,
+                String tbankOrderId,
+                PublicPaymentInitResponse cachedResponse,
+                String deferredFailure
+        ) {
+            this(
+                    invoiceId,
+                    paymentRefId,
+                    email,
+                    remainingKopecks,
+                    runtimeProfile,
+                    tbankOrderId,
+                    cachedResponse,
+                    deferredFailure,
+                    PROVIDER_TBANK,
+                    null,
+                    null,
+                    null
+            );
+        }
+    }
+
+    private record PreparedTochkaReconciliation(
+            Long refId,
+            Long invoiceId,
+            String refStatus,
+            TochkaPaymentProfile runtimeProfile,
+            List<TochkaPaymentMode> paymentModes,
+            String paymentLinkId,
+            String paymentId,
+            long amountKopecks,
+            LocalDateTime providerExpiresAt,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt,
+            boolean cancellation,
+            boolean refundSubmissionClaimed,
+            LocalDateTime refundClaimedAt
+    ) {
+    }
+
+    private record TochkaReconciliationObservation(
+            boolean notFound,
+            PaymentOperation operation,
+            MappedPayment mapped,
+            boolean refundAttempted,
+            boolean refundSubmitted,
+            RuntimeException failure
+    ) {
+        private static TochkaReconciliationObservation missing() {
+            return new TochkaReconciliationObservation(true, null, null, false, false, null);
+        }
+
+        private static TochkaReconciliationObservation observed(
+                PaymentOperation operation,
+                MappedPayment mapped
+        ) {
+            return new TochkaReconciliationObservation(
+                    false,
+                    operation,
+                    mapped,
+                    false,
+                    false,
+                    null
+            );
+        }
+
+        private TochkaReconciliationObservation withRefundAttempt(boolean submitted) {
+            return new TochkaReconciliationObservation(
+                    notFound,
+                    operation,
+                    mapped,
+                    true,
+                    submitted,
+                    null
+            );
+        }
+
+        private TochkaReconciliationObservation withRefundFailure(RuntimeException failure) {
+            return new TochkaReconciliationObservation(
+                    notFound,
+                    operation,
+                    mapped,
+                    true,
+                    false,
+                    failure
+            );
+        }
+
+        private static TochkaReconciliationObservation failed(RuntimeException failure) {
+            return new TochkaReconciliationObservation(false, null, null, false, false, failure);
+        }
     }
 
     private record ConfirmedStandaloneApplication(

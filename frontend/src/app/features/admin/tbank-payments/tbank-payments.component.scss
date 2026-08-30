@@ -1201,6 +1201,19 @@ input[type='search']::placeholder {
   grid-column: 1 / -1;
 }
 
+.manager-profile-row.routing-manager-row.changed {
+  border-color: color-mix(in srgb, var(--otziv-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--otziv-primary) 5%, var(--otziv-white));
+}
+
+.routing-manager-row .selected-bank {
+  color: #315f97;
+}
+
+.routing-manager-row .pending-bank-change {
+  color: #a56f00;
+}
+
 .manager-profile-list {
   display: grid;
   grid-template-columns: 1fr;

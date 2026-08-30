@@ -63,4 +63,10 @@ describe('app navigation registry', () => {
     expect(adminSections).not.toContain('achievements');
     expect(adminSections).not.toContain('gamification-rewards');
   });
+
+  it('opens the provider-neutral bank section from navigation', () => {
+    const bank = appNavigationLinksForGroup('home', ['ADMIN']).find((link) => link.id === 'tbank');
+    expect(bank?.label).toBe('Банк');
+    expect(bank?.routerLink).toBe('/admin/bank-payments');
+  });
 });

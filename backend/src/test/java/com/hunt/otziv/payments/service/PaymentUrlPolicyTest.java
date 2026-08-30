@@ -31,6 +31,31 @@ class PaymentUrlPolicyTest {
     }
 
     @Test
+    void tochkaHostedPaymentUrlRequiresExactHttpsHostAndStandardPort() {
+        String valid = "https://merch.securepaytb.ru/payment/operation-1?mode=sbp";
+        assertEquals(
+                valid,
+                PaymentUrlPolicy.require(
+                        valid,
+                        PaymentUrlPolicy.Purpose.TOCHKA_PAYMENT,
+                        HttpStatus.BAD_GATEWAY,
+                        "invalid"
+                )
+        );
+        for (String value : new String[]{
+                "https://merch.securepaytb.ru.evil.example/payment/operation-1",
+                "https://sub.merch.securepaytb.ru/payment/operation-1",
+                "http://merch.securepaytb.ru/payment/operation-1",
+                "https://merch.securepaytb.ru:8443/payment/operation-1"
+        }) {
+            assertFalse(
+                    PaymentUrlPolicy.isValid(value, PaymentUrlPolicy.Purpose.TOCHKA_PAYMENT),
+                    value
+            );
+        }
+    }
+
+    @Test
     void sbpPayloadAllowsNspkWebLinksAndSupportedBankDeepLinks() {
         for (String value : new String[]{
                 "https://qr.nspk.ru/AS100000000111?type=01",

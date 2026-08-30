@@ -21,16 +21,19 @@ public final class PaymentUrlPolicy {
     }
 
     public enum Purpose {
-        MANUAL_EXTERNAL(512, false),
-        TBANK_PAYMENT(1024, false),
-        SBP_PAYLOAD(2048, true);
+        MANUAL_EXTERNAL(512, false, null),
+        TBANK_PAYMENT(1024, false, null),
+        TOCHKA_PAYMENT(1024, false, "merch.securepaytb.ru"),
+        SBP_PAYLOAD(2048, true, null);
 
         private final int maxLength;
         private final boolean allowSbpSchemes;
+        private final String exactHttpsHost;
 
-        Purpose(int maxLength, boolean allowSbpSchemes) {
+        Purpose(int maxLength, boolean allowSbpSchemes, String exactHttpsHost) {
             this.maxLength = maxLength;
             this.allowSbpSchemes = allowSbpSchemes;
+            this.exactHttpsHost = exactHttpsHost;
         }
     }
 
@@ -95,6 +98,12 @@ public final class PaymentUrlPolicy {
             URI uri = new URI(value);
             String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
             if (WEB_SCHEMES.contains(scheme)) {
+                if (purpose.exactHttpsHost != null) {
+                    return "https".equals(scheme)
+                            && purpose.exactHttpsHost.equalsIgnoreCase(uri.getHost())
+                            && uri.getRawUserInfo() == null
+                            && (uri.getPort() == -1 || uri.getPort() == 443);
+                }
                 return uri.isAbsolute()
                         && uri.getHost() != null
                         && !uri.getHost().isBlank()

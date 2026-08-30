@@ -130,7 +130,7 @@ describe('ManagerBoardActionFacade', () => {
     const conflict = {
       status: 409,
       error: {
-        message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+        message: 'У заказа есть незавершенный банковский платёж. Проверьте его в журнале перед ручным закрытием.'
       }
     };
     const { facade, calls, mutationKey, toastMessages } = createFacade({ orderStatusError: conflict });
@@ -201,7 +201,7 @@ describe('ManagerBoardActionFacade', () => {
     const conflict = {
       status: 409,
       error: {
-        message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+        message: 'У заказа есть незавершенный банковский платёж. Проверьте его в журнале перед ручным закрытием.'
       }
     };
     const { facade, calls, toastMessages } = createFacade({ orderStatusError: conflict });
@@ -219,7 +219,7 @@ describe('ManagerBoardActionFacade', () => {
     const conflict = {
       status: 409,
       error: {
-        message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+        message: 'У заказа есть незавершенный банковский платёж. Проверьте его в журнале перед ручным закрытием.'
       }
     };
     const { facade, calls, toastMessages } = createFacade({ orderStatusError: conflict });
@@ -237,7 +237,7 @@ describe('ManagerBoardActionFacade', () => {
     const conflict = {
       status: 409,
       error: {
-        message: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+        message: 'У заказа есть незавершенный банковский платёж. Проверьте его в журнале перед ручным закрытием.'
       }
     };
     const { facade, calls, toastMessages } = createFacade({
@@ -273,7 +273,7 @@ describe('ManagerBoardActionFacade', () => {
       orderStatusError: {
         status: 409,
         error: {
-          detail: 'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.'
+          detail: 'У заказа есть незавершенный банковский платёж. Проверьте его в журнале перед ручным закрытием.'
         }
       }
     });

@@ -10,6 +10,7 @@ import { apiErrorMessage } from '../../shared/api-error-message';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { navigateToPaymentTarget } from '../../shared/payment-navigation';
+import { isBankPaymentRouteType } from '../../shared/bank-payment-presentation';
 
 @Component({
   selector: 'app-pay-group-page',
@@ -44,7 +45,7 @@ export class PayGroupPageComponent {
   readonly paidOrders = computed(() => this.invoice()?.orders.filter((order) => order.paid).length ?? 0);
   readonly readyOrders = computed(() => this.invoice()?.orders.filter((order) => order.ready).length ?? 0);
   readonly paymentRouteType = computed(() => (this.invoice()?.paymentRouteType ?? '').trim().toUpperCase());
-  readonly tbankRoute = computed(() => this.paymentRouteType() === 'TBANK_LINK');
+  readonly bankRoute = computed(() => isBankPaymentRouteType(this.paymentRouteType()));
   readonly managerTextRoute = computed(() => this.paymentRouteType() === 'MANAGER_TEXT');
   readonly manualRoute = computed(() => this.paymentRouteType() === 'MANUAL_MOBILE_BANK'
     || this.paymentRouteType() === 'MANUAL_EXTERNAL_LINK');
@@ -81,7 +82,7 @@ export class PayGroupPageComponent {
     const email = this.email().trim();
     return Boolean(
       this.invoice()?.payable &&
-      this.tbankRoute() &&
+      this.bankRoute() &&
       email &&
       email.includes('@') &&
       this.offerConsent() &&

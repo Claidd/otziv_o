@@ -3453,7 +3453,7 @@
                         <span>Фоновой очереди разрешено отправлять клиентам</span>
                       </label>
 
-                      <label class="checkbox" appTooltip="Управляет сообщениями, которые отправляются сразу при событиях заказа: ссылка проверки, передача в публикацию, счет после публикации, доплата после плохого отзыва, короткий отчет и успешная оплата T-Bank/СБП.">
+                      <label class="checkbox" appTooltip="Управляет сообщениями, которые отправляются сразу при событиях заказа: ссылка проверки, передача в публикацию, счет после публикации, доплата после плохого отзыва, короткий отчет и успешная банковская оплата.">
                         <input class="switch" type="checkbox" formControlName="immediateEnabled">
                         <span>Отправлять сразу при смене статуса заказа</span>
                       </label>
@@ -3569,11 +3569,11 @@
                         <span>Live-перевод просрочки в целевой статус</span>
                       </label>
 
-                      <div class="readonly-setting" appTooltip="Источник платежной инструкции меняется только в разделе T-Bank, чтобы не вернуть старый текст менеджера случайным сохранением автоответчика.">
+                      <div class="readonly-setting" appTooltip="Источник платежной инструкции меняется только в разделе «Банк», чтобы не вернуть старый текст менеджера случайным сохранением автоответчика.">
                         <span>Источник оплаты</span>
                         <strong>{{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }}</strong>
-                        <small>Меняется в разделе T-Bank.</small>
-                        <a href="/admin/tbank-payments">Открыть T-Bank</a>
+                        <small>Меняется в разделе «Банк».</small>
+                        <a href="/admin/bank-payments">Открыть раздел «Банк»</a>
                       </div>
 
                       <label appTooltip="Через сколько дней после выставления счета отправлять и повторять напоминание.">
@@ -3850,17 +3850,17 @@
                     <textarea rows="5" formControlName="publicationProgressReportText"></textarea>
                   </label>
 
-                  <label appTooltip="Основной текст для напоминаний в режиме Текст менеджера. В режиме T-Bank /pay ссылка стандартный шаблон берется из поля ниже; здесь можно собрать свой шаблон с переменными: {company}, {filial}, {companyAndFilial}, {managerPayText}, {legacyManagerPayText}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {tbankPaymentCopyText}, {sum}.">
+                  <label appTooltip="Основной текст для напоминаний в режиме Текст менеджера. В режиме банковской /pay-ссылки стандартный шаблон берется из поля ниже; здесь можно собрать свой шаблон с переменными: {company}, {filial}, {companyAndFilial}, {managerPayText}, {legacyManagerPayText}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {tbankPaymentCopyText}, {sum}.">
                     <span>Напоминание об оплате</span>
                     <textarea rows="5" formControlName="paymentReminderText"></textarea>
                   </label>
 
-                  <label appTooltip="Используется кнопкой Счет, автоответчиком в режиме T-Bank ссылок и счетом после плохого отзыва. Переменные: {company}, {filial}, {companyAndFilial}, {sum}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {recipient}, {comment}, {paymentAfterword}.">
+                  <label appTooltip="Используется кнопкой Счет, автоответчиком в режиме банковских ссылок и счетом после плохого отзыва. Переменные: {company}, {filial}, {companyAndFilial}, {sum}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {recipient}, {comment}, {paymentAfterword}.">
                     <span>Счет /pay</span>
                     <textarea rows="6" formControlName="paymentLinkCopyText"></textarea>
                   </label>
 
-                  <label appTooltip="Отправляется клиенту после успешной оплаты через T-Bank или СБП. Переменные: {orderId}, {orderLine}, {company}, {companyLine}, {filial}, {companyAndFilial}, {sum}, {paymentPage}, {payerEmail}, {receiptText}.">
+                  <label appTooltip="Отправляется клиенту после успешной оплаты через банк или СБП. Переменные: {orderId}, {orderLine}, {company}, {companyLine}, {filial}, {companyAndFilial}, {sum}, {paymentPage}, {payerEmail}, {receiptText}.">
                     <span>Успешная оплата</span>
                     <textarea rows="5" formControlName="paymentSuccessText"></textarea>
                   </label>

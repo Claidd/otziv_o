@@ -146,7 +146,10 @@ describe('ManagerOrderEditModalComponent', () => {
     const employeeButton = Array.from(routeSection?.querySelectorAll<HTMLButtonElement>('button') ?? [])
       .find((button) => button.textContent?.includes('Реквизиты сотрудника'));
     employeeButton?.click();
-    expect(selectedTargets).toEqual(['EMPLOYEE_REQUISITES']);
+    const bankButton = Array.from(routeSection?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+      .find((button) => button.textContent?.includes('Банковская ссылка владельца'));
+    bankButton?.click();
+    expect(selectedTargets).toEqual(['EMPLOYEE_REQUISITES', 'OWNER_TBANK']);
 
     component.allowPaymentRouteChange = false;
     fixture.detectChanges();

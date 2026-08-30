@@ -16,6 +16,8 @@ import java.util.regex.Pattern;
 @WebFilter(urlPatterns = "/*")
 public class RequestValidationFilter implements Filter {
 
+    private static final int TOCHKA_WEBHOOK_MAX_BODY_BYTES = 65_536;
+
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
@@ -24,6 +26,22 @@ public class RequestValidationFilter implements Filter {
 
         if (containsInvalidCharacters(httpRequest.getRequestURI())) {
             httpResponse.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid characters in request");
+            return;
+        }
+
+        if ("POST".equalsIgnoreCase(httpRequest.getMethod())
+                && matchesEndpoint(requestURI, "/api/payments/tochka/webhook")) {
+            try {
+                chain.doFilter(
+                        new CachedBodyHttpServletRequest(httpRequest, TOCHKA_WEBHOOK_MAX_BODY_BYTES),
+                        response
+                );
+            } catch (BodyTooLargeException exception) {
+                httpResponse.sendError(
+                        HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE,
+                        "Tochka webhook body exceeds byte limit"
+                );
+            }
             return;
         }
 

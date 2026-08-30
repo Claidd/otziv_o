@@ -14,6 +14,7 @@ public record PaymentProfileResponse(
         boolean defaultProfile,
         boolean testMode,
         boolean hasPassword,
+        boolean operational,
         String paymentPolicy,
         String manualPaymentType,
         String manualPhone,

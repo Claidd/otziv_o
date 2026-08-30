@@ -19,6 +19,9 @@ public class TbankRuntimeSettingsService {
 
     public static final String PAYMENT_SOURCE_MANAGER_TEXT = "MANAGER_TEXT";
     public static final String PAYMENT_SOURCE_TBANK_LINK = "TBANK_LINK";
+    public static final String PAYMENT_SOURCE_TOCHKA_LINK = "TOCHKA_LINK";
+    /** Provider-neutral route type for newly frozen bank-acquiring routes. */
+    public static final String PAYMENT_SOURCE_BANK_LINK = "BANK_LINK";
     public static final TbankPaymentPageMode DEFAULT_PAYMENT_PAGE_MODE = TbankPaymentPageMode.SBP_PRIMARY;
 
     private final AppSettingService appSettingService;

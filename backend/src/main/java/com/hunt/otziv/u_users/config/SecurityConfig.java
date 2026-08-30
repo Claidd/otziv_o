@@ -275,6 +275,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/review").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/payments/public/**").permitAll();
         auth.requestMatchers(HttpMethod.POST, "/api/payments/tbank/webhook").permitAll();
+        auth.requestMatchers(HttpMethod.POST, "/api/payments/tochka/webhook").permitAll();
         auth.requestMatchers("/api/common-billing/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/webhook", "/webhook/**").permitAll();
         // The bridge has its own constant-time token filter and is absent when disabled.

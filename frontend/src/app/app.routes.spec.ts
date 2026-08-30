@@ -33,7 +33,7 @@ describe('routes', () => {
       'admin/archive',
       'admin/workload-monitor',
       'admin/manager-control/:managerId',
-      'admin/tbank-payments',
+      'admin/bank-payments',
       'admin/common-billing',
       'admin/user-info/:userId',
       'admin/dictionaries/phones',
@@ -94,7 +94,7 @@ describe('routes', () => {
       ['admin/archive', ['ADMIN', 'OWNER']],
       ['admin/workload-monitor', ['ADMIN', 'OWNER']],
       ['admin/manager-control/:managerId', ['ADMIN', 'OWNER']],
-      ['admin/tbank-payments', ['ADMIN', 'OWNER']],
+      ['admin/bank-payments', ['ADMIN', 'OWNER']],
       ['admin/common-billing', ['ADMIN', 'OWNER']],
       ['admin/dictionaries/phones', ['ADMIN', 'OWNER']],
       ['admin/dictionaries', ['ADMIN', 'OWNER', 'MANAGER']]
@@ -104,6 +104,11 @@ describe('routes', () => {
       expect(route(path as string)?.canActivate).toEqual([roleGuard]);
       expect(route(path as string)?.data?.['roles']).toEqual(roles);
     });
+  });
+
+  it('keeps the old T-Bank URL as a backwards-compatible redirect', () => {
+    expect(route('admin/tbank-payments')?.redirectTo).toBe('admin/bank-payments');
+    expect(route('admin/tbank-payments')?.pathMatch).toBe('full');
   });
 
   it('keeps gamification UI routes disabled and provides a public not-found route', () => {

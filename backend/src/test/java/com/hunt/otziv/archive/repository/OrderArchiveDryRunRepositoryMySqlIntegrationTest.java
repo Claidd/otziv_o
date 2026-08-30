@@ -124,7 +124,7 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
     @ParameterizedTest
     @ValueSource(strings = {
             "APPLIED", "ARCHIVED", "CANCELED", "REJECTED",
-            "REFUNDED", "PARTIAL_REFUNDED", "REVERSED", "PARTIAL_REVERSED"
+            "REFUNDED", "PARTIAL_REFUNDED", "REVERSED", "PARTIAL_REVERSED", "EXPIRED"
     })
     void terminalPaymentRegistryLifecycleAllowsCommonInvoiceArchive(String paymentRefStatus) {
         insertPaidCommonInvoiceWithPaymentRef(paymentRefStatus);

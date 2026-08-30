@@ -19,6 +19,16 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
 
     Optional<CommonInvoicePaymentRef> findByTbankPaymentId(String tbankPaymentId);
 
+    Optional<CommonInvoicePaymentRef> findByProviderAndProviderOrderId(
+            String provider,
+            String providerOrderId
+    );
+
+    Optional<CommonInvoicePaymentRef> findByProviderAndProviderPaymentId(
+            String provider,
+            String providerPaymentId
+    );
+
     /** Read-only parent discovery used before taking the payment-ref lock. */
     @Query("""
             select ref.invoice.id
@@ -31,7 +41,13 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
             select ref
             from CommonInvoicePaymentRef ref
             join fetch ref.invoice invoice
-            where ref.status = :pendingStatus
+            where (
+                    ref.provider is null
+                    or trim(ref.provider) = ''
+                    or upper(ref.provider) = upper(:provider)
+                  )
+              and (
+                    ref.status = :pendingStatus
                or (
                     ref.status = :legacyConflictStatus
                     and ref.tbankPaymentId is not null
@@ -48,9 +64,11 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
                     ref.status = :cancelingStatus
                     and ref.updatedAt <= :cancelingBefore
                )
+              )
             order by ref.updatedAt asc, ref.id asc
             """)
     List<CommonInvoicePaymentRef> findCancelableRefs(
+            @Param("provider") String provider,
             @Param("pendingStatus") String pendingStatus,
             @Param("failedStatus") String failedStatus,
             @Param("legacyConflictStatus") String legacyConflictStatus,
@@ -99,6 +117,52 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
             """)
     List<CommonInvoicePaymentRef> findByInvoiceIdOrderByCreatedAtAsc(
             @Param("invoiceId") Long invoiceId
+    );
+
+    @Query("""
+            select ref
+            from CommonInvoicePaymentRef ref
+            join fetch ref.invoice invoice
+            where ref.provider = :provider
+              and ref.status in :statuses
+              and ref.updatedAt <= :updatedBefore
+            order by ref.updatedAt asc, ref.id asc
+            """)
+    List<CommonInvoicePaymentRef> findProviderReconciliationCandidates(
+            @Param("provider") String provider,
+            @Param("statuses") java.util.Collection<String> statuses,
+            @Param("updatedBefore") java.time.LocalDateTime updatedBefore,
+            Pageable pageable
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select ref
+            from CommonInvoicePaymentRef ref
+            where ref.invoice.id = :invoiceId
+              and ref.provider = :provider
+              and ref.status = :status
+            order by ref.updatedAt desc, ref.id desc
+            """)
+    List<CommonInvoicePaymentRef> findCurrentProviderRefsForUpdate(
+            @Param("invoiceId") Long invoiceId,
+            @Param("provider") String provider,
+            @Param("status") String status
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select ref
+            from CommonInvoicePaymentRef ref
+            where ref.invoice.id = :invoiceId
+              and ref.provider = :provider
+              and ref.status in :statuses
+            order by ref.updatedAt desc, ref.id desc
+            """)
+    List<CommonInvoicePaymentRef> findProviderRefsForUpdate(
+            @Param("invoiceId") Long invoiceId,
+            @Param("provider") String provider,
+            @Param("statuses") java.util.Collection<String> statuses
     );
 
     @Query("""

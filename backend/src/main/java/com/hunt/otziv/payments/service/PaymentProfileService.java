@@ -19,6 +19,8 @@ import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.repository.PaymentProfileRepository;
+import com.hunt.otziv.payments.tochka.dto.TochkaPaymentProfile;
+import com.hunt.otziv.payments.tochka.service.TochkaPaymentProfileResolver;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
@@ -65,6 +67,7 @@ public class PaymentProfileService {
     private final ManagerRepository managerRepository;
     private final TbankPaymentProperties properties;
     private final TbankRuntimeSettingsService runtimeSettingsService;
+    private final TochkaPaymentProfileResolver tochkaPaymentProfileResolver;
 
     @Transactional(readOnly = true)
     public TbankPaymentProfilesResponse managementState() {
@@ -105,10 +108,23 @@ public class PaymentProfileService {
             }
             Manager manager = managerRepository.findById(assignment.managerId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден"));
+            if (!isEligibleManager(manager)) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден");
+            }
             PaymentProfile profile = null;
             if (assignment.paymentProfileId() != null) {
                 profile = Optional.ofNullable(profiles.get(assignment.paymentProfileId()))
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежный профиль не найден"));
+            }
+            if (assignmentChangesProfile(manager, profile)) {
+                PaymentProfile effectiveProfile = profile == null ? defaultEntityProfile() : profile;
+                if (!isOperationalForNewPayments(effectiveProfile)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Платежный профиль «" + effectiveProfile.getName()
+                                    + "» выключен или не готов к новым платежам"
+                    );
+                }
             }
             manager.setPaymentProfile(profile);
             managerRepository.save(manager);
@@ -189,6 +205,11 @@ public class PaymentProfileService {
     public Optional<PaymentProfile> findByCode(String code) {
         String clean = normalize(code);
         return clean.isBlank() ? Optional.empty() : paymentProfileRepository.findByCode(clean);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<PaymentProfile> findById(Long profileId) {
+        return profileId == null ? Optional.empty() : paymentProfileRepository.findById(profileId);
     }
 
     public String provider(PaymentProfile profile) {
@@ -318,18 +339,58 @@ public class PaymentProfileService {
                 .toList();
     }
 
+    private boolean isEligibleManager(Manager manager) {
+        User user = manager == null ? null : manager.getUser();
+        return user != null
+                && user.isActive()
+                && user.getRoles() != null
+                && user.getRoles().stream()
+                .anyMatch(role -> role != null && "ROLE_MANAGER".equalsIgnoreCase(role.getName()));
+    }
+
+    private boolean assignmentChangesProfile(Manager manager, PaymentProfile requestedProfile) {
+        PaymentProfile currentProfile = manager == null ? null : manager.getPaymentProfile();
+        Long currentId = currentProfile == null ? null : currentProfile.getId();
+        Long requestedId = requestedProfile == null ? null : requestedProfile.getId();
+        return !java.util.Objects.equals(currentId, requestedId);
+    }
+
+    private boolean isOperationalForNewPayments(PaymentProfile profile) {
+        if (profile == null || !profile.isEnabled()) {
+            return false;
+        }
+        if (PaymentProfile.PROVIDER_TOCHKA.equals(provider(profile))) {
+            return isOperationalTochkaProfile(profile);
+        }
+        try {
+            return runtimeSettingsService.isTbankEnabled() && toRuntime(profile).hasCredentials();
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
     private PaymentProfileResponse profileResponse(PaymentProfile profile) {
         String normalizedProvider = provider(profile);
         TbankPaymentProfile runtimeProfile = PaymentProfile.PROVIDER_TBANK.equals(normalizedProvider)
                 ? toRuntime(profile)
                 : null;
-        String runtimeTerminalKey = runtimeProfile == null
-                ? normalize(profile.getTerminalKey())
-                : runtimeProfile.terminalKey();
-        boolean runtimeTestMode = runtimeProfile == null
-                ? profile.isTestMode()
-                : runtimeProfile.testMode();
-        boolean hasRuntimeCredentials = runtimeProfile != null && runtimeProfile.hasCredentials();
+        TochkaManagementRuntime tochkaRuntime = PaymentProfile.PROVIDER_TOCHKA.equals(normalizedProvider)
+                ? tochkaManagementRuntime(profile)
+                : null;
+        String runtimeTerminalKey = runtimeProfile != null
+                ? runtimeProfile.terminalKey()
+                : tochkaRuntime == null ? normalize(profile.getTerminalKey()) : tochkaRuntime.displayIdentity();
+        boolean runtimeTestMode = runtimeProfile != null
+                ? runtimeProfile.testMode()
+                : tochkaRuntime == null ? profile.isTestMode() : tochkaRuntime.testMode();
+        boolean hasRuntimeCredentials = runtimeProfile != null
+                ? runtimeProfile.hasCredentials()
+                : tochkaRuntime != null && tochkaRuntime.hasCredentials();
+        boolean operational = profile.isEnabled()
+                && hasRuntimeCredentials
+                && (PaymentProfile.PROVIDER_TOCHKA.equals(normalizedProvider)
+                    ? isOperationalTochkaProfile(profile)
+                    : runtimeSettingsService.isTbankEnabled());
         LocalDateTime periodStart = currentMonthStart();
         LocalDateTime periodEnd = periodStart.plusMonths(1);
         long manualUsed = manualMonthlyUsed(profile, periodStart, periodEnd);
@@ -342,11 +403,12 @@ public class PaymentProfileService {
                 normalizedProvider,
                 profile.getName(),
                 runtimeTerminalKey,
-                profile.getPasswordEnvKey(),
+                PaymentProfile.PROVIDER_TOCHKA.equals(normalizedProvider) ? null : profile.getPasswordEnvKey(),
                 profile.isEnabled(),
                 profile.isDefaultProfile(),
                 runtimeTestMode,
                 hasRuntimeCredentials,
+                operational,
                 paymentPolicy(profile).name(),
                 manualPaymentType(profile).name(),
                 normalize(profile.getManualPhone()),
@@ -364,6 +426,49 @@ public class PaymentProfileService {
         );
     }
 
+    /**
+     * Resolves only display metadata for the management screen. A broken or partially deployed
+     * configuration must not make the entire assignments screen unavailable, so this read path
+     * deliberately fails closed. Provider credentials and the complete merchant id are never
+     * returned to the browser.
+     */
+    private TochkaManagementRuntime tochkaManagementRuntime(PaymentProfile profile) {
+        try {
+            TochkaPaymentProfile runtime = tochkaPaymentProfileResolver.resolveForExistingPayment(profile);
+            return new TochkaManagementRuntime(
+                    maskedTochkaIdentity(runtime.merchantId(), runtime.code()),
+                    runtime.testMode(),
+                    runtime.hasCredentials()
+            );
+        } catch (RuntimeException exception) {
+            return new TochkaManagementRuntime(
+                    maskedTochkaIdentity("", profile == null ? "" : profile.getCode()),
+                    true,
+                    false
+            );
+        }
+    }
+
+    private boolean isOperationalTochkaProfile(PaymentProfile profile) {
+        try {
+            return tochkaPaymentProfileResolver.resolve(profile) != null;
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private String maskedTochkaIdentity(String merchantId, String profileCode) {
+        String cleanMerchantId = normalize(merchantId);
+        if (!cleanMerchantId.isBlank()) {
+            String suffix = cleanMerchantId.length() > 4
+                    ? cleanMerchantId.substring(cleanMerchantId.length() - 4)
+                    : "";
+            return suffix.isBlank() ? "Точка · ••••" : "Точка · ••••" + suffix;
+        }
+        String cleanCode = normalize(profileCode);
+        return cleanCode.isBlank() ? "Точка Банк" : "Точка · " + cleanCode;
+    }
+
     private ManagerPaymentProfileResponse managerResponse(Manager manager) {
         User user = manager.getUser();
         PaymentProfile profile = manager.getPaymentProfile();
@@ -374,6 +479,13 @@ public class PaymentProfileService {
                 profile == null ? null : profile.getId(),
                 profile == null ? "" : profile.getName()
         );
+    }
+
+    private record TochkaManagementRuntime(
+            String displayIdentity,
+            boolean testMode,
+            boolean hasCredentials
+    ) {
     }
 
     private ManagerManualPaymentSettingsResponse managerManualPaymentSettings(Manager manager, PaymentProfile profile) {

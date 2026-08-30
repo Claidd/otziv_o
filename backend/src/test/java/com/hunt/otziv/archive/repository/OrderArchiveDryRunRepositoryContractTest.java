@@ -14,6 +14,8 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -78,6 +80,7 @@ class OrderArchiveDryRunRepositoryContractTest {
         assertTrue(contract.contains("'APPLIED'"));
         assertTrue(contract.contains("'PARTIAL_REFUNDED'"));
         assertTrue(contract.contains("'PARTIAL_REVERSED'"));
+        assertEveryCommonInvoiceRefPredicateTreatsExpiredAsTerminal(contract);
         assertTrue(contract.contains("candidate_order.order_id IS NULL"));
     }
 
@@ -124,5 +127,18 @@ class OrderArchiveDryRunRepositoryContractTest {
                 "WHEN r.review_filial IS NULL OR r.review_filial = o.order_filial"
         ));
         assertTrue(reviewCopy.contains("ELSE NULL"));
+    }
+
+    private void assertEveryCommonInvoiceRefPredicateTreatsExpiredAsTerminal(String sql) {
+        Matcher predicates = Pattern.compile(
+                "UPPER\\(TRIM\\(COALESCE\\([^)]*\\)\\)\\) NOT IN \\((.*?)\\)",
+                Pattern.DOTALL
+        ).matcher(sql);
+        int predicateCount = 0;
+        while (predicates.find()) {
+            predicateCount++;
+            assertTrue(predicates.group(1).contains("'EXPIRED'"));
+        }
+        assertTrue(predicateCount >= 2);
     }
 }

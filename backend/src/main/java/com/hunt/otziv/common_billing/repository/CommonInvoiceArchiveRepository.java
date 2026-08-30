@@ -27,6 +27,7 @@ public class CommonInvoiceArchiveRepository {
             "ARCHIVED",
             "CANCELED",
             "REJECTED",
+            "EXPIRED",
             "REFUNDED",
             "PARTIAL_REFUNDED",
             "REVERSED",

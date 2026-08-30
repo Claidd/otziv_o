@@ -37,6 +37,28 @@ import com.hunt.otziv.payments.dto.TbankGetStateResponse;
 import com.hunt.otziv.payments.dto.TbankInitCommand;
 import com.hunt.otziv.payments.dto.TbankInitResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
+import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.CreatePaymentResponse;
+import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.CreatePaymentResponseData;
+import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.PaymentInfoData;
+import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.PaymentInfoResponse;
+import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.PaymentOperation;
+import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.RefundResponse;
+import com.hunt.otziv.payments.tochka.dto.TochkaApiModels.RefundResponseData;
+import com.hunt.otziv.payments.tochka.dto.TochkaCreatePaymentCommand;
+import com.hunt.otziv.payments.tochka.dto.TochkaAcquiringInternetPaymentWebhook;
+import com.hunt.otziv.payments.tochka.dto.TochkaPaymentProfile;
+import com.hunt.otziv.payments.tochka.dto.TochkaWebhookExpectation;
+import com.hunt.otziv.payments.tochka.model.TochkaPaymentMethod;
+import com.hunt.otziv.payments.tochka.model.TochkaPaymentMode;
+import com.hunt.otziv.payments.tochka.model.TochkaPaymentObject;
+import com.hunt.otziv.payments.tochka.model.TochkaTaxSystemCode;
+import com.hunt.otziv.payments.tochka.model.TochkaVatType;
+import com.hunt.otziv.payments.tochka.service.TochkaClient;
+import com.hunt.otziv.payments.tochka.service.TochkaPaymentOperationMapper;
+import com.hunt.otziv.payments.tochka.service.TochkaPaymentProfileResolver;
+import com.hunt.otziv.payments.tochka.service.TochkaProviderException;
+import com.hunt.otziv.payments.tochka.service.TochkaWebhookJwtVerifier;
+import com.hunt.otziv.payments.tochka.service.TochkaWebhookVerificationException;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
 import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import com.hunt.otziv.payments.model.ManualPaymentTask;
@@ -149,6 +171,18 @@ class PaymentLinkServiceTest {
 
     @Mock
     private TbankClient tbankClient;
+
+    @Mock
+    private TochkaPaymentProfileResolver tochkaPaymentProfileResolver;
+
+    @Mock
+    private TochkaClient tochkaClient;
+
+    @Mock
+    private TochkaWebhookJwtVerifier tochkaWebhookJwtVerifier;
+
+    private final TochkaPaymentOperationMapper tochkaPaymentOperationMapper =
+            new TochkaPaymentOperationMapper();
 
     @Mock
     private PaymentProfileService paymentProfileService;
@@ -1929,7 +1963,7 @@ class PaymentLinkServiceTest {
 
         var route = service.selectCommonInvoiceOwnerAcquiringRoute(manager, 230_000L);
 
-        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK, route.routeType());
+        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_BANK_LINK, route.routeType());
         assertEquals(9L, route.paymentProfileId());
         assertNull(route.manualSource());
         assertNull(route.manualPaymentType());
@@ -2037,7 +2071,7 @@ class PaymentLinkServiceTest {
 
         var route = service.selectCommonInvoiceRoute(manager, 230_000L);
 
-        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_TBANK_LINK, route.routeType());
+        assertEquals(TbankRuntimeSettingsService.PAYMENT_SOURCE_BANK_LINK, route.routeType());
         assertNull(route.manualSource());
         assertNull(route.manualTaskId());
         assertEquals("", route.manualPhone());
@@ -6187,6 +6221,7 @@ class PaymentLinkServiceTest {
 
         assertEquals(PaymentProfile.PROVIDER_TOCHKA, response.provider());
         assertEquals("BANK_ONLY", response.paymentPageMode());
+        assertFalse(response.payable());
         assertFalse(response.sbpBankSelectionSupported());
         assertFalse(response.tpayEnabled());
         assertFalse(response.sberpayEnabled());
@@ -6222,12 +6257,1241 @@ class PaymentLinkServiceTest {
         );
 
         assertEquals(409, bankForm.getStatusCode().value());
-        assertTrue(bankForm.getReason().contains("пока не активирован"));
+        assertTrue(bankForm.getReason().contains("выключен или не настроен"));
         assertEquals(409, sbp.getStatusCode().value());
-        assertTrue(sbp.getReason().contains("СБП через Точку"));
+        assertTrue(sbp.getReason().contains("выключен или не настроен"));
         assertEquals(409, banks.getStatusCode().value());
-        assertTrue(banks.getReason().contains("СБП через Точку"));
+        assertTrue(banks.getReason().contains("не используется"));
         verifyNoInteractions(tbankClient);
+        verifyNoInteractions(tochkaClient);
+    }
+
+    @Test
+    void tochkaExplicitSbpEndpointRejectsCardOnlyProfileBeforeDurableClaimOrPost() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_601L, "ООО Точка Только Карта", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(3_601L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(
+                true,
+                false,
+                List.of(TochkaPaymentMode.CARD)
+        );
+        PaymentLink link = payableLink(order, "tochka-card-only", 32_100L);
+        link.setId(3_601L);
+        link.setPaymentProfile(profile);
+        stubTochkaPublicInit(link, order, profile, runtime);
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class, () -> service.initSbp(
+                link.getToken(), "payer@example.ru", true, true, true, null, "203.0.113.8", "JUnit UA"
+        ));
+
+        assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
+        assertTrue(failure.getReason().contains("sbp"));
+        assertNull(link.getBankInitNonce());
+        assertNull(link.getBankInitLeaseUntil());
+        assertNull(link.getInitiatedAt());
+        verifyNoInteractions(tochkaClient, tbankClient);
+    }
+
+    @Test
+    void tochkaExplicitCardEndpointRejectsSbpOnlyProfileBeforeDurableClaimOrPost() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_602L, "ООО Точка Только СБП", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(3_602L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(
+                true,
+                false,
+                List.of(TochkaPaymentMode.SBP)
+        );
+        PaymentLink link = payableLink(order, "tochka-sbp-only", 32_100L);
+        link.setId(3_602L);
+        link.setPaymentProfile(profile);
+        stubTochkaPublicInit(link, order, profile, runtime);
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class, () -> service.init(
+                link.getToken(), "payer@example.ru", true, true, true, "203.0.113.7", "JUnit UA"
+        ));
+
+        assertEquals(HttpStatus.CONFLICT, failure.getStatusCode());
+        assertTrue(failure.getReason().contains("card"));
+        assertNull(link.getBankInitNonce());
+        assertNull(link.getBankInitLeaseUntil());
+        assertNull(link.getInitiatedAt());
+        verifyNoInteractions(tochkaClient, tbankClient);
+    }
+
+    @Test
+    void tochkaPublicCapabilitiesFollowProfilePaymentModeAllowList() {
+        PaymentLinkService service = service(properties());
+        Order cardOrder = order(3_603L, "ООО Точка Карта", BigDecimal.valueOf(321));
+        PaymentProfile cardProfile = tochkaEntityProfile(3_603L);
+        PaymentLink cardLink = payableLink(cardOrder, "tochka-public-card-only", 32_100L);
+        cardLink.setPaymentProfile(cardProfile);
+        Order sbpOrder = order(3_604L, "ООО Точка СБП", BigDecimal.valueOf(321));
+        PaymentProfile sbpProfile = tochkaEntityProfile(3_604L);
+        PaymentLink sbpLink = payableLink(sbpOrder, "tochka-public-sbp-only", 32_100L);
+        sbpLink.setPaymentProfile(sbpProfile);
+
+        when(tochkaPaymentProfileResolver.resolve(cardProfile)).thenReturn(tochkaRuntimeProfile(
+                true,
+                false,
+                List.of(TochkaPaymentMode.CARD)
+        ));
+        when(tochkaPaymentProfileResolver.resolve(sbpProfile)).thenReturn(tochkaRuntimeProfile(
+                true,
+                false,
+                List.of(TochkaPaymentMode.SBP)
+        ));
+        when(paymentLinkRepository.findByTokenWithOrder(cardLink.getToken())).thenReturn(Optional.of(cardLink));
+        when(paymentLinkRepository.findByTokenForUpdate(cardLink.getToken())).thenReturn(Optional.of(cardLink));
+        when(orderRepository.findByIdForCounterUpdate(cardOrder.getId())).thenReturn(Optional.of(cardOrder));
+        when(paymentLinkRepository.findByTokenWithOrder(sbpLink.getToken())).thenReturn(Optional.of(sbpLink));
+        when(paymentLinkRepository.findByTokenForUpdate(sbpLink.getToken())).thenReturn(Optional.of(sbpLink));
+        when(orderRepository.findByIdForCounterUpdate(sbpOrder.getId())).thenReturn(Optional.of(sbpOrder));
+
+        assertEquals("BANK_ONLY", service.publicLink(cardLink.getToken()).paymentPageMode());
+        assertEquals("SBP_ONLY", service.publicLink(sbpLink.getToken()).paymentPageMode());
+        verifyNoInteractions(tochkaClient, tbankClient);
+    }
+
+    @Test
+    void tochkaInitCreatesStrictCardPaymentLinkAndPersistsProviderBinding() {
+        PaymentLinkService service = service(properties());
+        Order order = order(361L, "ООО Точка Карта", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(31L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-card", 32_100L);
+        link.setPaymentProfile(profile);
+
+        stubTochkaPublicInit(link, order, profile, runtime);
+        when(tochkaClient.createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class)))
+                .thenAnswer(invocation -> tochkaCreateResponse(
+                        invocation.getArgument(1, TochkaCreatePaymentCommand.class),
+                        runtime,
+                        "tochka-operation-card",
+                        TochkaPaymentMode.CARD
+                ));
+
+        PublicPaymentInitResponse response = service.init(
+                link.getToken(),
+                "PAYER@EXAMPLE.RU",
+                true,
+                true,
+                true,
+                "203.0.113.7",
+                "JUnit UA"
+        );
+
+        ArgumentCaptor<TochkaCreatePaymentCommand> commandCaptor =
+                ArgumentCaptor.forClass(TochkaCreatePaymentCommand.class);
+        verify(tochkaClient).createPaymentWithReceipt(eq(runtime), commandCaptor.capture());
+        TochkaCreatePaymentCommand command = commandCaptor.getValue();
+        assertEquals(List.of(TochkaPaymentMode.CARD), command.paymentModes());
+        assertEquals(link.getTbankOrderId(), command.paymentLinkId());
+        assertEquals(32_100L, command.amountKopecks());
+        assertEquals("payer@example.ru", command.email());
+        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
+        assertEquals(PaymentMethod.BANK_FORM, link.getPaymentMethod());
+        assertEquals("tochka-operation-card", link.getTbankPaymentId());
+        assertEquals(runtime.merchantId(), link.getTbankTerminalKey());
+        assertEquals("CREATED", link.getProviderTerminalStatus());
+        assertEquals("https://merch.securepaytb.ru/pay/tochka-operation-card", link.getPaymentUrl());
+        assertNull(link.getBankInitNonce());
+        assertNull(link.getBankInitLeaseUntil());
+        assertEquals("BANK_FORM", response.method());
+        assertNull(response.qrPayload());
+        assertEquals(link.getPaymentUrl(), response.paymentUrl());
+        verifyNoInteractions(tbankClient);
+    }
+
+    @Test
+    void tochkaInitSbpCreatesStrictSbpHostedLinkWithoutQrPayload() {
+        PaymentLinkService service = service(properties());
+        Order order = order(362L, "ООО Точка СБП", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(32L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-sbp", 32_100L);
+        link.setPaymentProfile(profile);
+
+        stubTochkaPublicInit(link, order, profile, runtime);
+        when(tochkaClient.createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class)))
+                .thenAnswer(invocation -> tochkaCreateResponse(
+                        invocation.getArgument(1, TochkaCreatePaymentCommand.class),
+                        runtime,
+                        "tochka-operation-sbp",
+                        TochkaPaymentMode.SBP
+                ));
+
+        PublicPaymentInitResponse response = service.initSbp(
+                link.getToken(),
+                "payer@example.ru",
+                true,
+                true,
+                true,
+                null,
+                "203.0.113.8",
+                "JUnit UA"
+        );
+
+        ArgumentCaptor<TochkaCreatePaymentCommand> commandCaptor =
+                ArgumentCaptor.forClass(TochkaCreatePaymentCommand.class);
+        verify(tochkaClient).createPaymentWithReceipt(eq(runtime), commandCaptor.capture());
+        assertEquals(List.of(TochkaPaymentMode.SBP), commandCaptor.getValue().paymentModes());
+        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
+        assertEquals(PaymentMethod.SBP_QR, link.getPaymentMethod());
+        assertEquals("tochka-operation-sbp", response.paymentId());
+        assertEquals("SBP_QR", response.method());
+        assertEquals("https://merch.securepaytb.ru/pay/tochka-operation-sbp", response.paymentUrl());
+        assertNull(response.qrPayload());
+        assertNull(response.qrImage());
+        assertNull(link.getSbpQrPayload());
+        verify(tochkaClient, times(1)).createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class));
+        verifyNoInteractions(tbankClient);
+    }
+
+    @Test
+    void tochkaAdminResponseKeepsExactHostedPaymentUrl() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = payableLink(
+                order(3_621L, "ООО Точка Админ", BigDecimal.valueOf(321)),
+                "tochka-admin-response",
+                32_100L
+        );
+        link.setPaymentProfile(tochkaEntityProfile(3_621L));
+        link.setPaymentUrl("https://merch.securepaytb.ru/pay/tochka-operation-admin");
+
+        AdminPaymentLinkResponse response = ReflectionTestUtils.invokeMethod(
+                service,
+                "toAdminResponse",
+                link
+        );
+
+        assertNotNull(response);
+        assertEquals(link.getPaymentUrl(), response.paymentUrl());
+    }
+
+    @Test
+    void tochkaCachedSbpInitReturnsHostedUrlWithoutSecondPost() {
+        PaymentLinkService service = service(properties());
+        Order order = order(363L, "ООО Точка Cached", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(33L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-sbp-cached", 32_100L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("o363-cached");
+        link.setTbankPaymentId("tochka-operation-cached");
+        link.setTbankTerminalKey(runtime.merchantId());
+        link.setPaymentUrl("https://merch.securepaytb.ru/pay/tochka-operation-cached");
+
+        stubTochkaPublicInit(link, order, profile, runtime);
+
+        PublicPaymentInitResponse response = service.initSbp(
+                link.getToken(),
+                "payer@example.ru",
+                true,
+                true,
+                true,
+                null,
+                "203.0.113.8",
+                "JUnit UA"
+        );
+
+        assertEquals(link.getPaymentUrl(), response.paymentUrl());
+        assertEquals("tochka-operation-cached", response.paymentId());
+        assertEquals("SBP_QR", response.method());
+        assertNull(response.qrPayload());
+        assertNull(link.getBankInitNonce());
+        verifyNoInteractions(tochkaClient, tbankClient);
+    }
+
+    @Test
+    void tochkaCachedCardInitReturnsHostedUrlWithoutSecondPost() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_631L, "ООО Точка Cached Card", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(331L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-card-cached", 32_100L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.BANK_FORM);
+        link.setTbankOrderId("o3631-cached");
+        link.setTbankPaymentId("tochka-operation-card-cached");
+        link.setTbankTerminalKey(runtime.merchantId());
+        link.setPaymentUrl("https://merch.securepaytb.ru/pay/tochka-operation-card-cached");
+
+        stubTochkaPublicInit(link, order, profile, runtime);
+
+        PublicPaymentInitResponse response = service.init(
+                link.getToken(),
+                "payer@example.ru",
+                true,
+                true,
+                true,
+                "203.0.113.7",
+                "JUnit UA"
+        );
+
+        assertEquals(link.getPaymentUrl(), response.paymentUrl());
+        assertEquals("tochka-operation-card-cached", response.paymentId());
+        assertEquals("BANK_FORM", response.method());
+        assertNull(response.qrPayload());
+        assertNull(link.getBankInitNonce());
+        verifyNoInteractions(tochkaClient, tbankClient);
+    }
+
+    @Test
+    void tochkaCachedInitQuarantinesNonExactHostedUrlWithoutProviderPost() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_632L, "ООО Точка Unsafe Cached", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(332L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-unsafe-cached", 32_100L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("o3632-cached");
+        link.setTbankPaymentId("tochka-operation-unsafe-cached");
+        link.setTbankTerminalKey(runtime.merchantId());
+        link.setPaymentUrl("https://merch.securepaytb.ru.evil.example/pay/operation");
+
+        stubTochkaPublicInit(link, order, profile, runtime);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> service.initSbp(
+                link.getToken(),
+                "payer@example.ru",
+                true,
+                true,
+                true,
+                null,
+                "203.0.113.8",
+                "JUnit UA"
+        ));
+
+        assertEquals(502, exception.getStatusCode().value());
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertNull(link.getPaymentUrl());
+        assertTrue(link.getLastError().startsWith("unsafe_cached_tochka_payment_url:"));
+        verifyNoInteractions(tochkaClient, tbankClient);
+    }
+
+    @Test
+    void tochkaSbpInitRejectsExplicitBankSelectionBeforeProviderPost() {
+        PaymentLinkService service = service(properties());
+        Order order = order(364L, "ООО Точка Без Выбора Банка", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(34L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-sbp-bank-id", 32_100L);
+        link.setPaymentProfile(profile);
+        stubTochkaPublicInit(link, order, profile, runtime);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> service.initSbp(
+                link.getToken(),
+                "payer@example.ru",
+                true,
+                true,
+                true,
+                "bank-id-must-not-be-used",
+                "203.0.113.8",
+                "JUnit UA"
+        ));
+
+        assertEquals(400, exception.getStatusCode().value());
+        assertNull(link.getBankInitNonce());
+        verifyNoInteractions(tochkaClient, tbankClient);
+    }
+
+    @Test
+    void ambiguousTochkaCreateIsQuarantinedAndNeverPostedTwice() {
+        PaymentLinkService service = service(properties());
+        Order order = order(365L, "ООО Точка Неясный Ответ", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(35L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-ambiguous", 32_100L);
+        link.setId(365L);
+        link.setPaymentProfile(profile);
+        stubTochkaPublicInit(link, order, profile, runtime);
+        when(tochkaClient.createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class)))
+                .thenThrow(new TochkaProviderException(
+                        "Точка API вернула HTTP 408 на Create Payment Operation With Receipt",
+                        true,
+                        null
+                ));
+
+        assertThrows(ResponseStatusException.class, () -> service.initSbp(
+                link.getToken(), "payer@example.ru", true, true, true, null, "203.0.113.8", "JUnit UA"
+        ));
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertTrue(link.getLastError().contains("tochka_create_failed"));
+        assertNotNull(link.getTbankOrderId());
+        assertNull(link.getTbankPaymentId());
+        assertEquals(PaymentMethod.SBP_QR, link.getPaymentMethod());
+        assertNotNull(link.getBankInitNonce());
+        assertNotNull(link.getBankInitLeaseUntil());
+        assertThrows(ResponseStatusException.class, () -> service.initSbp(
+                link.getToken(), "payer@example.ru", true, true, true, null, "203.0.113.8", "JUnit UA"
+        ));
+        verify(tochkaClient, times(1)).createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class));
+        verifyNoInteractions(tbankClient);
+    }
+
+    @Test
+    void ambiguousTochkaSbpCreateRecoversByPaymentLinkIdWithoutRepeatingPost() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_651L, "ООО Точка Сверка СБП", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(351L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-ambiguous-recovery", 32_100L);
+        link.setId(3_651L);
+        link.setCreatedAt(LocalDateTime.now().minusDays(30));
+        link.setPaymentProfile(profile);
+        stubTochkaPublicInit(link, order, profile, runtime);
+        when(tochkaClient.createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class)))
+                .thenThrow(new TochkaProviderException("Точка API: результат POST неизвестен", true, null));
+
+        assertThrows(ResponseStatusException.class, () -> service.initSbp(
+                link.getToken(), "payer@example.ru", true, true, true, null, "203.0.113.8", "JUnit UA"
+        ));
+
+        String stablePaymentLinkId = link.getTbankOrderId();
+        assertNotNull(link.getInitiatedAt());
+        LocalDate attemptDate = link.getInitiatedAt().toLocalDate();
+        assertNotEquals(link.getCreatedAt().toLocalDate(), attemptDate);
+        profile.setEnabled(false);
+        TochkaPaymentProfile disabledRuntime = tochkaRuntimeProfile(false, false);
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(disabledRuntime);
+        link.setBankInitLeaseUntil(LocalDateTime.now().minusMinutes(1));
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(tochkaClient.findPaymentByPaymentLinkId(
+                eq(disabledRuntime),
+                eq(stablePaymentLinkId),
+                eq(32_100L),
+                eq(attemptDate.minusDays(1)),
+                eq(attemptDate.plusDays(5))
+        )).thenReturn(Optional.of(tochkaOperationWithoutPaymentType(
+                disabledRuntime,
+                stablePaymentLinkId,
+                "tochka-recovered-sbp-operation",
+                "CREATED",
+                32_100L
+        )));
+
+        assertTrue(service.recoverExpiredBankInitReservation(link.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
+        assertEquals(PaymentMethod.SBP_QR, link.getPaymentMethod());
+        assertEquals("tochka-recovered-sbp-operation", link.getTbankPaymentId());
+        assertEquals(
+                "https://merch.securepaytb.ru/pay/tochka-recovered-sbp-operation",
+                link.getPaymentUrl()
+        );
+        assertNull(link.getBankInitNonce());
+        assertNull(link.getBankInitLeaseUntil());
+        verify(tochkaClient, times(1)).createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class));
+        verify(tochkaClient, times(1)).findPaymentByPaymentLinkId(
+                eq(disabledRuntime),
+                eq(stablePaymentLinkId),
+                eq(32_100L),
+                eq(attemptDate.minusDays(1)),
+                eq(attemptDate.plusDays(5))
+        );
+        verify(tochkaPaymentProfileResolver, times(2)).resolveForExistingPayment(profile);
+        verify(tochkaClient, never()).getPaymentInfo(any(), anyString());
+    }
+
+    @Test
+    void ambiguousTochkaCreateRecoveryKeepsLateExpiredOperationInQuarantine() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_652L, "ООО Точка Просроченная Сверка", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(352L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-expired-recovery", 32_100L);
+        link.setId(3_652L);
+        link.setCreatedAt(LocalDateTime.now().minusMinutes(10));
+        link.setPaymentProfile(profile);
+        stubTochkaPublicInit(link, order, profile, runtime);
+        when(tochkaClient.createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class)))
+                .thenThrow(new TochkaProviderException("Точка API: результат POST неизвестен", true, null));
+
+        assertThrows(ResponseStatusException.class, () -> service.initSbp(
+                link.getToken(), "payer@example.ru", true, true, true, null, "203.0.113.8", "JUnit UA"
+        ));
+
+        String stablePaymentLinkId = link.getTbankOrderId();
+        link.setBankInitLeaseUntil(LocalDateTime.now().minusMinutes(1));
+        link.setExpiresAt(LocalDateTime.now().minusSeconds(1));
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(tochkaClient.findPaymentByPaymentLinkId(
+                eq(runtime), eq(stablePaymentLinkId), eq(32_100L), any(LocalDate.class), any(LocalDate.class)
+        )).thenReturn(Optional.of(tochkaOperation(
+                runtime,
+                stablePaymentLinkId,
+                "tochka-expired-recovered-operation",
+                TochkaPaymentMode.SBP,
+                "CREATED",
+                32_100L
+        )));
+
+        assertTrue(service.recoverExpiredBankInitReservation(link.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertEquals("tochka-expired-recovered-operation", link.getTbankPaymentId());
+        assertNull(link.getPaymentUrl());
+        assertNull(link.getBankInitNonce());
+        assertTrue(link.getLastError().contains("link_expired_during_tochka_create_recovery"));
+        verify(tochkaClient, times(1)).createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class));
+    }
+
+    @Test
+    void ambiguousTochkaCreateFailureNeverRegressesConcurrentApprovedState() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_653L, "ООО Точка Гонка Подтверждения", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(353L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-approved-create-race", 32_100L);
+        link.setId(3_653L);
+        link.setPaymentProfile(profile);
+        stubTochkaPublicInit(link, order, profile, runtime);
+        when(tochkaClient.createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class)))
+                .thenAnswer(invocation -> {
+                    link.setStatus(PaymentLinkStatus.CONFIRMED);
+                    link.setTbankPaymentId("tochka-approved-during-create");
+                    link.setProviderTerminalStatus("APPROVED");
+                    throw new TochkaProviderException("HTTP response lost after APPROVED", true, null);
+                });
+
+        assertThrows(ResponseStatusException.class, () -> service.initSbp(
+                link.getToken(), "payer@example.ru", true, true, true, null, "203.0.113.8", "JUnit UA"
+        ));
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        assertEquals("tochka-approved-during-create", link.getTbankPaymentId());
+        assertEquals("APPROVED", link.getProviderTerminalStatus());
+        assertNull(link.getBankInitNonce());
+        assertNull(link.getBankInitLeaseUntil());
+        assertFalse((link.getLastError() == null ? "" : link.getLastError()).startsWith("bank_init_ambiguous:"));
+    }
+
+    @Test
+    void definitiveTochkaCreateRejectionReleasesLeaseWithoutQuarantine() {
+        PaymentLinkService service = service(properties());
+        Order order = order(366L, "ООО Точка Отказ", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(36L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-rejected", 32_100L);
+        link.setPaymentProfile(profile);
+        stubTochkaPublicInit(link, order, profile, runtime);
+        when(tochkaClient.createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class)))
+                .thenThrow(new TochkaProviderException("Точка отклонила запрос до создания платежа", false, null))
+                .thenAnswer(invocation -> tochkaCreateResponse(
+                        invocation.getArgument(1, TochkaCreatePaymentCommand.class),
+                        runtime,
+                        "tochka-operation-after-preflight-fix",
+                        TochkaPaymentMode.CARD
+                ));
+
+        assertThrows(ResponseStatusException.class, () -> service.init(
+                link.getToken(), "payer@example.ru", true, true, true, "203.0.113.7", "JUnit UA"
+        ));
+
+        assertEquals(PaymentLinkStatus.CREATED, link.getStatus());
+        assertTrue(link.getLastError().startsWith("tochka_create_rejected:"));
+        assertNull(link.getTbankPaymentId());
+        assertNull(link.getBankInitNonce());
+        assertNull(link.getBankInitLeaseUntil());
+        assertNull(link.getInitiatedAt());
+
+        PublicPaymentInitResponse retried = service.init(
+                link.getToken(), "payer@example.ru", true, true, true, "203.0.113.7", "JUnit UA"
+        );
+
+        assertEquals("tochka-operation-after-preflight-fix", retried.paymentId());
+        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
+        assertNull(link.getBankInitNonce());
+        assertNull(link.getBankInitLeaseUntil());
+        verify(tochkaClient, times(2)).createPaymentWithReceipt(eq(runtime), any(TochkaCreatePaymentCommand.class));
+    }
+
+    @Test
+    void tochkaReconciliationUsesPinnedProfileAndAppliesApprovedAsProductionPrepayment() {
+        TbankPaymentProperties properties = properties();
+        properties.setApplyConfirmedPayments(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(3_661L, "ООО Точка Подтверждение", BigDecimal.valueOf(321));
+        order.setAmount(2);
+        order.setCounter(1);
+        PaymentProfile profile = tochkaEntityProfile(361L);
+        profile.setEnabled(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-approved-reconcile", 32_100L);
+        link.setId(3_661L);
+        link.setCreatedAt(LocalDateTime.now().minusMinutes(5));
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-link-approved");
+        link.setTbankPaymentId("tochka-operation-approved");
+        link.setTbankTerminalKey(runtime.merchantId());
+
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tochkaClient.getPaymentInfo(runtime, link.getTbankPaymentId())).thenReturn(tochkaPaymentInfo(
+                tochkaOperation(
+                        runtime,
+                        link.getTbankOrderId(),
+                        link.getTbankPaymentId(),
+                        TochkaPaymentMode.SBP,
+                        "APPROVED",
+                        link.getAmountKopecks()
+                )
+        ));
+        assertTrue(service.reconcileBankLink(link.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        assertEquals("APPROVED", link.getProviderTerminalStatus());
+        assertEquals("prepaid_waiting_order_completion", link.getLastError());
+        assertNotNull(link.getPaidAt());
+        verify(paymentProfileService, never()).isTestTerminal(runtime.merchantId());
+        verifyNoInteractions(tbankClient);
+    }
+
+    @Test
+    void tochkaWebhookVerifiesSignatureBeforeAnyDatabaseLookup() {
+        PaymentLinkService service = service(properties());
+        TochkaWebhookVerificationException failure =
+                new TochkaWebhookVerificationException("invalid signature");
+        when(tochkaWebhookJwtVerifier.verify("invalid-jwt")).thenThrow(failure);
+
+        TochkaWebhookVerificationException thrown = assertThrows(
+                TochkaWebhookVerificationException.class,
+                () -> service.handleTochkaWebhook("invalid-jwt")
+        );
+
+        assertSame(failure, thrown);
+        verify(tochkaWebhookJwtVerifier).verify("invalid-jwt");
+        verifyNoInteractions(paymentLinkRepository, orderRepository);
+    }
+
+    @Test
+    void signedUnknownTochkaWebhookIsAcknowledgedWithoutWritesAndUsesOrderedLookup() {
+        PaymentLinkService service = service(properties());
+        PaymentProfile profile = tochkaEntityProfile(31L);
+        profile.setTestMode(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink unknown = payableLink(order(3_670L, "Неизвестный платёж", BigDecimal.ONE), "unknown", 100L);
+        unknown.setTbankOrderId("tochka-unknown-link");
+        unknown.setTbankPaymentId("tochka-unknown-operation");
+        TochkaAcquiringInternetPaymentWebhook claims =
+                tochkaWebhook(runtime, unknown, TochkaPaymentMode.SBP, "APPROVED");
+        when(tochkaWebhookJwtVerifier.verify("signed-unknown")).thenReturn(claims);
+        when(paymentLinkRepository.findByTbankOrderIdWithOrder(claims.paymentLinkId()))
+                .thenReturn(Optional.empty());
+        when(paymentLinkRepository.findByTbankPaymentIdWithOrder(claims.operationId()))
+                .thenReturn(Optional.empty());
+
+        assertDoesNotThrow(() -> service.handleTochkaWebhook("signed-unknown"));
+
+        InOrder lookupOrder = inOrder(tochkaWebhookJwtVerifier, paymentLinkRepository);
+        lookupOrder.verify(tochkaWebhookJwtVerifier).verify("signed-unknown");
+        lookupOrder.verify(paymentLinkRepository).findByTbankOrderIdWithOrder(claims.paymentLinkId());
+        lookupOrder.verify(paymentLinkRepository).findByTbankPaymentIdWithOrder(claims.operationId());
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+        verifyNoInteractions(orderRepository, tochkaPaymentProfileResolver);
+    }
+
+    @Test
+    void signedMinimalTochkaTestWebhookIsAcknowledgedWithoutDatabaseAccess() {
+        PaymentLinkService service = service(properties());
+        TochkaAcquiringInternetPaymentWebhook minimal = new TochkaAcquiringInternetPaymentWebhook(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "acquiringInternetPayment",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+        when(tochkaWebhookJwtVerifier.verify("signed-test-envelope")).thenReturn(minimal);
+
+        assertDoesNotThrow(() -> service.handleTochkaWebhook("signed-test-envelope"));
+
+        verify(tochkaWebhookJwtVerifier).verify("signed-test-envelope");
+        verifyNoInteractions(paymentLinkRepository, orderRepository, tochkaPaymentProfileResolver);
+    }
+
+    @Test
+    void exactApprovedTochkaWebhookConfirmsIdempotentlyAfterPaymentSwitchesAreDisabled() {
+        TbankPaymentProperties properties = properties();
+        properties.setApplyConfirmedPayments(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(3_671L, "ООО Точка Webhook", BigDecimal.valueOf(321));
+        order.setAmount(2);
+        order.setCounter(1);
+        PaymentProfile profile = tochkaEntityProfile(31L);
+        profile.setEnabled(false);
+        profile.setTestMode(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-webhook-approved", 32_100L);
+        link.setId(3_671L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-webhook-link-approved");
+        link.setTbankPaymentId("tochka-webhook-operation-approved");
+        link.setTbankTerminalKey(runtime.merchantId());
+        link.setBankInitNonce("init-in-flight");
+        link.setBankInitLeaseUntil(LocalDateTime.now().plusMinutes(5));
+        TochkaAcquiringInternetPaymentWebhook claims =
+                tochkaWebhook(runtime, link, TochkaPaymentMode.SBP, "APPROVED");
+
+        when(tochkaWebhookJwtVerifier.verify("signed-approved")).thenReturn(claims);
+        when(tochkaWebhookJwtVerifier.requireMatches(eq(claims), any(TochkaWebhookExpectation.class)))
+                .thenReturn(claims);
+        when(paymentLinkRepository.findByTbankOrderIdWithOrder(link.getTbankOrderId()))
+                .thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+
+        assertDoesNotThrow(() -> service.handleTochkaWebhook("signed-approved"));
+        assertDoesNotThrow(() -> service.handleTochkaWebhook("signed-approved"));
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        assertEquals("APPROVED", link.getProviderTerminalStatus());
+        assertEquals("prepaid_waiting_order_completion", link.getLastError());
+        assertNotNull(link.getPaidAt());
+        assertNull(link.getBankInitNonce());
+        assertNull(link.getBankInitLeaseUntil());
+        ArgumentCaptor<TochkaWebhookExpectation> expectation =
+                ArgumentCaptor.forClass(TochkaWebhookExpectation.class);
+        verify(tochkaWebhookJwtVerifier, times(2)).requireMatches(eq(claims), expectation.capture());
+        assertEquals(runtime.customerCode(), expectation.getValue().customerCode());
+        assertEquals(runtime.merchantId(), expectation.getValue().merchantId());
+        assertEquals(BigDecimal.valueOf(link.getAmountKopecks(), 2), expectation.getValue().amount());
+        assertEquals(link.getTbankPaymentId(), expectation.getValue().operationId());
+        assertEquals(link.getTbankOrderId(), expectation.getValue().paymentLinkId());
+        assertEquals(TochkaPaymentMode.SBP.code(), expectation.getValue().paymentType());
+        verify(tochkaWebhookJwtVerifier, times(2)).verify("signed-approved");
+        verify(tochkaWebhookJwtVerifier, never()).verifyAndMatch(anyString(), any());
+        verify(tochkaPaymentProfileResolver, times(2)).resolveForExistingPayment(profile);
+        verify(tochkaPaymentProfileResolver, never()).resolve(profile);
+        verify(paymentLinkRepository, times(2)).save(link);
+        verifyNoInteractions(tbankClient, tochkaClient);
+    }
+
+    @Test
+    void authorizedOneStageTochkaWebhookIsDurablyQuarantined() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_672L, "ООО Точка Authorized", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(31L);
+        profile.setEnabled(false);
+        profile.setTestMode(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-webhook-authorized", 32_100L);
+        link.setId(3_672L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.BANK_FORM);
+        link.setTbankOrderId("tochka-webhook-link-authorized");
+        link.setTbankPaymentId("tochka-webhook-operation-authorized");
+        link.setTbankTerminalKey(runtime.merchantId());
+        TochkaAcquiringInternetPaymentWebhook claims =
+                tochkaWebhook(runtime, link, TochkaPaymentMode.CARD, "AUTHORIZED");
+        stubKnownTochkaWebhook("signed-authorized", claims, link, order, profile, runtime);
+
+        service.handleTochkaWebhook("signed-authorized");
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertEquals("AUTHORIZED", link.getProviderTerminalStatus());
+        assertTrue(link.getLastError().contains("tochka_status_requires_reconciliation"));
+        verify(paymentLinkRepository).save(link);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+    }
+
+    @Test
+    void lateApprovedTochkaWebhookNeverRegressesRefundTerminalState() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_673L, "ООО Точка Late Approved", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(31L);
+        profile.setEnabled(false);
+        profile.setTestMode(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-webhook-late-approved", 32_100L);
+        link.setId(3_673L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.REFUNDED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-webhook-link-refunded");
+        link.setTbankPaymentId("tochka-webhook-operation-refunded");
+        link.setTbankTerminalKey(runtime.merchantId());
+        link.setProviderTerminalStatus("REFUNDED");
+        TochkaAcquiringInternetPaymentWebhook claims =
+                tochkaWebhook(runtime, link, TochkaPaymentMode.SBP, "APPROVED");
+        stubKnownTochkaWebhook("signed-late-approved", claims, link, order, profile, runtime);
+
+        service.handleTochkaWebhook("signed-late-approved");
+
+        assertEquals(PaymentLinkStatus.REFUNDED, link.getStatus());
+        assertEquals("REFUNDED", link.getProviderTerminalStatus());
+        verify(paymentLinkRepository, never()).save(link);
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+        verify(paymentLinkReturnOutboxService, never()).enqueue(link);
+    }
+
+    @Test
+    void tochkaWebhookIdentityMismatchPropagatesWithoutMutation() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_674L, "ООО Точка Mismatch", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(31L);
+        profile.setEnabled(false);
+        profile.setTestMode(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-webhook-mismatch", 32_100L);
+        link.setId(3_674L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-webhook-link-mismatch");
+        link.setTbankPaymentId("tochka-webhook-operation-mismatch");
+        link.setTbankTerminalKey(runtime.merchantId());
+        TochkaAcquiringInternetPaymentWebhook claims =
+                tochkaWebhook(runtime, link, TochkaPaymentMode.SBP, "APPROVED");
+        TochkaWebhookVerificationException mismatch =
+                new TochkaWebhookVerificationException("amount mismatch");
+        when(tochkaWebhookJwtVerifier.verify("signed-mismatch")).thenReturn(claims);
+        when(paymentLinkRepository.findByTbankOrderIdWithOrder(link.getTbankOrderId()))
+                .thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(tochkaWebhookJwtVerifier.requireMatches(eq(claims), any(TochkaWebhookExpectation.class)))
+                .thenThrow(mismatch);
+
+        TochkaWebhookVerificationException thrown = assertThrows(
+                TochkaWebhookVerificationException.class,
+                () -> service.handleTochkaWebhook("signed-mismatch")
+        );
+
+        assertSame(mismatch, thrown);
+        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
+        assertNull(link.getProviderTerminalStatus());
+        verify(paymentLinkRepository, never()).save(link);
+    }
+
+    @Test
+    void tochkaWebhookPaymentTypeAndPinnedTestModeAreFailClosed() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_675L, "ООО Точка Mode Mismatch", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(31L);
+        profile.setEnabled(false);
+        profile.setTestMode(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-webhook-mode-mismatch", 32_100L);
+        link.setId(3_675L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-webhook-link-mode-mismatch");
+        link.setTbankPaymentId("tochka-webhook-operation-mode-mismatch");
+        link.setTbankTerminalKey(runtime.merchantId());
+        TochkaAcquiringInternetPaymentWebhook wrongPaymentType =
+                tochkaWebhook(runtime, link, TochkaPaymentMode.CARD, "APPROVED");
+        stubKnownTochkaWebhook("signed-wrong-mode", wrongPaymentType, link, order, profile, runtime);
+
+        assertThrows(
+                TochkaProviderException.class,
+                () -> service.handleTochkaWebhook("signed-wrong-mode")
+        );
+        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
+        verify(paymentLinkRepository, never()).save(link);
+
+        org.mockito.Mockito.reset(
+                tochkaWebhookJwtVerifier,
+                paymentLinkRepository,
+                orderRepository,
+                tochkaPaymentProfileResolver
+        );
+        profile.setTestMode(true);
+        TochkaAcquiringInternetPaymentWebhook exactPaymentType =
+                tochkaWebhook(runtime, link, TochkaPaymentMode.SBP, "APPROVED");
+        when(tochkaWebhookJwtVerifier.verify("signed-wrong-test-mode")).thenReturn(exactPaymentType);
+        when(paymentLinkRepository.findByTbankOrderIdWithOrder(link.getTbankOrderId()))
+                .thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+
+        assertThrows(
+                TochkaWebhookVerificationException.class,
+                () -> service.handleTochkaWebhook("signed-wrong-test-mode")
+        );
+        assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
+        verify(tochkaWebhookJwtVerifier, never()).requireMatches(any(), any());
+        verify(paymentLinkRepository, never()).save(link);
+    }
+
+    @Test
+    void staleTochkaApprovedObservationNeverRegressesPartialRefund() throws Exception {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_665L, "ООО Точка Монотонный Возврат", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(365L);
+        profile.setEnabled(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-stale-approved", 32_100L);
+        link.setId(3_665L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.PARTIAL_REFUNDED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-link-partial-refund");
+        link.setTbankPaymentId("tochka-operation-partial-refund");
+        link.setTbankTerminalKey(runtime.merchantId());
+        link.setProviderTerminalStatus("REFUNDED_PARTIALLY");
+
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tochkaClient.getPaymentInfo(runtime, link.getTbankPaymentId())).thenReturn(tochkaPaymentInfo(
+                tochkaOperation(
+                        runtime,
+                        link.getTbankOrderId(),
+                        link.getTbankPaymentId(),
+                        TochkaPaymentMode.SBP,
+                        "APPROVED",
+                        link.getAmountKopecks()
+                )
+        ));
+
+        assertFalse(service.reconcileBankLink(link.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.PARTIAL_REFUNDED, link.getStatus());
+        assertEquals("REFUNDED_PARTIALLY", link.getProviderTerminalStatus());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+        verify(paymentLinkReturnOutboxService, never()).enqueue(link);
+    }
+
+    @Test
+    void tochkaRefundAcceptanceQuarantinesUntilTerminalGetAndBlocksSecondPost() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_662L, "ООО Точка Возврат", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(362L);
+        profile.setEnabled(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-refund", 32_100L);
+        link.setId(3_662L);
+        link.setCreatedAt(LocalDateTime.now().minusDays(1));
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-link-refund");
+        link.setTbankPaymentId("tochka-operation-refund");
+        link.setTbankTerminalKey(runtime.merchantId());
+        link.setProviderTerminalStatus("APPROVED");
+
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tochkaClient.refund(eq(runtime), any())).thenReturn(new RefundResponse(new RefundResponseData(
+                true,
+                link.getTbankPaymentId(),
+                BigDecimal.valueOf(link.getAmountKopecks(), 2),
+                OffsetDateTime.now().toString(),
+                "tochka-refund-order"
+        )));
+
+        AdminPaymentLinkResponse accepted = service.cancel(link.getId());
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertEquals("NEEDS_RECONCILIATION", accepted.status());
+        assertFalse(accepted.refundable());
+        assertNull(link.getBankCancelNonce());
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getBankCancelOriginStatus());
+        assertNotNull(link.getBankCancelLeaseUntil());
+        assertTrue(link.getLastError().contains("tochka_refund_accepted"));
+        assertThrows(ResponseStatusException.class, () -> service.cancel(link.getId()));
+        verify(tochkaClient, times(1)).refund(eq(runtime), any());
+        verify(paymentLinkReturnOutboxService, never()).enqueue(link);
+
+        when(tochkaClient.getPaymentInfo(runtime, link.getTbankPaymentId())).thenReturn(tochkaPaymentInfo(
+                tochkaOperation(
+                        runtime,
+                        link.getTbankOrderId(),
+                        link.getTbankPaymentId(),
+                        TochkaPaymentMode.SBP,
+                        "REFUNDED",
+                        link.getAmountKopecks()
+                )
+        ));
+
+        assertTrue(service.reconcileBankLink(link.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.REFUNDED, link.getStatus());
+        assertNull(link.getBankCancelNonce());
+        assertNull(link.getBankCancelLeaseUntil());
+        assertNull(link.getBankCancelOriginStatus());
+        assertNull(link.getBankCancelOriginError());
+        assertFalse(service.reconcileBankLink(link.getId(), LocalDateTime.now()));
+        verify(paymentLinkReturnOutboxService, times(1)).enqueue(link);
+        verify(tochkaClient, times(1)).getPaymentInfo(runtime, link.getTbankPaymentId());
+        verify(tochkaClient, times(1)).refund(eq(runtime), any());
+    }
+
+    @Test
+    void ambiguousTochkaRefundHttpFailurePreservesClaimAndBlocksSecondPost() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_668L, "ООО Точка Неясный Возврат", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(368L);
+        profile.setEnabled(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-refund-ambiguous-http", 32_100L);
+        link.setId(3_668L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-link-refund-ambiguous-http");
+        link.setTbankPaymentId("tochka-operation-refund-ambiguous-http");
+        link.setTbankTerminalKey(runtime.merchantId());
+        link.setProviderTerminalStatus("APPROVED");
+
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tochkaClient.refund(eq(runtime), any())).thenThrow(new TochkaProviderException(
+                "Точка API вернула HTTP 429 на Refund Payment Operation",
+                true,
+                null
+        ));
+
+        assertThrows(TochkaProviderException.class, () -> service.cancel(link.getId()));
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertNotNull(link.getBankCancelNonce());
+        assertNotNull(link.getBankCancelLeaseUntil());
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getBankCancelOriginStatus());
+        assertTrue(link.getLastError().contains("tochka_refund_failed"));
+        assertThrows(ResponseStatusException.class, () -> service.cancel(link.getId()));
+        verify(tochkaClient, times(1)).refund(eq(runtime), any());
+    }
+
+    @Test
+    void tochkaRefundClaimSurvivesGetTransportFailureAndStillBlocksSecondPost() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_669L, "ООО Точка Сбой Сверки Возврата", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(369L);
+        profile.setEnabled(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-refund-get-failure", 32_100L);
+        link.setId(3_669L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-link-refund-get-failure");
+        link.setTbankPaymentId("tochka-operation-refund-get-failure");
+        link.setTbankTerminalKey(runtime.merchantId());
+        link.setProviderTerminalStatus("APPROVED");
+        String claimNonce = "tochka-refund-get-failure-nonce";
+        LocalDateTime claimLease = LocalDateTime.now().plusMinutes(5);
+        String originError = "confirmed-before-refund";
+        link.setBankCancelNonce(claimNonce);
+        link.setBankCancelLeaseUntil(claimLease);
+        link.setBankCancelOriginStatus(PaymentLinkStatus.CONFIRMED);
+        link.setBankCancelOriginError(originError);
+        link.setLastError("bank_cancel_in_progress: refund POST outcome unknown");
+
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tochkaClient.getPaymentInfo(runtime, link.getTbankPaymentId())).thenThrow(
+                new TochkaProviderException("Точка GET временно недоступен", false, null)
+        );
+
+        assertFalse(service.reconcileBankLink(link.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertEquals(claimNonce, link.getBankCancelNonce());
+        assertEquals(claimLease, link.getBankCancelLeaseUntil());
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getBankCancelOriginStatus());
+        assertEquals(originError, link.getBankCancelOriginError());
+        assertNotNull(link.getBankReconciliationAttemptedAt());
+        assertThrows(ResponseStatusException.class, () -> service.cancel(link.getId()));
+        verify(tochkaClient, times(1)).getPaymentInfo(runtime, link.getTbankPaymentId());
+        verify(tochkaClient, never()).refund(any(), any());
+    }
+
+    @Test
+    void approvedTochkaObservationKeepsActiveRefundClaimUntilTerminalRefund() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_670L, "ООО Точка Возврат Еще Обрабатывается", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(370L);
+        profile.setEnabled(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-refund-approved-observation", 32_100L);
+        link.setId(3_670L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-link-refund-approved-observation");
+        link.setTbankPaymentId("tochka-operation-refund-approved-observation");
+        link.setTbankTerminalKey(runtime.merchantId());
+        String claimNonce = "tochka-refund-approved-observation-nonce";
+        LocalDateTime claimLease = LocalDateTime.now().plusMinutes(5);
+        String originError = "confirmed-before-refund";
+        link.setBankCancelNonce(claimNonce);
+        link.setBankCancelLeaseUntil(claimLease);
+        link.setBankCancelOriginStatus(PaymentLinkStatus.CONFIRMED);
+        link.setBankCancelOriginError(originError);
+        link.setLastError("bank_cancel_in_progress: awaiting refund terminal status");
+
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tochkaClient.getPaymentInfo(runtime, link.getTbankPaymentId())).thenReturn(tochkaPaymentInfo(
+                tochkaOperation(
+                        runtime,
+                        link.getTbankOrderId(),
+                        link.getTbankPaymentId(),
+                        TochkaPaymentMode.SBP,
+                        "APPROVED",
+                        link.getAmountKopecks()
+                )
+        ));
+
+        assertFalse(service.reconcileBankLink(link.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertEquals("APPROVED", link.getProviderTerminalStatus());
+        assertEquals(claimNonce, link.getBankCancelNonce());
+        assertEquals(claimLease, link.getBankCancelLeaseUntil());
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getBankCancelOriginStatus());
+        assertEquals(originError, link.getBankCancelOriginError());
+        assertTrue(link.getLastError().contains("tochka_refund_awaiting_terminal_status"));
+        assertThrows(ResponseStatusException.class, () -> service.cancel(link.getId()));
+        verify(tochkaClient, times(1)).getPaymentInfo(runtime, link.getTbankPaymentId());
+        verify(tochkaClient, never()).refund(any(), any());
+        verify(paymentLinkReturnOutboxService, never()).enqueue(link);
+    }
+
+    @Test
+    void lateTochkaRefundAcceptanceDoesNotRegressConcurrentTerminalGet() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_664L, "ООО Точка Поздний Ответ Возврата", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(364L);
+        profile.setEnabled(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-late-refund-response", 32_100L);
+        link.setId(3_664L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-link-late-refund");
+        link.setTbankPaymentId("tochka-operation-late-refund");
+        link.setTbankTerminalKey(runtime.merchantId());
+        link.setProviderTerminalStatus("APPROVED");
+
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tochkaClient.refund(eq(runtime), any())).thenAnswer(invocation -> {
+            link.setStatus(PaymentLinkStatus.REFUNDED);
+            link.setProviderTerminalStatus("REFUNDED");
+            link.setBankCancelNonce(null);
+            link.setBankCancelLeaseUntil(null);
+            link.setBankCancelOriginStatus(null);
+            link.setBankCancelOriginError(null);
+            return new RefundResponse(new RefundResponseData(
+                    true,
+                    link.getTbankPaymentId(),
+                    BigDecimal.valueOf(link.getAmountKopecks(), 2),
+                    OffsetDateTime.now().toString(),
+                    "tochka-refund-order-late"
+            ));
+        });
+
+        AdminPaymentLinkResponse response = service.cancel(link.getId());
+
+        assertEquals(PaymentLinkStatus.REFUNDED, link.getStatus());
+        assertEquals("REFUNDED", response.status());
+        assertNull(link.getBankCancelOriginStatus());
+        verify(paymentLinkReturnOutboxService, never()).enqueue(link);
+        verify(tochkaClient, times(1)).refund(eq(runtime), any());
+    }
+
+    @Test
+    void activeTochkaPaymentFailsClosedBeforeManualCardSettlementOrProviderCalls() {
+        PaymentLinkService service = service(properties());
+        Order order = order(3_663L, "ООО Точка Ручной Перевод", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(363L);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile();
+        PaymentLink link = payableLink(order, "tochka-manual-card-blocked", 32_100L);
+        link.setId(3_663L);
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-link-manual-blocked");
+        link.setTbankPaymentId("tochka-operation-manual-blocked");
+        link.setTbankTerminalKey(runtime.merchantId());
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+
+        ResponseStatusException conflict = assertThrows(ResponseStatusException.class, () ->
+                service.confirmPaidByManualCardTransfer(
+                        link.getId(),
+                        true,
+                        true,
+                        link.getAmountKopecks(),
+                        "Выписка проверена",
+                        null,
+                        "owner",
+                        authentication
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+        assertTrue(conflict.getReason().contains("платеж Точки"));
+        verifyNoInteractions(tochkaClient, tbankClient);
+        verify(orderRepository, never()).findByIdForCounterUpdate(anyLong());
+    }
+
+    @Test
+    void enabledTochkaPublicLinkIsSbpPrimaryWithoutTbankWalletCapabilities() {
+        PaymentLinkService service = service(properties());
+        Order order = order(367L, "ООО Точка Активна", BigDecimal.valueOf(321));
+        PaymentProfile profile = tochkaEntityProfile(37L);
+        PaymentLink link = payableLink(order, "tochka-public-enabled", 32_100L);
+        link.setPaymentProfile(profile);
+        when(tochkaPaymentProfileResolver.resolve(profile)).thenReturn(tochkaRuntimeProfile());
+        when(paymentLinkRepository.findByTokenWithOrder(link.getToken())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByTokenForUpdate(link.getToken())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+
+        PublicPaymentLinkResponse response = service.publicLink(link.getToken());
+
+        assertTrue(response.payable());
+        assertEquals("SBP_PRIMARY", response.paymentPageMode());
+        assertFalse(response.sbpBankSelectionSupported());
+        assertFalse(response.tpayEnabled());
+        assertFalse(response.sberpayEnabled());
+        assertFalse(response.mirpayEnabled());
+        verifyNoInteractions(tochkaClient, tbankClient);
     }
 
     @Test
@@ -7336,6 +8600,10 @@ class PaymentLinkServiceTest {
                 runtimeSettingsService,
                 paymentProfileService,
                 tbankClient,
+                tochkaPaymentProfileResolver,
+                tochkaClient,
+                tochkaPaymentOperationMapper,
+                tochkaWebhookJwtVerifier,
                 signer,
                 paymentSuccessNotificationDeliveryService,
                 manualPaymentRecipientTelegramNotificationService,
@@ -7485,6 +8753,191 @@ class PaymentLinkServiceTest {
         profile.setDefaultProfile(TbankPaymentProfile.PRIMARY_CODE.equals(code));
         profile.setTestMode(true);
         return profile;
+    }
+
+    private PaymentProfile tochkaEntityProfile(Long id) {
+        PaymentProfile profile = profile(id, "tochka-primary", "Точка Банк", "");
+        profile.setProvider(PaymentProfile.PROVIDER_TOCHKA);
+        return profile;
+    }
+
+    private TochkaPaymentProfile tochkaRuntimeProfile() {
+        return tochkaRuntimeProfile(true, false);
+    }
+
+    private TochkaPaymentProfile tochkaRuntimeProfile(boolean enabled, boolean testMode) {
+        return tochkaRuntimeProfile(
+                enabled,
+                testMode,
+                List.of(TochkaPaymentMode.CARD, TochkaPaymentMode.SBP)
+        );
+    }
+
+    private TochkaPaymentProfile tochkaRuntimeProfile(
+            boolean enabled,
+            boolean testMode,
+            List<TochkaPaymentMode> paymentModes
+    ) {
+        return new TochkaPaymentProfile(
+                31L,
+                "tochka-primary",
+                "Точка Банк",
+                enabled,
+                "123456789",
+                "200000000043325",
+                "jwt-token-not-logged",
+                "cloudKassir",
+                testMode,
+                TochkaTaxSystemCode.USN_INCOME,
+                TochkaVatType.NONE,
+                TochkaPaymentMethod.FULL_PAYMENT,
+                TochkaPaymentObject.SERVICE,
+                "шт.",
+                "Репутационное сопровождение компании в сети Интернет",
+                paymentModes,
+                Duration.ofDays(7)
+        );
+    }
+
+    private void stubTochkaPublicInit(
+            PaymentLink link,
+            Order order,
+            PaymentProfile entityProfile,
+            TochkaPaymentProfile runtimeProfile
+    ) {
+        when(tochkaPaymentProfileResolver.resolve(entityProfile)).thenReturn(runtimeProfile);
+        when(paymentLinkRepository.findByTokenWithOrder(link.getToken())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        if (link.getId() != null) {
+            lenient().when(paymentLinkRepository.findByIdForUpdate(link.getId()))
+                    .thenReturn(Optional.of(link));
+        }
+    }
+
+    private CreatePaymentResponse tochkaCreateResponse(
+            TochkaCreatePaymentCommand command,
+            TochkaPaymentProfile profile,
+            String operationId,
+            TochkaPaymentMode paymentMode
+    ) {
+        return new CreatePaymentResponse(new CreatePaymentResponseData(
+                command.purpose(),
+                "CREATED",
+                BigDecimal.valueOf(command.amountKopecks(), 2),
+                operationId,
+                "https://merch.securepaytb.ru/pay/" + operationId,
+                profile.merchantId(),
+                command.paymentLinkId(),
+                List.of(paymentMode.code()),
+                profile.customerCode()
+        ));
+    }
+
+    private PaymentInfoResponse tochkaPaymentInfo(PaymentOperation operation) {
+        return new PaymentInfoResponse(new PaymentInfoData(List.of(operation)), null);
+    }
+
+    private PaymentOperation tochkaOperation(
+            TochkaPaymentProfile profile,
+            String paymentLinkId,
+            String operationId,
+            TochkaPaymentMode paymentMode,
+            String status,
+            long amountKopecks
+    ) {
+        return new PaymentOperation(
+                profile.customerCode(),
+                profile.taxSystemCode().code(),
+                paymentMode.code(),
+                "provider-payment-" + operationId,
+                "provider-transaction-" + operationId,
+                OffsetDateTime.now().minusMinutes(1).toString(),
+                BigDecimal.valueOf(amountKopecks, 2),
+                status,
+                operationId,
+                "https://merch.securepaytb.ru/pay/" + operationId,
+                profile.merchantId(),
+                "APPROVED".equals(status) ? OffsetDateTime.now().toString() : null,
+                paymentLinkId,
+                List.of()
+        );
+    }
+
+    private PaymentOperation tochkaOperationWithoutPaymentType(
+            TochkaPaymentProfile profile,
+            String paymentLinkId,
+            String operationId,
+            String status,
+            long amountKopecks
+    ) {
+        PaymentOperation operation = tochkaOperation(
+                profile,
+                paymentLinkId,
+                operationId,
+                TochkaPaymentMode.SBP,
+                status,
+                amountKopecks
+        );
+        return new PaymentOperation(
+                operation.customerCode(),
+                operation.taxSystemCode(),
+                null,
+                operation.paymentId(),
+                operation.transactionId(),
+                operation.createdAt(),
+                operation.amount(),
+                operation.status(),
+                operation.operationId(),
+                operation.paymentLink(),
+                operation.merchantId(),
+                operation.paidAt(),
+                operation.paymentLinkId(),
+                operation.orders()
+        );
+    }
+
+    private TochkaAcquiringInternetPaymentWebhook tochkaWebhook(
+            TochkaPaymentProfile profile,
+            PaymentLink link,
+            TochkaPaymentMode paymentMode,
+            String status
+    ) {
+        return new TochkaAcquiringInternetPaymentWebhook(
+                profile.customerCode(),
+                BigDecimal.valueOf(link.getAmountKopecks(), 2),
+                paymentMode.code(),
+                link.getTbankPaymentId(),
+                "provider-transaction-" + link.getTbankPaymentId(),
+                link.getDescription(),
+                null,
+                profile.merchantId(),
+                "acquiringInternetPayment",
+                null,
+                null,
+                status,
+                link.getTbankOrderId(),
+                null,
+                null,
+                null
+        );
+    }
+
+    private void stubKnownTochkaWebhook(
+            String rawJwt,
+            TochkaAcquiringInternetPaymentWebhook claims,
+            PaymentLink link,
+            Order order,
+            PaymentProfile profile,
+            TochkaPaymentProfile runtime
+    ) {
+        when(tochkaWebhookJwtVerifier.verify(rawJwt)).thenReturn(claims);
+        when(tochkaWebhookJwtVerifier.requireMatches(eq(claims), any(TochkaWebhookExpectation.class)))
+                .thenReturn(claims);
+        when(paymentLinkRepository.findByTbankOrderIdWithOrder(link.getTbankOrderId()))
+                .thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
     }
 
     private ContractorPaymentRequisitesSnapshot requisites(

@@ -92,7 +92,7 @@ class TochkaClientTest {
                             "status": "CREATED",
                             "amount": "123.45",
                             "operationId": "48232c9a-ce82-1593-3cb6-5c85a1ffef8f",
-                            "paymentLink": "https://merch.example.com/order/?uuid=42",
+                            "paymentLink": "https://merch.securepaytb.ru/order/?uuid=42",
                             "merchantId": "200000000001097",
                             "paymentLinkId": "payment-link-42-v1",
                             "paymentMode": ["card", "sbp"],
@@ -116,7 +116,7 @@ class TochkaClientTest {
         assertEquals("CREATED", response.data().status());
         assertEquals("48232c9a-ce82-1593-3cb6-5c85a1ffef8f", response.data().operationId());
         assertEquals(new BigDecimal("123.45"), response.data().amount());
-        assertEquals("https://merch.example.com/order/?uuid=42", response.data().paymentLink());
+        assertEquals("https://merch.securepaytb.ru/order/?uuid=42", response.data().paymentLink());
         server.verify();
     }
 
@@ -170,7 +170,7 @@ class TochkaClientTest {
                               "amount": "123.45",
                               "status": "APPROVED",
                               "operationId": "operation-42",
-                              "paymentLink": "https://merch.example.com/order/?uuid=42",
+                              "paymentLink": "https://merch.securepaytb.ru/order/?uuid=42",
                               "merchantId": "200000000001097",
                               "paidAt": "2026-08-29T08:30:00+03:00",
                               "paymentLinkId": "payment-link-42-v1"
@@ -264,7 +264,7 @@ class TochkaClientTest {
                             "paymentLinkId": "other-link",
                             "amount": "123.45",
                             "status": "CREATED",
-                            "paymentLink": "https://merch.example.com/other"
+                            "paymentLink": "https://merch.securepaytb.ru/other"
                           }]},
                           "Meta": {"currentPage": 1, "totalPages": 2, "totalItems": 2}
                         }
@@ -284,7 +284,7 @@ class TochkaClientTest {
                             "paymentLinkId": "payment-link-42-v1",
                             "amount": "123.45",
                             "status": "CREATED",
-                            "paymentLink": "https://merch.example.com/payment-42"
+                            "paymentLink": "https://merch.securepaytb.ru/payment-42"
                           }]},
                           "Meta": {"currentPage": 2, "totalPages": 2, "totalItems": 2}
                         }
@@ -300,6 +300,44 @@ class TochkaClientTest {
 
         assertEquals("operation-42", operation.operationId());
         server.verify();
+    }
+
+    @Test
+    void acceptsTerminalRecoveredPaymentsWithoutHostedPaymentLink() {
+        for (String status : List.of("APPROVED", "REFUNDED", "EXPIRED")) {
+            server.expect(requestTo(
+                            "https://enter.tochka.com/sandbox/v2/acquiring/v1.0/payments"
+                                    + "?customerCode=1234567ab&fromDate=2026-08-28&toDate=2026-08-29"
+                                    + "&page=1&perPage=100"
+                    ))
+                    .andExpect(method(HttpMethod.GET))
+                    .andRespond(withSuccess("""
+                            {
+                              "Data": {"Operation": [{
+                                "customerCode": "1234567ab",
+                                "merchantId": "200000000001097",
+                                "operationId": "operation-42",
+                                "paymentLinkId": "payment-link-42-v1",
+                                "amount": "123.45",
+                                "status": "%s"
+                              }]},
+                              "Meta": {"currentPage": 1, "totalPages": 1, "totalItems": 1}
+                            }
+                            """.formatted(status), MediaType.APPLICATION_JSON));
+
+            var operation = client.findPaymentByPaymentLinkId(
+                    properties.defaultProfile(),
+                    "payment-link-42-v1",
+                    12_345,
+                    LocalDate.of(2026, 8, 28),
+                    LocalDate.of(2026, 8, 29)
+            ).orElseThrow();
+
+            assertEquals(status, operation.status());
+            assertTrue(operation.paymentLink() == null || operation.paymentLink().isBlank());
+            server.verify();
+            server.reset();
+        }
     }
 
     @Test
@@ -375,7 +413,7 @@ class TochkaClientTest {
                             "paymentLinkId": "payment-link-42-v1",
                             "amount": "999.99",
                             "status": "CREATED",
-                            "paymentLink": "https://merch.example.com/payment-42"
+                            "paymentLink": "https://merch.securepaytb.ru/payment-42"
                           }]},
                           "Meta": {"currentPage": 1, "totalPages": 1, "totalItems": 1}
                         }
@@ -425,6 +463,113 @@ class TochkaClientTest {
         assertTrue(response.data().isRefund());
         assertEquals(new BigDecimal("23.45"), response.data().amount());
         assertEquals("17", response.data().orderId());
+        server.verify();
+    }
+
+    @Test
+    void existingOperationsRemainAvailableWhenGlobalAndProfileCreationAreDisabled() {
+        properties.setEnabled(false);
+        var frozenProfile = properties.defaultProfile();
+
+        server.expect(requestTo(
+                        "https://enter.tochka.com/sandbox/v2/acquiring/v1.0/payments/operation-42"
+                ))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sandbox.jwt.token"))
+                .andRespond(withSuccess("""
+                        {
+                          "Data": {"Operation": [{
+                            "operationId": "operation-42",
+                            "status": "APPROVED"
+                          }]}
+                        }
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(
+                        "https://enter.tochka.com/sandbox/v2/acquiring/v1.0/payments"
+                                + "?customerCode=1234567ab&fromDate=2026-08-28&toDate=2026-08-29"
+                                + "&page=1&perPage=100"
+                ))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sandbox.jwt.token"))
+                .andRespond(withSuccess("""
+                        {
+                          "Data": {"Operation": [{
+                            "customerCode": "1234567ab",
+                            "merchantId": "200000000001097",
+                            "operationId": "operation-42",
+                            "paymentLinkId": "payment-link-42-v1",
+                            "amount": "123.45",
+                            "status": "APPROVED"
+                          }]},
+                          "Meta": {"currentPage": 1, "totalPages": 1, "totalItems": 1}
+                        }
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(
+                        "https://enter.tochka.com/sandbox/v2/acquiring/v1.0/payments/operation-42/refund"
+                ))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sandbox.jwt.token"))
+                .andRespond(withSuccess("""
+                        {
+                          "Data": {
+                            "isRefund": true,
+                            "operationId": "operation-42",
+                            "amount": "23.45",
+                            "orderId": "17"
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        assertEquals(
+                "APPROVED",
+                client.getPaymentInfo(frozenProfile, "operation-42")
+                        .data().operations().getFirst().status()
+        );
+        assertEquals(
+                "operation-42",
+                client.findPaymentByPaymentLinkId(
+                        frozenProfile,
+                        "payment-link-42-v1",
+                        12_345,
+                        LocalDate.of(2026, 8, 28),
+                        LocalDate.of(2026, 8, 29)
+                ).orElseThrow().operationId()
+        );
+        assertTrue(client.refund(
+                frozenProfile,
+                new TochkaRefundCommand("operation-42", 2_345)
+        ).data().isRefund());
+        server.verify();
+    }
+
+    @Test
+    void existingOperationsStillRequireFrozenProfileIdentityAndCredentials() {
+        properties.setEnabled(false);
+        properties.setProfileCode("");
+
+        ResponseStatusException missingIdentity = assertThrows(
+                ResponseStatusException.class,
+                () -> client.getPaymentInfo(properties.defaultProfile(), "operation-42")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, missingIdentity.getStatusCode());
+        assertTrue(missingIdentity.getReason().contains("профиль"));
+
+        properties.setProfileCode("tochka-primary");
+        properties.setJwtToken("");
+
+        ResponseStatusException missingCredentials = assertThrows(
+                ResponseStatusException.class,
+                () -> client.refund(
+                        properties.defaultProfile(),
+                        new TochkaRefundCommand("operation-42", 2_345)
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, missingCredentials.getStatusCode());
+        assertTrue(missingCredentials.getReason().contains("JWT"));
+        assertTrue(missingCredentials instanceof TochkaProviderException);
+        assertFalse(((TochkaProviderException) missingCredentials).isOutcomeUnknown());
         server.verify();
     }
 
@@ -480,6 +625,54 @@ class TochkaClientTest {
     }
 
     @Test
+    void treatsNegativeRefundAcknowledgementAsAmbiguousToPreventUnsafeRetry() {
+        server.expect(requestTo(
+                        "https://enter.tochka.com/sandbox/v2/acquiring/v1.0/payments/operation-42/refund"
+                ))
+                .andRespond(withSuccess("""
+                        {
+                          "Data": {
+                            "isRefund": false,
+                            "operationId": "operation-42",
+                            "amount": "23.45"
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        TochkaProviderException error = assertThrows(
+                TochkaProviderException.class,
+                () -> client.refund(new TochkaRefundCommand("operation-42", 2_345))
+        );
+
+        assertTrue(error.isOutcomeUnknown());
+        server.verify();
+    }
+
+    @Test
+    void treatsEveryHttpFailureAfterRefundPostAsAmbiguous() {
+        for (HttpStatus status : List.of(
+                HttpStatus.REQUEST_TIMEOUT,
+                HttpStatus.TOO_MANY_REQUESTS,
+                HttpStatus.BAD_REQUEST
+        )) {
+            server.expect(ExpectedCount.once(), requestTo(
+                            "https://enter.tochka.com/sandbox/v2/acquiring/v1.0/payments/operation-42/refund"
+                    ))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(status));
+
+            TochkaProviderException error = assertThrows(
+                    TochkaProviderException.class,
+                    () -> client.refund(new TochkaRefundCommand("operation-42", 2_345))
+            );
+
+            assertTrue(error.isOutcomeUnknown(), "HTTP " + status.value());
+            server.verify();
+            server.reset();
+        }
+    }
+
+    @Test
     void refusesReceiptRequestUntilAusnObjectIsConfigured() {
         properties.setTaxSystemCode("");
 
@@ -493,7 +686,7 @@ class TochkaClientTest {
     }
 
     @Test
-    void refusesAnyRequestWhileTochkaFeatureIsDisabled() {
+    void refusesRetailerReadinessWhileTochkaFeatureIsDisabled() {
         properties.setEnabled(false);
 
         ResponseStatusException error = assertThrows(
@@ -503,6 +696,37 @@ class TochkaClientTest {
 
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
         assertFalse(error.getReason().contains("sandbox.jwt.token"));
+    }
+
+    @Test
+    void refusesCreateWhileGlobalTochkaFeatureIsDisabled() {
+        properties.setEnabled(false);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> client.createPaymentWithReceipt(command())
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("выключен в настройках"));
+        server.verify();
+    }
+
+    @Test
+    void refusesCreateForDisabledPaymentProfile() {
+        properties.setEnabled(false);
+        var disabledProfile = properties.defaultProfile();
+        properties.setEnabled(true);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> client.createPaymentWithReceipt(disabledProfile, command())
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("профиль"));
+        assertTrue(error.getReason().contains("выключен"));
+        server.verify();
     }
 
     @Test
@@ -541,29 +765,108 @@ class TochkaClientTest {
     }
 
     @Test
-    void rejectsUnsafePaymentUrlAsAmbiguousCreateOutcome() {
+    void treatsEveryHttpFailureAfterCreatePostAsAmbiguous() {
+        for (HttpStatus status : List.of(
+                HttpStatus.REQUEST_TIMEOUT,
+                HttpStatus.TOO_MANY_REQUESTS,
+                HttpStatus.BAD_REQUEST
+        )) {
+            server.expect(ExpectedCount.once(), requestTo(
+                            "https://enter.tochka.com/sandbox/v2/acquiring/v1.0/payments_with_receipt"
+                    ))
+                    .andExpect(method(HttpMethod.POST))
+                    .andRespond(withStatus(status));
+
+            TochkaProviderException error = assertThrows(
+                    TochkaProviderException.class,
+                    () -> client.createPaymentWithReceipt(command())
+            );
+
+            assertTrue(error.isOutcomeUnknown(), "HTTP " + status.value());
+            server.verify();
+            server.reset();
+        }
+    }
+
+    @Test
+    void rejectsExplicitPaymentModeOutsideProfileAllowListBeforeProviderCall() {
+        properties.setPaymentModes(List.of("card"));
+        ResponseStatusException sbpDisabled = assertThrows(
+                ResponseStatusException.class,
+                () -> client.createPaymentWithReceipt(command(List.of(TochkaPaymentMode.SBP)))
+        );
+
+        properties.setPaymentModes(List.of("sbp"));
+        ResponseStatusException cardDisabled = assertThrows(
+                ResponseStatusException.class,
+                () -> client.createPaymentWithReceipt(command(List.of(TochkaPaymentMode.CARD)))
+        );
+
+        assertEquals(HttpStatus.CONFLICT, sbpDisabled.getStatusCode());
+        assertEquals(HttpStatus.CONFLICT, cardDisabled.getStatusCode());
+        assertTrue(sbpDisabled.getReason().contains("выключен"));
+        assertTrue(cardDisabled.getReason().contains("выключен"));
+        assertFalse(((TochkaProviderException) sbpDisabled).isOutcomeUnknown());
+        assertFalse(((TochkaProviderException) cardDisabled).isOutcomeUnknown());
+        server.verify();
+    }
+
+    @Test
+    void acceptsExplicitPaymentModeContainedInProfileAllowList() {
+        properties.setPaymentModes(List.of("card"));
         server.expect(requestTo(
                         "https://enter.tochka.com/sandbox/v2/acquiring/v1.0/payments_with_receipt"
                 ))
-                .andRespond(withSuccess("""
-                        {
-                          "Data": {
-                            "status": "CREATED",
-                            "amount": 123.45,
-                            "operationId": "operation-42",
-                            "paymentLink": "http://unsafe.example/payment"
-                          }
-                        }
-                        """, MediaType.APPLICATION_JSON));
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess(
+                        createPaymentResponse("https://merch.securepaytb.ru/payment"),
+                        MediaType.APPLICATION_JSON
+                ));
 
-        TochkaProviderException error = assertThrows(
-                TochkaProviderException.class,
-                () -> client.createPaymentWithReceipt(command())
-        );
+        var response = client.createPaymentWithReceipt(command(List.of(TochkaPaymentMode.CARD)));
 
-        assertTrue(error.isOutcomeUnknown());
-        assertTrue(error.getReason().contains("некорректную ссылку"));
+        assertEquals("operation-42", response.data().operationId());
         server.verify();
+    }
+
+    @Test
+    void acceptsOfficialPaymentUrlOnExplicitHttpsPort443() {
+        String paymentLink = "https://merch.securepaytb.ru:443/payment";
+        server.expect(requestTo(
+                        "https://enter.tochka.com/sandbox/v2/acquiring/v1.0/payments_with_receipt"
+                ))
+                .andRespond(withSuccess(createPaymentResponse(paymentLink), MediaType.APPLICATION_JSON));
+
+        var response = client.createPaymentWithReceipt(command());
+
+        assertEquals(paymentLink, response.data().paymentLink());
+        server.verify();
+    }
+
+    @Test
+    void rejectsNonOfficialPaymentUrlsAsAmbiguousCreateOutcome() {
+        for (String paymentLink : List.of(
+                "http://merch.securepaytb.ru/payment",
+                "https://merch.securepaytb.ru.evil.example/payment",
+                "https://evil.merch.securepaytb.ru/payment",
+                "https://other.example/payment",
+                "https://merch.securepaytb.ru:8443/payment"
+        )) {
+            server.expect(requestTo(
+                            "https://enter.tochka.com/sandbox/v2/acquiring/v1.0/payments_with_receipt"
+                    ))
+                    .andRespond(withSuccess(createPaymentResponse(paymentLink), MediaType.APPLICATION_JSON));
+
+            TochkaProviderException error = assertThrows(
+                    TochkaProviderException.class,
+                    () -> client.createPaymentWithReceipt(command())
+            );
+
+            assertTrue(error.isOutcomeUnknown());
+            assertTrue(error.getReason().contains("некорректную ссылку"));
+            server.verify();
+            server.reset();
+        }
     }
 
     @Test
@@ -594,7 +897,7 @@ class TochkaClientTest {
                             "status": "CREATED",
                             "amount": 999.99,
                             "operationId": "operation-42",
-                            "paymentLink": "https://merch.example.com/payment",
+                            "paymentLink": "https://merch.securepaytb.ru/payment",
                             "merchantId": "200000000001097",
                             "paymentLinkId": "payment-link-42-v1",
                             "customerCode": "1234567ab"
@@ -638,6 +941,8 @@ class TochkaClientTest {
 
         assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
         assertTrue(error.getReason().contains("CloudKassir"));
+        assertTrue(error instanceof TochkaProviderException);
+        assertFalse(((TochkaProviderException) error).isOutcomeUnknown());
         server.verify();
     }
 
@@ -656,6 +961,10 @@ class TochkaClientTest {
     }
 
     private TochkaCreatePaymentCommand command() {
+        return command(List.of(TochkaPaymentMode.CARD, TochkaPaymentMode.SBP));
+    }
+
+    private TochkaCreatePaymentCommand command(List<TochkaPaymentMode> modes) {
         return new TochkaCreatePaymentCommand(
                 "payment-link-42-v1",
                 12_345,
@@ -663,8 +972,21 @@ class TochkaClientTest {
                 "client@example.com",
                 "https://o-ogo.ru/pay/success",
                 "https://o-ogo.ru/pay/fail",
-                List.of(TochkaPaymentMode.CARD, TochkaPaymentMode.SBP)
+                modes
         );
+    }
+
+    private String createPaymentResponse(String paymentLink) {
+        return """
+                {
+                  "Data": {
+                    "status": "CREATED",
+                    "amount": 123.45,
+                    "operationId": "operation-42",
+                    "paymentLink": "%s"
+                  }
+                }
+                """.formatted(paymentLink);
     }
 
     private TochkaPaymentProperties configuredProperties() {

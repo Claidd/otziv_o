@@ -236,8 +236,11 @@ public class AdminPaymentController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    @GetMapping("/api/admin/payments/tbank-profiles")
-    public TbankPaymentProfilesResponse tbankProfiles() {
+    @GetMapping({
+            "/api/admin/payments/bank-profiles",
+            "/api/admin/payments/tbank-profiles"
+    })
+    public TbankPaymentProfilesResponse bankProfiles() {
         return paymentProfileService.managementState();
     }
 
@@ -271,15 +274,21 @@ public class AdminPaymentController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    @PutMapping("/api/admin/payments/tbank-profiles/manager-assignments")
-    public TbankPaymentProfilesResponse updateTbankProfileAssignments(
+    @PutMapping({
+            "/api/admin/payments/bank-profiles/manager-assignments",
+            "/api/admin/payments/tbank-profiles/manager-assignments"
+    })
+    public TbankPaymentProfilesResponse updateBankProfileAssignments(
             @RequestBody UpdateManagerPaymentProfilesRequest request
     ) {
         return paymentProfileService.updateManagerAssignments(request);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    @PutMapping("/api/admin/payments/tbank-profiles/policies")
+    @PutMapping({
+            "/api/admin/payments/bank-profiles/policies",
+            "/api/admin/payments/tbank-profiles/policies"
+    })
     public TbankPaymentProfilesResponse updatePaymentProfilePolicies(
             @RequestBody UpdatePaymentProfilePoliciesRequest request
     ) {

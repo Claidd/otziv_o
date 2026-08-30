@@ -37,6 +37,11 @@ import {
   safePaymentNavigationTarget,
   type PaymentNavigationPurpose
 } from '../../../shared/payment-navigation';
+import {
+  bankProfileOptionLabel,
+  bankProviderLabel,
+  isBankPaymentRouteType
+} from '../../../shared/bank-payment-presentation';
 import { ToastService } from '../../../shared/toast.service';
 import {
   ManagerManualCardPaymentModalComponent,
@@ -241,17 +246,41 @@ export class TbankPaymentsComponent implements OnDestroy {
   });
 
   readonly tbankClientPaymentEnabled = computed(() => {
-    return this.runtimeSettings()?.clientTbankEnabled ?? false;
+    const settings = this.runtimeSettings();
+    return Boolean(settings?.clientTbankEnabled || isBankPaymentRouteType(settings?.paymentInstructionSource));
   });
 
-  readonly tbankReadyForClientPayments = computed(() => {
-    const status = this.status();
+  readonly defaultBankProfile = computed(() =>
+    this.profiles().find((candidate) => candidate.defaultProfile)
+      ?? this.profiles()[0]
+      ?? null
+  );
+
+  readonly bankReadyForClientPayments = computed(() => {
     const settings = this.runtimeSettings();
-    return Boolean(settings?.tbankEnabled
-      && settings.paymentLinksEnabled
-      && settings.managerUiEnabled
-      && status?.hasCredentials);
+    if (!settings?.paymentLinksEnabled || !settings.managerUiEnabled) {
+      return false;
+    }
+    const managers = this.managerProfiles();
+    if (!managers.length) {
+      return this.profiles().some((profile) => this.bankProfileReady(profile));
+    }
+    return managers.every((manager) => {
+      const profile = this.selectedManagerProfile(manager)
+        ?? this.defaultBankProfile()
+        ?? null;
+      return Boolean(profile && this.bankProfileReady(profile));
+    });
   });
+
+  readonly unreadyManagerBankProfiles = computed(() => this.managerProfiles()
+    .filter((manager) => {
+      const profile = this.selectedManagerProfile(manager)
+        ?? this.defaultBankProfile()
+        ?? null;
+      return !profile || !this.bankProfileReady(profile);
+    })
+    .map((manager) => manager.managerTitle));
 
   readonly activeRuntimeMode = computed<TbankRuntimeMode>(() => {
     return this.runtimeSettings()?.runtimeMode ?? this.status()?.runtimeMode ?? (this.status()?.testMode ? 'TEST' : 'LIVE');
@@ -279,7 +308,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       case 'SBP_ONLY':
         return 'На странице оплаты доступна только кнопка СБП. Форма банка скрыта.';
       case 'BANK_ONLY':
-        return 'На странице оплаты доступна только форма банка: карта, T-Pay и способы, включенные в T-Bank.';
+        return 'На странице оплаты доступна только форма выбранного банка.';
       default:
         return 'На странице оплаты сначала показываем СБП, а форма банка остается запасным способом.';
     }
@@ -297,20 +326,20 @@ export class TbankPaymentsComponent implements OnDestroy {
     ].filter(Boolean);
     if (this.paymentPageMode() === 'SBP_PAY_ONLY') {
       if (!methods.length) {
-        return 'В режиме "СБП + Pay" сейчас будет только СБП. Включите T-Pay, SberPay или Mir Pay ниже.';
+        return 'Для T‑Bank в режиме «СБП + Pay» сейчас будет только СБП. Профиль Точки эти переключатели не использует.';
       }
-      return `На /pay показываем СБП и быстрые способы: ${methods.join(', ')}. Карточную кнопку не показываем.`;
+      return `Для T‑Bank на /pay показываем СБП и ${methods.join(', ')}. Карточную кнопку не показываем.`;
     }
     if (!this.bankPaymentBlockEnabled()) {
       if (!methods.length) {
-        return 'Форма банка скрыта режимом "Только СБП". Быстрые методы появятся после выбора режима с банковским блоком.';
+        return 'Форма T‑Bank скрыта режимом «Только СБП». Профиль Точки эти переключатели не использует.';
       }
-      return `Сейчас выбран режим "Только СБП", поэтому ${methods.join(', ')} не показывается на /pay. Выберите "СБП + карта", "СБП + Pay" или "Только банк".`;
+      return `Сейчас выбран режим «Только СБП», поэтому способы T‑Bank (${methods.join(', ')}) не показываются на /pay.`;
     }
     if (!methods.length) {
-      return 'В блоке формы банка показываем только оплату картой. Быстрые методы можно включить здесь после включения в T-Bank.';
+      return 'В форме T‑Bank показываем только карту. T‑Pay, SberPay и Mir Pay можно включить после их активации в T‑Bank; профиль Точки эти флаги игнорирует.';
     }
-    return `В блоке формы банка показываем: ${methods.join(', ')}.`;
+    return `В форме T‑Bank показываем: ${methods.join(', ')}. Профиль Точки эти флаги игнорирует.`;
   });
 
   readonly launchStateTitle = computed(() => {
@@ -319,32 +348,32 @@ export class TbankPaymentsComponent implements OnDestroy {
       return 'Настройки загружаются';
     }
     if (settings.runtimeMode === 'TEST') {
-      return 'Тестовый контур';
+      return 'T‑Bank: тестовый контур';
     }
-    if (settings.paymentInstructionSource !== 'TBANK_LINK') {
+    if (!isBankPaymentRouteType(settings.paymentInstructionSource)) {
       return 'Боевой терминал, клиенты на Альфа';
     }
     if (!settings.applyConfirmedPayments) {
-      return 'T-Bank клиентам, заказы вручную';
+      return 'Банковские ссылки клиентам, заказы вручную';
     }
-    return 'T-Bank полностью включен';
+    return 'Банковские ссылки полностью включены';
   });
 
   readonly launchStateDescription = computed(() => {
     const settings = this.runtimeSettings();
     if (!settings) {
-      return 'Получаю состояние из backend.';
+      return 'Получаю состояние банковских профилей и настроек T‑Bank.';
     }
     if (settings.runtimeMode === 'TEST') {
-      return 'Можно проверять ссылки и возвраты. Клиентам остаются старые счета, заказы не переводятся в оплату.';
+      return 'T‑Bank работает на тестовом терминале. Клиентам остаются старые счета, заказы не переводятся в оплату.';
     }
-    if (settings.paymentInstructionSource !== 'TBANK_LINK') {
+    if (!isBankPaymentRouteType(settings.paymentInstructionSource)) {
       return 'Рабочие терминалы готовы для ручных тестов, но автоответчик продолжает отправлять старый текст/Альфа.';
     }
     if (!settings.applyConfirmedPayments) {
-      return 'Клиенты получают ссылки T-Bank, но подтвержденные платежи только попадают в журнал.';
+      return 'Клиенты получают банковские ссылки, но подтвержденные платежи только попадают в журнал.';
     }
-    return 'Клиенты получают ссылки T-Bank, webhook переводит заказ в оплату и запоминает e-mail плательщика.';
+    return 'Клиенты получают ссылку назначенного банка, webhook переводит заказ в оплату и запоминает e-mail плательщика.';
   });
 
   readonly launchStateClass = computed(() => {
@@ -352,7 +381,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     if (!settings || settings.runtimeMode === 'TEST') {
       return 'launch-summary test';
     }
-    if (settings.paymentInstructionSource === 'TBANK_LINK' && settings.applyConfirmedPayments) {
+    if (isBankPaymentRouteType(settings.paymentInstructionSource) && settings.applyConfirmedPayments) {
       return 'launch-summary live';
     }
     return 'launch-summary staged';
@@ -380,7 +409,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       { label: 'Можно вернуть', value: refundable, icon: 'undo', tone: 'yellow' },
       { label: 'Возвращено', value: refunded, icon: 'assignment_return', tone: 'green' },
       { label: 'Ошибки', value: rejected, icon: 'priority_high', tone: rejected ? 'red' : 'gray' },
-      { label: 'Источник счетов', value: this.tbankClientPaymentEnabled() ? 'T-Bank' : 'Текст', icon: 'payments', tone: this.tbankClientPaymentEnabled() ? 'green' : 'gray' },
+      { label: 'Источник счетов', value: this.tbankClientPaymentEnabled() ? 'Банк' : 'Текст', icon: 'payments', tone: this.tbankClientPaymentEnabled() ? 'green' : 'gray' },
       { label: 'Режим', value: this.activeRuntimeMode() === 'TEST' ? 'Тестовый' : 'Боевой', icon: this.activeRuntimeMode() === 'TEST' ? 'science' : 'verified', tone: this.activeRuntimeMode() === 'TEST' ? 'yellow' : 'green' }
     ];
   });
@@ -402,7 +431,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     forkJoin({
       status: this.paymentsApi.getTbankStatus(),
       links: this.paymentsApi.getAdminTbankPaymentLinks(this.paymentLinkQuery()),
-      profiles: this.paymentsApi.getAdminTbankPaymentProfiles(),
+      profiles: this.paymentsApi.getAdminBankPaymentProfiles(),
       manualTasks: this.paymentsApi.getAdminManualPaymentTasks(),
       runtimeSettings: this.paymentsApi.getAdminTbankRuntimeSettings()
     }).subscribe({
@@ -415,10 +444,10 @@ export class TbankPaymentsComponent implements OnDestroy {
         this.loading.set(false);
       },
       error: (err) => {
-        const message = apiErrorDetail(err, 'Не удалось загрузить T-Bank платежи');
+        const message = apiErrorDetail(err, 'Не удалось загрузить банковские платежи');
         this.error.set(message);
         this.loading.set(false);
-        this.toastService.error('T-Bank платежи не загрузились', message);
+        this.toastService.error('Банковские платежи не загрузились', message);
       }
     });
   }
@@ -440,7 +469,7 @@ export class TbankPaymentsComponent implements OnDestroy {
 
     if (mode === 'LIVE') {
       const confirmed = window.confirm(
-        'Переключить T-Bank на рабочие терминалы? Клиентам ссылки T-Bank не уйдут, пока источник счетов остается «Альфа / текст».'
+        'Переключить T‑Bank на рабочие терминалы? Клиентам банковские ссылки не уйдут, пока источник счетов остается «Альфа / текст».'
       );
       if (!confirmed) {
         return;
@@ -462,15 +491,15 @@ export class TbankPaymentsComponent implements OnDestroy {
     }
     if (source === 'TBANK_LINK') {
       if (current.runtimeMode !== 'LIVE') {
-        this.toastService.error('Сначала включите боевой контур', 'В тестовом режиме клиентам нельзя отправлять ссылки T-Bank.');
+        this.toastService.error('Сначала включите боевой контур', 'В тестовом режиме клиентам нельзя отправлять банковские ссылки.');
         return;
       }
-      if (!this.tbankReadyForClientPayments()) {
-        this.toastService.error('T-Bank еще не готов', 'Проверьте API, создание ссылок, UI менеджера и секреты терминалов.');
+      if (!this.bankReadyForClientPayments()) {
+        this.toastService.error('Банковские ссылки еще не готовы', 'Проверьте API, создание ссылок, UI менеджера и реквизиты профилей.');
         return;
       }
       const confirmed = window.confirm(
-        'Отправлять клиентам ссылки T-Bank вместо старого текста/Альфа? Рекомендую включать после тестового реального платежа и чека.'
+        'Отправлять клиентам ссылки назначенного банка вместо старого текста/Альфа? Включайте после тестового реального платежа и проверки чека.'
       );
       if (!confirmed) {
         return;
@@ -478,7 +507,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     }
     this.saveRuntimeSettings(
       { paymentInstructionSource: source },
-      source === 'TBANK_LINK' ? 'Клиентские счета переключены на T-Bank' : 'Клиентские счета вернулись на Альфа / текст'
+      source === 'TBANK_LINK' ? 'Клиентские счета переключены на банковские ссылки' : 'Клиентские счета вернулись на Альфа / текст'
     );
   }
 
@@ -531,7 +560,10 @@ export class TbankPaymentsComponent implements OnDestroy {
     }
     const patch: UpdateTbankRuntimeSettingsRequest = {};
     patch[field] = enabled;
-    this.saveRuntimeSettings(patch, 'Настройка T-Bank сохранена');
+    this.saveRuntimeSettings(
+      patch,
+      field === 'tbankEnabled' ? 'Настройка API T‑Bank сохранена' : 'Настройка банковских ссылок сохранена'
+    );
   }
 
   setFastBankMethodSwitch(
@@ -687,7 +719,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       paymentProfileId: this.selectedProfileId(manager)
     }));
     this.savingProfiles.set(true);
-    this.paymentsApi.updateAdminTbankPaymentProfileAssignments(assignments).subscribe({
+    this.paymentsApi.updateAdminBankPaymentProfileAssignments(assignments).subscribe({
       next: (state) => {
         this.applyProfilesState(state.profiles, state.managers);
         this.savingProfiles.set(false);
@@ -771,7 +803,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       };
     });
     this.savingProfilePolicies.set(true);
-    this.paymentsApi.updateAdminPaymentProfilePolicies(request).subscribe({
+    this.paymentsApi.updateAdminBankPaymentProfilePolicies(request).subscribe({
       next: (state) => {
         this.applyProfilesState(state.profiles, state.managers);
         this.savingProfilePolicies.set(false);
@@ -815,11 +847,11 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.savingProfilePolicies.set(true);
     this.savingProfiles.set(true);
     let policiesSaved = false;
-    this.paymentsApi.updateAdminPaymentProfilePolicies(policyRequest).pipe(
+    this.paymentsApi.updateAdminBankPaymentProfilePolicies(policyRequest).pipe(
       tap(() => {
         policiesSaved = true;
       }),
-      switchMap(() => this.paymentsApi.updateAdminTbankPaymentProfileAssignments(assignments))
+      switchMap(() => this.paymentsApi.updateAdminBankPaymentProfileAssignments(assignments))
     ).subscribe({
       next: (state) => {
         this.applyProfilesState(state.profiles, state.managers);
@@ -849,7 +881,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       return;
     }
 
-    const confirmed = window.confirm(`Вернуть платеж T-Bank ${link.tbankPaymentId} на сумму ${link.amount} руб.?`);
+    const confirmed = window.confirm(`Вернуть банковский платеж ${link.tbankPaymentId} на сумму ${link.amount} руб.?`);
     if (!confirmed) {
       return;
     }
@@ -1406,7 +1438,18 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   paymentSubtitle(link: AdminPaymentLinkResponse): string {
     const parts = [link.filialTitle, link.description].filter(Boolean);
-    return parts.join(' - ') || 'T-Bank';
+    return parts.join(' - ') || 'Банк';
+  }
+
+  paymentProfileDisplayName(link: AdminPaymentLinkResponse): string {
+    const profileCode = link.paymentProfileCode?.trim();
+    const profile = profileCode
+      ? this.profiles().find((candidate) => candidate.code === profileCode)
+      : null;
+    if (profile) {
+      return `${bankProviderLabel(profile.provider)} · ${profile.name}`;
+    }
+    return link.paymentProfileName || link.tbankTerminalKey || 'Профиль оплаты';
   }
 
   paymentMethodLabel(link: AdminPaymentLinkResponse): string {
@@ -1561,11 +1604,52 @@ export class TbankPaymentsComponent implements OnDestroy {
   profilePolicyLabel(profile: PaymentProfileResponse): string {
     const policy = this.policyDraft(profile.id).paymentPolicy;
     if (policy !== 'MANUAL_UNTIL_LIMIT_THEN_TBANK') {
-      return 'Только T-Bank';
+      return 'Только банк';
     }
     return this.policyDraft(profile.id).manualPaymentType === 'EXTERNAL_LINK'
       ? 'Ссылка до лимита'
       : 'Телефон до лимита';
+  }
+
+  profileProviderLabel(profile: PaymentProfileResponse): string {
+    return bankProviderLabel(profile.provider);
+  }
+
+  managerProfileOptionLabel(profile: PaymentProfileResponse): string {
+    return bankProfileOptionLabel(profile);
+  }
+
+  defaultManagerProfileOptionLabel(): string {
+    const profile = this.defaultBankProfile();
+    return profile ? `По умолчанию · ${bankProfileOptionLabel(profile)}` : 'По умолчанию';
+  }
+
+  defaultManagerProfileReady(): boolean {
+    const profile = this.defaultBankProfile();
+    return Boolean(profile && this.bankProfileReady(profile));
+  }
+
+  selectedManagerProfile(manager: ManagerPaymentProfileResponse): PaymentProfileResponse | null {
+    const profileId = this.selectedProfileId(manager);
+    return profileId == null ? null : this.profiles().find((profile) => profile.id === profileId) ?? null;
+  }
+
+  managerProfileChanged(manager: ManagerPaymentProfileResponse): boolean {
+    return this.selectedProfileId(manager) !== (manager.paymentProfileId ?? null);
+  }
+
+  bankProfileReady(profile: PaymentProfileResponse): boolean {
+    if (profile.operational != null) {
+      return profile.operational;
+    }
+    if (!profile.enabled || !profile.hasPassword) {
+      return false;
+    }
+    const provider = (profile.provider ?? '').trim().toUpperCase();
+    if (provider === 'T_BANK' || provider === 'TBANK' || provider === 'T-BANK') {
+      return Boolean(this.runtimeSettings()?.tbankEnabled && this.status()?.hasCredentials);
+    }
+    return false;
   }
 
   profileManualUsagePercent(profile: PaymentProfileResponse): number {
@@ -1757,7 +1841,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     }
     const optimistic = { ...previous, ...patch };
     optimistic.testMode = optimistic.runtimeMode === 'TEST';
-    optimistic.clientTbankEnabled = optimistic.paymentInstructionSource === 'TBANK_LINK';
+    optimistic.clientTbankEnabled = isBankPaymentRouteType(optimistic.paymentInstructionSource);
     this.runtimeSettings.set(optimistic);
     this.savingRuntimeSettings.set(true);
     this.paymentsApi.updateAdminTbankRuntimeSettings(patch).subscribe({
@@ -1779,7 +1863,7 @@ export class TbankPaymentsComponent implements OnDestroy {
         this.runtimeSettings.set(previous);
         this.savingRuntimeSettings.set(false);
         const message = apiErrorDetail(err, 'Не удалось сохранить настройки запуска');
-        this.toastService.error('Настройки T-Bank не сохранены', message);
+        this.toastService.error('Настройки банка не сохранены', message);
       }
     });
   }
@@ -1887,7 +1971,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   }
 
   private loadProfilesOnly(showError = false): void {
-    this.paymentsApi.getAdminTbankPaymentProfiles().subscribe({
+    this.paymentsApi.getAdminBankPaymentProfiles().subscribe({
       next: (profiles) => this.applyProfilesState(profiles.profiles, profiles.managers),
       error: (err) => {
         if (showError) {

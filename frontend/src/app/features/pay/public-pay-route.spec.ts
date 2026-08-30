@@ -198,6 +198,30 @@ describe('public payment route isolation', () => {
     fixture.destroy();
   });
 
+  it.each(['TBANK_LINK', 'TOCHKA_LINK', 'BANK_LINK'])(
+    'treats %s as a bank route for a common invoice',
+    async (paymentRouteType) => {
+      const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
+      const paymentsApi = {
+        getPublicCommonInvoice: vi.fn(() => of({ ...invoice('A'), paymentRouteType })),
+        initPublicCommonInvoicePayment: vi.fn(),
+        reportPublicCommonInvoicePaid: vi.fn()
+      };
+      await configure(PayGroupPageComponent, params, paymentsApi);
+      const fixture = TestBed.createComponent(PayGroupPageComponent);
+      const component = fixture.componentInstance;
+
+      component.email.set('payer@example.com');
+      component.offerConsent.set(true);
+      component.privacyConsent.set(true);
+      component.receiptConsent.set(true);
+
+      expect(component.bankRoute()).toBe(true);
+      expect(component.canSubmit()).toBe(true);
+      fixture.destroy();
+    }
+  );
+
   it('group contractor route records client report separately from confirmed payment', async () => {
     const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
     const current: PublicCommonInvoice = {

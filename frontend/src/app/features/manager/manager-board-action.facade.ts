@@ -29,7 +29,7 @@ export type ManagerBoardActionFacadeDeps = {
 
 export class ManagerBoardActionFacade {
   private static readonly ACTIVE_BANK_PAYMENT_CONFLICT =
-    'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.';
+    'У заказа есть незавершенный банковский платёж. Проверьте его в журнале перед ручным закрытием.';
   private static readonly ACTUAL_RECIPIENT_REQUIRED_HINT = 'фактического получателя';
 
   constructor(private readonly deps: ManagerBoardActionFacadeDeps) {}

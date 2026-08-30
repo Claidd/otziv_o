@@ -44,10 +44,11 @@ class WebhookRateLimitFilterTest {
         invoke("POST", "/review/editReviewses/2ca03e9b-8768-4c84-b222-d718c15c80c9");
         invoke("POST", "/api/payments/public/payment-token/init");
         invoke("POST", "/api/payments/tbank/webhook");
+        invoke("POST", "/api/payments/tochka/webhook");
 
         verify(rateLimiter, org.mockito.Mockito.times(4)).tryAcquire("review-public|203.0.113.7");
         verify(rateLimiter).tryAcquire("payment-public|203.0.113.7");
-        verify(rateLimiter).tryAcquire("webhook|203.0.113.7");
+        verify(rateLimiter, org.mockito.Mockito.times(2)).tryAcquire("webhook|203.0.113.7");
     }
 
     @Test
@@ -107,6 +108,7 @@ class WebhookRateLimitFilterTest {
                 List.of("POST", "/api/auth/register-performerevil"),
                 List.of("POST", "/registerevil"),
                 List.of("POST", "/register/extra"),
+                List.of("POST", "/api/payments/tochka/webhookevil"),
                 List.of("OPTIONS", "/api/review-check/order-id")
         )) {
             MockHttpServletRequest servletRequest = new MockHttpServletRequest(request.get(0), request.get(1));

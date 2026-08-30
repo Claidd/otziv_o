@@ -23,7 +23,15 @@ import lombok.Setter;
         name = "common_invoice_payment_refs",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_common_invoice_payment_ref_order", columnNames = "tbank_order_id"),
-                @UniqueConstraint(name = "uk_common_invoice_payment_ref_payment", columnNames = "tbank_payment_id")
+                @UniqueConstraint(name = "uk_common_invoice_payment_ref_payment", columnNames = "tbank_payment_id"),
+                @UniqueConstraint(
+                        name = "uk_common_invoice_payment_ref_provider_order",
+                        columnNames = {"provider", "provider_order_id"}
+                ),
+                @UniqueConstraint(
+                        name = "uk_common_invoice_payment_ref_provider_payment",
+                        columnNames = {"provider", "provider_payment_id"}
+                )
         }
 )
 public class CommonInvoicePaymentRef {
@@ -45,6 +53,43 @@ public class CommonInvoicePaymentRef {
 
     @Column(name = "tbank_terminal_key", length = 64)
     private String tbankTerminalKey;
+
+    /**
+     * Immutable provider snapshot for this exact attempt. Legacy rows are backfilled as T_BANK;
+     * new rows must capture this before the external create request is sent.
+     */
+    @Column(nullable = false, length = 32)
+    private String provider = "T_BANK";
+
+    @Column(name = "payment_profile_id")
+    private Long paymentProfileId;
+
+    /** Merchant-generated idempotency/lookup identity (T-Bank OrderId or Tochka paymentLinkId). */
+    @Column(name = "provider_order_id", length = 64)
+    private String providerOrderId;
+
+    /** Provider-generated operation identity (T-Bank PaymentId or Tochka operationId). */
+    @Column(name = "provider_payment_id", length = 64)
+    private String providerPaymentId;
+
+    /** TerminalKey for T-Bank or merchantId for Tochka, frozen with the attempt. */
+    @Column(name = "provider_merchant_id", length = 64)
+    private String providerMerchantId;
+
+    @Column(name = "provider_payment_mode", length = 32)
+    private String providerPaymentMode;
+
+    @Column(name = "provider_test_mode")
+    private Boolean providerTestMode;
+
+    @Column(name = "provider_status", length = 32)
+    private String providerStatus;
+
+    @Column(name = "provider_payment_url", length = 1024)
+    private String providerPaymentUrl;
+
+    @Column(name = "provider_expires_at")
+    private LocalDateTime providerExpiresAt;
 
     @Column(name = "amount_kopecks")
     private Long amountKopecks;

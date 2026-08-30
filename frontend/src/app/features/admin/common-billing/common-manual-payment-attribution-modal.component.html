@@ -32,7 +32,7 @@
       @if (options()!.remainingKopecks > 0) {
         @if (reconcilesCurrentTbank()) {
           <div class="actual-payment-warning">
-            У счёта открыта ссылка T‑Bank. При подтверждении система сначала проверит её в банке и отменит
+            У счёта открыта банковская ссылка. При подтверждении система сначала проверит её в банке и отменит
             только при отсутствии платежа. Если по ссылке уже есть движение денег, счёт не закроется и
             двойного начисления не будет. Выберите ниже того, кто фактически получил перевод по прежним реквизитам.
           </div>
@@ -169,7 +169,7 @@
           <button type="button" class="secondary" [disabled]="saving()" (click)="close()">Отмена</button>
           <button type="button" class="primary" [disabled]="!canSubmit()" (click)="submit()">
             {{ saving()
-              ? (reconcilesCurrentTbank() ? 'Сверяем T‑Bank и сохраняем…' : 'Сохраняем…')
+              ? (reconcilesCurrentTbank() ? 'Сверяем банковскую оплату и сохраняем…' : 'Сохраняем…')
               : 'Учесть оплату и закрыть счёт' }}
           </button>
         </div>

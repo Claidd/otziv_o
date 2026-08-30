@@ -177,7 +177,8 @@ public class OrderArchiveDryRunRepository {
                                 WHERE related_ref.invoice_id = related_invoice.invoice_id
                                   AND UPPER(TRIM(COALESCE(related_ref.status, ''))) NOT IN (
                                         'APPLIED', 'ARCHIVED', 'CANCELED', 'REJECTED',
-                                        'REFUNDED', 'PARTIAL_REFUNDED', 'REVERSED', 'PARTIAL_REVERSED'
+                                        'REFUNDED', 'PARTIAL_REFUNDED', 'REVERSED', 'PARTIAL_REVERSED',
+                                        'EXPIRED'
                                   )
                             )
                       )
@@ -227,7 +228,8 @@ public class OrderArchiveDryRunRepository {
                             'REFUNDED',
                             'PARTIAL_REFUNDED',
                             'REVERSED',
-                            'PARTIAL_REVERSED'
+                            'PARTIAL_REVERSED',
+                            'EXPIRED'
                       )
               )
             """;

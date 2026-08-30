@@ -228,8 +228,48 @@
             <span class="material-icons-sharp" aria-hidden="true">description</span>
             <div>
               <strong>Бумажный счёт владельца</strong>
-              <p>Реквизиты сотрудников и ссылка T‑Bank не выдаются. Напоминания начнутся после отметки об отправке документа.</p>
+              <p>Реквизиты сотрудников и банковская ссылка не выдаются. Напоминания начнутся после отметки об отправке счёта.</p>
             </div>
+          </section>
+
+          <section class="paper-invoice-workflow" aria-label="Последовательность работы с бумажным счётом">
+            <header>
+              <strong>Порядок работы</strong>
+              <small>Выполняйте действия последовательно</small>
+            </header>
+            <ol>
+              <li [class.is-done]="!!invoice?.sentAt" [class.is-current]="!invoice?.sentAt">
+                <span class="paper-invoice-workflow-marker" aria-hidden="true">
+                  {{ invoice?.sentAt ? '✓' : '1' }}
+                </span>
+                <div>
+                  <strong>Сообщить о готовности</strong>
+                  <small>{{ invoice?.sentAt ? 'Клиент уведомлён' : 'Отправить сообщение о завершении работ' }}</small>
+                </div>
+              </li>
+              <li
+                [class.is-done]="!!invoice?.paperInvoiceIssuedAt"
+                [class.is-current]="!!invoice?.sentAt && !invoice?.paperInvoiceIssuedAt">
+                <span class="paper-invoice-workflow-marker" aria-hidden="true">
+                  {{ invoice?.paperInvoiceIssuedAt ? '✓' : '2' }}
+                </span>
+                <div>
+                  <strong>Отправить счёт клиенту</strong>
+                  <small>{{ invoice?.paperInvoiceIssuedAt ? 'Отправка подтверждена' : 'Прикрепить документ и подтвердить отправку' }}</small>
+                </div>
+              </li>
+              <li
+                [class.is-done]="invoice?.status === 'PAID'"
+                [class.is-current]="!!invoice?.paperInvoiceIssuedAt && invoice?.status !== 'PAID'">
+                <span class="paper-invoice-workflow-marker" aria-hidden="true">
+                  {{ invoice?.status === 'PAID' ? '✓' : '3' }}
+                </span>
+                <div>
+                  <strong>Подтвердить оплату</strong>
+                  <small>{{ invoice?.status === 'PAID' ? 'Оплата подтверждена' : 'После проверки поступления денег' }}</small>
+                </div>
+              </li>
+            </ol>
           </section>
         }
 
@@ -250,7 +290,7 @@
                 <p class="invoice-problem-next">{{ invoiceProblemActionLabel() }}</p>
               }
               @if (attentionPaymentEvidence().length) {
-                <ol class="invoice-problem-steps" aria-label="Реквизиты T-Bank для ручной сверки">
+                <ol class="invoice-problem-steps" aria-label="Банковские реквизиты для ручной сверки">
                   @for (evidence of attentionPaymentEvidence(); track evidence.key) {
                     <li>
                       <strong>{{ evidence.label }}</strong>:
@@ -321,7 +361,7 @@
             && !invoice?.paperInvoiceIssuedAt) {
             <button type="button" class="success" (click)="markPaperInvoiceIssued()" [disabled]="!!mutating()">
               <span class="material-icons-sharp" aria-hidden="true">mark_email_read</span>
-              Документ передан клиенту
+              Счёт отправлен клиенту
             </button>
           }
           @if (invoiceNeedsAttention()) {
@@ -384,7 +424,9 @@
           } @else {
             <button type="button" class="primary" (click)="sendInvoice()" [disabled]="!!mutating() || !readyForSending()">
               <span class="material-icons-sharp" aria-hidden="true">send</span>
-              {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE' ? 'Отправить уведомление' : 'Отправить' }}
+              {{ invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'
+                ? (invoice?.sentAt ? 'Повторить уведомление' : 'Сообщить о готовности')
+                : 'Отправить' }}
             </button>
           }
           <button type="button" class="secondary" (click)="copyPublicUrl()" [disabled]="!invoice?.publicUrl || invoice?.invoicePaymentMode === 'OWNER_PAPER_INVOICE'">
@@ -396,13 +438,21 @@
               <span class="material-icons-sharp" aria-hidden="true">playlist_add_check</span>
               Одобрить все
             </button>
+            @if (paperInvoiceAwaitingDeliveryConfirmation()) {
+              <p class="invoice-action-sequence-hint">
+                <span class="material-icons-sharp" aria-hidden="true">info</span>
+                Сначала подтвердите отправку счёта клиенту — затем станет доступна кнопка «Оплачен».
+              </p>
+            }
             @if (invoice?.contractorPaymentRoute) {
               <button type="button" class="success" (click)="confirmContractorPaymentSource()" [disabled]="!!mutating() || !canConfirmContractorSource()">
                 <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
                 Сверить поступление
               </button>
             } @else {
-              <button type="button" class="success" (click)="markInvoicePaid()" [disabled]="!!mutating() || !canMarkPaid()">
+              <button type="button" class="success" (click)="markInvoicePaid()"
+                [disabled]="!!mutating() || !canMarkPaid()"
+                [attr.title]="paperInvoiceAwaitingDeliveryConfirmation() ? 'Сначала отметьте отправку счёта клиенту' : null">
                 <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
                 Оплачен
               </button>
@@ -441,7 +491,7 @@
               <span>Отправлен {{ invoice?.sentAt | date:'dd.MM HH:mm' }}</span>
             }
             @if (invoice?.paperInvoiceIssuedAt) {
-              <span>Бумажный документ отправлен {{ invoice?.paperInvoiceIssuedAt | date:'dd.MM HH:mm' }}</span>
+              <span>Бумажный счёт отправлен {{ invoice?.paperInvoiceIssuedAt | date:'dd.MM HH:mm' }}</span>
             }
             @if (invoice?.lastReminderAt) {
               <span>Напоминание {{ invoice?.lastReminderAt | date:'dd.MM HH:mm' }}</span>

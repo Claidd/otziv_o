@@ -141,7 +141,7 @@
                   </button>
                 }
               </section>
-            } @else if (tbankRoute()) {
+            } @else if (bankRoute()) {
               <form class="pay-form" (ngSubmit)="submitPayment()" aria-label="Данные для оплаты">
               <label class="email-field">
                 <span>E-mail для электронного чека</span>
@@ -193,9 +193,9 @@
               </button>
 
               <div class="payment-badges" aria-label="Способы оплаты">
+                <span>СБП</span>
                 <span>МИР</span>
-                <span>VISA</span>
-                <span>Mastercard</span>
+                <span>Банковская карта</span>
                 <span>Без НДС</span>
               </div>
 
@@ -235,11 +235,11 @@
       </div>
     </div>
     <div class="pay-side-card">
-      <span class="material-icons-sharp" aria-hidden="true">{{ tbankRoute() ? 'verified_user' : 'receipt_long' }}</span>
-      <strong>{{ tbankRoute() ? 'Платеж проходит на стороне банка' : 'Один платеж на весь общий счет' }}</strong>
-      <small>{{ tbankRoute() ? 'Сумма формы банка создается на текущий остаток' : 'Используйте только реквизиты, указанные на этой странице' }}</small>
+      <span class="material-icons-sharp" aria-hidden="true">{{ bankRoute() ? 'verified_user' : 'receipt_long' }}</span>
+      <strong>{{ bankRoute() ? 'Платеж проходит на стороне выбранного банка' : 'Один платеж на весь общий счет' }}</strong>
+      <small>{{ bankRoute() ? 'Сумма банковской формы создается на текущий остаток' : 'Используйте только реквизиты, указанные на этой странице' }}</small>
     </div>
-    @if (tbankRoute()) {
+    @if (bankRoute()) {
       <div class="pay-side-card">
         <span class="material-icons-sharp" aria-hidden="true">admin_panel_settings</span>
         <strong>Сертификаты Минцифры</strong>

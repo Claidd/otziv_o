@@ -130,7 +130,10 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     SELECT DISTINCT m
     FROM Manager m
     JOIN FETCH m.user u
+    JOIN u.roles r
     LEFT JOIN FETCH u.image
+    WHERE u.active = true
+      AND r.name = 'ROLE_MANAGER'
     ORDER BY m.id
 """)
     List<Manager> findAllForReportReviewSettings();
@@ -139,7 +142,10 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     SELECT DISTINCT m
     FROM Manager m
     JOIN FETCH m.user u
+    JOIN u.roles r
     LEFT JOIN FETCH m.paymentProfile
+    WHERE u.active = true
+      AND r.name = 'ROLE_MANAGER'
     ORDER BY m.id
 """)
     List<Manager> findAllForPaymentProfileAssignments();

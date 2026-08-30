@@ -18,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 
@@ -32,6 +34,47 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AdminPaymentControllerTest {
+
+    @Test
+    void bankProfileEndpointsKeepLegacyTbankAliases() throws Exception {
+        GetMapping getMapping = AdminPaymentController.class
+                .getMethod("bankProfiles")
+                .getAnnotation(GetMapping.class);
+        PutMapping assignmentsMapping = AdminPaymentController.class
+                .getMethod(
+                        "updateBankProfileAssignments",
+                        com.hunt.otziv.payments.dto.UpdateManagerPaymentProfilesRequest.class
+                )
+                .getAnnotation(PutMapping.class);
+        PutMapping policiesMapping = AdminPaymentController.class
+                .getMethod(
+                        "updatePaymentProfilePolicies",
+                        com.hunt.otziv.payments.dto.UpdatePaymentProfilePoliciesRequest.class
+                )
+                .getAnnotation(PutMapping.class);
+
+        org.junit.jupiter.api.Assertions.assertArrayEquals(
+                new String[]{
+                        "/api/admin/payments/bank-profiles",
+                        "/api/admin/payments/tbank-profiles"
+                },
+                getMapping.value()
+        );
+        org.junit.jupiter.api.Assertions.assertArrayEquals(
+                new String[]{
+                        "/api/admin/payments/bank-profiles/manager-assignments",
+                        "/api/admin/payments/tbank-profiles/manager-assignments"
+                },
+                assignmentsMapping.value()
+        );
+        org.junit.jupiter.api.Assertions.assertArrayEquals(
+                new String[]{
+                        "/api/admin/payments/bank-profiles/policies",
+                        "/api/admin/payments/tbank-profiles/policies"
+                },
+                policiesMapping.value()
+        );
+    }
 
     @Mock
     private PaymentLinkService paymentLinkService;

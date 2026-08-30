@@ -2,8 +2,10 @@ package com.hunt.otziv.payments;
 
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.PaymentProfilePolicyRequest;
+import com.hunt.otziv.payments.dto.ManagerPaymentProfileAssignmentRequest;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.dto.UpdateManagerManualPaymentSettingsRequest;
+import com.hunt.otziv.payments.dto.UpdateManagerPaymentProfilesRequest;
 import com.hunt.otziv.payments.dto.UpdatePaymentProfilePoliciesRequest;
 import com.hunt.otziv.payments.model.PaymentPolicy;
 import com.hunt.otziv.payments.model.ManualPaymentType;
@@ -13,15 +15,20 @@ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.repository.PaymentProfileRepository;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
+import com.hunt.otziv.payments.tochka.dto.TochkaPaymentProfile;
+import com.hunt.otziv.payments.tochka.service.TochkaPaymentProfileResolver;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -46,6 +53,9 @@ class PaymentProfileServiceTest {
     @Mock
     private TbankRuntimeSettingsService runtimeSettingsService;
 
+    @Mock
+    private TochkaPaymentProfileResolver tochkaPaymentProfileResolver;
+
     @Test
     void managerCannotUpdateSharedManualPaymentRequisites() {
         TbankPaymentProperties properties = new TbankPaymentProperties();
@@ -54,7 +64,8 @@ class PaymentProfileServiceTest {
                 paymentLinkRepository,
                 managerRepository,
                 properties,
-                runtimeSettingsService
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
         );
         ResponseStatusException error = assertThrows(
                 ResponseStatusException.class,
@@ -86,7 +97,8 @@ class PaymentProfileServiceTest {
                 paymentLinkRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
-                runtimeSettingsService
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
         );
 
         var response = service.managerManualPaymentSettings(10L);
@@ -115,7 +127,8 @@ class PaymentProfileServiceTest {
                 paymentLinkRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
-                runtimeSettingsService
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
         );
 
         var profiles = service.managementState().profiles();
@@ -142,7 +155,8 @@ class PaymentProfileServiceTest {
                 paymentLinkRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
-                runtimeSettingsService
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
         );
         PaymentProfilePolicyRequest update = new PaymentProfilePolicyRequest(
                 profile.getId(),
@@ -179,7 +193,8 @@ class PaymentProfileServiceTest {
                 paymentLinkRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
-                runtimeSettingsService
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
         );
         PaymentProfilePolicyRequest update = new PaymentProfilePolicyRequest(
                 profile.getId(),
@@ -219,7 +234,8 @@ class PaymentProfileServiceTest {
                 paymentLinkRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
-                runtimeSettingsService
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
         );
 
         var profiles = service.findByTerminalKeys(List.of(
@@ -246,7 +262,8 @@ class PaymentProfileServiceTest {
                 paymentLinkRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
-                runtimeSettingsService
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
         );
 
         ResponseStatusException runtimeError = assertThrows(
@@ -265,27 +282,192 @@ class PaymentProfileServiceTest {
     }
 
     @Test
-    void managementStateDoesNotTreatTochkaProfileAsTbankCredentials() {
+    void managementStateUsesExactTochkaRuntimeWithoutExposingProviderSecrets() {
         PaymentProfile tochka = profile();
+        tochka.setCode("tochka-primary");
+        tochka.setName("Точка Банк");
         tochka.setProvider(PaymentProfile.PROVIDER_TOCHKA);
-        tochka.setTerminalKey("tochka-profile-key");
+        tochka.setTerminalKey("tochka-profile-placeholder");
+        tochka.setPasswordEnvKey("jwt-must-not-leave-backend");
         when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
                 .thenReturn(List.of(tochka));
         when(managerRepository.findAllForPaymentProfileAssignments()).thenReturn(List.of());
+        TochkaPaymentProfile runtime = tochkaRuntime("merchant-provider-9876", "jwt-live-secret", true);
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(tochka)).thenReturn(runtime);
+        when(tochkaPaymentProfileResolver.resolve(tochka)).thenReturn(runtime);
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
-                runtimeSettingsService
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
         );
 
         var response = service.managementState().profiles().getFirst();
 
         assertEquals(PaymentProfile.PROVIDER_TOCHKA, response.provider());
-        assertEquals("tochka-profile-key", response.terminalKey());
-        assertFalse(response.hasPassword());
+        assertEquals("Точка · ••••9876", response.terminalKey());
+        assertTrue(response.testMode());
+        assertTrue(response.hasPassword());
+        assertTrue(response.operational());
+        assertEquals(null, response.passwordEnvKey());
+        assertFalse(response.toString().contains("merchant-provider-9876"));
+        assertFalse(response.toString().contains("jwt-live-secret"));
+        assertFalse(response.toString().contains("jwt-must-not-leave-backend"));
         verify(runtimeSettingsService, never()).runtimeMode();
+    }
+
+    @Test
+    void managementStateFailsClosedWhenTochkaRuntimeCannotBeResolved() {
+        PaymentProfile tochka = profile();
+        tochka.setCode("tochka-primary");
+        tochka.setProvider(PaymentProfile.PROVIDER_TOCHKA);
+        tochka.setTerminalKey("tochka-profile-placeholder");
+        tochka.setTestMode(false);
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(tochka));
+        when(managerRepository.findAllForPaymentProfileAssignments()).thenReturn(List.of());
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(tochka))
+                .thenThrow(new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "mismatch"));
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
+        );
+
+        var response = service.managementState().profiles().getFirst();
+
+        assertEquals("Точка · tochka-primary", response.terminalKey());
+        assertTrue(response.testMode());
+        assertFalse(response.hasPassword());
+        assertFalse(response.operational());
+        verify(runtimeSettingsService, never()).runtimeMode();
+    }
+
+    @Test
+    void managementStateDoesNotMarkConfiguredButDisabledTochkaProfileOperational() {
+        PaymentProfile tochka = profile();
+        tochka.setCode("tochka-primary");
+        tochka.setProvider(PaymentProfile.PROVIDER_TOCHKA);
+        TochkaPaymentProfile runtime = tochkaRuntime("merchant-provider-9876", "jwt-live-secret", false);
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(tochka));
+        when(managerRepository.findAllForPaymentProfileAssignments()).thenReturn(List.of());
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(tochka)).thenReturn(runtime);
+        when(tochkaPaymentProfileResolver.resolve(tochka))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "disabled"));
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
+        );
+
+        var response = service.managementState().profiles().getFirst();
+
+        assertTrue(response.hasPassword());
+        assertFalse(response.operational());
+    }
+
+    @Test
+    void managerCanBeAssignedToTochkaProfile() {
+        PaymentProfile tochka = profile();
+        tochka.setCode("tochka-primary");
+        tochka.setProvider(PaymentProfile.PROVIDER_TOCHKA);
+        Manager manager = manager(null);
+        TochkaPaymentProfile runtime = tochkaRuntime("merchant-provider-9876", "jwt-live-secret", false);
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(tochka));
+        when(managerRepository.findById(manager.getId())).thenReturn(Optional.of(manager));
+        when(managerRepository.findAllForPaymentProfileAssignments()).thenReturn(List.of(manager));
+        when(tochkaPaymentProfileResolver.resolve(tochka)).thenReturn(runtime);
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
+        );
+
+        var response = service.updateManagerAssignments(new UpdateManagerPaymentProfilesRequest(List.of(
+                new ManagerPaymentProfileAssignmentRequest(manager.getId(), tochka.getId())
+        )));
+
+        assertEquals(tochka, manager.getPaymentProfile());
+        assertEquals(tochka.getId(), response.managers().getFirst().paymentProfileId());
+        verify(managerRepository).save(manager);
+    }
+
+    @Test
+    void managerCannotBeSwitchedToProfileThatIsNotOperational() {
+        PaymentProfile tochka = profile();
+        tochka.setCode("tochka-primary");
+        tochka.setName("Точка Банк");
+        tochka.setProvider(PaymentProfile.PROVIDER_TOCHKA);
+        tochka.setEnabled(false);
+        Manager manager = manager(null);
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(tochka));
+        when(managerRepository.findById(manager.getId())).thenReturn(Optional.of(manager));
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
+        );
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.updateManagerAssignments(new UpdateManagerPaymentProfilesRequest(List.of(
+                        new ManagerPaymentProfileAssignmentRequest(manager.getId(), tochka.getId())
+                )))
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("не готов к новым платежам"));
+        verify(managerRepository, never()).save(manager);
+    }
+
+    @Test
+    void paymentProfileCannotBeAssignedToHistoricalNonManagerIdentity() {
+        PaymentProfile tochka = profile();
+        tochka.setCode("tochka-primary");
+        tochka.setProvider(PaymentProfile.PROVIDER_TOCHKA);
+        Manager historical = manager(null);
+        historical.getUser().getRoles().clear();
+        Role client = new Role();
+        client.setName("ROLE_CLIENT");
+        historical.getUser().getRoles().add(client);
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(tochka));
+        when(managerRepository.findById(historical.getId())).thenReturn(Optional.of(historical));
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
+        );
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.updateManagerAssignments(new UpdateManagerPaymentProfilesRequest(List.of(
+                        new ManagerPaymentProfileAssignmentRequest(historical.getId(), tochka.getId())
+                )))
+        );
+
+        assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
+        verify(managerRepository, never()).save(historical);
     }
 
     @Test
@@ -299,7 +481,8 @@ class PaymentProfileServiceTest {
                 paymentLinkRepository,
                 managerRepository,
                 new TbankPaymentProperties(),
-                runtimeSettingsService
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
         );
 
         assertTrue(service.findByTerminalKey("merchant-id").isEmpty());
@@ -309,12 +492,38 @@ class PaymentProfileServiceTest {
         User user = new User();
         user.setId(10L);
         user.setUsername("manager");
+        user.setActive(true);
+        Role managerRole = new Role();
+        managerRole.setName("ROLE_MANAGER");
+        user.setRoles(new java.util.ArrayList<>(List.of(managerRole)));
 
         Manager manager = new Manager();
         manager.setId(3L);
         manager.setUser(user);
         manager.setPaymentProfile(profile);
         return manager;
+    }
+
+    private TochkaPaymentProfile tochkaRuntime(String merchantId, String jwtToken, boolean testMode) {
+        return new TochkaPaymentProfile(
+                2L,
+                "tochka-primary",
+                "Точка Банк",
+                true,
+                "customer-code",
+                merchantId,
+                jwtToken,
+                "",
+                testMode,
+                null,
+                null,
+                null,
+                null,
+                "",
+                "",
+                List.of(),
+                Duration.ofDays(7)
+        );
     }
 
     private PaymentProfile profile() {

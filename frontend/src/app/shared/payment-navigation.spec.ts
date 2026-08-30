@@ -94,6 +94,7 @@ describe('payment navigation policy', () => {
     'http://securepay.tinkoff.ru/pay',
     'https://securepay.tinkoff.ru.evil.test/pay',
     'http://merch.securepaytb.ru/order/?uuid=example',
+    'https://merch.securepaytb.ru:8443/order/?uuid=example',
     'https://merch.securepaytb.ru.evil.test/order/?uuid=example',
     'https://evil.test/pay'
   ])('rejects an untrusted generated payment URL %s', (target) => {

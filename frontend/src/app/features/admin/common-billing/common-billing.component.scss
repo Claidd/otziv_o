@@ -12,6 +12,10 @@
   --billing-action-border: #d8e0ea;
   --billing-action-primary: #d23f29;
   --billing-action-primary-hover: #bf3421;
+  --billing-action-primary-soft: #fff2ed;
+  --billing-action-primary-soft-hover: #fbe2d9;
+  --billing-action-primary-soft-text: #a93422;
+  --billing-action-primary-soft-border: #e4a493;
   --billing-action-success: #168268;
   --billing-action-success-hover: #106d57;
   --billing-action-success-soft: #e8f7f2;
@@ -64,6 +68,10 @@
   --billing-action-border: #47525c;
   --billing-action-primary: #c84b2e;
   --billing-action-primary-hover: #df5a37;
+  --billing-action-primary-soft: #3b2a25;
+  --billing-action-primary-soft-hover: #4b332b;
+  --billing-action-primary-soft-text: #ffad95;
+  --billing-action-primary-soft-border: #765044;
   --billing-action-success: #17745f;
   --billing-action-success-hover: #1d8a70;
   --billing-action-success-soft: #203a34;
@@ -836,6 +844,115 @@ button .material-icons-sharp {
   overflow-wrap: anywhere;
 }
 
+.paper-invoice-workflow {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid var(--billing-action-border);
+  border-radius: 0.7rem;
+  padding: 0.62rem;
+  background: color-mix(in srgb, var(--billing-action-surface) 82%, transparent);
+}
+
+.paper-invoice-workflow > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.paper-invoice-workflow > header strong {
+  color: var(--billing-action-text);
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.paper-invoice-workflow > header small {
+  color: var(--billing-action-muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.paper-invoice-workflow ol {
+  display: grid;
+  gap: 0.38rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.paper-invoice-workflow li {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 0.58rem;
+  padding: 0.42rem 0.48rem;
+  color: var(--billing-action-muted);
+  background: transparent;
+}
+
+.paper-invoice-workflow li.is-current {
+  border-color: var(--billing-action-primary-soft-border);
+  color: var(--billing-action-primary-soft-text);
+  background: var(--billing-action-primary-soft);
+}
+
+.paper-invoice-workflow li.is-done {
+  border-color: var(--billing-action-success-soft-border);
+  color: var(--billing-action-success-soft-text);
+  background: var(--billing-action-success-soft);
+}
+
+.paper-invoice-workflow-marker {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border: 1px solid var(--billing-action-border);
+  border-radius: 999px;
+  color: inherit;
+  background: var(--billing-panel-surface);
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.paper-invoice-workflow li.is-current .paper-invoice-workflow-marker {
+  border-color: var(--billing-action-primary-soft-border);
+}
+
+.paper-invoice-workflow li.is-done .paper-invoice-workflow-marker {
+  border-color: var(--billing-action-success-soft-border);
+}
+
+.paper-invoice-workflow li div {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.paper-invoice-workflow li strong {
+  color: inherit;
+  font-size: 0.7rem;
+  font-weight: 950;
+  line-height: 1.18;
+}
+
+.paper-invoice-workflow li small {
+  color: var(--billing-action-muted);
+  font-size: 0.62rem;
+  font-weight: 780;
+  line-height: 1.22;
+}
+
+.paper-invoice-workflow li.is-current small,
+.paper-invoice-workflow li.is-done small {
+  color: inherit;
+  opacity: 0.84;
+}
+
 .invoice-problem-steps {
   display: grid;
   gap: 0.28rem;
@@ -945,25 +1062,25 @@ button .material-icons-sharp {
 }
 
 .invoice-actions .primary {
-  border-color: var(--billing-action-primary);
-  color: #fff;
-  background: var(--billing-action-primary);
+  border-color: var(--billing-action-primary-soft-border);
+  color: var(--billing-action-primary-soft-text);
+  background: var(--billing-action-primary-soft);
 }
 
 .invoice-actions .primary:hover:not(:disabled) {
-  border-color: var(--billing-action-primary-hover);
-  background: var(--billing-action-primary-hover);
+  border-color: var(--billing-action-primary-soft-border);
+  background: var(--billing-action-primary-soft-hover);
 }
 
 .invoice-actions .success {
-  border-color: var(--billing-action-success);
-  color: #fff;
-  background: var(--billing-action-success);
+  border-color: var(--billing-action-success-soft-border);
+  color: var(--billing-action-success-soft-text);
+  background: var(--billing-action-success-soft);
 }
 
 .invoice-actions .success:hover:not(:disabled) {
-  border-color: var(--billing-action-success-hover);
-  background: var(--billing-action-success-hover);
+  border-color: var(--billing-action-success-soft-border);
+  background: var(--billing-action-success-soft-hover);
 }
 
 .invoice-actions .review {
@@ -997,6 +1114,28 @@ button .material-icons-sharp {
 .invoice-actions .danger:hover:not(:disabled) {
   border-color: var(--billing-action-danger-border);
   background: var(--billing-action-danger-soft-hover);
+}
+
+.invoice-action-sequence-hint {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 0.42rem;
+  margin: 0;
+  border: 1px dashed var(--billing-action-border);
+  border-radius: 0.58rem;
+  padding: 0.52rem 0.62rem;
+  color: var(--billing-action-muted);
+  background: color-mix(in srgb, var(--billing-action-surface) 72%, transparent);
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1.28;
+}
+
+.invoice-action-sequence-hint .material-icons-sharp {
+  flex: 0 0 auto;
+  color: var(--billing-action-primary-soft-text);
+  font-size: 1rem;
 }
 
 .invoice-timeline {

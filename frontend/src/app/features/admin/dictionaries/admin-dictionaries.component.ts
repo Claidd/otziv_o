@@ -625,7 +625,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     clientTextReminderText: ['', [Validators.required, Validators.maxLength(500)]],
     publicationStartedText: ['', [Validators.required, Validators.maxLength(500)]],
     publicationProgressReportText: ['', [Validators.required, Validators.maxLength(500)]],
-    paymentInstructionSource: ['MANAGER_TEXT' as 'MANAGER_TEXT' | 'TBANK_LINK', [Validators.required]],
+    paymentInstructionSource: ['MANAGER_TEXT' as 'MANAGER_TEXT' | 'TBANK_LINK' | 'BANK_LINK' | 'TOCHKA_LINK', [Validators.required]],
     paymentReminderText: ['', [Validators.required, Validators.maxLength(500)]],
     paymentLinkCopyText: ['', [Validators.required, Validators.maxLength(500)]],
     paymentSuccessText: ['', [Validators.required, Validators.maxLength(500)]],
@@ -2580,7 +2580,9 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   paymentInstructionSourceLabel(source?: 'MANAGER_TEXT' | 'TBANK_LINK' | string | null): string {
-    return source === 'TBANK_LINK' ? 'T-Bank /pay ссылка' : 'текст менеджера';
+    return source === 'TBANK_LINK' || source === 'BANK_LINK' || source === 'TOCHKA_LINK'
+      ? 'банковская /pay-ссылка'
+      : 'текст менеджера';
   }
 
   categoryTitle(category?: DictionaryOption | null): string {

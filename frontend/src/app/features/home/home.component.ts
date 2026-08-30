@@ -721,7 +721,7 @@ export class HomeComponent {
         this.manualPaymentSettings.set(null);
         this.manualPaymentError.set(this.requestWarning(
           'Реквизиты ручной оплаты не загрузились',
-          'Если менеджеру включена оплата на телефон, проверьте профиль оплаты в T-Bank.',
+          'Если менеджеру включена оплата на телефон, проверьте его профиль в разделе «Банк».',
           err,
           'account_balance_wallet'
         ));

@@ -51,6 +51,7 @@ public class TochkaClient {
     private static final int MAX_RECONCILIATION_PAGES = 100;
     private static final long MAX_RECONCILIATION_DAYS = 7;
     private static final int MAX_REDIRECT_URL_LENGTH = 2_083;
+    private static final String PAYMENT_LINK_HOST = "merch.securepaytb.ru";
     private static final Pattern CUSTOMER_CODE_PATTERN = Pattern.compile("[A-Za-z0-9]{9}");
     private static final Pattern MERCHANT_ID_PATTERN = Pattern.compile("[0-9]{15}");
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
@@ -78,6 +79,14 @@ public class TochkaClient {
 
     public RetailerListResponse getRetailers() {
         return getRetailers(properties.defaultProfile());
+    }
+
+    /**
+     * Validates that a resolved profile can be used by the Tochka transport
+     * without performing a network request.
+     */
+    public void requireConfigured(TochkaPaymentProfile profile) {
+        validateAuthentication(profile);
     }
 
     public RetailerListResponse getRetailers(TochkaPaymentProfile profile) {
@@ -109,10 +118,7 @@ public class TochkaClient {
             TochkaPaymentProfile profile,
             TochkaCreatePaymentCommand command
     ) {
-        validateCreate(profile, command);
-        if (!profile.testMode()) {
-            verifyRetailerReadiness(profile, requestedPaymentModes(profile, command));
-        }
+        validateCreateBeforeSubmit(profile, command);
         URI uri = URI.create(baseUrl(profile) + ACQUIRING_PATH + "/payments_with_receipt");
         CreatePaymentResponse response = exchange(
                 profile,
@@ -126,12 +132,41 @@ public class TochkaClient {
         return response;
     }
 
+    private void validateCreateBeforeSubmit(
+            TochkaPaymentProfile profile,
+            TochkaCreatePaymentCommand command
+    ) {
+        try {
+            validateCreate(profile, command);
+            if (!profile.testMode()) {
+                verifyRetailerReadiness(profile, requestedPaymentModes(profile, command));
+            }
+        } catch (TochkaProviderException failure) {
+            // Retailer-readiness is a GET. It cannot have submitted the create POST, so its
+            // existing definitive classification must be preserved for claim release.
+            throw failure;
+        } catch (ResponseStatusException failure) {
+            throw new TochkaProviderException(
+                    failure.getStatusCode(),
+                    failure.getReason(),
+                    false,
+                    failure
+            );
+        } catch (RuntimeException failure) {
+            throw new TochkaProviderException(
+                    "Не удалось подготовить запрос создания платежа Точки до отправки POST",
+                    false,
+                    failure
+            );
+        }
+    }
+
     public PaymentInfoResponse getPaymentInfo(String operationId) {
         return getPaymentInfo(properties.defaultProfile(), operationId);
     }
 
     public PaymentInfoResponse getPaymentInfo(TochkaPaymentProfile profile, String operationId) {
-        validateAuthentication(profile);
+        validateExistingPaymentAuthentication(profile);
         String cleanOperationId = required(operationId, "operationId");
         URI uri = UriComponentsBuilder
                 .fromUriString(baseUrl(profile) + ACQUIRING_PATH + "/payments")
@@ -163,7 +198,7 @@ public class TochkaClient {
             LocalDate fromDate,
             LocalDate toDate
     ) {
-        validateAuthentication(profile);
+        validateExistingPaymentAuthentication(profile);
         String cleanPaymentLinkId = required(paymentLinkId, "paymentLinkId");
         BigDecimal expectedAmount = rubles(expectedAmountKopecks);
         validateReconciliationWindow(fromDate, toDate);
@@ -227,12 +262,31 @@ public class TochkaClient {
     }
 
     public RefundResponse refund(TochkaPaymentProfile profile, TochkaRefundCommand command) {
-        validateAuthentication(profile);
-        if (command == null) {
-            throw badRequest("Не заданы параметры возврата Точки");
+        String operationId;
+        BigDecimal amount;
+        try {
+            validateExistingPaymentAuthentication(profile);
+            if (command == null) {
+                throw badRequest("Не заданы параметры возврата Точки");
+            }
+            operationId = required(command.operationId(), "operationId");
+            amount = rubles(command.amountKopecks());
+        } catch (TochkaProviderException failure) {
+            throw failure;
+        } catch (ResponseStatusException failure) {
+            throw new TochkaProviderException(
+                    failure.getStatusCode(),
+                    failure.getReason(),
+                    false,
+                    failure
+            );
+        } catch (RuntimeException failure) {
+            throw new TochkaProviderException(
+                    "Не удалось подготовить запрос возврата Точки до отправки POST",
+                    false,
+                    failure
+            );
         }
-        String operationId = required(command.operationId(), "operationId");
-        BigDecimal amount = rubles(command.amountKopecks());
         URI uri = UriComponentsBuilder
                 .fromUriString(baseUrl(profile) + ACQUIRING_PATH + "/payments")
                 .pathSegment(operationId, "refund")
@@ -315,8 +369,11 @@ public class TochkaClient {
             }
             return responseBody;
         } catch (RestClientResponseException e) {
-            boolean outcomeUnknown = isMutation(method)
-                    && (e.getStatusCode().is5xxServerError() || e.getStatusCode().value() == 424);
+            // Once a mutation reached the HTTP transport, no provider status code is safe proof
+            // that Tochka did not create the payment/refund. In particular 408/429 may be
+            // generated after an upstream accepted the POST. Keep the durable claim and recover
+            // by GET instead of allowing an automatic second POST.
+            boolean outcomeUnknown = isMutation(method);
             throw new TochkaProviderException(
                     "Точка API вернула HTTP " + e.getStatusCode().value() + " на " + operation,
                     outcomeUnknown,
@@ -450,7 +507,10 @@ public class TochkaClient {
         if (!PAYMENT_STATUSES.contains(operation.status())) {
             throw ambiguousResponse("Сверка Точки вернула неизвестный статус платежа");
         }
-        if (!isValidHttpsPaymentLink(operation.paymentLink())) {
+        String recoveredPaymentLink = operation.paymentLink() == null ? "" : operation.paymentLink().trim();
+        boolean paymentLinkRequired = "CREATED".equals(operation.status());
+        if ((paymentLinkRequired && !isValidHttpsPaymentLink(recoveredPaymentLink))
+                || (!recoveredPaymentLink.isBlank() && !isValidHttpsPaymentLink(recoveredPaymentLink))) {
             throw ambiguousResponse("Сверка Точки вернула некорректную ссылку на оплату");
         }
     }
@@ -467,11 +527,7 @@ public class TochkaClient {
             throw ambiguousResponse("Точка API не вернула признак создания возврата");
         }
         if (!response.data().isRefund()) {
-            throw new TochkaProviderException(
-                    "Точка API не подтвердила создание возврата",
-                    false,
-                    null
-            );
+            throw ambiguousResponse("Точка API не подтвердила создание возврата");
         }
         if (!operationId.equals(response.data().operationId())) {
             throw ambiguousResponse("Точка API вернула возврат для другой операции");
@@ -599,18 +655,43 @@ public class TochkaClient {
         if (modes.isEmpty()) {
             throw conflict("Для профиля Точки не задан ни один способ оплаты");
         }
+        if (modes.stream().anyMatch(Objects::isNull)
+                || modes.stream().distinct().count() != modes.size()) {
+            throw conflict("Запрошенные способы оплаты Точки должны быть уникальными и непустыми");
+        }
+        if (!profile.paymentModes().containsAll(modes)) {
+            throw conflict("Запрошенный способ оплаты выключен в платежном профиле Точки");
+        }
     }
 
     private void validateAuthentication(TochkaPaymentProfile profile) {
         if (!properties.isEnabled()) {
             throw conflict("Интернет-эквайринг Точки выключен в настройках");
         }
-        if (profile == null || profile.code().isBlank()) {
-            throw conflict("Не выбран платежный профиль Точки");
-        }
+        validateProfileIdentity(profile);
         if (!profile.enabled()) {
             throw conflict("Платежный профиль Точки «" + profile.displayName() + "» выключен");
         }
+        validateProfileCredentials(profile);
+    }
+
+    /**
+     * Existing operations must remain recoverable after an administrator disables new Tochka
+     * payments. The frozen profile identity and credentials are still mandatory, but neither the
+     * global creation switch nor the profile creation switch may fence GET/recovery/refund calls.
+     */
+    private void validateExistingPaymentAuthentication(TochkaPaymentProfile profile) {
+        validateProfileIdentity(profile);
+        validateProfileCredentials(profile);
+    }
+
+    private void validateProfileIdentity(TochkaPaymentProfile profile) {
+        if (profile == null || profile.code().isBlank()) {
+            throw conflict("Не выбран платежный профиль Точки");
+        }
+    }
+
+    private void validateProfileCredentials(TochkaPaymentProfile profile) {
         if (!CUSTOMER_CODE_PATTERN.matcher(profile.customerCode()).matches()) {
             throw conflict("Для профиля Точки customerCode должен состоять из 9 букв или цифр");
         }
@@ -689,9 +770,11 @@ public class TochkaClient {
     private boolean isValidHttpsPaymentLink(String value) {
         try {
             URI uri = URI.create(safe(value));
+            int port = uri.getPort();
             return "https".equalsIgnoreCase(uri.getScheme())
-                    && uri.getHost() != null
-                    && uri.getUserInfo() == null;
+                    && PAYMENT_LINK_HOST.equalsIgnoreCase(uri.getHost())
+                    && uri.getUserInfo() == null
+                    && (port == -1 || port == 443);
         } catch (IllegalArgumentException e) {
             return false;
         }
