@@ -505,6 +505,7 @@ public class CommonBillingService {
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final ManualPaymentAutoConfirmationService manualPaymentAutoConfirmationService;
     private final ManualCardPaymentReviewNotificationService manualCardPaymentReviewNotificationService;
+    private final PaperInvoiceManagerNotificationService paperInvoiceManagerNotificationService;
     private final AppSettingService appSettingService;
     private final ContractorPaymentLiveRoutingService contractorPaymentLiveRoutingService;
     private final ContractorPaymentShadowService contractorPaymentShadowService;
@@ -3197,6 +3198,7 @@ public class CommonBillingService {
         account.setInvoicePaymentMode(requestedMode);
         accountRepository.save(account);
         invoiceRepository.save(invoice);
+        paperInvoiceManagerNotificationService.closeAfterCommit(invoiceId);
         log.info("Common invoice payment mode changed: invoiceId={}, mode={}, actor={}",
                 invoiceId, requestedMode, actor);
     }
@@ -3224,6 +3226,7 @@ public class CommonBillingService {
             log.info("Common paper invoice marked issued: invoiceId={}, actor={}",
                     invoiceId, principal == null ? "system" : principal.getName());
         }
+        paperInvoiceManagerNotificationService.closeAfterCommit(invoiceId);
         return invoiceAfterOrderPrelude(invoiceId);
     }
 
@@ -9321,6 +9324,11 @@ public class CommonBillingService {
                     : LocalDateTime.now().plusDays(REMINDER_INTERVAL_DAYS));
             invoice.setLastError(null);
             invoiceRepository.save(invoice);
+            if (!prepared.reminder()
+                    && isOwnerPaperInvoice(invoice)
+                    && invoice.getPaperInvoiceIssuedAt() == null) {
+                paperInvoiceManagerNotificationService.notifyAfterCommit(invoice.getId());
+            }
             return true;
         }
 

@@ -5,6 +5,7 @@ import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.contractor_payments.model.ContractorActualPaymentSourceKind;
 import com.hunt.otziv.payments.repository.ManualPaymentLegacyMonthlySourceProjection;
 import com.hunt.otziv.payments.model.ManualPaymentSource;
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import com.hunt.otziv.u_users.model.Manager;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
@@ -289,6 +290,21 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
     );
 
     @Query("""
+        SELECT invoice.id
+        FROM CommonInvoice invoice
+        WHERE invoice.invoicePaymentMode = :paperInvoiceMode
+          AND invoice.sentAt IS NOT NULL
+          AND invoice.paperInvoiceIssuedAt IS NULL
+          AND invoice.status IN :statuses
+        ORDER BY invoice.sentAt ASC, invoice.id ASC
+    """)
+    List<Long> findPaperInvoiceDeliveryNotificationCandidates(
+            @Param("paperInvoiceMode") InvoicePaymentMode paperInvoiceMode,
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
+            Pageable pageable
+    );
+
+    @Query("""
         SELECT invoice
         FROM CommonInvoice invoice
         JOIN FETCH invoice.account account
@@ -425,6 +441,13 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
                 AND publicationBlocker.publicationBlockerSince <= :publicationBlockerBefore
               )
             )
+            OR (
+              invoice.invoicePaymentMode = :paperInvoiceMode
+              AND invoice.sentAt IS NOT NULL
+              AND invoice.paperInvoiceIssuedAt IS NULL
+              AND invoice.sentAt <= :paperInvoiceDeliveryBefore
+              AND invoice.status IN :paperInvoiceOpenStatuses
+            )
           )
     """)
     long countManagerControlInvoices(
@@ -434,7 +457,10 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("partiallyPaidStatus") CommonInvoiceStatus partiallyPaidStatus,
             @Param("collectingStatus") CommonInvoiceStatus collectingStatus,
             @Param("staleBefore") LocalDateTime staleBefore,
-            @Param("publicationBlockerBefore") LocalDateTime publicationBlockerBefore
+            @Param("publicationBlockerBefore") LocalDateTime publicationBlockerBefore,
+            @Param("paperInvoiceMode") InvoicePaymentMode paperInvoiceMode,
+            @Param("paperInvoiceOpenStatuses") Collection<CommonInvoiceStatus> paperInvoiceOpenStatuses,
+            @Param("paperInvoiceDeliveryBefore") LocalDateTime paperInvoiceDeliveryBefore
     );
 
     @Query("""
@@ -492,6 +518,13 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
                 AND publicationBlocker.publicationBlockerSince <= :publicationBlockerBefore
               )
             )
+            OR (
+              invoice.invoicePaymentMode = :paperInvoiceMode
+              AND invoice.sentAt IS NOT NULL
+              AND invoice.paperInvoiceIssuedAt IS NULL
+              AND invoice.sentAt <= :paperInvoiceDeliveryBefore
+              AND invoice.status IN :paperInvoiceOpenStatuses
+            )
           )
         ORDER BY invoice.updatedAt ASC, invoice.id ASC
     """)
@@ -503,6 +536,9 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("collectingStatus") CommonInvoiceStatus collectingStatus,
             @Param("staleBefore") LocalDateTime staleBefore,
             @Param("publicationBlockerBefore") LocalDateTime publicationBlockerBefore,
+            @Param("paperInvoiceMode") InvoicePaymentMode paperInvoiceMode,
+            @Param("paperInvoiceOpenStatuses") Collection<CommonInvoiceStatus> paperInvoiceOpenStatuses,
+            @Param("paperInvoiceDeliveryBefore") LocalDateTime paperInvoiceDeliveryBefore,
             Pageable pageable
     );
 

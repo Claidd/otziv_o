@@ -78,6 +78,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.service.OrderService;
 import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
@@ -154,6 +155,7 @@ public class ManagerControlService {
     private static final int OVERDUE_NOTIFICATION_DAYS = 4;
     private static final int WORKER_ORDER_UNCHANGED_DAYS = 2;
     private static final int COMMON_INVOICE_STALE_DAYS = 3;
+    private static final int PAPER_INVOICE_DELIVERY_SLA_HOURS = 24;
     private static final Duration CLIENT_MESSAGE_PREPARED_STALE_AFTER = Duration.ofMinutes(15);
     private static final String CLIENT_MESSAGE_DELIVERY_PREPARED_PREFIX = "client_message_delivery_prepared:";
     private static final String CLIENT_MESSAGE_DELIVERY_UNKNOWN_PREFIX = "client_message_delivery_unknown:";
@@ -212,6 +214,11 @@ public class ManagerControlService {
             "Выставлен счет",
             "Напоминание",
             "Не оплачено"
+    );
+    private static final Set<CommonInvoiceStatus> PAPER_INVOICE_DELIVERY_OPEN_STATUSES = Set.of(
+            CommonInvoiceStatus.INVOICED,
+            CommonInvoiceStatus.REMINDER,
+            CommonInvoiceStatus.PARTIALLY_PAID
     );
     private static final Set<String> MANUAL_CONTACT_ORDER_STATUSES = Set.of(
             "Новый",
@@ -6108,7 +6115,10 @@ public class ManagerControlService {
                 CommonInvoiceStatus.PARTIALLY_PAID,
                 CommonInvoiceStatus.COLLECTING,
                 LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS),
-                LocalDateTime.now().minusHours(COMMON_INVOICE_PUBLICATION_BLOCKER_HOURS)
+                LocalDateTime.now().minusHours(COMMON_INVOICE_PUBLICATION_BLOCKER_HOURS),
+                InvoicePaymentMode.OWNER_PAPER_INVOICE,
+                PAPER_INVOICE_DELIVERY_OPEN_STATUSES,
+                LocalDateTime.now().minusHours(PAPER_INVOICE_DELIVERY_SLA_HOURS)
         );
     }
 
@@ -6121,6 +6131,9 @@ public class ManagerControlService {
                 CommonInvoiceStatus.COLLECTING,
                 LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS),
                 LocalDateTime.now().minusHours(COMMON_INVOICE_PUBLICATION_BLOCKER_HOURS),
+                InvoicePaymentMode.OWNER_PAPER_INVOICE,
+                PAPER_INVOICE_DELIVERY_OPEN_STATUSES,
+                LocalDateTime.now().minusHours(PAPER_INVOICE_DELIVERY_SLA_HOURS),
                 PageRequest.of(0, 10_000)
         );
     }
@@ -6207,6 +6220,9 @@ public class ManagerControlService {
                 && (invoice.getSentAt() == null || invoice.getNextReminderAt() == null)) {
             return true;
         }
+        if (isPaperInvoiceDeliveryOverdue(invoice, now)) {
+            return true;
+        }
         List<CommonInvoiceOrder> invoiceItems = commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
         if (status == CommonInvoiceStatus.COLLECTING
                 && commonInvoicePublicationBlockerService.hasOverdueBlockers(invoiceItems, now)) {
@@ -6225,6 +6241,19 @@ public class ManagerControlService {
         }
         return invoiceItems.stream()
                 .noneMatch(item -> item != null && !item.isReady());
+    }
+
+    private boolean isPaperInvoiceDeliveryOverdue(CommonInvoice invoice, LocalDateTime now) {
+        if (invoice == null
+                || invoice.getInvoicePaymentMode() != InvoicePaymentMode.OWNER_PAPER_INVOICE
+                || invoice.getSentAt() == null
+                || invoice.getPaperInvoiceIssuedAt() != null
+                || !PAPER_INVOICE_DELIVERY_OPEN_STATUSES.contains(invoice.getStatus())) {
+            return false;
+        }
+        LocalDateTime deliveryDeadline = invoice.getSentAt().plusHours(PAPER_INVOICE_DELIVERY_SLA_HOURS);
+        LocalDateTime checkTime = now == null ? LocalDateTime.now() : now;
+        return !deliveryDeadline.isAfter(checkTime);
     }
 
     private List<Company> telegramChatIssueCompanies(Manager manager, int limit) {
@@ -6430,13 +6459,18 @@ public class ManagerControlService {
                 .filter(Objects::nonNull)
                 .min(LocalDateTime::compareTo)
                 .orElse(invoice.getUpdatedAt());
+        if (isPaperInvoiceDeliveryOverdue(invoice, LocalDateTime.now())) {
+            attentionStartedAt = invoice.getSentAt();
+        }
         return new ManagerControlConcreteItemResponse(
                 null,
                 "COMMON_INVOICE",
                 invoice.getId(),
                 safe(invoice.getTitle()).isBlank() ? "Общий счет #" + invoice.getId() : invoice.getTitle(),
                 commonInvoiceSubtitle(accountName, invoice.getAmountKopecks(), remainingKopecks),
-                publicationBlockers.isEmpty()
+                isPaperInvoiceDeliveryOverdue(invoice, LocalDateTime.now())
+                        ? "Нужно отправить счёт"
+                        : publicationBlockers.isEmpty()
                         ? commonInvoiceStatusLabel(invoice.getStatus())
                         : "Требует внимания · блокеров " + publicationBlockers.size(),
                 attentionStartedAt == null ? null : daysSince(attentionStartedAt.toLocalDate(), today),
@@ -6490,6 +6524,12 @@ public class ManagerControlService {
         }
         if (status == CommonInvoiceStatus.BAN) {
             return "Счет в бане. Рекомендация: проверьте причину блокировки в карточке счета.";
+        }
+        if (isPaperInvoiceDeliveryOverdue(invoice, LocalDateTime.now())) {
+            return "Почему в замечаниях: клиент уведомлён о завершении работ, но отправка бумажного счёта "
+                    + "не подтверждена более 24 часов. Отправьте документ в клиентский чат, затем откройте "
+                    + "«Детали» и нажмите «Счёт отправлен клиенту». До подтверждения клиентские напоминания "
+                    + "и отметка оплаты заблокированы.";
         }
         if (publicationBlockers != null && !publicationBlockers.isEmpty()) {
             String blockers = publicationBlockers.stream()

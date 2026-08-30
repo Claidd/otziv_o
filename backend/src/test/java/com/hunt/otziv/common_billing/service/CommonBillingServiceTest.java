@@ -247,6 +247,8 @@ class CommonBillingServiceTest {
     @Mock
     private ManualCardPaymentReviewNotificationService manualCardPaymentReviewNotificationService;
     @Mock
+    private PaperInvoiceManagerNotificationService paperInvoiceManagerNotificationService;
+    @Mock
     private AppSettingService appSettingService;
     @Mock
     private ContractorCompletionRewardService contractorCompletionRewardService;

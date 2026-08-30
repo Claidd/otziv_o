@@ -67,6 +67,7 @@ import com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.service.OrderService;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.model.InvoicePaymentMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.payments.service.StandaloneBankPaymentPolicy;
@@ -357,7 +358,8 @@ class ManagerControlServiceTest {
     @Test
     void commonInvoiceControlPassesStatusesThatRequireAllOrdersReady() throws Exception {
         Manager manager = new Manager();
-        when(commonInvoiceRepository.countManagerControlInvoices(any(), any(), any(), any(), any(), any(), any()))
+        when(commonInvoiceRepository.countManagerControlInvoices(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(0L);
 
         Method method = ManagerControlService.class.getDeclaredMethod("commonInvoiceActionCount", Manager.class);
@@ -371,8 +373,71 @@ class ManagerControlServiceTest {
                 eq(com.hunt.otziv.common_billing.model.CommonInvoiceStatus.PARTIALLY_PAID),
                 eq(com.hunt.otziv.common_billing.model.CommonInvoiceStatus.COLLECTING),
                 any(),
+                any(),
+                eq(InvoicePaymentMode.OWNER_PAPER_INVOICE),
+                any(),
                 any()
         );
+    }
+
+    @Test
+    void paperInvoiceWithoutDeliveryConfirmationBecomesManagerRemarkAfterTwentyFourHours() throws Exception {
+        CommonInvoice invoice = paperInvoicePendingSince(LocalDateTime.now().minusHours(25));
+        Method problemMethod = ManagerControlService.class.getDeclaredMethod(
+                "isCommonInvoiceManagerControlProblem",
+                CommonInvoice.class,
+                LocalDateTime.class
+        );
+        problemMethod.setAccessible(true);
+
+        assertTrue((Boolean) problemMethod.invoke(service, invoice, LocalDateTime.now()));
+
+        Method reasonMethod = ManagerControlService.class.getDeclaredMethod(
+                "commonInvoiceReason",
+                CommonInvoice.class,
+                LocalDate.class,
+                List.class,
+                List.class
+        );
+        reasonMethod.setAccessible(true);
+        String reason = (String) reasonMethod.invoke(
+                service,
+                invoice,
+                LocalDate.now(),
+                List.of(),
+                List.of()
+        );
+
+        assertTrue(reason.contains("не подтверждена более 24 часов"));
+        assertTrue(reason.contains("Счёт отправлен клиенту"));
+        assertFalse(reason.toLowerCase().contains("нажмите «починить»"));
+    }
+
+    @Test
+    void paperInvoiceRemarkDisappearsAfterDeliveryConfirmation() throws Exception {
+        CommonInvoice invoice = paperInvoicePendingSince(LocalDateTime.now().minusHours(25));
+        invoice.setPaperInvoiceIssuedAt(LocalDateTime.now());
+        invoice.setUpdatedAt(LocalDateTime.now());
+        when(commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId())).thenReturn(List.of());
+
+        Method problemMethod = ManagerControlService.class.getDeclaredMethod(
+                "isCommonInvoiceManagerControlProblem",
+                CommonInvoice.class,
+                LocalDateTime.class
+        );
+        problemMethod.setAccessible(true);
+
+        assertFalse((Boolean) problemMethod.invoke(service, invoice, LocalDateTime.now()));
+    }
+
+    private CommonInvoice paperInvoicePendingSince(LocalDateTime sentAt) {
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(901L);
+        invoice.setStatus(CommonInvoiceStatus.INVOICED);
+        invoice.setInvoicePaymentMode(InvoicePaymentMode.OWNER_PAPER_INVOICE);
+        invoice.setSentAt(sentAt);
+        invoice.setUpdatedAt(sentAt);
+        return invoice;
     }
 
     @Test

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 public class CommonBillingReminderScheduler {
 
     private final CommonBillingService commonBillingService;
+    private final PaperInvoiceManagerNotificationService paperInvoiceManagerNotificationService;
 
     @Scheduled(fixedDelayString = "${common-billing.reminders.fixed-delay:PT5M}")
     public void sendDueReminders() {
@@ -25,6 +26,17 @@ public class CommonBillingReminderScheduler {
         int sent = commonBillingService.sendUnsentActionInvoices(20);
         if (sent > 0) {
             log.info("Common billing unsent invoices sent: {}", sent);
+        }
+    }
+
+    @Scheduled(
+            fixedDelayString = "${common-billing.paper-invoice-manager-notifications.fixed-delay:PT5M}",
+            initialDelayString = "${common-billing.paper-invoice-manager-notifications.initial-delay:PT30S}"
+    )
+    public void notifyManagersAboutPaperInvoices() {
+        int processed = paperInvoiceManagerNotificationService.notifyPending(50);
+        if (processed > 0) {
+            log.debug("Common paper invoice manager notifications checked: {}", processed);
         }
     }
 
