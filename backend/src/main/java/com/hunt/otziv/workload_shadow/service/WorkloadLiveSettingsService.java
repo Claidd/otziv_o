@@ -57,7 +57,7 @@ public class WorkloadLiveSettingsService {
                 integer(values, "stable-hours", 168),
                 integer(values, "min-candidates-per-manager", 2),
                 managerIds(stringAllowEmpty(values, "canary-manager-ids", "")),
-                integer(values, "offer-timeout-minutes", 60),
+                integer(values, "offer-timeout-minutes", 180),
                 string(values, "offer-start-time", "10:00"),
                 string(values, "offer-end-time", "21:00"),
                 integer(values, "max-transfers-per-manager-day", 5),

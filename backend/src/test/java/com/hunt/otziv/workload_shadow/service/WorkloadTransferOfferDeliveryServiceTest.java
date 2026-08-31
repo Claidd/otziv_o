@@ -32,7 +32,7 @@ class WorkloadTransferOfferDeliveryServiceTest {
     @Mock private TelegramService telegramService;
 
     @Test
-    void successfulTelegramDeliveryStartsConfiguredResponseWindow() {
+    void successfulTelegramDeliveryStartsConfiguredThreeHourResponseWindow() {
         var projection =
                 mock(WorkloadTransferOfferRepository.DeliveryProjection.class);
         String offerToken = UUID.randomUUID().toString();
@@ -47,7 +47,7 @@ class WorkloadTransferOfferDeliveryServiceTest {
                 new WorkloadTransferOfferService.ClaimedOffers(
                         "delivery-lease",
                         List.of(projection),
-                        19
+                        180
                 )
         );
         WorkloadLiveSettingsResponse settings = settings("LIVE", List.of());
@@ -84,13 +84,14 @@ class WorkloadTransferOfferDeliveryServiceTest {
                 anyList()
         );
         assertThat(message.getValue())
-                .contains("19 мин. с момента доставки")
+                .contains("3 часа с момента доставки")
+                .doesNotContain("180 мин.")
                 .doesNotContain("Ответьте до");
         verify(offerService).markDelivered(
                 51L,
                 "delivery-lease",
                 701,
-                19
+                180
         );
     }
 

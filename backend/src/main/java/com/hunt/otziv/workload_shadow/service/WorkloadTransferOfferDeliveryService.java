@@ -194,7 +194,7 @@ public class WorkloadTransferOfferDeliveryService {
                 Новые: %d · Коррекция: %d · Выгул: %d
                 Публикация: %d · Восстановление: %d · Плохие: %d
 
-                На ответ даётся <b>%d мин. с момента доставки</b>. Компания будет передана только после вашего согласия и повторной проверки графа.
+                На ответ даётся <b>%s с момента доставки</b>. Компания будет передана только после вашего согласия и повторной проверки графа.
                 """.formatted(
                 html(offer.getCandidateWorkerName()),
                 html(offer.getCompanyTitle()),
@@ -208,8 +208,28 @@ public class WorkloadTransferOfferDeliveryService {
                 number(offer.getPublishCount()),
                 number(offer.getRecoveryCount()),
                 number(offer.getBadCount()),
-                Math.max(1, responseTimeoutMinutes)
+                responseWindow(responseTimeoutMinutes)
         ).trim();
+    }
+
+    private String responseWindow(int responseTimeoutMinutes) {
+        int safeMinutes = Math.max(1, responseTimeoutMinutes);
+        if (safeMinutes % 60 != 0) {
+            return safeMinutes + " мин.";
+        }
+        int hours = safeMinutes / 60;
+        int lastTwoDigits = hours % 100;
+        String unit;
+        if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+            unit = "часов";
+        } else {
+            unit = switch (hours % 10) {
+                case 1 -> "час";
+                case 2, 3, 4 -> "часа";
+                default -> "часов";
+            };
+        }
+        return hours + " " + unit;
     }
 
 

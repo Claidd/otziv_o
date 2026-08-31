@@ -477,7 +477,7 @@ export class WorkloadShadowComponent implements OnDestroy {
     stableHours: [168, [Validators.required, Validators.min(1), Validators.max(720)]],
     minCandidatesPerManager: [2, [Validators.required, Validators.min(1), Validators.max(20)]],
     canaryManagerIds: [''],
-    offerTimeoutMinutes: [60, [Validators.required, Validators.min(1), Validators.max(240)]],
+    offerTimeoutMinutes: [180, [Validators.required, Validators.min(1), Validators.max(240)]],
     offerStartTime: ['10:00', [Validators.required, Validators.pattern(TIME_PATTERN)]],
     offerEndTime: ['21:00', [Validators.required, Validators.pattern(TIME_PATTERN)]],
     maxTransfersPerManagerDay: [5, [Validators.required, Validators.min(1), Validators.max(100)]],
