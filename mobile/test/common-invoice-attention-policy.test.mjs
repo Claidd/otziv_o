@@ -14,8 +14,8 @@ const {
 } = loadTsModule('src/app/shared/common-invoice-attention-policy.ts');
 
 test('explains the no-payment action and keeps it separate from paid and unpaid statuses', () => {
-  assert.equal(COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL, 'В T‑Bank оплаты нет — продолжить');
-  assert.match(commonInvoiceNoPaymentActionHint(), /по перечисленным OrderId и PaymentId в T‑Bank/u);
+  assert.equal(COMMON_INVOICE_NO_PAYMENT_ACTION_LABEL, 'В банке оплаты нет — продолжить');
+  assert.match(commonInvoiceNoPaymentActionHint(), /по перечисленным OrderId и PaymentId в банке/u);
   assert.match(commonInvoiceNoPaymentActionHint(), /не будет отмечен оплаченным/u);
   assert.match(commonInvoiceNoPaymentActionHint(), /не перейдёт в статус «Не оплачено»/u);
   assert.match(commonInvoiceNoPaymentActionHint(), /отдельным действием «Оплачено»/u);
@@ -35,10 +35,10 @@ test('distinguishes OrderId search from PaymentId verification and branches by p
 
 test('confirmation acknowledges only the no-actionable-payment outcome', () => {
   const confirmation = commonInvoiceNoPaymentConfirmation('\n\nOrderId example');
-  assert.match(confirmation, /РЕЗУЛЬТАТ ПРОВЕРКИ T‑BANK: ПО УКАЗАННЫМ ID ОПЛАТЫ НЕТ/u);
+  assert.match(confirmation, /РЕЗУЛЬТАТ ПРОВЕРКИ БАНКА: ПО УКАЗАННЫМ ID ОПЛАТЫ НЕТ/u);
   assert.match(confirmation, /ВСЕ перечисленные OrderId и PaymentId/u);
   assert.match(confirmation, /не активен, не успешен/u);
-  assert.match(confirmation, /ТОЛЬКО отсутствие оплаты по перечисленным T‑Bank ID/u);
+  assert.match(confirmation, /ТОЛЬКО отсутствие оплаты по перечисленным банковским ID/u);
   assert.match(confirmation, /НЕ отмечает счёт оплаченным/u);
   assert.match(confirmation, /НЕ переводит его в «Не оплачено»/u);
   assert.match(confirmation, /отдельным действием «Оплачено»/u);

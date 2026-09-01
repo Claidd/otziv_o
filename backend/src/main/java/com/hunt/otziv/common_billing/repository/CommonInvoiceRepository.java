@@ -280,7 +280,11 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
           AND account.enabled = true
           AND invoice.sentAt IS NULL
           AND invoice.updatedAt <= :readyBefore
-          AND COALESCE(invoice.lastError, '') = ''
+          AND (
+              COALESCE(invoice.lastError, '') = ''
+              OR invoice.lastError = 'payment_route_changed_message_pending'
+              OR invoice.lastError LIKE 'payment_route_changed_message_retry:%'
+          )
         ORDER BY invoice.updatedAt ASC, invoice.id ASC
     """)
     List<CommonInvoice> findUnsentActionCandidates(
@@ -301,6 +305,29 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
     List<Long> findPaperInvoiceDeliveryNotificationCandidates(
             @Param("paperInvoiceMode") InvoicePaymentMode paperInvoiceMode,
             @Param("statuses") Collection<CommonInvoiceStatus> statuses,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT invoice
+        FROM CommonInvoice invoice
+        JOIN FETCH invoice.account account
+        LEFT JOIN FETCH account.manager manager
+        LEFT JOIN FETCH manager.user
+        LEFT JOIN FETCH account.invoiceCompany invoiceCompany
+        WHERE invoice.status IN :statuses
+          AND account.enabled = true
+          AND invoice.sentAt IS NULL
+          AND invoice.updatedAt <= :readyBefore
+          AND (
+              invoice.lastError = 'payment_route_changed_message_pending'
+              OR invoice.lastError LIKE 'payment_route_changed_message_retry:%'
+          )
+        ORDER BY invoice.updatedAt ASC, invoice.id ASC
+    """)
+    List<CommonInvoice> findPendingPaymentRouteChangeCandidates(
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
+            @Param("readyBefore") LocalDateTime readyBefore,
             Pageable pageable
     );
 

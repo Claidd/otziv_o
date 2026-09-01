@@ -12,6 +12,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
@@ -54,12 +56,13 @@ class OrderPaymentMessageBuilderTest {
         verifyNoInteractions(paymentLinkServiceProvider, paymentLinkService);
     }
 
-    @Test
-    void tbankSourceCreatesPaymentLink() {
+    @ParameterizedTest
+    @ValueSource(strings = {"TBANK_LINK", "BANK_LINK", "TOCHKA_LINK"})
+    void bankSourceCreatesPaymentLink(String source) {
         Order order = order();
         order.getManager().setPayText("старый текст оплаты");
         when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, "MANAGER_TEXT"))
-                .thenReturn("TBANK_LINK");
+                .thenReturn(source);
         when(paymentLinkServiceProvider.getObject()).thenReturn(paymentLinkService);
         when(paymentLinkService.createForOrderInNewTransaction(10L)).thenReturn(new ManagerPaymentLinkResponse(
                 "token",

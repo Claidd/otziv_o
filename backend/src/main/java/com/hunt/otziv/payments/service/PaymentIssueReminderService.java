@@ -118,6 +118,36 @@ public class PaymentIssueReminderService {
         }
     }
 
+    /** Clears the deduplicated staff task after an automatic retry succeeds. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void resolveOrderIssue(Long orderId, String sourceType, Long sourceId) {
+        if (orderId == null || orderId <= 0) {
+            return;
+        }
+        orderRepository.findByIdForOrderDto(orderId).ifPresent(order -> {
+            String cleanSourceType = sourceType(sourceType);
+            Long cleanSourceId = sourceId == null || sourceId <= 0 ? orderId : sourceId;
+            for (User recipient : recipients(order).values()) {
+                try {
+                    personalReminderService.deleteSystemReminderBySource(
+                            recipient,
+                            cleanSourceType,
+                            cleanSourceId
+                    );
+                } catch (RuntimeException exception) {
+                    log.warn(
+                            "Не удалось закрыть платёжное замечание orderId={}, sourceType={}, sourceId={}, userId={}",
+                            orderId,
+                            cleanSourceType,
+                            cleanSourceId,
+                            recipient.getId(),
+                            exception
+                    );
+                }
+            }
+        });
+    }
+
     private Map<Long, User> recipients(Order order) {
         Map<Long, User> recipients = new LinkedHashMap<>();
         addRecipient(recipients, responsibleManager(order));

@@ -45,6 +45,7 @@ export interface CommonInvoiceSummaryResponse {
   paymentRouteType?: string | null;
   paymentRouteProfileName?: string | null;
   paymentRouteProvider?: string | null;
+  paymentRouteRecipient?: string | null;
   paymentRouteManualTaskId?: number | null;
   contractorPaymentRoute: boolean;
   paymentRouteSelectedAt?: string | null;
@@ -141,7 +142,10 @@ export interface CommonInvoiceDetailsResponse {
   paymentEvidenceToken?: string | null;
 }
 
-export type CommonInvoicePaymentRouteChangeTarget = 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK';
+export type CommonInvoicePaymentRouteChangeTarget =
+  | 'EMPLOYEE_REQUISITES'
+  | 'OWNER_TBANK'
+  | 'OWNER_BANK_REISSUE';
 
 export interface CommonInvoicePaymentRouteChangeContextResponse {
   currentRoute: string;
@@ -151,6 +155,12 @@ export interface CommonInvoicePaymentRouteChangeContextResponse {
   canChange: boolean;
   blockReason: string;
   paymentEvidenceToken: string;
+  currentPaymentProfileId?: number | null;
+  ownerBankTargetPaymentProfileId?: number | null;
+  ownerBankTargetPaymentProfileName?: string | null;
+  ownerBankTargetProvider?: string | null;
+  canReissueOwnerBank: boolean;
+  ownerBankReissueBlockReason: string;
 }
 
 export interface CommonInvoiceArchiveOrderPreview {
@@ -298,11 +308,17 @@ export class CommonBillingApi {
   changeCommonInvoicePaymentRoute(
     invoiceId: number,
     target: CommonInvoicePaymentRouteChangeTarget,
-    expectedPaymentEvidenceToken: string
+    expectedPaymentEvidenceToken: string,
+    expectedTargetPaymentProfileId?: number | null
   ): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/payment-route-change`,
-      { target, confirmedUnpaid: true, expectedPaymentEvidenceToken }
+      {
+        target,
+        confirmedUnpaid: true,
+        expectedPaymentEvidenceToken,
+        expectedTargetPaymentProfileId: expectedTargetPaymentProfileId ?? null
+      }
     );
   }
 

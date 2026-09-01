@@ -23,7 +23,7 @@ export interface CurrentUser {
 }
 
 export type TbankRuntimeMode = 'TEST' | 'LIVE';
-export type PaymentInstructionSource = 'MANAGER_TEXT' | 'TBANK_LINK';
+export type PaymentInstructionSource = 'MANAGER_TEXT' | 'BANK_LINK' | 'TBANK_LINK' | 'TOCHKA_LINK';
 export type TbankPaymentPageMode = 'SBP_PRIMARY' | 'BANK_PRIMARY' | 'SBP_PAY_ONLY' | 'SBP_ONLY' | 'BANK_ONLY';
 export type PaymentPolicy = 'T_BANK_ONLY' | 'MANUAL_UNTIL_LIMIT_THEN_TBANK';
 export type PaymentMethod = 'BANK_FORM' | 'SBP_QR' | 'MANUAL_MOBILE_BANK' | 'MANUAL_EXTERNAL_LINK' | string;
@@ -80,6 +80,7 @@ export interface AdminPaymentLinkResponse {
   manualPaymentType?: ManualPaymentType | string | null;
   manualPhone?: string | null;
   manualRecipientName?: string | null;
+  specialistName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;
   manualComment?: string | null;
@@ -310,6 +311,34 @@ export interface ManagerPaymentLinkResponse {
   copyText: string;
 }
 
+export type PaymentRouteChangeTarget = 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE';
+
+export interface PaymentRouteChangeContext {
+  paymentLinkId: number | null;
+  currentRoute: string;
+  currentRecipient: string;
+  status: string;
+  canChange: boolean;
+  blockReason: string;
+  configuredMode?: 'AUTO_ROUTING' | PaymentRouteChangeTarget | string;
+  paperInvoiceIssued?: boolean;
+  expectedTargetPaymentProfileId?: number | null;
+}
+
+export interface PaymentRouteChangeRequest {
+  expectedPaymentLinkId: number | null;
+  target: PaymentRouteChangeTarget;
+  confirmedUnpaid: boolean;
+  expectedTargetPaymentProfileId?: number | null;
+}
+
+export interface PaymentRouteChangeResponse {
+  previousPaymentLinkId: number | null;
+  paymentLinkId: number | null;
+  target: PaymentRouteChangeTarget;
+  clientNotificationScheduled: boolean;
+}
+
 export interface TbankPaymentStatus {
   enabled: boolean;
   paymentLinksEnabled: boolean;
@@ -337,6 +366,8 @@ export interface PublicPaymentLink {
   payerEmail?: string | null;
   status: string;
   paymentMethod?: PaymentMethod;
+  provider?: 'T_BANK' | 'TOCHKA' | string | null;
+  sbpBankSelectionSupported?: boolean | null;
   expiresAt: string;
   payable: boolean;
   paymentPageMode?: TbankPaymentPageMode;
@@ -849,7 +880,10 @@ export interface CommonBillingCompanyResponse {
 
 export type InvoicePaymentMode = 'AUTO_ROUTING' | 'OWNER_PAPER_INVOICE';
 
-export type CommonInvoicePaymentRouteChangeTarget = 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK';
+export type CommonInvoicePaymentRouteChangeTarget =
+  | 'EMPLOYEE_REQUISITES'
+  | 'OWNER_TBANK'
+  | 'OWNER_BANK_REISSUE';
 
 export interface CommonInvoicePaymentRouteChangeContextResponse {
   currentRoute: string;
@@ -859,6 +893,12 @@ export interface CommonInvoicePaymentRouteChangeContextResponse {
   canChange: boolean;
   blockReason: string;
   paymentEvidenceToken: string;
+  currentPaymentProfileId?: number | null;
+  ownerBankTargetPaymentProfileId?: number | null;
+  ownerBankTargetPaymentProfileName?: string | null;
+  ownerBankTargetProvider?: string | null;
+  canReissueOwnerBank: boolean;
+  ownerBankReissueBlockReason: string;
 }
 
 export interface ContractorCommonSourceConfirmationRequest {
@@ -907,7 +947,9 @@ export interface CommonInvoiceSummaryResponse {
   tbankTerminalLabel?: string | null;
   tbankTerminalKey?: string | null;
   paymentRouteType?: string | null;
+  paymentRouteProvider?: string | null;
   paymentRouteProfileName?: string | null;
+  paymentRouteRecipient?: string | null;
   paymentRouteManualTaskId?: number | null;
   contractorPaymentRoute: boolean;
   paymentRouteSelectedAt?: string | null;
@@ -2620,7 +2662,7 @@ export interface AdminClientMessageSettings {
   clientTextReminderText: string;
   publicationStartedText: string;
   publicationProgressReportText: string;
-  paymentInstructionSource: 'MANAGER_TEXT' | 'TBANK_LINK';
+  paymentInstructionSource: PaymentInstructionSource;
   paymentReminderText: string;
   paymentLinkCopyText: string;
   paymentSuccessText: string;
@@ -2664,7 +2706,7 @@ export interface AdminClientMessageMonitorQueueItem {
   consecutiveFailures: number;
   expectedChannel?: string | null;
   channelDetails?: string | null;
-  paymentInstructionSource?: 'MANAGER_TEXT' | 'TBANK_LINK' | string | null;
+  paymentInstructionSource?: PaymentInstructionSource | string | null;
   messagePreview?: string | null;
   readiness?: string | null;
   readinessLabel?: string | null;
@@ -4343,11 +4385,12 @@ export class ApiService {
   changeCommonInvoicePaymentRoute(
     invoiceId: number,
     target: CommonInvoicePaymentRouteChangeTarget,
-    expectedPaymentEvidenceToken: string
+    expectedPaymentEvidenceToken: string,
+    expectedTargetPaymentProfileId?: number | null
   ): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-route-change`),
-      { target, confirmedUnpaid: true, expectedPaymentEvidenceToken }
+      { target, confirmedUnpaid: true, expectedPaymentEvidenceToken, expectedTargetPaymentProfileId }
     );
   }
 
@@ -5075,6 +5118,29 @@ export class ApiService {
   createManagerOrderPaymentLink(orderId: number): Observable<ManagerPaymentLinkResponse> {
     return this.http.post<ManagerPaymentLinkResponse>(
       this.apiUrl(`/api/manager/orders/${orderId}/payment-link`),
+      {}
+    );
+  }
+
+  getManagerOrderPaymentRouteChangeContext(orderId: number): Observable<PaymentRouteChangeContext> {
+    return this.http.get<PaymentRouteChangeContext>(
+      this.apiUrl(`/api/manager/orders/${orderId}/payment-route-change-context`)
+    );
+  }
+
+  changeManagerOrderPaymentRoute(
+    orderId: number,
+    request: PaymentRouteChangeRequest
+  ): Observable<PaymentRouteChangeResponse> {
+    return this.http.post<PaymentRouteChangeResponse>(
+      this.apiUrl(`/api/manager/orders/${orderId}/payment-route-change`),
+      request
+    );
+  }
+
+  markManagerOrderPaperInvoiceIssued(orderId: number): Observable<unknown> {
+    return this.http.post(
+      this.apiUrl(`/api/manager/orders/${orderId}/paper-invoice/issued`),
       {}
     );
   }

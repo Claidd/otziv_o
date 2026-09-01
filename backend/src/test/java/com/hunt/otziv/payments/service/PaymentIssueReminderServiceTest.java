@@ -98,6 +98,26 @@ class PaymentIssueReminderServiceTest {
         verifyNoInteractions(orderRepository, userService, personalReminderService);
     }
 
+    @Test
+    void successfulRetryClearsRouteChangeIssueForEveryRecipient() {
+        User managerUser = user(50L, true);
+        User owner = user(60L, true);
+        Order order = order(25_048L, managerUser, null);
+        when(orderRepository.findByIdForOrderDto(25_048L)).thenReturn(Optional.of(order));
+        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
+        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of());
+
+        service.resolveOrderIssue(25_048L, "PAYMENT_ROUTE_CHANGE_DELIVERY", 7_262L);
+
+        verify(personalReminderService).deleteSystemReminderBySource(
+                managerUser, "PAYMENT_ROUTE_CHANGE_DELIVERY", 7_262L
+        );
+        verify(personalReminderService).deleteSystemReminderBySource(
+                owner, "PAYMENT_ROUTE_CHANGE_DELIVERY", 7_262L
+        );
+        verifyNoMoreInteractions(personalReminderService);
+    }
+
     private Order order(Long id, User orderManagerUser, User companyManagerUser) {
         Order order = new Order();
         order.setId(id);

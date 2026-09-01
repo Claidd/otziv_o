@@ -566,12 +566,14 @@ export interface PaymentRouteChangeContext {
   blockReason: string;
   configuredMode?: 'AUTO_ROUTING' | 'EMPLOYEE_REQUISITES' | 'OWNER_TBANK' | 'OWNER_PAPER_INVOICE' | string;
   paperInvoiceIssued?: boolean;
+  expectedTargetPaymentProfileId?: number | null;
 }
 
 export interface PaymentRouteChangeRequest {
   expectedPaymentLinkId: number | null;
   target: PaymentRouteChangeTarget;
   confirmedUnpaid: boolean;
+  expectedTargetPaymentProfileId?: number | null;
 }
 
 export interface PaymentRouteChangeResponse {

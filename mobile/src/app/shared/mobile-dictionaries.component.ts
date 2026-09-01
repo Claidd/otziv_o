@@ -30,6 +30,11 @@ import {
 import { MobileSearchBarComponent } from './mobile-search-bar.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from './mobile-status-slider.component';
 import { MobileConfirmService } from './mobile-confirm.service';
+import {
+  isBankPaymentInstructionSource,
+  normalizePaymentInstructionSource,
+  paymentInstructionSourceFormValue as bankSourceFormValue
+} from './bank-payment-source';
 
 type DictionaryTabKey = 'categories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
 type EditorKind = Exclude<DictionaryTabKey, 'settings' | 'autoresponder' | 'autoresponderMonitor'> | 'subcategory';
@@ -579,9 +584,9 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                   <div class="form-grid">
                     <label class="wide"><span>Ссылка проверки отзывов</span><input [ngModel]="autoresponder().reviewLinkBaseUrl" (ngModelChange)="patchAutoresponder('reviewLinkBaseUrl', $event)"></label>
                     <label class="wide"><span>Источник оплаты</span>
-                      <select [ngModel]="autoresponder().paymentInstructionSource" (ngModelChange)="patchAutoresponder('paymentInstructionSource', $event)">
+                      <select [ngModel]="paymentInstructionSourceFormValue(autoresponder().paymentInstructionSource)" (ngModelChange)="patchAutoresponder('paymentInstructionSource', $event)">
                         <option value="MANAGER_TEXT">Текст менеджера</option>
-                        <option value="TBANK_LINK">T-Bank ссылка</option>
+                        <option value="BANK_LINK">Банковская ссылка</option>
                       </select>
                     </label>
                     <label class="wide"><span>Текст проверки отзывов</span><textarea rows="5" [ngModel]="autoresponder().reviewReminderText" (ngModelChange)="patchAutoresponder('reviewReminderText', $event)"></textarea></label>
@@ -2309,7 +2314,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       clientTextReminderText: this.text(value.clientTextReminderText) || CLIENT_MESSAGE_DEFAULTS.clientTextReminderText,
       publicationStartedText: this.text(value.publicationStartedText) || CLIENT_MESSAGE_DEFAULTS.publicationStartedText,
       publicationProgressReportText: this.text(value.publicationProgressReportText) || CLIENT_MESSAGE_DEFAULTS.publicationProgressReportText,
-      paymentInstructionSource: value.paymentInstructionSource === 'TBANK_LINK' ? 'TBANK_LINK' : 'MANAGER_TEXT',
+      paymentInstructionSource: normalizePaymentInstructionSource(value.paymentInstructionSource),
       paymentReminderText: this.text(value.paymentReminderText) || CLIENT_MESSAGE_DEFAULTS.paymentReminderText,
       paymentLinkCopyText: this.text(value.paymentLinkCopyText) || CLIENT_MESSAGE_DEFAULTS.paymentLinkCopyText,
       paymentSuccessText: this.text(value.paymentSuccessText) || CLIENT_MESSAGE_DEFAULTS.paymentSuccessText,
@@ -2478,7 +2483,11 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   }
 
   paymentInstructionSourceLabel(source?: string | null): string {
-    return source === 'TBANK_LINK' ? 'T-Bank ссылка' : 'текст менеджера';
+    return isBankPaymentInstructionSource(source) ? 'банковская ссылка' : 'текст менеджера';
+  }
+
+  paymentInstructionSourceFormValue(source?: string | null): 'MANAGER_TEXT' | 'BANK_LINK' {
+    return bankSourceFormValue(source);
   }
 
   private monitorSearchText(item: AdminClientMessageMonitorQueueItem | AdminClientMessageMonitorAttempt): string {

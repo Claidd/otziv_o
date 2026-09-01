@@ -70,6 +70,7 @@ import {
   manualPaymentAccountingRecipientLabel,
   manualPaymentAccountingSourceLabel
 } from '../../../shared/manual-payment-recipient-summary';
+import { manualPaymentTaskWorklist } from '../../../shared/manual-payment-task-visibility';
 
 type PaymentMetric = {
   label: string;
@@ -111,12 +112,14 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   private readonly paymentsApi = inject(PaymentsApi);
   private readonly toastService = inject(ToastService);
+  readonly isBankPaymentInstructionSource = isBankPaymentRouteType;
 
   readonly links = signal<AdminPaymentLinkResponse[]>([]);
   readonly status = signal<TbankPaymentStatus | null>(null);
   readonly profiles = signal<PaymentProfileResponse[]>([]);
   readonly managerProfiles = signal<ManagerPaymentProfileResponse[]>([]);
   readonly manualTasks = signal<ManualPaymentTaskResponse[]>([]);
+  readonly visibleManualTasks = computed(() => manualPaymentTaskWorklist(this.manualTasks()));
   readonly recipientSummaryMonth = signal(TbankPaymentsComponent.currentMonthInput());
   readonly recipientMonthlySummary = signal<ManualPaymentRecipientMonthlySummaryResponse | null>(null);
   readonly recipientSummaryError = signal<string | null>(null);
@@ -489,7 +492,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     if (!current || this.savingRuntimeSettings() || current.paymentInstructionSource === source) {
       return;
     }
-    if (source === 'TBANK_LINK') {
+    if (isBankPaymentRouteType(source)) {
       if (current.runtimeMode !== 'LIVE') {
         this.toastService.error('Сначала включите боевой контур', 'В тестовом режиме клиентам нельзя отправлять банковские ссылки.');
         return;
@@ -507,7 +510,9 @@ export class TbankPaymentsComponent implements OnDestroy {
     }
     this.saveRuntimeSettings(
       { paymentInstructionSource: source },
-      source === 'TBANK_LINK' ? 'Клиентские счета переключены на банковские ссылки' : 'Клиентские счета вернулись на Альфа / текст'
+      isBankPaymentRouteType(source)
+        ? 'Клиентские счета переключены на банковские ссылки'
+        : 'Клиентские счета вернулись на Альфа / текст'
     );
   }
 
@@ -1450,6 +1455,24 @@ export class TbankPaymentsComponent implements OnDestroy {
       return `${bankProviderLabel(profile.provider)} · ${profile.name}`;
     }
     return link.paymentProfileName || link.tbankTerminalKey || 'Профиль оплаты';
+  }
+
+  manualRecipientDisplay(link: AdminPaymentLinkResponse): string {
+    const recipient = link.manualRecipientName?.trim() ?? '';
+    const specialist = link.specialistName?.trim() ?? '';
+    if (recipient && specialist && recipient.localeCompare(specialist, 'ru', { sensitivity: 'base' }) === 0) {
+      return `Получатель и специалист: ${recipient}`;
+    }
+    if (recipient && specialist) {
+      return `Получатель: ${recipient} · Специалист: ${specialist}`;
+    }
+    if (recipient) {
+      return `Получатель: ${recipient}`;
+    }
+    if (specialist) {
+      return `Специалист: ${specialist}`;
+    }
+    return 'Получатель и специалист не указаны';
   }
 
   paymentMethodLabel(link: AdminPaymentLinkResponse): string {

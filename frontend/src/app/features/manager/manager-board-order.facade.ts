@@ -330,7 +330,10 @@ export class ManagerBoardOrderFacade {
     this.deps.managerApi.changePaymentRoute(order.id, {
       expectedPaymentLinkId: context.paymentLinkId,
       target,
-      confirmedUnpaid: true
+      confirmedUnpaid: true,
+      expectedTargetPaymentProfileId: target === 'OWNER_TBANK'
+        ? context.expectedTargetPaymentProfileId ?? null
+        : null
     }).subscribe({
       next: (response) => {
         this.paymentRouteChanging.set(false);

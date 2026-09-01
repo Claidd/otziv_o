@@ -31,7 +31,7 @@ const HEADER_LINKS: MobileHeaderLink[] = [
   { label: 'Специалист', icon: 'engineering', path: '/tabs/worker', roles: rolesForAction(MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view) },
   { label: 'Риски', icon: 'policy', path: '/tabs/worker-risk', roles: rolesForAction(MOBILE_SECTIONS.workerRisk, MOBILE_ACTIONS.view) },
   { label: 'Оператор', icon: 'support_agent', path: '/tabs/operator', roles: rolesForAction(MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view) },
-  { label: 'Т Банк', icon: 'account_balance_wallet', path: '/tabs/tbank', roles: rolesForAction(MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view) },
+  { label: 'Банк', icon: 'account_balance_wallet', path: '/tabs/tbank', roles: rolesForAction(MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view) },
   { label: 'Пользователи', icon: 'admin_panel_settings', path: '/tabs/users', roles: rolesForAction(MOBILE_SECTIONS.adminUsers, MOBILE_ACTIONS.view) },
   { label: 'Обучение', icon: 'school', path: '/tabs/training', roles: rolesForAction(MOBILE_SECTIONS.training, MOBILE_ACTIONS.view) },
   { label: 'WhatsApp', icon: 'qr_code_2', path: '/tabs/whatsapp', roles: ['MANAGER'] },

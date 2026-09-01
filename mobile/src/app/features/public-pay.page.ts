@@ -92,7 +92,7 @@ import { manualTransferDestinationPresentation } from '../shared/manual-transfer
                     </button>
                   </section>
                 } @else {
-                  @if (showSbpPayment()) {
+                  @if (showSbpPayment() && sbpBankSelectionSupported()) {
                     <section class="sbp-card">
                       <label>
                         <span>Банк СБП</span>
@@ -112,7 +112,11 @@ import { manualTransferDestinationPresentation } from '../shared/manual-transfer
                   </button>
 
                   @if (showBankPayment() && showSbpPayment()) {
-                    <button type="button" (click)="submitBankForm()" [disabled]="!canSubmit()">Открыть форму банка</button>
+                    @if (primaryUsesSbp()) {
+                      <button type="button" (click)="submitBankForm()" [disabled]="!canSubmit()">Открыть форму банка</button>
+                    } @else {
+                      <button type="button" (click)="submitSbp()" [disabled]="!canSubmit()">Открыть в СБП</button>
+                    }
                   }
                 }
                 <p class="cert-help">
@@ -172,8 +176,31 @@ export class PublicPayPage implements OnDestroy {
   readonly manualTransferCopyLabel = computed(() => this.manualTransferDestination().copyLabel);
   readonly statusLabel = computed(() => this.statusText(this.payment()?.status));
   readonly paymentPageMode = computed<TbankPaymentPageMode>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
-  readonly showSbpPayment = computed(() => !this.manualPayment() && this.paymentPageMode() !== 'BANK_ONLY');
-  readonly showBankPayment = computed(() => !this.manualPayment() && this.paymentPageMode() !== 'SBP_ONLY' && this.paymentPageMode() !== 'SBP_PAY_ONLY');
+  readonly sbpBankSelectionSupported = computed(() => this.payment()?.sbpBankSelectionSupported !== false);
+  readonly lockedTochkaPaymentMethod = computed<null | 'BANK_FORM' | 'SBP_QR'>(() => {
+    const payment = this.payment();
+    const status = (payment?.status ?? '').trim().toUpperCase();
+    if ((payment?.provider ?? '').trim().toUpperCase() !== 'TOCHKA'
+      || !['INITIATED', 'AUTHORIZED'].includes(status)) {
+      return null;
+    }
+    return payment?.paymentMethod === 'BANK_FORM' || payment?.paymentMethod === 'SBP_QR'
+      ? payment.paymentMethod
+      : null;
+  });
+  readonly showSbpPayment = computed(() => !this.manualPayment()
+    && this.paymentPageMode() !== 'BANK_ONLY'
+    && this.lockedTochkaPaymentMethod() !== 'BANK_FORM');
+  readonly showBankPayment = computed(() => !this.manualPayment()
+    && this.paymentPageMode() !== 'SBP_ONLY'
+    && this.paymentPageMode() !== 'SBP_PAY_ONLY'
+    && this.lockedTochkaPaymentMethod() !== 'SBP_QR');
+  readonly primaryUsesSbp = computed(() => {
+    if (!this.showSbpPayment()) {
+      return false;
+    }
+    return !this.showBankPayment() || this.paymentPageMode() !== 'BANK_PRIMARY';
+  });
   readonly isPaymentComplete = computed(() => ['CONFIRMED', 'TEST_CONFIRMED'].includes(this.payment()?.status ?? ''));
   readonly canSubmit = computed(() => Boolean(this.payment()?.payable && this.email().includes('@') && this.offerConsent() && this.privacyConsent() && this.receiptConsent() && !this.sbpSubmitting() && !this.bankSubmitting()));
   readonly canReportManual = computed(() => Boolean(this.payment()?.payable && this.manualPayment() && this.manualPaymentDestinationAvailable() && this.payment()?.status !== 'MANUAL_REPORTED' && !this.manualSubmitting()));
@@ -182,8 +209,8 @@ export class PublicPayPage implements OnDestroy {
   readonly manualPaymentDestinationAvailable = computed(() => this.externalManualPayment()
     ? Boolean(this.manualPaymentUrl())
     : Boolean(this.payment()?.manualPhone?.trim()));
-  readonly primaryButtonIcon = computed(() => this.showSbpPayment() ? (this.sbpSubmitting() ? 'hourglass_top' : 'account_balance_wallet') : (this.bankSubmitting() ? 'hourglass_top' : 'payments'));
-  readonly primaryButtonText = computed(() => this.showSbpPayment() ? (this.sbpSubmitting() ? 'Открываем СБП...' : 'Открыть в СБП') : (this.bankSubmitting() ? 'Открываем банк...' : 'Открыть форму банка'));
+  readonly primaryButtonIcon = computed(() => this.primaryUsesSbp() ? (this.sbpSubmitting() ? 'hourglass_top' : 'account_balance_wallet') : (this.bankSubmitting() ? 'hourglass_top' : 'payments'));
+  readonly primaryButtonText = computed(() => this.primaryUsesSbp() ? (this.sbpSubmitting() ? 'Открываем СБП...' : 'Открыть в СБП') : (this.bankSubmitting() ? 'Открываем банк...' : 'Открыть форму банка'));
   readonly paymentCompleteTitle = computed(() => this.payment()?.status === 'TEST_CONFIRMED' ? 'Тестовая оплата подтверждена' : 'Оплата прошла успешно');
   readonly paymentCompleteText = computed(() => this.payment()?.status === 'TEST_CONFIRMED' ? 'Повторная оплата по этой ссылке больше не нужна.' : 'Электронный чек будет отправлен на указанный e-mail.');
 
@@ -211,7 +238,7 @@ export class PublicPayPage implements OnDestroy {
   }
 
   submitPrimaryPayment(): void {
-    if (this.showSbpPayment()) {
+    if (this.primaryUsesSbp()) {
       this.submitSbp();
     } else {
       this.submitBankForm();
@@ -219,6 +246,10 @@ export class PublicPayPage implements OnDestroy {
   }
 
   submitSbp(): void {
+    if (!this.showSbpPayment()) {
+      this.message.set('Для этой операции уже выбран другой способ оплаты.');
+      return;
+    }
     if (!this.canSubmit()) {
       this.message.set('Укажите e-mail и подтвердите согласия.');
       return;
@@ -258,6 +289,10 @@ export class PublicPayPage implements OnDestroy {
   }
 
   submitBankForm(): void {
+    if (!this.showBankPayment()) {
+      this.message.set('Для этой операции уже выбран другой способ оплаты.');
+      return;
+    }
     if (!this.canSubmit()) {
       this.message.set('Укажите e-mail и подтвердите согласия.');
       return;
@@ -417,7 +452,12 @@ export class PublicPayPage implements OnDestroy {
     if (!preserveEmail || !typedEmail) {
       this.email.set(payment.payerEmail ?? '');
     }
-    if (payment.payable && this.showSbpPayment() && !this.sbpBanks().length) {
+    if (!this.sbpBankSelectionSupported()) {
+      this.sbpBanksLoadSubscription?.unsubscribe();
+      this.sbpBanksLoadSubscription = undefined;
+      this.sbpBanks.set([]);
+      this.selectedSbpBankId.set('');
+    } else if (payment.payable && this.showSbpPayment() && !this.sbpBanks().length) {
       this.loadSbpBanks(payment.token);
     }
   }
@@ -430,6 +470,9 @@ export class PublicPayPage implements OnDestroy {
   }
 
   private loadSbpBanks(token: string): void {
+    if (!this.sbpBankSelectionSupported()) {
+      return;
+    }
     const routeTicket = this.captureRoute();
     if (!routeTicket) {
       return;

@@ -85,7 +85,7 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
   readonly recipientEffect = mobileTaskAwareRecipientEffect;
 
   readonly title = computed(() => this.mode === 'TBANK_FALLBACK'
-    ? 'Оплата переводом вместо T‑Bank'
+    ? 'Оплата переводом вместо банковской ссылки'
     : 'Фактические получатели оплаты');
   readonly totalKopecks = computed(() => {
     let total = 0;

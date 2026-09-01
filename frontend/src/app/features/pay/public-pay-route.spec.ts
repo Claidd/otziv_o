@@ -147,6 +147,53 @@ describe('public payment route isolation', () => {
     fixture.destroy();
   });
 
+  it.each([
+    ['SBP_QR', true, false],
+    ['BANK_FORM', false, true]
+  ] as const)(
+    'keeps an initiated Tochka %s operation on its frozen payment method',
+    async (paymentMethod, showSbp, showBank) => {
+      const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
+      const current: PublicPaymentLink = {
+        ...payment('A'),
+        provider: 'TOCHKA',
+        status: 'INITIATED',
+        paymentMethod,
+        paymentPageMode: 'SBP_PRIMARY',
+        sbpBankSelectionSupported: false
+      };
+      const paymentsApi = {
+        getPublicPaymentLink: vi.fn(() => of(current)),
+        getPublicSbpBanks: vi.fn(() => of([])),
+        initPublicPayment: vi.fn(),
+        initPublicSbpPayment: vi.fn(),
+        reportPublicManualPayment: vi.fn()
+      };
+      await configure(PayPageComponent, params, paymentsApi);
+      const fixture = TestBed.createComponent(PayPageComponent);
+      const component = fixture.componentInstance;
+
+      component.email.set('payer@example.com');
+      component.offerConsent.set(true);
+      component.privacyConsent.set(true);
+      component.receiptConsent.set(true);
+
+      expect(component.tochkaPaymentMethodLocked()).toBe(true);
+      expect(component.showSbpPayment()).toBe(showSbp);
+      expect(component.showBankPayment()).toBe(showBank);
+
+      if (paymentMethod === 'SBP_QR') {
+        component.submitBankForm();
+        expect(paymentsApi.initPublicPayment).not.toHaveBeenCalled();
+      } else {
+        component.submitSbp();
+        expect(paymentsApi.initPublicSbpPayment).not.toHaveBeenCalled();
+      }
+      expect(component.message()).toContain('Запросите новую ссылку');
+      fixture.destroy();
+    }
+  );
+
   it('group payment cancels stale reads and suppresses a late init navigation without cancelling the write', async () => {
     const params = new BehaviorSubject(convertToParamMap({ token: 'A' }));
     const first = new Subject<PublicCommonInvoice>();

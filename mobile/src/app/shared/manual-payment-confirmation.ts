@@ -14,6 +14,8 @@ export interface ManualCardPaymentConfirmationEvidence {
 }
 
 export const UNFINISHED_PROVIDER_PAYMENT_MESSAGE =
+  'У заказа есть незавершенный банковский/СБП платеж. Проверьте его в журнале перед ручным закрытием.';
+const LEGACY_UNFINISHED_PROVIDER_PAYMENT_MESSAGE =
   'У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.';
 const ACTUAL_RECIPIENT_REQUIRED_MESSAGE_HINT = 'фактического получателя';
 
@@ -97,7 +99,7 @@ export function manualCardPaymentFallbackDecision(
       false,
       true,
       'invalid-amount',
-      'Не удалось определить точную положительную сумму заказа. Оплата не отмечена, ссылка T-Bank/СБП не закрыта.'
+      'Не удалось определить точную положительную сумму заказа. Оплата не отмечена, банковская/СБП ссылка не закрыта.'
     );
   }
   return decision(true, true, 'allowed');
@@ -122,7 +124,7 @@ export function manualCardPaymentFallbackAccessDecision(
       false,
       true,
       'missing-order-id',
-      'Не найден точный номер заказа. Оплата не отмечена, ссылка T-Bank/СБП не закрыта.'
+      'Не найден точный номер заказа. Оплата не отмечена, банковская/СБП ссылка не закрыта.'
     );
   }
   return decision(true, true, 'allowed');
@@ -133,8 +135,17 @@ export function isManualCardPaymentFallbackConflict(error: unknown): boolean {
   return apiErrorStatus(error) === 409 && (
     mobilePaymentRouteErrorCode(error) === 'ACTUAL_RECIPIENT_REQUIRED'
       || message === UNFINISHED_PROVIDER_PAYMENT_MESSAGE
+      || message === LEGACY_UNFINISHED_PROVIDER_PAYMENT_MESSAGE
+      || isUnfinishedProviderPaymentMessage(message)
       || message.toLocaleLowerCase('ru-RU').includes(ACTUAL_RECIPIENT_REQUIRED_MESSAGE_HINT)
   );
+}
+
+function isUnfinishedProviderPaymentMessage(message: string): boolean {
+  const normalized = message.toLocaleLowerCase('ru-RU').replaceAll('ё', 'е');
+  return normalized.includes('незавершенн')
+    && normalized.includes('платеж')
+    && normalized.includes('журнал');
 }
 
 export function shouldSubmitManualCardPaymentFallback(
@@ -160,7 +171,7 @@ export function manualCardPaymentConfirmationPrompt(
     title: 'Подтвердить ручную оплату',
     message: `Заказ #${orderId}: подтвердите, что вы проверили выписку счёта или карты получателя, `
       + `полная сумма ${amountLabel} фактически поступила. `
-      + 'Незавершённая неоплаченная ссылка T-Bank/СБП будет безопасно закрыта, а заказ отмечен оплаченным.',
+      + 'Незавершённая неоплаченная банковская/СБП ссылка будет безопасно закрыта, а заказ отмечен оплаченным.',
     confirmText: 'Деньги получены, закрыть ссылку'
   };
 }

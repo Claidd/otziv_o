@@ -35,6 +35,7 @@ import {
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { isBankPaymentInstructionSource } from '../shared/bank-payment-source';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 import { paymentTargetForUpdate } from '../shared/payment-navigation';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
@@ -58,6 +59,7 @@ import {
 } from '../shared/manual-payment-routing';
 import { MobileManualCardPaymentFlowService } from '../shared/mobile-manual-card-payment-flow.service';
 import { MobileManualPaymentTaskOperationKeyDraft } from '../shared/manual-payment-operation-key';
+import { manualPaymentTaskWorklist } from '../shared/manual-payment-task-visibility';
 
 type TbankMode = 'payments' | 'recipients' | 'launch' | 'tasks' | 'profiles' | 'managers';
 type PaymentStatusFilter = 'all' | 'active' | 'paid' | 'refunded' | 'failed' | 'created' | 'manual';
@@ -98,7 +100,7 @@ function currentMonthInput(): string {
   imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `
     <div class="ion-page">
-      <app-mobile-header title="Т Банк" />
+      <app-mobile-header title="Банк" />
 
       <ion-content fullscreen [scrollY]="false">
         <ion-refresher slot="fixed" [disabled]="refreshDisabled()" (ionRefresh)="refresh($event)">
@@ -111,7 +113,7 @@ function currentMonthInput(): string {
           <app-mobile-status-slider
             [items]="modeItems()"
             [activeKey]="mode()"
-            ariaLabel="Разделы T-Bank"
+            ariaLabel="Разделы банка"
             (select)="selectModeItem($event)"
           />
 
@@ -236,7 +238,7 @@ function currentMonthInput(): string {
                         </button>
                       }
                       <div class="manual-note">
-                        <strong>{{ link.manualRecipientName || 'Получатель не указан' }}</strong>
+                        <strong>{{ manualRecipientDisplay(link) }}</strong>
                         <small>{{ manualSourceLabel(link) }} · {{ link.manualComment || 'Комментарий не задан' }}</small>
                       </div>
                     } @else {
@@ -449,7 +451,7 @@ function currentMonthInput(): string {
               }
             </section>
           } @else if (mode() === 'launch') {
-            <section class="launch-list" aria-label="Пульт запуска T-Bank">
+            <section class="launch-list" aria-label="Пульт запуска банка">
               @if (runtimeSettings(); as settings) {
                 <article class="launch-card launch-summary-card">
                   <header>
@@ -466,7 +468,7 @@ function currentMonthInput(): string {
                 </article>
 
                 <article class="launch-card">
-                  <h3><span>1</span> Контур T-Bank</h3>
+                  <h3><span>1</span> Контур банка</h3>
                   <div class="segmented two">
                     <button type="button" [class.active]="settings.runtimeMode === 'TEST'" [disabled]="savingRuntimeSettings() || loading()" (click)="setRuntimeMode('TEST')">
                       <span class="material-icons-sharp">science</span>
@@ -487,9 +489,9 @@ function currentMonthInput(): string {
                       <span class="material-icons-sharp">article</span>
                       Альфа / текст
                     </button>
-                    <button type="button" [class.active]="settings.paymentInstructionSource === 'TBANK_LINK'" [disabled]="savingRuntimeSettings() || loading() || settings.runtimeMode === 'TEST'" (click)="setPaymentInstructionSource('TBANK_LINK')">
+                    <button type="button" [class.active]="usesBankPaymentInstructionSource(settings.paymentInstructionSource)" [disabled]="savingRuntimeSettings() || loading() || settings.runtimeMode === 'TEST'" (click)="setPaymentInstructionSource('BANK_LINK')">
                       <span class="material-icons-sharp">link</span>
-                      T-Bank ссылки
+                      Банковские ссылки
                     </button>
                   </div>
                   <small>Переключает автоответчик и счета после плохого отзыва.</small>
@@ -553,7 +555,7 @@ function currentMonthInput(): string {
                 <article class="launch-card">
                   <h3><span>6</span> Базовые переключатели</h3>
                   <label class="toggle-row">
-                    <span><strong>API</strong><small>Разрешить работу T-Bank backend</small></span>
+                    <span><strong>API</strong><small>Разрешить работу банковского backend</small></span>
                     <input type="checkbox" [checked]="settings.tbankEnabled" [disabled]="savingRuntimeSettings() || loading()" (change)="setCoreSwitch('tbankEnabled', $any($event.target).checked)">
                   </label>
                   <label class="toggle-row">
@@ -730,7 +732,7 @@ function currentMonthInput(): string {
                 </footer>
               </article>
 
-              @for (task of manualTasks(); track task.id) {
+              @for (task of visibleManualTasks(); track task.id) {
                 <article class="profile-card manual-task-card" [class.disabled]="task.status !== 'ACTIVE'">
                   <header>
                     <span class="material-icons-sharp">playlist_add_check</span>
@@ -874,7 +876,7 @@ function currentMonthInput(): string {
                 <article class="bank-card">
                   <span class="material-icons-sharp">{{ bank.enabled ? 'verified' : 'power_settings_new' }}</span>
                   <div>
-                    <p>T-Bank</p>
+                    <p>Банк</p>
                     <h2>{{ bank.enabled ? 'API включен' : 'API выключен' }}</h2>
                     <small>
                       {{ bank.testMode ? 'тестовый терминал' : 'боевой терминал' }} ·
@@ -921,7 +923,7 @@ function currentMonthInput(): string {
                     </span>
                     <span>
                       <small>Провайдер</small>
-                      <strong>{{ profile.provider }}</strong>
+                      <strong>{{ paymentProviderLabel(profile.provider) }}</strong>
                     </span>
                     <span>
                       <small>Статус</small>
@@ -946,7 +948,7 @@ function currentMonthInput(): string {
                       (click)="setProfilePolicy(profile.id, 'T_BANK_ONLY')"
                     >
                       <span class="material-icons-sharp">account_balance</span>
-                      Только T-Bank
+                      Только банк
                     </button>
                     <button
                       type="button"
@@ -1086,7 +1088,7 @@ function currentMonthInput(): string {
             <form class="sheet-body tbank-date-sheet-body" (ngSubmit)="applyDateSheet()">
               <header class="sheet-head">
                 <div>
-                  <p class="sheet-note">T-Bank</p>
+                  <p class="sheet-note">Банк</p>
                   <h2>Период платежей</h2>
                 </div>
                 <button class="icon-button" type="button" (click)="closeDateSheet()" aria-label="Закрыть">
@@ -2180,6 +2182,7 @@ export class TbankPage implements OnInit {
   readonly profiles = signal<PaymentProfileResponse[]>([]);
   readonly managerProfiles = signal<ManagerPaymentProfileResponse[]>([]);
   readonly manualTasks = signal<ManualPaymentTaskResponse[]>([]);
+  readonly visibleManualTasks = computed(() => manualPaymentTaskWorklist(this.manualTasks()));
   readonly editingTaskId = signal<number | null>(null);
   readonly recipientSummaryMonth = signal(currentMonthInput());
   readonly recipientMonthlySummary = signal<ManualPaymentRecipientMonthlySummaryResponse | null>(null);
@@ -2371,12 +2374,10 @@ export class TbankPage implements OnInit {
   });
 
   readonly tbankReadyForClientPayments = computed(() => {
-    const status = this.status();
     const settings = this.runtimeSettings();
     return Boolean(settings?.tbankEnabled
       && settings.paymentLinksEnabled
-      && settings.managerUiEnabled
-      && status?.hasCredentials);
+      && settings.managerUiEnabled);
   });
 
   readonly hasUnsavedTbankChanges = computed(() => this.profileAssignmentsDirty() || this.profilePoliciesDirty());
@@ -2420,13 +2421,13 @@ export class TbankPage implements OnInit {
     if (settings.runtimeMode === 'TEST') {
       return 'Тестовый контур';
     }
-    if (settings.paymentInstructionSource !== 'TBANK_LINK') {
+    if (!isBankPaymentInstructionSource(settings.paymentInstructionSource)) {
       return 'Боевой терминал, клиенты на Альфа';
     }
     if (!settings.applyConfirmedPayments) {
-      return 'T-Bank клиентам, заказы вручную';
+      return 'Банк клиентам, заказы вручную';
     }
-    return 'T-Bank полностью включен';
+    return 'Банк полностью включен';
   });
 
   readonly launchStateDescription = computed(() => {
@@ -2437,11 +2438,11 @@ export class TbankPage implements OnInit {
     if (settings.runtimeMode === 'TEST') {
       return 'Можно проверять ссылки и возвраты. Клиентам остаются старые счета.';
     }
-    if (settings.paymentInstructionSource !== 'TBANK_LINK') {
+    if (!isBankPaymentInstructionSource(settings.paymentInstructionSource)) {
       return 'Терминалы готовы для ручных тестов, но автоответчик отправляет старый текст.';
     }
     if (!settings.applyConfirmedPayments) {
-      return 'Клиенты получают ссылки T-Bank, подтвержденные платежи попадают в журнал.';
+      return 'Клиенты получают банковские ссылки, подтвержденные платежи попадают в журнал.';
     }
     return 'Webhook CONFIRMED переводит заказ в оплату и сохраняет e-mail плательщика.';
   });
@@ -2504,7 +2505,7 @@ export class TbankPage implements OnInit {
       this.applyProfilesState(profiles.profiles, profiles.managers);
       this.keepPageInRange();
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось загрузить T-Bank.'));
+      this.error.set(this.errorMessage(error, 'Не удалось загрузить раздел банка.'));
     } finally {
       this.loading.set(false);
     }
@@ -2622,7 +2623,7 @@ export class TbankPage implements OnInit {
     if (mode === 'LIVE') {
       const confirmed = await this.confirm.confirm({
         title: 'Боевой контур',
-        message: 'Переключить T-Bank на рабочие терминалы? Клиентам ссылки T-Bank не уйдут, пока источник счетов остается «Альфа / текст».',
+        message: 'Переключить банк на рабочие терминалы? Клиентам банковские ссылки не уйдут, пока источник счетов остается «Альфа / текст».',
         confirmText: 'Включить'
       });
       if (!confirmed) {
@@ -2637,23 +2638,29 @@ export class TbankPage implements OnInit {
     await this.saveRuntimeSettings(patch);
   }
 
+  usesBankPaymentInstructionSource(source?: string | null): boolean {
+    return isBankPaymentInstructionSource(source);
+  }
+
   async setPaymentInstructionSource(source: PaymentInstructionSource): Promise<void> {
     const current = this.runtimeSettings();
-    if (!current || this.savingRuntimeSettings() || current.paymentInstructionSource === source) {
+    if (!current || this.savingRuntimeSettings()
+      || current.paymentInstructionSource === source
+      || (isBankPaymentInstructionSource(current.paymentInstructionSource) && isBankPaymentInstructionSource(source))) {
       return;
     }
-    if (source === 'TBANK_LINK') {
+    if (isBankPaymentInstructionSource(source)) {
       if (current.runtimeMode !== 'LIVE') {
         this.error.set('Сначала включите боевой контур.');
         return;
       }
       if (!this.tbankReadyForClientPayments()) {
-        this.error.set('T-Bank еще не готов: проверьте API, ссылки, UI менеджера и секреты терминалов.');
+        this.error.set('Банковские платежи еще не готовы: проверьте API, ссылки, UI менеджера и платежные профили.');
         return;
       }
       const confirmed = await this.confirm.confirm({
-        title: 'T-Bank клиентам',
-        message: 'Отправлять клиентам ссылки T-Bank вместо старого текста/Альфа?',
+        title: 'Банк клиентам',
+        message: 'Отправлять клиентам банковские ссылки вместо старого текста/Альфа?',
         confirmText: 'Переключить'
       });
       if (!confirmed) {
@@ -2743,9 +2750,21 @@ export class TbankPage implements OnInit {
   profilePolicyLabel(profile: PaymentProfileResponse): string {
     const draft = this.policyDraft(profile.id);
     if (draft.paymentPolicy !== 'MANUAL_UNTIL_LIMIT_THEN_TBANK') {
-      return 'Только T-Bank';
+      return 'Только банк';
     }
     return draft.manualPaymentType === 'EXTERNAL_LINK' ? 'Ссылка до лимита' : 'Телефон до лимита';
+  }
+
+  paymentProviderLabel(provider?: string | null): string {
+    switch ((provider ?? '').trim().toUpperCase()) {
+      case 'TOCHKA':
+        return 'Точка';
+      case 'T_BANK':
+      case 'TBANK':
+        return 'Т-Банк';
+      default:
+        return provider?.trim() || 'Банк';
+    }
   }
 
   profileManualUsagePercent(profile: PaymentProfileResponse): number {
@@ -2965,7 +2984,7 @@ export class TbankPage implements OnInit {
 
     const confirmed = await this.confirm.confirm({
       title: 'Возврат платежа',
-      message: `Вернуть платеж T-Bank ${link.tbankPaymentId || link.id} на сумму ${this.money(link.amount)}?`,
+      message: `Вернуть банковский платеж ${link.tbankPaymentId || link.id} на сумму ${this.money(link.amount)}?`,
       confirmText: 'Вернуть',
       danger: true
     });
@@ -3197,7 +3216,7 @@ export class TbankPage implements OnInit {
   }
 
   paymentSubtitle(link: AdminPaymentLinkResponse): string {
-    return [link.filialTitle, link.description].filter(Boolean).join(' · ') || 'T-Bank';
+    return [link.filialTitle, link.description].filter(Boolean).join(' · ') || 'Банк';
   }
 
   paymentAddress(link: AdminPaymentLinkResponse): string {
@@ -3213,6 +3232,24 @@ export class TbankPage implements OnInit {
       return this.isExternalManualPayment(link) ? 'Ссылка Альфа' : 'Телефон';
     }
     return link.paymentMethod === 'SBP_QR' ? 'СБП' : 'Форма банка';
+  }
+
+  manualRecipientDisplay(link: AdminPaymentLinkResponse): string {
+    const recipient = link.manualRecipientName?.trim() ?? '';
+    const specialist = link.specialistName?.trim() ?? '';
+    if (recipient && specialist && recipient.localeCompare(specialist, 'ru', { sensitivity: 'base' }) === 0) {
+      return `Получатель и специалист: ${recipient}`;
+    }
+    if (recipient && specialist) {
+      return `Получатель: ${recipient} · Специалист: ${specialist}`;
+    }
+    if (recipient) {
+      return `Получатель: ${recipient}`;
+    }
+    if (specialist) {
+      return `Специалист: ${specialist}`;
+    }
+    return 'Получатель и специалист не указаны';
   }
 
   manualSourceLabel(link: AdminPaymentLinkResponse): string {
@@ -3545,7 +3582,7 @@ export class TbankPage implements OnInit {
     }
     const optimistic = { ...previous, ...request };
     optimistic.testMode = optimistic.runtimeMode === 'TEST';
-    optimistic.clientTbankEnabled = optimistic.paymentInstructionSource === 'TBANK_LINK';
+    optimistic.clientTbankEnabled = isBankPaymentInstructionSource(optimistic.paymentInstructionSource);
     this.runtimeSettings.set(optimistic);
     this.savingRuntimeSettings.set(true);
     this.error.set(null);
@@ -3563,7 +3600,7 @@ export class TbankPage implements OnInit {
       } : status);
     } catch (error) {
       this.runtimeSettings.set(previous);
-      this.error.set(this.errorMessage(error, 'Не удалось сохранить настройки T-Bank.'));
+      this.error.set(this.errorMessage(error, 'Не удалось сохранить настройки банка.'));
     } finally {
       this.savingRuntimeSettings.set(false);
     }

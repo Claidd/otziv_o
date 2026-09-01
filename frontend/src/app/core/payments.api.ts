@@ -134,6 +134,7 @@ export interface AdminPaymentLinkResponse {
   manualPaymentType?: ManualPaymentType | string | null;
   manualPhone?: string | null;
   manualRecipientName?: string | null;
+  specialistName?: string | null;
   manualBankName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;

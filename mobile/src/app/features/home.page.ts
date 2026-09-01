@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
+import { Component, computed, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationStart, ParamMap, Router, RouterLink } from '@angular/router';
 import { IonContent, IonModal, ToastController } from '@ionic/angular/standalone';
@@ -61,6 +61,7 @@ import {
   mobileManualTaskTargetValid
 } from '../shared/manual-payment-task-target';
 import { MobileManualPaymentTaskOperationKeyDraft } from '../shared/manual-payment-operation-key';
+import { manualPaymentTaskWorklist } from '../shared/manual-payment-task-visibility';
 
 type HomeSectionKey = 'profile' | 'analytics' | 'team' | 'score' | 'dictionaries';
 type HomeTone = 'blue' | 'green' | 'teal' | 'violet' | 'yellow';
@@ -355,7 +356,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                       </button>
 
                       <div class="manual-task-list">
-                        @for (task of manualPaymentTasks(); track task.id) {
+                        @for (task of visibleManualPaymentTasks(); track task.id) {
                           <section class="manual-task-item" [class.inactive]="task.status !== 'ACTIVE'">
                             <header>
                               <div>
@@ -951,7 +952,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                     <button type="button" (click)="openTbankSection()">
                       <span class="material-icons-sharp">account_balance_wallet</span>
                       <div>
-                        <strong>Т Банк</strong>
+                        <strong>Банк</strong>
                         <small>платежи и профили</small>
                       </div>
                     </button>
@@ -2534,6 +2535,7 @@ export class HomePage implements OnInit, OnDestroy {
   readonly manualPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly manualPaymentMessage = signal<string | null>(null);
   readonly manualPaymentTasks = signal<ManualPaymentTaskResponse[]>([]);
+  readonly visibleManualPaymentTasks = computed(() => manualPaymentTaskWorklist(this.manualPaymentTasks()));
   readonly manualTaskLoading = signal(false);
   readonly manualTaskSaving = signal(false);
   readonly manualTaskMutatingId = signal<number | null>(null);

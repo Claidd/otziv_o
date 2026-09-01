@@ -23,6 +23,7 @@ import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot;
 import com.hunt.otziv.payments.dto.PaymentLinkAdminSummary;
+import com.hunt.otziv.payments.dto.PaymentRouteChangeContextResponse;
 import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
 import com.hunt.otziv.payments.dto.PublicPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.PublicSbpBankResponse;
@@ -99,6 +100,7 @@ import com.hunt.otziv.payments.service.TbankTokenSigner;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Role;
+import com.hunt.otziv.u_users.model.Worker;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -466,6 +468,249 @@ class PaymentLinkServiceTest {
                         PaymentRouteChangeTarget.OWNER_TBANK
                 )
         );
+    }
+
+    @Test
+    void paymentRouteContextShowsFrozenRecipientAndOrderSpecialist() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_810L, "ООО Получатель", BigDecimal.valueOf(2_000));
+        Manager manager = manager("manager");
+        manager.setId(61L);
+        order.setManager(manager);
+        User specialistUser = new User();
+        specialistUser.setFio("Петров П.П.");
+        order.setWorker(Worker.builder().id(71L).user(specialistUser).build());
+        PaymentProfile targetProfile = profile(81L, "target", "Точка", "terminal-target");
+        PaymentLink current = payableLink(order, "manual-current", 200_000L);
+        current.setId(7_260L);
+        current.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        current.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        current.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
+        current.setManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+        current.setManualRecipientName("Иванова А.А.");
+        when(orderRepository.findById(24_810L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdInForRead(java.util.Set.of(24_810L)))
+                .thenReturn(List.of(current));
+        when(paymentProfileService.selectForManagerForNewRoute(manager)).thenReturn(targetProfile);
+
+        PaymentRouteChangeContextResponse context =
+                service.paymentRouteChangeContextAuthorized(24_810L, authentication);
+
+        assertEquals("Получатель: Иванова А.А. · Специалист: Петров П.П.",
+                context.currentRecipient());
+        assertEquals(81L, context.expectedTargetPaymentProfileId());
+    }
+
+    @Test
+    void paymentRouteContextFallsBackToSpecialistWhenRecipientIsBlank() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_811L, "ООО Получатель", BigDecimal.valueOf(2_000));
+        Manager manager = manager("manager");
+        manager.setId(62L);
+        order.setManager(manager);
+        User specialistUser = new User();
+        specialistUser.setFio("Петров П.П.");
+        order.setWorker(Worker.builder().id(72L).user(specialistUser).build());
+        PaymentLink current = payableLink(order, "manual-current-fallback", 200_000L);
+        current.setId(7_261L);
+        current.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        current.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        current.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
+        current.setManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+        current.setManualRecipientName(" ");
+        when(orderRepository.findById(24_811L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdInForRead(java.util.Set.of(24_811L)))
+                .thenReturn(List.of(current));
+
+        PaymentRouteChangeContextResponse context =
+                service.paymentRouteChangeContextAuthorized(24_811L, authentication);
+
+        assertEquals("Получатель и специалист: Петров П.П.", context.currentRecipient());
+    }
+
+    @Test
+    void paymentRouteContextFailsClosedForInactiveAssignedManager() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_816L, "ООО Неактивный менеджер", BigDecimal.valueOf(2_000));
+        Manager manager = order.getManager();
+        when(orderRepository.findById(24_816L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdInForRead(java.util.Set.of(24_816L)))
+                .thenReturn(List.of());
+        when(paymentProfileService.selectForManagerForNewRoute(manager)).thenThrow(
+                new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Для создания нового платежа назначьте активного менеджера с ролью менеджера"
+                )
+        );
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.paymentRouteChangeContextAuthorized(24_816L, authentication)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+    }
+
+    @Test
+    void ordinaryNewRouteFailsBeforeLinkInsertWhenAssignedManagerIsInactive() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_817L, "ООО Новый маршрут", BigDecimal.valueOf(2_000));
+        Manager manager = order.getManager();
+        when(orderRepository.findByIdForMutation(24_817L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24_817L)).thenReturn(List.of());
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(24_817L), anyCollection(), any(LocalDateTime.class)
+        )).thenReturn(Optional.empty());
+        when(paymentProfileService.lockManagerForRouting(manager)).thenThrow(
+                new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Для создания нового платежа назначьте активного менеджера с ролью менеджера"
+                )
+        );
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createForOrder(24_817L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+        InOrder locks = inOrder(paymentLinkRepository, paymentProfileService);
+        locks.verify(paymentLinkRepository).findByOrderIdForUpdate(24_817L);
+        locks.verify(paymentProfileService).lockManagerForRouting(manager);
+    }
+
+    @Test
+    void ownerBankRouteRejectsChangedTargetProfileBeforeCancelingCurrentLink() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_812L, "ООО Смена банка", BigDecimal.valueOf(2_000));
+        Manager manager = manager("manager");
+        manager.setId(63L);
+        order.setManager(manager);
+        PaymentLink current = payableLink(order, "owner-current", 200_000L);
+        current.setId(7_262L);
+        current.setStatus(PaymentLinkStatus.CREATED);
+        PaymentProfile changedProfile = profile(92L, "changed", "Новый банк", "terminal-new");
+        when(orderRepository.findByIdForCounterUpdate(24_812L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24_812L)).thenReturn(List.of(current));
+        when(paymentProfileService.lockManagerForRouting(manager)).thenReturn(manager);
+        when(paymentProfileService.selectForManager(manager)).thenReturn(changedProfile);
+        when(paymentProfileService.lockForRouting(changedProfile)).thenReturn(changedProfile);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.replacePaymentRouteAuthorized(
+                        24_812L,
+                        7_262L,
+                        PaymentRouteChangeTarget.OWNER_TBANK,
+                        true,
+                        91L,
+                        authentication
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("Получатель банковского платежа уже изменился"));
+        verify(paymentProfileService).lockManagerForRouting(manager);
+        verify(paymentLinkRepository).findByOrderIdForUpdate(24_812L);
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+    }
+
+    @Test
+    void paymentRouteChangeRejectsStaleExpectedLinkBeforeLockingRecipient() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_813L, "ООО CAS", BigDecimal.valueOf(2_000));
+        PaymentLink current = payableLink(order, "cas-current", 200_000L);
+        current.setId(7_263L);
+        current.setStatus(PaymentLinkStatus.CREATED);
+        when(orderRepository.findByIdForCounterUpdate(24_813L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24_813L)).thenReturn(List.of(current));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.replacePaymentRouteAuthorized(
+                        24_813L,
+                        7_262L,
+                        PaymentRouteChangeTarget.OWNER_TBANK,
+                        true,
+                        1L,
+                        authentication
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("Способ оплаты уже изменен"));
+        verify(paymentProfileService, never()).lockManagerForRouting(any());
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+        verifyNoInteractions(taskReceiptIntegrationService);
+    }
+
+    @Test
+    void paymentRouteChangeRejectsBankEvidenceBeforeLockingRecipient() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_814L, "ООО Evidence", BigDecimal.valueOf(2_000));
+        PaymentLink current = payableLink(order, "evidence-current", 200_000L);
+        current.setId(7_264L);
+        current.setStatus(PaymentLinkStatus.INITIATED);
+        current.setPaymentMethod(PaymentMethod.BANK_FORM);
+        current.setTbankPaymentId("bank-payment-started");
+        when(orderRepository.findByIdForCounterUpdate(24_814L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24_814L)).thenReturn(List.of(current));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.replacePaymentRouteAuthorized(
+                        24_814L,
+                        7_264L,
+                        PaymentRouteChangeTarget.OWNER_TBANK,
+                        true,
+                        1L,
+                        authentication
+                )
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("Платеж уже начат"));
+        verify(paymentProfileService, never()).lockManagerForRouting(any());
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+        verifyNoInteractions(taskReceiptIntegrationService);
+    }
+
+    @Test
+    void paymentRouteChangeDoesNotCancelOldLinkWhenReleaseFails() {
+        PaymentLinkService service = service(properties());
+        Order order = order(24_815L, "ООО Release", BigDecimal.valueOf(2_000));
+        Manager manager = manager("manager");
+        manager.setId(64L);
+        order.setManager(manager);
+        PaymentProfile profile = profile(93L, "manual", "Ручной маршрут", "terminal-manual");
+        PaymentLink current = payableLink(order, "release-current", 200_000L);
+        current.setId(7_265L);
+        current.setStatus(PaymentLinkStatus.CREATED);
+        when(orderRepository.findByIdForCounterUpdate(24_815L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.findByOrderIdForUpdate(24_815L)).thenReturn(List.of(current));
+        when(paymentProfileService.lockManagerForRouting(manager)).thenReturn(manager);
+        when(paymentProfileService.selectForManager(manager)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        doThrow(new IllegalStateException("release failed"))
+                .when(taskReceiptIntegrationService)
+                .release(current, "Способ оплаты изменен по просьбе клиента");
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> service.replacePaymentRouteAuthorized(
+                        24_815L,
+                        7_265L,
+                        PaymentRouteChangeTarget.EMPLOYEE_REQUISITES,
+                        true,
+                        null,
+                        authentication
+                )
+        );
+
+        assertEquals(PaymentLinkStatus.CREATED, current.getStatus());
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+        verify(paymentLinkRepository, never()).saveAndFlush(any(PaymentLink.class));
     }
 
     @Test
@@ -2172,6 +2417,7 @@ class PaymentLinkServiceTest {
         assertEquals("https://example.ru/pay/active-sbp-token", response.url());
         assertEquals("SBP_QR", response.paymentMethod());
         assertEquals("INITIATED", response.status());
+        verify(paymentProfileService, never()).lockManagerForRouting(any());
         verify(manualPaymentTaskService, never()).findRoutableTask(
                 any(),
                 any(),
@@ -2499,7 +2745,13 @@ class PaymentLinkServiceTest {
     void reportedButUnconfirmedContractorLinkKeepsRequisitesVisible() {
         PaymentLinkService service = service(properties());
         PaymentLink link = new PaymentLink();
-        link.setOrder(order(146L, "ООО Ожидаем сверку", BigDecimal.valueOf(500)));
+        Order order = order(146L, "ООО Ожидаем сверку", BigDecimal.valueOf(500));
+        Worker specialist = new Worker();
+        User specialistUser = new User();
+        specialistUser.setFio("Лика Специалист");
+        specialist.setUser(specialistUser);
+        order.setWorker(specialist);
+        link.setOrder(order);
         link.setToken("reported-contractor-token");
         link.setAmountKopecks(50_000L);
         link.setStatus(PaymentLinkStatus.MANUAL_REPORTED);
@@ -2537,6 +2789,7 @@ class PaymentLinkServiceTest {
         assertEquals("Комментарий только из зашифрованного snapshot", response.manualComment());
         assertEquals("+79000000001", admin.manualPhone());
         assertEquals("Пётр Получатель", admin.manualRecipientName());
+        assertEquals("Лика Специалист", admin.specialistName());
         assertEquals("Тест Банк", admin.manualBankName());
         assertEquals("Комментарий только из зашифрованного snapshot", admin.manualComment());
     }
@@ -8649,6 +8902,10 @@ class PaymentLinkServiceTest {
         org.mockito.Mockito.lenient().when(runtimeSettingsService.isManagerUiEnabled()).thenAnswer(invocation -> properties.isManagerUiEnabled());
         org.mockito.Mockito.lenient().when(runtimeSettingsService.isApplyConfirmedPayments()).thenAnswer(invocation -> properties.isApplyConfirmedPayments());
         org.mockito.Mockito.lenient().when(paymentProfileService.selectForManager(any())).thenReturn(defaultProfile);
+        org.mockito.Mockito.lenient().when(paymentProfileService.selectForManagerForNewRoute(any()))
+                .thenReturn(defaultProfile);
+        org.mockito.Mockito.lenient().when(paymentProfileService.lockManagerForRouting(any(Manager.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         org.mockito.Mockito.lenient().when(paymentProfileService.lockForRouting(any())).thenAnswer(invocation -> invocation.getArgument(0));
         org.mockito.Mockito.lenient().when(paymentProfileService.provider(any(PaymentProfile.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0, PaymentProfile.class).normalizedProvider());
@@ -8729,12 +8986,19 @@ class PaymentLinkServiceTest {
         order.setId(id);
         order.setCompany(company);
         order.setSum(sum);
+        Manager manager = manager("manager-" + id);
+        manager.setId(id);
+        order.setManager(manager);
         return order;
     }
 
     private Manager manager(String username) {
         User user = new User();
         user.setUsername(username);
+        user.setActive(true);
+        Role managerRole = new Role();
+        managerRole.setName("ROLE_MANAGER");
+        user.setRoles(new java.util.ArrayList<>(List.of(managerRole)));
 
         Manager manager = new Manager();
         manager.setUser(user);

@@ -16,6 +16,8 @@ import {
   BadReviewTaskItem,
   CompanyDeepReportState,
   ManagerPaymentLinkResponse,
+  PaymentRouteChangeContext,
+  PaymentRouteChangeTarget,
   OrderDetailsPayload,
   OrderReviewItem,
   ReviewRecoveryBatchItem,
@@ -494,6 +496,24 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
             </section>
 
             <footer class="order-details-actions">
+              @if (canShowPaymentLinkAction()) {
+                <button type="button" (click)="createPaymentLink()" [disabled]="isMutating('payment-link')">
+                  <span class="material-icons-sharp">payments</span>
+                  {{ isMutating('payment-link') ? 'Создаю...' : paymentLinkModeLabel() }}
+                </button>
+              }
+              @if (paymentLink(); as link) {
+                <button type="button" (click)="copyCurrentPaymentLink(link)" [disabled]="copiedKey() === 'payment-link'">
+                  <span class="material-icons-sharp">{{ copiedKey() === 'payment-link' ? 'check' : 'content_copy' }}</span>
+                  {{ copiedKey() === 'payment-link' ? 'Скопировано' : 'Ссылка оплаты' }}
+                </button>
+              }
+              @if (canManagePaymentRoute()) {
+                <button type="button" (click)="openPaymentRouteChange()" [disabled]="paymentRouteContextLoading() || paymentRouteChanging()">
+                  <span class="material-icons-sharp">account_tree</span>
+                  {{ paymentRouteContextLoading() ? 'Проверяю...' : 'Получатель оплаты' }}
+                </button>
+              }
               <button type="button" (click)="openCompanyReport()" [disabled]="companyReportLoading()">
                 <span class="material-icons-sharp">business</span>
                 О компании
@@ -659,6 +679,68 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                   </button>
                 }
               </footer>
+            </section>
+          </ng-template>
+        </ion-modal>
+
+        <ion-modal class="sheet-modal payment-route-modal" [isOpen]="paymentRouteVisible()" (didDismiss)="closePaymentRouteChange()">
+          <ng-template>
+            <section class="sheet-body payment-route-sheet">
+              <header class="sheet-head">
+                <div>
+                  <p class="sheet-note">Заказ #{{ orderId() || '' }}</p>
+                  <h2>Получатель оплаты</h2>
+                </div>
+                <button class="icon-button" type="button" (click)="closePaymentRouteChange()" [disabled]="paymentRouteChanging()" aria-label="Закрыть">
+                  <span class="material-icons-sharp">close</span>
+                </button>
+              </header>
+
+              @if (paymentRouteContextLoading()) {
+                <div class="payment-route-state">
+                  <span class="material-icons-sharp">hourglass_top</span>
+                  <strong>Проверяем текущий маршрут...</strong>
+                </div>
+              } @else if (paymentRouteContext(); as context) {
+                <article class="payment-route-current">
+                  <small>Сейчас</small>
+                  <strong>{{ context.currentRoute || 'Маршрут не выбран' }}</strong>
+                  @if (context.currentRecipient) {
+                    <span>{{ context.currentRecipient }}</span>
+                  }
+                  @if (context.status) {
+                    <em>{{ context.status }}</em>
+                  }
+                </article>
+
+                @if (!context.canChange) {
+                  <p class="sheet-error">{{ context.blockReason || 'Получателя сейчас нельзя изменить.' }}</p>
+                } @else {
+                  <div class="payment-route-options">
+                    <button type="button" (click)="changePaymentRoute('EMPLOYEE_REQUISITES')" [disabled]="paymentRouteChanging() || paymentRouteTargetActive('EMPLOYEE_REQUISITES')">
+                      <span class="material-icons-sharp">badge</span>
+                      <strong>Реквизиты сотрудника</strong>
+                      <small>Перевод на назначенные реквизиты</small>
+                    </button>
+                    <button type="button" (click)="changePaymentRoute('OWNER_TBANK')" [disabled]="paymentRouteChanging() || paymentRouteTargetActive('OWNER_TBANK')">
+                      <span class="material-icons-sharp">link</span>
+                      <strong>{{ context.configuredMode === 'OWNER_TBANK' ? 'Переиздать банковскую ссылку' : 'Банковская ссылка владельца' }}</strong>
+                      <small>Банк выбирается по профилю менеджера</small>
+                    </button>
+                    <button type="button" (click)="changePaymentRoute('OWNER_PAPER_INVOICE')" [disabled]="paymentRouteChanging() || paymentRouteTargetActive('OWNER_PAPER_INVOICE')">
+                      <span class="material-icons-sharp">description</span>
+                      <strong>Бумажный счёт владельца</strong>
+                      <small>Автонапоминания начнутся после отметки об отправке</small>
+                    </button>
+                  </div>
+                }
+
+                @if (context.configuredMode === 'OWNER_PAPER_INVOICE' && context.paymentLinkId != null && !context.paperInvoiceIssued) {
+                  <button class="paper-issued-action" type="button" (click)="markPaperInvoiceIssued()" [disabled]="paymentRouteChanging()">
+                    {{ paymentRouteChanging() ? 'Сохраняю...' : 'Счёт отправлен клиенту' }}
+                  </button>
+                }
+              }
             </section>
           </ng-template>
         </ion-modal>
@@ -2068,6 +2150,76 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       font-size: 1rem;
     }
 
+    .payment-route-sheet {
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .payment-route-state,
+    .payment-route-current {
+      display: grid;
+      gap: 0.3rem;
+      border: 1px solid rgba(103, 116, 131, 0.16);
+      border-radius: 0.9rem;
+      padding: 0.85rem;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+    }
+
+    .payment-route-state {
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+    }
+
+    .payment-route-current small,
+    .payment-route-current span,
+    .payment-route-current em,
+    .payment-route-options small {
+      color: var(--otziv-info);
+      font-family: var(--otziv-font-family);
+      font-size: 0.72rem;
+      font-style: normal;
+      font-weight: 800;
+    }
+
+    .payment-route-options {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .payment-route-options button {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 0.2rem 0.55rem;
+      align-items: center;
+      min-height: 3.5rem;
+      border: 1px solid rgba(108, 155, 207, 0.25);
+      border-radius: 0.85rem;
+      padding: 0.65rem 0.75rem;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+      text-align: left;
+    }
+
+    .payment-route-options .material-icons-sharp {
+      grid-row: 1 / 3;
+      color: var(--otziv-primary);
+    }
+
+    .payment-route-options strong,
+    .payment-route-options small {
+      grid-column: 2;
+    }
+
+    .paper-issued-action {
+      min-height: 2.7rem;
+      border: 0;
+      border-radius: 0.85rem;
+      color: var(--otziv-white);
+      background: var(--otziv-primary);
+      font-weight: 1000;
+    }
+
     .order-review-bottom-controls .expand-list-button,
     .order-review-bottom-controls .lead-pager button {
       background: linear-gradient(145deg, rgba(108, 155, 207, 0.16) 0%, var(--otziv-white) 92%);
@@ -2156,6 +2308,10 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   readonly companyReportState = signal<CompanyDeepReportState | null>(null);
   readonly tbankStatus = signal<TbankPaymentStatus | null>(null);
   readonly paymentLink = signal<ManagerPaymentLinkResponse | null>(null);
+  readonly paymentRouteVisible = signal(false);
+  readonly paymentRouteContextLoading = signal(false);
+  readonly paymentRouteChanging = signal(false);
+  readonly paymentRouteContext = signal<PaymentRouteChangeContext | null>(null);
   readonly hasReadyCompanyReport = computed(() => !!this.companyReportState()?.latestJob?.report);
   readonly companyReportBusy = computed(() => this.companyReportLoading() || !!this.companyReportState()?.activeJob);
   readonly companyReport = computed(() => (this.companyReportState()?.latestJob?.report ?? null) as CompanyReport | null);
@@ -2387,6 +2543,10 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.companyReportError.set(null);
     this.companyReportState.set(null);
     this.paymentLink.set(null);
+    this.paymentRouteVisible.set(false);
+    this.paymentRouteContextLoading.set(false);
+    this.paymentRouteChanging.set(false);
+    this.paymentRouteContext.set(null);
     this.reviewsExpanded.set(false);
     this.reviewEdit.set(null);
     this.reviewEditInitialField.set(null);
@@ -4227,21 +4387,167 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     const status = this.tbankStatus();
     return !!this.details()
       && !!status?.managerUiEnabled
-      && !!status.enabled
       && !!status.paymentLinksEnabled
-      && !!status.applyConfirmedPayments
       && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
   }
 
   paymentLinkModeLabel(): string {
-    const status = this.tbankStatus();
-    if (!status) {
-      return 'Счет';
+    return 'Банковский счёт';
+  }
+
+  canManagePaymentRoute(): boolean {
+    return !!this.details() && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  }
+
+  paymentRouteTargetActive(target: PaymentRouteChangeTarget): boolean {
+    return target !== 'OWNER_TBANK' && this.paymentRouteContext()?.configuredMode === target;
+  }
+
+  copyCurrentPaymentLink(link: ManagerPaymentLinkResponse): void {
+    const routeTicket = this.captureOrderRoute();
+    if (routeTicket) {
+      void this.copyText(link.copyText || link.url, 'payment-link', routeTicket);
     }
-    if (!status.enabled) {
-      return 'Тест-счет';
+  }
+
+  async openPaymentRouteChange(): Promise<void> {
+    const orderId = this.orderId();
+    const routeTicket = this.captureOrderRoute();
+    if (!orderId || !routeTicket || !this.canManagePaymentRoute() || this.paymentRouteContextLoading()) {
+      return;
     }
-    return status.applyConfirmedPayments ? 'Счет T-Bank' : 'Тест-счет';
+    this.paymentRouteVisible.set(true);
+    this.paymentRouteContextLoading.set(true);
+    this.paymentRouteContext.set(null);
+    this.error.set(null);
+    try {
+      const context = await firstValueFrom(this.api.getManagerOrderPaymentRouteChangeContext(orderId));
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.paymentRouteContext.set(context);
+      }
+    } catch (error) {
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось проверить текущего получателя оплаты'));
+        this.paymentRouteVisible.set(false);
+      }
+    } finally {
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.paymentRouteContextLoading.set(false);
+      }
+    }
+  }
+
+  closePaymentRouteChange(): void {
+    if (this.paymentRouteChanging()) {
+      return;
+    }
+    this.paymentRouteVisible.set(false);
+    this.paymentRouteContext.set(null);
+  }
+
+  async changePaymentRoute(target: PaymentRouteChangeTarget): Promise<void> {
+    const orderId = this.orderId();
+    const context = this.paymentRouteContext();
+    const routeTicket = this.captureOrderRoute();
+    if (!orderId || !context?.canChange || !routeTicket || this.paymentRouteChanging()
+      || this.paymentRouteTargetActive(target)) {
+      return;
+    }
+    const targetLabel = this.paymentRouteTargetLabel(target);
+    const confirmed = await this.confirm.confirm({
+      title: 'Сменить получателя оплаты',
+      message: `Переключить заказ на «${targetLabel}»? Продолжайте только если клиент ещё не оплатил: прежний маршрут будет закрыт, а клиенту запланировано обновлённое сообщение.`,
+      confirmText: 'Сменить',
+      danger: true
+    });
+    if (!confirmed || !this.isActiveOrderRoute(routeTicket)) {
+      return;
+    }
+    this.paymentRouteChanging.set(true);
+    this.error.set(null);
+    try {
+      const response = await firstValueFrom(this.api.changeManagerOrderPaymentRoute(orderId, {
+        expectedPaymentLinkId: context.paymentLinkId,
+        target,
+        confirmedUnpaid: true,
+        expectedTargetPaymentProfileId: target === 'OWNER_TBANK'
+          ? context.expectedTargetPaymentProfileId ?? null
+          : null
+      }));
+      if (!this.isActiveOrderRoute(routeTicket)) {
+        return;
+      }
+      this.paymentLink.set(null);
+      this.paymentRouteVisible.set(false);
+      this.paymentRouteContext.set(null);
+      this.loadDetails();
+      await this.presentPaymentRouteSuccessToast(
+        response.clientNotificationScheduled
+          ? `Получатель изменён. Сообщение клиенту запланировано.`
+          : 'Получатель изменён.',
+        routeTicket
+      );
+    } catch (error) {
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось сменить получателя оплаты'));
+      }
+    } finally {
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.paymentRouteChanging.set(false);
+      }
+    }
+  }
+
+  async markPaperInvoiceIssued(): Promise<void> {
+    const orderId = this.orderId();
+    const routeTicket = this.captureOrderRoute();
+    const context = this.paymentRouteContext();
+    if (!orderId || !routeTicket || !context || context.configuredMode !== 'OWNER_PAPER_INVOICE'
+      || context.paymentLinkId == null || context.paperInvoiceIssued || this.paymentRouteChanging()) {
+      return;
+    }
+    this.paymentRouteChanging.set(true);
+    this.error.set(null);
+    try {
+      await firstValueFrom(this.api.markManagerOrderPaperInvoiceIssued(orderId));
+      if (!this.isActiveOrderRoute(routeTicket)) {
+        return;
+      }
+      this.paymentRouteContext.update((current) => current ? { ...current, paperInvoiceIssued: true } : current);
+      await this.presentPaymentRouteSuccessToast('Отправка счёта отмечена. Автонапоминания могут продолжить работу.', routeTicket);
+    } catch (error) {
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось отметить отправку счёта'));
+      }
+    } finally {
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.paymentRouteChanging.set(false);
+      }
+    }
+  }
+
+  private paymentRouteTargetLabel(target: PaymentRouteChangeTarget): string {
+    switch (target) {
+      case 'EMPLOYEE_REQUISITES':
+        return 'Реквизиты сотрудника';
+      case 'OWNER_PAPER_INVOICE':
+        return 'Бумажный счёт владельца';
+      default:
+        return 'Банковская ссылка владельца';
+    }
+  }
+
+  private async presentPaymentRouteSuccessToast(message: string, routeTicket: RouteEpochTicket): Promise<void> {
+    const toast = await this.toastController.create({
+      message,
+      duration: 3500,
+      position: 'top',
+      color: 'success',
+      icon: 'checkmark-circle'
+    });
+    if (this.isActiveOrderRoute(routeTicket)) {
+      await toast.present();
+    }
   }
 
   createPaymentLink(): void {

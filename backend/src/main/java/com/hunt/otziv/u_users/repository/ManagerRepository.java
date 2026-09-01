@@ -5,17 +5,23 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.model.Worker;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ManagerRepository extends CrudRepository<Manager, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Manager m LEFT JOIN FETCH m.paymentProfile WHERE m.id = :id")
+    Optional<Manager> findByIdForPaymentProfileUpdate(@Param("id") Long id);
 
     // найти менеджера по id
 //    Optional<Manager> findById(Long id);

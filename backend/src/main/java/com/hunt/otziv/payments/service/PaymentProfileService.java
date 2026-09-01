@@ -106,7 +106,7 @@ public class PaymentProfileService {
             if (assignment == null || assignment.managerId() == null) {
                 continue;
             }
-            Manager manager = managerRepository.findById(assignment.managerId())
+            Manager manager = managerRepository.findByIdForPaymentProfileUpdate(assignment.managerId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден"));
             if (!isEligibleManager(manager)) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден");
@@ -174,6 +174,21 @@ public class PaymentProfileService {
         return defaultEntityProfile();
     }
 
+    /**
+     * Resolves a profile only for a genuinely new payment route.
+     *
+     * <p>Historical/frozen routes intentionally continue to use
+     * {@link #selectForManager(Manager)} or their stored profile id. This
+     * stricter entry point prevents an unassigned, disabled, or historical
+     * manager record from silently falling back to another owner's default
+     * profile when new payment details are issued.</p>
+     */
+    @Transactional(readOnly = true)
+    public PaymentProfile selectForManagerForNewRoute(Manager manager) {
+        requireEligibleManagerForNewRoute(manager);
+        return selectForManager(manager);
+    }
+
     @Transactional(readOnly = true)
     public PaymentProfile defaultEntityProfile() {
         return paymentProfileRepository.findFirstByDefaultProfileTrueOrderByIdAsc()
@@ -187,6 +202,36 @@ public class PaymentProfileService {
             return profile;
         }
         return paymentProfileRepository.findByIdForUpdate(profile.getId()).orElse(profile);
+    }
+
+    /**
+     * Serializes route creation with an admin changing the manager's bank.
+     * The route then freezes exactly the profile the user confirmed in the
+     * payment-route context.
+     */
+    @Transactional
+    public Manager lockManagerForRouting(Manager manager) {
+        if (manager == null || manager.getId() == null) {
+            throw ineligibleManagerForNewRoute();
+        }
+        Manager locked = managerRepository.findByIdForPaymentProfileUpdate(manager.getId())
+                .orElseThrow(this::ineligibleManagerForNewRoute);
+        requireEligibleManagerForNewRoute(locked);
+        return locked;
+    }
+
+    public Manager requireEligibleManagerForNewRoute(Manager manager) {
+        if (!isEligibleManager(manager)) {
+            throw ineligibleManagerForNewRoute();
+        }
+        return manager;
+    }
+
+    private ResponseStatusException ineligibleManagerForNewRoute() {
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Для создания нового платежа назначьте активного менеджера с ролью менеджера"
+        );
     }
 
     @Transactional

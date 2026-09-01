@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const pageSource = source('src/app/features/public-pay-group.page.ts');
 const apiSource = source('src/app/core/api.service.ts');
+const bankRouteSource = source('src/app/shared/bank-payment-source.ts');
 
 test('mobile common invoice models every public routing field returned by the backend', () => {
   const interfaceStart = apiSource.indexOf('export interface PublicCommonInvoice {');
@@ -26,11 +27,12 @@ test('mobile common invoice models every public routing field returned by the ba
   }
 });
 
-test('mobile common invoice keeps T-Bank init isolated from manual routes', () => {
-  assert.match(pageSource, /tbankRoute = computed[\s\S]*?TBANK_LINK/);
+test('mobile common invoice keeps bank-link init isolated from manual routes', () => {
+  assert.match(pageSource, /bankRoute = computed[\s\S]*?isBankPaymentRoute/);
+  assert.match(bankRouteSource, /BANK_LINK[\s\S]*?TBANK_LINK[\s\S]*?TOCHKA_LINK/);
   assert.match(pageSource, /manualRoute = computed[\s\S]*?MANUAL_MOBILE_BANK[\s\S]*?MANUAL_EXTERNAL_LINK/);
-  assert.match(pageSource, /invoice\.payable && tbankRoute\(\)[\s\S]*?submitPayment\(\)/);
-  assert.match(pageSource, /canSubmit = computed[\s\S]*?this\.tbankRoute\(\)/);
+  assert.match(pageSource, /invoice\.payable && bankRoute\(\)[\s\S]*?submitPayment\(\)/);
+  assert.match(pageSource, /canSubmit = computed[\s\S]*?this\.bankRoute\(\)/);
 });
 
 test('mobile common manual route shows and copies recipient requisites with card-aware labels', () => {

@@ -258,6 +258,12 @@
               </button>
             }
 
+            @if (tochkaPaymentMethodLocked()) {
+              <p class="sbp-inline-note" aria-live="polite">
+                Способ оплаты уже зафиксирован в операции Точка Банка. Для смены способа запросите новую ссылку у менеджера.
+              </p>
+            }
+
             @if (hasSbpLink()) {
               <p class="sbp-inline-note" aria-live="polite">Если приложение банка не открылось, нажмите основную кнопку еще раз.</p>
             }

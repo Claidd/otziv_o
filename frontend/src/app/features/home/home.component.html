@@ -631,7 +631,7 @@
           </div>
 
           <div class="manual-task-list">
-            @for (task of manualPaymentTasks(); track task.id) {
+            @for (task of visibleManualPaymentTasks(); track task.id) {
               <article class="manual-task-card" [class.inactive]="task.status !== 'ACTIVE'">
                 <header>
                   <div>

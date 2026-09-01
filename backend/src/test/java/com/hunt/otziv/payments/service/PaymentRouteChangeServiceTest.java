@@ -68,19 +68,19 @@ class PaymentRouteChangeServiceTest {
                 21L, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true
         );
         when(paymentLinkService.replacePaymentRouteAuthorized(
-                8L, 21L, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, authentication
+                8L, 21L, PaymentRouteChangeTarget.EMPLOYEE_REQUISITES, true, null, authentication
         )).thenReturn(replacement);
         PaymentRouteChangeService service = new PaymentRouteChangeService(paymentLinkService, notificationWorker);
         TransactionSynchronizationManager.initSynchronization();
 
         PaymentRouteChangeResponse result = service.change(8L, request, authentication);
 
-        verifyNoInteractions(notificationWorker);
+        verify(notificationWorker).enqueue(8L, 22L, payment);
         assertEquals(22L, result.paymentLinkId());
         assertTrue(result.clientNotificationScheduled());
         for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
             synchronization.afterCommit();
         }
-        verify(notificationWorker).send(8L, 22L, payment);
+        verify(notificationWorker).send(22L);
     }
 }

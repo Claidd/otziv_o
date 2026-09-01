@@ -29,6 +29,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
+import com.hunt.otziv.payments.service.BankPaymentInstructionSource;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
@@ -48,7 +49,6 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -357,7 +357,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     private String badReviewInvoiceMessage(Order order, BadReviewTaskSummary summary) {
-        if (usesTbankPaymentInstructionSource()) {
+        if (usesBankPaymentInstructionSource()) {
             return paymentLinkServiceProvider.getObject().createForOrder(order.getId()).copyText();
         }
         String heading = orderHeading(order);
@@ -382,7 +382,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     private String paymentInstruction(Order order) {
-        if (!usesTbankPaymentInstructionSource()) {
+        if (!usesBankPaymentInstructionSource()) {
             return managerPayText(order);
         }
         ManagerPaymentLinkResponse link = paymentLinkServiceProvider.getObject().createForOrder(order.getId());
@@ -409,12 +409,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         }
     }
 
-    private boolean usesTbankPaymentInstructionSource() {
+    private boolean usesBankPaymentInstructionSource() {
         String source = appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
                 "MANAGER_TEXT"
         );
-        return "TBANK_LINK".equals((source == null ? "" : source.trim()).toUpperCase(Locale.ROOT));
+        return BankPaymentInstructionSource.isBankLink(source);
     }
 
     private String managerPayText(Order order) {

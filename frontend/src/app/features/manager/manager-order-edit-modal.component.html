@@ -214,7 +214,9 @@
                       <button type="button" class="secondary"
                         (click)="paymentRouteChanged.emit('OWNER_TBANK')"
                         [disabled]="paymentRouteChanging">
-                        Банковская ссылка владельца
+                        {{ paymentRouteContext.configuredMode === 'OWNER_TBANK'
+                          ? 'Переиздать банковскую ссылку'
+                          : 'Банковская ссылка владельца' }}
                       </button>
                       @if (allowPaperInvoiceMode) {
                         <button type="button" class="secondary"

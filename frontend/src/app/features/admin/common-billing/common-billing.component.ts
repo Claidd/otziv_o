@@ -1015,6 +1015,60 @@ export class CommonBillingComponent implements OnDestroy {
     });
   }
 
+  reissueCommonInvoiceOwnerBankRoute(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || !isBankPaymentRouteType(invoice.paymentRouteType)
+      || this.mutating() || invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+      return;
+    }
+    const viewGeneration = this.invoiceViewGeneration;
+    const mutationKey = 'load-common-owner-bank-reissue';
+    this.mutating.set(mutationKey);
+    this.commonBillingApi.commonInvoicePaymentRouteChangeContext(invoice.id).subscribe({
+      next: (context) => {
+        if (!this.isCurrentPageView(viewGeneration) || this.mutating() !== mutationKey) {
+          return;
+        }
+        this.mutating.set('');
+        if (!context.canReissueOwnerBank) {
+          this.toastService.error(
+            'Банковский профиль нельзя обновить',
+            context.ownerBankReissueBlockReason || 'Нужна ручная сверка'
+          );
+          return;
+        }
+        const target = bankPaymentRouteLabel(
+          'BANK_LINK',
+          context.ownerBankTargetPaymentProfileName,
+          context.ownerBankTargetProvider
+        );
+        if (!window.confirm(
+          `Переиздать банковский способ оплаты на «${target}»? `
+          + 'Операция разрешена только пока банк ещё не создавал платежную попытку. '
+          + 'Клиенту сразу уйдёт сообщение с обновлённым способом оплаты.'
+        )) {
+          return;
+        }
+        this.invoiceAction(
+          invoice.id,
+          'reissue-common-owner-bank-route',
+          () => this.commonBillingApi.changeCommonInvoicePaymentRoute(
+            invoice.id,
+            'OWNER_BANK_REISSUE',
+            context.paymentEvidenceToken,
+            context.ownerBankTargetPaymentProfileId
+          ),
+          `Общий счёт переведён на ${target}`
+        );
+      },
+      error: (err) => {
+        if (this.isCurrentPageView(viewGeneration) && this.mutating() === mutationKey) {
+          this.failMutation(err, 'Не удалось проверить переиздание банковского профиля');
+        }
+      }
+    });
+  }
+
   markPaperInvoiceIssued(): void {
     const invoice = this.currentInvoice();
     if (!invoice || invoice.invoicePaymentMode !== 'OWNER_PAPER_INVOICE'
@@ -1431,11 +1485,15 @@ export class CommonBillingComponent implements OnDestroy {
     }
     switch (invoice.paymentRouteType) {
       case 'MANUAL_EXTERNAL_LINK':
-        return invoice.paymentRouteManualTaskId
+        return invoice.paymentRouteRecipient?.trim()
+          ? `Внешняя ссылка · ${invoice.paymentRouteRecipient.trim()}`
+          : invoice.paymentRouteManualTaskId
           ? `Внешняя ссылка · задание #${invoice.paymentRouteManualTaskId}`
           : 'Внешняя ссылка';
       case 'MANUAL_MOBILE_BANK':
-        return invoice.paymentRouteManualTaskId
+        return invoice.paymentRouteRecipient?.trim()
+          ? `Реквизиты · ${invoice.paymentRouteRecipient.trim()}`
+          : invoice.paymentRouteManualTaskId
           ? `Мобильный банк · задание #${invoice.paymentRouteManualTaskId}`
           : 'Мобильный банк';
       case 'MANAGER_TEXT':
@@ -1757,6 +1815,10 @@ export class CommonBillingComponent implements OnDestroy {
 
   openPaymentRouteChange(): void {
     this.orderFacade.openPaymentRouteChange();
+  }
+
+  isOwnerBankRoute(invoice: CommonInvoiceSummaryResponse | null | undefined): boolean {
+    return Boolean(invoice && isBankPaymentRouteType(invoice.paymentRouteType));
   }
 
   retryManualTbankReconciliation(): void {

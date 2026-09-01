@@ -344,6 +344,12 @@
               <span class="material-icons-sharp" aria-hidden="true">swap_horiz</span>
               Сменить способ оплаты
             </button>
+            @if (isOwnerBankRoute(invoice)) {
+              <button type="button" class="secondary" (click)="reissueCommonInvoiceOwnerBankRoute()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">published_with_changes</span>
+                Обновить банк владельца
+              </button>
+            }
           }
           @if (canManagePaperInvoices()
             && (!invoiceNeedsAttention() || paperModeSwitchNeedsRetry())

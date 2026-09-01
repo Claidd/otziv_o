@@ -108,7 +108,7 @@ type InvoiceAction =
                 <span class="material-icons-sharp" aria-hidden="true">description</span>
                 <div>
                   <strong>Бумажный счёт владельца</strong>
-                  <p>Реквизиты сотрудников и ссылка T-Bank не отправляются. После передачи документа отметьте «Счёт отправлен».</p>
+                  <p>Реквизиты сотрудников и банковская ссылка не отправляются. После передачи документа отметьте «Счёт отправлен».</p>
                 </div>
               </section>
             } @else if (invoice.paymentRouteSelectedAt) {
@@ -127,6 +127,9 @@ type InvoiceAction =
                 && invoice.paymentRouteSelectedAt
                 && invoice.status !== 'PAID') {
                 <button type="button" (click)="changePaymentRoute()" [disabled]="!!mutating()">Сменить способ оплаты</button>
+                @if (isBankPaymentRoute(invoice.paymentRouteType)) {
+                  <button type="button" (click)="reissueOwnerBankRoute()" [disabled]="!!mutating()">Обновить банк и ссылку</button>
+                }
               }
               @if (canManagePaperInvoices()
                 && (invoice.status !== 'NEEDS_ATTENTION' || paperModeSwitchNeedsRetry(invoice))
@@ -222,9 +225,9 @@ type InvoiceAction =
             }
 
             @if (attentionPolicy(invoice).paymentInitCheck) {
-              <section class="payment-evidence" aria-label="Реквизиты T-Bank для ручной сверки">
+              <section class="payment-evidence" aria-label="Банковские реквизиты для ручной сверки">
                 <header>
-                  <span>Как проверить платёж в T-Bank</span>
+                  <span>Как проверить платёж в банке</span>
                   <strong>{{ paymentEvidence().length }}</strong>
                 </header>
                 <ol class="payment-check-guide">
@@ -898,7 +901,7 @@ export class CommonBillingPage implements OnInit, OnDestroy {
         : 'OWNER_TBANK';
       const destination = target === 'EMPLOYEE_REQUISITES'
         ? 'реквизиты специалиста или менеджера'
-        : 'ссылку T-Bank владельца';
+        : 'банковскую ссылку владельца';
       const recipient = context.currentRecipient?.trim()
         ? ` Получатель сейчас: ${context.currentRecipient}.`
         : '';
@@ -923,6 +926,62 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     } catch (error) {
       if (this.routeGuard.accepts(ticket)) {
         this.error.set(this.errorMessage(error, 'Не удалось изменить способ оплаты.'));
+      }
+    } finally {
+      if (this.routeGuard.accepts(ticket)) {
+        this.mutating.set(null);
+      }
+    }
+  }
+
+  async reissueOwnerBankRoute(): Promise<void> {
+    const invoice = this.summary();
+    const invoiceId = this.invoiceId();
+    const ticket = this.routeGuard.capture();
+    if (!invoice || !invoiceId || !ticket || this.mutating()
+      || !this.isBankPaymentRoute(invoice.paymentRouteType)
+      || invoice.status === 'NEEDS_ATTENTION'
+      || invoice.invoicePaymentMode === 'OWNER_PAPER_INVOICE') {
+      return;
+    }
+
+    this.readRun += 1;
+    this.mutating.set('load-owner-bank-reissue');
+    try {
+      const context = await firstValueFrom(this.api.getCommonInvoicePaymentRouteChangeContext(invoiceId));
+      if (!this.routeGuard.accepts(ticket)) {
+        return;
+      }
+      if (!context.canReissueOwnerBank) {
+        this.error.set(context.ownerBankReissueBlockReason || 'Банковский профиль сейчас нельзя обновить.');
+        return;
+      }
+      const provider = this.paymentRouteProviderLabel(context.ownerBankTargetProvider);
+      const profile = context.ownerBankTargetPaymentProfileName?.trim();
+      const target = profile ? `${provider} · ${profile}` : provider;
+      const confirmed = await this.confirm.confirm({
+        title: 'Обновить банк общего счёта',
+        message: `Переиздать способ оплаты на «${target}»? Это разрешено только пока клиент не начинал оплату. Старая ссылка будет закрыта, а клиенту уйдёт новый способ оплаты.`,
+        confirmText: 'Переиздать',
+        danger: true
+      });
+      if (!confirmed || !this.routeGuard.accepts(ticket)) {
+        return;
+      }
+      this.mutating.set('reissue-owner-bank-route');
+      const details = await firstValueFrom(this.api.changeCommonInvoicePaymentRoute(
+        invoiceId,
+        'OWNER_BANK_REISSUE',
+        context.paymentEvidenceToken,
+        context.ownerBankTargetPaymentProfileId
+      ));
+      if (this.routeGuard.accepts(ticket)) {
+        this.details.set(details);
+        this.error.set(null);
+      }
+    } catch (error) {
+      if (this.routeGuard.accepts(ticket)) {
+        this.error.set(this.errorMessage(error, 'Не удалось обновить банк общего счёта.'));
       }
     } finally {
       if (this.routeGuard.accepts(ticket)) {
@@ -1296,20 +1355,45 @@ export class CommonBillingPage implements OnInit, OnDestroy {
     }
     const profile = invoice.paymentRouteProfileName?.trim();
     switch (invoice.paymentRouteType) {
+      case 'BANK_LINK':
       case 'TBANK_LINK':
-        return profile ? `T-Bank · ${profile}` : 'T-Bank владельца';
+      case 'TOCHKA_LINK': {
+        const provider = this.paymentRouteProviderLabel(invoice.paymentRouteProvider);
+        return profile ? `${provider} · ${profile}` : `${provider} владельца`;
+      }
       case 'MANUAL_EXTERNAL_LINK':
-        return invoice.paymentRouteManualTaskId
+        return invoice.paymentRouteRecipient?.trim()
+          ? `Внешняя ссылка · ${invoice.paymentRouteRecipient.trim()}`
+          : invoice.paymentRouteManualTaskId
           ? `Внешняя ссылка · задание #${invoice.paymentRouteManualTaskId}`
           : 'Внешняя ссылка';
       case 'MANUAL_MOBILE_BANK':
-        return invoice.paymentRouteManualTaskId
+        return invoice.paymentRouteRecipient?.trim()
+          ? `Реквизиты · ${invoice.paymentRouteRecipient.trim()}`
+          : invoice.paymentRouteManualTaskId
           ? `Реквизиты сотрудника · задание #${invoice.paymentRouteManualTaskId}`
           : (profile ? `Реквизиты сотрудника · ${profile}` : 'Реквизиты сотрудника');
       case 'MANAGER_TEXT':
         return 'Текст менеджера';
       default:
         return 'Маршрут не выбран';
+    }
+  }
+
+  isBankPaymentRoute(routeType?: string | null): boolean {
+    const route = (routeType ?? '').trim().toUpperCase();
+    return route === 'BANK_LINK' || route === 'TBANK_LINK' || route === 'TOCHKA_LINK';
+  }
+
+  private paymentRouteProviderLabel(provider?: string | null): string {
+    switch ((provider ?? '').trim().toUpperCase()) {
+      case 'TOCHKA':
+        return 'Точка';
+      case 'T_BANK':
+      case 'TBANK':
+        return 'Т-Банк';
+      default:
+        return 'Банк';
     }
   }
 

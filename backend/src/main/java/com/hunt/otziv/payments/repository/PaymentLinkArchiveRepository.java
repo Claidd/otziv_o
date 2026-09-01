@@ -2,6 +2,7 @@ package com.hunt.otziv.payments.repository;
 
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.PaymentLinkAdminSummary;
+import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.service.PaymentUrlPolicy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -358,8 +359,9 @@ public class PaymentLinkArchiveRepository {
                 .addValue("limit", Math.max(1, size))
                 .addValue("offset", Math.max(0, page) * Math.max(1, size));
         return jdbc.query("""
-                SELECT apl.*
+                SELECT apl.*, profile.provider AS payment_profile_provider
                 FROM archive_payment_links apl
+                LEFT JOIN payment_profiles profile ON profile.id = apl.payment_profile_id
                 """ + filterWhereClause() + """
                 ORDER BY apl.created_at DESC, apl.id DESC
                 LIMIT :limit OFFSET :offset
@@ -761,10 +763,11 @@ public class PaymentLinkArchiveRepository {
                 value(rs, "tbank_payment_id"),
                 value(rs, "tbank_order_id"),
                 value(rs, "payer_email"),
-                PaymentUrlPolicy.safe(value(rs, "payment_url"), PaymentUrlPolicy.Purpose.TBANK_PAYMENT),
+                archivedPaymentUrl(rs),
                 value(rs, "manual_payment_type"),
                 contractorRoute ? "" : value(rs, "manual_phone"),
                 contractorRoute ? "" : value(rs, "manual_recipient_name"),
+                "",
                 contractorRoute ? "" : value(rs, "manual_bank_name"),
                 contractorRoute
                         ? ""
@@ -803,6 +806,15 @@ public class PaymentLinkArchiveRepository {
             case "active", "paid", "refunded", "failed", "created", "manual" -> value;
             default -> "all";
         };
+    }
+
+    private String archivedPaymentUrl(ResultSet rs) throws SQLException {
+        PaymentUrlPolicy.Purpose purpose = PaymentProfile.PROVIDER_TOCHKA.equalsIgnoreCase(
+                value(rs, "payment_profile_provider")
+        )
+                ? PaymentUrlPolicy.Purpose.TOCHKA_PAYMENT
+                : PaymentUrlPolicy.Purpose.TBANK_PAYMENT;
+        return PaymentUrlPolicy.safe(value(rs, "payment_url"), purpose);
     }
 
     private String normalize(String value) {

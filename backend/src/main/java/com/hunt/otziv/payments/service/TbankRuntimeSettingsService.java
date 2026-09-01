@@ -6,7 +6,6 @@ import com.hunt.otziv.payments.dto.TbankRuntimeSettingsResponse;
 import com.hunt.otziv.payments.dto.UpdateTbankRuntimeSettingsRequest;
 import com.hunt.otziv.payments.model.TbankPaymentPageMode;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -17,11 +16,11 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class TbankRuntimeSettingsService {
 
-    public static final String PAYMENT_SOURCE_MANAGER_TEXT = "MANAGER_TEXT";
-    public static final String PAYMENT_SOURCE_TBANK_LINK = "TBANK_LINK";
-    public static final String PAYMENT_SOURCE_TOCHKA_LINK = "TOCHKA_LINK";
+    public static final String PAYMENT_SOURCE_MANAGER_TEXT = BankPaymentInstructionSource.MANAGER_TEXT;
+    public static final String PAYMENT_SOURCE_TBANK_LINK = BankPaymentInstructionSource.TBANK_LINK;
+    public static final String PAYMENT_SOURCE_TOCHKA_LINK = BankPaymentInstructionSource.TOCHKA_LINK;
     /** Provider-neutral route type for newly frozen bank-acquiring routes. */
-    public static final String PAYMENT_SOURCE_BANK_LINK = "BANK_LINK";
+    public static final String PAYMENT_SOURCE_BANK_LINK = BankPaymentInstructionSource.BANK_LINK;
     public static final TbankPaymentPageMode DEFAULT_PAYMENT_PAGE_MODE = TbankPaymentPageMode.SBP_PRIMARY;
 
     private final AppSettingService appSettingService;
@@ -67,7 +66,7 @@ public class TbankRuntimeSettingsService {
         boolean sberpayEnabled = bool(request == null ? null : request.sberpayEnabled(), isSberpayEnabled());
         boolean mirpayEnabled = bool(request == null ? null : request.mirpayEnabled(), isMirpayEnabled());
 
-        validate(mode, tbankEnabled, paymentLinksEnabled, managerUiEnabled, applyConfirmedPayments, paymentInstructionSource);
+        validate(mode, paymentLinksEnabled, managerUiEnabled, applyConfirmedPayments, paymentInstructionSource);
 
         appSettingService.setString(AppSettingService.PAYMENTS_TBANK_RUNTIME_MODE, mode.name());
         appSettingService.setBoolean(AppSettingService.PAYMENTS_TBANK_ENABLED, tbankEnabled);
@@ -96,7 +95,7 @@ public class TbankRuntimeSettingsService {
 
     @Transactional
     public TbankRuntimeSettingsResponse updateClientPaymentSource(boolean useTbankLinks) {
-        String source = useTbankLinks ? PAYMENT_SOURCE_TBANK_LINK : PAYMENT_SOURCE_MANAGER_TEXT;
+        String source = useTbankLinks ? PAYMENT_SOURCE_BANK_LINK : PAYMENT_SOURCE_MANAGER_TEXT;
         return update(new UpdateTbankRuntimeSettingsRequest(
                 runtimeMode().name(),
                 isTbankEnabled(),
@@ -209,7 +208,7 @@ public class TbankRuntimeSettingsService {
                 managerUiEnabled,
                 applyConfirmedPayments,
                 source,
-                PAYMENT_SOURCE_TBANK_LINK.equals(source),
+                BankPaymentInstructionSource.isBankLink(source),
                 (paymentPageMode == null ? DEFAULT_PAYMENT_PAGE_MODE : paymentPageMode).name(),
                 tpayEnabled,
                 sberpayEnabled,
@@ -219,7 +218,6 @@ public class TbankRuntimeSettingsService {
 
     private void validate(
             TbankRuntimeMode runtimeMode,
-            boolean tbankEnabled,
             boolean paymentLinksEnabled,
             boolean managerUiEnabled,
             boolean applyConfirmedPayments,
@@ -231,17 +229,17 @@ public class TbankRuntimeSettingsService {
                     "В тестовом режиме нельзя засчитывать платежи как реальные"
             );
         }
-        if (runtimeMode.isTest() && PAYMENT_SOURCE_TBANK_LINK.equals(paymentInstructionSource)) {
+        if (runtimeMode.isTest() && BankPaymentInstructionSource.isBankLink(paymentInstructionSource)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "В тестовом режиме нельзя отправлять клиентам ссылки T-Bank"
+                    "В тестовом режиме нельзя отправлять клиентам банковские ссылки"
             );
         }
-        if (PAYMENT_SOURCE_TBANK_LINK.equals(paymentInstructionSource)
-                && (!tbankEnabled || !paymentLinksEnabled || !managerUiEnabled)) {
+        if (BankPaymentInstructionSource.isBankLink(paymentInstructionSource)
+                && (!paymentLinksEnabled || !managerUiEnabled)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Для отправки ссылок T-Bank включите API, создание ссылок и UI менеджера"
+                    "Для отправки банковских ссылок включите создание ссылок и UI менеджера"
             );
         }
     }
@@ -251,13 +249,6 @@ public class TbankRuntimeSettingsService {
     }
 
     private String normalizePaymentSource(String value, String fallback) {
-        String clean = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
-        if (PAYMENT_SOURCE_TBANK_LINK.equals(clean)) {
-            return PAYMENT_SOURCE_TBANK_LINK;
-        }
-        if (PAYMENT_SOURCE_MANAGER_TEXT.equals(clean)) {
-            return PAYMENT_SOURCE_MANAGER_TEXT;
-        }
-        return fallback == null || fallback.isBlank() ? PAYMENT_SOURCE_MANAGER_TEXT : fallback;
+        return BankPaymentInstructionSource.normalize(value, fallback);
     }
 }

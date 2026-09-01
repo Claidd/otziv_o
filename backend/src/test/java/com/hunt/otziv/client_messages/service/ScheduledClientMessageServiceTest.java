@@ -53,6 +53,8 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -501,8 +503,9 @@ class ScheduledClientMessageServiceTest {
         verify(whatsAppAuthAlertService, never()).notifyAuthIssue(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
-    @Test
-    void paymentReminderMovesFirstInvoiceToReminderStatusAfterSend() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"TBANK_LINK", "BANK_LINK", "TOCHKA_LINK"})
+    void paymentReminderMovesFirstInvoiceToReminderStatusAfterSend(String paymentSource) throws Exception {
         LocalDateTime statusChangedAt = LocalDateTime.of(2026, 5, 20, 10, 0);
         LocalDateTime now = LocalDateTime.of(2026, 5, 22, 10, 0);
         ScheduledClientMessageState state = ScheduledClientMessageState.builder()
@@ -537,7 +540,7 @@ class ScheduledClientMessageServiceTest {
         when(appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
                 ScheduledClientMessageService.DEFAULT_PAYMENT_INSTRUCTION_SOURCE
-        )).thenReturn("TBANK_LINK");
+        )).thenReturn(paymentSource);
         when(paymentLinkService.createForOrderInNewTransaction(15L)).thenReturn(new ManagerPaymentLinkResponse(
                 "token", "", 15L, BigDecimal.valueOf(1300), 130000, "CREATED", "MANUAL_MOBILE_BANK",
                 LocalDateTime.now().plusDays(90),

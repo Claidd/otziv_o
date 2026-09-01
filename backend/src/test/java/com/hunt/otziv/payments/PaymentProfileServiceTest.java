@@ -384,7 +384,7 @@ class PaymentProfileServiceTest {
         TochkaPaymentProfile runtime = tochkaRuntime("merchant-provider-9876", "jwt-live-secret", false);
         when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
                 .thenReturn(List.of(tochka));
-        when(managerRepository.findById(manager.getId())).thenReturn(Optional.of(manager));
+        when(managerRepository.findByIdForPaymentProfileUpdate(manager.getId())).thenReturn(Optional.of(manager));
         when(managerRepository.findAllForPaymentProfileAssignments()).thenReturn(List.of(manager));
         when(tochkaPaymentProfileResolver.resolve(tochka)).thenReturn(runtime);
         PaymentProfileService service = new PaymentProfileService(
@@ -415,7 +415,7 @@ class PaymentProfileServiceTest {
         Manager manager = manager(null);
         when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
                 .thenReturn(List.of(tochka));
-        when(managerRepository.findById(manager.getId())).thenReturn(Optional.of(manager));
+        when(managerRepository.findByIdForPaymentProfileUpdate(manager.getId())).thenReturn(Optional.of(manager));
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
@@ -449,7 +449,7 @@ class PaymentProfileServiceTest {
         historical.getUser().getRoles().add(client);
         when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
                 .thenReturn(List.of(tochka));
-        when(managerRepository.findById(historical.getId())).thenReturn(Optional.of(historical));
+        when(managerRepository.findByIdForPaymentProfileUpdate(historical.getId())).thenReturn(Optional.of(historical));
         PaymentProfileService service = new PaymentProfileService(
                 paymentProfileRepository,
                 paymentLinkRepository,
@@ -468,6 +468,79 @@ class PaymentProfileServiceTest {
 
         assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
         verify(managerRepository, never()).save(historical);
+    }
+
+    @Test
+    void frozenProfileLookupRemainsAvailableButNewRouteSelectionRejectsInactiveManager() {
+        PaymentProfile frozenProfile = profile();
+        Manager inactive = manager(frozenProfile);
+        inactive.getUser().setActive(false);
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
+        );
+
+        assertEquals(frozenProfile, service.selectForManager(inactive));
+        ResponseStatusException inactiveError = assertThrows(
+                ResponseStatusException.class,
+                () -> service.selectForManagerForNewRoute(inactive)
+        );
+        ResponseStatusException missingError = assertThrows(
+                ResponseStatusException.class,
+                () -> service.selectForManagerForNewRoute(null)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, inactiveError.getStatusCode());
+        assertEquals(HttpStatus.CONFLICT, missingError.getStatusCode());
+    }
+
+    @Test
+    void routingLockValidatesTheLockedManagerEligibility() {
+        Manager staleInput = manager(profile());
+        Manager locked = manager(profile());
+        locked.setId(staleInput.getId());
+        locked.getUser().getRoles().clear();
+        Role client = new Role();
+        client.setName("ROLE_CLIENT");
+        locked.getUser().getRoles().add(client);
+        when(managerRepository.findByIdForPaymentProfileUpdate(staleInput.getId()))
+                .thenReturn(Optional.of(locked));
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
+        );
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.lockManagerForRouting(staleInput)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+    }
+
+    @Test
+    void routingLockReturnsAnActiveManagerWithManagerRole() {
+        Manager manager = manager(profile());
+        when(managerRepository.findByIdForPaymentProfileUpdate(manager.getId()))
+                .thenReturn(Optional.of(manager));
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService,
+                tochkaPaymentProfileResolver
+        );
+
+        assertEquals(manager, service.lockManagerForRouting(manager));
     }
 
     @Test

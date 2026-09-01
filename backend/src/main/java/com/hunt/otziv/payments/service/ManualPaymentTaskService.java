@@ -144,12 +144,15 @@ public class ManualPaymentTaskService {
                     ));
             return toResponse(replay);
         }
-        // A genuinely new task participates in profile capacity even for an
-        // OWNER/EXTERNAL target. Serialize phase promotion before target
-        // resolution and before the first task/profile write. Exact creation
-        // replays above remain write-free and need no financial lock.
+        // Exact creation replays above remain write-free and need no routing
+        // locks. New tasks use the same Manager -> PaymentProfile order as
+        // ordinary route creation; the accounting-phase mutex is then taken
+        // before any contractor target/profile resolution or task write.
+        manager = paymentProfileService.lockManagerForRouting(manager);
+        PaymentProfile profile = paymentProfileService.lockForRouting(
+                paymentProfileService.selectForManager(manager)
+        );
         contractorPaymentAccountingPhaseService.lockCurrent();
-        PaymentProfile profile = paymentProfileService.selectForManager(manager);
         long targetAmountKopecks = requiredPositive(request == null ? null : request.targetAmountKopecks());
         TargetResolution target = managerScoped
                 ? accountingTargetPolicy.resolveForManager(

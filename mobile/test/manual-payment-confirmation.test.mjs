@@ -136,7 +136,7 @@ test('requires the explicit confirmation before building/sending the fallback re
   assert.match(prompt.message, /выписку/i);
   assert.match(prompt.message, /полная сумма/i);
   assert.match(prompt.message, /1\s000,00\s₽/);
-  assert.match(prompt.message, /ссылка T-Bank\/СБП будет .* закрыта/i);
+  assert.match(prompt.message, /банковская\/СБП ссылка будет .* закрыта/i);
   assert.match(prompt.confirmText, /закрыть ссылку/i);
   assert.equal(manualCardPaymentConfirmationPrompt(0, 100000), null);
   assert.equal(manualCardPaymentConfirmationPrompt(25047, 0), null);

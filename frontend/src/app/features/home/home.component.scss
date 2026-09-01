@@ -554,7 +554,7 @@ small {
 
 .contractor-payment-metrics-hint {
   margin: 0;
-  color: rgba(103, 116, 131, 0.82);
+  color: var(--otziv-info);
   font-size: 0.68rem;
   font-weight: 800;
   line-height: 1.4;
@@ -1693,12 +1693,12 @@ dd {
 
 .contractor-payment-role {
   gap: 0.9rem;
-  border: 1px solid rgba(103, 116, 131, 0.13);
+  border: 1px solid var(--otziv-surface-border-neutral);
   border-radius: var(--otziv-card-radius);
   padding: 1rem;
   background:
     radial-gradient(circle at top right, rgba(108, 155, 207, 0.08), transparent 36%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(247, 249, 253, 0.9));
+    var(--otziv-surface-gradient-neutral);
 }
 
 .contractor-payment-role > header {
@@ -1727,10 +1727,10 @@ dd {
   display: grid;
   min-width: 0;
   gap: 0.18rem;
-  border: 1px solid rgba(103, 116, 131, 0.12);
+  border: 1px solid var(--otziv-surface-border-neutral);
   border-radius: 0.92rem;
   padding: 0.72rem 0.82rem;
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--otziv-muted-surface);
 }
 
 .contractor-payment-requisites dt {
@@ -1784,12 +1784,12 @@ dd {
 .contractor-payment-analytics {
   display: grid;
   gap: 1rem;
-  border: 1px solid rgba(116, 154, 207, 0.2);
+  border: 1px solid var(--otziv-surface-border-neutral);
   border-radius: calc(var(--otziv-card-radius) - 0.35rem);
   padding: 1rem;
   background:
     radial-gradient(circle at 92% 4%, rgba(236, 66, 43, 0.055), transparent 34%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(247, 249, 253, 0.93));
+    var(--otziv-surface-gradient-neutral);
 }
 
 .contractor-payment-analytics-title {
@@ -1910,6 +1910,16 @@ dd {
   border-color: var(--otziv-surface-border-red);
   background: var(--otziv-surface-gradient-red);
   color: var(--otziv-danger);
+}
+
+:host-context(body.otziv-dark-theme) .contractor-payment-mode.live {
+  color: var(--otziv-success);
+}
+
+:host-context(body.otziv-dark-theme) .contractor-payment-mode.shadow,
+:host-context(body.otziv-dark-theme) .contractor-payment-analytics-card.yellow,
+:host-context(body.otziv-dark-theme) .contractor-payment-metrics .contractor-payment-metric-card:nth-child(2) {
+  color: var(--otziv-warning);
 }
 
 @media (max-width: 1120px) {

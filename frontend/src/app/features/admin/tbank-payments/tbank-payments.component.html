@@ -296,6 +296,7 @@
                       </a>
                     }
                     <small>{{ link.manualPaymentUrl || 'Ссылка не указана' }}</small>
+                    <small>{{ manualRecipientDisplay(link) }}</small>
                   } @else {
                     <button
                       type="button"
@@ -307,9 +308,9 @@
                       <span class="material-icons-sharp" aria-hidden="true">{{ copied() === 'manual-phone-' + link.id ? 'check' : 'content_copy' }}</span>
                       <strong>{{ link.manualPhone || 'Телефон не указан' }}</strong>
                     </button>
-                    <small>{{ link.manualRecipientName || 'Получатель не указан' }}</small>
+                    <small>{{ manualRecipientDisplay(link) }}</small>
                   }
-                  <small class="profile-line">{{ paymentProfileDisplayName(link) }}</small>
+                  <small class="profile-line">Платёжный профиль: {{ paymentProfileDisplayName(link) }}</small>
                   <small class="method-line">{{ paymentMethodLabel(link) }} · {{ link.manualComment || 'без комментария' }}</small>
                   <small class="method-line">{{ manualSourceLabel(link) }}</small>
                 } @else {
@@ -568,9 +569,9 @@
             </button>
             <button
               type="button"
-              [class.active]="settings.paymentInstructionSource === 'TBANK_LINK'"
+              [class.active]="isBankPaymentInstructionSource(settings.paymentInstructionSource)"
               [disabled]="savingRuntimeSettings() || loading() || settings.runtimeMode === 'TEST'"
-              (click)="setPaymentInstructionSource('TBANK_LINK')"
+              (click)="setPaymentInstructionSource('BANK_LINK')"
             >
               <span class="material-icons-sharp" aria-hidden="true">link</span>
               Банковские ссылки
@@ -952,7 +953,7 @@
         </div>
 
         <div class="manual-task-admin-list">
-          @for (task of manualTasks(); track trackManualTask($index, task)) {
+          @for (task of visibleManualTasks(); track trackManualTask($index, task)) {
             <article class="manual-task-admin-card" [class.inactive]="task.status !== 'ACTIVE'">
               <header>
                 <span class="route-avatar">

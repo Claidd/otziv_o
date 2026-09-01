@@ -1,6 +1,7 @@
 package com.hunt.otziv.contractor_payments.service;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.payments.service.BankPaymentInstructionSource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,7 +10,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -219,7 +219,7 @@ public class ContractorPaymentRuntimeSwitch {
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
                 ""
         );
-        if (!"TBANK_LINK".equals(instructionSource.trim().toUpperCase(Locale.ROOT))) {
+        if (!BankPaymentInstructionSource.isBankLink(instructionSource)) {
             blockers.add("Клиентские сообщения не настроены на платежную ссылку");
         }
         if (!safeFresh(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED)

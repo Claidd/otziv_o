@@ -8,6 +8,7 @@ import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
 import { manualTransferDestinationPresentation } from '../shared/manual-transfer-destination';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 import { configuredPaymentTarget } from '../shared/payment-navigation';
+import { isBankPaymentRoute } from '../shared/bank-payment-source';
 
 @Component({
   selector: 'app-public-pay-group-page',
@@ -109,7 +110,7 @@ import { configuredPaymentTarget } from '../shared/payment-navigation';
                   </button>
                 }
               </section>
-            } @else if (invoice.payable && tbankRoute()) {
+            } @else if (invoice.payable && bankRoute()) {
               <form class="pay-form" (ngSubmit)="submitPayment()">
                 <label>
                   <span>E-mail для чека</span>
@@ -171,7 +172,7 @@ export class PublicPayGroupPage implements OnDestroy {
   readonly statusLabel = computed(() => this.statusText(this.invoice()?.status));
   readonly readyOrders = computed(() => this.invoice()?.orders.filter((order) => order.ready).length ?? 0);
   readonly paymentRouteType = computed(() => (this.invoice()?.paymentRouteType ?? '').trim().toUpperCase());
-  readonly tbankRoute = computed(() => !this.paymentRouteType() || this.paymentRouteType() === 'TBANK_LINK');
+  readonly bankRoute = computed(() => isBankPaymentRoute(this.paymentRouteType()));
   readonly managerTextRoute = computed(() => this.paymentRouteType() === 'MANAGER_TEXT');
   readonly manualRoute = computed(() => ['MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK'].includes(this.paymentRouteType()));
   readonly externalManualRoute = computed(() => this.paymentRouteType() === 'MANUAL_EXTERNAL_LINK'
@@ -185,7 +186,7 @@ export class PublicPayGroupPage implements OnDestroy {
     : this.manualTransferDestination().paymentTitle);
   readonly canSubmit = computed(() => Boolean(
     this.invoice()?.payable
-      && this.tbankRoute()
+      && this.bankRoute()
       && this.email().includes('@')
       && this.offerConsent()
       && this.privacyConsent()

@@ -219,6 +219,44 @@ class PaymentLinkArchiveRepositoryContractTest {
     }
 
     @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void archivedTochkaResponseUsesTheFrozenProviderUrlPolicy() throws Exception {
+        when(jdbc.query(
+                anyString(),
+                any(MapSqlParameterSource.class),
+                any(RowMapper.class)
+        )).thenAnswer(invocation -> {
+            RowMapper<AdminPaymentLinkResponse> mapper = invocation.getArgument(2);
+            ResultSet rs = org.mockito.Mockito.mock(ResultSet.class);
+            when(rs.getLong(anyString())).thenAnswer(valueInvocation -> switch (
+                    valueInvocation.getArgument(0, String.class)
+            ) {
+                case "id" -> 42L;
+                case "amount_kopecks" -> 100_00L;
+                default -> 0L;
+            });
+            when(rs.getString(anyString())).thenAnswer(valueInvocation -> switch (
+                    valueInvocation.getArgument(0, String.class)
+            ) {
+                case "token" -> "archived-tochka-token";
+                case "payment_profile_provider" -> "TOCHKA";
+                case "payment_url" -> "https://merch.securepaytb.ru/payments/operation";
+                default -> null;
+            });
+            return List.of(mapper.mapRow(rs, 0));
+        });
+
+        List<AdminPaymentLinkResponse> page = repository.findArchivedPage(
+                0, 20, "all", "", null, null, null, false, "https://example.ru"
+        );
+
+        assertEquals("https://merch.securepaytb.ru/payments/operation", page.get(0).paymentUrl());
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbc).query(sql.capture(), any(MapSqlParameterSource.class), any(RowMapper.class));
+        assertTrue(sql.getValue().contains("profile.provider AS payment_profile_provider"));
+    }
+
+    @Test
     void hardDeleteAndPreparedOrderGuardsUseTheFullArchiveFence() {
         when(jdbc.queryForObject(anyString(), anyMap(), eq(Long.class))).thenReturn(0L);
 

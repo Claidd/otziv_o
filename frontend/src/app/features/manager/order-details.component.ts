@@ -652,10 +652,10 @@ export class OrderDetailsComponent {
     if (!status) {
       return 'Проверка';
     }
-    if (!status.enabled) {
-      return 'Тест выключен';
+    if (status.runtimeMode === 'TEST') {
+      return 'Тестовый режим';
     }
-    return status.applyConfirmedPayments ? 'Боевой учет' : 'Тест без учета';
+    return status.applyConfirmedPayments ? 'Автоучёт оплаты' : 'Без автоучёта';
   }
 
   companyReportActionLabel(): string {

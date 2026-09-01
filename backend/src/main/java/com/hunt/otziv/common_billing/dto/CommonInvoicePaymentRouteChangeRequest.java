@@ -1,12 +1,19 @@
 package com.hunt.otziv.common_billing.dto;
 
-import com.hunt.otziv.payments.dto.PaymentRouteChangeTarget;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 public record CommonInvoicePaymentRouteChangeRequest(
-        @NotNull PaymentRouteChangeTarget target,
+        @NotNull CommonInvoicePaymentRouteChangeTarget target,
         boolean confirmedUnpaid,
-        @NotBlank String expectedPaymentEvidenceToken
+        @NotBlank String expectedPaymentEvidenceToken,
+        Long expectedTargetPaymentProfileId
 ) {
+    public CommonInvoicePaymentRouteChangeRequest(
+            CommonInvoicePaymentRouteChangeTarget target,
+            boolean confirmedUnpaid,
+            String expectedPaymentEvidenceToken
+    ) {
+        this(target, confirmedUnpaid, expectedPaymentEvidenceToken, null);
+    }
 }

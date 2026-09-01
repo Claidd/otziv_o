@@ -168,7 +168,6 @@ export class ManagerBoardComponent implements OnDestroy {
   private readonly searchDelayMs = 500;
   private readonly chatBotLinkPolls = new Map<number, ChatBotLinkPoll>();
   private readonly chatBotLinkPollTimers = new Map<number, number>();
-  private readonly paymentCopyCache = new Map<number, string>();
   private chatBotLinkRefreshInFlight = false;
   private searchTimer: number | null = null;
   private lastMobileNavIntentStamp = 0;
@@ -658,18 +657,9 @@ export class ManagerBoardComponent implements OnDestroy {
       return;
     }
 
-    const cachedPaymentText = this.paymentCopyCache.get(order.id);
-    if (cachedPaymentText) {
-      await this.copyText(cachedPaymentText, `payment-${order.id}`, 'Текст счета скопирован');
-      return;
-    }
-
     try {
       const response = await firstValueFrom(this.paymentsApi.createOrderPaymentLink(order.id));
       const paymentText = response.copyText || response.url;
-      if (paymentText) {
-        this.paymentCopyCache.set(order.id, paymentText);
-      }
       await this.copyText(
         paymentText,
         `payment-${order.id}`,

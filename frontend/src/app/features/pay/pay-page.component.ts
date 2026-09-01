@@ -10,7 +10,13 @@ import {
   navigateToPaymentTarget,
   type PaymentNavigationPurpose
 } from '../../shared/payment-navigation';
-import { PaymentsApi, PublicPaymentLink, PublicSbpBank, TbankPaymentPageMode } from '../../core/payments.api';
+import {
+  PaymentsApi,
+  PublicPaymentLink,
+  PublicSbpBank,
+  TbankPaymentPageMode,
+  type PaymentMethod
+} from '../../core/payments.api';
 import { LatestRouteRequest } from '../../core/latest-route-request';
 import { RouteEpoch, RouteEpochTicket } from '../../core/route-epoch';
 import { manualTransferDestinationPresentation } from '../../shared/manual-transfer-destination';
@@ -75,10 +81,24 @@ export class PayPageComponent {
   readonly statusLabel = computed(() => this.statusText(this.payment()?.status));
   readonly paymentPageMode = computed<TbankPaymentPageMode>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
   readonly sbpBankSelectionSupported = computed(() => this.payment()?.sbpBankSelectionSupported !== false);
-  readonly showSbpPayment = computed(() => !this.manualPayment() && this.paymentPageMode() !== 'BANK_ONLY');
+  readonly lockedTochkaPaymentMethod = computed<PaymentMethod | null>(() => {
+    const payment = this.payment();
+    const provider = payment?.provider?.trim().toUpperCase();
+    const status = payment?.status?.trim().toUpperCase();
+    const method = payment?.paymentMethod;
+    if (provider !== 'TOCHKA' || (status !== 'INITIATED' && status !== 'AUTHORIZED')) {
+      return null;
+    }
+    return method === 'BANK_FORM' || method === 'SBP_QR' ? method : null;
+  });
+  readonly tochkaPaymentMethodLocked = computed(() => this.lockedTochkaPaymentMethod() !== null);
+  readonly showSbpPayment = computed(() => !this.manualPayment()
+    && this.paymentPageMode() !== 'BANK_ONLY'
+    && this.lockedTochkaPaymentMethod() !== 'BANK_FORM');
   readonly showBankPayment = computed(() => !this.manualPayment()
     && this.paymentPageMode() !== 'SBP_ONLY'
-    && this.paymentPageMode() !== 'SBP_PAY_ONLY');
+    && this.paymentPageMode() !== 'SBP_PAY_ONLY'
+    && this.lockedTochkaPaymentMethod() !== 'SBP_QR');
   readonly isPaymentComplete = computed(() => this.isCompletedStatus(this.payment()?.status));
   readonly bankMethodChips = computed(() => {
     const payment = this.payment();
@@ -103,8 +123,7 @@ export class PayPageComponent {
   });
   readonly fastBankMethods = computed(() => this.bankMethodChips().filter((method) => method !== 'Карта'));
   readonly hasFastBankMethods = computed(() => this.fastBankMethods().length > 0);
-  readonly showFastBankMethods = computed(() => !this.manualPayment()
-    && this.paymentPageMode() !== 'SBP_ONLY'
+  readonly showFastBankMethods = computed(() => this.showBankPayment()
     && this.hasFastBankMethods());
   readonly checkoutTitle = computed(() => {
     if (this.showSbpPayment()) {
@@ -245,6 +264,10 @@ export class PayPageComponent {
   }
 
   submitSbp(bankId = this.selectedSbpBankId()): void {
+    if (this.lockedTochkaPaymentMethod() === 'BANK_FORM') {
+      this.message.set('Для этой банковской операции уже выбрана оплата картой. Запросите новую ссылку у менеджера, чтобы оплатить через СБП.');
+      return;
+    }
     if (!this.canSubmit()) {
       this.message.set('Укажите e-mail и подтвердите согласия.');
       return;
@@ -307,6 +330,10 @@ export class PayPageComponent {
   }
 
   submitBankForm(): void {
+    if (this.lockedTochkaPaymentMethod() === 'SBP_QR') {
+      this.message.set('Для этой банковской операции уже выбрана оплата через СБП. Запросите новую ссылку у менеджера, чтобы оплатить картой.');
+      return;
+    }
     if (!this.canSubmit()) {
       this.message.set('Укажите e-mail и подтвердите согласия.');
       return;

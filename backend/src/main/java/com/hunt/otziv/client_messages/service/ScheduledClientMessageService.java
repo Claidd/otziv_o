@@ -29,6 +29,7 @@ import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.service.BankPaymentInstructionSource;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.payments.service.PaymentIssueReminderService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
@@ -3020,8 +3021,8 @@ public class ScheduledClientMessageService {
         String paymentLink = "";
         String tbankPaymentCopyText = "";
         String frozenTransferNumber = null;
-        if (requiresTbankPaymentLink(template)) {
-            ManagerPaymentLinkResponse link = createTbankPaymentLink(order);
+        if (requiresBankPaymentLink(template)) {
+            ManagerPaymentLinkResponse link = createBankPaymentLink(order);
             if ("OWNER_PAPER_INVOICE".equals(link.paymentMethod())
                     && "CREATED".equals(link.status())) {
                 throw new PaymentInstructionException(
@@ -3032,13 +3033,13 @@ public class ScheduledClientMessageService {
             paymentLink = link.url();
             tbankPaymentCopyText = link.copyText();
             frozenTransferNumber = link.telegramCopyTransferNumber();
-            if (usesTbankPaymentInstructionSource() && isDefaultPaymentReminderTemplate(template)) {
+            if (usesBankPaymentInstructionSource() && isDefaultPaymentReminderTemplate(template)) {
                 return new PaymentMessageWithTransfer(
                         tbankPaymentCopyText,
                         link.telegramCopyTransferNumber()
                 );
             }
-            if (usesTbankPaymentInstructionSource()) {
+            if (usesBankPaymentInstructionSource()) {
                 paymentInstruction = link.instructionText();
             }
         }
@@ -3077,8 +3078,8 @@ public class ScheduledClientMessageService {
                 : "Здравствуйте, напоминаем об оплате выполненного заказа. Пришлите чек, пожалуйста, как оплатите.";
     }
 
-    private boolean requiresTbankPaymentLink(String template) {
-        return usesTbankPaymentInstructionSource()
+    private boolean requiresBankPaymentLink(String template) {
+        return usesBankPaymentInstructionSource()
                 || containsVariable(template, "paymentLink")
                 || containsVariable(template, "tbankPaymentLink")
                 || containsVariable(template, "tbankPaymentCopyText");
@@ -3092,11 +3093,11 @@ public class ScheduledClientMessageService {
         return template != null && template.contains("{" + variable + "}");
     }
 
-    private ManagerPaymentLinkResponse createTbankPaymentLink(Order order) {
+    private ManagerPaymentLinkResponse createBankPaymentLink(Order order) {
         try {
             return paymentLinkService.createForOrderInNewTransaction(order.getId());
         } catch (Exception e) {
-            throw new PaymentInstructionException("Не удалось подготовить ссылку T-Bank для заказа #"
+            throw new PaymentInstructionException("Не удалось подготовить банковскую ссылку для заказа #"
                     + order.getId() + ": " + readableException(e), e);
         }
     }
@@ -3418,8 +3419,8 @@ public class ScheduledClientMessageService {
         );
     }
 
-    private boolean usesTbankPaymentInstructionSource() {
-        return "TBANK_LINK".equals(paymentInstructionSource());
+    private boolean usesBankPaymentInstructionSource() {
+        return BankPaymentInstructionSource.isBankLink(paymentInstructionSource());
     }
 
     private boolean requiresClientMessageSlot(ClientMessageScenario scenario) {
@@ -3432,8 +3433,7 @@ public class ScheduledClientMessageService {
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
                 DEFAULT_PAYMENT_INSTRUCTION_SOURCE
         );
-        String value = (hasText(raw) ? raw : DEFAULT_PAYMENT_INSTRUCTION_SOURCE).trim().toUpperCase(Locale.ROOT);
-        return "TBANK_LINK".equals(value) ? "TBANK_LINK" : DEFAULT_PAYMENT_INSTRUCTION_SOURCE;
+        return BankPaymentInstructionSource.normalize(raw, DEFAULT_PAYMENT_INSTRUCTION_SOURCE);
     }
 
     private List<String> listSetting(String key, String fallbackCsv) {

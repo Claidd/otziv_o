@@ -395,6 +395,7 @@ public class PaymentLinkService {
         managerAccessService.requireOrderAccess(orderId, authentication);
         List<PaymentLink> links = paymentLinkRepository.findByOrderIdInForRead(Set.of(orderId));
         PaymentLink current = currentRouteChangeLink(links).orElse(null);
+        Long expectedTargetPaymentProfileId = targetPaymentProfileId(order);
         if (current == null) {
             InvoicePaymentMode configuredMode = invoicePaymentMode(order);
             return new PaymentRouteChangeContextResponse(
@@ -405,22 +406,32 @@ public class PaymentLinkService {
                     true,
                     "",
                     configuredMode.name(),
-                    false
+                    false,
+                    expectedTargetPaymentProfileId
             );
         }
         String blockReason = routeChangeBlockReason(current);
         String currentRoute = isPaperInvoice(current)
                 ? "Бумажный счёт владельца"
-                : isManualPayment(current) ? "Оплата по реквизитам" : "Эквайринг Т-Банк";
-        String currentRecipient = normalize(current.getPaymentProfileName());
-        if (currentRecipient.isBlank() && !isManualPayment(current)) {
+                : isManualPayment(current)
+                    ? "Оплата по реквизитам"
+                    : isTochkaPaymentLink(current)
+                        ? "Эквайринг · Точка Банк"
+                        : "Эквайринг · T‑Bank";
+        String currentRecipient = isPaperInvoice(current)
+                ? "Владелец"
+                : isManualPayment(current)
+                    ? manualRouteRecipientContext(current, order)
+                    : normalize(current.getPaymentProfileName());
+        if (currentRecipient.isBlank()) {
             currentRecipient = "Владелец";
         }
         return new PaymentRouteChangeContextResponse(
                 current.getId(), currentRoute, currentRecipient, current.getStatus().name(),
                 blockReason == null, blockReason == null ? "" : blockReason,
                 invoicePaymentMode(order).name(),
-                current.getPaperInvoiceIssuedAt() != null
+                current.getPaperInvoiceIssuedAt() != null,
+                expectedTargetPaymentProfileId
         );
     }
 
@@ -430,6 +441,7 @@ public class PaymentLinkService {
             Long expectedPaymentLinkId,
             PaymentRouteChangeTarget target,
             boolean confirmedUnpaid,
+            Long expectedTargetPaymentProfileId,
             Authentication authentication
     ) {
         if (!confirmedUnpaid) {
@@ -458,6 +470,11 @@ public class PaymentLinkService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Активный счет уже изменился. Обновите заказ и повторите");
             }
+            Manager manager = paymentProfileService.lockManagerForRouting(orderManager(order));
+            PaymentProfile profile = target == PaymentRouteChangeTarget.OWNER_PAPER_INVOICE
+                    ? null
+                    : paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
+            validateExpectedTargetPaymentProfile(target, expectedTargetPaymentProfileId, profile);
             InvoicePaymentMode mode = paymentModeForTarget(target);
             order.setInvoicePaymentMode(mode);
             orderRepository.save(order);
@@ -484,6 +501,16 @@ public class PaymentLinkService {
                     "Сумма заказа изменилась. Сначала обновите счет обычным способом");
         }
 
+        // Keep the global mutation order aligned with prepareForOrder:
+        // Order -> PaymentLinks -> Manager -> PaymentProfile.  Besides avoiding
+        // a deadlock, this freezes the recipient only after the link CAS and
+        // payment-evidence checks have succeeded.
+        Manager manager = paymentProfileService.lockManagerForRouting(orderManager(order));
+        PaymentProfile profile = target == PaymentRouteChangeTarget.OWNER_PAPER_INVOICE
+                ? null
+                : paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
+        validateExpectedTargetPaymentProfile(target, expectedTargetPaymentProfileId, profile);
+
         String replacementReason = "Способ оплаты изменен по просьбе клиента";
         taskReceiptIntegrationService.release(current, replacementReason);
         current.setStatus(PaymentLinkStatus.CANCELED);
@@ -494,12 +521,6 @@ public class PaymentLinkService {
             contractorPaymentLiveRoutingService.releaseClosedPaymentLink(current);
         }
 
-        Manager manager = target == PaymentRouteChangeTarget.OWNER_PAPER_INVOICE
-                ? null
-                : orderManager(order);
-        PaymentProfile profile = manager == null
-                ? null
-                : paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
         PaymentLink replacement = paymentLinkRepository.saveAndFlush(newPaymentLink(order, amountKopecks, now));
 
         order.setInvoicePaymentMode(paymentModeForTarget(target));
@@ -553,6 +574,28 @@ public class PaymentLinkService {
                 orderId, current.getId(), replacement.getId(), target,
                 authentication == null ? "system" : authentication.getName());
         return new PaymentRouteReplacement(current.getId(), replacement.getId(), target, response);
+    }
+
+    private void validateExpectedTargetPaymentProfile(
+            PaymentRouteChangeTarget target,
+            Long expectedTargetPaymentProfileId,
+            PaymentProfile profile
+    ) {
+        if (target != PaymentRouteChangeTarget.OWNER_TBANK) {
+            return;
+        }
+        if (expectedTargetPaymentProfileId == null || expectedTargetPaymentProfileId <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Обновите заказ и подтвердите актуального получателя банковского платежа"
+            );
+        }
+        if (profile == null || !Objects.equals(expectedTargetPaymentProfileId, profile.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Получатель банковского платежа уже изменился. Обновите заказ и повторите"
+            );
+        }
     }
 
     private void requireLiveRouteChangeEnabled() {
@@ -761,37 +804,38 @@ public class PaymentLinkService {
                     );
                 }
             } else {
+                // A started payment is already bound to its frozen provider/profile.
+                // Do not make continued access depend on the manager still being active.
+                if (canReuseStartedBankLink(link, amountKopecks)) {
+                    return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
+                }
+                if (canReuseFrozenPaymentRoute(link, amountKopecks)) {
+                    return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
+                }
+
+                // From here on we may replace or reconfigure the route. Lock and
+                // validate the manager only after Order and PaymentLinks are locked.
+                manager = paymentProfileService.lockManagerForRouting(manager);
                 profile = paymentProfileService.lockForRouting(
                         paymentProfileService.selectForManager(manager)
                 );
-            ensurePaymentProfile(link);
-            // Once T-Bank has returned a PaymentId, BANK_FORM versus SBP_QR is
-            // the customer's choice inside the same public payment link, not a
-            // change of the order's configured payment route. Keep returning
-            // that immutable provider binding while its amount is current.
-            // Creating (or even preparing) a replacement here would either
-            // produce a false "old requisites" conflict or risk a duplicate
-            // provider payment.
-            if (canReuseStartedBankLink(link, amountKopecks)) {
-                return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
-            }
-            PaymentLink candidate = preparedCandidate(order, manager, profile, amountKopecks, now, link.getId());
-            if (canReuseLink(link, candidate)) {
-                return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
-            }
-
-            if (canRetireStaleLink(link)) {
-                retireStaleReusableLink(link);
-                if (link.getContractorAllocationId() != null) {
-                    contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
+                PaymentLink candidate = preparedCandidate(order, manager, profile, amountKopecks, now, link.getId());
+                if (canReuseLink(link, candidate)) {
+                    return new PaymentInstructionPreparation(toManagerResponseWithShadowRoute(link), false);
                 }
-            } else {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "У заказа уже есть платеж в процессе по старым реквизитам или сумме. Проверьте платеж в журнале перед созданием нового счета."
-                );
+
+                if (canRetireStaleLink(link)) {
+                    retireStaleReusableLink(link);
+                    if (link.getContractorAllocationId() != null) {
+                        contractorPaymentLiveRoutingService.releaseClosedPaymentLink(link);
+                    }
+                } else {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "У заказа уже есть платеж в процессе по старым реквизитам или сумме. Проверьте платеж в журнале перед созданием нового счета."
+                    );
+                }
             }
-        }
         }
 
         if (lockedOrderLinks.stream().anyMatch(this::blocksCreationOfAnotherBankPayment)) {
@@ -801,8 +845,13 @@ public class PaymentLinkService {
             );
         }
 
+        if (profile == null) {
+            manager = paymentProfileService.lockManagerForRouting(manager);
+            profile = paymentProfileService.lockForRouting(
+                    paymentProfileService.selectForManager(manager)
+            );
+        }
         PaymentLink link = paymentLinkRepository.save(newPaymentLink(order, amountKopecks, now));
-        profile = paymentProfileService.lockForRouting(paymentProfileService.selectForManager(manager));
         if (configuredMode == InvoicePaymentMode.OWNER_TBANK) {
             requireLiveRouteChangeEnabled();
             prepareLivePaymentLinkSourceOrFail(link, now);
@@ -903,6 +952,21 @@ public class PaymentLinkService {
         return toManagerResponse(link);
     }
 
+    /**
+     * Rebuilds delivery text from the frozen payment-link/allocation route.
+     * Decrypted contractor requisites therefore never need to be copied into
+     * the notification outbox in plaintext.
+     */
+    @Transactional(readOnly = true)
+    public ManagerPaymentLinkResponse paymentRouteChangeNotificationDetails(Long paymentLinkId) {
+        if (paymentLinkId == null || paymentLinkId <= 0) {
+            return null;
+        }
+        return paymentLinkRepository.findById(paymentLinkId)
+                .map(this::toManagerResponse)
+                .orElse(null);
+    }
+
     private boolean shouldReserveShadowRoute(PaymentLink link) {
         return link != null
                 && link.getId() != null
@@ -937,6 +1001,7 @@ public class PaymentLinkService {
                     "У заказа уже есть платеж, требующий сверки. Бумажный счёт пока создать нельзя"
             );
         }
+        paymentProfileService.lockManagerForRouting(orderManager(order));
         PaymentLink link = newPaymentLink(order, amountKopecks, now);
         applyOwnerPaperInvoiceRoute(link);
         link = paymentLinkRepository.save(link);
@@ -1464,6 +1529,29 @@ public class PaymentLinkService {
                 && normalize(current.getManualPaymentUrl()).equals(normalize(candidate.getManualPaymentUrl()))
                 && normalize(current.getManualPaymentButtonLabel()).equals(normalize(candidate.getManualPaymentButtonLabel()))
                 && normalize(current.getManualComment()).equals(normalize(candidate.getManualComment()));
+    }
+
+    private boolean canReuseFrozenPaymentRoute(PaymentLink link, long currentAmountKopecks) {
+        if (link == null || link.getAmountKopecks() != currentAmountKopecks) {
+            return false;
+        }
+        Long reserved = link.getReservedAmountKopecks();
+        if (reserved != null && reserved != currentAmountKopecks) {
+            return false;
+        }
+        if (link.getPaymentMethod() == PaymentMethod.BANK_FORM
+                || link.getPaymentMethod() == PaymentMethod.SBP_QR) {
+            return (link.getPaymentProfile() != null && link.getPaymentProfile().getId() != null)
+                    || !normalize(link.getPaymentProfileCode()).isBlank()
+                    || !normalize(link.getTbankTerminalKey()).isBlank();
+        }
+        if (link.getPaymentMethod() == PaymentMethod.MANUAL_MOBILE_BANK
+                || link.getPaymentMethod() == PaymentMethod.MANUAL_EXTERNAL_LINK) {
+            return (link.getManualPaymentTask() != null && link.getManualPaymentTask().getId() != null)
+                    || (link.getPaymentProfile() != null && link.getPaymentProfile().getId() != null)
+                    || link.getContractorAllocationId() != null;
+        }
+        return false;
     }
 
     private boolean isFrozenContractorRoute(PaymentLink link) {
@@ -8638,6 +8726,7 @@ public class PaymentLinkService {
                 manualPaymentTypeName(link),
                 requisites.phone(),
                 requisites.recipientName(),
+                orderSpecialistName(order),
                 requisites.bankName(),
                 isManualPayment(link) ? requisites.paymentUrl() : "",
                 manualButtonLabel(link),
@@ -8819,6 +8908,11 @@ public class PaymentLinkService {
         return manager;
     }
 
+    private Long targetPaymentProfileId(Order order) {
+        PaymentProfile profile = paymentProfileService.selectForManagerForNewRoute(orderManager(order));
+        return profile == null ? null : profile.getId();
+    }
+
     private boolean shouldUseManualPayment(
             PaymentProfile profile,
             long amountKopecks,
@@ -8958,6 +9052,37 @@ public class PaymentLinkService {
             return "";
         }
         return manualRouteReadView(link).recipientName();
+    }
+
+    private String manualRouteRecipientContext(PaymentLink link, Order order) {
+        String specialist = orderSpecialistName(order);
+        String recipient = isFrozenContractorRoute(link)
+                ? contractorPaymentLiveRoutingService.activePaymentLinkRequisites(link)
+                    .map(ContractorPaymentRequisitesSnapshot::recipientName)
+                    .map(this::normalize)
+                    .orElse("")
+                : normalize(link == null ? null : link.getManualRecipientName());
+        if (recipient.isBlank()) {
+            recipient = specialist;
+        }
+        if (recipient.isBlank()) {
+            recipient = manualRecipientName(link);
+        }
+        if (specialist.isBlank()) {
+            return "Получатель: " + recipient;
+        }
+        if (recipient.equalsIgnoreCase(specialist)) {
+            return "Получатель и специалист: " + recipient;
+        }
+        return "Получатель: " + recipient + " · Специалист: " + specialist;
+    }
+
+    private String orderSpecialistName(Order order) {
+        User user = order == null || order.getWorker() == null
+                ? null
+                : order.getWorker().getUser();
+        String fio = normalize(user == null ? null : user.getFio());
+        return fio.isBlank() ? normalize(user == null ? null : user.getUsername()) : fio;
     }
 
     private ManualRouteReadView manualRouteReadView(PaymentLink link) {

@@ -53,6 +53,7 @@ import {
   manualPaymentTaskTargetValid
 } from '../../shared/manual-payment-task-target';
 import { ManualPaymentTaskOperationKeyDraft } from '../../shared/manual-payment-operation-key';
+import { manualPaymentTaskWorklist } from '../../shared/manual-payment-task-visibility';
 
 type DashboardAction = {
   label: string;
@@ -140,6 +141,7 @@ export class HomeComponent {
   readonly manualPaymentUrl = signal(DEFAULT_MANUAL_PAYMENT_URL);
   readonly manualPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly manualPaymentTasks = signal<ManualPaymentTaskResponse[]>([]);
+  readonly visibleManualPaymentTasks = computed(() => manualPaymentTaskWorklist(this.manualPaymentTasks()));
   readonly manualTaskLoading = signal(false);
   readonly manualTaskSaving = signal(false);
   readonly manualTaskMutatingId = signal<number | null>(null);

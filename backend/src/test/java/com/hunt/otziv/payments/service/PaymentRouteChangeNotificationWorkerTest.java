@@ -5,8 +5,11 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
+import com.hunt.otziv.payments.repository.PaymentRouteChangeNotificationOutboxRepository;
+import com.hunt.otziv.payments.repository.PaymentRouteChangeNotificationOutboxRepository.Delivery;
 import com.hunt.otziv.u_users.model.Manager;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,8 +18,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,6 +39,12 @@ class PaymentRouteChangeNotificationWorkerTest {
     private PaymentIssueReminderService paymentIssueReminderService;
 
     @Mock
+    private PaymentRouteChangeNotificationOutboxRepository outboxRepository;
+
+    @Mock
+    private PaymentLinkService paymentLinkService;
+
+    @Mock
     private Order order;
 
     @Mock
@@ -42,8 +55,12 @@ class PaymentRouteChangeNotificationWorkerTest {
 
     @Test
     void sendsReplacementDetailsToActiveClientChatWithCopyButton() {
-        ManagerPaymentLinkResponse payment = payment();
-        when(orderRepository.findByIdForMutation(8L)).thenReturn(Optional.of(order));
+        Delivery delivery = delivery(1);
+        when(outboxRepository.tryAcquire(eq(22L), anyString(), anyString(), any(Duration.class)))
+                .thenReturn(Optional.of(delivery));
+        when(orderRepository.findByIdForCounterUpdate(8L)).thenReturn(Optional.of(order));
+        when(outboxRepository.isCurrentReplacement(8L, 22L)).thenReturn(true);
+        when(paymentLinkService.paymentRouteChangeNotificationDetails(22L)).thenReturn(payment());
         when(order.getCompany()).thenReturn(company);
         when(order.getManager()).thenReturn(manager);
         when(manager.getClientId()).thenReturn("client");
@@ -52,17 +69,28 @@ class PaymentRouteChangeNotificationWorkerTest {
                 order, "client", "group", "По вашей просьбе способ оплаты изменен. Используйте новые реквизиты.\n\nПолный текст",
                 "Новые реквизиты оплаты", "89140000000"
         )).thenReturn(true);
+        when(outboxRepository.markSent(delivery)).thenReturn(true);
         PaymentRouteChangeNotificationWorker worker = worker();
 
-        worker.send(8L, 22L, payment);
+        worker.send(22L);
 
-        verifyNoInteractions(paymentIssueReminderService);
+        verify(outboxRepository).markSent(delivery);
+        verify(paymentIssueReminderService).resolveOrderIssue(
+                8L, "PAYMENT_ROUTE_CHANGE_DELIVERY", 22L
+        );
+        verify(paymentIssueReminderService, never()).notifyOrderIssue(
+                anyLong(), anyString(), anyLong(), anyString(), anyString()
+        );
     }
 
     @Test
     void createsManagerAndOwnerReminderWhenNewDetailsAreNotDelivered() {
-        ManagerPaymentLinkResponse payment = payment();
-        when(orderRepository.findByIdForMutation(8L)).thenReturn(Optional.of(order));
+        Delivery delivery = delivery(2);
+        when(outboxRepository.tryAcquire(eq(22L), anyString(), anyString(), any(Duration.class)))
+                .thenReturn(Optional.of(delivery));
+        when(orderRepository.findByIdForCounterUpdate(8L)).thenReturn(Optional.of(order));
+        when(outboxRepository.isCurrentReplacement(8L, 22L)).thenReturn(true);
+        when(paymentLinkService.paymentRouteChangeNotificationDetails(22L)).thenReturn(payment());
         when(order.getCompany()).thenReturn(company);
         when(order.getManager()).thenReturn(manager);
         when(manager.getClientId()).thenReturn("client");
@@ -71,10 +99,17 @@ class PaymentRouteChangeNotificationWorkerTest {
                 order, "client", "group", "По вашей просьбе способ оплаты изменен. Используйте новые реквизиты.\n\nПолный текст",
                 "Новые реквизиты оплаты", "89140000000"
         )).thenReturn(false);
+        when(outboxRepository.markFailed(
+                eq(delivery),
+                eq("Активный клиентский чат недоступен"),
+                any(Duration.class)
+        )).thenReturn(true);
         PaymentRouteChangeNotificationWorker worker = worker();
 
-        worker.send(8L, 22L, payment);
+        worker.send(22L);
 
+        verify(outboxRepository).markFailed(eq(delivery), eq("Активный клиентский чат недоступен"),
+                any(Duration.class));
         verify(paymentIssueReminderService).notifyOrderIssue(
                 eq(8L),
                 eq("PAYMENT_ROUTE_CHANGE_DELIVERY"),
@@ -84,10 +119,47 @@ class PaymentRouteChangeNotificationWorkerTest {
         );
     }
 
+    @Test
+    void neverSendsStaleReplacementAfterAnotherRouteChange() {
+        Delivery delivery = delivery(1);
+        when(outboxRepository.tryAcquire(eq(22L), anyString(), anyString(), any(Duration.class)))
+                .thenReturn(Optional.of(delivery));
+        when(orderRepository.findByIdForCounterUpdate(8L)).thenReturn(Optional.of(order));
+        when(outboxRepository.isCurrentReplacement(8L, 22L)).thenReturn(false);
+        when(outboxRepository.markSkipped(delivery, "replacement_payment_link_is_not_current"))
+                .thenReturn(true);
+
+        worker().send(22L);
+
+        verify(outboxRepository).markSkipped(delivery, "replacement_payment_link_is_not_current");
+        verifyNoInteractions(notificationService);
+        verifyNoInteractions(paymentIssueReminderService);
+    }
+
+    @Test
+    void enqueuePersistsSnapshotBeforeAnyDeliveryAttempt() {
+        ManagerPaymentLinkResponse payment = payment();
+        when(outboxRepository.enqueue(8L, 22L))
+                .thenReturn(true);
+
+        worker().enqueue(8L, 22L, payment);
+
+        verify(outboxRepository).enqueue(8L, 22L);
+        verifyNoInteractions(orderRepository, notificationService, paymentIssueReminderService);
+    }
+
     private PaymentRouteChangeNotificationWorker worker() {
         return new PaymentRouteChangeNotificationWorker(
-                orderRepository, notificationService, paymentIssueReminderService
+                orderRepository,
+                notificationService,
+                paymentIssueReminderService,
+                outboxRepository,
+                paymentLinkService
         );
+    }
+
+    private Delivery delivery(int attemptCount) {
+        return new Delivery(22L, 8L, attemptCount, "claim");
     }
 
     private ManagerPaymentLinkResponse payment() {

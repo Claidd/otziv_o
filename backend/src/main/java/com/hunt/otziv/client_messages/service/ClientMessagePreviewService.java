@@ -9,6 +9,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder;
 import com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder;
 import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.service.BankPaymentInstructionSource;
 import com.hunt.otziv.u_users.model.Manager;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
@@ -127,17 +128,17 @@ public class ClientMessagePreviewService {
         String paymentInstruction = managerPayText;
         String paymentLink = "";
         String tbankPaymentCopyText = "";
-        if (requiresTbankPaymentLink(template)) {
-            paymentLink = "[T-Bank ссылка будет создана при отправке]";
+        if (requiresBankPaymentLink(template)) {
+            paymentLink = "[банковская ссылка будет создана при отправке]";
             tbankPaymentCopyText = "[текст для оплаты будет создан при отправке]";
-            if (usesTbankPaymentInstructionSource() && isDefaultPaymentReminderTemplate(template)) {
+            if (usesBankPaymentInstructionSource() && isDefaultPaymentReminderTemplate(template)) {
                 return renderOrderTemplate(
                         "{companyAndFilial}\n\n{tbankPaymentCopyText}",
                         order,
                         Map.of("tbankPaymentCopyText", tbankPaymentCopyText)
                 );
             }
-            if (usesTbankPaymentInstructionSource()) {
+            if (usesBankPaymentInstructionSource()) {
                 paymentInstruction = "Ссылка на оплату: " + paymentLink;
             }
         }
@@ -180,8 +181,8 @@ public class ClientMessagePreviewService {
         );
     }
 
-    private boolean requiresTbankPaymentLink(String template) {
-        return usesTbankPaymentInstructionSource()
+    private boolean requiresBankPaymentLink(String template) {
+        return usesBankPaymentInstructionSource()
                 || containsVariable(template, "paymentLink")
                 || containsVariable(template, "tbankPaymentLink")
                 || containsVariable(template, "tbankPaymentCopyText");
@@ -191,8 +192,8 @@ public class ClientMessagePreviewService {
         return DEFAULT_PAYMENT_REMINDER_TEXT.equals(template);
     }
 
-    private boolean usesTbankPaymentInstructionSource() {
-        return "TBANK_LINK".equals(paymentInstructionSource());
+    private boolean usesBankPaymentInstructionSource() {
+        return BankPaymentInstructionSource.isBankLink(paymentInstructionSource());
     }
 
     private String paymentInstructionSource() {
@@ -200,9 +201,7 @@ public class ClientMessagePreviewService {
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
                 DEFAULT_PAYMENT_INSTRUCTION_SOURCE
         );
-        return "TBANK_LINK".equals((value == null ? "" : value.trim()).toUpperCase(Locale.ROOT))
-                ? "TBANK_LINK"
-                : DEFAULT_PAYMENT_INSTRUCTION_SOURCE;
+        return BankPaymentInstructionSource.normalize(value, DEFAULT_PAYMENT_INSTRUCTION_SOURCE);
     }
 
     private String paymentOverdueTargetStatus() {

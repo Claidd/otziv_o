@@ -7,6 +7,7 @@ import type {
   ManagerOption,
   OrderCardItem,
   OrderEditPayload,
+  PaymentRouteChangeRequest,
   OrderProductOption,
   OrderUpdateRequest
 } from '../../core/manager.api';
@@ -108,6 +109,7 @@ function createFacade(config: {
   const openedCompanies: string[] = [];
   let lastCreateRequest: CompanyOrderCreateRequest | null = null;
   let lastOrderRequest: OrderUpdateRequest | null = null;
+  let lastPaymentRouteRequest: PaymentRouteChangeRequest | null = null;
   const sourceCreatePayload = config.createPayload ?? createPayload();
   const sourceOrderPayload = config.orderPayload ?? orderPayload();
   const deps: ManagerBoardOrderFacadeDeps = {
@@ -158,10 +160,12 @@ function createFacade(config: {
           currentRecipient: 'Владелец',
           status: 'CREATED',
           canChange: true,
-          blockReason: ''
+          blockReason: '',
+          expectedTargetPaymentProfileId: 81
         });
       },
       changePaymentRoute: (orderId, request) => {
+        lastPaymentRouteRequest = request;
         calls.push(`change-payment-route:${orderId}:${request.target}:${request.expectedPaymentLinkId}`);
         return of({
           previousPaymentLinkId: request.expectedPaymentLinkId,
@@ -204,6 +208,9 @@ function createFacade(config: {
     },
     get lastOrderRequest() {
       return lastOrderRequest;
+    },
+    get lastPaymentRouteRequest() {
+      return lastPaymentRouteRequest;
     }
   };
 }
@@ -306,5 +313,16 @@ describe('ManagerBoardOrderFacade', () => {
     expect(state.toastMessages).toContain(
       'success:Способ оплаты изменен:Клиенту отправляется новый способ оплаты по заказу #30'
     );
+  });
+
+  it('freezes the selected manager bank when reissuing an owner bank link', () => {
+    const state = createFacade();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    state.facade.openOrderEdit(order({ id: 30 }));
+    state.facade.openPaymentRouteChange();
+    state.facade.changePaymentRoute('OWNER_TBANK');
+
+    expect(state.lastPaymentRouteRequest?.expectedTargetPaymentProfileId).toBe(81);
   });
 });

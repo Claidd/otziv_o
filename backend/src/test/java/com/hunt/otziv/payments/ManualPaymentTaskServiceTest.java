@@ -129,7 +129,9 @@ class ManualPaymentTaskServiceTest {
         when(manager.getUser()).thenReturn(user);
         when(user.getFio()).thenReturn("Менеджер");
         when(user.getUsername()).thenReturn("manager");
+        when(paymentProfileService.lockManagerForRouting(manager)).thenReturn(manager);
         when(paymentProfileService.selectForManager(manager)).thenReturn(bankProfile);
+        when(paymentProfileService.lockForRouting(bankProfile)).thenReturn(bankProfile);
         when(bankProfile.getId()).thenReturn(9L);
         when(bankProfile.getName()).thenReturn("Основные реквизиты");
         when(accountingTargetPolicy.resolveForManagement(
@@ -209,6 +211,8 @@ class ManualPaymentTaskServiceTest {
         assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
         verify(taskRepository, org.mockito.Mockito.times(1)).save(any(ManualPaymentTask.class));
         verify(contractorPaymentAccountingPhaseService).lockCurrent();
+        verify(paymentProfileService).lockManagerForRouting(manager);
+        verify(paymentProfileService).lockForRouting(bankProfile);
         InOrder creationOrder = inOrder(
                 contractorPaymentAccountingPhaseService,
                 accountingTargetPolicy,
@@ -223,6 +227,55 @@ class ManualPaymentTaskServiceTest {
                 null
         );
         creationOrder.verify(taskRepository).save(any(ManualPaymentTask.class));
+    }
+
+    @Test
+    void newTaskFailsClosedWhenAssignedManagerIsNotEligible() {
+        com.hunt.otziv.u_users.model.Manager manager =
+                org.mockito.Mockito.mock(com.hunt.otziv.u_users.model.Manager.class);
+        when(managerRepository.findByIdWithPaymentProfile(5L)).thenReturn(Optional.of(manager));
+        when(manager.getId()).thenReturn(5L);
+        ManualPaymentTaskCreationRequest creation = new ManualPaymentTaskCreationRequest();
+        when(taskCreationRequestRepository.insertIfAbsent(
+                org.mockito.ArgumentMatchers.eq("task-create-inactive"),
+                org.mockito.ArgumentMatchers.anyString()
+        )).thenAnswer(invocation -> {
+            creation.setOperationKey("task-create-inactive");
+            creation.setPayloadHash(invocation.getArgument(1));
+            return 1;
+        });
+        when(taskCreationRequestRepository.findByOperationKeyForUpdate("task-create-inactive"))
+                .thenReturn(Optional.of(creation));
+        when(paymentProfileService.lockManagerForRouting(manager)).thenThrow(
+                new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Для создания нового платежа назначьте активного менеджера с ролью менеджера"
+                )
+        );
+        CreateManualPaymentTaskRequest request = new CreateManualPaymentTaskRequest(
+                5L,
+                ManualPaymentType.MOBILE_BANK.name(),
+                "+79990000000",
+                "Наталья",
+                "",
+                "Перейти к оплате",
+                100_000L,
+                "Тест",
+                ManualPaymentTaskAccountingTargetKind.EXTERNAL_TASK.name(),
+                null,
+                false,
+                "task-create-inactive"
+        );
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createManagementTask(request, "admin")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(taskRepository, never()).save(any(ManualPaymentTask.class));
+        verify(contractorPaymentAccountingPhaseService, never()).lockCurrent();
+        org.mockito.Mockito.verifyNoInteractions(accountingTargetPolicy);
     }
 
     @Test

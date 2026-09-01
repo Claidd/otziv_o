@@ -34,15 +34,22 @@ public class PaymentRouteChangeService {
                         request.expectedPaymentLinkId(),
                         request.target(),
                         request.confirmedUnpaid(),
+                        request.expectedTargetPaymentProfileId(),
                         authentication
                 );
         Runnable notification = replacement.response() == null
                 ? null
-                : () -> notificationWorker.send(
-                        orderId,
-                        replacement.paymentLinkId(),
-                        replacement.response()
-                );
+                : () -> notificationWorker.send(replacement.paymentLinkId());
+        if (notification != null) {
+            // This insert participates in the route-change transaction.  The
+            // scheduler can therefore recover a committed replacement even if
+            // the process dies before afterCommit executes.
+            notificationWorker.enqueue(
+                    orderId,
+                    replacement.paymentLinkId(),
+                    replacement.response()
+            );
+        }
         if (notification != null && TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override

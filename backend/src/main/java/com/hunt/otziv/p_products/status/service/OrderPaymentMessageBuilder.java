@@ -5,9 +5,9 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
+import com.hunt.otziv.payments.service.BankPaymentInstructionSource;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import java.math.BigDecimal;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
@@ -18,8 +18,6 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class OrderPaymentMessageBuilder {
 
-    private static final String PAYMENT_SOURCE_TBANK_LINK = "TBANK_LINK";
-    private static final String PAYMENT_SOURCE_MANAGER_TEXT = "MANAGER_TEXT";
     private static final String RECOVERY_PRODUCT_TITLE = "Восстановление";
 
     private final AppSettingService appSettingService;
@@ -31,7 +29,7 @@ public class OrderPaymentMessageBuilder {
     }
 
     public PreparedPaymentMessage publishedOrderPaymentMessageWithTransfer(Order order) {
-        if (usesTbankPaymentInstructionSource()) {
+        if (usesBankPaymentInstructionSource()) {
             ManagerPaymentLinkResponse link = paymentLink(order);
             return new PreparedPaymentMessage(link.copyText(), link.telegramCopyTransferNumber());
         }
@@ -45,12 +43,12 @@ public class OrderPaymentMessageBuilder {
 
     /** Read-only preview that shares the factual amount and recipient renderer. */
     public String publishedOrderPaymentMessagePreview(Order order) {
-        if (!usesTbankPaymentInstructionSource()) {
+        if (!usesBankPaymentInstructionSource()) {
             return publishedOrderPaymentMessage(order);
         }
         String heading = orderHeading(order);
         String paymentText = "К оплате: " + money(payableSum(order))
-                + " руб.\n\n[T-Bank ссылка будет создана при отправке]";
+                + " руб.\n\n[банковская ссылка будет создана при отправке]";
         return heading.isBlank() ? paymentText : heading + "\n\n" + paymentText;
     }
 
@@ -72,18 +70,18 @@ public class OrderPaymentMessageBuilder {
         } catch (Exception e) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Не удалось подготовить ссылку T-Bank для заказа #" + (order == null ? "-" : order.getId()) + ": " + readableException(e),
+                    "Не удалось подготовить банковскую ссылку для заказа #" + (order == null ? "-" : order.getId()) + ": " + readableException(e),
                     e
             );
         }
     }
 
-    private boolean usesTbankPaymentInstructionSource() {
+    private boolean usesBankPaymentInstructionSource() {
         String source = appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
-                PAYMENT_SOURCE_MANAGER_TEXT
+                BankPaymentInstructionSource.MANAGER_TEXT
         );
-        return PAYMENT_SOURCE_TBANK_LINK.equals((source == null ? "" : source.trim()).toUpperCase(Locale.ROOT));
+        return BankPaymentInstructionSource.isBankLink(source);
     }
 
     private String managerPayText(Order order) {

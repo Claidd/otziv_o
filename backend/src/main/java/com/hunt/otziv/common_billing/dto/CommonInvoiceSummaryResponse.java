@@ -36,6 +36,7 @@ public record CommonInvoiceSummaryResponse(
         String paymentRouteType,
         String paymentRouteProvider,
         String paymentRouteProfileName,
+        String paymentRouteRecipient,
         Long paymentRouteManualTaskId,
         boolean contractorPaymentRoute,
         LocalDateTime paymentRouteSelectedAt,
@@ -62,7 +63,7 @@ public record CommonInvoiceSummaryResponse(
                 sentAt, lastReminderAt, nextReminderAt, closedAt, closedBy, closeReason, lastError,
                 paymentSuccessNotificationError, tbankOrderId, tbankPaymentId,
                 tbankPaymentAmountKopecks, tbankTerminalLabel, tbankTerminalKey, paymentRouteType,
-                null, paymentRouteProfileName, paymentRouteManualTaskId, contractorPaymentRoute,
+                null, paymentRouteProfileName, null, paymentRouteManualTaskId, contractorPaymentRoute,
                 paymentRouteSelectedAt, invoicePurpose, supersedesInvoiceId,
                 "AUTO_ROUTING", null);
     }

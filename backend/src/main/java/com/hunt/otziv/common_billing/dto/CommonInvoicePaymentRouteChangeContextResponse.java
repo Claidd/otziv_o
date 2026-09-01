@@ -1,14 +1,18 @@
 package com.hunt.otziv.common_billing.dto;
 
-import com.hunt.otziv.payments.dto.PaymentRouteChangeTarget;
-
 public record CommonInvoicePaymentRouteChangeContextResponse(
         String currentRoute,
-        PaymentRouteChangeTarget currentTarget,
+        CommonInvoicePaymentRouteChangeTarget currentTarget,
         String currentRecipient,
         String status,
         boolean canChange,
         String blockReason,
-        String paymentEvidenceToken
+        String paymentEvidenceToken,
+        Long currentPaymentProfileId,
+        Long ownerBankTargetPaymentProfileId,
+        String ownerBankTargetPaymentProfileName,
+        String ownerBankTargetProvider,
+        boolean canReissueOwnerBank,
+        String ownerBankReissueBlockReason
 ) {
 }

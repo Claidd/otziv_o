@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -241,6 +242,18 @@ class ContractorPaymentRuntimeSwitchTest {
                         "Подготовка неизменяемого снимка маршрута выключена",
                         "Клиентские сообщения не настроены на платежную ссылку"
                 );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"TBANK_LINK", "BANK_LINK", "TOCHKA_LINK"})
+    void clientFacingRoutingAcceptsEveryBankLinkAlias(String source) {
+        when(appSettingService.getStringFresh(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
+                ""
+        )).thenReturn(source);
+
+        assertThat(runtimeSwitch.routingConfigurationBlockers())
+                .doesNotContain("Клиентские сообщения не настроены на платежную ссылку");
     }
 
     @Test
