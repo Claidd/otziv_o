@@ -46,6 +46,15 @@ if ($LASTEXITCODE -ne 0 -or $base -notmatch '^[0-9a-f]{40}$') {
     throw 'Unable to resolve the deploy snapshot base revision.'
 }
 
+& git --no-replace-objects -C $root merge-base --is-ancestor $base $headRevision 2>$null
+$baseAncestryExitCode = $LASTEXITCODE
+if ($baseAncestryExitCode -eq 1) {
+    throw 'Deploy snapshot base revision is not an ancestor of the prepared snapshot.'
+}
+if ($baseAncestryExitCode -ne 0) {
+    throw 'Unable to verify deploy snapshot base ancestry.'
+}
+
 $changedFiles = @(& git -C $root diff --name-only --diff-filter=ACDMRTUXB $base $headRevision)
 if ($LASTEXITCODE -ne 0 -or $changedFiles.Count -eq 0) {
     throw 'Prepared deploy snapshot has no verifiable changes.'

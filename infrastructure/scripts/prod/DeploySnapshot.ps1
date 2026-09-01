@@ -30,11 +30,165 @@ function Invoke-OtzivSnapshotGitText {
         [Parameter(Mandatory = $true)][string]$FailureMessage
     )
 
-    $output = @(& git -C $Repository @Arguments 2>&1)
-    if ($LASTEXITCODE -ne 0) {
+    $result = Invoke-OtzivSnapshotGit -Repository $Repository -Arguments $Arguments
+    if ($result.ExitCode -ne 0) {
         throw $FailureMessage
     }
-    return ($output -join [Environment]::NewLine).Trim()
+    return (($result.Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine).Trim()
+}
+
+function Invoke-OtzivSnapshotGit {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    # Windows PowerShell 5.1 turns redirected native stderr into ErrorRecord
+    # objects. Under the deploy script's ErrorActionPreference=Stop that can
+    # throw before LASTEXITCODE is inspected. Keep native failures as explicit
+    # result data so every caller can fail closed with its own stable message.
+    $previousErrorActionPreference = $ErrorActionPreference
+    $nativePreference = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+    try {
+        $ErrorActionPreference = 'Continue'
+        if ($null -ne $nativePreference) {
+            Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $false -Scope Local
+        }
+        $output = @(& git --no-replace-objects -C $Repository @Arguments 2>&1)
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        if ($null -ne $nativePreference) {
+            Set-Variable -Name PSNativeCommandUseErrorActionPreference -Value $nativePreference.Value -Scope Local
+        }
+    }
+
+    return [pscustomobject]@{
+        ExitCode = $exitCode
+        Output = [object[]]@($output)
+    }
+}
+
+function Get-OtzivExactCommitRevision {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string]$Revision,
+        [Parameter(Mandatory = $true)][string]$FailureMessage
+    )
+
+    $resolved = Invoke-OtzivSnapshotGitText -Repository $Repository `
+        -Arguments @('rev-parse', '--verify', "${Revision}^{commit}") `
+        -FailureMessage $FailureMessage
+    if ($resolved -notmatch '^[0-9a-f]{40}$') {
+        throw $FailureMessage
+    }
+    return $resolved
+}
+
+function Update-OtzivProductionMainRevision {
+    param([Parameter(Mandatory = $true)][string]$Repository)
+
+    $fetchResult = Invoke-OtzivSnapshotGit -Repository $Repository `
+        -Arguments @('fetch', '--quiet', '--no-tags', 'origin',
+            '+refs/heads/main:refs/remotes/origin/main')
+    if ($fetchResult.ExitCode -ne 0) {
+        throw 'Unable to fetch the protected production branch origin/main. Production deployment remains blocked.'
+    }
+
+    return Get-OtzivExactCommitRevision -Repository $Repository `
+        -Revision 'refs/remotes/origin/main' `
+        -FailureMessage 'Unable to resolve the protected production branch origin/main. Production deployment remains blocked.'
+}
+
+function Assert-OtzivProductionMainRevisionUnchanged {
+    param(
+        [Parameter(Mandatory = $true)][string]$SelectedRevision,
+        [Parameter(Mandatory = $true)][string]$RefreshedRevision
+    )
+
+    if ($SelectedRevision -notmatch '^[0-9a-f]{40}$' -or
+        $RefreshedRevision -notmatch '^[0-9a-f]{40}$') {
+        throw 'Production-main stability verification requires exact 40-character Git revisions.'
+    }
+    if ($SelectedRevision -cne $RefreshedRevision) {
+        throw "Protected origin/main advanced from $SelectedRevision to $RefreshedRevision while the deploy snapshot was being prepared. Restart deployment from the updated main line."
+    }
+}
+
+function Assert-OtzivDeployRevisionContainsProductionMain {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string]$ProductionMainRevision,
+        [Parameter(Mandatory = $true)][string]$DeployRevision
+    )
+
+    if ($ProductionMainRevision -notmatch '^[0-9a-f]{40}$' -or
+        $DeployRevision -notmatch '^[0-9a-f]{40}$') {
+        throw 'Production lineage verification requires exact 40-character Git revisions.'
+    }
+
+    $resolvedProductionMain = Get-OtzivExactCommitRevision -Repository $Repository `
+        -Revision $ProductionMainRevision `
+        -FailureMessage 'The protected production-main revision is unavailable. Production deployment remains blocked.'
+    $resolvedDeployRevision = Get-OtzivExactCommitRevision -Repository $Repository `
+        -Revision $DeployRevision `
+        -FailureMessage 'The requested deploy revision is unavailable. Production deployment remains blocked.'
+
+    $ancestryResult = Invoke-OtzivSnapshotGit -Repository $Repository `
+        -Arguments @('merge-base', '--is-ancestor', $resolvedProductionMain, $resolvedDeployRevision)
+    $ancestryExitCode = $ancestryResult.ExitCode
+    if ($ancestryExitCode -eq 0) {
+        return
+    }
+    if ($ancestryExitCode -eq 1) {
+        throw "Deploy revision $resolvedDeployRevision does not contain protected origin/main revision $resolvedProductionMain. Update or rebase the worktree before deploying."
+    }
+    throw 'Unable to verify production Git ancestry. Production deployment remains blocked.'
+}
+
+function Assert-OtzivPreparedDeploySnapshotState {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string]$ExpectedRevision
+    )
+
+    if ($ExpectedRevision -notmatch '^[0-9a-f]{40}$') {
+        throw 'Prepared deploy snapshot state requires one exact expected revision.'
+    }
+    $resolvedExpectedRevision = Get-OtzivExactCommitRevision -Repository $Repository `
+        -Revision $ExpectedRevision `
+        -FailureMessage 'Prepared deploy snapshot expected revision is unavailable.'
+    $headRevision = Get-OtzivExactCommitRevision -Repository $Repository `
+        -Revision 'HEAD' `
+        -FailureMessage 'Unable to resolve the prepared deploy snapshot HEAD revision.'
+    if ($headRevision -cne $resolvedExpectedRevision) {
+        throw "Prepared deploy snapshot HEAD changed from $resolvedExpectedRevision to $headRevision. Production deployment remains blocked."
+    }
+
+    $statusResult = Invoke-OtzivSnapshotGit -Repository $Repository `
+        -Arguments @('status', '--porcelain', '--untracked-files=all', '--ignored=matching')
+    if ($statusResult.ExitCode -ne 0) {
+        throw 'Unable to verify prepared deploy snapshot cleanliness. Production deployment remains blocked.'
+    }
+    $changes = @($statusResult.Output | Where-Object {
+            -not [string]::IsNullOrWhiteSpace([string]$_)
+        })
+    if ($changes.Count -gt 0) {
+        throw 'Prepared deploy snapshot worktree changed after it was materialized or validated. Production deployment remains blocked.'
+    }
+
+    $indexFlagsResult = Invoke-OtzivSnapshotGit -Repository $Repository `
+        -Arguments @('ls-files', '-v')
+    if ($indexFlagsResult.ExitCode -ne 0) {
+        throw 'Unable to verify prepared deploy snapshot index flags. Production deployment remains blocked.'
+    }
+    $unsafeIndexFlags = @($indexFlagsResult.Output | Where-Object {
+            [string]$_ -cmatch '^(?:[a-z]|S) '
+        })
+    if ($unsafeIndexFlags.Count -gt 0) {
+        throw 'Prepared deploy snapshot contains assume-unchanged or skip-worktree files. Production deployment remains blocked.'
+    }
+    return $headRevision
 }
 
 function Get-OtzivDeployChanges {
@@ -43,11 +197,12 @@ function Get-OtzivDeployChanges {
         [Parameter(Mandatory = $true)][string[]]$InputPaths
     )
 
-    $output = @(& git -C $Repository status --porcelain --untracked-files=all -- @InputPaths)
-    if ($LASTEXITCODE -ne 0) {
+    $arguments = @('status', '--porcelain', '--untracked-files=all', '--') + $InputPaths
+    $result = Invoke-OtzivSnapshotGit -Repository $Repository -Arguments $arguments
+    if ($result.ExitCode -ne 0) {
         throw 'Unable to inspect deployment inputs.'
     }
-    return @($output | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    return @($result.Output | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
 }
 
 function New-OtzivDeploySnapshot {
@@ -57,12 +212,9 @@ function New-OtzivDeploySnapshot {
     )
 
     $repositoryRoot = [IO.Path]::GetFullPath($Repository)
-    $baseRevision = Invoke-OtzivSnapshotGitText -Repository $repositoryRoot `
-        -Arguments @('rev-parse', '--verify', 'HEAD^{commit}') `
+    $baseRevision = Get-OtzivExactCommitRevision -Repository $repositoryRoot `
+        -Revision 'HEAD' `
         -FailureMessage 'Unable to resolve the deploy snapshot base revision.'
-    if ($baseRevision -notmatch '^[0-9a-f]{40}$') {
-        throw 'Deploy snapshot base did not resolve to one exact Git commit.'
-    }
 
     $temporaryIndex = Join-Path ([IO.Path]::GetTempPath()) ("otziv-deploy-index-" + [Guid]::NewGuid().ToString('N'))
     $previousIndex = [Environment]::GetEnvironmentVariable('GIT_INDEX_FILE')
@@ -85,9 +237,11 @@ function New-OtzivDeploySnapshot {
             -Arguments @('read-tree', $baseRevision) `
             -FailureMessage 'Unable to initialize the isolated deploy snapshot index.')
 
-        $addOutput = @(& git -C $repositoryRoot add -A -- @InputPaths 2>&1)
-        if ($LASTEXITCODE -ne 0) {
-            throw "Unable to add deployment inputs to the isolated snapshot index:`n$($addOutput -join [Environment]::NewLine)"
+        $addResult = Invoke-OtzivSnapshotGit -Repository $repositoryRoot `
+            -Arguments (@('add', '-A', '--') + $InputPaths)
+        if ($addResult.ExitCode -ne 0) {
+            $addOutputText = (($addResult.Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine)
+            throw "Unable to add deployment inputs to the isolated snapshot index:`n$addOutputText"
         }
 
         $changedText = Invoke-OtzivSnapshotGitText -Repository $repositoryRoot `

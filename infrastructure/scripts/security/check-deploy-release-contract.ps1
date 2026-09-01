@@ -36,6 +36,7 @@ $whatsappChromiumLaunch = [IO.File]::ReadAllText($whatsappChromiumLaunchPath)
 $whatsappChromiumSmoke = [IO.File]::ReadAllText($whatsappChromiumSmokePath)
 $buildCompose = [IO.File]::ReadAllText($buildComposePath)
 $productionCompose = [IO.File]::ReadAllText($productionComposePath)
+. $snapshotPath
 
 function Assert-Match {
     param([string]$Text, [string]$Pattern, [string]$Message)
@@ -96,6 +97,219 @@ function Get-LocalNodeDependencyClosure {
     return @($visited)
 }
 
+function Invoke-DeployLineageTestGit {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $output = @(& git -C $Repository @Arguments 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Deploy-lineage test Git command failed: git -C $Repository $($Arguments -join ' ')"
+    }
+    return ($output -join [Environment]::NewLine).Trim()
+}
+
+function Assert-DeployLineageRejected {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string]$ProductionMainRevision,
+        [Parameter(Mandatory = $true)][string]$DeployRevision,
+        [Parameter(Mandatory = $true)][string]$Scenario
+    )
+
+    try {
+        Assert-OtzivDeployRevisionContainsProductionMain -Repository $Repository `
+            -ProductionMainRevision $ProductionMainRevision `
+            -DeployRevision $DeployRevision
+    } catch {
+        if ($_.Exception.Message -notlike 'Deploy revision * does not contain protected origin/main revision *') {
+            throw
+        }
+        return
+    }
+    throw "Production lineage guard accepted a $Scenario deploy revision."
+}
+
+function Assert-PreparedSnapshotStateRejected {
+    param(
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][string]$ExpectedRevision,
+        [Parameter(Mandatory = $true)][string]$ExpectedMessagePattern,
+        [Parameter(Mandatory = $true)][string]$Scenario
+    )
+
+    try {
+        [void](Assert-OtzivPreparedDeploySnapshotState -Repository $Repository `
+                -ExpectedRevision $ExpectedRevision)
+    } catch {
+        if ($_.Exception.Message -notlike $ExpectedMessagePattern) {
+            throw
+        }
+        return
+    }
+    throw "Prepared snapshot state guard accepted $Scenario."
+}
+
+function Test-DeployLineageGuard {
+    $testRoot = Join-Path ([IO.Path]::GetTempPath()) ("otziv-deploy-lineage-contract-" + [Guid]::NewGuid().ToString('N'))
+    $remoteRepository = Join-Path $testRoot 'origin.git'
+    $workingRepository = Join-Path $testRoot 'work'
+    New-Item -ItemType Directory -Path $testRoot | Out-Null
+    try {
+        [void](Invoke-DeployLineageTestGit -Repository $testRoot -Arguments @('init', '--quiet', '--bare', $remoteRepository))
+        [void](Invoke-DeployLineageTestGit -Repository $testRoot -Arguments @('init', '--quiet', '-b', 'main', $workingRepository))
+        Set-Content -LiteralPath (Join-Path $workingRepository 'tracked-sentinel.txt') `
+            -Value 'tracked' -Encoding Ascii
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('add', '--', 'tracked-sentinel.txt'))
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('-c', 'user.name=Otziv Contract', '-c', 'user.email=contract@local.invalid',
+                'commit', '--quiet', '-m', 'base'))
+        $baseRevision = Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('rev-parse', 'HEAD')
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('remote', 'add', 'origin', $remoteRepository))
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('push', '--quiet', '-u', 'origin', 'main'))
+
+        $protectedBase = Update-OtzivProductionMainRevision -Repository $workingRepository
+        if ($protectedBase -cne $baseRevision) {
+            throw 'Production lineage guard did not pin the exact fetched origin/main revision.'
+        }
+        Assert-OtzivDeployRevisionContainsProductionMain -Repository $workingRepository `
+            -ProductionMainRevision $protectedBase `
+            -DeployRevision $baseRevision
+
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('-c', 'user.name=Otziv Contract', '-c', 'user.email=contract@local.invalid',
+                'commit', '--quiet', '--allow-empty', '-m', 'ahead'))
+        $aheadRevision = Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('rev-parse', 'HEAD')
+        Assert-OtzivDeployRevisionContainsProductionMain -Repository $workingRepository `
+            -ProductionMainRevision $protectedBase `
+            -DeployRevision $aheadRevision
+        [void](Assert-OtzivPreparedDeploySnapshotState -Repository $workingRepository `
+                -ExpectedRevision $aheadRevision)
+
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('checkout', '--quiet', '-b', 'post-validator-mutation', $aheadRevision))
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('-c', 'user.name=Otziv Contract', '-c', 'user.email=contract@local.invalid',
+                'commit', '--quiet', '--allow-empty', '-m', 'mutated after validator'))
+        Assert-PreparedSnapshotStateRejected -Repository $workingRepository `
+            -ExpectedRevision $aheadRevision `
+            -ExpectedMessagePattern 'Prepared deploy snapshot HEAD changed from * to *' `
+            -Scenario 'a descendant commit created after validation'
+
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('checkout', '--quiet', 'main'))
+        $dirtyMutationPath = Join-Path $workingRepository 'post-validator-mutation.txt'
+        Set-Content -LiteralPath $dirtyMutationPath -Value 'mutation' -Encoding Ascii
+        Assert-PreparedSnapshotStateRejected -Repository $workingRepository `
+            -ExpectedRevision $aheadRevision `
+            -ExpectedMessagePattern 'Prepared deploy snapshot worktree changed after it was materialized or validated.*' `
+            -Scenario 'an uncommitted mutation created after validation'
+        Remove-Item -LiteralPath $dirtyMutationPath -Force
+        [void](Assert-OtzivPreparedDeploySnapshotState -Repository $workingRepository `
+                -ExpectedRevision $aheadRevision)
+
+        $ignoredMutationPath = Join-Path $workingRepository 'ignored-mutation.yaml'
+        Add-Content -LiteralPath (Join-Path $workingRepository '.git\info\exclude') `
+            -Value '*.yaml' -Encoding Ascii
+        Set-Content -LiteralPath $ignoredMutationPath -Value 'ignored mutation' -Encoding Ascii
+        Assert-PreparedSnapshotStateRejected -Repository $workingRepository `
+            -ExpectedRevision $aheadRevision `
+            -ExpectedMessagePattern 'Prepared deploy snapshot worktree changed after it was materialized or validated.*' `
+            -Scenario 'an ignored file created after validation'
+        Remove-Item -LiteralPath $ignoredMutationPath -Force
+
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('update-index', '--assume-unchanged', '--', 'tracked-sentinel.txt'))
+        Assert-PreparedSnapshotStateRejected -Repository $workingRepository `
+            -ExpectedRevision $aheadRevision `
+            -ExpectedMessagePattern 'Prepared deploy snapshot contains assume-unchanged or skip-worktree files.*' `
+            -Scenario 'an assume-unchanged index entry'
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('update-index', '--no-assume-unchanged', '--', 'tracked-sentinel.txt'))
+        [void](Assert-OtzivPreparedDeploySnapshotState -Repository $workingRepository `
+                -ExpectedRevision $aheadRevision)
+
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('push', '--quiet', 'origin', 'main'))
+        $protectedAhead = Update-OtzivProductionMainRevision -Repository $workingRepository
+        if ($protectedAhead -cne $aheadRevision) {
+            throw 'Production lineage guard did not refresh origin/main before checking ancestry.'
+        }
+        Assert-OtzivProductionMainRevisionUnchanged `
+            -SelectedRevision $protectedAhead `
+            -RefreshedRevision $protectedAhead
+        $preparedAdvanceRejected = $false
+        try {
+            Assert-OtzivProductionMainRevisionUnchanged `
+                -SelectedRevision $protectedBase `
+                -RefreshedRevision $protectedAhead
+        } catch {
+            if ($_.Exception.Message -notlike 'Protected origin/main advanced from * to * while the deploy snapshot was being prepared.*') {
+                throw
+            }
+            $preparedAdvanceRejected = $true
+        }
+        if (-not $preparedAdvanceRejected) {
+            throw 'Prepared deployment did not reject origin/main advancing after its immutable revision was selected.'
+        }
+
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('checkout', '--quiet', '--detach', $baseRevision))
+        Assert-DeployLineageRejected -Repository $workingRepository `
+            -ProductionMainRevision $protectedAhead `
+            -DeployRevision $baseRevision `
+            -Scenario 'behind'
+
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('checkout', '--quiet', '-b', 'divergent', $baseRevision))
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('-c', 'user.name=Otziv Contract', '-c', 'user.email=contract@local.invalid',
+                'commit', '--quiet', '--allow-empty', '-m', 'divergent'))
+        $divergentRevision = Invoke-DeployLineageTestGit -Repository $workingRepository -Arguments @('rev-parse', 'HEAD')
+        Assert-DeployLineageRejected -Repository $workingRepository `
+            -ProductionMainRevision $protectedAhead `
+            -DeployRevision $divergentRevision `
+            -Scenario 'divergent'
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('replace', '--graft', $divergentRevision, $protectedAhead))
+        Assert-DeployLineageRejected -Repository $workingRepository `
+            -ProductionMainRevision $protectedAhead `
+            -DeployRevision $divergentRevision `
+            -Scenario 'divergent with a local replacement parent'
+        $validatorRejectedDivergentBase = $false
+        try {
+            & $snapshotValidatorPath -RepoRoot $workingRepository -BaseRevision $protectedAhead
+        } catch {
+            if ($_.Exception.Message -ne 'Deploy snapshot base revision is not an ancestor of the prepared snapshot.') {
+                throw
+            }
+            $validatorRejectedDivergentBase = $true
+        }
+        if (-not $validatorRejectedDivergentBase) {
+            throw 'Deploy snapshot validator accepted a divergent base revision.'
+        }
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('replace', '-d', $divergentRevision))
+
+        [void](Invoke-DeployLineageTestGit -Repository $workingRepository `
+            -Arguments @('remote', 'set-url', 'origin', (Join-Path $testRoot 'missing-origin.git')))
+        try {
+            [void](Update-OtzivProductionMainRevision -Repository $workingRepository)
+        } catch {
+            if ($_.Exception.Message -ne 'Unable to fetch the protected production branch origin/main. Production deployment remains blocked.') {
+                throw
+            }
+            Write-Host 'Deploy lineage regression succeeded. Current/ahead accepted; behind/divergent/replaced ancestry, advanced prepared main, post-validator mutations, and fetch failure rejected.'
+            return
+        }
+        throw 'Production lineage guard did not fail closed when origin/main could not be fetched.'
+    } finally {
+        if (Test-Path -LiteralPath $testRoot) {
+            Remove-Item -LiteralPath $testRoot -Recurse -Force
+        }
+    }
+}
+
+Test-DeployLineageGuard
+
 $workerBuildBlocks = [regex]::Matches($buildCompose, '(?m)^  external-review-worker:\s*$')
 if ($workerBuildBlocks.Count -ne 1) {
     throw "docker-compose.build.yaml must define external-review-worker exactly once; found $($workerBuildBlocks.Count)."
@@ -115,6 +329,19 @@ Assert-Order $deploy 'wait_service_healthy app 1200' '--remove-orphans --no-deps
 Assert-Match $deploy 'if \[ "`\$deploy_external_review_worker" = "1" \]; then[\s\S]{0,150}compose --profile external-review up -d --remove-orphans --no-deps dozzle alloy[\s\S]{0,100}else[\s\S]{0,100}compose up -d --remove-orphans --no-deps dozzle alloy' 'Orphan cleanup must preserve the opted-in worker profile.'
 Assert-Match $deploy 'set_env EXTERNAL_REVIEW_CHECK_ENABLED "true"[\s\S]{0,100}set_env EXTERNAL_REVIEW_CHECK_ENABLED "false"' 'Production deploy must persist the backend hard switch consistently with the worker opt-in.'
 Assert-Match $deploy 'Join-Path \$scriptRoot ''DeploySnapshot\.ps1''' 'Production deploy must load the isolated automatic snapshot implementation.'
+Assert-Match $snapshot '@\(''fetch'', ''--quiet'', ''--no-tags'', ''origin''[\s\S]{0,100}\+refs/heads/main:refs/remotes/origin/main' 'Production deploy must fetch the exact protected origin/main ref before selecting a release.'
+Assert-Match $snapshot 'Windows PowerShell 5\.1[\s\S]{0,500}\$ErrorActionPreference = ''Continue''[\s\S]{0,500}PSNativeCommandUseErrorActionPreference' 'Native Git capture must preserve explicit exit-code handling under Windows PowerShell 5.1 and modern pwsh.'
+Assert-Match $snapshot '\$fetchResult = Invoke-OtzivSnapshotGit[\s\S]{0,200}\$fetchResult\.ExitCode -ne 0' 'A failed production-main fetch must use the cross-PowerShell native result wrapper and fail closed.'
+Assert-Match $snapshot '@\(''merge-base'', ''--is-ancestor'', \$resolvedProductionMain, \$resolvedDeployRevision\)' 'Production lineage verification must use Git ancestry rather than timestamps or branch names.'
+Assert-Match $snapshot 'git --no-replace-objects -C \$Repository' 'Production Git verification must ignore local replacement-object ancestry.'
+Assert-Order $deploy 'Update-OtzivProductionMainRevision -Repository $repoRoot' '$dirtyDeployInputs = @(Get-OtzivDeployChanges' 'Production must refresh and verify origin/main before inspecting or snapshotting local deployment inputs.'
+Assert-Match $deploy '\$DeployProtectedMainRevision -notmatch ''\^\[0-9a-f\]\{40\}\$''[\s\S]{0,700}Update-OtzivProductionMainRevision -Repository \$repoRoot[\s\S]{0,300}Assert-OtzivProductionMainRevisionUnchanged' 'Prepared snapshots must refetch origin/main and reject a protected revision that advanced during snapshot validation.'
+Assert-Order $deploy 'Assert-OtzivProductionMainRevisionUnchanged' '$dirtyDeployInputs = @(Get-OtzivDeployChanges' 'Prepared snapshots must verify protected-main stability before inspecting deployment inputs.'
+Assert-Order $deploy 'Assert-OtzivDeployRevisionContainsProductionMain -Repository $repoRoot' '$dirtyDeployInputs = @(Get-OtzivDeployChanges' 'Production snapshots must verify protected-main ancestry before inspecting deployment inputs.'
+Assert-Match $deploy '\$DeploySnapshotRevision -notmatch ''\^\[0-9a-f\]\{40\}\$''[\s\S]{0,400}Assert-OtzivPreparedDeploySnapshotState -Repository \$repoRoot' 'Prepared deployment must bind its child worktree to the exact immutable snapshot commit and require a clean tree.'
+Assert-Order $deploy 'Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot' '$dirtyDeployInputs = @(Get-OtzivDeployChanges' 'Prepared child exact-revision and cleanliness verification must run before dirty-worktree handling.'
+Assert-Match $snapshot '''--ignored=matching''' 'Prepared snapshot cleanliness must include ignored files that could otherwise enter a Docker context.'
+Assert-Match $snapshot '@\(''ls-files'', ''-v''\)[\s\S]{0,300}\^\(\?:\[a-z\]\|S\)' 'Prepared snapshot verification must reject assume-unchanged and skip-worktree entries.'
 Assert-Order $deploy '$snapshotMobileRelease = if ($SkipMobileApkUpload)' 'New-OtzivDeploySnapshot -Repository $repoRoot -InputPaths $deployInputPaths' 'Automatic snapshot deploys must pin the local mobile release before materializing the isolated worktree.'
 Assert-Match $deploy '\$forwardParameters\[''MobileApkPath''\]\s*=\s*\$snapshotMobileRelease\.File\.FullName' 'Automatic snapshot recursion must forward the pinned absolute local APK path instead of rediscovering releases inside the Git snapshot.'
 Assert-Match $deploy 'New-OtzivDeploySnapshot -Repository \$repoRoot -InputPaths \$deployInputPaths' 'Dirty production inputs must be captured through the isolated snapshot index.'
@@ -122,17 +349,27 @@ Assert-Match $deploy 'worktree add --detach \$snapshotWorktree \$snapshot\.Commi
 Assert-Match $deploy '& \$snapshotValidator -RepoRoot \$snapshotWorktree -BaseRevision \$snapshot\.BaseRevision' 'Automatic deploy must validate the clean snapshot before contacting production.'
 Assert-Order $deploy '& $snapshotValidator' '& $preparedDeployScript @forwardParameters' 'Automatic snapshot validation must finish before the production deploy script is invoked.'
 Assert-Match $deploy 'Remove\(''AllowDirtyWorktree''\)' 'Automatic snapshot recursion must not forward the dirty-worktree bypass.'
+Assert-Match $deploy '\$forwardParameters\[''DeploySnapshotRevision''\]\s*=\s*\$snapshot\.Commit' 'Automatic snapshot recursion must forward the exact immutable snapshot commit.'
+Assert-Match $deploy '\$forwardParameters\[''DeployProtectedMainRevision''\]\s*=\s*\$protectedMainRevision' 'Automatic snapshot recursion must forward the immutable protected origin/main revision.'
+Assert-Order $deploy 'Automatic deploy snapshot validation was bypassed explicitly.' '[void](Assert-OtzivPreparedDeploySnapshotState -Repository $snapshotWorktree' 'Skipping snapshot tests must not skip the post-validation exact-revision and cleanliness check.'
+Assert-Order $deploy 'Automatic deploy snapshot validation was bypassed explicitly.' '@(''clean'', ''-ffdx'')' 'Generated and ignored validator artifacts must be removed even when validation is bypassed.'
+Assert-Order $deploy '@(''clean'', ''-ffdx'')' '[void](Assert-OtzivPreparedDeploySnapshotState -Repository $snapshotWorktree' 'Snapshot cleanup must finish before the post-validator byte-state check.'
+Assert-Order $deploy '[void](Assert-OtzivPreparedDeploySnapshotState -Repository $snapshotWorktree' '& $preparedDeployScript @forwardParameters' 'The prepared worktree must be rechecked after validation immediately before launching the child deploy.'
+Assert-Match $deploy 'Invoke-External -FilePath "docker" -Arguments \$buildArgs[\s\S]{0,300}Assert-OtzivPreparedDeploySnapshotState -Repository \$repoRoot[\s\S]{0,300}docker.+push' 'Prepared source bytes must be rechecked after Docker build and before image push.'
+Assert-Match $deploy 'Copy-DeployPath -RepoRoot \$repoRoot[\s\S]{0,300}Assert-OtzivPreparedDeploySnapshotState -Repository \$repoRoot' 'Prepared source bytes must be rechecked after deployment-bundle copying.'
 Assert-Match $deploy '\$revisionTagSuffix = "-\$\(\$gitRevision\.Substring\(0, 12\)\)"' 'Production image tags must include the exact deploy snapshot revision.'
 Assert-Match $snapshot '''backend''[\s\S]{0,100}''frontend''[\s\S]{0,100}''mobile''[\s\S]{0,100}''whatsapp''[\s\S]{0,100}''infrastructure''' 'Automatic snapshots must include every deploy source tree.'
 Assert-NotMatch $snapshot '''outreach-module''' 'Automatic snapshots must not include the extracted outreach module.'
 Assert-NotMatch $snapshot '(?m)^\s*''\.''\s*,?\s*$' 'Automatic snapshots must never add the unrestricted repository root.'
 Assert-Match $snapshot 'GIT_INDEX_FILE' 'Automatic snapshots must use an isolated Git index.'
 Assert-Match $snapshot '@\(''read-tree'', \$baseRevision\)' 'Automatic snapshots must start from the exact current commit tree.'
-Assert-Match $snapshot 'git -C \$repositoryRoot add -A -- @InputPaths' 'Automatic snapshots must capture tracked, deleted, and untracked allowlisted inputs.'
+Assert-Match $snapshot 'Invoke-OtzivSnapshotGit -Repository \$repositoryRoot[\s\S]{0,100}@\(''add'', ''-A'', ''--''\) \+ \$InputPaths' 'Automatic snapshots must capture tracked, deleted, and untracked allowlisted inputs.'
 Assert-Match $snapshot '@\(''commit-tree'', \$tree, ''-p'', \$baseRevision' 'Automatic snapshots must produce an immutable Git commit without changing the user branch.'
 Assert-Match $snapshot '''update-ref'', \$snapshotRef, \$commit' 'Automatic snapshot commits must retain a local recovery reference.'
 Assert-Match $snapshotValidator 'run-secret-scan\.ps1''[\s\S]{0,100}Mode\s*=\s*''dir''' 'Automatic deploy snapshots must pass a secret scan.'
 Assert-Match $snapshotValidator 'check-flyway-contract\.ps1''[\s\S]{0,100}BaseRevision\s*=\s*\$base' 'Automatic deploy snapshots must enforce append-only Flyway migrations.'
+Assert-Match $snapshotValidator 'merge-base --is-ancestor \$base \$headRevision' 'Snapshot validation must reject a base revision that is not an ancestor of the prepared snapshot.'
+Assert-Match $snapshotValidator 'git --no-replace-objects -C \$root merge-base' 'Snapshot base validation must ignore local replacement-object ancestry.'
 Assert-Match $snapshotValidator '''backend full test suite''[\s\S]{0,300}''verify''' 'Changed backend snapshots must pass the full Maven suite.'
 Assert-NotMatch $snapshotValidator "\.\./pom\.xml|outreach-module" 'Backend snapshot validation must remain independent from the extracted outreach reactor.'
 Assert-Match $snapshotValidator '''frontend unit tests''[\s\S]{0,200}''--watch=false''' 'Changed frontend snapshots must pass unit tests.'
@@ -210,8 +447,17 @@ Assert-Match $deploy 'assert_running_service_image app "`\$app_image"[\s\S]{0,15
 Assert-Match $deploy 'whatsapp\\chromium-launch\.js' 'Deploy bundle must include the shared audited Chromium launch arguments.'
 Assert-Match $deploy 'whatsapp\\chromium-smoke\.js' 'Deploy bundle must include the real Chromium launch smoke test.'
 $whatsappRuntimeDependencies = Get-LocalNodeDependencyClosure -EntryPath $whatsappIndexPath
+$resolvedRepoRoot = [IO.Path]::GetFullPath($repoRoot)
+$repoRootPrefix = $resolvedRepoRoot.TrimEnd([char[]]@(
+        [IO.Path]::DirectorySeparatorChar,
+        [IO.Path]::AltDirectorySeparatorChar
+    )) + [IO.Path]::DirectorySeparatorChar
 foreach ($dependencyPath in $whatsappRuntimeDependencies) {
-    $relativePath = [IO.Path]::GetRelativePath($repoRoot, $dependencyPath).Replace('/', '\')
+    $resolvedDependencyPath = [IO.Path]::GetFullPath($dependencyPath)
+    if (-not $resolvedDependencyPath.StartsWith($repoRootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "WhatsApp runtime dependency escapes the repository: $resolvedDependencyPath"
+    }
+    $relativePath = $resolvedDependencyPath.Substring($repoRootPrefix.Length).Replace('/', '\')
     Assert-Match $deploy ('"' + [regex]::Escape($relativePath) + '"') "Deploy bundle must include WhatsApp runtime dependency: $relativePath"
 }
 Assert-Match $whatsappIndex 'chromiumLaunchArgs\(proxyServerArg\(\)\)' 'WhatsApp clients must use the shared audited Chromium launch arguments.'
@@ -365,4 +611,8 @@ foreach ($parser in @{
     }
 }
 
+& git --no-replace-objects -C $repoRoot rev-parse --verify HEAD *> $null
+if ($LASTEXITCODE -ne 0) {
+    throw 'Unable to restore a successful native-command state after deploy release regressions.'
+}
 Write-Output 'Deploy release contract passed: durable lock, encrypted DB backup, optional worker/MAX rollout, and post-health APK publication are ordered safely.'

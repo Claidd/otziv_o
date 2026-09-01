@@ -26,6 +26,8 @@ param(
     [switch]$PrepareSnapshotOnly,
     [switch]$PreparedDeploySnapshot,
     [string]$DeploySnapshotBaseRevision = "",
+    [string]$DeploySnapshotRevision = "",
+    [string]$DeployProtectedMainRevision = "",
     [switch]$Help
 )
 
@@ -579,6 +581,49 @@ if (-not (Test-Path -LiteralPath $snapshotLibraryPath -PathType Leaf)) {
 }
 . $snapshotLibraryPath
 
+$preparedSnapshotRevision = $null
+$initialDeployRevision = if ($PreparedDeploySnapshot) {
+    if ($DeploySnapshotRevision -notmatch '^[0-9a-f]{40}$') {
+        throw 'Prepared deploy snapshot requires the exact snapshot revision selected by its parent deploy.'
+    }
+    $preparedSnapshotRevision = Get-OtzivExactCommitRevision -Repository $repoRoot `
+        -Revision $DeploySnapshotRevision `
+        -FailureMessage 'Prepared deploy snapshot cannot resolve its exact snapshot revision.'
+    Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
+        -ExpectedRevision $preparedSnapshotRevision
+} else {
+    if (-not [string]::IsNullOrWhiteSpace($DeploySnapshotRevision)) {
+        throw 'DeploySnapshotRevision is reserved for an internally prepared deploy snapshot.'
+    }
+    Get-OtzivExactCommitRevision -Repository $repoRoot `
+        -Revision 'HEAD' `
+        -FailureMessage 'Unable to resolve the initial production deploy revision.'
+}
+
+$protectedMainRevision = if ($PreparedDeploySnapshot) {
+    if ($DeployProtectedMainRevision -notmatch '^[0-9a-f]{40}$') {
+        throw 'Prepared deploy snapshot requires the exact protected origin/main revision selected by its parent deploy.'
+    }
+    $selectedProtectedMainRevision = Get-OtzivExactCommitRevision -Repository $repoRoot `
+        -Revision $DeployProtectedMainRevision `
+        -FailureMessage 'Prepared deploy snapshot cannot resolve its protected origin/main revision.'
+    $refreshedProtectedMainRevision = Update-OtzivProductionMainRevision -Repository $repoRoot
+    Assert-OtzivProductionMainRevisionUnchanged `
+        -SelectedRevision $selectedProtectedMainRevision `
+        -RefreshedRevision $refreshedProtectedMainRevision
+    $selectedProtectedMainRevision
+} else {
+    if (-not [string]::IsNullOrWhiteSpace($DeployProtectedMainRevision)) {
+        throw 'DeployProtectedMainRevision is reserved for an internally prepared deploy snapshot.'
+    }
+    Update-OtzivProductionMainRevision -Repository $repoRoot
+}
+
+Assert-OtzivDeployRevisionContainsProductionMain -Repository $repoRoot `
+    -ProductionMainRevision $protectedMainRevision `
+    -DeployRevision $initialDeployRevision
+Write-Host "Protected origin/main revision: $protectedMainRevision"
+
 $deployInputPaths = @(Get-OtzivDeployInputPaths)
 $dirtyDeployInputs = @(Get-OtzivDeployChanges -Repository $repoRoot -InputPaths $deployInputPaths)
 
@@ -586,6 +631,21 @@ if ($PreparedDeploySnapshot) {
     if ([string]::IsNullOrWhiteSpace($DeploySnapshotBaseRevision) -or
         $DeploySnapshotBaseRevision -notmatch '^[0-9a-f]{40}$') {
         throw 'Prepared deploy snapshot requires one exact base revision.'
+    }
+    $DeploySnapshotBaseRevision = Get-OtzivExactCommitRevision -Repository $repoRoot `
+        -Revision $DeploySnapshotBaseRevision `
+        -FailureMessage 'Prepared deploy snapshot cannot resolve its exact base revision.'
+    Assert-OtzivDeployRevisionContainsProductionMain -Repository $repoRoot `
+        -ProductionMainRevision $protectedMainRevision `
+        -DeployRevision $DeploySnapshotBaseRevision
+    $snapshotBaseAncestryResult = Invoke-OtzivSnapshotGit -Repository $repoRoot `
+        -Arguments @('merge-base', '--is-ancestor', $DeploySnapshotBaseRevision, $initialDeployRevision)
+    $snapshotBaseAncestryExitCode = $snapshotBaseAncestryResult.ExitCode
+    if ($snapshotBaseAncestryExitCode -eq 1) {
+        throw 'Prepared deploy snapshot base revision is not an ancestor of its deploy revision.'
+    }
+    if ($snapshotBaseAncestryExitCode -ne 0) {
+        throw 'Unable to verify prepared deploy snapshot base ancestry.'
     }
     if ($dirtyDeployInputs.Count -gt 0) {
         throw "Prepared deploy snapshot worktree is not clean:`n$($dirtyDeployInputs -join [Environment]::NewLine)"
@@ -602,6 +662,12 @@ if ($PreparedDeploySnapshot) {
     }
 
     $snapshot = New-OtzivDeploySnapshot -Repository $repoRoot -InputPaths $deployInputPaths
+    Assert-OtzivDeployRevisionContainsProductionMain -Repository $repoRoot `
+        -ProductionMainRevision $protectedMainRevision `
+        -DeployRevision $snapshot.BaseRevision
+    Assert-OtzivDeployRevisionContainsProductionMain -Repository $repoRoot `
+        -ProductionMainRevision $protectedMainRevision `
+        -DeployRevision $snapshot.Commit
     Write-Host "Deploy snapshot: $($snapshot.Commit)"
     Write-Host "Recovery ref: $($snapshot.Ref)"
     Write-Host 'Included deployment changes:'
@@ -609,6 +675,15 @@ if ($PreparedDeploySnapshot) {
 
     $snapshotParent = Join-Path ([IO.Path]::GetTempPath()) 'otziv-deploy-worktrees'
     $snapshotWorktree = Join-Path $snapshotParent ([Guid]::NewGuid().ToString('N'))
+    $snapshotParent = [IO.Path]::GetFullPath($snapshotParent)
+    $snapshotWorktree = [IO.Path]::GetFullPath($snapshotWorktree)
+    $snapshotParentPrefix = $snapshotParent.TrimEnd([char[]]@(
+            [IO.Path]::DirectorySeparatorChar,
+            [IO.Path]::AltDirectorySeparatorChar
+        )) + [IO.Path]::DirectorySeparatorChar
+    if (-not $snapshotWorktree.StartsWith($snapshotParentPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Automatic deploy snapshot worktree escaped its dedicated temporary parent.'
+    }
     New-Item -ItemType Directory -Path $snapshotParent -Force | Out-Null
 
     try {
@@ -617,11 +692,8 @@ if ($PreparedDeploySnapshot) {
             throw 'Unable to prepare the clean automatic deploy snapshot worktree.'
         }
 
-        $preparedRevision = (& git -C $snapshotWorktree rev-parse --verify HEAD).Trim()
-        $preparedChanges = @(& git -C $snapshotWorktree status --porcelain --untracked-files=all)
-        if ($LASTEXITCODE -ne 0 -or $preparedRevision -cne $snapshot.Commit -or $preparedChanges.Count -gt 0) {
-            throw 'Automatic deploy snapshot worktree failed exact revision/cleanliness verification.'
-        }
+        [void](Assert-OtzivPreparedDeploySnapshotState -Repository $snapshotWorktree `
+                -ExpectedRevision $snapshot.Commit)
 
         if (-not $SkipAutoSnapshotValidation) {
             $snapshotValidator = Join-Path $snapshotWorktree 'infrastructure\scripts\prod\validate-deploy-snapshot.ps1'
@@ -640,6 +712,14 @@ if ($PreparedDeploySnapshot) {
             Write-Warning 'Automatic deploy snapshot validation was bypassed explicitly.'
         }
 
+        $snapshotCleanupResult = Invoke-OtzivSnapshotGit -Repository $snapshotWorktree `
+            -Arguments @('clean', '-ffdx')
+        if ($snapshotCleanupResult.ExitCode -ne 0) {
+            throw 'Unable to remove generated or ignored files from the validated deploy snapshot.'
+        }
+        [void](Assert-OtzivPreparedDeploySnapshotState -Repository $snapshotWorktree `
+                -ExpectedRevision $snapshot.Commit)
+
         $forwardParameters = @{}
         foreach ($entry in $PSBoundParameters.GetEnumerator()) {
             $forwardParameters[$entry.Key] = $entry.Value
@@ -647,6 +727,8 @@ if ($PreparedDeploySnapshot) {
         [void]$forwardParameters.Remove('AllowDirtyWorktree')
         $forwardParameters['PreparedDeploySnapshot'] = $true
         $forwardParameters['DeploySnapshotBaseRevision'] = $snapshot.BaseRevision
+        $forwardParameters['DeploySnapshotRevision'] = $snapshot.Commit
+        $forwardParameters['DeployProtectedMainRevision'] = $protectedMainRevision
         $forwardParameters['Tag'] = $Tag
         $forwardParameters['EnvFile'] = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot -AllowMissing:$SkipEnvUpload
 
@@ -672,10 +754,17 @@ if ($PreparedDeploySnapshot) {
     Write-Warning 'Deploying from a dirty worktree by explicit override. The resulting images may not be reproducible from Git.'
 }
 
-$gitRevision = (& git -C $repoRoot rev-parse --verify HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $gitRevision -notmatch '^[0-9a-f]{40}$') {
-    throw 'Unable to resolve the exact Git revision for the deployment tag.'
+$gitRevision = if ($PreparedDeploySnapshot) {
+    Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
+        -ExpectedRevision $preparedSnapshotRevision
+} else {
+    Get-OtzivExactCommitRevision -Repository $repoRoot `
+        -Revision 'HEAD' `
+        -FailureMessage 'Unable to resolve the exact Git revision for the deployment tag.'
 }
+Assert-OtzivDeployRevisionContainsProductionMain -Repository $repoRoot `
+    -ProductionMainRevision $protectedMainRevision `
+    -DeployRevision $gitRevision
 $revisionTagSuffix = "-$($gitRevision.Substring(0, 12))"
 if ($Tag -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$') {
     throw 'Tag must be a valid, bounded Docker tag (letters, digits, dot, underscore and dash only).'
@@ -853,6 +942,10 @@ $env:APP_IMAGE = $appImage
 $env:WEB_IMAGE = $webImage
 $env:EXTERNAL_REVIEW_WORKER_IMAGE = $externalReviewWorkerImage
 
+if ($PreparedDeploySnapshot) {
+    [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
+            -ExpectedRevision $preparedSnapshotRevision)
+}
 if (-not $SkipBuildPush) {
     $buildArgs = @("compose", "-f", $buildCompose, "build")
     if ($NoBuildCache) {
@@ -863,6 +956,10 @@ if (-not $SkipBuildPush) {
         $buildArgs += "external-review-worker"
     }
     Invoke-External -FilePath "docker" -Arguments $buildArgs
+    if ($PreparedDeploySnapshot) {
+        [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
+                -ExpectedRevision $preparedSnapshotRevision)
+    }
     Write-Host "Pushing application image..."
     Invoke-External -FilePath "docker" -Arguments @("push", $appImage)
     Write-Host "Pushing web image..."
@@ -946,12 +1043,20 @@ fi
     }
 }
 
+if ($PreparedDeploySnapshot) {
+    [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
+            -ExpectedRevision $preparedSnapshotRevision)
+}
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 Protect-SensitiveLocalPath -Path $stageRoot
 try {
     Write-Host "Preparing deployment bundle..."
     foreach ($deployBundlePath in $deployBundlePaths) {
         Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath $deployBundlePath
+    }
+    if ($PreparedDeploySnapshot) {
+        [void](Assert-OtzivPreparedDeploySnapshotState -Repository $repoRoot `
+                -ExpectedRevision $preparedSnapshotRevision)
     }
 
     $uploadedMobileRelease = "0"
