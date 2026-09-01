@@ -31,6 +31,7 @@ import { MobileReviewFieldEditorComponent } from '../shared/mobile-review-field-
 import { safeHttpsOrInternalUrl } from '../shared/external-navigation';
 import { manualCardPaymentFallbackAccessDecision } from '../shared/manual-payment-confirmation';
 import { MobileManualCardPaymentFlowService } from '../shared/mobile-manual-card-payment-flow.service';
+import { mobileManualCardPaymentIsCompleted } from '../shared/mobile-manual-card-payment';
 
 type ReviewEditableField = 'text' | 'answer';
 type ReviewCheckAction = 'load' | 'save' | 'approve' | 'correction' | 'send-check' | 'pay-ok';
@@ -78,8 +79,8 @@ type ReviewDraft = {
           }
 
           @if (statusMessage()) {
-            <div class="mobile-status-card">
-              <span class="material-icons-sharp">task_alt</span>
+            <div class="mobile-status-card" [class.warning]="statusMessageWarning()">
+              <span class="material-icons-sharp">{{ statusMessageWarning() ? 'pending_actions' : 'task_alt' }}</span>
               <strong>{{ statusMessage() }}</strong>
             </div>
           }
@@ -381,6 +382,10 @@ type ReviewDraft = {
       padding: 0.55rem 0.75rem;
       color: var(--otziv-success);
       text-align: left;
+    }
+
+    .mobile-status-card.warning {
+      color: var(--ion-color-warning-shade, #9a6700);
     }
 
     .review-check-actions {
@@ -1004,6 +1009,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly statusMessage = signal<string | null>(null);
+  readonly statusMessageWarning = signal(false);
   readonly mutationKey = signal<string | null>(null);
   readonly drafts = signal<Record<number, ReviewDraft>>({});
   readonly commentDraft = signal('');
@@ -1080,7 +1086,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     this.reviewCheckRouteLoadResolved = false;
     this.loading.set(true);
     this.error.set(null);
-    this.statusMessage.set(null);
+    this.clearStatusMessage();
 
     const token = this.capabilityToken();
     const loadKey: ReviewCheckLoadKey = {
@@ -1174,7 +1180,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     const activeId = sourceDetails.reviews[activeIndex]?.id;
     this.mutationKey.set(key);
     this.error.set(null);
-    this.statusMessage.set(null);
+    this.clearStatusMessage();
 
     try {
       let updatedDetails: ReviewCheckPayload;
@@ -1199,12 +1205,19 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
           throw genericError;
         }
 
-        const completed = await this.manualCardPaymentFlow.confirm(sourceDetails.orderId!);
+        const outcome = await this.manualCardPaymentFlow.confirm(sourceDetails.orderId!);
         if (!this.acceptsReviewCheckRoute(routeTicket)) {
           return;
         }
-        if (!completed) {
-          this.statusMessage.set('Оплата не изменена');
+        if (!outcome) {
+          this.setStatusMessage('Оплата не изменена', true);
+          return;
+        }
+        if (!mobileManualCardPaymentIsCompleted(outcome.result)) {
+          this.setStatusMessage(
+            outcome.result.message || 'Ожидается подтверждение владельца',
+            true
+          );
           return;
         }
         updatedDetails = await firstValueFrom(
@@ -1222,7 +1235,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
         this.activeReviewIndex.set(Math.max(0, Math.min(activeIndex, this.reviewCardCount(updatedDetails) - 1)));
         this.scrollActiveReview();
       }
-      this.statusMessage.set('Оплата отмечена');
+      this.setStatusMessage('Оплата отмечена');
     } catch (err) {
       if (this.acceptsReviewCheckRoute(routeTicket)) {
         this.error.set(this.errorMessage(err, 'Не удалось отметить оплату.'));
@@ -1323,7 +1336,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     const key = this.fieldMutationKey(review, field);
     this.mutationKey.set(key);
     this.error.set(null);
-    this.statusMessage.set(null);
+    this.clearStatusMessage();
 
     const token = this.capabilityToken();
     const request = field === 'text'
@@ -1342,7 +1355,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
         this.applyUpdatedReview(updatedReview);
         this.editingFieldKey.set(null);
         this.mutationKey.set(null);
-        this.statusMessage.set(field === 'text' ? 'Текст отзыва сохранен' : 'Замечание сохранено');
+        this.setStatusMessage(field === 'text' ? 'Текст отзыва сохранен' : 'Замечание сохранено');
       },
       error: (err) => {
         if (!this.acceptsReviewCheckRoute(routeTicket) || this.mutationKey() !== key) {
@@ -1408,7 +1421,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     const key = this.notesMutationKey(review);
     this.mutationKey.set(key);
     this.error.set(null);
-    this.statusMessage.set(null);
+    this.clearStatusMessage();
 
     const reviewNote = this.reviewNoteValue(review);
     const orderNote = this.orderNoteValue(details);
@@ -1449,7 +1462,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
       }
 
       this.noteOpenId.set(null);
-      this.statusMessage.set('Заметки сохранены');
+      this.setStatusMessage('Заметки сохранены');
     } catch (err) {
       if (this.acceptsReviewCheckRoute(routeTicket)) {
         if (updatedReview) {
@@ -1476,7 +1489,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
           companyChanged && !companySaved ? 'заметка компании' : null
         ].filter((label): label is string => Boolean(label));
         if (saved.length) {
-          this.statusMessage.set(`Сохранено: ${saved.join(', ')}. Не сохранено: ${unsaved.join(', ')}.`);
+          this.setStatusMessage(`Сохранено: ${saved.join(', ')}. Не сохранено: ${unsaved.join(', ')}.`);
         }
         this.error.set(this.errorMessage(err, 'Не удалось сохранить заметки.'));
       }
@@ -1685,7 +1698,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
 
     this.mutationKey.set(key);
     this.error.set(null);
-    this.statusMessage.set(null);
+    this.clearStatusMessage();
     const activeIndex = this.activeReviewIndex();
     const activeId = this.details()?.reviews[activeIndex]?.id;
 
@@ -1701,7 +1714,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
           this.activeReviewIndex.set(Math.max(0, Math.min(activeIndex, this.reviewCardCount(details) - 1)));
           this.scrollActiveReview();
         }
-        this.statusMessage.set(successMessage);
+        this.setStatusMessage(successMessage);
         this.mutationKey.set(null);
       },
       error: (err) => {
@@ -1812,7 +1825,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     this.details.set(null);
     this.loading.set(false);
     this.error.set(null);
-    this.statusMessage.set(null);
+    this.clearStatusMessage();
     this.mutationKey.set(null);
     this.drafts.set({});
     this.commentDraft.set('');
@@ -1823,6 +1836,16 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     this.noteOpenId.set(null);
     this.listExpanded.set(false);
     this.activeReviewIndex.set(0);
+  }
+
+  private setStatusMessage(message: string, warning = false): void {
+    this.statusMessageWarning.set(warning);
+    this.statusMessage.set(message);
+  }
+
+  private clearStatusMessage(): void {
+    this.statusMessage.set(null);
+    this.statusMessageWarning.set(false);
   }
 
   private isCapabilityRoute(): boolean {

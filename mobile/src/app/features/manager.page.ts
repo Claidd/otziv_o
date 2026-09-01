@@ -61,6 +61,7 @@ import {
   isManualCardPaymentFallbackConflict
 } from '../shared/manual-payment-confirmation';
 import { MobileManualCardPaymentFlowService } from '../shared/mobile-manual-card-payment-flow.service';
+import { mobileManualCardPaymentIsCompleted } from '../shared/mobile-manual-card-payment';
 import { MobileCommonManualPaymentFlowService } from '../shared/mobile-common-manual-payment-flow.service';
 import {
   ALL_STATUS,
@@ -3262,8 +3263,8 @@ export class ManagerPage implements OnInit, OnDestroy {
       if (!this.canUsePrivilegedPaymentFallback() || !this.isUnfinishedProviderPaymentConflict(error)) {
         throw error;
       }
-      const completed = await this.manualCardPaymentFlow.confirm(order.id);
-      if (!completed) {
+      const outcome = await this.manualCardPaymentFlow.confirm(order.id);
+      if (!outcome || !mobileManualCardPaymentIsCompleted(outcome.result)) {
         return false;
       }
     }

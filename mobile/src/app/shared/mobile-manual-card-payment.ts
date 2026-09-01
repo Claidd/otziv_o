@@ -1,4 +1,5 @@
 import type {
+  ManagerManualCardPaymentResult,
   ManualCardPaymentContext,
   ManualCardPaymentRecipientOption
 } from '../core/api.service';
@@ -19,6 +20,12 @@ function mobileMatchingManualCardRecipient(
     return null;
   }
   return candidates.find((candidate) => mobileManualCardRecipientKey(candidate) === expectedKey) ?? null;
+}
+
+export function mobileManualCardPaymentIsCompleted(
+  result: ManagerManualCardPaymentResult | null | undefined
+): boolean {
+  return result?.status === 'COMPLETED';
 }
 
 export function mobileManualCardRecipientKey(candidate: ManualCardPaymentRecipientOption): string {

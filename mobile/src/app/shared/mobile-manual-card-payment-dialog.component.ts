@@ -14,6 +14,7 @@ import {
 import { firstValueFrom } from 'rxjs';
 import {
   ApiService,
+  type ManagerManualCardPaymentResult,
   type ManualCardPaymentConfirmationRequest,
   type ManualCardPaymentContext,
   type ManualCardPaymentRecipientOption
@@ -32,9 +33,10 @@ import {
   mobileTaskAwareRecipientEffect
 } from './manual-payment-routing';
 
-export interface MobileManualCardPaymentCompleted {
+export interface MobileManualCardPaymentOutcome {
   context: ManualCardPaymentContext;
   recipient: ManualCardPaymentRecipientOption;
+  result: ManagerManualCardPaymentResult;
 }
 
 @Component({
@@ -80,6 +82,8 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
     return Boolean(selected && this.context?.originalRecipient
       && mobileManualCardRecipientKey(selected) !== mobileManualCardRecipientKey(this.context.originalRecipient));
   });
+
+  readonly ownerSelected = computed(() => this.selectedRecipient()?.recipientType === 'OWNER');
 
   readonly selectedAnomalyWarning = computed(() => {
     const selected = this.selectedRecipient();
@@ -163,9 +167,15 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
     this.saving.set(true);
     this.error.set(null);
     try {
-      await firstValueFrom(this.api.confirmManagerManualCardPayment(this.context.orderId, request));
-      const result: MobileManualCardPaymentCompleted = { context: this.context, recipient: submission.recipient };
-      await this.modalController.dismiss(result, 'completed');
+      const apiResult = await firstValueFrom(
+        this.api.confirmManagerManualCardPayment(this.context.orderId, request)
+      );
+      const outcome: MobileManualCardPaymentOutcome = {
+        context: this.context,
+        recipient: submission.recipient,
+        result: apiResult
+      };
+      await this.modalController.dismiss(outcome, 'submitted');
     } catch (error) {
       if (mobileRetryablePaymentRouteError(error)) {
         await this.reloadContextAfterConflict(error);

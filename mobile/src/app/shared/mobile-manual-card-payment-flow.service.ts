@@ -4,9 +4,10 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../core/api.service';
 import {
   MobileManualCardPaymentDialogComponent,
-  type MobileManualCardPaymentCompleted
+  type MobileManualCardPaymentOutcome
 } from './mobile-manual-card-payment-dialog.component';
 import {
+  mobileManualCardPaymentIsCompleted,
   mobileManualCardPaymentSelectionRecipient,
   mobileManualCardRecipientLabel,
 } from './mobile-manual-card-payment';
@@ -19,7 +20,7 @@ export class MobileManualCardPaymentFlowService {
     private readonly toastController: ToastController
   ) {}
 
-  async confirm(orderId: number, defaultReason = ''): Promise<MobileManualCardPaymentCompleted | null> {
+  async confirm(orderId: number, defaultReason = ''): Promise<MobileManualCardPaymentOutcome | null> {
     const context = await firstValueFrom(this.api.getManagerManualCardPaymentContext(orderId));
     if (!mobileManualCardPaymentSelectionRecipient(context)) {
       throw new Error(context.recipientSelectionFrozen
@@ -36,15 +37,18 @@ export class MobileManualCardPaymentFlowService {
       breakpoints: [0, 0.9, 1]
     });
     await modal.present();
-    const result = await modal.onWillDismiss<MobileManualCardPaymentCompleted>();
-    if (result.role !== 'completed' || !result.data) {
+    const result = await modal.onWillDismiss<MobileManualCardPaymentOutcome>();
+    if (result.role !== 'submitted' || !result.data) {
       return null;
     }
+    const completed = mobileManualCardPaymentIsCompleted(result.data.result);
     const toast = await this.toastController.create({
-      message: `Оплата отмечена. Получатель — ${mobileManualCardRecipientLabel(result.data.recipient)}`,
+      message: completed
+        ? `Оплата отмечена. Получатель — ${mobileManualCardRecipientLabel(result.data.recipient)}`
+        : result.data.result.message || 'Запрос отправлен владельцу. До подтверждения заказ не считается оплаченным.',
       duration: 3200,
       position: 'top',
-      color: 'success'
+      color: completed ? 'success' : 'warning'
     });
     await toast.present();
     return result.data;

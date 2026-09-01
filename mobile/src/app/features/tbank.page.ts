@@ -58,6 +58,7 @@ import {
   mobilePaymentRouteErrorMessage
 } from '../shared/manual-payment-routing';
 import { MobileManualCardPaymentFlowService } from '../shared/mobile-manual-card-payment-flow.service';
+import { mobileManualCardPaymentIsCompleted } from '../shared/mobile-manual-card-payment';
 import { MobileManualPaymentTaskOperationKeyDraft } from '../shared/manual-payment-operation-key';
 import { manualPaymentTaskWorklist } from '../shared/manual-payment-task-visibility';
 
@@ -3032,8 +3033,8 @@ export class TbankPage implements OnInit {
           this.error.set('У платежа нет корректного заказа, поэтому безопасный выбор фактического получателя недоступен.');
         } else {
           try {
-            const completed = await this.manualCardPaymentFlow.confirm(orderId);
-            if (completed) {
+            const outcome = await this.manualCardPaymentFlow.confirm(orderId);
+            if (mobileManualCardPaymentIsCompleted(outcome?.result)) {
               await this.load();
             }
           } catch (typedError) {

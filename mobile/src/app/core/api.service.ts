@@ -1269,6 +1269,15 @@ export interface ManualCardPaymentConfirmationRequest {
   recipientProfileId?: number | null;
 }
 
+export type ManagerManualCardPaymentResultStatus = 'COMPLETED' | 'OWNER_APPROVAL_PENDING';
+
+export interface ManagerManualCardPaymentResult {
+  status: ManagerManualCardPaymentResultStatus;
+  orderId: number;
+  paymentLinkId: number;
+  message: string;
+}
+
 export interface CommonManualPaymentAttributionModeResponse {
   attributionRequired: boolean;
 }
@@ -4074,8 +4083,8 @@ export class ApiService {
   confirmManagerManualCardPayment(
     orderId: number,
     request: ManualCardPaymentConfirmationRequest
-  ): Observable<void> {
-    return this.http.post<void>(
+  ): Observable<ManagerManualCardPaymentResult> {
+    return this.http.post<ManagerManualCardPaymentResult>(
       this.apiUrl(`/api/manager/orders/${orderId}/confirm-manual-card-payment`),
       request
     );

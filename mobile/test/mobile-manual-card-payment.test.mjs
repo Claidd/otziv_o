@@ -3,11 +3,19 @@ import test from 'node:test';
 import { loadTsModule } from './load-ts-module.mjs';
 
 const {
+  mobileManualCardPaymentIsCompleted,
   mobileManualCardPaymentSelectionRecipient,
   mobileManualCardPaymentSubmission,
   mobileManualCardRecipientKey,
   mobileOriginalManualCardRecipient
 } = loadTsModule('src/app/shared/mobile-manual-card-payment.ts');
+
+test('manual-card result is completed only for the explicit completed backend status', () => {
+  assert.equal(mobileManualCardPaymentIsCompleted({ status: 'COMPLETED' }), true);
+  assert.equal(mobileManualCardPaymentIsCompleted({ status: 'OWNER_APPROVAL_PENDING' }), false);
+  assert.equal(mobileManualCardPaymentIsCompleted({ status: 'UNKNOWN' }), false);
+  assert.equal(mobileManualCardPaymentIsCompleted(null), false);
+});
 
 const owner = {
   recipientType: 'OWNER',

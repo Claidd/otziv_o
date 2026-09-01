@@ -75,6 +75,12 @@
         </p>
       }
 
+      @if (ownerSelected()) {
+        <p class="notice recipient-change" role="status">
+          При выборе владельца нажатие отправит владельцу запрос в Telegram. До его подтверждения текущий платёжный источник не закрывается и заказ не считается оплаченным.
+        </p>
+      }
+
       @if (selectedAnomalyWarning()) {
         <p class="notice anomaly" role="alert">{{ selectedAnomalyWarning() }}</p>
       }
@@ -133,7 +139,7 @@
         @if (saving()) {
           <ion-spinner name="crescent" />
         } @else {
-          {{ context.recipientSelectionFrozen ? 'Повторить подтверждение' : 'Подтвердить оплату' }}
+          {{ context.recipientSelectionFrozen ? 'Повторить подтверждение' : ownerSelected() ? 'Отправить владельцу' : 'Подтвердить оплату' }}
         }
       </ion-button>
     </div>
