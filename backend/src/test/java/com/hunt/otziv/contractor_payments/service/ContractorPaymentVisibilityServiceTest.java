@@ -36,6 +36,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
@@ -99,10 +100,62 @@ class ContractorPaymentVisibilityServiceTest {
         when(attributionRepository.summarizeProfileActualTransfersInPeriod(any(), any(), any(), any()))
                 .thenReturn(List.of(actualTransferSummary(41L, 3L, 12_500L)));
 
-        ContractorPaymentAdminSummaryResponse response = service.adminSummary().getFirst();
+        ContractorPaymentAdminSummaryResponse response = service.adminSummary(LocalDate.of(2026, 8, 31)).getFirst();
 
         assertEquals(3L, response.actualTransferCount());
         assertEquals(12_500L, response.actualTransferAmountKopecks());
+    }
+
+    @Test
+    void adminSummaryUsesSelectedMonthInsteadOfLeakingCurrentMonth() {
+        LocalDate selectedDate = LocalDate.of(2026, 8, 31);
+        LocalDate augustStart = LocalDate.of(2026, 8, 1);
+        LocalDate septemberStart = LocalDate.of(2026, 9, 1);
+        User user = user(26L, "historical-worker", "ROLE_WORKER");
+        user.setFio("Исторический профиль");
+        ContractorPaymentProfile profile = profile(42L, user, ContractorRole.SPECIALIST);
+        when(profileRepository.findAllWithUser()).thenReturn(List.of(profile));
+        when(ledgerService.totalAccrued(profile)).thenReturn(38_595L);
+        when(ledgerService.accruedInPeriod(profile, augustStart, septemberStart)).thenReturn(16_425L);
+        when(allocationRepository.sumOutstandingExposure(any(), any(), anySet()))
+                .thenReturn(15_000L, 3_500L, 500L);
+        when(accountingService.confirmedGross(profile, ContractorAllocationMode.SHADOW)).thenReturn(18_800L);
+        when(accountingService.confirmedGrossInPeriod(
+                profile,
+                ContractorAllocationMode.SHADOW,
+                augustStart.atStartOfDay(),
+                septemberStart.atStartOfDay()
+        )).thenReturn(4_100L);
+        when(accountingService.returnedInPeriod(
+                profile,
+                ContractorAllocationMode.SHADOW,
+                augustStart.atStartOfDay(),
+                septemberStart.atStartOfDay()
+        )).thenReturn(600L);
+        when(attributionRepository.summarizeProfileActualTransfersInPeriod(
+                Set.of(42L),
+                ContractorAllocationMode.SHADOW,
+                augustStart.atStartOfDay(),
+                septemberStart.atStartOfDay()
+        )).thenReturn(List.of(actualTransferSummary(42L, 2L, 3_500L)));
+
+        ContractorPaymentAdminSummaryResponse response = service.adminSummary(selectedDate).getFirst();
+
+        assertEquals(16_425L, response.accruedMonthKopecks());
+        assertEquals(3_500L, response.paidMonthKopecks());
+        assertEquals(2L, response.actualTransferCount());
+        assertEquals(3_500L, response.actualTransferAmountKopecks());
+        assertFalse(response.profileEnabled());
+        assertEquals(19_795L, response.outstandingDebtKopecks());
+        assertEquals(19_000L, response.outstandingReservedKopecks());
+        assertEquals(795L, response.availableKopecks());
+        verify(ledgerService).accruedInPeriod(profile, augustStart, septemberStart);
+        verify(attributionRepository).summarizeProfileActualTransfersInPeriod(
+                Set.of(42L),
+                ContractorAllocationMode.SHADOW,
+                augustStart.atStartOfDay(),
+                septemberStart.atStartOfDay()
+        );
     }
 
     @Test

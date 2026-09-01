@@ -11,6 +11,7 @@ import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardServ
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
+import com.hunt.otziv.p_products.dto.OrderPaidPostCommitEvent;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.next_order.service.NextOrderFailureNotifier;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
@@ -26,9 +27,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
-import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.CaughtFailureStage.OPEN_NEXT_ORDER;
 import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFlow.ORDER_PAYMENT;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -52,6 +54,7 @@ class OrderTransactionServiceImplObservabilityTest {
     @Mock private NextOrderRequestService nextOrderRequestService;
     @Mock private MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
     @Mock private GamificationEventService gamificationEventService;
+    @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private R0ObservabilityMetrics observabilityMetrics;
     @Mock private ContractorPaymentRolloutStateService contractorPaymentRolloutStateService;
     @Mock private ContractorCompletionRewardService contractorCompletionRewardService;
@@ -59,7 +62,7 @@ class OrderTransactionServiceImplObservabilityTest {
     @InjectMocks private OrderTransactionServiceImpl service;
 
     @Test
-    void observesCompletionAndCaughtNextOrderFailureWithoutChangingPaymentResult() throws Exception {
+    void propagatesNextOrderPersistenceFailureInsteadOfReturningRollbackOnlySuccess() throws Exception {
         Company company = Company.builder()
                 .id(20L)
                 .counterPay(0)
@@ -82,12 +85,16 @@ class OrderTransactionServiceImplObservabilityTest {
         doThrow(new IllegalStateException("synthetic failure"))
                 .when(nextOrderRequestService).openForPaidOrder(order);
 
-        assertTrue(service.handlePaymentStatus(order, true));
+        IllegalStateException failure = assertThrows(
+                IllegalStateException.class,
+                () -> service.handlePaymentStatus(order, true)
+        );
 
+        assertTrue(failure.getMessage().contains("synthetic failure"));
         verify(observabilityMetrics).observeTransactionCompletion(ORDER_PAYMENT);
-        verify(observabilityMetrics).recordCaughtFailure(ORDER_PAYMENT, OPEN_NEXT_ORDER);
         verify(orderRepository).saveAndFlush(order);
-        verify(nextOrderFailureNotifier).notifyManager(eq(order), any(), eq("оплата обычного заказа"), any());
+        verify(nextOrderFailureNotifier, never()).notifyManager(any(), any(), any(), any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -124,6 +131,7 @@ class OrderTransactionServiceImplObservabilityTest {
         verify(companyService).save(company);
         verify(contractorCompletionRewardService).ensureOrderPaymentAccrual(11L);
         verify(orderRepository).saveAndFlush(order);
+        verify(eventPublisher).publishEvent(new OrderPaidPostCommitEvent(11L));
     }
 
     @Test
@@ -143,6 +151,6 @@ class OrderTransactionServiceImplObservabilityTest {
         verify(companyService, never()).save(any(Company.class));
         verify(orderRepository, never()).saveAndFlush(any());
         verify(contractorCompletionRewardService).ensureOrderPaymentAccrual(12L);
-        verify(gamificationEventService, never()).recordOrderPaid(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 }

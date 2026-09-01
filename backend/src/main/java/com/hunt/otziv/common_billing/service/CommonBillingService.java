@@ -57,7 +57,6 @@ import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
 import com.hunt.otziv.p_products.deletion.service.OrderDeletionService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
-import com.hunt.otziv.p_products.next_order.service.NextOrderFailureNotifier;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
@@ -500,7 +499,6 @@ public class CommonBillingService {
     @Autowired
     @Lazy
     private OrderStatusTransitionService orderStatusTransitionService;
-    private final NextOrderFailureNotifier nextOrderFailureNotifier;
     @Autowired
     @Lazy
     private NextOrderRequestService nextOrderRequestService;
@@ -2125,14 +2123,10 @@ public class CommonBillingService {
         // target order is locked.
         refreshInvoiceAmounts(invoice, items);
         if (!items.isEmpty() && items.stream().allMatch(CommonInvoiceOrder::isPaid)) {
-            if (!closeOrderAsPaidForConfirmedItem(invoice, target)) {
-                return true;
-            }
+            closeOrderAsPaidForConfirmedItem(invoice, target);
             closePaidInvoice(invoice, items);
         } else {
-            if (!closeOrderAsPaidForConfirmedItem(invoice, target)) {
-                return true;
-            }
+            closeOrderAsPaidForConfirmedItem(invoice, target);
             invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
             if (invoice.getNextReminderAt() == null) {
                 invoice.setNextReminderAt(nextAutomaticPaymentReminderAt(LocalDateTime.now()));
@@ -10425,7 +10419,6 @@ public class CommonBillingService {
         if (normalize(invoice.getPaymentMethod()).isBlank()) {
             invoice.setPaymentMethod(PAYMENT_METHOD_TBANK);
         }
-        List<String> closeFailures = new ArrayList<>();
         for (CommonInvoiceOrder item : items) {
             try {
                 if (isAlreadyClosedOrder(item, alreadyClosedOrderIds)) {
@@ -10445,9 +10438,9 @@ public class CommonBillingService {
                 item.setUnpaid(false);
             } catch (Exception e) {
                 observabilityMetrics.recordCaughtFailure(COMMON_INVOICE_CLOSE, CLOSE_ORDER);
-                Long orderId = item.getOrder() == null ? null : item.getOrder().getId();
-                closeFailures.add(String.valueOf(orderId));
-                log.warn("Не удалось закрыть заказ {} оплатой общего счета {}", orderId, invoice.getId(), e);
+                Long orderId = item == null || item.getOrder() == null ? null : item.getOrder().getId();
+                log.error("Не удалось закрыть заказ {} оплатой общего счета {}", orderId, invoice.getId(), e);
+                throw commonInvoiceAtomicFailure(invoice, orderId, "close_order", e);
             }
         }
         invoiceOrderRepository.saveAll(items);
@@ -10456,20 +10449,6 @@ public class CommonBillingService {
             invoice.setPaidAt(LocalDateTime.now());
         }
         invoice.setNextReminderAt(null);
-        if (!closeFailures.isEmpty()) {
-            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
-            invoice.setLastError(limit(
-                    "close_failed: платеж получен, но заказы не закрылись: " + String.join(", ", closeFailures),
-                    512
-            ));
-            invoiceRepository.save(invoice);
-            if (finalAttribution != null) {
-                recordFinalAttributionAndEnqueueRecipientNotifications(invoice, finalAttribution);
-            }
-            scheduleContractorShadowReconcile(invoice.getId());
-            return;
-        }
-
         markInvoicePaidClosed(invoice);
         invoice.setLastError(null);
         if (finalAttribution != null) {
@@ -10477,18 +10456,9 @@ public class CommonBillingService {
             recordFinalAttributionAndEnqueueRecipientNotifications(invoice, finalAttribution);
         }
         paymentNotificationOutboxRepository.enqueueClient(invoice.getId());
-        notifyPaymentSuccessIfNeeded(invoice, items);
         invoiceRepository.save(invoice);
         manualPaymentTaskService.completeCommonInvoiceTaskIfTargetReached(invoice.getPaymentRouteManualTaskId());
-        List<String> nextOrderFailures = openNextOrdersIfEnabled(invoice, items);
-        if (!nextOrderFailures.isEmpty()) {
-            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
-            invoice.setLastError(limit(
-                    "next_order_failed: платеж закрыт, но следующие заказы не создались: " + String.join(", ", nextOrderFailures),
-                    512
-            ));
-            invoiceRepository.save(invoice);
-        }
+        openNextOrdersIfEnabled(invoice, items);
         scheduleContractorShadowReconcile(invoice.getId());
     }
 
@@ -10523,7 +10493,7 @@ public class CommonBillingService {
         invoice.setNextReminderAt(null);
     }
 
-    private boolean closeOrderAsPaidForConfirmedItem(CommonInvoice invoice, CommonInvoiceOrder item) {
+    private void closeOrderAsPaidForConfirmedItem(CommonInvoice invoice, CommonInvoiceOrder item) {
         try {
             Order order = item == null ? null : item.getOrder();
             if (isOrderPaid(order)) {
@@ -10531,20 +10501,28 @@ public class CommonBillingService {
             } else {
                 closeOrderAsPaidWithoutNextOrder(order, true);
             }
-            return true;
         } catch (Exception e) {
             Long orderId = item == null || item.getOrder() == null ? null : item.getOrder().getId();
-            log.warn("Не удалось закрыть заказ {} после подтвержденной оплаты отдельной ссылки", orderId, e);
-            if (invoice != null) {
-                invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
-                invoice.setLastError(limit(
-                        "close_failed: платеж получен, но заказ не закрылся: " + orderId,
-                        512
-                ));
-                invoiceRepository.save(invoice);
-            }
-            return false;
+            observabilityMetrics.recordCaughtFailure(COMMON_INVOICE_CLOSE, CLOSE_ORDER);
+            log.error("Не удалось закрыть заказ {} после подтвержденной оплаты отдельной ссылки общего счета {}",
+                    orderId, invoice == null ? null : invoice.getId(), e);
+            throw commonInvoiceAtomicFailure(invoice, orderId, "close_confirmed_order", e);
         }
+    }
+
+    private IllegalStateException commonInvoiceAtomicFailure(
+            CommonInvoice invoice,
+            Long orderId,
+            String operation,
+            Throwable cause
+    ) {
+        Long invoiceId = invoice == null ? null : invoice.getId();
+        return new IllegalStateException(
+                "Common invoice operation failed atomically: operation=" + operation
+                        + ", invoiceId=" + invoiceId
+                        + ", orderId=" + orderId,
+                cause
+        );
     }
 
     private boolean isAlreadyClosedOrder(CommonInvoiceOrder item, Set<Long> alreadyClosedOrderIds) {
@@ -10636,65 +10614,20 @@ public class CommonBillingService {
         }
     }
 
-    private List<String> openNextOrdersIfEnabled(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+    private void openNextOrdersIfEnabled(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         if (invoice == null || invoice.getAccount() == null || !invoice.getAccount().isAutoRepeatOrders()) {
-            return List.of();
+            return;
         }
-        List<String> failures = new ArrayList<>();
         for (CommonInvoiceOrder item : items) {
             try {
                 nextOrderRequestService.openForPaidOrder(item.getOrder());
             } catch (RuntimeException e) {
                 observabilityMetrics.recordCaughtFailure(COMMON_INVOICE_CLOSE, OPEN_NEXT_ORDER);
-                String label = orderFailureLabel(item);
-                failures.add(label);
-                log.warn("Не удалось создать следующий заказ после полной оплаты общего счета {} для заказа {}",
-                        invoice.getId(), item.getOrder() == null ? null : item.getOrder().getId(), e);
-                nextOrderFailureNotifier.notifyManager(
-                        item.getOrder(),
-                        manager(invoice),
-                        "полная оплата общего счета #" + invoice.getId(),
-                        e
-                );
+                Long orderId = item == null || item.getOrder() == null ? null : item.getOrder().getId();
+                log.error("Не удалось сохранить заявку следующего заказа после полной оплаты общего счета {} для заказа {}",
+                        invoice.getId(), orderId, e);
+                throw commonInvoiceAtomicFailure(invoice, orderId, "open_next_order", e);
             }
-        }
-        return failures;
-    }
-
-    private void notifyPaymentSuccessIfNeeded(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
-        if (invoice == null || invoice.getPaymentSuccessNotifiedAt() != null) {
-            return;
-        }
-        if (!immediateClientMessagesEnabled()) {
-            invoice.setPaymentSuccessNotificationError("immediate_messages_disabled: моментальные клиентские сообщения выключены");
-            return;
-        }
-
-        try {
-            Company company = chatCompany(invoice, items);
-            Manager manager = manager(invoice, items);
-            ClientMessageSendResult result = messageSender.send(
-                    company,
-                    manager == null ? null : manager.getClientId(),
-                    company == null ? null : company.getGroupId(),
-                    paymentSuccessMessage(invoice, items)
-            );
-            if (result != null && result.sent()) {
-                invoice.setPaymentSuccessNotifiedAt(LocalDateTime.now());
-                invoice.setPaymentSuccessNotificationError(null);
-                log.info("Common invoice payment success notification sent: invoiceId={}, channel={}",
-                        invoice.getId(), result.channel());
-                return;
-            }
-
-            String error = clientMessageError(result);
-            invoice.setPaymentSuccessNotificationError(limit(error, 512));
-            log.warn("Common invoice payment success notification was not sent: invoiceId={}, error={}",
-                    invoice.getId(), error);
-        } catch (RuntimeException e) {
-            String error = readableException(e);
-            invoice.setPaymentSuccessNotificationError(limit(error, 512));
-            log.warn("Common invoice payment success notification failed: invoiceId={}", invoice.getId(), e);
         }
     }
 

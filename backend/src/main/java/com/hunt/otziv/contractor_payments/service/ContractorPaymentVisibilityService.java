@@ -89,15 +89,17 @@ public class ContractorPaymentVisibilityService {
     /**
      * Read-only finance overview for administrators and owners. The endpoint
      * layer must still enforce role access; this method deliberately returns no
-     * payment requisites.
+     * payment requisites. Monthly movements use {@code selectedDate}; balance
+     * and open-exposure values intentionally remain the current ledger snapshot.
      */
     @Transactional(readOnly = true)
-    public List<ContractorPaymentAdminSummaryResponse> adminSummary() {
+    public List<ContractorPaymentAdminSummaryResponse> adminSummary(LocalDate selectedDate) {
+        LocalDate monthStart = monthStart(selectedDate);
         List<ContractorPaymentProfile> profiles = profileRepository.findAllWithUser();
-        Map<Long, ActualTransferStats> actualTransfers = actualTransfersByProfile(profiles);
+        Map<Long, ActualTransferStats> actualTransfers = actualTransfersByProfile(profiles, monthStart);
         return profiles.stream()
                 .map(profile -> {
-                    ContractorPaymentSummaryResponse summary = summary(profile);
+                    ContractorPaymentSummaryResponse summary = summary(profile, monthStart);
                     ActualTransferStats transferStats = actualTransfers.getOrDefault(
                             profile.getId(),
                             ActualTransferStats.empty()
@@ -105,6 +107,12 @@ public class ContractorPaymentVisibilityService {
                     long pending = Math.addExact(
                             summary.clientReportedKopecks(),
                             summary.partiallyConfirmedOutstandingKopecks()
+                    );
+                    long outstandingReserved = Math.addExact(summary.reservedKopecks(), pending);
+                    long netPaid = Math.max(0L, summary.netReceivedTotalKopecks());
+                    long outstandingDebt = Math.max(
+                            0L,
+                            Math.subtractExact(summary.accruedTotalKopecks(), netPaid)
                     );
                     return new ContractorPaymentAdminSummaryResponse(
                             profile.getId(),
@@ -121,6 +129,8 @@ public class ContractorPaymentVisibilityService {
                             summary.netReceivedTotalKopecks(),
                             transferStats.count(),
                             transferStats.amountKopecks(),
+                            outstandingDebt,
+                            outstandingReserved,
                             summary.availableKopecks(),
                             summary.reportingLive(),
                             summary.currentMonthCoverageComplete()
@@ -165,7 +175,10 @@ public class ContractorPaymentVisibilityService {
         ));
     }
 
-    private Map<Long, ActualTransferStats> actualTransfersByProfile(List<ContractorPaymentProfile> profiles) {
+    private Map<Long, ActualTransferStats> actualTransfersByProfile(
+            List<ContractorPaymentProfile> profiles,
+            LocalDate monthStart
+    ) {
         if (profiles == null || profiles.isEmpty()) {
             return Map.of();
         }
@@ -177,7 +190,6 @@ public class ContractorPaymentVisibilityService {
             return Map.of();
         }
 
-        LocalDate monthStart = LocalDate.now(businessZone()).withDayOfMonth(1);
         LocalDateTime from = monthStart.atStartOfDay();
         LocalDateTime to = monthStart.plusMonths(1).atStartOfDay();
         ContractorAllocationMode mode = accountingPhaseService.current();
@@ -197,7 +209,13 @@ public class ContractorPaymentVisibilityService {
     }
 
     private ContractorPaymentSummaryResponse summary(ContractorPaymentProfile profile) {
-        LocalDate monthStart = LocalDate.now(businessZone()).withDayOfMonth(1);
+        return summary(profile, monthStart(null));
+    }
+
+    private ContractorPaymentSummaryResponse summary(
+            ContractorPaymentProfile profile,
+            LocalDate monthStart
+    ) {
         LocalDate nextMonth = monthStart.plusMonths(1);
         LocalDateTime monthStartTime = monthStart.atStartOfDay();
         LocalDateTime nextMonthTime = nextMonth.atStartOfDay();
@@ -277,6 +295,13 @@ public class ContractorPaymentVisibilityService {
                 trackingStartedAt,
                 currentMonthCoverageComplete
         );
+    }
+
+    private LocalDate monthStart(LocalDate selectedDate) {
+        LocalDate effectiveDate = selectedDate == null
+                ? LocalDate.now(businessZone())
+                : selectedDate;
+        return effectiveDate.withDayOfMonth(1);
     }
 
     private ContractorPaymentAllocationJournalItemResponse journalItem(

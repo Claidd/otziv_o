@@ -9,10 +9,8 @@ import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
 import com.hunt.otziv.contractor_payments.model.ContractorPaymentAccountingAuthority;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentRolloutStateService;
-import com.hunt.otziv.gamification.service.GamificationEventService;
-import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
+import com.hunt.otziv.p_products.dto.OrderPaidPostCommitEvent;
 import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.next_order.service.NextOrderFailureNotifier;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.service.OrderStatusService;
@@ -20,13 +18,13 @@ import com.hunt.otziv.p_products.service.OrderTransactionService;
 import com.hunt.otziv.z_zp.service.PaymentCheckService;
 import com.hunt.otziv.z_zp.service.ZpService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.CaughtFailureStage.OPEN_NEXT_ORDER;
 import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFlow.ORDER_PAYMENT;
 
 @Service
@@ -40,10 +38,8 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     private final CompanyStatusService companyStatusService;
     private final OrderStatusService orderStatusService;
     private final BadReviewTaskService badReviewTaskService;
-    private final NextOrderFailureNotifier nextOrderFailureNotifier;
     private final NextOrderRequestService nextOrderRequestService;
-    private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
-    private final GamificationEventService gamificationEventService;
+    private final ApplicationEventPublisher eventPublisher;
     private final R0ObservabilityMetrics observabilityMetrics;
     private final ContractorPaymentRolloutStateService contractorPaymentRolloutStateService;
     private final ContractorCompletionRewardService contractorCompletionRewardService;
@@ -59,10 +55,8 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
             CompanyStatusService companyStatusService,
             OrderStatusService orderStatusService,
             BadReviewTaskService badReviewTaskService,
-            NextOrderFailureNotifier nextOrderFailureNotifier,
             NextOrderRequestService nextOrderRequestService,
-            MobilePushBusinessNotificationService mobilePushBusinessNotificationService,
-            GamificationEventService gamificationEventService,
+            ApplicationEventPublisher eventPublisher,
             R0ObservabilityMetrics observabilityMetrics,
             ContractorPaymentRolloutStateService contractorPaymentRolloutStateService,
             ContractorCompletionRewardService contractorCompletionRewardService
@@ -74,10 +68,8 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         this.companyStatusService = companyStatusService;
         this.orderStatusService = orderStatusService;
         this.badReviewTaskService = badReviewTaskService;
-        this.nextOrderFailureNotifier = nextOrderFailureNotifier;
         this.nextOrderRequestService = nextOrderRequestService;
-        this.mobilePushBusinessNotificationService = mobilePushBusinessNotificationService;
-        this.gamificationEventService = gamificationEventService;
+        this.eventPublisher = eventPublisher;
         this.observabilityMetrics = observabilityMetrics;
         this.contractorPaymentRolloutStateService = contractorPaymentRolloutStateService;
         this.contractorCompletionRewardService = contractorCompletionRewardService;
@@ -153,13 +145,13 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
                 companyService.save(checkStatusToCompany(company));
                 badReviewTaskService.cancelPendingTasksForOrder(order);
                 if (createNextOrder) {
-                    try {
-                        nextOrderRequestService.openForPaidOrder(order);
-                    } catch (RuntimeException e) {
-                        observabilityMetrics.recordCaughtFailure(ORDER_PAYMENT, OPEN_NEXT_ORDER);
-                        log.warn("Не удалось открыть заявку на следующий заказ после оплаты заказа {}", order.getId(), e);
-                        nextOrderFailureNotifier.notifyManager(order, null, "оплата обычного заказа", e);
-                    }
+                    // The PENDING request is the durable intent. It belongs to
+                    // the payment transaction, while actual order creation is
+                    // already dispatched asynchronously AFTER_COMMIT. Never
+                    // catch a REQUIRED participant here: doing so hides the
+                    // original persistence cause and leaves this transaction
+                    // rollback-only until an anonymous UnexpectedRollback.
+                    nextOrderRequestService.openForPaidOrder(order);
                 }
             } else {
                 log.error("Проблемы при сохранении начислений");
@@ -178,8 +170,11 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
             contractorCompletionRewardService.ensureOrderPaymentAccrual(order.getId());
         }
         if (!wasAlreadyPaid) {
-            gamificationEventService.recordOrderPaid(order);
-            mobilePushBusinessNotificationService.notifyOwnersOrderPaid(order);
+            // Both consumers are optional and perform their own database work.
+            // Running them under the order/payment lock allowed a caught
+            // REQUIRED failure to poison the financial transaction. The event
+            // is delivered only after the enclosing transaction really commits.
+            eventPublisher.publishEvent(new OrderPaidPostCommitEvent(order.getId()));
         }
         return true;
     }

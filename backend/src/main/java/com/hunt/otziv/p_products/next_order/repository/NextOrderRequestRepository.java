@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,6 +20,21 @@ import java.util.Optional;
 public interface NextOrderRequestRepository extends CrudRepository<NextOrderRequest, Long> {
 
     Optional<NextOrderRequest> findBySourceOrderId(Long sourceOrderId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT request FROM NextOrderRequest request WHERE request.id = :requestId")
+    Optional<NextOrderRequest> findByIdForUpdate(@Param("requestId") Long requestId);
+
+    @Query("""
+        SELECT request.id
+        FROM NextOrderRequest request
+        WHERE request.status IN :statuses
+          AND request.updatedAt <= :dueBefore
+        ORDER BY request.updatedAt ASC, request.id ASC
+    """)
+    List<Long> findStaleRequestIds(@Param("statuses") Collection<NextOrderRequestStatus> statuses,
+                                   @Param("dueBefore") LocalDateTime dueBefore,
+                                   Pageable pageable);
 
     List<NextOrderRequest> findByCreatedOrder_Id(Long createdOrderId);
 

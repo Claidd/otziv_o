@@ -13,6 +13,7 @@ import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService.AggregateTeam;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
+import com.hunt.otziv.contractor_payments.dto.ContractorPaymentAdminSummaryResponse;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentVisibilityService;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
@@ -53,7 +54,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -532,7 +535,31 @@ class ApiCabinetControllerTest {
         assertEquals(DATE, response.date());
         assertEquals("alex", response.user().getUsername());
         assertEquals(100L, response.groups().get("managers").getFirst().salary());
+        verify(contractorPaymentVisibilityService).adminSummary(DATE);
         verify(analyticsAggregateScoreService, never()).buildScore(DATE);
+    }
+
+    @Test
+    void scoreKeepsWorkMetricsCachedButReloadsFinanceForEveryRequest() {
+        ReflectionTestUtils.setField(controller, "aggregateAnalyticsReadEnabled", false);
+        when(personalService.getPersonalsAndCountToScore(DATE))
+                .thenReturn(List.of(scoreUser("Cached Manager", 100L)));
+        ContractorPaymentAdminSummaryResponse firstFinance = mock(ContractorPaymentAdminSummaryResponse.class);
+        ContractorPaymentAdminSummaryResponse secondFinance = mock(ContractorPaymentAdminSummaryResponse.class);
+        when(contractorPaymentVisibilityService.adminSummary(DATE))
+                .thenReturn(List.of(firstFinance), List.of(secondFinance));
+
+        ApiCabinetController.ScoreResponse first = controller.score(
+                principal, authentication, DATE, false
+        );
+        ApiCabinetController.ScoreResponse second = controller.score(
+                principal, authentication, DATE, false
+        );
+
+        assertSame(firstFinance, first.contractorPayments().getFirst());
+        assertSame(secondFinance, second.contractorPayments().getFirst());
+        verify(personalService).getPersonalsAndCountToScore(DATE);
+        verify(contractorPaymentVisibilityService, times(2)).adminSummary(DATE);
     }
 
     @Test
@@ -592,6 +619,7 @@ class ApiCabinetControllerTest {
         assertNull(worker.totalSum());
         assertNull(worker.zpTotal());
         assertNull(worker.newCompanies());
+        verify(contractorPaymentVisibilityService, never()).adminSummary(DATE);
     }
 
     @Test

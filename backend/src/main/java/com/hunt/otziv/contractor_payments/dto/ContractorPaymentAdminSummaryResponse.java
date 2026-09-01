@@ -6,7 +6,9 @@ import com.hunt.otziv.contractor_payments.model.ContractorRole;
  * Admin/owner financial overview for the score page.
  *
  * <p>Intentionally excludes payment requisites; the score page needs amounts,
- * not card/phone snapshots.</p>
+ * not card/phone snapshots. Month fields and transfer statistics belong to the
+ * month selected on the score page. Total, debt, open-reserve and available
+ * fields are a current all-time balance snapshot.</p>
  */
 public record ContractorPaymentAdminSummaryResponse(
         Long profileId,
@@ -23,6 +25,8 @@ public record ContractorPaymentAdminSummaryResponse(
         long paidTotalKopecks,
         long actualTransferCount,
         long actualTransferAmountKopecks,
+        long outstandingDebtKopecks,
+        long outstandingReservedKopecks,
         long availableKopecks,
         boolean reportingLive,
         boolean currentMonthCoverageComplete

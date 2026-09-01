@@ -21,27 +21,36 @@
   }
 
   @if (score()) {
-    @if (!score()?.financeVisible) {
+    @if (score()?.financeVisible) {
+      <section class="notice">
+        <span class="material-icons-sharp">info</span>
+        <p>«Начислено» и «Оплачено» считаются за выбранный месяц. Общий долг, резерв и сумма к доплате — текущие переходящие остатки: при смене месяца они не пропадают.</p>
+      </section>
+    } @else {
       <section class="notice">
         <span class="material-icons-sharp">lock</span>
         <p>Финансовые суммы скрыты для твоей роли. Рейтинг показывает рабочие счетчики.</p>
       </section>
     }
 
-    @for (section of sections; track section.key) {
-      <section class="score-section">
+    @for (section of visibleSections(); track section.key) {
+      <section class="score-section" [class.saved-balances]="section.financialOnly">
         <div class="section-title">
           <span class="material-icons-sharp">{{ section.icon }}</span>
           <h2>{{ section.title }}</h2>
           <small>{{ users(section).length }}</small>
         </div>
 
+        @if (section.financialOnly) {
+          <p class="section-description">Здесь показаны долги и резервы профилей, которых уже нет в рейтинге за выбранный месяц.</p>
+        }
+
         <div class="score-grid">
           @for (user of users(section); track userTrack(user)) {
             <article class="score-card">
               <div class="rank">{{ $index + 1 }}</div>
 
-              @if (score()?.financeVisible && user.userId) {
+              @if (score()?.financeVisible && user.userId && !section.financialOnly) {
                 <a class="avatar-link" [routerLink]="['/admin/user-info', user.userId]">
                   <img [src]="imageUrl(user.imageId)" [alt]="user.fio">
                 </a>
@@ -53,48 +62,66 @@
 
               <div class="person-main">
                 <h3>{{ user.fio }}</h3>
-                <p>{{ user.role }}</p>
+                <p>{{ section.financialOnly ? 'В рейтинге за месяц отсутствует' : user.role }}</p>
               </div>
 
-              @if (contractorPaymentFor(user); as payment) {
+              @for (payment of contractorPaymentsFor(user); track payment.profileId) {
                 <div class="card-finance" [class.muted]="!payment.profileEnabled">
                   <div class="card-finance-title">
-                    <span class="material-icons-sharp">payments</span>
-                    <strong>Финансы</strong>
+                    <div class="card-finance-heading">
+                      <span class="material-icons-sharp">payments</span>
+                      <span>
+                        <strong>Финансы · {{ contractorRoleLabel(payment) }}</strong>
+                        <em>за {{ selectedMonthLabel() }}</em>
+                      </span>
+                    </div>
                     <small [class.live]="payment.reportingLive && payment.liveEnabled">
                       {{ contractorStatusLabel(payment) }}
                     </small>
                   </div>
                   <div class="card-finance-grid">
                     <span class="accrued">
-                      <small>Начислено</small>
+                      <small>Начислено за месяц</small>
                       <b>{{ moneyKopecks(payment.accruedMonthKopecks) }}</b>
                     </span>
-                    <span class="reserved">
-                      <small>Резерв</small>
-                      <b>{{ moneyKopecks(payment.reservedKopecks) }}</b>
-                    </span>
                     <span class="paid">
-                      <small>Оплачено</small>
+                      <small>Оплачено за месяц</small>
                       <b>{{ moneyKopecks(payment.paidMonthKopecks) }}</b>
                     </span>
                     <span class="transfers">
-                      <small>Переводы</small>
+                      <small>Переводы за месяц</small>
                       <b>{{ payment.actualTransferCount || 0 }} шт.</b>
                       <em>{{ moneyKopecks(payment.actualTransferAmountKopecks) }}</em>
+                    </span>
+                    <span class="debt">
+                      <small>Долг всего сейчас</small>
+                      <b>{{ moneyKopecks(outstandingDebtKopecks(payment)) }}</b>
+                    </span>
+                    <span class="reserved">
+                      <small>Резерв всего сейчас</small>
+                      <b>{{ moneyKopecks(outstandingReservedKopecks(payment)) }}</b>
+                      @if (payment.pendingKopecks) {
+                        <em>на подтверждении: {{ moneyKopecks(payment.pendingKopecks) }}</em>
+                      }
+                    </span>
+                    <span class="due">
+                      <small>К доплате сейчас</small>
+                      <b>{{ moneyKopecks(payment.availableKopecks) }}</b>
                     </span>
                   </div>
                 </div>
               }
 
-              <dl>
-                @for (row of rows(section, user); track row.label) {
-                  <div>
-                    <dt>{{ row.label }}</dt>
-                    <dd>{{ row.value }}</dd>
-                  </div>
-                }
-              </dl>
+              @if (!section.financialOnly) {
+                <dl>
+                  @for (row of rows(section, user); track row.label) {
+                    <div>
+                      <dt>{{ row.label }}</dt>
+                      <dd>{{ row.value }}</dd>
+                    </div>
+                  }
+                </dl>
+              }
 
             </article>
           } @empty {

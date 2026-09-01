@@ -102,6 +102,18 @@ input[type='date'] {
   font-weight: 900;
 }
 
+.section-description {
+  max-width: 62rem;
+  color: var(--otziv-info);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.score-section.saved-balances {
+  border: 1px solid rgba(239, 177, 77, 0.28);
+  background: linear-gradient(145deg, rgba(239, 177, 77, 0.06), var(--otziv-white) 28%);
+}
+
 .score-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
@@ -196,19 +208,36 @@ dd {
 }
 
 .card-finance.muted {
-  opacity: 0.62;
+  opacity: 1;
+}
+
+.card-finance + .card-finance {
+  border-top: 1px dashed rgba(103, 116, 131, 0.2);
+  padding-top: 0.65rem;
 }
 
 .card-finance-title {
   display: flex;
   min-width: 0;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.35rem;
   padding: 0 0.1rem;
   color: var(--otziv-info);
 }
 
-.card-finance-title span {
+.card-finance-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.card-finance-heading > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.card-finance-title .card-finance-heading > .material-icons-sharp {
   color: var(--otziv-primary);
   font-size: 1.05rem;
 }
@@ -216,6 +245,13 @@ dd {
 .card-finance-title strong {
   color: var(--otziv-dark);
   font-size: 0.82rem;
+}
+
+.card-finance-heading em {
+  color: var(--otziv-info);
+  font-size: 0.64rem;
+  font-style: normal;
+  font-weight: 800;
 }
 
 .card-finance-title small {
@@ -228,7 +264,7 @@ dd {
   color: var(--otziv-info);
   font-size: 0.66rem;
   font-weight: 900;
-  white-space: nowrap;
+  text-align: right;
 }
 
 .card-finance-title small.live {
@@ -260,6 +296,16 @@ dd {
   background: linear-gradient(135deg, rgba(49, 164, 145, 0.11), var(--otziv-white));
 }
 
+.card-finance-grid > span.debt {
+  border-color: rgba(220, 74, 57, 0.24);
+  background: linear-gradient(135deg, rgba(220, 74, 57, 0.08), var(--otziv-white));
+}
+
+.card-finance-grid > span.due {
+  border-color: rgba(231, 75, 57, 0.3);
+  background: linear-gradient(135deg, rgba(231, 75, 57, 0.12), var(--otziv-white));
+}
+
 .card-finance-grid > span.transfers {
   border-color: rgba(79, 111, 181, 0.24);
   background: linear-gradient(135deg, rgba(79, 111, 181, 0.1), var(--otziv-white));
@@ -267,12 +313,10 @@ dd {
 
 .card-finance-grid small {
   display: block;
-  overflow: hidden;
   color: var(--otziv-info);
   font-size: 0.66rem;
   font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.2;
 }
 
 .card-finance-grid b {

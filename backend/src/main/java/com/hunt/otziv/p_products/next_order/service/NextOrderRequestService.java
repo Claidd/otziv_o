@@ -4,7 +4,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
-import com.hunt.otziv.common_billing.service.CommonBillingNextOrderFailureMarker;
+import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestFailedEvent;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestedEvent;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestSummary;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
@@ -52,8 +52,6 @@ public class NextOrderRequestService {
     private final CompanyService companyService;
     private final CompanyStatusService companyStatusService;
     private final ApplicationEventPublisher eventPublisher;
-    private final NextOrderFailureNotifier nextOrderFailureNotifier;
-    private final CommonBillingNextOrderFailureMarker commonBillingNextOrderFailureMarker;
 
     @Transactional
     public Optional<NextOrderRequest> openForPaidOrder(Order sourceOrder) {
@@ -209,20 +207,22 @@ public class NextOrderRequestService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markFailed(Long requestId, Throwable cause) {
-        requestRepository.findById(requestId).ifPresent(request -> {
+        requestRepository.findByIdForUpdate(requestId).ifPresent(request -> {
+            if (!OPEN_REQUEST_STATUSES.contains(request.getStatus())) {
+                log.info(
+                        "Поздняя ошибка автосоздания проигнорирована для завершенной заявки {} со статусом {}",
+                        requestId,
+                        request.getStatus()
+                );
+                return;
+            }
             request.setAttempts(request.getAttempts() + 1);
             request.setStatus(NextOrderRequestStatus.FAILED);
             request.setErrorMessage(truncate(errorMessage(cause)));
             requestRepository.save(request);
-            refreshCompanyStatusForOpenRequests(request.getCompany().getId());
-            commonBillingNextOrderFailureMarker.markAttentionForSourceOrder(request.getSourceOrder(), requestId, cause);
             log.error("Автоматический следующий заказ по заявке {} не создан", requestId, cause);
-            nextOrderFailureNotifier.notifyManager(
-                    request.getSourceOrder(),
-                    null,
-                    "автосоздание следующего заказа по заявке #" + requestId,
-                    cause
-            );
+            Long sourceOrderId = request.getSourceOrder() == null ? null : request.getSourceOrder().getId();
+            eventPublisher.publishEvent(new NextOrderRequestFailedEvent(requestId, sourceOrderId, cause));
         });
     }
 

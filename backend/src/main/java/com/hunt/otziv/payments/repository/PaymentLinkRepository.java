@@ -328,10 +328,37 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             String lastError
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<PaymentLink> findFirstByOrder_IdAndStatusAndLastErrorStartingWithOrderByPaidAtDesc(
             Long orderId,
             PaymentLinkStatus status,
             String lastErrorPrefix
+    );
+
+    @Query("""
+        SELECT link.order.id
+        FROM PaymentLink link
+        WHERE link.status = com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED
+          AND link.lastError LIKE CONCAT(:lastErrorPrefix, '%')
+          AND link.paidAt IS NOT NULL
+          AND link.paidAt <= :attemptBefore
+          AND (link.order.complete = true OR link.order.counter >= link.order.amount)
+          AND NOT EXISTS (
+              SELECT recoveryTask.id
+              FROM ReviewRecoveryTask recoveryTask
+              WHERE recoveryTask.order.id = link.order.id
+                AND recoveryTask.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus.PLANNED
+                AND recoveryTask.batch.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus.OPEN
+        )
+        GROUP BY link.order.id
+        ORDER BY MAX(link.updatedAt),
+                 MIN(link.paidAt),
+                 MIN(link.id)
+    """)
+    List<Long> findConfirmedPrepaymentRecoveryOrderIds(
+            @Param("lastErrorPrefix") String lastErrorPrefix,
+            @Param("attemptBefore") LocalDateTime attemptBefore,
+            Pageable pageable
     );
 
     Optional<PaymentLink> findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(

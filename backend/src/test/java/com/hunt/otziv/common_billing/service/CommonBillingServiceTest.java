@@ -50,7 +50,6 @@ import com.hunt.otziv.p_products.deletion.service.OrderDeletionService;
 import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
-import com.hunt.otziv.p_products.next_order.service.NextOrderFailureNotifier;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
@@ -226,8 +225,6 @@ class CommonBillingServiceTest {
     private OrderTransactionService orderTransactionService;
     @Mock
     private OrderStatusTransitionService orderStatusTransitionService;
-    @Mock
-    private NextOrderFailureNotifier nextOrderFailureNotifier;
     @Mock
     private NextOrderRequestService nextOrderRequestService;
     @Mock
@@ -1277,7 +1274,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void closePaidInvoiceObservesCompletionAndCaughtOrderFailure() throws Exception {
+    void closePaidInvoiceFailsFastWithoutSavingNeedsAttentionWhenOrderCloseFails() throws Exception {
         CommonInvoice invoice = new CommonInvoice();
         invoice.setId(501L);
         invoice.setStatus(CommonInvoiceStatus.READY);
@@ -1290,43 +1287,94 @@ class CommonBillingServiceTest {
         item.setOrder(order);
         item.setAmountKopecks(10_000L);
 
-        doThrow(new IllegalStateException("synthetic close failure"))
+        IllegalStateException persistenceFailure = new IllegalStateException("synthetic close failure");
+        doThrow(persistenceFailure)
                 .when(orderTransactionService).handlePaymentStatus(order, false);
 
-        ReflectionTestUtils.invokeMethod(service, "closePaidInvoice", invoice, List.of(item));
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () ->
+                ReflectionTestUtils.invokeMethod(service, "closePaidInvoice", invoice, List.of(item))
+        );
 
+        assertSame(persistenceFailure, thrown.getCause());
+        assertTrue(thrown.getMessage().contains("operation=close_order"));
+        assertTrue(thrown.getMessage().contains("invoiceId=501"));
+        assertTrue(thrown.getMessage().contains("orderId=601"));
         verify(observabilityMetrics).observeTransactionCompletion(COMMON_INVOICE_CLOSE);
         verify(observabilityMetrics).recordCaughtFailure(COMMON_INVOICE_CLOSE, CLOSE_ORDER);
-        verify(invoiceRepository).save(invoice);
-        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        verify(invoiceRepository, never()).save(invoice);
+        verify(messageSender, never()).send(any(), any(), any(), any());
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertNull(invoice.getLastError());
     }
 
     @Test
-    void openNextOrdersRecordsCaughtFailureWithoutChangingControlFlow() {
+    void confirmedItemCloseFailsFastWithoutSavingNeedsAttention() throws Exception {
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(503L);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+
+        Order order = new Order();
+        order.setId(603L);
+        CommonInvoiceOrder item = new CommonInvoiceOrder();
+        item.setOrder(order);
+        item.setInvoice(invoice);
+        IllegalStateException persistenceFailure = new IllegalStateException("synthetic confirmed close failure");
+        doThrow(persistenceFailure).when(orderTransactionService).handlePaymentStatus(order, false);
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () ->
+                ReflectionTestUtils.invokeMethod(
+                        service,
+                        "closeOrderAsPaidForConfirmedItem",
+                        invoice,
+                        item
+                )
+        );
+
+        assertSame(persistenceFailure, thrown.getCause());
+        assertTrue(thrown.getMessage().contains("operation=close_confirmed_order"));
+        assertTrue(thrown.getMessage().contains("invoiceId=503"));
+        assertTrue(thrown.getMessage().contains("orderId=603"));
+        verify(observabilityMetrics).recordCaughtFailure(COMMON_INVOICE_CLOSE, CLOSE_ORDER);
+        verify(invoiceRepository, never()).save(invoice);
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertNull(invoice.getLastError());
+    }
+
+    @Test
+    void openNextOrdersFailsFastWithoutSavingNeedsAttention() {
         CommonBillingAccount account = new CommonBillingAccount();
         account.setAutoRepeatOrders(true);
         CommonInvoice invoice = new CommonInvoice();
         invoice.setId(502L);
         invoice.setAccount(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
 
         Order order = new Order();
         order.setId(602L);
         CommonInvoiceOrder item = new CommonInvoiceOrder();
         item.setOrder(order);
         item.setInvoice(invoice);
-        doThrow(new IllegalStateException("synthetic next-order failure"))
+        IllegalStateException persistenceFailure = new IllegalStateException("synthetic next-order failure");
+        doThrow(persistenceFailure)
                 .when(nextOrderRequestService).openForPaidOrder(order);
 
-        List<String> failures = ReflectionTestUtils.invokeMethod(
-                service,
-                "openNextOrdersIfEnabled",
-                invoice,
-                List.of(item)
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () ->
+                ReflectionTestUtils.invokeMethod(
+                        service,
+                        "openNextOrdersIfEnabled",
+                        invoice,
+                        List.of(item)
+                )
         );
 
-        assertNotNull(failures);
-        assertEquals(1, failures.size());
+        assertSame(persistenceFailure, thrown.getCause());
+        assertTrue(thrown.getMessage().contains("operation=open_next_order"));
+        assertTrue(thrown.getMessage().contains("invoiceId=502"));
+        assertTrue(thrown.getMessage().contains("orderId=602"));
         verify(observabilityMetrics).recordCaughtFailure(COMMON_INVOICE_CLOSE, OPEN_NEXT_ORDER);
+        verify(invoiceRepository, never()).save(invoice);
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertNull(invoice.getLastError());
     }
 
     @Test
@@ -2317,7 +2365,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void markPaidLeavesInvoiceVisibleWhenOrderClosingFails() throws Exception {
+    void markPaidPropagatesOrderClosingFailureForAtomicRollback() throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
         Order order = order(101L);
@@ -2327,21 +2375,26 @@ class CommonBillingServiceTest {
         when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
-        when(orderTransactionService.handlePaymentStatus(order, false)).thenThrow(new RuntimeException("zp"));
-        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
-        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        RuntimeException persistenceFailure = new RuntimeException("zp");
+        when(orderTransactionService.handlePaymentStatus(order, false)).thenThrow(persistenceFailure);
 
-        service.markPaid(10L);
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> service.markPaid(10L));
 
+        assertSame(persistenceFailure, thrown.getCause());
+        assertTrue(thrown.getMessage().contains("operation=close_order"));
+        assertTrue(thrown.getMessage().contains("invoiceId=10"));
+        assertTrue(thrown.getMessage().contains("orderId=101"));
         assertFalse(item.isPaid());
-        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
-        assertTrue(invoice.getLastError().contains("close_failed"));
+        assertTrue(invoice.getStatus() != CommonInvoiceStatus.NEEDS_ATTENTION);
+        assertTrue(invoice.getLastError() == null || !invoice.getLastError().contains("close_failed"));
         verify(nextOrderRequestService, never()).openForPaidOrder(any());
+        verify(messageSender, never()).send(any(), any(), any(), any());
     }
 
     @Test
-    void markPaidLeavesInvoiceVisibleAndNotifiesWhenNextOrderCreationFails() throws Exception {
+    void markPaidPropagatesNextOrderFailureWithoutInlineSuccessNotification() throws Exception {
         CommonBillingAccount account = account();
+        account.setAutoRepeatOrders(true);
         CommonInvoice invoice = invoice(account);
         Order order = order(101L);
         CommonInvoiceOrder item = item(invoice, order);
@@ -2351,16 +2404,20 @@ class CommonBillingServiceTest {
         when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
-        when(nextOrderRequestService.openForPaidOrder(order)).thenThrow(new RuntimeException("next"));
-        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
-        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        RuntimeException persistenceFailure = new RuntimeException("next");
+        when(nextOrderRequestService.openForPaidOrder(order)).thenThrow(persistenceFailure);
 
-        service.markPaid(10L);
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> service.markPaid(10L));
 
+        assertSame(persistenceFailure, thrown.getCause());
+        assertTrue(thrown.getMessage().contains("operation=open_next_order"));
+        assertTrue(thrown.getMessage().contains("invoiceId=10"));
+        assertTrue(thrown.getMessage().contains("orderId=101"));
         assertTrue(item.isPaid());
-        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
-        assertTrue(invoice.getLastError().contains("next_order_failed"));
-        verify(nextOrderFailureNotifier).notifyManager(any(), any(), any(), any());
+        assertTrue(invoice.getStatus() != CommonInvoiceStatus.NEEDS_ATTENTION);
+        assertTrue(invoice.getLastError() == null || !invoice.getLastError().contains("next_order_failed"));
+        verify(paymentNotificationOutboxRepository).enqueueClient(10L);
+        verify(messageSender, never()).send(any(), any(), any(), any());
     }
 
     @Test
@@ -4399,7 +4456,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void markPaidSendsCommonPaymentSuccessNotification() throws Exception {
+    void markPaidEnqueuesCommonPaymentSuccessWithoutInlineNotification() throws Exception {
         CommonBillingAccount account = account();
         account.setAutoRepeatOrders(false);
         Manager manager = manager(7L);
@@ -4419,24 +4476,16 @@ class CommonBillingServiceTest {
                 .thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
         when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
-        when(messageSender.send(eq(company), eq("whatsapp_vika"), eq("120363@test"), any()))
-                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
         when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
 
         service.markPaid(10L);
 
         assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
-        assertNotNull(invoice.getPaymentSuccessNotifiedAt());
-        assertEquals(null, invoice.getPaymentSuccessNotificationError());
-        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
-        verify(messageSender).send(eq(company), eq("whatsapp_vika"), eq("120363@test"), messageCaptor.capture());
+        assertNull(invoice.getPaymentSuccessNotifiedAt());
+        assertNull(invoice.getPaymentSuccessNotificationError());
+        verify(messageSender, never()).send(any(), any(), any(), any());
         verify(paymentNotificationOutboxRepository).enqueueClient(10L);
-        assertTrue(messageCaptor.getValue().contains("Оплата прошла успешно."));
-        assertTrue(messageCaptor.getValue().contains("Общий счет: Общий плательщик"));
-        assertTrue(messageCaptor.getValue().contains("Сумма: 1000 руб."));
-        assertTrue(messageCaptor.getValue().contains("client@example.com"));
     }
 
     @Test
@@ -4496,7 +4545,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void outboxClientDeliverySkipsInvoiceAlreadyNotifiedInline() {
+    void outboxClientDeliverySkipsInvoiceAlreadyMarkedNotified() {
         CommonInvoice invoice = invoice(account());
         invoice.setStatus(CommonInvoiceStatus.PAID);
         invoice.setAmountKopecks(100_000L);

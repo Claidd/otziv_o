@@ -355,7 +355,7 @@ public class ApiCabinetController {
             boolean financeVisible = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
             boolean managerPerformanceVisible = financeVisible;
 
-            return cached(
+            CachedScoreResponse cachedScore = cached(
                     CacheConfig.CABINET_SCORE,
                     cabinetKey("score", principal.getName(), financeVisible, managerPerformanceVisible, selectedDate, aggregateAnalyticsReadEnabled),
                     refresh,
@@ -378,12 +378,11 @@ public class ApiCabinetController {
                                         Collectors.toList()
                                 ));
 
-                        return new ScoreResponse(
+                        return new CachedScoreResponse(
                                 selectedDate,
                                 personalService.getUserLK(principal),
                                 financeVisible,
                                 managerPerformanceVisible,
-                                financeVisible ? contractorPaymentVisibilityService.adminSummary() : List.of(),
                                 Map.of(
                                         "managers", groupedUsers.getOrDefault("ROLE_MANAGER", List.of()),
                                         "marketologs", groupedUsers.getOrDefault("ROLE_MARKETOLOG", List.of()),
@@ -392,6 +391,17 @@ public class ApiCabinetController {
                                 )
                         );
                     }
+            );
+            List<ContractorPaymentAdminSummaryResponse> contractorPayments = financeVisible
+                    ? contractorPaymentVisibilityService.adminSummary(selectedDate)
+                    : List.of();
+            return new ScoreResponse(
+                    cachedScore.date(),
+                    cachedScore.user(),
+                    cachedScore.financeVisible(),
+                    cachedScore.managerPerformanceVisible(),
+                    contractorPayments,
+                    cachedScore.groups()
             );
         });
     }
@@ -1068,6 +1078,15 @@ public class ApiCabinetController {
             boolean financeVisible,
             boolean managerPerformanceVisible,
             List<ContractorPaymentAdminSummaryResponse> contractorPayments,
+            Map<String, List<ScoreUserResponse>> groups
+    ) {
+    }
+
+    private record CachedScoreResponse(
+            LocalDate date,
+            UserLKDTO user,
+            boolean financeVisible,
+            boolean managerPerformanceVisible,
             Map<String, List<ScoreUserResponse>> groups
     ) {
     }

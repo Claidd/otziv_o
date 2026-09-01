@@ -6,6 +6,7 @@ import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.common_billing.service.CommonBillingNextOrderFailureMarker;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestedEvent;
+import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestFailedEvent;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestSummary;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
 import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
@@ -15,6 +16,8 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.u_users.model.Worker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -140,7 +143,7 @@ class NextOrderRequestServiceTest {
     }
 
     @Test
-    void markFailedMarksLinkedCommonInvoiceAsNeedsAttention() {
+    void markFailedCommitsStateBeforePostCommitNotifications() {
         NextOrderRequestService service = service();
         Company company = company(10L);
         Filial filial = filial(20L);
@@ -154,13 +157,43 @@ class NextOrderRequestServiceTest {
         request.setId(50L);
         RuntimeException cause = new RuntimeException("deadlock");
 
-        when(requestRepository.findById(50L)).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(request));
 
         service.markFailed(50L, cause);
 
         assertEquals(NextOrderRequestStatus.FAILED, request.getStatus());
-        verify(commonBillingNextOrderFailureMarker).markAttentionForSourceOrder(sourceOrder, 50L, cause);
+        assertEquals(1, request.getAttempts());
         verify(requestRepository).save(request);
+        verify(eventPublisher).publishEvent(new NextOrderRequestFailedEvent(50L, 30L, cause));
+        verifyNoInteractions(commonBillingNextOrderFailureMarker, nextOrderFailureNotifier);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = NextOrderRequestStatus.class, names = {"CREATED", "CANCELED"})
+    void markFailedDoesNotOverwriteTerminalRequest(NextOrderRequestStatus terminalStatus) {
+        NextOrderRequestService service = service();
+        Company company = company(10L);
+        Filial filial = filial(20L);
+        Order sourceOrder = order(30L, company, filial);
+        NextOrderRequest request = NextOrderRequest.builder()
+                .company(company)
+                .filial(filial)
+                .sourceOrder(sourceOrder)
+                .status(terminalStatus)
+                .errorMessage("terminal state")
+                .attempts(3)
+                .build();
+        request.setId(50L);
+
+        when(requestRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(request));
+
+        service.markFailed(50L, new RuntimeException("late listener failure"));
+
+        assertEquals(terminalStatus, request.getStatus());
+        assertEquals(3, request.getAttempts());
+        assertEquals("terminal state", request.getErrorMessage());
+        verify(requestRepository, never()).save(any());
+        verifyNoInteractions(eventPublisher, commonBillingNextOrderFailureMarker, nextOrderFailureNotifier);
     }
 
     private NextOrderRequestService service() {
@@ -169,9 +202,7 @@ class NextOrderRequestServiceTest {
                 orderRepository,
                 companyService,
                 companyStatusService,
-                eventPublisher,
-                nextOrderFailureNotifier,
-                commonBillingNextOrderFailureMarker
+                eventPublisher
         );
     }
 

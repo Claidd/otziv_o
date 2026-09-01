@@ -97,6 +97,7 @@ import com.hunt.otziv.payments.service.PaymentSuccessNotificationDeliveryService
 import com.hunt.otziv.payments.service.TbankClient;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
+import com.hunt.otziv.review_recovery.service.ReviewRecoveryGateService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Role;
@@ -113,6 +114,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -128,6 +131,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -167,6 +171,9 @@ class PaymentLinkServiceTest {
 
     @Mock
     private BadReviewTaskService badReviewTaskService;
+
+    @Mock
+    private ReviewRecoveryGateService reviewRecoveryGateService;
 
     @Mock
     private OrderTransactionService orderTransactionService;
@@ -7115,6 +7122,258 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void approvedTochkaPaymentWaitsForActiveReviewRecoveryAndAppliesExactlyOnceAfterRelease()
+            throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setApplyConfirmedPayments(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(25_099L, "ООО Восстановление отзывов", BigDecimal.valueOf(4_000));
+        order.setAmount(20);
+        order.setCounter(20);
+        PaymentProfile profile = tochkaEntityProfile(407L);
+        profile.setTestMode(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink link = payableLink(order, "tochka-recovery-gated", 400_000L);
+        link.setId(7_407L);
+        link.setCreatedAt(LocalDateTime.now().minusHours(1));
+        link.setPaymentProfile(profile);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankOrderId("tochka-link-7407");
+        link.setTbankPaymentId("tochka-operation-7407");
+        link.setTbankTerminalKey(runtime.merchantId());
+
+        when(reviewRecoveryGateService.hasActiveRecoveryTasks(order.getId()))
+                .thenReturn(true, false);
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(paymentLinkRepository.findByIdWithOrder(link.getId())).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByIdForUpdate(link.getId())).thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tochkaClient.getPaymentInfo(runtime, link.getTbankPaymentId())).thenReturn(tochkaPaymentInfo(
+                tochkaOperation(
+                        runtime,
+                        link.getTbankOrderId(),
+                        link.getTbankPaymentId(),
+                        TochkaPaymentMode.SBP,
+                        "APPROVED",
+                        link.getAmountKopecks()
+                )
+        ));
+        when(paymentLinkRepository
+                .findFirstByOrder_IdAndStatusAndLastErrorStartingWithOrderByPaidAtDesc(
+                        order.getId(),
+                        PaymentLinkStatus.CONFIRMED,
+                        "prepaid_waiting_order_completion"
+                ))
+                .thenReturn(Optional.of(link), Optional.empty());
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+
+        assertTrue(service.reconcileBankLink(link.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        assertEquals("APPROVED", link.getProviderTerminalStatus());
+        assertEquals("prepaid_waiting_order_completion", link.getLastError());
+        assertEquals(400_000L, link.getConfirmedAmountKopecks());
+        verify(orderTransactionService, never()).handlePaymentStatus(any(Order.class));
+
+        assertTrue(service.applyConfirmedPrepaymentIfReady(order.getId()));
+        assertFalse(service.applyConfirmedPrepaymentIfReady(order.getId()));
+
+        assertNull(link.getLastError());
+        verify(orderTransactionService, times(1)).handlePaymentStatus(order);
+    }
+
+    @Test
+    void approvedTochkaApplyFailureIsQuarantinedDurablyAndNextRetrySelfRecovers()
+            throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setApplyConfirmedPayments(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(25_199L, "ООО Повтор Точка", BigDecimal.valueOf(4_000));
+        order.setAmount(20);
+        order.setCounter(20);
+        PaymentProfile profile = tochkaEntityProfile(417L);
+        profile.setTestMode(false);
+        TochkaPaymentProfile runtime = tochkaRuntimeProfile(false, false);
+        PaymentLink snapshot = payableLink(order, "tochka-rollback-snapshot", 400_000L);
+        snapshot.setId(7_417L);
+        snapshot.setCreatedAt(LocalDateTime.now().minusHours(1));
+        snapshot.setPaymentProfile(profile);
+        snapshot.setStatus(PaymentLinkStatus.INITIATED);
+        snapshot.setPaymentMethod(PaymentMethod.SBP_QR);
+        snapshot.setTbankOrderId("tochka-link-7417");
+        snapshot.setTbankPaymentId("tochka-operation-7417");
+        snapshot.setTbankTerminalKey(runtime.merchantId());
+        PaymentLink doomed = copyBankLink(snapshot);
+        PaymentLink recovered = copyBankLink(snapshot);
+
+        when(tochkaPaymentProfileResolver.resolveForExistingPayment(profile)).thenReturn(runtime);
+        when(paymentLinkRepository.findByIdWithOrder(snapshot.getId()))
+                .thenReturn(Optional.of(snapshot), Optional.of(recovered));
+        when(paymentLinkRepository.findByIdForUpdate(snapshot.getId()))
+                .thenReturn(Optional.of(doomed), Optional.of(recovered), Optional.of(recovered));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tochkaClient.getPaymentInfo(runtime, snapshot.getTbankPaymentId())).thenReturn(tochkaPaymentInfo(
+                tochkaOperation(
+                        runtime,
+                        snapshot.getTbankOrderId(),
+                        snapshot.getTbankPaymentId(),
+                        TochkaPaymentMode.SBP,
+                        "APPROVED",
+                        snapshot.getAmountKopecks()
+                )
+        ));
+        when(orderTransactionService.handlePaymentStatus(order))
+                .thenThrow(new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "synthetic accounting conflict"
+                ))
+                .thenReturn(true);
+
+        assertTrue(service.reconcileBankLink(snapshot.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, recovered.getStatus());
+        assertEquals("APPROVED", recovered.getProviderTerminalStatus());
+        assertEquals(400_000L, recovered.getConfirmedAmountKopecks());
+        assertNotNull(recovered.getPaidAt());
+        assertNotNull(recovered.getBankReconciliationAttemptedAt());
+        assertTrue(recovered.getLastError().contains("synthetic accounting conflict"));
+
+        assertTrue(service.reconcileBankLink(
+                recovered.getId(),
+                LocalDateTime.now().plusSeconds(1)
+        ));
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, recovered.getStatus());
+        assertNull(recovered.getLastError());
+        verify(orderTransactionService, times(2)).handlePaymentStatus(order);
+    }
+
+    @Test
+    void confirmedTbankApplyFailureUsesTheSameDurableQuarantineBoundary() throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        properties.setApplyConfirmedPayments(true);
+        when(paymentProfileService.isTestTerminal("terminal")).thenReturn(false);
+        PaymentLinkService service = service(properties);
+        Order order = order(25_299L, "ООО Повтор Т-Банк", BigDecimal.valueOf(1_000));
+        order.setAmount(10);
+        order.setCounter(10);
+        PaymentLink snapshot = initiatedBankLink(7_427L, order, 100_000L);
+        PaymentLink doomed = copyBankLink(snapshot);
+        PaymentLink recovered = copyBankLink(snapshot);
+
+        when(paymentLinkRepository.findByIdWithOrder(snapshot.getId())).thenReturn(Optional.of(snapshot));
+        when(paymentLinkRepository.findByIdForUpdate(snapshot.getId()))
+                .thenReturn(Optional.of(doomed), Optional.of(recovered));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq(snapshot.getTbankPaymentId())))
+                .thenReturn(tbankState(
+                        "CONFIRMED",
+                        snapshot.getTbankPaymentId(),
+                        snapshot.getTbankOrderId(),
+                        snapshot.getAmountKopecks()
+                ));
+        when(orderTransactionService.handlePaymentStatus(order))
+                .thenThrow(new IllegalStateException("synthetic tbank accounting failure"));
+
+        assertTrue(service.reconcileBankLink(snapshot.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, recovered.getStatus());
+        assertEquals("CONFIRMED", recovered.getProviderTerminalStatus());
+        assertEquals(100_000L, recovered.getConfirmedAmountKopecks());
+        assertTrue(recovered.getLastError().contains("synthetic tbank accounting failure"));
+    }
+
+    @Test
+    void nonConfirmedApplyFailureRotatesOutOfReconciliationPageZero() {
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(25_349L, "ООО Очередь сверки", BigDecimal.valueOf(1_000));
+        PaymentLink snapshot = initiatedBankLink(7_432L, order, 100_000L);
+        PaymentLink doomed = copyBankLink(snapshot);
+        PaymentLink recovered = copyBankLink(snapshot);
+
+        when(paymentLinkRepository.findByIdWithOrder(snapshot.getId())).thenReturn(Optional.of(snapshot));
+        when(paymentLinkRepository.findByIdForUpdate(snapshot.getId()))
+                .thenReturn(Optional.of(doomed), Optional.of(recovered));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq(snapshot.getTbankPaymentId())))
+                .thenReturn(tbankState(
+                        "PROCESSING",
+                        snapshot.getTbankPaymentId(),
+                        snapshot.getTbankOrderId(),
+                        snapshot.getAmountKopecks()
+                ));
+        when(paymentLinkRepository.save(any(PaymentLink.class)))
+                .thenThrow(new IllegalStateException("synthetic persistence failure"))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertTrue(service.reconcileBankLink(snapshot.getId(), LocalDateTime.now()));
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, recovered.getStatus());
+        assertEquals("PROCESSING", recovered.getProviderTerminalStatus());
+        assertNull(recovered.getPaidAt());
+        assertNull(recovered.getConfirmedAmountKopecks());
+        assertNotNull(recovered.getBankReconciliationAttemptedAt());
+        assertTrue(recovered.getLastError().contains("synthetic persistence failure"));
+    }
+
+    @Test
+    void commitTimeUnexpectedRollbackStillPersistsProviderConfirmationInFreshTransaction()
+            throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        properties.setApplyConfirmedPayments(true);
+        when(paymentProfileService.isTestTerminal("terminal")).thenReturn(false);
+        AtomicInteger requiredCalls = new AtomicInteger();
+        PaymentLinkTransactionExecutor executor = new PaymentLinkTransactionExecutor() {
+            @Override
+            public <T> T required(Supplier<T> work) {
+                T result = work.get();
+                if (requiredCalls.getAndIncrement() == 0) {
+                    throw new UnexpectedRollbackException("synthetic rollback-only at commit");
+                }
+                return result;
+            }
+        };
+        PaymentLinkService service = service(
+                properties,
+                new TbankTokenSigner(),
+                null,
+                executor
+        );
+        Order order = order(25_399L, "ООО Commit boundary", BigDecimal.valueOf(1_000));
+        order.setAmount(10);
+        order.setCounter(10);
+        PaymentLink snapshot = initiatedBankLink(7_437L, order, 100_000L);
+        PaymentLink doomed = copyBankLink(snapshot);
+        PaymentLink recovered = copyBankLink(snapshot);
+
+        when(paymentLinkRepository.findByIdWithOrder(snapshot.getId())).thenReturn(Optional.of(snapshot));
+        when(paymentLinkRepository.findByIdForUpdate(snapshot.getId()))
+                .thenReturn(Optional.of(doomed), Optional.of(recovered));
+        when(orderRepository.findByIdForCounterUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq(snapshot.getTbankPaymentId())))
+                .thenReturn(tbankState(
+                        "CONFIRMED",
+                        snapshot.getTbankPaymentId(),
+                        snapshot.getTbankOrderId(),
+                        snapshot.getAmountKopecks()
+                ));
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+
+        assertTrue(service.reconcileBankLink(snapshot.getId(), LocalDateTime.now()));
+
+        assertEquals(2, requiredCalls.get());
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, recovered.getStatus());
+        assertEquals("CONFIRMED", recovered.getProviderTerminalStatus());
+        assertNotNull(recovered.getBankReconciliationAttemptedAt());
+        assertTrue(recovered.getLastError().contains("synthetic rollback-only at commit"));
+    }
+
+    @Test
     void tochkaWebhookVerifiesSignatureBeforeAnyDatabaseLookup() {
         PaymentLinkService service = service(properties());
         TochkaWebhookVerificationException failure =
@@ -8790,6 +9049,36 @@ class PaymentLinkServiceTest {
         return link;
     }
 
+    private PaymentLink copyBankLink(PaymentLink source) {
+        PaymentLink copy = new PaymentLink();
+        copy.setId(source.getId());
+        copy.setRowVersion(source.getRowVersion());
+        copy.setOrder(source.getOrder());
+        copy.setToken(source.getToken());
+        copy.setAmountKopecks(source.getAmountKopecks());
+        copy.setConfirmedAmountKopecks(source.getConfirmedAmountKopecks());
+        copy.setDescription(source.getDescription());
+        copy.setStatus(source.getStatus());
+        copy.setPaymentMethod(source.getPaymentMethod());
+        copy.setPaymentProfile(source.getPaymentProfile());
+        copy.setPaymentProfileCode(source.getPaymentProfileCode());
+        copy.setPaymentProfileName(source.getPaymentProfileName());
+        copy.setTbankPaymentId(source.getTbankPaymentId());
+        copy.setTbankOrderId(source.getTbankOrderId());
+        copy.setTbankTerminalKey(source.getTbankTerminalKey());
+        copy.setProviderTerminalStatus(source.getProviderTerminalStatus());
+        copy.setLastError(source.getLastError());
+        copy.setCreatedAt(source.getCreatedAt());
+        copy.setUpdatedAt(source.getUpdatedAt());
+        copy.setBankReconciliationAttemptedAt(source.getBankReconciliationAttemptedAt());
+        copy.setBankInitNonce(source.getBankInitNonce());
+        copy.setBankInitLeaseUntil(source.getBankInitLeaseUntil());
+        copy.setExpiresAt(source.getExpiresAt());
+        copy.setInitiatedAt(source.getInitiatedAt());
+        copy.setPaidAt(source.getPaidAt());
+        return copy;
+    }
+
     private TbankGetStateResponse tbankState(
             String status,
             String paymentId,
@@ -8841,6 +9130,20 @@ class PaymentLinkServiceTest {
             TbankTokenSigner signer,
             CommonBillingService commonBillingService
     ) {
+        return service(
+                properties,
+                signer,
+                commonBillingService,
+                new PaymentLinkTransactionExecutor()
+        );
+    }
+
+    private PaymentLinkService service(
+            TbankPaymentProperties properties,
+            TbankTokenSigner signer,
+            CommonBillingService commonBillingService,
+            PaymentLinkTransactionExecutor transactionExecutor
+    ) {
         @SuppressWarnings("unchecked")
         ObjectProvider<CommonBillingService> commonBillingServiceProvider = org.mockito.Mockito.mock(ObjectProvider.class);
         org.mockito.Mockito.lenient().when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
@@ -8848,6 +9151,7 @@ class PaymentLinkServiceTest {
                 paymentLinkRepository,
                 orderRepository,
                 badReviewTaskService,
+                reviewRecoveryGateService,
                 orderTransactionService,
                 properties,
                 runtimeSettingsService,
@@ -8878,7 +9182,7 @@ class PaymentLinkServiceTest {
                 actualPaymentAttributionService,
                 contractorPaymentTargetAccessPolicy,
                 paymentIssueReminderService,
-                new PaymentLinkTransactionExecutor()
+                transactionExecutor
         );
     }
 

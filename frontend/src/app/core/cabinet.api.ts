@@ -271,6 +271,8 @@ export interface ScoreContractorPaymentSummary {
   paidTotalKopecks: number;
   actualTransferCount: number;
   actualTransferAmountKopecks: number;
+  outstandingDebtKopecks?: number;
+  outstandingReservedKopecks?: number;
   availableKopecks: number;
   reportingLive: boolean;
   currentMonthCoverageComplete: boolean;

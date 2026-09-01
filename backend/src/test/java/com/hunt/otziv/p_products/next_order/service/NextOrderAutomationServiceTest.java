@@ -44,6 +44,19 @@ class NextOrderAutomationServiceTest {
     private OrderCreationService creationService;
 
     @Test
+    void createdRequestIsIdempotentUnderLockedRecoveryReplay() {
+        Order sourceOrder = order(30L, review(101L, 2L, "250"));
+        NextOrderRequest request = request(50L, sourceOrder);
+        request.setStatus(NextOrderRequestStatus.CREATED);
+        when(requestRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(request));
+
+        service().createNextOrder(50L);
+
+        verify(requestRepository).findByIdForUpdate(50L);
+        verifyNoInteractions(requestService, creationService);
+    }
+
+    @Test
     void reusesActiveOrderWhenReviewTermsMatchAsMultisetRegardlessOfReviewIds() {
         Order sourceOrder = order(
                 30L,
@@ -170,7 +183,7 @@ class NextOrderAutomationServiceTest {
 
     private void stubRequestAndActiveOrders(NextOrderRequest request, Order... activeOrders) {
         Order sourceOrder = request.getSourceOrder();
-        when(requestRepository.findById(request.getId())).thenReturn(Optional.of(request));
+        when(requestRepository.findByIdForUpdate(request.getId())).thenReturn(Optional.of(request));
         when(requestService.orderFilialIds(sourceOrder)).thenReturn(Set.of(20L));
         when(requestService.findActiveOrdersForFilials(10L, Set.of(20L), 20L, 70L))
                 .thenReturn(List.of(activeOrders));

@@ -25,6 +25,7 @@ import com.hunt.otziv.manager.service.ManagerAccessService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.service.OrderTransactionService;
+import com.hunt.otziv.review_recovery.service.ReviewRecoveryGateService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
@@ -155,7 +156,11 @@ public class PaymentLinkService {
             "contractor_live_routing_missing_allocation:";
     private static final String LIVE_ROUTING_FAIL_CLOSED_REMINDER_SOURCE =
             "PAYMENT_LIVE_ROUTING_FAIL_CLOSED";
-    private static final String PREPAID_WAITING_ORDER_COMPLETION = "prepaid_waiting_order_completion";
+    static final String PREPAID_WAITING_ORDER_COMPLETION = "prepaid_waiting_order_completion";
+    private static final String PREPAID_APPLY_FAILED = "prepaid_apply_failed:";
+    private static final String PROVIDER_CONFIRMED_APPLY_FAILED =
+            "provider_confirmed_apply_failed:";
+    private static final String BANK_STATUS_APPLY_FAILED = "bank_status_apply_failed:";
     private static final Set<PaymentLinkStatus> REUSABLE_STATUSES = Set.of(
             PaymentLinkStatus.CREATED,
             PaymentLinkStatus.INITIATED,
@@ -283,6 +288,7 @@ public class PaymentLinkService {
     private final PaymentLinkRepository paymentLinkRepository;
     private final OrderRepository orderRepository;
     private final BadReviewTaskService badReviewTaskService;
+    private final ReviewRecoveryGateService reviewRecoveryGateService;
     private final OrderTransactionService orderTransactionService;
     private final TbankPaymentProperties properties;
     private final TbankRuntimeSettingsService runtimeSettingsService;
@@ -2262,25 +2268,21 @@ public class PaymentLinkService {
             return;
         }
 
-        try {
-            PaymentProfile entityProfile = link.getPaymentProfile();
-            TochkaPaymentProfile runtimeProfile =
-                    tochkaPaymentProfileResolver.resolveForExistingPayment(entityProfile);
-            if (!Objects.equals(observation.profileId(), entityProfile == null ? null : entityProfile.getId())
-                    || !observation.merchantId().equals(runtimeProfile.merchantId())
-                    || !observation.customerCode().equals(runtimeProfile.customerCode())
-                    || observation.testMode() != runtimeProfile.testMode()) {
-                quarantineTochkaState(link, "tochka_profile_changed_after_status_observation");
-                return;
-            }
-
-            applyValidatedTochkaState(link, mapped, entityProfile, runtimeProfile);
-        } catch (RuntimeException failure) {
-            quarantineTochkaState(
-                    link,
-                    "tochka_status_apply_failed: " + tochkaProviderFailureReason(failure)
-            );
+        PaymentProfile entityProfile = link.getPaymentProfile();
+        TochkaPaymentProfile runtimeProfile =
+                tochkaPaymentProfileResolver.resolveForExistingPayment(entityProfile);
+        if (!Objects.equals(observation.profileId(), entityProfile == null ? null : entityProfile.getId())
+                || !observation.merchantId().equals(runtimeProfile.merchantId())
+                || !observation.customerCode().equals(runtimeProfile.customerCode())
+                || observation.testMode() != runtimeProfile.testMode()) {
+            quarantineTochkaState(link, "tochka_profile_changed_after_status_observation");
+            return;
         }
+
+        // Never catch a financial transition failure in this joined transaction.
+        // A nested @Transactional participant may already have marked it rollback-only;
+        // the caller must observe the failure and quarantine it in a fresh transaction.
+        applyValidatedTochkaState(link, mapped, entityProfile, runtimeProfile);
     }
 
     private void applyValidatedTochkaState(
@@ -2441,56 +2443,47 @@ public class PaymentLinkService {
             return;
         }
 
-        try {
-            PaymentProfile profile = resolvePaymentProfile(link);
-            TbankPaymentProfile runtimeProfile = runtimeProfileForLink(profile, link);
-            if (!normalize(runtimeProfile.terminalKey()).equals(observation.terminalKey())) {
-                log.warn(
-                        "T-Bank GetState observation ignored after payment profile changed: linkId={}",
-                        link.getId()
-                );
-                return;
-            }
-            if (!isStateConsistent(link, observation.state(), runtimeProfile)) {
-                paymentLinkRepository.save(link);
-                return;
-            }
-
-            TbankGetStateResponse state = observation.state();
-            link.setTbankTerminalKey(runtimeProfile.terminalKey());
-            if (!normalize(state.paymentId()).isBlank()) {
-                link.setTbankPaymentId(state.paymentId());
-            }
-            if (normalize(link.getTbankOrderId()).isBlank() && !normalize(state.orderId()).isBlank()) {
-                link.setTbankOrderId(state.orderId());
-            }
-            applyPaymentProfile(link, profile);
-            if (holdActiveCancelQuarantine(link, incomingStatus)) {
-                paymentLinkRepository.save(link);
-                return;
-            }
-            if (applyCancelRecoveryObservationIfNeeded(link, incomingStatus)) {
-                paymentLinkRepository.save(link);
-                return;
-            }
-            applyBankStatus(
-                    link,
-                    incomingStatus,
-                    state.success(),
-                    normalize(state.errorCode())
-            );
-            clearResolvedCancelReservation(link, incomingStatus);
-            paymentLinkRepository.save(link);
-        } catch (ResponseStatusException e) {
+        PaymentProfile profile = resolvePaymentProfile(link);
+        TbankPaymentProfile runtimeProfile = runtimeProfileForLink(profile, link);
+        if (!normalize(runtimeProfile.terminalKey()).equals(observation.terminalKey())) {
             log.warn(
-                    "T-Bank GetState observation apply skipped: linkId={}, status={}, reason={}",
-                    link.getId(),
-                    e.getStatusCode(),
-                    normalize(e.getReason())
+                    "T-Bank GetState observation ignored after payment profile changed: linkId={}",
+                    link.getId()
             );
-        } catch (RuntimeException e) {
-            log.warn("T-Bank GetState observation apply failed: linkId={}", link.getId(), e);
+            return;
         }
+        if (!isStateConsistent(link, observation.state(), runtimeProfile)) {
+            paymentLinkRepository.save(link);
+            return;
+        }
+
+        TbankGetStateResponse state = observation.state();
+        link.setTbankTerminalKey(runtimeProfile.terminalKey());
+        if (!normalize(state.paymentId()).isBlank()) {
+            link.setTbankPaymentId(state.paymentId());
+        }
+        if (normalize(link.getTbankOrderId()).isBlank() && !normalize(state.orderId()).isBlank()) {
+            link.setTbankOrderId(state.orderId());
+        }
+        applyPaymentProfile(link, profile);
+        if (holdActiveCancelQuarantine(link, incomingStatus)) {
+            paymentLinkRepository.save(link);
+            return;
+        }
+        if (applyCancelRecoveryObservationIfNeeded(link, incomingStatus)) {
+            paymentLinkRepository.save(link);
+            return;
+        }
+        // As with Tochka, a financial transition exception must leave this
+        // transaction instead of being swallowed after a nested rollback-only.
+        applyBankStatus(
+                link,
+                incomingStatus,
+                state.success(),
+                normalize(state.errorCode())
+        );
+        clearResolvedCancelReservation(link, incomingStatus);
+        paymentLinkRepository.save(link);
     }
 
     private boolean sameObservedLink(PaymentLink link, ProviderStateObservation observation) {
@@ -7905,9 +7898,151 @@ public class PaymentLinkService {
         }
         ProviderStateObservation observation = observeBankState(snapshot);
         Long orderId = snapshot.getOrder() == null ? null : snapshot.getOrder().getId();
-        return transactionExecutor.required(() ->
-                applyReconciliationObservation(linkId, orderId, eligibleBefore, observation)
-        );
+        try {
+            return transactionExecutor.required(() ->
+                    applyReconciliationObservation(linkId, orderId, eligibleBefore, observation)
+            );
+        } catch (RuntimeException failure) {
+            log.error(
+                    "Provider status apply rolled back: linkId={}, orderId={}, providerStatus={}",
+                    linkId,
+                    orderId,
+                    providerStatus(observation),
+                    failure
+            );
+            if (quarantineObservedBankApplyFailure(
+                    linkId,
+                    orderId,
+                    eligibleBefore,
+                    observation,
+                    failure
+            )) {
+                return true;
+            }
+            throw failure;
+        }
+    }
+
+    /**
+     * Persists the failed observation audit only after the state transaction
+     * has fully rolled back. For an exact confirmation it also preserves the
+     * bank's payment evidence. Keeping this boundary outside the failed
+     * transaction prevents an inner rollback-only marker from turning the
+     * useful cause into an anonymous UnexpectedRollbackException, and the
+     * attempt timestamp rotates a broken row out of scheduler page zero.
+     */
+    private boolean quarantineObservedBankApplyFailure(
+            Long linkId,
+            Long orderId,
+            LocalDateTime eligibleBefore,
+            ProviderStateObservation observation,
+            RuntimeException failure
+    ) {
+        if (observation == null) {
+            return false;
+        }
+        boolean providerConfirmed = isProviderConfirmedObservation(observation);
+        try {
+            return transactionExecutor.required(() -> {
+                if (orderId == null || orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+                    return false;
+                }
+                PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElse(null);
+                if (!hasOrderBinding(link, orderId)
+                        || !isReconciliationEligible(link, eligibleBefore)
+                        || !matchesObservedBankBinding(link, observation, orderId)) {
+                    return false;
+                }
+
+                LocalDateTime now = LocalDateTime.now();
+                link.setBankReconciliationAttemptedAt(now);
+                link.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+                String observedStatus = providerStatus(observation);
+                if (!observedStatus.isBlank()) {
+                    link.setProviderTerminalStatus(observedStatus);
+                }
+                if (providerConfirmed) {
+                    if (link.getPaidAt() == null) {
+                        link.setPaidAt(now);
+                    }
+                    link.setConfirmedAmountKopecks(link.getAmountKopecks());
+                }
+                clearBankInitReservation(link);
+                link.setLastError(limit(
+                        (providerConfirmed
+                                ? PROVIDER_CONFIRMED_APPLY_FAILED
+                                : BANK_STATUS_APPLY_FAILED)
+                                + " " + paymentFailureReason(failure),
+                        512
+                ));
+                paymentLinkRepository.save(link);
+                return true;
+            });
+        } catch (RuntimeException quarantineFailure) {
+            log.error(
+                    "Failed to persist bank-status apply quarantine: linkId={}, orderId={}",
+                    linkId,
+                    orderId,
+                    quarantineFailure
+            );
+            return false;
+        }
+    }
+
+    private boolean isProviderConfirmedObservation(ProviderStateObservation observation) {
+        if (observation instanceof TochkaStateObservation tochka) {
+            return normalize(tochka.failureReason()).isBlank()
+                    && tochka.mapped() != null
+                    && tochka.mapped().status() == PaymentLinkStatus.CONFIRMED;
+        }
+        if (observation instanceof BankStateObservation tbank) {
+            return tbank.state() != null
+                    && tbank.state().success()
+                    && "CONFIRMED".equals(normalize(tbank.state().status()).toUpperCase());
+        }
+        return false;
+    }
+
+    private boolean matchesObservedBankBinding(
+            PaymentLink link,
+            ProviderStateObservation observation,
+            Long orderId
+    ) {
+        if (observation instanceof TochkaStateObservation tochka) {
+            return matchesTochkaObservationBinding(link, tochka, orderId);
+        }
+        if (!(observation instanceof BankStateObservation tbank)) {
+            return false;
+        }
+        TbankGetStateResponse state = tbank.state();
+        boolean baseBinding = sameObservedLink(link, tbank)
+                && orderId != null
+                && orderId.equals(tbank.orderId())
+                && hasOrderBinding(link, orderId)
+                && link.getAmountKopecks() == tbank.amountKopecks()
+                && normalize(link.getTbankPaymentId()).equals(tbank.paymentId())
+                && normalize(link.getTbankOrderId()).equals(tbank.tbankOrderId())
+                && normalize(link.getTbankTerminalKey()).equals(tbank.terminalKey());
+        if (!baseBinding || state == null) {
+            return baseBinding;
+        }
+        String responsePaymentId = normalize(state.paymentId());
+        String responseOrderId = normalize(state.orderId());
+        String responseTerminalKey = normalize(state.terminalKey());
+        return (state.amount() == null || state.amount() == link.getAmountKopecks())
+                && (responsePaymentId.isBlank() || responsePaymentId.equals(tbank.paymentId()))
+                && (responseOrderId.isBlank() || responseOrderId.equals(tbank.tbankOrderId()))
+                && (responseTerminalKey.isBlank() || responseTerminalKey.equals(tbank.terminalKey()));
+    }
+
+    private String providerStatus(ProviderStateObservation observation) {
+        if (observation instanceof TochkaStateObservation tochka && tochka.mapped() != null) {
+            return normalize(tochka.mapped().providerStatus()).toUpperCase();
+        }
+        if (observation instanceof BankStateObservation tbank && tbank.state() != null) {
+            return normalize(tbank.state().status()).toUpperCase();
+        }
+        return "";
     }
 
     private boolean applyReconciliationObservation(
@@ -7944,9 +8079,34 @@ public class PaymentLinkService {
                     || !link.getBankReconciliationAttemptedAt().isAfter(eligibleBefore));
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public boolean applyConfirmedPrepaymentIfReady(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return false;
+        }
+        try {
+            return transactionExecutor.required(() -> {
+                Order lockedOrder = orderRepository.findByIdForCounterUpdate(orderId).orElse(null);
+                return applyConfirmedPrepaymentIfReadyLocked(lockedOrder);
+            });
+        } catch (RuntimeException failure) {
+            recordConfirmedPrepaymentApplyFailure(orderId, failure);
+            log.error("Confirmed prepayment recovery failed: orderId={}", orderId, failure);
+            return false;
+        }
+    }
+
     @Transactional
     public boolean applyConfirmedPrepaymentIfReady(Order order) {
-        if (order == null || order.getId() == null || !canApplyOrderPaymentNow(order)) {
+        if (order == null || order.getId() == null) {
+            return false;
+        }
+        Order lockedOrder = orderRepository.findByIdForCounterUpdate(order.getId()).orElse(null);
+        return applyConfirmedPrepaymentIfReadyLocked(lockedOrder);
+    }
+
+    private boolean applyConfirmedPrepaymentIfReadyLocked(Order order) {
+        if (order == null || order.getId() == null) {
             return false;
         }
         Optional<PaymentLink> optionalLink = paymentLinkRepository
@@ -7960,6 +8120,9 @@ public class PaymentLinkService {
         }
 
         PaymentLink link = optionalLink.get();
+        if (!canApplyOrderPaymentNow(order)) {
+            return false;
+        }
         if (markAmountMismatchIfNeeded(link)) {
             paymentLinkRepository.save(link);
             return false;
@@ -7978,16 +8141,70 @@ public class PaymentLinkService {
             log.info("Предоплата по ссылке {} применена после завершения заказа {}", link.getId(), order.getId());
             return true;
         } catch (Exception e) {
-            link.setStatus(PaymentLinkStatus.FAILED);
-            link.setLastError("Prepaid order payment transition failed");
-            paymentLinkRepository.save(link);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось применить предоплату заказа", e);
         }
     }
 
+    private void recordConfirmedPrepaymentApplyFailure(Long orderId, RuntimeException failure) {
+        try {
+            transactionExecutor.requiredNoRollback(() -> {
+                if (orderRepository.findByIdForCounterUpdate(orderId).isEmpty()) {
+                    return null;
+                }
+                Optional<PaymentLink> candidate = paymentLinkRepository
+                        .findFirstByOrder_IdAndStatusAndLastErrorStartingWithOrderByPaidAtDesc(
+                                orderId,
+                                PaymentLinkStatus.CONFIRMED,
+                                PREPAID_WAITING_ORDER_COMPLETION
+                        );
+                candidate.ifPresent(link -> {
+                    String audit = normalize(link.getLastError());
+                    int previousFailure = audit.indexOf(PREPAID_APPLY_FAILED);
+                    if (previousFailure >= 0) {
+                        audit = audit.substring(0, previousFailure).stripTrailing();
+                        if (audit.endsWith(";")) {
+                            audit = audit.substring(0, audit.length() - 1).stripTrailing();
+                        }
+                    }
+                    link.setLastError(limit(
+                            audit + "; " + PREPAID_APPLY_FAILED + " " + paymentFailureReason(failure),
+                            512
+                    ));
+                    paymentLinkRepository.save(link);
+                });
+                return null;
+            });
+        } catch (RuntimeException quarantineFailure) {
+            log.error(
+                    "Failed to persist confirmed prepayment recovery error: orderId={}",
+                    orderId,
+                    quarantineFailure
+            );
+        }
+    }
+
+    private String paymentFailureReason(Throwable failure) {
+        Throwable current = failure;
+        String detail = "";
+        while (current != null) {
+            if (current instanceof ResponseStatusException response
+                    && response.getReason() != null
+                    && !response.getReason().isBlank()) {
+                detail = response.getReason();
+            } else if (current.getMessage() != null && !current.getMessage().isBlank()) {
+                detail = current.getMessage();
+            }
+            current = current.getCause();
+        }
+        String type = failure == null ? "RuntimeException" : failure.getClass().getSimpleName();
+        return detail.isBlank() ? type : type + ": " + detail;
+    }
+
     private boolean canApplyOrderPaymentNow(Order order) {
         return order != null
-                && (order.isComplete() || order.getAmount() <= order.getCounter());
+                && order.getId() != null
+                && (order.isComplete() || order.getAmount() <= order.getCounter())
+                && !reviewRecoveryGateService.hasActiveRecoveryTasks(order.getId());
     }
 
     private boolean handlePaymentStatusWithoutPrematureRepeat(Order order) throws Exception {
@@ -7996,16 +8213,7 @@ public class PaymentLinkService {
         if (commonBillingService == null || orderId == null) {
             return orderTransactionService.handlePaymentStatus(order);
         }
-        try {
-            if (commonBillingService.isOrderInActiveCommonInvoice(orderId)) {
-                return orderTransactionService.handlePaymentStatus(order, false);
-            }
-        } catch (RuntimeException e) {
-            log.warn(
-                    "Не удалось проверить общий счет заказа {} перед оплатой; следующий заказ временно не создается",
-                    orderId,
-                    e
-            );
+        if (commonBillingService.isOrderInActiveCommonInvoice(orderId)) {
             return orderTransactionService.handlePaymentStatus(order, false);
         }
         return orderTransactionService.handlePaymentStatus(order);
@@ -8018,11 +8226,7 @@ public class PaymentLinkService {
         if (commonBillingService == null || orderId == null) {
             return;
         }
-        try {
-            commonBillingService.applyConfirmedOrderPayment(orderId, link.getPaidAt(), reason);
-        } catch (RuntimeException e) {
-            log.warn("Не удалось зачесть оплату заказа {} в общий счет", orderId, e);
-        }
+        commonBillingService.applyConfirmedOrderPayment(orderId, link.getPaidAt(), reason);
     }
 
     private void markOrderPrepaid(PaymentLink link) {

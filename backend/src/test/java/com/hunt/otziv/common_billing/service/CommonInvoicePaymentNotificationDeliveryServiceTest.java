@@ -58,6 +58,29 @@ class CommonInvoicePaymentNotificationDeliveryServiceTest {
     }
 
     @Test
+    void deliversCommittedClientOutboxOnlyOnceAfterFinalization() {
+        Delivery delivery = clientDelivery();
+        when(repository.findDueDeliveryIds(50)).thenReturn(List.of(92L), List.of());
+        when(claimService.tryClaim(92L)).thenReturn(Optional.of(delivery));
+        when(commonBillingService.deliverPaymentSuccessNotificationFromOutbox(146L))
+                .thenReturn(new CommonBillingService.ClientPaymentNotificationAttempt(
+                        true,
+                        false,
+                        "WhatsApp",
+                        ""
+                ));
+        when(claimService.markSent(delivery)).thenReturn(true);
+
+        assertEquals(1, service.retryBatch());
+        assertEquals(0, service.retryBatch());
+
+        verify(commonBillingService).deliverPaymentSuccessNotificationFromOutbox(146L);
+        verify(claimService).markSent(delivery);
+        verify(claimService, never()).markFailed(any(), any());
+        verifyNoInteractions(recipientNotificationService);
+    }
+
+    @Test
     void alreadyDeliveredClientNotificationIsSkippedWithoutDuplicateMessage() {
         Delivery delivery = clientDelivery();
         when(repository.findDueDeliveryIds(50)).thenReturn(List.of(92L));

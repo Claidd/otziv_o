@@ -6,13 +6,21 @@ import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { businessDateIso } from '../../shared/business-date';
+import {
+  scoreMonthLabel,
+  scoreOrphanPayments,
+  scoreOutstandingDebtKopecks,
+  scoreOutstandingReservedKopecks,
+  scorePaymentsForUser
+} from './score-finance.helpers';
 
-type ScoreGroupKey = 'managers' | 'workers' | 'operators' | 'marketologs';
+type ScoreGroupKey = 'managers' | 'workers' | 'operators' | 'marketologs' | 'savedBalances';
 
 type ScoreSection = {
   key: ScoreGroupKey;
   title: string;
   icon: string;
+  financialOnly?: boolean;
 };
 
 @Component({
@@ -33,6 +41,12 @@ export class ScoreComponent {
     { key: 'operators', title: 'Операторы', icon: 'support_agent' },
     { key: 'marketologs', title: 'Маркетологи', icon: 'campaign' }
   ];
+  private readonly savedBalancesSection: ScoreSection = {
+    key: 'savedBalances',
+    title: 'Сохранённые остатки',
+    icon: 'account_balance_wallet',
+    financialOnly: true
+  };
 
   constructor(private readonly cabinetApi: CabinetApi) {
     this.load();
@@ -64,20 +78,55 @@ export class ScoreComponent {
   }
 
   users(section: ScoreSection): ScoreUser[] {
+    if (section.key === 'savedBalances') {
+      return this.savedContractorUsers();
+    }
     return this.score()?.groups[section.key] ?? [];
   }
 
-  contractorPaymentFor(user: ScoreUser): ScoreContractorPaymentSummary | null {
+  visibleSections(): ScoreSection[] {
+    return this.savedContractorPayments().length
+      ? [...this.sections, this.savedBalancesSection]
+      : this.sections;
+  }
+
+  savedContractorPayments(): ScoreContractorPaymentSummary[] {
+    const response = this.score();
+    if (!response?.financeVisible) {
+      return [];
+    }
+    const groups = response.groups;
+    const visibleUserIds = [
+      ...groups.managers,
+      ...groups.workers,
+      ...groups.operators,
+      ...groups.marketologs
+    ]
+      .map((user) => user.userId)
+      .filter((userId): userId is number => userId != null);
+    return scoreOrphanPayments(response.contractorPayments ?? [], visibleUserIds);
+  }
+
+  private savedContractorUsers(): ScoreUser[] {
+    const users = new Map<number, ScoreUser>();
+    for (const payment of this.savedContractorPayments()) {
+      if (!users.has(payment.userId)) {
+        users.set(payment.userId, {
+          fio: payment.fio || `Профиль #${payment.profileId}`,
+          role: 'Сохранённый финансовый профиль',
+          userId: payment.userId
+        });
+      }
+    }
+    return [...users.values()];
+  }
+
+  contractorPaymentsFor(user: ScoreUser): ScoreContractorPaymentSummary[] {
     if (!this.score()?.financeVisible || !user.userId) {
-      return null;
+      return [];
     }
     const rows = this.score()?.contractorPayments ?? [];
-    const userRows = rows.filter(row => row.userId === user.userId);
-    if (!userRows.length) {
-      return null;
-    }
-    const expectedRole = this.contractorRoleForUser(user);
-    return userRows.find(row => row.role === expectedRole) ?? userRows[0] ?? null;
+    return scorePaymentsForUser(rows, user.userId, this.contractorRoleForUser(user));
   }
 
   rows(section: ScoreSection, user: ScoreUser): Array<{ label: string; value: string }> {
@@ -128,12 +177,28 @@ export class ScoreComponent {
 
   contractorStatusLabel(row: ScoreContractorPaymentSummary): string {
     if (!row.profileEnabled) {
-      return 'профиль выключен';
+      return 'выключен · остаток сохранён';
     }
     if (!row.liveEnabled) {
-      return 'реквизиты выключены';
+      return 'реквизиты выключены · учёт сохранён';
     }
     return row.reportingLive ? 'LIVE' : 'тестовый расчёт';
+  }
+
+  contractorRoleLabel(row: ScoreContractorPaymentSummary): string {
+    return row.role === 'MANAGER' ? 'менеджер' : 'специалист';
+  }
+
+  selectedMonthLabel(): string {
+    return scoreMonthLabel(this.score()?.date || this.selectedDate());
+  }
+
+  outstandingDebtKopecks(row: ScoreContractorPaymentSummary): number {
+    return scoreOutstandingDebtKopecks(row);
+  }
+
+  outstandingReservedKopecks(row: ScoreContractorPaymentSummary): number {
+    return scoreOutstandingReservedKopecks(row);
   }
 
   moneyKopecks(value?: number | null): string {

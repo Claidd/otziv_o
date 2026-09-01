@@ -1,23 +1,22 @@
-package com.hunt.otziv.p_products.next_order.config;
+package com.hunt.otziv.p_products.config;
 
-import com.hunt.otziv.p_products.config.DurablePostCommitRejectedExecutionHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @Configuration
-public class NextOrderAutomationAsyncConfig {
+public class OrderPaymentPostCommitAsyncConfig {
 
-    @Bean(name = "nextOrderAutomationExecutor")
-    public TaskExecutor nextOrderAutomationExecutor() {
+    @Bean(name = "orderPaymentPostCommitExecutor")
+    public TaskExecutor orderPaymentPostCommitExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(1);
-        executor.setMaxPoolSize(1);
+        executor.setMaxPoolSize(2);
         executor.setQueueCapacity(1_000);
-        executor.setThreadNamePrefix("next-order-");
+        executor.setThreadNamePrefix("order-paid-post-commit-");
         executor.setRejectedExecutionHandler(
-                new DurablePostCommitRejectedExecutionHandler("nextOrderAutomationExecutor")
+                new DurablePostCommitRejectedExecutionHandler("orderPaymentPostCommitExecutor")
         );
         executor.initialize();
         return executor;

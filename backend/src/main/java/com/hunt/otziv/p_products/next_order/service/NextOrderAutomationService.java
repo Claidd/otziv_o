@@ -37,7 +37,9 @@ public class NextOrderAutomationService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createNextOrder(Long requestId) {
-        NextOrderRequest request = requestRepository.findById(requestId)
+        // Scheduler/startup recovery may race the original AFTER_COMMIT event.
+        // Serialize the whole idempotent decision on the durable request row.
+        NextOrderRequest request = requestRepository.findByIdForUpdate(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Next order request not found: " + requestId));
 
         if (request.getStatus() == NextOrderRequestStatus.CREATED) {
