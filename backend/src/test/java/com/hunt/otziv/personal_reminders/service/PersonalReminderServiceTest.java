@@ -3,6 +3,7 @@ package com.hunt.otziv.personal_reminders.service;
 import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.personal_reminders.dto.PersonalReminderResponse;
+import com.hunt.otziv.personal_reminders.dto.PersonalReminderRequest;
 import com.hunt.otziv.personal_reminders.model.PersonalReminder;
 import com.hunt.otziv.personal_reminders.repository.PersonalReminderRepository;
 import com.hunt.otziv.payments.service.BadReviewPaymentInstructionOrchestrator;
@@ -23,7 +24,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -142,6 +147,62 @@ class PersonalReminderServiceTest {
         );
 
         verifyNoInteractions(paymentInstructionOrchestrator);
+    }
+
+    @Test
+    void systemReminderUpsertFlushesCanonicalBeforeRemovingDuplicates() {
+        User user = new User();
+        user.setId(5L);
+        PersonalReminder canonical = reminder(21L, "old", "PAYMENT_RETURN_RECONCILIATION", 99L);
+        PersonalReminder duplicate = reminder(22L, "duplicate", "PAYMENT_RETURN_RECONCILIATION", 99L);
+        when(reminderRepository
+                .findByUserIdAndSourceTypeAndSourceIdAndCompletedAtIsNullOrderByIdAsc(
+                        5L, "PAYMENT_RETURN_RECONCILIATION", 99L))
+                .thenReturn(List.of(canonical, duplicate));
+
+        service.upsertSystemReminderDueNow(
+                user,
+                "Нужна сверка",
+                "Проверьте выписку",
+                "PAYMENT_RETURN_RECONCILIATION",
+                99L,
+                42L
+        );
+
+        assertEquals("Нужна сверка", canonical.getTitle());
+        assertEquals("Проверьте выписку", canonical.getText());
+        assertEquals("datetime", canonical.getReminderMode());
+        assertNotNull(canonical.getRemindAt());
+        assertEquals(42L, canonical.getSourceOrderId());
+        var ordered = inOrder(reminderRepository);
+        ordered.verify(reminderRepository).saveAndFlush(canonical);
+        ordered.verify(reminderRepository).deleteAll(List.of(duplicate));
+        ordered.verify(reminderRepository).flush();
+    }
+
+    @Test
+    void paymentReturnReconciliationReminderCannotBeChangedOrDismissedByUser() {
+        User user = new User();
+        user.setId(5L);
+        user.setUsername("manager");
+        PersonalReminder reminder = reminder(
+                23L,
+                "Нужна сверка возврата",
+                "PAYMENT_RETURN_RECONCILIATION",
+                99L
+        );
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(user));
+        when(reminderRepository.findByIdAndUserId(23L, 5L)).thenReturn(Optional.of(reminder));
+
+        PersonalReminderRequest update = new PersonalReminderRequest(
+                "скрыть", "скрыть", "none", null, null
+        );
+        assertThrows(ResponseStatusException.class, () -> service.update(principal("manager"), 23L, update));
+        assertThrows(ResponseStatusException.class, () -> service.complete(principal("manager"), 23L));
+        assertThrows(ResponseStatusException.class, () -> service.delete(principal("manager"), 23L));
+
+        verify(reminderRepository, never()).save(reminder);
+        verify(reminderRepository, never()).delete(reminder);
     }
 
     private PersonalReminder reminder(Long id, String title, String sourceType, Long sourceId) {

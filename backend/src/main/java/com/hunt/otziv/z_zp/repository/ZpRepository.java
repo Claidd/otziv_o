@@ -29,6 +29,20 @@ public interface ZpRepository extends JpaRepository<Zp, Long>  {
 
     List<Zp> findByOrderIdAndActiveTrue(Long orderId);
 
+    /**
+     * Canonical cancellation mutex: active reward sources are locked in a
+     * stable order before any contractor payment profile is locked.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT z
+        FROM Zp z
+        WHERE z.orderId = :orderId
+          AND z.active = true
+        ORDER BY z.id
+    """)
+    List<Zp> findActiveByOrderIdForContractorLedgerUpdate(@Param("orderId") Long orderId);
+
     /** Durable per-source mutex used by the ledger repair on every node. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT z FROM Zp z WHERE z.id = :id")

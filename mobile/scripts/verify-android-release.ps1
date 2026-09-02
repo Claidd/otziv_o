@@ -142,6 +142,160 @@ function Invoke-AndroidBuildTool {
     return $output
 }
 
+function Get-NormalizedDirectoryPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+    while ($fullPath.Length -gt $pathRoot.Length -and
+            ($fullPath.EndsWith([System.IO.Path]::DirectorySeparatorChar) -or
+             $fullPath.EndsWith([System.IO.Path]::AltDirectorySeparatorChar))) {
+        $fullPath = $fullPath.Substring(0, $fullPath.Length - 1)
+    }
+    return $fullPath
+}
+
+function Set-PrivateApkStagePermissions {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    $directorySecurity = [System.Security.AccessControl.DirectorySecurity]::new()
+    $directorySecurity.SetAccessRuleProtection($true, $false)
+    $inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor
+        [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+    $identities = @(
+        [System.Security.Principal.WindowsIdentity]::GetCurrent().User,
+        [System.Security.Principal.SecurityIdentifier]::new(
+            [System.Security.Principal.WellKnownSidType]::LocalSystemSid,
+            $null
+        ),
+        [System.Security.Principal.SecurityIdentifier]::new(
+            [System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid,
+            $null
+        )
+    )
+    foreach ($identity in $identities) {
+        $accessRule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+            $identity,
+            [System.Security.AccessControl.FileSystemRights]::FullControl,
+            $inheritanceFlags,
+            [System.Security.AccessControl.PropagationFlags]::None,
+            [System.Security.AccessControl.AccessControlType]::Allow
+        )
+        [void]$directorySecurity.AddAccessRule($accessRule)
+    }
+    Set-Acl -LiteralPath $Directory -AclObject $directorySecurity -ErrorAction Stop
+}
+
+function Remove-AsciiApkVerificationStage {
+    param([AllowNull()][object]$Stage)
+
+    if ($null -eq $Stage) {
+        return
+    }
+
+    try {
+        $temporaryRoot = Get-NormalizedDirectoryPath -Path ([string]$Stage.TemporaryRoot)
+        $stageDirectory = Get-NormalizedDirectoryPath -Path ([string]$Stage.Directory)
+        $stageApk = [System.IO.Path]::GetFullPath([string]$Stage.ApkPath)
+        $stageName = [System.IO.Path]::GetFileName($stageDirectory)
+        $stageParent = [System.IO.Directory]::GetParent($stageDirectory)
+        $expectedApk = Join-Path $stageDirectory "release.apk"
+        $isDirectChild = $null -ne $stageParent -and [string]::Equals(
+            $stageParent.FullName,
+            $temporaryRoot,
+            [System.StringComparison]::OrdinalIgnoreCase
+        )
+        if (-not $isDirectChild -or
+                $stageName -notmatch '^otziv-apk-verify-[0-9a-f]{32}$' -or
+                -not [string]::Equals($stageApk, $expectedApk, [System.StringComparison]::OrdinalIgnoreCase)) {
+            Write-Warning "Refusing to clean an unexpected Android APK verification staging path."
+            return
+        }
+
+        if (Test-Path -LiteralPath $stageDirectory -PathType Container) {
+            $stageDirectoryItem = Get-Item -LiteralPath $stageDirectory -Force
+            if (($stageDirectoryItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                Write-Warning "Refusing to clean a reparse-point Android APK verification staging directory."
+                return
+            }
+        }
+        if (Test-Path -LiteralPath $stageApk -PathType Leaf) {
+            $stageApkItem = Get-Item -LiteralPath $stageApk -Force
+            if (($stageApkItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                Write-Warning "Refusing to clean a reparse-point Android APK verification file."
+                return
+            }
+            Remove-Item -LiteralPath $stageApk -Force -ErrorAction Stop
+        }
+        if (Test-Path -LiteralPath $stageDirectory -PathType Container) {
+            Remove-Item -LiteralPath $stageDirectory -Force -ErrorAction Stop
+        }
+    } catch {
+        Write-Warning "Could not completely clean the Android APK verification stage: $($_.Exception.Message)"
+    }
+}
+
+function New-AsciiApkVerificationStage {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceApk,
+        [Parameter(Mandatory = $true)][string]$ExpectedSha256
+    )
+
+    $temporaryRoot = Get-NormalizedDirectoryPath -Path (
+        (Resolve-Path -LiteralPath ([System.IO.Path]::GetTempPath()) -ErrorAction Stop).Path
+    )
+    if ($temporaryRoot -match '[^\u0000-\u007F]') {
+        throw "Android APK verification requires an ASCII-only temporary path. Set TEMP and TMP to a writable ASCII-only directory."
+    }
+
+    $stageDirectory = Join-Path $temporaryRoot (
+        "otziv-apk-verify-" + [System.Guid]::NewGuid().ToString("N")
+    )
+    $stageApk = Join-Path $stageDirectory "release.apk"
+    $stage = [pscustomobject]@{
+        TemporaryRoot = $temporaryRoot
+        Directory = $stageDirectory
+        ApkPath = $stageApk
+    }
+    if ($stageApk -match '[^\u0000-\u007F]') {
+        throw "Android APK verification staging path must contain only ASCII characters."
+    }
+
+    try {
+        New-Item -ItemType Directory -Path $stageDirectory | Out-Null
+        $stageDirectoryItem = Get-Item -LiteralPath $stageDirectory -Force
+        $stageParent = [System.IO.Directory]::GetParent($stageDirectoryItem.FullName)
+        if ($null -eq $stageParent -or
+                -not [string]::Equals(
+                    $stageParent.FullName,
+                    $temporaryRoot,
+                    [System.StringComparison]::OrdinalIgnoreCase
+                ) -or
+                ($stageDirectoryItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Android APK verification staging directory is outside the expected temporary root or is a reparse point."
+        }
+        Set-PrivateApkStagePermissions -Directory $stageDirectoryItem.FullName
+        Copy-Item -LiteralPath $SourceApk -Destination $stageApk
+
+        $resolvedStageApk = (Resolve-Path -LiteralPath $stageApk -ErrorAction Stop).Path
+        if ($resolvedStageApk -match '[^\u0000-\u007F]') {
+            throw "Android APK verification staging path must contain only ASCII characters."
+        }
+
+        $stageSha256 = (Get-FileHash -LiteralPath $resolvedStageApk -Algorithm SHA256).Hash.ToUpperInvariant()
+        if ($stageSha256 -cne $ExpectedSha256) {
+            throw "Staged APK hash does not match the source artifact."
+        }
+
+        $stage.Directory = $stageDirectoryItem.FullName
+        $stage.ApkPath = $resolvedStageApk
+        return $stage
+    } catch {
+        Remove-AsciiApkVerificationStage -Stage $stage
+        throw
+    }
+}
+
 if ($ExpectedVersionCode -le 0) {
     throw "ExpectedVersionCode must be positive."
 }
@@ -157,21 +311,37 @@ if ($normalizedExpectedSigner -notmatch '^[0-9A-F]{64}$') {
     throw "ExpectedSignerSha256 must contain exactly 64 hexadecimal characters."
 }
 
-$resolvedApk = (Resolve-Path -LiteralPath $ApkPath -ErrorAction Stop).Path
-if (-not (Test-Path -LiteralPath $resolvedApk -PathType Leaf)) {
+$sourceApkItem = Get-Item -LiteralPath $ApkPath -Force -ErrorAction Stop
+if ($sourceApkItem.PSIsContainer) {
     throw "APK file was not found."
 }
+if (($sourceApkItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw "APK source must not be a symbolic link or another reparse point."
+}
+$resolvedApk = $sourceApkItem.FullName
 if ([System.IO.Path]::GetExtension($resolvedApk) -ine '.apk') {
     throw "Release artifact must have the .apk extension."
 }
 
+$artifactSha256 = (Get-FileHash -LiteralPath $resolvedApk -Algorithm SHA256).Hash.ToUpperInvariant()
+$verificationStage = $null
+$verificationApk = $resolvedApk
+$runningOnWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+if ($runningOnWindows -and $resolvedApk -match '[^\u0000-\u007F]') {
+    $verificationStage = New-AsciiApkVerificationStage `
+            -SourceApk $resolvedApk `
+            -ExpectedSha256 $artifactSha256
+    $verificationApk = $verificationStage.ApkPath
+}
+
+try {
 $sdkDirectory = Resolve-AndroidSdkDirectory -ConfiguredPath $AndroidSdkPath
 $apkSigner = Find-AndroidBuildTool -BaseNames @('apksigner') -SdkDirectory $sdkDirectory
-$aapt = Find-AndroidBuildTool -BaseNames @('aapt', 'aapt2') -SdkDirectory $sdkDirectory
+$aapt = Find-AndroidBuildTool -BaseNames @('aapt2', 'aapt') -SdkDirectory $sdkDirectory
 
 $signatureOutput = Invoke-AndroidBuildTool `
         -FilePath $apkSigner `
-        -Arguments @('verify', '--verbose', '--print-certs', $resolvedApk) `
+        -Arguments @('verify', '--verbose', '--print-certs', $verificationApk) `
         -DisplayName 'apksigner'
 $signatureText = $signatureOutput -join "`n"
 
@@ -201,7 +371,7 @@ if ($actualSigners[0] -cne $normalizedExpectedSigner) {
 
 $badgingOutput = Invoke-AndroidBuildTool `
         -FilePath $aapt `
-        -Arguments @('dump', 'badging', $resolvedApk) `
+        -Arguments @('dump', 'badging', $verificationApk) `
         -DisplayName 'aapt/aapt2'
 $packageLine = $badgingOutput | Where-Object { $_ -match '^package:' } | Select-Object -First 1
 if ([string]::IsNullOrWhiteSpace($packageLine)) {
@@ -231,7 +401,17 @@ if ($badgingOutput | Where-Object { $_ -match '^application-debuggable' }) {
     throw "Debuggable APK cannot be used as a production release."
 }
 
-$artifactSha256 = (Get-FileHash -LiteralPath $resolvedApk -Algorithm SHA256).Hash.ToUpperInvariant()
+if ($null -ne $verificationStage) {
+    $verifiedStageSha256 = (Get-FileHash -LiteralPath $verificationApk -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($verifiedStageSha256 -cne $artifactSha256) {
+        throw "Staged APK changed during Android build-tool verification."
+    }
+}
+$currentSourceSha256 = (Get-FileHash -LiteralPath $resolvedApk -Algorithm SHA256).Hash.ToUpperInvariant()
+if ($currentSourceSha256 -cne $artifactSha256) {
+    throw "Source APK changed during Android build-tool verification."
+}
+
 $result = [pscustomobject]@{
     ApkPath = $resolvedApk
     PackageName = $actualPackage
@@ -239,6 +419,9 @@ $result = [pscustomobject]@{
     VersionName = $actualVersionName
     SignerSha256 = $actualSigners[0]
     ArtifactSha256 = $artifactSha256
+}
+} finally {
+    Remove-AsciiApkVerificationStage -Stage $verificationStage
 }
 
 if (-not $Quiet) {

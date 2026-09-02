@@ -1,7 +1,0 @@
-*** Begin Patch
-*** Update File: backend/src/main/java/com/hunt/otziv/payments/service/PaymentLinkReturnOutboxService.java
-@@
-     private static final Set<PaymentLinkStatus> RETURN_STATUSES = EnumSet.of(
-+            PaymentLinkStatus.CANCELED,
-             PaymentLinkStatus.REVERSED,
-*** End Patch

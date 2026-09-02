@@ -1,9 +1,0 @@
-*** Begin Patch
-*** Update File: backend/src/main/resources/db/migration/V1_10_253__manual_payment_task_creation_and_receipt_evidence.sql
-@@
- -- deployment already accepted a typed common receipt; those sources require
- -- an explicit operator reconciliation before this migration can be applied.
-+DROP TEMPORARY TABLE IF EXISTS v253_common_attribution_preflight;
-+
- CREATE TEMPORARY TABLE v253_common_attribution_preflight (
-*** End Patch

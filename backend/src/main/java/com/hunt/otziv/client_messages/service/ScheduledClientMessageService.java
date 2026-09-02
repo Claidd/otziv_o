@@ -323,6 +323,12 @@ public class ScheduledClientMessageService {
         if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
             return manualRetryResult(state, false);
         }
+        if (ClientMessageStateSafety.blocksAutomaticRearm(state)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Исход предыдущей отправки не определен. Проверьте чат клиента перед повтором."
+            );
+        }
         if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -1237,7 +1243,9 @@ public class ScheduledClientMessageService {
                 ClientMessageScenario.BAD_REVIEW_INVOICE,
                 "bad-review-invoice:order:" + orderId
         ).orElse(null);
-        if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
+        if (state == null
+                || state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                || ClientMessageStateSafety.blocksAutomaticRearm(state)) {
             return;
         }
         LocalDateTime nowStorage = databaseTimestamp(LocalDateTime.now(clock));

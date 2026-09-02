@@ -25,6 +25,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.service.PaymentReturnRecoveryState;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.ManualPaymentTaskContractorCapacityService;
 import com.hunt.otziv.u_users.model.Manager;
@@ -1051,7 +1052,7 @@ public class ContractorPaymentShadowService {
             if (!isFinalAttributedPaymentLink(link)) {
                 return snapshot;
             }
-            if (RETURNED_LINK_STATUSES.contains(link.getStatus())) {
+            if (isReturnedPaymentLink(link)) {
                 taskReturnBridge.recordAuthoritativePaymentLinkReturn(link);
             }
             List<ContractorPaymentAllocation> sourceSnapshots = paymentLinkSourceSnapshots(link.getId());
@@ -1071,7 +1072,7 @@ public class ContractorPaymentShadowService {
             }
             PaymentLink link = sourcePrelude.link();
             if (isFinalAttributedPaymentLink(link)) {
-                if (RETURNED_LINK_STATUSES.contains(link.getStatus())) {
+                if (isReturnedPaymentLink(link)) {
                     taskReturnBridge.recordAuthoritativePaymentLinkReturn(link);
                 }
                 List<ContractorPaymentAllocation> sourceSnapshots = paymentLinkSourceSnapshots(link.getId());
@@ -1106,7 +1107,7 @@ public class ContractorPaymentShadowService {
                 );
                 if (!releasedByOrderStatus
                         || PAID_LINK_STATUSES.contains(link.getStatus())
-                        || RETURNED_LINK_STATUSES.contains(link.getStatus())) {
+                        || isReturnedPaymentLink(link)) {
                     applyLinkStatus(allocation, link, now);
                 }
             }
@@ -1302,7 +1303,15 @@ public class ContractorPaymentShadowService {
 
     private boolean isFinalAttributedPaymentLink(PaymentLink link) {
         return link != null && (PAID_LINK_STATUSES.contains(link.getStatus())
-                || RETURNED_LINK_STATUSES.contains(link.getStatus()));
+                || isReturnedPaymentLink(link));
+    }
+
+    private boolean isReturnedPaymentLink(PaymentLink link) {
+        return link != null && (
+                RETURNED_LINK_STATUSES.contains(link.getStatus())
+                        || (link.getStatus() == PaymentLinkStatus.CANCELED
+                        && PaymentReturnRecoveryState.hasLinkSpecificSettledEvidence(link))
+        );
     }
 
     private PaymentLinkActualReturnPlan paymentLinkActualReturnPlan(
@@ -1687,7 +1696,7 @@ public class ContractorPaymentShadowService {
             );
             return;
         }
-        if (RETURNED_LINK_STATUSES.contains(linkStatus)) {
+        if (isReturnedPaymentLink(link)) {
             long confirmed = confirmedAmount(link);
             boolean late = isReleased(allocation);
             accountingService.recordConfirmation(
@@ -1700,7 +1709,9 @@ public class ContractorPaymentShadowService {
                     late
             );
             LocalDateTime returnedAt = firstNonNull(link.getUpdatedAt(), now);
-            if (linkStatus == PaymentLinkStatus.REVERSED || linkStatus == PaymentLinkStatus.REFUNDED) {
+            if (linkStatus == PaymentLinkStatus.REVERSED
+                    || linkStatus == PaymentLinkStatus.REFUNDED
+                    || linkStatus == PaymentLinkStatus.CANCELED) {
                 accountingService.recordReturnTotal(
                         allocation,
                         allocation.getConfirmedKopecks(),

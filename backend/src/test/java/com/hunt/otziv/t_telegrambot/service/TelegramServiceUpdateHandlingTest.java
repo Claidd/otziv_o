@@ -62,6 +62,23 @@ class TelegramServiceUpdateHandlingTest {
     private WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService;
 
     @Test
+    void ownerPaymentApprovalCallbackTokenIsRedactedForLogs() {
+        assertEquals(
+                "ompa:a:91:[REDACTED]",
+                TelegramService.callbackDataForLog("ompa:a:91:secret-token")
+        );
+        assertEquals(
+                "ompa:a:[REDACTED]",
+                TelegramService.callbackDataForLog("ompa:a:malformed")
+        );
+    }
+
+    @Test
+    void unrelatedCallbackDataIsUnchangedForLogs() {
+        assertEquals("worker:done:17", TelegramService.callbackDataForLog("worker:done:17"));
+    }
+
+    @Test
     void groupTextMessageDoesNotStartUserLoginFlow() {
         CapturingTelegramService service = service();
         when(telegramGroupLinkService.handleGroupStartCommand(anyLong(), anyString()))

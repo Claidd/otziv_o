@@ -17,6 +17,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
+if (-not (Test-Path -LiteralPath $envResolverPath -PathType Leaf)) {
+    throw "Env resolver script not found: $envResolverPath"
+}
+. $envResolverPath
+$EnvFile = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot
+
 function Get-EnvValue {
     param(
         [Parameter(Mandatory = $true)][string]$Path,

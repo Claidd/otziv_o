@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
@@ -56,11 +57,15 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -735,6 +740,70 @@ class BadReviewTaskServiceImplTest {
     }
 
     @Test
+    void completionInvoiceDeliveryStartsOnlyAfterFreshTransactionReleasesTaskLock() {
+        Order order = order(17L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(44L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+        when(badReviewTaskRepository.findByIdForMutation(44L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.summarizeByOrderId(17L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
+        ));
+        when(appSettingService.getBoolean(
+                AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED,
+                true
+        )).thenReturn(true);
+        when(appSettingService.getBoolean(
+                AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED,
+                true
+        )).thenReturn(true);
+
+        AtomicBoolean transactionActive = new AtomicBoolean();
+        org.mockito.Mockito.reset(transactionRunner);
+        doAnswer(invocation -> {
+            Supplier<?> work = invocation.getArgument(0);
+            transactionActive.set(true);
+            try {
+                return work.get();
+            } finally {
+                transactionActive.set(false);
+            }
+        }).when(transactionRunner).required(any());
+        doAnswer(invocation -> {
+            assertFalse(transactionActive.get(), "delivery must not re-lock the task inside the outer transaction");
+            return null;
+        }).when(completionPostActionOrchestrator).deliverInvoice(44L, 17L);
+
+        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 44L, false);
+
+        verify(transactionRunner).required(any());
+        verify(badReviewTaskRepository).findByIdForMutation(44L);
+        verify(completionPostActionOrchestrator).deliverInvoice(44L, 17L);
+    }
+
+    @Test
+    void completionPostActionsStopWhenTaskWasCanceledBeforeCallbackReload() {
+        BadReviewTask task = BadReviewTask.builder()
+                .id(45L)
+                .order(order(19L))
+                .status(BadReviewTaskStatus.CANCELED)
+                .price(BigDecimal.valueOf(300))
+                .build();
+        when(badReviewTaskRepository.findByIdForMutation(45L)).thenReturn(Optional.of(task));
+
+        ReflectionTestUtils.invokeMethod(service, "runCompletionSideEffectsById", 45L, false);
+
+        verify(badReviewTaskRepository).findByIdForMutation(45L);
+        verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
+        verify(personalReminderService, never()).createSystemReminderDueNow(
+                any(), any(), any(), any(), any(), any()
+        );
+    }
+
+    @Test
     void createTaskFailsClosedWhenNoReviewPriceCanBeDetermined() {
         Order order = order(151L);
         order.setSum(null);
@@ -1063,6 +1132,40 @@ class BadReviewTaskServiceImplTest {
         orderOfCalls.verify(transactionRunner).required(any());
         orderOfCalls.verify(paymentLinkService)
                 .retireOpenLinksBeforePayableChange(22L, "Выполненная дополнительная задача изменила сумму счета");
+        InOrder mutationLocks = inOrder(orderRepository, paymentInvoiceRetryScheduler, paymentLinkService);
+        mutationLocks.verify(orderRepository).findByIdForCounterUpdate(22L);
+        mutationLocks.verify(paymentInvoiceRetryScheduler).assertPaymentAutomationMutable(22L);
+        mutationLocks.verify(paymentLinkService)
+                .retireOpenLinksBeforePayableChange(22L, "Выполненная дополнительная задача изменила сумму счета");
+    }
+
+    @Test
+    void completeTaskStopsBeforeMutationWhenInvoiceDeliveryIsAlreadyPrepared() {
+        Order order = order(24L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(54L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+        when(badReviewTaskRepository.findStatusById(54L)).thenReturn(Optional.of(BadReviewTaskStatus.NEW));
+        when(badReviewTaskRepository.findOrderIdById(54L)).thenReturn(Optional.of(24L));
+        when(orderRepository.findByIdForCounterUpdate(24L)).thenReturn(Optional.of(order));
+        when(paymentLinkServiceProvider.getIfAvailable()).thenReturn(paymentLinkService);
+        doThrow(new ResponseStatusException(HttpStatus.CONFLICT, "delivery prepared"))
+                .when(paymentInvoiceRetryScheduler)
+                .assertPaymentAutomationMutable(24L);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.completeTask(54L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        verify(badReviewTaskRepository, never()).save(task);
+        verify(paymentLinkService, never()).retireOpenLinksBeforePayableChange(any(), anyString());
+        verify(commonBillingService, never()).refreshLinkedOrderAmount(any());
+        verify(completionPostActionOrchestrator, never()).deliverInvoice(any(), any());
     }
 
     @Test

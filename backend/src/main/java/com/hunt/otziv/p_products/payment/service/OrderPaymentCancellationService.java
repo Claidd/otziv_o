@@ -20,17 +20,18 @@ import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.service.OrderCompanyStatusService;
+import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.PaymentReturnRecoveryState;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.repository.PaymentCheckRepository;
-import com.hunt.otziv.z_zp.repository.ZpRepository;
 import java.math.BigDecimal;
 import java.security.Principal;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,8 @@ public class OrderPaymentCancellationService {
             PaymentLinkStatus.TEST_CONFIRMED,
             PaymentLinkStatus.CONFIRMED,
             PaymentLinkStatus.AMOUNT_MISMATCH,
+            PaymentLinkStatus.PARTIAL_REVERSED,
+            PaymentLinkStatus.PARTIAL_REFUNDED,
             PaymentLinkStatus.NEEDS_RECONCILIATION,
             PaymentLinkStatus.MANUAL_REPORTED
     );
@@ -63,7 +66,6 @@ public class OrderPaymentCancellationService {
     private final OrderCompanyStatusService orderCompanyStatusService;
     private final CompanyService companyService;
     private final PaymentCheckRepository paymentCheckRepository;
-    private final ZpRepository zpRepository;
     private final NextOrderRequestRepository nextOrderRequestRepository;
     private final OrderDeletionService orderDeletionService;
     private final PaymentLinkRepository paymentLinkRepository;
@@ -79,7 +81,7 @@ public class OrderPaymentCancellationService {
 
     @Transactional
     public void cancelPayment(Long orderId, Principal principal) {
-        Order order = orderRepository.findByIdForMutation(orderId)
+        Order order = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
 
         if (!STATUS_PAYMENT.equals(safeStatusTitle(order))) {
@@ -100,33 +102,36 @@ public class OrderPaymentCancellationService {
             );
         }
 
+        List<PaymentCheck> activeChecks = paymentCheckRepository.findByOrderIdAndActiveTrue(orderId);
+        PaymentCheck activeCheck = requireSingleActivePaymentCheck(order, activeChecks);
+        boolean returnedSourceMarked = markExactReturnedSourceProcessed(order, activeCheck);
+        List<Zp> paymentDependentZp =
+                contractorRewardLedgerService.lockActiveOrderRewardsAndRequireCancellationRepresentable(orderId);
+
+        BigDecimal canceledSum = activeCheck.getSum();
+        int canceledAmount = requirePaidAmountSnapshot(activeCheck);
+        requireCompanyRollback(order, canceledSum, canceledAmount);
+
         cancelNextOrderRequest(order, principal);
 
-        order = orderRepository.findByIdForMutation(orderId)
+        order = orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден после отката следующего заказа"));
+        if (!STATUS_PAYMENT.equals(safeStatusTitle(order))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Статус заказа изменился во время отмены оплаты");
+        }
+        Company company = requireCompanyRollback(order, canceledSum, canceledAmount);
 
-        List<PaymentCheck> activeChecks = paymentCheckRepository.findByOrderIdAndActiveTrue(orderId);
-        List<Zp> activeZp = zpRepository.findByOrderIdAndActiveTrue(orderId);
-        List<Zp> paymentDependentZp = List.copyOf(activeZp);
-        contractorRewardLedgerService.requireCancellationRepresentable(paymentDependentZp);
-
-        BigDecimal canceledSum = activeChecks.stream()
-                .map(PaymentCheck::getSum)
-                .filter(sum -> sum != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        int canceledAmount = paymentDependentZp.stream()
-                .map(Zp::getAmount)
-                .max(Comparator.naturalOrder())
-                .orElse(order.getAmount());
-
-        activeChecks.forEach(check -> check.setActive(false));
-        paymentCheckRepository.saveAll(activeChecks);
+        activeCheck.setActive(false);
+        paymentCheckRepository.save(activeCheck);
+        // Active payment_check rows have an FK to the paid status. Flush their
+        // deactivation before changing the order to Reminder.
+        orderRepository.flush();
         int deactivatedSalary = contractorCompletionRewardService.deactivateOrderPaymentAccruals(
                 orderId,
                 "manual_payment_cancellation"
         );
 
-        rollbackCompanyTotals(order, canceledSum, canceledAmount);
+        applyCompanyRollback(order, company, canceledSum, canceledAmount);
 
         String oldStatus = safeStatusTitle(order);
         order.setComplete(false);
@@ -137,7 +142,7 @@ public class OrderPaymentCancellationService {
         restorePaymentLink(order);
         paymentInvoiceRetryScheduler.scheduleInitialInvoice(order);
 
-        businessAuditService.recordSafely(
+        businessAuditService.recordRequiredInCurrentTransaction(
                 "order_payment_canceled",
                 "order",
                 order.getId(),
@@ -150,6 +155,7 @@ public class OrderPaymentCancellationService {
                         + ";salaryDeactivated=" + deactivatedSalary
                         + ";sum=" + canceledSum
                         + ";amount=" + canceledAmount
+                        + ";returnedSourceMarked=" + returnedSourceMarked
                         + ";paymentLink=restored"
         );
         log.info(
@@ -204,18 +210,124 @@ public class OrderPaymentCancellationService {
         }
     }
 
-    private void rollbackCompanyTotals(Order order, BigDecimal canceledSum, int canceledAmount) {
+    private PaymentCheck requireSingleActivePaymentCheck(Order order, List<PaymentCheck> activeChecks) {
+        List<PaymentCheck> checks = activeChecks == null ? List.of() : activeChecks;
+        if (checks.size() != 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Отмена оплаты остановлена: активных чеков " + checks.size() + " вместо 1"
+            );
+        }
+        PaymentCheck check = checks.getFirst();
+        Long companyId = order.getCompany() == null ? null : order.getCompany().getId();
+        Long statusId = order.getStatus() == null ? null : order.getStatus().getId();
+        if (!check.isActive()
+                || !java.util.Objects.equals(check.getOrderId(), order.getId())
+                || check.getSum() == null
+                || check.getSum().signum() < 0
+                || companyId == null
+                || !java.util.Objects.equals(check.getCompanyId(), companyId)
+                || statusId == null
+                || !java.util.Objects.equals(check.getPaymentStatusGuard(), statusId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Отмена оплаты остановлена: активный чек не согласован с заказом"
+            );
+        }
+        return check;
+    }
+
+    /**
+     * A provider return may arrive before its outbox worker. If this manual
+     * cancellation is already applying the exact returned check, fence that
+     * source in the same transaction so the later worker is a financial no-op.
+     * Lock order stays order -> exact payment link, matching return recovery.
+     */
+    private boolean markExactReturnedSourceProcessed(Order order, PaymentCheck activeCheck) {
+        Long paymentLinkId = activeCheck.getPaymentLinkId();
+        if (paymentLinkId == null) {
+            return false;
+        }
+        PaymentLink source = paymentLinkRepository.findByIdForUpdate(paymentLinkId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Отмена оплаты остановлена: exact source платежного чека не найден"
+                ));
+        Long sourceOrderId = source.getOrder() == null ? null : source.getOrder().getId();
+        if (!Objects.equals(order.getId(), sourceOrderId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Отмена оплаты остановлена: exact source платежного чека относится к другому заказу"
+            );
+        }
+        if (!PaymentReturnRecoveryState.isFullReturn(source.getStatus())
+                || !PaymentReturnRecoveryState.hasLinkSpecificSettledEvidence(source)) {
+            return false;
+        }
+        if (!PaymentReturnRecoveryState.isValidMarkerTuple(source)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Отмена оплаты остановлена: маркер возврата exact source поврежден"
+            );
+        }
+        if (PaymentReturnRecoveryState.isMarkerEmpty(source)) {
+            PaymentReturnRecoveryState.markProcessed(
+                    source,
+                    activeCheck.getId(),
+                    PaymentReturnRecoveryState.OUTCOME_APPLIED
+            );
+            paymentLinkRepository.save(source);
+            return true;
+        }
+        if (PaymentReturnRecoveryState.OUTCOME_APPLIED.equals(source.getReturnRecoveryOutcome())
+                && Objects.equals(activeCheck.getId(), source.getReturnRecoveryPaymentCheckId())) {
+            return true;
+        }
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Отмена оплаты остановлена: возврат exact source уже обработан с другим исходом"
+        );
+    }
+
+    private Company requireCompanyRollback(Order order, BigDecimal canceledSum, int canceledAmount) {
         if (order.getCompany() == null || order.getCompany().getId() == null) {
-            return;
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "У оплаченного заказа не определена компания");
         }
 
         Company company = companyService.getCompaniesById(order.getCompany().getId());
         if (company == null) {
-            return;
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Компания оплаченного заказа не найдена");
         }
+        if (canceledAmount < 0
+                || company.getCounterPay() < canceledAmount
+                || safeMoney(company.getSumTotal()).compareTo(canceledSum) < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Итоги компании не согласованы с отменяемой оплатой"
+            );
+        }
+        return company;
+    }
 
-        company.setCounterPay(Math.max(0, company.getCounterPay() - Math.max(0, canceledAmount)));
-        company.setSumTotal(nonNegative(safeMoney(company.getSumTotal()).subtract(safeMoney(canceledSum))));
+    private int requirePaidAmountSnapshot(PaymentCheck activeCheck) {
+        Integer paidAmount = activeCheck == null ? null : activeCheck.getPaidAmount();
+        if (paidAmount == null || paidAmount < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Отмена оплаты остановлена: в чеке нет достоверного снимка количества оплаченных работ"
+            );
+        }
+        return paidAmount;
+    }
+
+    private void applyCompanyRollback(
+            Order order,
+            Company company,
+            BigDecimal canceledSum,
+            int canceledAmount
+    ) {
+        company.setCounterPay(company.getCounterPay() - canceledAmount);
+        company.setSumTotal(safeMoney(company.getSumTotal()).subtract(canceledSum));
         companyService.save(company);
         order.setCompany(company);
     }
@@ -224,7 +336,4 @@ public class OrderPaymentCancellationService {
         return value == null ? BigDecimal.ZERO : value;
     }
 
-    private BigDecimal nonNegative(BigDecimal value) {
-        return value == null || value.signum() < 0 ? BigDecimal.ZERO : value;
-    }
 }

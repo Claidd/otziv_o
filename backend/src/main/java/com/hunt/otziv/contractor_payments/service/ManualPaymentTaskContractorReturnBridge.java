@@ -20,6 +20,7 @@ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.repository.ManualPaymentTaskArchivedSourceRepository;
 import com.hunt.otziv.payments.service.ManualPaymentTaskLedgerService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskRouteErrors;
+import com.hunt.otziv.payments.service.PaymentReturnRecoveryState;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -275,7 +276,7 @@ public class ManualPaymentTaskContractorReturnBridge {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void recordAuthoritativePaymentLinkReturn(PaymentLink lockedLink) {
-        if (lockedLink == null || !returnedPaymentLinkStatus(lockedLink.getStatus())
+        if (lockedLink == null || !returnedPaymentLinkStatus(lockedLink)
                 || lockedLink.getManualSource() != ManualPaymentSource.MANUAL_TASK) {
             return;
         }
@@ -690,11 +691,14 @@ public class ManualPaymentTaskContractorReturnBridge {
                 && row.getActualRecipientProfileId() != null;
     }
 
-    private boolean returnedPaymentLinkStatus(PaymentLinkStatus status) {
+    private boolean returnedPaymentLinkStatus(PaymentLink link) {
+        PaymentLinkStatus status = link == null ? null : link.getStatus();
         return status == PaymentLinkStatus.REVERSED
                 || status == PaymentLinkStatus.PARTIAL_REVERSED
                 || status == PaymentLinkStatus.REFUNDED
-                || status == PaymentLinkStatus.PARTIAL_REFUNDED;
+                || status == PaymentLinkStatus.PARTIAL_REFUNDED
+                || (status == PaymentLinkStatus.CANCELED
+                    && PaymentReturnRecoveryState.hasLinkSpecificSettledEvidence(link));
     }
 
     private boolean partialPaymentLinkStatus(PaymentLinkStatus status) {

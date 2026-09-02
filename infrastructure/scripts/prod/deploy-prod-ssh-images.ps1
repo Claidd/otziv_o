@@ -7,7 +7,9 @@ param(
     [string]$VpsUser = "hunt",
     [int]$VpsPort = 22022,
     [string]$VpsPath = "/opt/otziv",
+    [string]$ProjectFilesRoot = "",
     [string]$SshKey = "",
+    [string]$SshKnownHostsFile = "",
     [string]$EnvFile = ".env.prod",
     [string]$RemoteEnvFile = ".env.prod",
     [switch]$SkipEnvUpload,
@@ -58,7 +60,10 @@ copies the tar directly to the VPS over SSH, loads images there, updates the
 remote env image tags, and starts docker compose without pulling from registry.
 
 Example:
-  .\infrastructure\scripts\prod\deploy-prod-ssh-images.ps1 -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022 -VpsPath /docker -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519 -RemoteEnvFile .env -Tag 2.3 -SkipEnvUpload
+  .\infrastructure\scripts\prod\deploy-prod-ssh-images.ps1 -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022 -VpsPath /docker -RemoteEnvFile .env -Tag 2.3 -SkipEnvUpload -AllowLegacyDeploy
+
+By default, the script reads the SSH key and known_hosts from the sibling
+.ssh directory, and resolves .env.prod from the sibling .otziv\env directory.
 '@ | Write-Host
 }
 
@@ -149,6 +154,49 @@ if ([string]::IsNullOrWhiteSpace($RemoteEnvFile) -or $RemoteEnvFile.Contains("/"
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
+$envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
+if (-not (Test-Path -LiteralPath $envResolverPath -PathType Leaf)) {
+    throw "Env resolver script not found: $envResolverPath"
+}
+. $envResolverPath
+
+if ([string]::IsNullOrWhiteSpace($ProjectFilesRoot)) {
+    $ProjectFilesRoot = Get-OtzivProjectFilesRoot -RepoRoot $repoRoot
+} elseif (-not [System.IO.Path]::IsPathRooted($ProjectFilesRoot)) {
+    $ProjectFilesRoot = Join-Path (Split-Path -Parent $repoRoot) $ProjectFilesRoot
+}
+$projectFilesRootFullPath = [System.IO.Path]::GetFullPath($ProjectFilesRoot)
+$projectFilesRootDriveRoot = [System.IO.Path]::GetPathRoot($projectFilesRootFullPath)
+if ($projectFilesRootFullPath.Equals($projectFilesRootDriveRoot, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'ProjectFilesRoot must be a dedicated directory, not a filesystem root.'
+}
+$ProjectFilesRoot = $projectFilesRootFullPath.TrimEnd('\', '/')
+if (-not (Test-Path -LiteralPath $ProjectFilesRoot -PathType Container)) {
+    throw "External project files root not found: $ProjectFilesRoot"
+}
+
+$sshDirectory = Get-OtzivSshDirectory -RepoRoot $repoRoot -ProjectFilesRoot $ProjectFilesRoot
+if ([string]::IsNullOrWhiteSpace($SshKey)) {
+    $SshKey = Join-Path $sshDirectory "otziv_vps_ed25519"
+} elseif (-not [System.IO.Path]::IsPathRooted($SshKey)) {
+    $SshKey = Join-Path $ProjectFilesRoot $SshKey
+}
+$SshKey = [System.IO.Path]::GetFullPath($SshKey)
+if (-not (Test-Path -LiteralPath $SshKey -PathType Leaf)) {
+    throw "SSH private key not found: $SshKey"
+}
+
+if ([string]::IsNullOrWhiteSpace($SshKnownHostsFile)) {
+    $SshKnownHostsFile = Join-Path $sshDirectory "known_hosts"
+} elseif (-not [System.IO.Path]::IsPathRooted($SshKnownHostsFile)) {
+    $SshKnownHostsFile = Join-Path $ProjectFilesRoot $SshKnownHostsFile
+}
+$SshKnownHostsFile = [System.IO.Path]::GetFullPath($SshKnownHostsFile)
+if (-not (Test-Path -LiteralPath $SshKnownHostsFile -PathType Leaf)) {
+    throw "SSH known_hosts file not found: $SshKnownHostsFile"
+}
+$sshKnownHostsOptionPath = $SshKnownHostsFile.Replace('\', '/')
+
 $buildCompose = Join-Path $repoRoot "docker-compose.build.yaml"
 $appImage = "${DockerHubNamespace}/${AppRepository}:${Tag}"
 $webImage = "${DockerHubNamespace}/${WebRepository}:${Tag}"
@@ -163,15 +211,7 @@ if (-not (Test-Path -LiteralPath $buildCompose)) {
     throw "Missing build compose file: $buildCompose"
 }
 
-$envFilePath = if ([System.IO.Path]::IsPathRooted($EnvFile)) {
-    $EnvFile
-} else {
-    Join-Path $repoRoot $EnvFile
-}
-
-if (-not $SkipEnvUpload -and -not (Test-Path -LiteralPath $envFilePath)) {
-    throw "Env file not found: $envFilePath. Create it or pass -SkipEnvUpload."
-}
+$envFilePath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot -AllowMissing:$SkipEnvUpload
 
 Write-Host "Building local images for direct SSH deploy:"
 Write-Host "  APP_IMAGE=$appImage"
@@ -229,17 +269,15 @@ try {
     }
     Invoke-External -FilePath "tar" -Arguments @("-czf", $bundlePath, "-C", $stageRoot, ".")
 
-    $sshArgs = @()
-    $scpArgs = @()
-    if (-not [string]::IsNullOrWhiteSpace($SshKey)) {
-        $sshArgs += @("-i", $SshKey)
-        $scpArgs += @("-i", $SshKey)
-    }
+    $sshArgs = @("-i", $SshKey)
+    $scpArgs = @("-i", $SshKey)
     $sshKeepAliveArgs = @(
         "-o", "BatchMode=yes",
+        "-o", "IdentitiesOnly=yes",
         "-o", "ConnectTimeout=15",
         "-o", "ConnectionAttempts=2",
         "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "UserKnownHostsFile=$sshKnownHostsOptionPath",
         "-o", "ServerAliveInterval=20",
         "-o", "ServerAliveCountMax=12",
         "-o", "TCPKeepAlive=yes"

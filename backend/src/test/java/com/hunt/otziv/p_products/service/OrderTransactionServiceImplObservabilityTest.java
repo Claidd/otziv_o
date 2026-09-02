@@ -127,7 +127,7 @@ class OrderTransactionServiceImplObservabilityTest {
 
         assertTrue(service.handlePaymentStatus(order, false));
 
-        verify(paymentCheckService).save(order, BigDecimal.TEN);
+        verify(paymentCheckService).save(order, BigDecimal.TEN, 1);
         verify(companyService).save(company);
         verify(contractorCompletionRewardService).ensureOrderPaymentAccrual(11L);
         verify(orderRepository).saveAndFlush(order);

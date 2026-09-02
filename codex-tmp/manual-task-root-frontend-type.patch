@@ -1,6 +1,0 @@
-*** Begin Patch
-*** Update File: frontend/src/app/features/admin/common-billing/common-manual-payment-attribution-modal.component.ts
-@@
--        recipientType: candidate!.recipientType,
-+        recipientType: candidate!.recipientType ?? null,
-*** End Patch

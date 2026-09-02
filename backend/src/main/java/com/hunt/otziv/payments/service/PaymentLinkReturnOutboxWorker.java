@@ -55,15 +55,17 @@ public class PaymentLinkReturnOutboxWorker {
 
     private void deliver(PaymentLinkReturnOutboxRepository.Claim claim) {
         try {
+            PaymentLinkStatus observedStatus;
+            try {
+                observedStatus = PaymentLinkStatus.valueOf(claim.observedStatus());
+            } catch (RuntimeException invalidStatus) {
+                throw new IllegalStateException(
+                        "Unknown payment return outbox status: " + claim.observedStatus(),
+                        invalidStatus
+                );
+            }
             contractorPaymentShadowService.reconcilePaymentLinkId(claim.paymentLinkId());
             if (orderRecoveryService != null && clientMessageService != null) {
-                PaymentLinkStatus observedStatus = null;
-                try {
-                    observedStatus = PaymentLinkStatus.valueOf(claim.observedStatus());
-                } catch (RuntimeException ignored) {
-                    // Unknown historical status is accounting-only and must
-                    // not prevent the outbox row from being acknowledged.
-                }
                 orderRecoveryService.reopenAfterFullReturn(
                         new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
                                 claim.paymentLinkId(),
@@ -71,7 +73,12 @@ public class PaymentLinkReturnOutboxWorker {
                         )
                 ).ifPresent(orderId -> {
                     orderRecoveryService.createReplacementPaymentRoute(orderId);
-                    clientMessageService.enqueuePaymentReminderAfterFullReturn(orderId);
+                    if (!clientMessageService.enqueuePaymentReminderAfterFullReturn(orderId)) {
+                        throw new IllegalStateException(
+                                "Durable payment-return client reminder was not persisted for order " + orderId
+                        );
+                    }
+                    orderRecoveryService.completeManualReturnFollowUp(claim.paymentLinkId());
                 });
             }
             transactions.succeeded(claim);

@@ -1040,8 +1040,18 @@ public class CommonBillingService {
             boolean manual,
             boolean paymentRouteChanged
     ) {
+        sendInvoiceMessage(invoiceId, manual, paymentRouteChanged, true);
+        return writeTransaction(() -> invoice(invoiceId));
+    }
+
+    private void sendInvoiceMessage(
+            Long invoiceId,
+            boolean manual,
+            boolean paymentRouteChanged,
+            boolean checkVisibility
+    ) {
         PreparedCommonInvoiceMessage preparedMessage = writeTransaction(() ->
-                preparePaymentMessage(invoiceId, false, manual, false, null, true)
+                preparePaymentMessage(invoiceId, false, manual, false, null, checkVisibility)
         );
         PreparedCommonInvoiceMessage prepared = paymentRouteChanged
                 && preparedMessage != null
@@ -1057,7 +1067,11 @@ public class CommonBillingService {
                 return null;
             });
         }
-        return writeTransaction(() -> invoice(invoiceId));
+    }
+
+    /** System-only send path used by durable post-commit automation. */
+    void sendInvoiceAutomatically(Long invoiceId, boolean manual) {
+        sendInvoiceMessage(invoiceId, manual, false, false);
     }
 
     private void resetToReadyOnlyBeforeFirstSend(CommonInvoice invoice) {
@@ -8436,14 +8450,14 @@ public class CommonBillingService {
 
     private void sendInvoiceAfterCommit(Long invoiceId, boolean manual) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            sendInvoice(invoiceId, manual);
+            sendInvoiceAutomatically(invoiceId, manual);
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 try {
-                    sendInvoice(invoiceId, manual);
+                    sendInvoiceAutomatically(invoiceId, manual);
                 } catch (RuntimeException e) {
                     log.warn("Не удалось автоотправить общий счет {} после коммита", invoiceId, e);
                 }

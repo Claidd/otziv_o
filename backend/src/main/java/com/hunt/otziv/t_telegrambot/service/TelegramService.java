@@ -81,6 +81,7 @@ public class TelegramService extends TelegramLongPollingBot {
     private static final int SEND_ATTEMPTS = 3;
     private static final long SEND_RETRY_DELAY_MS = 1_500L;
     private static final ObjectMapper TELEGRAM_JSON = new ObjectMapper();
+    private static final String OWNER_PAYMENT_APPROVAL_CALLBACK_PREFIX = "ompa:a:";
 
     private final String botUsername;
     private final boolean sendingEnabled;
@@ -407,7 +408,7 @@ public class TelegramService extends TelegramLongPollingBot {
 
     private void handleCallbackQuery(CallbackQuery callbackQuery) {
         log.info("Telegram callback received data='{}' from={} chat={}",
-                callbackQuery == null ? null : callbackQuery.getData(),
+                callbackDataForLog(callbackQuery == null ? null : callbackQuery.getData()),
                 callbackQuery == null || callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId(),
                 callbackQuery == null || callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId());
 
@@ -516,6 +517,19 @@ public class TelegramService extends TelegramLongPollingBot {
         Optional<PublicationProgressPreferenceService.PreferenceUpdate> update =
                 publicationProgressPreferenceService.handleTelegramCommand(chatId, messageText);
         return update == null ? Optional.empty() : update;
+    }
+
+    static String callbackDataForLog(String callbackData) {
+        if (callbackData == null || !callbackData.startsWith(OWNER_PAYMENT_APPROVAL_CALLBACK_PREFIX)) {
+            return callbackData;
+        }
+        String payload = callbackData.substring(OWNER_PAYMENT_APPROVAL_CALLBACK_PREFIX.length());
+        int tokenSeparator = payload.indexOf(':');
+        if (tokenSeparator < 0) {
+            return OWNER_PAYMENT_APPROVAL_CALLBACK_PREFIX + "[REDACTED]";
+        }
+        String approvalId = payload.substring(0, tokenSeparator);
+        return OWNER_PAYMENT_APPROVAL_CALLBACK_PREFIX + approvalId + ":[REDACTED]";
     }
 
     private String telegramMessageText(Message message) {

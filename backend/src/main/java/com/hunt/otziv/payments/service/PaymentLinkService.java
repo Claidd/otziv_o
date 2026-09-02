@@ -127,6 +127,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
+import com.hunt.otziv.z_zp.service.PaymentCheckService;
+import com.hunt.otziv.z_zp.service.PaymentCheckSourceContext;
 
 @Service
 @Slf4j
@@ -290,6 +292,7 @@ public class PaymentLinkService {
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryGateService reviewRecoveryGateService;
     private final OrderTransactionService orderTransactionService;
+    private final PaymentCheckService paymentCheckService;
     private final TbankPaymentProperties properties;
     private final TbankRuntimeSettingsService runtimeSettingsService;
     private final PaymentProfileService paymentProfileService;
@@ -2994,6 +2997,7 @@ public class PaymentLinkService {
             paymentLinkRepository.save(link);
 
             Company company = order.getCompany();
+            Manager companyManager = company == null ? null : company.getManager();
             manualCardPaymentReviewNotificationService.notifyOwnerApprovalAfterCommit(
                     new ManualCardPaymentReviewNotificationService.OwnerApprovalRequest(
                             approval.getId(),
@@ -3004,7 +3008,9 @@ public class PaymentLinkService {
                             link.getAmountKopecks(),
                             actor,
                             reason,
-                            link.getStatus() == null ? null : link.getStatus().name()
+                            link.getStatus() == null ? null : link.getStatus().name(),
+                            companyManager == null ? null : companyManager.getId(),
+                            companyManager == null ? null : companyManager.getAuditTelegramGroupChatId()
                     )
             );
             return ManagerManualCardPaymentResultResponse.ownerApprovalPending(orderId, link.getId());
@@ -3015,12 +3021,18 @@ public class PaymentLinkService {
     public OwnerManualCardPaymentApprovalOutcome approveOwnerManualCardPayment(
             Long approvalId,
             String callbackToken,
+            Long callbackChatId,
             User approver,
             Authentication authentication
     ) {
         requireOwnerManualCardPaymentApprover(approver, authentication);
         OwnerManualCardPaymentApprovalCommand command = transactionExecutor.required(() ->
-                prepareOwnerManualCardPaymentApproval(approvalId, callbackToken));
+                prepareOwnerManualCardPaymentApproval(
+                        approvalId,
+                        callbackToken,
+                        callbackChatId,
+                        authentication
+                ));
         if (command.alreadyCompleted()) {
             return command.outcome(true);
         }
@@ -3035,7 +3047,8 @@ public class PaymentLinkService {
                     new ManualCardPaymentContext(ManualCardPaymentMode.MANAGER_REPORTED, command.reason()),
                     command.recipientType(),
                     command.recipientProfileId(),
-                    command.recipientKey()
+                    command.recipientKey(),
+                    true
             );
         } catch (RuntimeException exception) {
             transactionExecutor.requiredNoRollback(() -> {
@@ -3084,9 +3097,18 @@ public class PaymentLinkService {
 
     private OwnerManualCardPaymentApprovalCommand prepareOwnerManualCardPaymentApproval(
             Long approvalId,
-            String callbackToken
+            String callbackToken,
+            Long callbackChatId,
+            Authentication authentication
     ) {
         OwnerManualCardPaymentApproval approval = requireOwnerApproval(approvalId, callbackToken);
+        Order order = orderRepository.findByIdForCounterUpdate(approval.getOrderId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Заказ запроса больше не существует. Оплата не зачислена."
+                ));
+        requireOwnerApprovalManagerGroup(order, callbackChatId);
+        managerAccessService.requireOrderAccess(approval.getOrderId(), authentication);
         if (approval.getStatus() == OwnerManualCardPaymentApprovalStatus.CONFIRMED) {
             return OwnerManualCardPaymentApprovalCommand.from(approval, true);
         }
@@ -3115,6 +3137,22 @@ public class PaymentLinkService {
         approval.setLastError(null);
         ownerManualCardPaymentApprovalRepository.save(approval);
         return OwnerManualCardPaymentApprovalCommand.from(approval, false);
+    }
+
+    private void requireOwnerApprovalManagerGroup(Order order, Long callbackChatId) {
+        Company company = order == null ? null : order.getCompany();
+        Manager manager = company == null ? null : company.getManager();
+        Long expectedChatId = manager == null ? null : manager.getAuditTelegramGroupChatId();
+        if (callbackChatId == null
+                || callbackChatId >= 0
+                || expectedChatId == null
+                || expectedChatId >= 0
+                || !expectedChatId.equals(callbackChatId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Подтверждение доступно только в чате назначенного компании менеджера"
+            );
+        }
     }
 
     private OwnerManualCardPaymentApproval requireOwnerApproval(Long approvalId, String callbackToken) {
@@ -3474,7 +3512,37 @@ public class PaymentLinkService {
             Long requestedRecipientProfileId,
             String requestedRecipientKey
     ) {
-        contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
+        return confirmPaidByManualCardTransferInternal(
+                linkId,
+                receivedAmountKopecks,
+                note,
+                receiptUrl,
+                actor,
+                authentication,
+                context,
+                requestedRecipientType,
+                requestedRecipientProfileId,
+                requestedRecipientKey,
+                false
+        );
+    }
+
+    private AdminPaymentLinkResponse confirmPaidByManualCardTransferInternal(
+            Long linkId,
+            Long receivedAmountKopecks,
+            String note,
+            String receiptUrl,
+            String actor,
+            Authentication authentication,
+            ManualCardPaymentContext context,
+            ContractorRecipientType requestedRecipientType,
+            Long requestedRecipientProfileId,
+            String requestedRecipientKey,
+            boolean signedOwnerApproval
+    ) {
+        if (!signedOwnerApproval) {
+            contractorPaymentTargetAccessPolicy.requireCanManagePaymentLink(linkId);
+        }
         String cleanNote = normalize(note);
         String cleanReceiptUrl = validatedReceiptUrl(receiptUrl);
         String cleanActor = normalize(actor);
@@ -4158,6 +4226,7 @@ public class PaymentLinkService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ платежной ссылки не найден"));
         managerAccessService.requireOrderAccess(plan.orderId(), authentication);
         ensureOrderNotCoveredByActiveCommonInvoice(plan.orderId());
+        paymentInvoiceRetryScheduler.assertPaymentAutomationMutable(plan.orderId());
         PaymentLink link = paymentLinkRepository.findByIdForUpdate(plan.linkId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         requireManualCardPlanBinding(link, plan);
@@ -4209,11 +4278,6 @@ public class PaymentLinkService {
             );
         }
 
-        try {
-            handlePaymentStatusWithoutPrematureRepeat(order);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось зачислить ручную оплату заказа", e);
-        }
         LocalDateTime now = LocalDateTime.now();
         PaymentLink manualEvidence = manualCardPaymentEvidenceLink(
                 link,
@@ -4225,6 +4289,13 @@ public class PaymentLinkService {
                 context.mode()
         );
         manualEvidence = paymentLinkRepository.saveAndFlush(manualEvidence);
+        try {
+            // The check must belong to the actual cash evidence, not to the
+            // historical bank route that was closed before the card transfer.
+            handlePaymentStatusWithoutPrematureRepeat(order, manualEvidence.getId());
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось зачислить ручную оплату заказа", e);
+        }
         setManualCardPaymentComment(link, manualCardPaymentAudit(note, receiptUrl, context.mode()));
         link.setManualConfirmedAt(null);
         link.setManualConfirmedBy(null);
@@ -4282,6 +4353,7 @@ public class PaymentLinkService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         managerAccessService.requireOrderAccess(orderId, authentication);
         ensureOrderNotCoveredByActiveCommonInvoice(orderId);
+        paymentInvoiceRetryScheduler.assertPaymentAutomationMutable(orderId);
         PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         if (!hasOrderBinding(link, orderId)
@@ -4312,7 +4384,7 @@ public class PaymentLinkService {
         boolean updated = false;
         try {
             if (canApplyOrderPaymentNow(order)) {
-                updated = handlePaymentStatusWithoutPrematureRepeat(order);
+                updated = handlePaymentStatusWithoutPrematureRepeat(order, link.getId());
             }
         } catch (Exception failure) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Не удалось зачислить ручную оплату", failure);
@@ -5454,7 +5526,7 @@ public class PaymentLinkService {
 
         if (source.getStatus() == PaymentLinkStatus.CONFIRMED && canApplyOrderPaymentNow(source.getOrder())) {
             try {
-                boolean updated = handlePaymentStatusWithoutPrematureRepeat(source.getOrder());
+                boolean updated = handlePaymentStatusWithoutPrematureRepeat(source.getOrder(), source.getId());
                 if (updated) {
                     cancelBadReviewAutoBanAfterCommit(source.getOrder(), "Перевод подтвержден по конкретному счету");
                 }
@@ -5650,7 +5722,7 @@ public class PaymentLinkService {
                 manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
                 return;
             }
-            boolean updated = handlePaymentStatusWithoutPrematureRepeat(link.getOrder());
+            boolean updated = handlePaymentStatusWithoutPrematureRepeat(link.getOrder(), link.getId());
             LocalDateTime now = LocalDateTime.now();
             link.setStatus(PaymentLinkStatus.CONFIRMED);
             link.setPaidAt(now);
@@ -7526,7 +7598,7 @@ public class PaymentLinkService {
             return;
         }
         try {
-            boolean updated = handlePaymentStatusWithoutPrematureRepeat(link.getOrder());
+            boolean updated = handlePaymentStatusWithoutPrematureRepeat(link.getOrder(), link.getId());
             link.setStatus(PaymentLinkStatus.CONFIRMED);
             link.setPaidAt(LocalDateTime.now());
             link.setConfirmedAmountKopecks(link.getAmountKopecks());
@@ -8129,7 +8201,7 @@ public class PaymentLinkService {
         }
 
         try {
-            boolean updated = handlePaymentStatusWithoutPrematureRepeat(order);
+            boolean updated = handlePaymentStatusWithoutPrematureRepeat(order, link.getId());
             String linkAudit = normalize(link.getLastError());
             int sourceAuditIndex = linkAudit.indexOf(CONTRACTOR_SOURCE_CONFIRMATION_AUDIT_PREFIX);
             link.setLastError(sourceAuditIndex >= 0 ? linkAudit.substring(sourceAuditIndex) : null);
@@ -8207,16 +8279,22 @@ public class PaymentLinkService {
                 && !reviewRecoveryGateService.hasActiveRecoveryTasks(order.getId());
     }
 
-    private boolean handlePaymentStatusWithoutPrematureRepeat(Order order) throws Exception {
+    private boolean handlePaymentStatusWithoutPrematureRepeat(Order order, Long paymentLinkId) throws Exception {
         CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
         Long orderId = order == null ? null : order.getId();
-        if (commonBillingService == null || orderId == null) {
+        boolean updated = PaymentCheckSourceContext.withPaymentLink(paymentLinkId, () -> {
+            if (commonBillingService == null || orderId == null) {
+                return orderTransactionService.handlePaymentStatus(order);
+            }
+            if (commonBillingService.isOrderInActiveCommonInvoice(orderId)) {
+                return orderTransactionService.handlePaymentStatus(order, false);
+            }
             return orderTransactionService.handlePaymentStatus(order);
+        });
+        if (updated) {
+            paymentCheckService.assertActiveCheckBoundToPaymentLink(orderId, paymentLinkId);
         }
-        if (commonBillingService.isOrderInActiveCommonInvoice(orderId)) {
-            return orderTransactionService.handlePaymentStatus(order, false);
-        }
-        return orderTransactionService.handlePaymentStatus(order);
+        return updated;
     }
 
     private void syncCommonInvoiceOrderPayment(PaymentLink link, String reason) {

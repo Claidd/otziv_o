@@ -3,7 +3,7 @@ param(
     [string]$ProxySshTarget = $env:OPENAI_PROXY_SSH_TARGET,
     [string]$ProxySshUser = $env:OPENAI_PROXY_SSH_USER,
     [int]$ProxySshPort = $(if ([string]::IsNullOrWhiteSpace($env:OPENAI_PROXY_SSH_PORT)) { 22022 } else { [int]$env:OPENAI_PROXY_SSH_PORT }),
-    [string]$ProxySshKey = $(if ([string]::IsNullOrWhiteSpace($env:OPENAI_PROXY_SSH_KEY)) { "$env:USERPROFILE\.ssh\otziv_vps_ed25519" } else { $env:OPENAI_PROXY_SSH_KEY }),
+    [string]$ProxySshKey = $env:OPENAI_PROXY_SSH_KEY,
     [string]$PublicIpLookupUrl = "https://api.ipify.org",
     [string]$RuleComment = "otziv-local-dev",
     [switch]$SkipProxyRouteIpDetection,
@@ -162,6 +162,9 @@ if (-not (Test-Path -LiteralPath $envResolverPath)) {
     throw "Env resolver script not found: $envResolverPath"
 }
 . $envResolverPath
+if ([string]::IsNullOrWhiteSpace($ProxySshKey)) {
+    $ProxySshKey = Join-Path (Get-OtzivSshDirectory -RepoRoot $repoRoot) "otziv_vps_ed25519"
+}
 $envPath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot
 Write-Host "Using env file: $envPath"
 

@@ -1,7 +1,0 @@
-*** Begin Patch
-*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/PaymentReturnOrderRecoveryServiceTest.java
-@@
-     @Test
--    void cancellationWithoutSettledEvidenceDoesNotReopenOrder() {
-+    void cancellationWithoutSettledEvidenceDoesNotReopenOrder() throws Exception {
-*** End Patch

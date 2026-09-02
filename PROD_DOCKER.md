@@ -207,7 +207,7 @@ docker compose -f docker-compose.yaml --env-file .env --profile db-admin up -d p
 С локального компьютера открой туннель:
 
 ```powershell
-ssh -i "$env:USERPROFILE\.ssh\otziv_vps_ed25519" -p 22022 -L 6571:127.0.0.1:6571 hunt@95.213.248.152
+ssh -i "F:\Works\Projects\.ssh\otziv_vps_ed25519" -p 22022 -L 6571:127.0.0.1:6571 hunt@95.213.248.152
 ```
 
 После этого phpMyAdmin будет доступен локально на `http://127.0.0.1:6571`. Логин и пароль вводятся руками, из `.env.prod` они больше не передаются в контейнер phpMyAdmin для автологина.
@@ -267,12 +267,13 @@ docker compose -f docker-compose.build.yaml push app nginx
 Для обычного обновления prod можно запустить PowerShell-скрипт:
 
 ```powershell
+Set-Location 'F:\Works\Projects\otziv'
+
 .\infrastructure\scripts\prod\deploy-prod.ps1 `
-  -VpsHost 203.0.113.10 `
+  -VpsHost 95.213.248.152 `
   -VpsUser hunt `
   -VpsPort 22022 `
-  -VpsPath /opt/otziv `
-  -SshKey C:\Users\Hunt\.ssh\id_rsa `
+  -VpsPath /docker `
   -RemoteEnvFile .env
 ```
 
@@ -281,7 +282,7 @@ docker compose -f docker-compose.build.yaml push app nginx
 - собирает и пушит `APP_IMAGE` и `WEB_IMAGE` через `docker-compose.build.yaml`;
 - только при явном `-EnableExternalReviewWorker` дополнительно собирает, пушит и разворачивает `EXTERNAL_REVIEW_WORKER_IMAGE`, одновременно включая hard-switch `EXTERNAL_REVIEW_CHECK_ENABLED`; без флага worker остаётся остановлен, а hard-switch принудительно сохраняется `false`;
 - загружает на VPS `docker-compose.yaml`, `.env.prod` и prod-конфиги из `infrastructure`;
-- до замены файлов и до запуска Flyway создаёт обязательный зашифрованный DB-backup с отдельным `DEPLOY_DB_BACKUP_ENCRYPTION_KEY_BASE64`, проверяет HMAC/расшифровку/gzip на VPS и скачивает копию в `%USERPROFILE%\.otziv\backups\pre-deploy\<tag>`;
+- до замены файлов и до запуска Flyway создаёт обязательный зашифрованный DB-backup с отдельным `DEPLOY_DB_BACKUP_ENCRYPTION_KEY_BASE64`, проверяет HMAC/расшифровку/gzip на VPS и скачивает копию в `F:\Works\Projects\.otziv\backups\pre-deploy\<tag>`;
 - до backup отключает и останавливает `otziv-prod-up.timer` и активный oneshot-сервис, сохраняет исходные состояния enable/active в защищённом lock-каталоге, затем удерживает один durable deploy-lock до завершения rollout, поэтому self-heal, перезагрузка VPS и второй deploy не могут вклиниться между снимком БД и миграцией;
 - сохраняет DB-backup в `.deploy-backups/<tag>/`, а старые `docker-compose.yaml` и env-файл — в уникальном `.deploy-backups/<tag>/rollout-<id>/`, поэтому повтор того же тега не затирает исходный rollback;
 - при первом переходе с прежней раскладки сертификатов копирует `data/nginx/o-ogo.crt`/`o-ogo.key` в `data/nginx/certs/fullchain.pem`/`privkey.pem`, если новых файлов еще нет;
@@ -293,17 +294,18 @@ docker compose -f docker-compose.build.yaml push app nginx
 
 Для релиза 5.50 `APP_MEMORY_LIMIT` обязателен и должен быть не ниже `2304m`: фактический пик RSS новой сборки превышает 1.7 GiB, поэтому прежний лимит `1536m` небезопасен. `JAVA_OPTS` при этом менять не требуется.
 
-Перед первым запуском на локальном компьютере нужен `docker login`, а на VPS должны быть Docker Engine и Docker Compose plugin или standalone-команда `docker-compose`. Можно добавить к команде флаг `-DockerLogin`, чтобы скрипт сам запустил локальный `docker login` перед сборкой и push. По умолчанию скрипт берет локальный `.env.prod`, обновляет в его временной копии `APP_IMAGE`/`WEB_IMAGE` на новый тег и загружает копию на VPS. Если на VPS используется файл `.env`, передай `-RemoteEnvFile .env`.
+Перед первым запуском на локальном компьютере нужен `docker login`, а на VPS должны быть Docker Engine и Docker Compose plugin или standalone-команда `docker-compose`. Можно добавить к команде флаг `-DockerLogin`, чтобы скрипт сам запустил локальный `docker login` перед сборкой и push. По умолчанию скрипт берет `F:\Works\Projects\.otziv\env\prod.env` и SSH-ключ `F:\Works\Projects\.ssh\otziv_vps_ed25519`, обновляет во временной копии env `APP_IMAGE`/`WEB_IMAGE` на новый тег и загружает копию на VPS. Явные `-EnvFile` и `-SshKey` по-прежнему имеют приоритет. Если на VPS используется файл `.env`, передай `-RemoteEnvFile .env`.
 
 Если секретный `.env.prod` уже настроен на VPS и его не нужно перезаписывать, добавь флаг:
 
 ```powershell
+Set-Location 'F:\Works\Projects\otziv'
+
 .\infrastructure\scripts\prod\deploy-prod.ps1 `
-  -VpsHost 203.0.113.10 `
+  -VpsHost 95.213.248.152 `
   -VpsUser hunt `
   -VpsPort 22022 `
-  -VpsPath /opt/otziv `
-  -SshKey C:\Users\Hunt\.ssh\id_rsa `
+  -VpsPath /docker `
   -RemoteEnvFile .env `
   -SkipEnvUpload
 ```

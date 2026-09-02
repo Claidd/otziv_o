@@ -38,6 +38,8 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class PersonalReminderService {
 
+    private static final String IMMUTABLE_PAYMENT_RETURN_SOURCE = "PAYMENT_RETURN_RECONCILIATION";
+
     private static final int DEFAULT_TIMER_MINUTES = 30;
     private static final int MAX_TIMER_MINUTES = 10_080;
     private static final String RECOVERY_COMPLETED_TITLE_PREFIX = "Восстановление завершено";
@@ -83,6 +85,7 @@ public class PersonalReminderService {
     public PersonalReminderResponse update(Principal principal, Long reminderId, PersonalReminderRequest request) {
         User user = currentUser(principal);
         PersonalReminder reminder = findOwnedReminder(reminderId, user);
+        rejectUserMutationOfRecoveryReminder(reminder);
         applyRequest(reminder, request, Instant.now());
 
         return PersonalReminderResponse.from(reminderRepository.save(reminder));
@@ -92,6 +95,7 @@ public class PersonalReminderService {
     public PersonalReminderResponse complete(Principal principal, Long reminderId) {
         User user = currentUser(principal);
         PersonalReminder reminder = findOwnedReminder(reminderId, user);
+        rejectUserMutationOfRecoveryReminder(reminder);
         PersonalReminderResponse response = PersonalReminderResponse.from(reminder);
         reminderRepository.delete(reminder);
 
@@ -102,6 +106,7 @@ public class PersonalReminderService {
     public void delete(Principal principal, Long reminderId) {
         User user = currentUser(principal);
         PersonalReminder reminder = findOwnedReminder(reminderId, user);
+        rejectUserMutationOfRecoveryReminder(reminder);
         reminderRepository.delete(reminder);
     }
 
@@ -151,6 +156,50 @@ public class PersonalReminderService {
             Long sourceOrderId
     ) {
         createSystemReminder(user, title, text, "datetime", Instant.now(), null, sourceType, sourceId, sourceOrderId);
+    }
+
+    /**
+     * Creates or refreshes the single open system reminder for a source.
+     * The existing row is locked and flushed before any duplicate is removed,
+     * so a failed refresh cannot leave the source without a durable card.
+     */
+    @Transactional
+    public void upsertSystemReminderDueNow(
+            User user,
+            String title,
+            String text,
+            String sourceType,
+            Long sourceId,
+            Long sourceOrderId
+    ) {
+        if (user == null || user.getId() == null || sourceId == null || sourceId <= 0) {
+            throw new IllegalArgumentException("Пользователь и источник системного напоминания обязательны");
+        }
+        String cleanSourceType = trimOrDefault(sourceType, "");
+        if (cleanSourceType.isBlank()) {
+            throw new IllegalArgumentException("Тип источника системного напоминания обязателен");
+        }
+
+        List<PersonalReminder> existing =
+                reminderRepository.findByUserIdAndSourceTypeAndSourceIdAndCompletedAtIsNullOrderByIdAsc(
+                        user.getId(), cleanSourceType, sourceId);
+        PersonalReminder reminder = existing.isEmpty() ? new PersonalReminder() : existing.getFirst();
+        reminder.setUser(user);
+        reminder.setTitle(trimOrDefault(title, "Напоминание"));
+        reminder.setText(trimOrDefault(text, ""));
+        reminder.setReminderMode("datetime");
+        reminder.setRemindAt(Instant.now());
+        reminder.setTimerMinutes(null);
+        reminder.setCompletedAt(null);
+        reminder.setSourceType(cleanSourceType);
+        reminder.setSourceId(sourceId);
+        reminder.setSourceOrderId(sourceOrderId);
+        reminderRepository.saveAndFlush(reminder);
+
+        if (existing.size() > 1) {
+            reminderRepository.deleteAll(existing.subList(1, existing.size()));
+            reminderRepository.flush();
+        }
     }
 
     @Transactional(readOnly = true)
@@ -253,6 +302,14 @@ public class PersonalReminderService {
                 trimOrDefault(sourceType, ""),
                 sourceId
         );
+        reminderRepository.flush();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasOpenSystemReminderBySource(String sourceType, Long sourceId) {
+        return sourceId != null && sourceId > 0
+                && reminderRepository.existsBySourceTypeAndSourceIdAndCompletedAtIsNull(
+                        trimOrDefault(sourceType, ""), sourceId);
     }
 
     private void applyRequest(PersonalReminder reminder, PersonalReminderRequest request, Instant now) {
@@ -282,6 +339,15 @@ public class PersonalReminderService {
     private PersonalReminder findOwnedReminder(Long reminderId, User user) {
         return reminderRepository.findByIdAndUserId(reminderId, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заметка не найдена"));
+    }
+
+    private void rejectUserMutationOfRecoveryReminder(PersonalReminder reminder) {
+        if (reminder != null && IMMUTABLE_PAYMENT_RETURN_SOURCE.equals(reminder.getSourceType())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Системное напоминание о возврате закрывается только после финансовой сверки"
+            );
+        }
     }
 
     private User currentUser(Principal principal) {

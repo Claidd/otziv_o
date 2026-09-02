@@ -9,10 +9,13 @@ import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,14 +55,16 @@ class ClientChatMessageSenderTest {
                 "Скопировать номер карты", "2202208238396676"
         );
         verify(telegramService, never()).sendMessage(12345L, "Счет и номер 2202208238396676");
+        verify(telegramService, never()).sendMessage(12345L, "2202208238396676");
     }
 
     @Test
-    void whatsappAddsPlainCopyHintWhenCopyMetadataExists() {
+    void whatsappSendsCopyValueAsSeparateMessageWhenCopyMetadataExists() {
         Company company = company("https://chat.whatsapp.com/example", null, null);
         String message = "Счет";
-        String messageWithCopyHint = message + "\n\nНомер карты для копирования: 2202208238396676";
-        when(whatsAppService.sendMessageToGroup("manager", "whatsapp-group", messageWithCopyHint))
+        when(whatsAppService.sendMessageToGroup("manager", "whatsapp-group", message))
+                .thenReturn("ok");
+        when(whatsAppService.sendMessageToGroup("manager", "whatsapp-group", "2202208238396676"))
                 .thenReturn("ok");
 
         ClientMessageSendResult result = sender.send(
@@ -67,27 +72,63 @@ class ClientChatMessageSenderTest {
         );
 
         assertTrue(result.sent());
-        verify(whatsAppService).sendMessageToGroup("manager", "whatsapp-group", messageWithCopyHint);
+        InOrder delivery = inOrder(whatsAppService);
+        delivery.verify(whatsAppService).sendMessageToGroup("manager", "whatsapp-group", message);
+        delivery.verify(whatsAppService).sendMessageToGroup(
+                "manager", "whatsapp-group", "2202208238396676"
+        );
         verify(telegramService, never()).sendMessageWithCopyTextButton(
                 12345L, message, "Скопировать номер карты", "2202208238396676"
         );
     }
 
     @Test
-    void maxAddsPlainCopyHintWhenCopyMetadataExists() {
+    void maxSendsCopyValueAsSeparateMessageWhenCopyMetadataExists() {
         Company company = company("https://max.ru/example", null, 98765L);
         String message = "Счет";
-        String messageWithCopyHint = message + "\n\nНомер карты для копирования: 2202208238396676";
-        when(maxBotClient.sendMessageToChat(98765L, messageWithCopyHint)).thenReturn(true);
+        when(maxBotClient.sendMessageToChat(98765L, message)).thenReturn(true);
+        when(maxBotClient.sendMessageToChat(98765L, "2202208238396676")).thenReturn(true);
 
         ClientMessageSendResult result = sender.send(
                 company, "manager", "whatsapp-group", message, copyButton
         );
 
         assertTrue(result.sent());
-        verify(maxBotClient).sendMessageToChat(98765L, messageWithCopyHint);
+        InOrder delivery = inOrder(maxBotClient);
+        delivery.verify(maxBotClient).sendMessageToChat(98765L, message);
+        delivery.verify(maxBotClient).sendMessageToChat(98765L, "2202208238396676");
         verify(telegramService, never()).sendMessageWithCopyTextButton(
                 98765L, message, "Скопировать номер карты", "2202208238396676"
+        );
+    }
+
+    @Test
+    void copyOnlyFailureDoesNotFailSuccessfulPrimaryMessage() {
+        Company company = company("https://chat.whatsapp.com/example", null, null);
+        when(whatsAppService.sendMessageToGroup("manager", "whatsapp-group", "Счет")).thenReturn("ok");
+        when(whatsAppService.sendMessageToGroup("manager", "whatsapp-group", "2202208238396676"))
+                .thenReturn("error");
+
+        ClientMessageSendResult result = sender.send(
+                company, "manager", "whatsapp-group", "Счет", copyButton
+        );
+
+        assertTrue(result.sent());
+        verify(whatsAppService).sendMessageToGroup("manager", "whatsapp-group", "2202208238396676");
+    }
+
+    @Test
+    void primaryFailureDoesNotSendCopyOnlyMessage() {
+        Company company = company("https://chat.whatsapp.com/example", null, null);
+        when(whatsAppService.sendMessageToGroup("manager", "whatsapp-group", "Счет")).thenReturn("error");
+
+        ClientMessageSendResult result = sender.send(
+                company, "manager", "whatsapp-group", "Счет", copyButton
+        );
+
+        assertFalse(result.sent());
+        verify(whatsAppService, never()).sendMessageToGroup(
+                "manager", "whatsapp-group", "2202208238396676"
         );
     }
 

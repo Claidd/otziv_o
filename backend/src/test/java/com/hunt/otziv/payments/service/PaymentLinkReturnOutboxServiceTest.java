@@ -2,6 +2,7 @@ package com.hunt.otziv.payments.service;
 
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentShadowService;
@@ -95,5 +96,22 @@ class PaymentLinkReturnOutboxServiceTest {
 
         verify(transactions).retry(claim, failure);
         verify(transactions, never()).succeeded(claim);
+    }
+
+    @Test
+    void workerKeepsUnknownObservedStatusRetryableWithoutTouchingFinancialLedgers() {
+        PaymentLinkReturnOutboxRepository.Claim claim = new PaymentLinkReturnOutboxRepository.Claim(
+                3L, 130L, 9L, "FUTURE_RETURN", "token-3", 1);
+        when(transactions.claimNext()).thenReturn(Optional.of(claim), Optional.empty());
+        PaymentLinkReturnOutboxWorker worker = new PaymentLinkReturnOutboxWorker(
+                transactions, shadowService);
+
+        worker.processDue();
+
+        verify(transactions).retry(
+                org.mockito.ArgumentMatchers.eq(claim),
+                org.mockito.ArgumentMatchers.isA(IllegalStateException.class));
+        verify(transactions, never()).succeeded(claim);
+        verifyNoInteractions(shadowService);
     }
 }

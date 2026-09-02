@@ -100,6 +100,12 @@ class PaymentLinkArchiveRepositoryContractTest {
         assertTrue(copySql.getValue().contains("shadow_route_generation"));
         assertTrue(copySql.getValue().contains("contractor_evidence_original_link_id"));
         assertTrue(copySql.getValue().contains("manual_bank_name"));
+        assertTrue(copySql.getValue().contains("return_recovery_processed_at"));
+        assertTrue(copySql.getValue().contains("return_recovery_payment_check_id"));
+        assertTrue(copySql.getValue().contains("return_recovery_outcome"));
+        assertTrue(copySql.getValue().contains("return_recovery_resolved_at"));
+        assertTrue(copySql.getValue().contains("return_recovery_resolved_by"));
+        assertTrue(copySql.getValue().contains("return_recovery_resolution_reason"));
 
         ArgumentCaptor<String> deleteSql = ArgumentCaptor.forClass(String.class);
         verify(jdbc).update(deleteSql.capture(), anyMap());
@@ -266,12 +272,14 @@ class PaymentLinkArchiveRepositoryContractTest {
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(jdbc, org.mockito.Mockito.times(2))
                 .queryForObject(sql.capture(), anyMap(), eq(Long.class));
-        sql.getAllValues().forEach(PaymentLinkArchiveRepositoryContractTest::assertArchiveFinalFence);
+        assertArchiveFinalFence(sql.getAllValues().get(0));
+        assertPreparedArchiveFinalFence(sql.getAllValues().get(1));
     }
 
     private static void assertArchiveSelectionFence(String sql) {
         assertSqlTokensSeparated(sql);
         assertArchiveStateFence(sql);
+        assertTrue(sql.contains("active_payment_check.check_payment_link = pl.id"));
         assertTrue(sql.contains("payment_success_notification_retry_claims"));
         assertTrue(sql.contains("notification_claim.processing_lease_until > CURRENT_TIMESTAMP(6)"));
         assertTrue(sql.contains("contractor_payment_allocations contractor_allocation"));
@@ -288,6 +296,18 @@ class PaymentLinkArchiveRepositoryContractTest {
     private static void assertArchiveFinalFence(String sql) {
         assertSqlTokensSeparated(sql);
         assertArchiveStateFence(sql);
+        assertTrue(sql.contains("active_payment_check.check_payment_link = pl.id"));
+        assertTrue(sql.contains("payment_success_notification_retry_claims"));
+        assertFalse(sql.contains("notification_claim.processing_lease_until"));
+        assertTrue(sql.contains("contractor_payment_allocations contractor_allocation"));
+        assertTrue(sql.contains("contractor_evidence_original_link_id"));
+        assertTrue(sql.contains("source_generation_snapshot"));
+    }
+
+    private static void assertPreparedArchiveFinalFence(String sql) {
+        assertSqlTokensSeparated(sql);
+        assertArchiveStateFence(sql);
+        assertFalse(sql.contains("active_payment_check.check_payment_link = pl.id"));
         assertTrue(sql.contains("payment_success_notification_retry_claims"));
         assertFalse(sql.contains("notification_claim.processing_lease_until"));
         assertTrue(sql.contains("contractor_payment_allocations contractor_allocation"));
@@ -300,6 +320,9 @@ class PaymentLinkArchiveRepositoryContractTest {
         assertTrue(sql.contains("bank_init_nonce IS NOT NULL"));
         assertTrue(sql.contains("bank_cancel_nonce IS NOT NULL"));
         assertTrue(sql.contains("bank_cancel_origin_status IS NOT NULL"));
+        assertTrue(sql.contains("return_recovery_outcome, '') = 'MANUAL_RECONCILIATION'"));
+        assertTrue(sql.contains("return_recovery_processed_at IS NULL"));
+        assertTrue(sql.contains("'APPLIED_MANUALLY', 'ACCEPTED_NOOP'"));
         assertTrue(sql.contains(
                 "LOWER(TRIM(COALESCE(pl.last_error, ''))) LIKE 'manual_card_payment_pending:%'"
         ));

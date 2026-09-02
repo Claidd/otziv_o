@@ -1,6 +1,0 @@
-*** Begin Patch
-*** Update File: backend/src/test/java/com/hunt/otziv/payments/service/ManualPaymentTaskAccountingTargetPolicyTest.java
-@@
--        assertEquals(true, historical.needsOverrunAcknowledgement());
-+        assertEquals(true, historical.needsAcknowledgement());
-*** End Patch

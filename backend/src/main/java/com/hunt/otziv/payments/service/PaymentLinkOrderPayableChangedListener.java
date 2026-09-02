@@ -13,6 +13,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class PaymentLinkOrderPayableChangedListener {
 
     private final PaymentLinkService paymentLinkService;
+    private final PaymentLinkTransactionExecutor transactionExecutor;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onOrderPayableChanged(OrderPayableChangedEvent event) {
@@ -20,7 +21,7 @@ public class PaymentLinkOrderPayableChangedListener {
             return;
         }
         try {
-            paymentLinkService.refreshLinkedOrderAmount(event.orderId());
+            transactionExecutor.required(() -> paymentLinkService.refreshLinkedOrderAmount(event.orderId()));
         } catch (RuntimeException e) {
             log.warn("Не удалось обновить обычный счёт после изменения суммы заказа {}", event.orderId(), e);
         }

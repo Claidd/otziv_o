@@ -301,6 +301,64 @@ class ContractorRewardLedgerServiceTest {
     }
 
     @Test
+    void cancellationPreflightLocksSourcesBeforeProfilesInSortedUserOrder() {
+        Zp highUserReward = reward(91L, 801L, new BigDecimal("20.00"));
+        highUserReward.setUserId(202L);
+        Zp lowUserReward = reward(92L, 801L, new BigDecimal("30.00"));
+        lowUserReward.setUserId(101L);
+        Zp secondLowUserReward = reward(93L, 801L, new BigDecimal("40.00"));
+        secondLowUserReward.setUserId(101L);
+        List<Zp> activeRewards = List.of(highUserReward, lowUserReward, secondLowUserReward);
+
+        ContractorPaymentProfile lowUserProfile = profile(31L, user(101L));
+        ContractorPaymentProfile highUserProfile = profile(32L, user(202L));
+        when(zpRepository.findActiveByOrderIdForContractorLedgerUpdate(801L))
+                .thenReturn(activeRewards);
+        when(profileRepository.findAllByUserIdForUpdate(101L))
+                .thenReturn(List.of(lowUserProfile));
+        when(profileRepository.findAllByUserIdForUpdate(202L))
+                .thenReturn(List.of(highUserProfile));
+
+        List<Zp> result = service
+                .lockActiveOrderRewardsAndRequireCancellationRepresentable(801L);
+
+        assertThat(result).containsExactlyElementsOf(activeRewards);
+        InOrder locks = inOrder(zpRepository, profileRepository);
+        locks.verify(zpRepository).findActiveByOrderIdForContractorLedgerUpdate(801L);
+        locks.verify(profileRepository).findAllByUserIdForUpdate(101L);
+        locks.verify(profileRepository).findAllByUserIdForUpdate(202L);
+        org.mockito.Mockito.verify(profileRepository, org.mockito.Mockito.times(1))
+                .findAllByUserIdForUpdate(101L);
+    }
+
+    @Test
+    void cancellationPreflightLocksAllProfilesBeforeRejectingPreCutoverReward() {
+        Zp lowUserReward = reward(101L, 802L, new BigDecimal("20.00"));
+        lowUserReward.setUserId(101L);
+        Zp highUserReward = reward(102L, 802L, new BigDecimal("30.00"));
+        highUserReward.setUserId(202L);
+
+        ContractorPaymentProfile lowUserProfile = profile(41L, user(101L));
+        ContractorPaymentProfile highUserProfile = profile(42L, user(202L));
+        highUserProfile.setTrackingStartZpId(102L);
+        when(zpRepository.findActiveByOrderIdForContractorLedgerUpdate(802L))
+                .thenReturn(List.of(lowUserReward, highUserReward));
+        when(profileRepository.findAllByUserIdForUpdate(101L))
+                .thenReturn(List.of(lowUserProfile));
+        when(profileRepository.findAllByUserIdForUpdate(202L))
+                .thenReturn(List.of(highUserProfile));
+
+        assertThatThrownBy(() -> service
+                .lockActiveOrderRewardsAndRequireCancellationRepresentable(802L))
+                .hasMessageContaining("переходящий остаток");
+
+        InOrder locks = inOrder(zpRepository, profileRepository);
+        locks.verify(zpRepository).findActiveByOrderIdForContractorLedgerUpdate(802L);
+        locks.verify(profileRepository).findAllByUserIdForUpdate(101L);
+        locks.verify(profileRepository).findAllByUserIdForUpdate(202L);
+    }
+
+    @Test
     void safeSynchronizationWaitsForSourceCommitThenUsesIndependentTransaction() {
         Zp reward = reward(77L, 701L, new BigDecimal("10.00"));
         when(transactionManager.getTransaction(any()))

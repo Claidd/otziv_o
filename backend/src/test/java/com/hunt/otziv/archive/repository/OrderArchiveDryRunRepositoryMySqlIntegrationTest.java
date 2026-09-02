@@ -159,6 +159,35 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
     }
 
     @Test
+    void pendingPaymentReturnOutboxBlocksInitialCandidateSelectionUntilSucceeded() {
+        insertPaidOrder(1201L);
+        jdbc.update("""
+                INSERT INTO payment_links (
+                    id, order_id, status, receipt_status,
+                    payment_success_notification_retry_eligible
+                ) VALUES (1202, 1201, 'CONFIRMED', 'DONE', 0)
+                """);
+        jdbc.update("""
+                INSERT INTO payment_link_return_reconciliation_outbox (
+                    payment_link_id, status
+                ) VALUES (1202, 'PENDING')
+                """);
+
+        assertThat(repository.countEligibleOrders(CUTOFF_DATE)).isZero();
+        transaction.executeWithoutResult(status -> {
+            repository.prepareCandidateOrders(CUTOFF_DATE, 10);
+            assertThat(repository.lockPreparedCandidateOrders()).isZero();
+        });
+
+        jdbc.update("""
+                UPDATE payment_link_return_reconciliation_outbox
+                SET status = 'SUCCEEDED'
+                WHERE payment_link_id = 1202
+                """);
+        assertThat(repository.countEligibleOrders(CUTOFF_DATE)).isEqualTo(1);
+    }
+
+    @Test
     void terminalSuccessorArchivesTogetherWithItsImmutableUnpaidPredecessor() {
         insertPaidOrder(901L);
         jdbc.update("""
@@ -269,6 +298,7 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
 
     private void initializeSchema(DataSource dataSource) {
         JdbcTemplate setup = new JdbcTemplate(dataSource);
+        setup.execute("DROP TABLE IF EXISTS payment_link_return_reconciliation_outbox");
         setup.execute("DROP TABLE IF EXISTS payment_success_notification_retry_claims");
         setup.execute("DROP TABLE IF EXISTS common_invoice_payment_refs");
         setup.execute("DROP TABLE IF EXISTS common_invoice_orders");
@@ -363,11 +393,25 @@ class OrderArchiveDryRunRepositoryMySqlIntegrationTest {
                     bank_init_nonce VARCHAR(64) NULL,
                     bank_cancel_nonce VARCHAR(64) NULL,
                     bank_cancel_origin_status VARCHAR(32) NULL,
+                    return_recovery_processed_at DATETIME(6) NULL,
+                    return_recovery_payment_check_id BIGINT NULL,
+                    return_recovery_outcome VARCHAR(32) NULL,
+                    return_recovery_resolved_at DATETIME(6) NULL,
+                    return_recovery_resolved_by VARCHAR(150) NULL,
+                    return_recovery_resolution_reason VARCHAR(512) NULL,
                     last_error VARCHAR(1024) NULL,
                     receipt_status VARCHAR(32) NULL,
                     payment_success_notified_at DATETIME(6) NULL,
                     payment_success_notification_retry_eligible TINYINT(1) NOT NULL DEFAULT 0,
                     PRIMARY KEY (id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE payment_link_return_reconciliation_outbox (
+                    outbox_id BIGINT NOT NULL AUTO_INCREMENT,
+                    payment_link_id BIGINT NOT NULL,
+                    status VARCHAR(16) NOT NULL,
+                    PRIMARY KEY (outbox_id)
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""

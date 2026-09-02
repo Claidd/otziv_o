@@ -13,6 +13,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class CommonInvoicePublicationBlockerListener {
 
     private final CommonInvoicePublicationBlockerService blockerService;
+    private final CommonBillingTransactionExecutor transactionExecutor;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onOrderStatusChanged(OrderStatusChangedEvent event) {
@@ -20,7 +21,7 @@ public class CommonInvoicePublicationBlockerListener {
             return;
         }
         try {
-            blockerService.reconcileOrder(event.orderId());
+            transactionExecutor.required(() -> blockerService.reconcileOrder(event.orderId()));
         } catch (RuntimeException e) {
             log.warn("Не удалось пересчитать блокер общего счета после смены статуса заказа {}", event.orderId(), e);
         }

@@ -53,18 +53,28 @@ public class ClientChatMessageSender {
                 company.getMaxGroupChatId()
         );
 
-        return switch (activePlatform) {
+        ClientMessageSendResult primaryResult = switch (activePlatform) {
             case WHATSAPP -> hasText(groupId)
-                    ? sendToWhatsApp(clientId, groupId, messageForPlainChannel(message, telegramCopyButton))
+                    ? sendToWhatsApp(clientId, groupId, message)
                     : missingActiveChannel("whatsapp_group_missing", "Для WhatsApp-группы не задан groupId");
             case TELEGRAM -> company.getTelegramGroupChatId() != null
                     ? sendToTelegram(company.getTelegramGroupChatId(), message, telegramCopyButton)
                     : missingActiveChannel("telegram_group_missing", "Для Telegram-группы не задан chatId");
             case MAX -> company.getMaxGroupChatId() != null
-                    ? sendToMax(company.getMaxGroupChatId(), messageForPlainChannel(message, telegramCopyButton))
+                    ? sendToMax(company.getMaxGroupChatId(), message)
                     : missingActiveChannel("max_group_missing", "Для MAX-группы не задан chatId");
             case UNKNOWN -> missingActiveChannel("chat_platform_unknown", "Ссылка на чат не распознана или не указана");
         };
+        if (primaryResult.sent()) {
+            sendPlainChannelCopyMessageBestEffort(
+                    activePlatform,
+                    company,
+                    clientId,
+                    groupId,
+                    telegramCopyButton
+            );
+        }
+        return primaryResult;
     }
 
     public ClientMessageSendResult sendToPlatform(
@@ -164,25 +174,30 @@ public class ClientChatMessageSender {
         return ClientMessageSendResult.failed(code, message);
     }
 
-    private String messageForPlainChannel(String message, TelegramTransferCopyButton copyButton) {
+    private void sendPlainChannelCopyMessageBestEffort(
+            ChatPlatform platform,
+            Company company,
+            String clientId,
+            String groupId,
+            TelegramTransferCopyButton copyButton
+    ) {
         if (copyButton == null || !hasText(copyButton.copyText())) {
-            return message;
+            return;
         }
-        String copyHint = plainCopyHint(copyButton);
-        if (!hasText(copyHint) || (message != null && message.contains(copyHint))) {
-            return message;
-        }
-        return message + "\n\n" + copyHint;
-    }
 
-    private String plainCopyHint(TelegramTransferCopyButton copyButton) {
-        String label = "Скопировать номер";
-        if ("Скопировать номер карты".equals(copyButton.text())) {
-            label = "Номер карты для копирования";
-        } else if ("Скопировать номер телефона".equals(copyButton.text())) {
-            label = "Телефон для копирования";
+        ClientMessageSendResult copyResult = switch (platform) {
+            case WHATSAPP -> sendToWhatsApp(clientId, groupId, copyButton.copyText());
+            case MAX -> sendToMax(company.getMaxGroupChatId(), copyButton.copyText());
+            case TELEGRAM, UNKNOWN -> null;
+        };
+        if (copyResult != null && !copyResult.sent()) {
+            log.warn(
+                    "Отдельное сообщение с платежным реквизитом не отправлено: companyId={}, platform={}, code={}",
+                    company.getId(),
+                    platform,
+                    copyResult.errorCode()
+            );
         }
-        return label + ": " + copyButton.copyText();
     }
 
     private ChatPlatform activeChatPlatform(Company company) {

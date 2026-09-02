@@ -199,45 +199,21 @@ public class ManualCardPaymentReviewNotificationService {
                 request.approvalId(),
                 request.callbackToken()
         );
-        for (User recipient : recipients().values()) {
-            try {
-                if (!personalReminderService.hasOpenSystemReminder(
-                        recipient,
-                        OWNER_APPROVAL_REMINDER_SOURCE,
-                        request.approvalId()
-                )) {
-                    personalReminderService.createSystemReminderDueNow(
-                            recipient,
-                            title,
-                            limit(text, 1000),
-                            OWNER_APPROVAL_REMINDER_SOURCE,
-                            request.approvalId(),
-                            request.orderId()
-                    );
-                }
-            } catch (RuntimeException exception) {
-                log.warn(
-                        "Не удалось создать запрос подтверждения владельца approvalId={}, userId={}",
-                        request.approvalId(),
-                        recipient.getId(),
-                        exception
-                );
-            }
-            if (recipient.getTelegramChatId() == null) {
-                continue;
-            }
+        Long managerGroupChatId = request.managerGroupChatId();
+        if (managerGroupChatId != null && managerGroupChatId < 0) {
             try {
                 telegramService.sendMessageWithInlineButton(
-                        recipient.getTelegramChatId(),
+                        managerGroupChatId,
                         text,
                         "✅ Подтвердить поступление владельцу",
                         callbackData
                 );
             } catch (RuntimeException exception) {
                 log.warn(
-                        "Не удалось отправить Telegram-запрос approvalId={}, userId={}",
+                        "Не удалось отправить Telegram-запрос approvalId={}, managerId={}, groupChatId={}",
                         request.approvalId(),
-                        recipient.getId(),
+                        request.managerId(),
+                        managerGroupChatId,
                         exception
                 );
             }
@@ -383,7 +359,9 @@ public class ManualCardPaymentReviewNotificationService {
             long amountKopecks,
             String actor,
             String reason,
-            String linkStatus
+            String linkStatus,
+            Long managerId,
+            Long managerGroupChatId
     ) {
     }
 }

@@ -314,6 +314,25 @@ public class PaymentLink {
     @Column(name = "provider_terminal_status", length = 32)
     private String providerTerminalStatus;
 
+    /** Durable idempotency fence for paid-order recovery after a full return. */
+    @Column(name = "return_recovery_processed_at")
+    private LocalDateTime returnRecoveryProcessedAt;
+
+    @Column(name = "return_recovery_payment_check_id")
+    private Long returnRecoveryPaymentCheckId;
+
+    @Column(name = "return_recovery_outcome", length = 32)
+    private String returnRecoveryOutcome;
+
+    @Column(name = "return_recovery_resolved_at")
+    private LocalDateTime returnRecoveryResolvedAt;
+
+    @Column(name = "return_recovery_resolved_by", length = 150)
+    private String returnRecoveryResolvedBy;
+
+    @Column(name = "return_recovery_resolution_reason", length = 512)
+    private String returnRecoveryResolutionReason;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

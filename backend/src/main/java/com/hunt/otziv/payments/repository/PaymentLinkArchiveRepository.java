@@ -74,6 +74,12 @@ public class PaymentLinkArchiveRepository {
             "payment_success_notification_error",
             "payment_success_notification_retry_eligible",
             "last_error",
+            "return_recovery_processed_at",
+            "return_recovery_payment_check_id",
+            "return_recovery_outcome",
+            "return_recovery_resolved_at",
+            "return_recovery_resolved_by",
+            "return_recovery_resolution_reason",
             "created_at",
             "updated_at",
             "expires_at",
@@ -110,6 +116,45 @@ public class PaymentLinkArchiveRepository {
                 OR pl.bank_init_nonce IS NOT NULL
                 OR pl.bank_cancel_nonce IS NOT NULL
                 OR pl.bank_cancel_origin_status IS NOT NULL
+                OR COALESCE(pl.return_recovery_outcome, '') = 'MANUAL_RECONCILIATION'
+                OR NOT (
+                    (
+                        pl.return_recovery_processed_at IS NULL
+                        AND pl.return_recovery_payment_check_id IS NULL
+                        AND pl.return_recovery_outcome IS NULL
+                        AND pl.return_recovery_resolved_at IS NULL
+                        AND pl.return_recovery_resolved_by IS NULL
+                        AND pl.return_recovery_resolution_reason IS NULL
+                    )
+                    OR (
+                        pl.return_recovery_processed_at IS NOT NULL
+                        AND (
+                            (
+                                COALESCE(pl.return_recovery_outcome, '') = 'APPLIED'
+                                AND pl.return_recovery_payment_check_id IS NOT NULL
+                                AND pl.return_recovery_resolved_at IS NULL
+                                AND pl.return_recovery_resolved_by IS NULL
+                                AND pl.return_recovery_resolution_reason IS NULL
+                            )
+                            OR (
+                                COALESCE(pl.return_recovery_outcome, '') IN (
+                                    'STALE_PAYMENT_CYCLE', 'MANUAL_RECONCILIATION'
+                                )
+                                AND pl.return_recovery_resolved_at IS NULL
+                                AND pl.return_recovery_resolved_by IS NULL
+                                AND pl.return_recovery_resolution_reason IS NULL
+                            )
+                            OR (
+                                COALESCE(pl.return_recovery_outcome, '') IN (
+                                    'APPLIED_MANUALLY', 'ACCEPTED_NOOP'
+                                )
+                                AND pl.return_recovery_resolved_at IS NOT NULL
+                                AND NULLIF(TRIM(pl.return_recovery_resolved_by), '') IS NOT NULL
+                                AND NULLIF(TRIM(pl.return_recovery_resolution_reason), '') IS NOT NULL
+                            )
+                        )
+                    )
+                )
                 OR LOWER(TRIM(COALESCE(pl.last_error, ''))) LIKE 'manual_card_payment_pending:%'
                 OR (
                     pl.manual_actual_recipient_frozen_at IS NOT NULL
@@ -132,6 +177,19 @@ public class PaymentLinkArchiveRepository {
                     WHERE return_outbox.payment_link_id = pl.id
                       AND return_outbox.status <> 'SUCCEEDED'
                 )
+            )
+            """;
+
+    /** Generic link archiving must retain an exact source while its paid-order
+     * check is live. Prepared order archiving copies that check and source in
+     * one locked batch and therefore uses a dedicated predicate without this
+     * standalone fence. */
+    private static final String ACTIVE_PAYMENT_CHECK_SOURCE_BLOCKER_SQL = """
+            EXISTS (
+                SELECT 1
+                FROM payment_check active_payment_check
+                WHERE active_payment_check.check_active = 1
+                  AND active_payment_check.check_payment_link = pl.id
             )
             """;
 
@@ -291,6 +349,7 @@ public class PaymentLinkArchiveRepository {
     private static final String ARCHIVE_SELECTION_BLOCKER_SQL = """
             (
                 %s
+                OR %s
                 OR EXISTS (
                     SELECT 1
                     FROM payment_success_notification_retry_claims notification_claim
@@ -302,6 +361,7 @@ public class PaymentLinkArchiveRepository {
             )
             """.formatted(
             ARCHIVE_STATE_BLOCKER_SQL,
+            ACTIVE_PAYMENT_CHECK_SOURCE_BLOCKER_SQL,
             CONTRACTOR_ARCHIVE_SELECTION_BLOCKER_SQL,
             CONTRACTOR_MANUAL_EVIDENCE_BLOCKER_SQL
     );
@@ -311,11 +371,23 @@ public class PaymentLinkArchiveRepository {
      * removed every expired, ineligible claim before any live row can move.
      */
     private static final String ARCHIVE_FINAL_BLOCKER_SQL = archiveFinalBlockerSql(
-            CONTRACTOR_MANUAL_EVIDENCE_BLOCKER_SQL
+            CONTRACTOR_MANUAL_EVIDENCE_BLOCKER_SQL,
+            true
     );
 
     private static final String ARCHIVE_DELETE_BLOCKER_SQL = archiveFinalBlockerSql(
-            CONTRACTOR_MANUAL_EVIDENCE_DELETE_BLOCKER_SQL
+            CONTRACTOR_MANUAL_EVIDENCE_DELETE_BLOCKER_SQL,
+            true
+    );
+
+    private static final String PREPARED_ORDER_ARCHIVE_FINAL_BLOCKER_SQL = archiveFinalBlockerSql(
+            CONTRACTOR_MANUAL_EVIDENCE_BLOCKER_SQL,
+            false
+    );
+
+    private static final String PREPARED_ORDER_ARCHIVE_DELETE_BLOCKER_SQL = archiveFinalBlockerSql(
+            CONTRACTOR_MANUAL_EVIDENCE_DELETE_BLOCKER_SQL,
+            false
     );
 
     private static final String ARCHIVE_ELIGIBILITY_SQL = """
@@ -569,7 +641,7 @@ public class PaymentLinkArchiveRepository {
                     JOIN archive_candidate_orders co ON co.order_id = pl.order_id
                     WHERE %s
                 )
-                """.formatted(ARCHIVE_FINAL_BLOCKER_SQL);
+                """.formatted(PREPARED_ORDER_ARCHIVE_FINAL_BLOCKER_SQL);
         Long present = jdbc.queryForObject(sql, Map.of(), Long.class);
         return present != null && present > 0;
     }
@@ -587,6 +659,47 @@ public class PaymentLinkArchiveRepository {
     }
 
     public int archiveIds(Collection<Long> ids, LocalDateTime archivedAt, String reason, Long batchId) {
+        return archiveIds(ids, archivedAt, reason, batchId, ARCHIVE_FINAL_BLOCKER_SQL);
+    }
+
+    public int archivePreparedOrderIds(
+            Collection<Long> ids,
+            LocalDateTime archivedAt,
+            String reason,
+            Long batchId
+    ) {
+        return archiveIds(ids, archivedAt, reason, batchId, PREPARED_ORDER_ARCHIVE_FINAL_BLOCKER_SQL);
+    }
+
+    /**
+     * Re-archiving a restored order must replace its previous immutable
+     * payment snapshot. Call only after the corresponding live ids were
+     * selected FOR UPDATE; a later copy failure rolls this delete back with
+     * the surrounding order-archive transaction.
+     */
+    public int deleteArchivedSnapshotsForPreparedRearchive(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        return jdbc.update("""
+                DELETE archived
+                FROM archive_payment_links archived
+                WHERE archived.id IN (:ids)
+                  AND EXISTS (
+                      SELECT 1
+                      FROM payment_links live
+                      WHERE live.id = archived.id
+                  )
+                """, Map.of("ids", ids));
+    }
+
+    private int archiveIds(
+            Collection<Long> ids,
+            LocalDateTime archivedAt,
+            String reason,
+            Long batchId,
+            String blockerSql
+    ) {
         if (ids == null || ids.isEmpty()) {
             return 0;
         }
@@ -621,7 +734,7 @@ public class PaymentLinkArchiveRepository {
                 LEFT JOIN users u ON u.id = m.user_id
                 WHERE pl.id IN (:ids)
                   AND NOT %s
-                """).formatted(columns, selectColumns, ARCHIVE_FINAL_BLOCKER_SQL);
+                """).formatted(columns, selectColumns, blockerSql);
         return jdbc.update(sql, new MapSqlParameterSource()
                 .addValue("ids", ids)
                 .addValue("archivedAt", Timestamp.valueOf(archivedAt))
@@ -630,6 +743,14 @@ public class PaymentLinkArchiveRepository {
     }
 
     public int deleteLiveIds(Collection<Long> ids) {
+        return deleteLiveIds(ids, ARCHIVE_DELETE_BLOCKER_SQL);
+    }
+
+    public int deletePreparedOrderLiveIds(Collection<Long> ids) {
+        return deleteLiveIds(ids, PREPARED_ORDER_ARCHIVE_DELETE_BLOCKER_SQL);
+    }
+
+    private int deleteLiveIds(Collection<Long> ids, String blockerSql) {
         if (ids == null || ids.isEmpty()) {
             return 0;
         }
@@ -643,13 +764,17 @@ public class PaymentLinkArchiveRepository {
                       FROM archive_payment_links archived
                       WHERE archived.id = pl.id
                   )
-                """.formatted(ARCHIVE_DELETE_BLOCKER_SQL);
+                """.formatted(blockerSql);
         return jdbc.update(sql, Map.of("ids", ids));
     }
 
-    private static String archiveFinalBlockerSql(String manualEvidenceBlockerSql) {
+    private static String archiveFinalBlockerSql(
+            String manualEvidenceBlockerSql,
+            boolean blockActivePaymentCheckSource
+    ) {
         return """
                 (
+                    %s
                     %s
                     OR EXISTS (
                         SELECT 1
@@ -661,6 +786,9 @@ public class PaymentLinkArchiveRepository {
                 )
                 """.formatted(
                 ARCHIVE_STATE_BLOCKER_SQL,
+                blockActivePaymentCheckSource
+                        ? "OR " + ACTIVE_PAYMENT_CHECK_SOURCE_BLOCKER_SQL
+                        : "",
                 CONTRACTOR_ARCHIVE_SELECTION_BLOCKER_SQL,
                 manualEvidenceBlockerSql
         );

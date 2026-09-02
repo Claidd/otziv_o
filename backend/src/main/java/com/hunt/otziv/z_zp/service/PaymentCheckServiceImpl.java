@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -146,11 +147,24 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
     @Transactional
     public boolean save(Order order){ // Сохранить Чек в БД
         BigDecimal sum = order != null && order.getSum() != null ? order.getSum() : BigDecimal.ZERO;
-        return save(order, sum);
+        return saveInternal(order, sum, null, null);
     } // Сохранить Чек в БД
 
     @Transactional
     public boolean save(Order order, BigDecimal sum){ // Сохранить Чек в БД
+        return saveInternal(order, sum, null, null);
+    }
+
+    @Override
+    @Transactional
+    public boolean save(Order order, BigDecimal sum, int paidAmount) {
+        if (paidAmount < 0) {
+            throw new IllegalArgumentException("Количество оплаченных работ не может быть отрицательным");
+        }
+        return saveInternal(order, sum, paidAmount, PaymentCheckSourceContext.currentPaymentLinkId());
+    }
+
+    private boolean saveInternal(Order order, BigDecimal sum, Integer paidAmount, Long paymentLinkId) {
         try {
             if (order == null || order.getId() == null) {
                 throw new IllegalArgumentException("Для чека нужен заказ с ID");
@@ -161,22 +175,35 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
                 throw new IllegalStateException("Активный чек можно создать только для оплаченного заказа");
             }
             BigDecimal expected = sum == null ? BigDecimal.ZERO : sum;
+            Long expectedManagerId = requiredManagerUserId(order);
+            Long expectedWorkerId = requiredWorkerUserId(order);
+            Long expectedCompanyId = requiredCompanyId(order);
+            Long expectedStatusGuard = order.getStatus().getId();
             List<PaymentCheck> existing = paymentCheckRepository.findByOrderIdAndActiveTrue(order.getId());
             if (!existing.isEmpty()) {
                 BigDecimal recorded = existing.stream()
                         .map(PaymentCheck::getSum)
                         .filter(java.util.Objects::nonNull)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
-                if (recorded.compareTo(expected) == 0 && existing.size() == 1) {
-                    log.info("Активный чек заказа {} уже существует с той же суммой; повтор не создается", order.getId());
+                PaymentCheck onlyCheck = existing.size() == 1 ? existing.getFirst() : null;
+                boolean sameFinancialFact = onlyCheck != null
+                        && recorded.compareTo(expected) == 0
+                        && java.util.Objects.equals(onlyCheck.getManagerId(), expectedManagerId)
+                        && java.util.Objects.equals(onlyCheck.getWorkerId(), expectedWorkerId)
+                        && java.util.Objects.equals(onlyCheck.getCompanyId(), expectedCompanyId)
+                        && java.util.Objects.equals(onlyCheck.getPaymentStatusGuard(), expectedStatusGuard)
+                        && java.util.Objects.equals(onlyCheck.getPaidAmount(), paidAmount)
+                        && java.util.Objects.equals(onlyCheck.getPaymentLinkId(), paymentLinkId);
+                if (sameFinancialFact) {
+                    log.info("Активный чек заказа {} уже существует с теми же реквизитами; повтор не создается", order.getId());
                     return true;
                 }
                 throw new IllegalStateException(
-                        "Активный чек заказа " + order.getId() + " не совпадает с оплатой: "
-                                + recorded + " вместо " + expected
+                        "Активный чек заказа " + order.getId()
+                                + " не совпадает с текущим финансовым фактом"
                 );
             }
-            saveCheckCompany(order, sum);
+            saveCheckCompany(order, sum, paidAmount, paymentLinkId);
             return true;
         }
         catch (Exception e){
@@ -187,25 +214,80 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
     @Transactional
     protected void saveCheckCompany(Order order){ // Сохранить Чек в БД
         BigDecimal sum = order != null && order.getSum() != null ? order.getSum() : BigDecimal.ZERO;
-        saveCheckCompany(order, sum);
+        saveCheckCompany(order, sum, null, null);
     } // Сохранить Чек в БД
 
     @Transactional
     protected void saveCheckCompany(Order order, BigDecimal sum){ // Сохранить Чек в БД
+        saveCheckCompany(order, sum, null, null);
+    }
+
+    private void saveCheckCompany(Order order, BigDecimal sum, Integer paidAmount, Long paymentLinkId) {
         log.info("Зашли в создание чека");
         PaymentCheck paymentCheck = new PaymentCheck();
         paymentCheck.setTitle(order.getCompany().getTitle());
-        paymentCheck.setCompanyId(order.getCompany().getId());
+        paymentCheck.setCompanyId(requiredCompanyId(order));
         paymentCheck.setSum(sum);
+        paymentCheck.setPaidAmount(paidAmount);
+        paymentCheck.setPaymentLinkId(paymentLinkId);
         paymentCheck.setOrderId(order.getId());
         paymentCheck.setPaymentStatusGuard(order.getStatus().getId());
-        paymentCheck.setManagerId(order.getManager().getUser().getId());
-        paymentCheck.setWorkerId(order.getManager().getUser().getId());
+        paymentCheck.setManagerId(requiredManagerUserId(order));
+        paymentCheck.setWorkerId(requiredWorkerUserId(order));
         paymentCheck.setActive(true);
 //        System.out.println(paymentCheck);
         paymentCheckRepository.save(paymentCheck);
         log.info("Чек сохранен");
     } // Сохранить Чек в БД
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void assertActiveCheckBoundToPaymentLink(Long orderId, Long paymentLinkId) {
+        if (orderId == null || paymentLinkId == null) {
+            throw new IllegalArgumentException("Для привязки платежного цикла нужны ID заказа и ссылки");
+        }
+        List<PaymentCheck> checks = paymentCheckRepository.findByOrderIdAndActiveTrue(orderId);
+        if (checks == null || checks.size() != 1) {
+            throw new IllegalStateException(
+                    "Не удалось привязать платежный цикл заказа " + orderId
+                            + ": активных чеков " + (checks == null ? 0 : checks.size())
+            );
+        }
+        PaymentCheck check = checks.getFirst();
+        if (!java.util.Objects.equals(check.getPaymentLinkId(), paymentLinkId)) {
+            throw new IllegalStateException(
+                    "Активный чек заказа " + orderId
+                            + " не относится к подтверждаемой платежной ссылке"
+            );
+        }
+    }
+
+    private Long requiredManagerUserId(Order order) {
+        if (order == null
+                || order.getManager() == null
+                || order.getManager().getUser() == null
+                || order.getManager().getUser().getId() == null) {
+            throw new IllegalStateException("Для чека оплаты не определен менеджер заказа");
+        }
+        return order.getManager().getUser().getId();
+    }
+
+    private Long requiredWorkerUserId(Order order) {
+        if (order == null
+                || order.getWorker() == null
+                || order.getWorker().getUser() == null
+                || order.getWorker().getUser().getId() == null) {
+            throw new IllegalStateException("Для чека оплаты не определен исполнитель заказа");
+        }
+        return order.getWorker().getUser().getId();
+    }
+
+    private Long requiredCompanyId(Order order) {
+        if (order == null || order.getCompany() == null || order.getCompany().getId() == null) {
+            throw new IllegalStateException("Для чека оплаты не определена компания заказа");
+        }
+        return order.getCompany().getId();
+    }
 
     private List<CheckDTO> toDTOList(List<PaymentCheck> paymentCheckList) { // Метод для преобразования из сущности paymentCheck в checkDTO
         return paymentCheckList.stream().map(this::toDTO).collect(Collectors.toList());

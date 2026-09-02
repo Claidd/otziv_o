@@ -38,6 +38,9 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
     @Query("SELECT link FROM PaymentLink link WHERE link.id = :id")
     Optional<PaymentLink> findByIdForUpdate(@Param("id") Long id);
 
+    @Query("SELECT link.order.id FROM PaymentLink link WHERE link.id = :id")
+    Optional<Long> findOrderIdById(@Param("id") Long id);
+
     List<PaymentLink> findTop100ByOrderByCreatedAtDesc();
 
     boolean existsByOrder_IdAndStatusIn(Long orderId, Collection<PaymentLinkStatus> statuses);
@@ -48,11 +51,17 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
         WHERE link.order.id = :orderId
           AND link.id <> :returnedLinkId
           AND link.status IN (
+              com.hunt.otziv.payments.model.PaymentLinkStatus.AUTHORIZED,
+              com.hunt.otziv.payments.model.PaymentLinkStatus.MANUAL_REPORTED,
+              com.hunt.otziv.payments.model.PaymentLinkStatus.TEST_CONFIRMED,
               com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED,
-              com.hunt.otziv.payments.model.PaymentLinkStatus.AMOUNT_MISMATCH
+              com.hunt.otziv.payments.model.PaymentLinkStatus.AMOUNT_MISMATCH,
+              com.hunt.otziv.payments.model.PaymentLinkStatus.PARTIAL_REVERSED,
+              com.hunt.otziv.payments.model.PaymentLinkStatus.PARTIAL_REFUNDED,
+              com.hunt.otziv.payments.model.PaymentLinkStatus.NEEDS_RECONCILIATION
           )
     """)
-    boolean existsOtherConfirmedPayment(
+    boolean existsOtherPaymentBlockingReturn(
             @Param("orderId") Long orderId,
             @Param("returnedLinkId") Long returnedLinkId
     );

@@ -46,8 +46,8 @@ public class OwnerManualCardPaymentApprovalTelegramCallbackService {
         }
         long telegramUserId = callbackQuery.getFrom().getId();
         long callbackChatId = callbackQuery.getMessage().getChatId();
-        if (callbackChatId != telegramUserId) {
-            return Optional.of("Подтверждение доступно только в личном чате владельца");
+        if (callbackChatId >= 0) {
+            return Optional.of("Подтверждение доступно только в чате назначенного компании менеджера");
         }
         User actor = userService.findByChatId(telegramUserId)
                 .filter(User::isActive)
@@ -70,30 +70,34 @@ public class OwnerManualCardPaymentApprovalTelegramCallbackService {
                     paymentLinkService.approveOwnerManualCardPayment(
                             parsed.approvalId(),
                             parsed.token(),
+                            callbackChatId,
                             actor,
                             authentication
                     );
             try {
                 notificationService.closeOwnerApprovalReminders(outcome.approvalId());
-                telegramService.editMessageText(
-                        callbackChatId,
-                        callbackQuery.getMessage().getMessageId(),
-                        completedText(outcome),
-                        "HTML",
-                        null
-                );
-            } catch (RuntimeException notificationFailure) {
+            } catch (RuntimeException reminderFailure) {
                 log.warn(
-                        "Оплата владельцу подтверждена, но Telegram/напоминание не обновлено approvalId={}",
+                        "Оплата владельцу подтверждена, но напоминание не закрыто approvalId={}",
                         outcome.approvalId(),
-                        notificationFailure
+                        reminderFailure
                 );
             }
+            publishCompletion(
+                    callbackChatId,
+                    callbackQuery.getMessage().getMessageId(),
+                    outcome
+            );
             return Optional.of(outcome.alreadyCompleted()
                     ? "Оплата уже была подтверждена"
                     : "Поступление владельцу подтверждено, заказ оплачен");
         } catch (ResponseStatusException exception) {
-            return Optional.of(limit(message(exception), 180));
+            String answer = limit(message(exception), 180);
+            if (exception.getStatusCode().value() == 400
+                    || exception.getStatusCode().value() == 409) {
+                notifyGroupFailure(callbackChatId, parsed.approvalId(), answer);
+            }
+            return Optional.of(answer);
         } catch (RuntimeException exception) {
             log.warn("Не удалось подтвердить оплату владельцу approvalId={}", parsed.approvalId(), exception);
             return Optional.of("Не удалось безопасно подтвердить оплату. Повторите позже");
@@ -102,8 +106,67 @@ public class OwnerManualCardPaymentApprovalTelegramCallbackService {
         }
     }
 
+    private void publishCompletion(
+            long callbackChatId,
+            int messageId,
+            PaymentLinkService.OwnerManualCardPaymentApprovalOutcome outcome
+    ) {
+        String text = completedText(outcome);
+        boolean edited = false;
+        try {
+            edited = telegramService.editMessageText(
+                    callbackChatId,
+                    messageId,
+                    text,
+                    "HTML",
+                    null
+            );
+        } catch (RuntimeException editFailure) {
+            log.warn(
+                    "Оплата владельцу подтверждена, но Telegram-сообщение не обновлено approvalId={}",
+                    outcome.approvalId(),
+                    editFailure
+            );
+        }
+        if (edited) {
+            return;
+        }
+        try {
+            telegramService.sendMessage(callbackChatId, text, "HTML");
+        } catch (RuntimeException sendFailure) {
+            log.warn(
+                    "Оплата владельцу подтверждена, но итоговое Telegram-сообщение не отправлено approvalId={}",
+                    outcome.approvalId(),
+                    sendFailure
+            );
+        }
+    }
+
+    private void notifyGroupFailure(long callbackChatId, Long approvalId, String reason) {
+        if (callbackChatId >= 0) {
+            return;
+        }
+        String request = approvalId == null ? "" : " по запросу №" + approvalId;
+        String text = "⚠️ Не удалось подтвердить поступление владельцу" + request + ".\n"
+                + "Причина: " + limit(reason, 512) + "\n"
+                + "Оплата не зачислена. Проверьте назначение компании и состояние счёта.";
+        try {
+            telegramService.sendMessage(callbackChatId, text);
+        } catch (RuntimeException notificationFailure) {
+            log.warn(
+                    "Не удалось отправить ошибку подтверждения владельца в группу approvalId={}",
+                    approvalId,
+                    notificationFailure
+            );
+        }
+    }
+
     private boolean canApprove(User actor) {
-        if (actor == null || actor.getId() == null || actor.getRoles() == null) {
+        if (actor == null
+                || actor.getId() == null
+                || actor.getUsername() == null
+                || actor.getUsername().isBlank()
+                || actor.getRoles() == null) {
             return false;
         }
         return actor.getRoles().stream()

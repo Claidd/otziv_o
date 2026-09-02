@@ -30,6 +30,25 @@ test('release verifier pins identity, signer and internal APK metadata', () => {
   assert.match(verifier, /application-debuggable/);
   assert.match(verifier, /Join-Path \$resolvedCandidate "build-tools"/);
   assert.match(verifier, /Test-Path -LiteralPath \$buildToolsDirectory -PathType Container/);
+  assert.match(verifier, /New-AsciiApkVerificationStage/);
+  assert.match(verifier, /\[System\.IO\.Path\]::GetTempPath\(\)/);
+  assert.match(verifier, /\[\^\\u0000-\\u007F\]/);
+  assert.match(verifier, /Copy-Item -LiteralPath \$SourceApk -Destination \$stageApk/);
+  assert.match(verifier, /Staged APK hash does not match the source artifact/);
+  assert.match(verifier, /Source APK changed during Android build-tool verification/);
+  assert.match(verifier, /Set-PrivateApkStagePermissions/);
+  assert.match(verifier, /SetAccessRuleProtection\(\$true, \$false\)/);
+  assert.match(verifier, /FileAttributes\]::ReparsePoint/);
+  assert.match(verifier, /APK source must not be a symbolic link or another reparse point/);
+  assert.match(verifier, /Remove-Item -LiteralPath \$stageApk -Force/);
+  assert.match(verifier, /Remove-Item -LiteralPath \$stageDirectory -Force/);
+  assert.doesNotMatch(verifier, /Remove-Item[^\r\n]+-Recurse/);
+  assert.match(verifier, /Find-AndroidBuildTool -BaseNames @\('aapt2', 'aapt'\)/);
+  assert.match(verifier, /\$runningOnWindows -and \$resolvedApk -match/);
+  assert.match(verifier, /'--print-certs', \$verificationApk/);
+  assert.match(verifier, /'dump', 'badging', \$verificationApk/);
+  assert.doesNotMatch(verifier, /'--print-certs', \$resolvedApk/);
+  assert.doesNotMatch(verifier, /'dump', 'badging', \$resolvedApk/);
 });
 
 test('release build verifies both Gradle output and immutable copied artifact', () => {
@@ -43,13 +62,16 @@ test('release build verifies both Gradle output and immutable copied artifact', 
 });
 
 test('production deploy verifies selected APK before build and VPS access', () => {
-  const verifierCall = deploy.indexOf('verify-android-release.ps1');
+  const verifierCall = deploy.indexOf('$mobileRelease = Confirm-MobileReleaseArtifact');
   const buildStart = deploy.indexOf('Write-Host "Building and pushing:"');
-  const vpsCheck = deploy.indexOf('Write-Host "Checking mobile APK state on VPS..."');
+  const sshPreflight = deploy.indexOf('Write-Host "Checking VPS SSH access before build/push..."');
+  const dockerBuild = deploy.indexOf('Invoke-External -FilePath "docker" -Arguments $buildArgs');
 
   assert.ok(verifierCall >= 0);
+  assert.equal((deploy.match(/\$mobileRelease = Confirm-MobileReleaseArtifact/g) ?? []).length, 1);
   assert.ok(verifierCall < buildStart);
-  assert.ok(verifierCall < vpsCheck);
+  assert.ok(verifierCall < sshPreflight);
+  assert.ok(verifierCall < dockerBuild);
   assert.match(deploy, /VersionName = \$verified\.VersionName/);
   assert.match(deploy, /VersionCode = \[int\]\$verified\.VersionCode/);
   assert.match(deploy, /Mobile APK hash changed after verification and before bundle creation/);

@@ -27,6 +27,12 @@ public class PaymentCheck implements PaymentCheckStatView {
     private String title;
     @Column(name = "check_sum")
     private BigDecimal sum;
+    /** Exact order/item count added to Company.counterPay by this payment. */
+    @Column(name = "check_paid_amount")
+    private Integer paidAmount;
+    /** Payment source that created this cycle; null for non-link/legacy payments. */
+    @Column(name = "check_payment_link")
+    private Long paymentLinkId;
     @Column(name = "check_company")
     private Long companyId;
     @Column(name = "check_order")

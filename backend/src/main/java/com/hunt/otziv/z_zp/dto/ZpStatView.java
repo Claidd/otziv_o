@@ -7,4 +7,8 @@ public interface ZpStatView {
     LocalDate getCreated();
     BigDecimal getSum();
     int getAmount();
+
+    default long getEntryCount() {
+        return 1L;
+    }
 }

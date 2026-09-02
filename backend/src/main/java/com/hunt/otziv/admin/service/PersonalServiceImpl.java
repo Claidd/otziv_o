@@ -7,6 +7,8 @@ import com.hunt.otziv.admin.dto.personal_stat.UserLKDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
 import com.hunt.otziv.admin.dto.personal.*;
 import com.hunt.otziv.admin.model.Quadruple;
+import com.hunt.otziv.analytics.service.AnalyticsSalarySourceService;
+import com.hunt.otziv.analytics.service.AnalyticsSalarySourceService.UserSalaryTotal;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
@@ -19,11 +21,10 @@ import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.service.*;
 import com.hunt.otziv.z_zp.dto.PaymentCheckStatView;
+import com.hunt.otziv.z_zp.dto.CanonicalZpStatRow;
 import com.hunt.otziv.z_zp.dto.ZpStatView;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
-import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.service.PaymentCheckService;
-import com.hunt.otziv.z_zp.service.ZpService;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import lombok.RequiredArgsConstructor;
@@ -56,7 +57,6 @@ public class PersonalServiceImpl implements PersonalService {
     private final MarketologService marketologService;
     private final WorkerService workerService;
     private final OperatorService operatorService;
-    private final ZpService zpService;
     private final PaymentCheckService paymentCheckService;
     private final UserService userService;
     private final LeadService leadService;
@@ -68,6 +68,7 @@ public class PersonalServiceImpl implements PersonalService {
     private final StaffDailyProgressService staffDailyProgressService;
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
+    private final AnalyticsSalarySourceService analyticsSalarySourceService;
 
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
     private static final String ROLE_OWNER = "ROLE_OWNER";
@@ -202,9 +203,9 @@ public class PersonalServiceImpl implements PersonalService {
         BigDecimal sum730 = zpPay730Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         //        ЗП Сумма всех заказов за 30-60-90 дней
-        BigDecimal sumCount1Month = BigDecimal.valueOf(zpPay30Day.size()); // 1 сумма
-        BigDecimal sumCount2Month = BigDecimal.valueOf(zpPay60Day.size()); // 2 сумма
-        BigDecimal sumCount3Month = BigDecimal.valueOf(zpPay90Day.size()); // 3 сумма
+        BigDecimal sumCount1Month = BigDecimal.valueOf(salaryEntryCount(zpPay30Day)); // 1 сумма
+        BigDecimal sumCount2Month = BigDecimal.valueOf(salaryEntryCount(zpPay60Day)); // 2 сумма
+        BigDecimal sumCount3Month = BigDecimal.valueOf(salaryEntryCount(zpPay90Day)); // 3 сумма
 
         Long imageId = 1L;
         StatDTO statDTO = new StatDTO();
@@ -234,8 +235,8 @@ public class PersonalServiceImpl implements PersonalService {
         statDTO.setSum1Week(sum7.intValue());
         statDTO.setSum1Month(sum30.intValue());
         statDTO.setSum1Year(sum365.intValue());
-        statDTO.setSumOrders1Month(zpPay30Day.size());
-        statDTO.setSumOrders2Month(zpPay60Day.size());
+        statDTO.setSumOrders1Month(salaryEntryCount(zpPay30Day));
+        statDTO.setSumOrders2Month(salaryEntryCount(zpPay60Day));
         statDTO.setPercent1Day(calculatePercentageDifference(sum1, sum2).intValue());
         statDTO.setPercent1Week(calculatePercentageDifference(sum7, sum14).intValue());
         statDTO.setPercent1Month(calculatePercentageDifference(sum30, sum60).intValue());
@@ -255,7 +256,114 @@ public class PersonalServiceImpl implements PersonalService {
     }
 
     private List<ZpStatView> getZarplataStats(LocalDate localDate, String role, Set<Manager> managerList) {
-        return checkRoleAndExecute(role, () -> zpService.findStatRowsToDate(localDate), owner -> zpService.findStatRowsToDateByOwner(localDate, owner), managerList);
+        LocalDate anchor = localDate == null ? LocalDate.now() : localDate;
+        LocalDate fromInclusive = anchor.minusYears(1).withDayOfYear(1);
+        if (ROLE_OWNER.equals(role)) {
+            Set<Long> visibleUserIds = userService.findAllRelevantUserIdsForOwner(
+                    managerList == null ? Set.of() : managerList
+            );
+            return canonicalSalaryRows(analyticsSalarySourceService.dailyForUsers(
+                    visibleUserIds,
+                    fromInclusive,
+                    anchor
+            ));
+        }
+        return canonicalSalaryRows(analyticsSalarySourceService.dailyAll(fromInclusive, anchor));
+    }
+
+    private List<ZpStatView> canonicalSalaryRowsForUser(
+            Long userId,
+            LocalDate fromInclusive,
+            LocalDate toInclusive
+    ) {
+        if (userId == null) {
+            return List.of();
+        }
+        return canonicalSalaryRows(analyticsSalarySourceService.dailyForUsers(
+                List.of(userId),
+                fromInclusive,
+                toInclusive
+        ));
+    }
+
+    private List<ZpStatView> canonicalSalaryRowsForMonth(Long userId, LocalDate month) {
+        LocalDate anchor = month == null ? LocalDate.now() : month;
+        return canonicalSalaryRowsForUser(
+                userId,
+                anchor.withDayOfMonth(1),
+                anchor.withDayOfMonth(anchor.lengthOfMonth())
+        );
+    }
+
+    private List<ZpStatView> canonicalSalaryRows(
+            List<AnalyticsSalarySourceService.DailySalary> dailyRows
+    ) {
+        if (dailyRows == null || dailyRows.isEmpty()) {
+            return List.of();
+        }
+        return dailyRows.stream()
+                .map(row -> (ZpStatView) new CanonicalZpStatRow(
+                        row.metricDate(),
+                        row.salarySum(),
+                        Math.toIntExact(row.salaryReviewCount()),
+                        row.salaryEntryCount()
+                ))
+                .toList();
+    }
+
+    private int salaryEntryCount(Collection<? extends ZpStatView> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return 0;
+        }
+        return Math.toIntExact(rows.stream().mapToLong(ZpStatView::getEntryCount).sum());
+    }
+
+    private Map<String, Pair<String, Long>> canonicalSalaryTelegram(
+            LocalDate fromInclusive,
+            LocalDate toInclusive
+    ) {
+        return analyticsSalarySourceService.totalsForActiveUsers(fromInclusive, toInclusive).stream()
+                .filter(row -> Set.of(ROLE_MANAGER, "ROLE_WORKER", "ROLE_MARKETOLOG").contains(row.role()))
+                .sorted(Comparator
+                        .comparingInt((UserSalaryTotal row) -> salaryRolePriority(row.role()))
+                        .thenComparing(UserSalaryTotal::salarySum, Comparator.reverseOrder()))
+                .collect(Collectors.toMap(
+                        UserSalaryTotal::fio,
+                        row -> Pair.of(row.role(), row.salarySum().longValue()),
+                        (first, duplicate) -> first,
+                        LinkedHashMap::new
+                ));
+    }
+
+    private Map<String, Quadruple<String, Long, Long, Long>> canonicalSalaryScore(
+            LocalDate fromInclusive,
+            LocalDate toInclusive
+    ) {
+        return analyticsSalarySourceService.totalsForActiveUsers(fromInclusive, toInclusive).stream()
+                .sorted(Comparator
+                        .comparingInt((UserSalaryTotal row) -> salaryRolePriority(row.role()))
+                        .thenComparing(UserSalaryTotal::salarySum, Comparator.reverseOrder()))
+                .collect(Collectors.toMap(
+                        UserSalaryTotal::fio,
+                        row -> Quadruple.of(
+                                row.role(),
+                                row.salarySum().longValue(),
+                                row.salaryEntryCount(),
+                                row.salaryReviewCount()
+                        ),
+                        (first, duplicate) -> first,
+                        LinkedHashMap::new
+                ));
+    }
+
+    private int salaryRolePriority(String role) {
+        return switch (role == null ? "" : role) {
+            case ROLE_MANAGER -> 1;
+            case "ROLE_WORKER" -> 2;
+            case "ROLE_OPERATOR" -> 3;
+            case "ROLE_MARKETOLOG" -> 4;
+            default -> 5;
+        };
     }
 
     private List<Long> getInWorkLeadList(String role, LocalDate localDate, Set<Manager> managerList) {
@@ -497,7 +605,8 @@ public class PersonalServiceImpl implements PersonalService {
 
 
     public UserStatDTO getWorkerReviews(User user, LocalDate localDate) {
-        List<Zp> zps = zpService.findAllToDateByUser(localDate, user.getId());
+        LocalDate salaryHistoryStart = localDate.minusYears(1).withDayOfYear(1);
+        List<ZpStatView> zps = canonicalSalaryRowsForUser(user.getId(), salaryHistoryStart, localDate);
         //        выбираем даты месяца
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
         LocalDate firstDayOfMonthAgo = firstDayOfMonth.minusMonths(1).withDayOfMonth(1);
@@ -512,31 +621,31 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate lastDayOf1YearAgo = localDate.minusYears(1).withMonth(12).withDayOfMonth(31);
 
         //        ЗП Разбивка на списки 1-2-7-14-30-60-90-360-730 дней от текущей даты
-        List<Zp> zpPay1Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate)).toList();
-        List<Zp> zpPay2Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(1))).toList();
-        List<Zp> zpPay7Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(7)) || z.getCreated().isAfter(localDate.minusDays(7))).toList();
-        List<Zp> zpPay14Day = zps.stream().filter(z -> (z.getCreated().isEqual(localDate.minusDays(14)) || z.getCreated().isAfter(localDate.minusDays(14))) && z.getCreated().isBefore(localDate.minusDays(7))).toList();
-        List<Zp> zpPay30Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfMonth) || z.getCreated().isAfter(firstDayOfMonth)) && (z.getCreated().isEqual(lastDayOfMonth) || z.getCreated().isBefore(lastDayOfMonth))).toList();
-        List<Zp> zpPay60Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfMonthAgo) || z.getCreated().isAfter(firstDayOfMonthAgo)) && (z.getCreated().isEqual(lastDayOfMonthAgo) || z.getCreated().isBefore(lastDayOfMonthAgo))).toList();
-        List<Zp> zpPay90Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOf3MonthAgo) || z.getCreated().isAfter(firstDayOf3MonthAgo)) && (z.getCreated().isEqual(lastDayOf3MonthAgo) || z.getCreated().isBefore(lastDayOf3MonthAgo))).toList();
-        List<Zp> zpPay365Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfYear) || z.getCreated().isAfter(firstDayOfYear)) && (z.getCreated().isEqual(localDate) || z.getCreated().isBefore(localDate))).toList();
-        List<Zp> zpPay730Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOf1YearAgo) || z.getCreated().isAfter(firstDayOf1YearAgo)) && (z.getCreated().isEqual(localDate.minusYears(1)) || z.getCreated().isBefore(localDate.minusYears(1)))).toList();
+        List<ZpStatView> zpPay1Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate)).toList();
+        List<ZpStatView> zpPay2Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(1))).toList();
+        List<ZpStatView> zpPay7Day = zps.stream().filter(z -> z.getCreated().isEqual(localDate.minusDays(7)) || z.getCreated().isAfter(localDate.minusDays(7))).toList();
+        List<ZpStatView> zpPay14Day = zps.stream().filter(z -> (z.getCreated().isEqual(localDate.minusDays(14)) || z.getCreated().isAfter(localDate.minusDays(14))) && z.getCreated().isBefore(localDate.minusDays(7))).toList();
+        List<ZpStatView> zpPay30Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfMonth) || z.getCreated().isAfter(firstDayOfMonth)) && (z.getCreated().isEqual(lastDayOfMonth) || z.getCreated().isBefore(lastDayOfMonth))).toList();
+        List<ZpStatView> zpPay60Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfMonthAgo) || z.getCreated().isAfter(firstDayOfMonthAgo)) && (z.getCreated().isEqual(lastDayOfMonthAgo) || z.getCreated().isBefore(lastDayOfMonthAgo))).toList();
+        List<ZpStatView> zpPay90Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOf3MonthAgo) || z.getCreated().isAfter(firstDayOf3MonthAgo)) && (z.getCreated().isEqual(lastDayOf3MonthAgo) || z.getCreated().isBefore(lastDayOf3MonthAgo))).toList();
+        List<ZpStatView> zpPay365Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOfYear) || z.getCreated().isAfter(firstDayOfYear)) && (z.getCreated().isEqual(localDate) || z.getCreated().isBefore(localDate))).toList();
+        List<ZpStatView> zpPay730Day = zps.stream().filter(z -> (z.getCreated().isEqual(firstDayOf1YearAgo) || z.getCreated().isAfter(firstDayOf1YearAgo)) && (z.getCreated().isEqual(localDate.minusYears(1)) || z.getCreated().isBefore(localDate.minusYears(1)))).toList();
 
 
         //        ЗП Сумма всех выплат за 1-2-7-14-30-60-90-360-730 дней
-        BigDecimal sum1 = zpPay1Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum7 = zpPay7Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum30 = zpPay30Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum365 = zpPay365Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
-        BigDecimal sum2 = zpPay2Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal sum14 = zpPay14Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal sum60 = zpPay60Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal sum730 = zpPay730Day.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum1 = zpPay1Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum7 = zpPay7Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum30 = zpPay30Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum365 = zpPay365Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        BigDecimal sum2 = zpPay2Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum14 = zpPay14Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum60 = zpPay60Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum730 = zpPay730Day.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         //        ЗП Сумма всех заказов за 30-60-90 дней
-        BigDecimal sumCount1Month = BigDecimal.valueOf(zpPay30Day.size()); // 1 сумма
-        BigDecimal sumCount2Month = BigDecimal.valueOf(zpPay60Day.size()); // 2 сумма
-        BigDecimal sumCount3Month = BigDecimal.valueOf(zpPay90Day.size()); // 3 сумма
+        BigDecimal sumCount1Month = BigDecimal.valueOf(salaryEntryCount(zpPay30Day)); // 1 сумма
+        BigDecimal sumCount2Month = BigDecimal.valueOf(salaryEntryCount(zpPay60Day)); // 2 сумма
+        BigDecimal sumCount3Month = BigDecimal.valueOf(salaryEntryCount(zpPay90Day)); // 3 сумма
 
 
         Long imageId = user.getImage() != null ? user.getImage().getId() : 1L;
@@ -554,8 +663,8 @@ public class PersonalServiceImpl implements PersonalService {
         userStatDTO.setSum1Week(sum7.intValue());
         userStatDTO.setSum1Month(sum30.intValue());
         userStatDTO.setSum1Year(sum365.intValue());
-        userStatDTO.setSumOrders1Month(zpPay30Day.size());
-        userStatDTO.setSumOrders2Month(zpPay60Day.size());
+        userStatDTO.setSumOrders1Month(salaryEntryCount(zpPay30Day));
+        userStatDTO.setSumOrders2Month(salaryEntryCount(zpPay60Day));
 
         userStatDTO.setPercent1Day(calculatePercentageDifference(sum1, sum2).intValue());
         userStatDTO.setPercent1Week(calculatePercentageDifference(sum7, sum14).intValue());
@@ -670,7 +779,7 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
 
         // Получаем данные о зарплатах
-        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonthToTelegram(firstDayOfMonth, lastDayOfMonth);
+        Map<String, Pair<String, Long>> zps = canonicalSalaryTelegram(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о платежах
         Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о новых компаниях
@@ -1006,7 +1115,7 @@ public class PersonalServiceImpl implements PersonalService {
         // Получаем данные о зарплатах
         Map<String, Quadruple<String, Long, Long, Long>> zps = recordScoreSegment(
                 "zp",
-                () -> zpService.getAllZpToMonth(firstDayOfMonth, lastDayOfMonth)
+                () -> canonicalSalaryScore(firstDayOfMonth, lastDayOfMonth)
         );
         // Получаем данные о платежах
         Map<String, Pair<Long, Long>> pcs = recordScoreSegment(
@@ -1098,7 +1207,7 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
 
         // Получаем данные о зарплатах
-        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonthToTelegram(firstDayOfMonth, lastDayOfMonth);
+        Map<String, Pair<String, Long>> zps = canonicalSalaryTelegram(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о платежах
         Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о новых компаниях
@@ -1176,7 +1285,7 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
 
         // Получаем данные о зарплатах
-        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonthToTelegram(firstDayOfMonth, lastDayOfMonth);
+        Map<String, Pair<String, Long>> zps = canonicalSalaryTelegram(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о платежах
         Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о новых компаниях
@@ -1313,7 +1422,7 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
 
         // Получаем данные о зарплатах
-        Map<String, Pair<String, Long>> zps = zpService.getAllZpToMonthToTelegram(firstDayOfMonth, lastDayOfMonth);
+        Map<String, Pair<String, Long>> zps = canonicalSalaryTelegram(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о платежах
         Map<String, Pair<Long, Long>> pcs = paymentCheckService.getAllPaymentToMonth(firstDayOfMonth, lastDayOfMonth);
         // Получаем данные о новых компаниях
@@ -1472,8 +1581,8 @@ public class PersonalServiceImpl implements PersonalService {
         LocalDate localDate = LocalDate.now();
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-        List<Zp> zps = zpService.getAllWorkerZp(manager.getUser().getUsername());
-        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма ЗП
+        List<ZpStatView> zps = canonicalSalaryRowsForMonth(manager.getUser().getId(), localDate);
+        BigDecimal sum30 = zps.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма ЗП
         List<PaymentCheck> pcs = paymentCheckService.getAllWorkerPaymentToDate(manager.getUser().getId(), firstDayOfMonth, lastDayOfMonth);
         BigDecimal sum30Payments = pcs.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма Выручки
         Long imageId = manager.getUser().getImage() != null ? manager.getUser().getImage().getId() : 1L;
@@ -1487,8 +1596,8 @@ public class PersonalServiceImpl implements PersonalService {
                 .login(manager.getUser().getUsername())
                 .imageId(imageId)
                 .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .order1Month(salaryEntryCount(zps))
+                .review1Month(zps.stream().mapToInt(ZpStatView::getAmount).sum())
                 .payment1Month(sum30Payments.intValue())
                 .leadsInWorkInMonth(inWorkleadList.size())
                 .build();
@@ -1496,8 +1605,8 @@ public class PersonalServiceImpl implements PersonalService {
 
     private MarketologsListDTO toMarketologsListDTOAndCount(Marketolog marketolog){
         LocalDate localDate = LocalDate.now();
-        List<Zp> zps = zpService.getAllWorkerZp(marketolog.getUser().getUsername());
-        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        List<ZpStatView> zps = canonicalSalaryRowsForMonth(marketolog.getUser().getId(), localDate);
+        BigDecimal sum30 = zps.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = marketolog.getUser().getImage() != null ? marketolog.getUser().getImage().getId() : 1L;
         Long newListLeadsToMarketolog = leadService.findAllByLidListNew(marketolog);
         Long inWorkListLeadsToMarketolog = leadService.findAllByLidListStatusInWork(marketolog);
@@ -1512,8 +1621,8 @@ public class PersonalServiceImpl implements PersonalService {
                 .login(marketolog.getUser().getUsername())
                 .imageId(imageId)
                 .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .order1Month(salaryEntryCount(zps))
+                .review1Month(zps.stream().mapToInt(ZpStatView::getAmount).sum())
                 .leadsNew(newListLeadsToMarketolog)
                 .leadsInWork(inWorkListLeadsToMarketolog)
                 .percentInWork(percentInWork)
@@ -1522,8 +1631,8 @@ public class PersonalServiceImpl implements PersonalService {
 
     private WorkersListDTO toWorkersListDTOAndCount(Worker worker){
         LocalDate localDate = LocalDate.now();
-        List<Zp> zps = zpService.getAllWorkerZp(worker.getUser().getUsername());
-        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        List<ZpStatView> zps = canonicalSalaryRowsForMonth(worker.getUser().getId(), localDate);
+        BigDecimal sum30 = zps.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = worker.getUser().getImage() != null ? worker.getUser().getImage().getId() : 1L;
         int newOrderInt = orderService.countOrdersByWorkerAndStatus(worker, "Новый");
         int inCorrectInt = orderService.countOrdersByWorkerAndStatus(worker, "Коррекция");
@@ -1536,8 +1645,8 @@ public class PersonalServiceImpl implements PersonalService {
                 .login(worker.getUser().getUsername())
                 .imageId(imageId)
                 .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .order1Month(salaryEntryCount(zps))
+                .review1Month(zps.stream().mapToInt(ZpStatView::getAmount).sum())
                 .newOrder(newOrderInt)
                 .inCorrect(inCorrectInt)
                 .intVigul(inVigulInt)
@@ -1551,8 +1660,8 @@ public class PersonalServiceImpl implements PersonalService {
 
     private OperatorsListDTO toOperatorsListDTOAndCount(Operator operator){
         LocalDate localDate = LocalDate.now();
-        List<Zp> zps = zpService.getAllWorkerZp(operator.getUser().getUsername());
-        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        List<ZpStatView> zps = canonicalSalaryRowsForMonth(operator.getUser().getId(), localDate);
+        BigDecimal sum30 = zps.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = operator.getUser().getImage() != null ? operator.getUser().getImage().getId() : 1L;
         Long newListLeadsToOperators = leadService.findAllByLidListNew(operator);
         Long inWorkListLeadsToOperators = leadService.findAllByLidListStatusInWork(operator);
@@ -1567,8 +1676,8 @@ public class PersonalServiceImpl implements PersonalService {
                 .login(operator.getUser().getUsername())
                 .imageId(imageId)
                 .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .order1Month(salaryEntryCount(zps))
+                .review1Month(zps.stream().mapToInt(ZpStatView::getAmount).sum())
                 .leadsNew(newListLeadsToOperators)
                 .leadsInWork(inWorkListLeadsToOperators)
                 .percentInWork(percentInWork)
@@ -1613,8 +1722,8 @@ public class PersonalServiceImpl implements PersonalService {
     private ManagersListDTO toManagersListDTOAndCountToDate(Manager manager, LocalDate localDate){
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-        List<Zp> zps = zpService.getAllWorkerZpToDate(manager.getUser().getUsername(), firstDayOfMonth, lastDayOfMonth);
-        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма ЗП
+        List<ZpStatView> zps = canonicalSalaryRowsForUser(manager.getUser().getId(), firstDayOfMonth, lastDayOfMonth);
+        BigDecimal sum30 = zps.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма ЗП
         List<PaymentCheck> pcs = paymentCheckService.getAllWorkerPaymentToDate(manager.getUser().getId(), firstDayOfMonth, localDate);
         BigDecimal sum30Payments = pcs.stream().map(PaymentCheck::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // сумма Выручки
         Long imageId = manager.getUser().getImage() != null ? manager.getUser().getImage().getId() : 1L;
@@ -1625,18 +1734,17 @@ public class PersonalServiceImpl implements PersonalService {
                 .login(manager.getUser().getUsername())
                 .imageId(imageId)
                 .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .order1Month(salaryEntryCount(zps))
+                .review1Month(zps.stream().mapToInt(ZpStatView::getAmount).sum())
                 .payment1Month(sum30Payments.intValue())
                 .build();
     }
 
     private MarketologsListDTO toMarketologsListDTOAndCountToDate(Marketolog marketolog, LocalDate localDate){
-//        List<Zp> zps = zpService.getAllWorkerZpToDate(marketolog.getUser().getUsername(), localDate);
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-        List<Zp> zps = zpService.getAllWorkerZpToDate(marketolog.getUser().getUsername(), firstDayOfMonth, lastDayOfMonth);
-        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        List<ZpStatView> zps = canonicalSalaryRowsForUser(marketolog.getUser().getId(), firstDayOfMonth, lastDayOfMonth);
+        BigDecimal sum30 = zps.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = marketolog.getUser().getImage() != null ? marketolog.getUser().getImage().getId() : 1L;
         Long newListLeadsToMarketolog = leadService.findAllByLidListNewToDate(marketolog, localDate);
         Long inWorkListLeadsToMarketolog = leadService.findAllByLidListStatusInWorkToDate(marketolog, localDate);
@@ -1651,8 +1759,8 @@ public class PersonalServiceImpl implements PersonalService {
                 .login(marketolog.getUser().getUsername())
                 .imageId(imageId)
                 .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .order1Month(salaryEntryCount(zps))
+                .review1Month(zps.stream().mapToInt(ZpStatView::getAmount).sum())
                 .leadsNew(newListLeadsToMarketolog)
                 .leadsInWork(inWorkListLeadsToMarketolog)
                 .percentInWork(percentInWork)
@@ -1660,11 +1768,10 @@ public class PersonalServiceImpl implements PersonalService {
     }
 
     private WorkersListDTO toWorkersListDTOAndCountToDate(Worker worker, LocalDate localDate){
-//        List<Zp> zps = zpService.getAllWorkerZpToDate(worker.getUser().getUsername(), localDate);
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-        List<Zp> zps = zpService.getAllWorkerZpToDate(worker.getUser().getUsername(), firstDayOfMonth, lastDayOfMonth);
-        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        List<ZpStatView> zps = canonicalSalaryRowsForUser(worker.getUser().getId(), firstDayOfMonth, lastDayOfMonth);
+        BigDecimal sum30 = zps.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = worker.getUser().getImage() != null ? worker.getUser().getImage().getId() : 1L;
         return WorkersListDTO.builder()
                 .id(worker.getId())
@@ -1673,18 +1780,17 @@ public class PersonalServiceImpl implements PersonalService {
                 .login(worker.getUser().getUsername())
                 .imageId(imageId)
                 .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .order1Month(salaryEntryCount(zps))
+                .review1Month(zps.stream().mapToInt(ZpStatView::getAmount).sum())
                 .acceptsCompanyTransfers(worker.isAcceptsCompanyTransfers())
                 .build();
     }
 
     private OperatorsListDTO toOperatorsListDTOAndCountToDate(Operator operator, LocalDate localDate){
-//        List<Zp> zps = zpService.getAllWorkerZpToDate(operator.getUser().getUsername(), localDate);
         LocalDate firstDayOfMonth = localDate.withDayOfMonth(1);
         LocalDate lastDayOfMonth = localDate.withDayOfMonth(localDate.lengthOfMonth());
-        List<Zp> zps = zpService.getAllWorkerZpToDate(operator.getUser().getUsername(), firstDayOfMonth, lastDayOfMonth);
-        BigDecimal sum30 = zps.stream().map(Zp::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
+        List<ZpStatView> zps = canonicalSalaryRowsForUser(operator.getUser().getId(), firstDayOfMonth, lastDayOfMonth);
+        BigDecimal sum30 = zps.stream().map(ZpStatView::getSum).reduce(BigDecimal.ZERO, BigDecimal::add); // первая сумма
         Long imageId = operator.getUser().getImage() != null ? operator.getUser().getImage().getId() : 1L;
         Long newListLeadsToOperators = leadService.findAllByLidListNewToDate(operator, localDate);
         Long inWorkListLeadsToOperators = leadService.findAllByLidListStatusInWorkToDate(operator, localDate);
@@ -1699,8 +1805,8 @@ public class PersonalServiceImpl implements PersonalService {
                 .login(operator.getUser().getUsername())
                 .imageId(imageId)
                 .sum1Month(sum30.intValue())
-                .order1Month(zps.size())
-                .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .order1Month(salaryEntryCount(zps))
+                .review1Month(zps.stream().mapToInt(ZpStatView::getAmount).sum())
                 .leadsNew(newListLeadsToOperators)
                 .leadsInWork(inWorkListLeadsToOperators)
                 .percentInWork(percentInWork)

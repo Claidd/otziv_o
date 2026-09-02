@@ -186,6 +186,32 @@ class ManualPaymentTaskContractorReturnBridgeTest {
     }
 
     @Test
+    void ownerSettledCanceledPaymentLinkRecordsFullSourceBoundReturn() {
+        Scenario scenario = sourceScenario(ContractorActualPaymentSourceKind.PAYMENT_LINK);
+        when(scenario.attribution().getActualManualPaymentTaskTargetKind())
+                .thenReturn(ManualPaymentTaskAccountingTargetKind.OWNER);
+        scenario.link().setAmountKopecks(AMOUNT);
+        scenario.link().setConfirmedAmountKopecks(AMOUNT);
+        scenario.link().setStatus(PaymentLinkStatus.CANCELED);
+        when(taskLedgerService.lockReturnSource(TASK_ID, scenario.source())).thenReturn(25_000L);
+
+        service.recordAuthoritativePaymentLinkReturn(scenario.link());
+
+        assertReturn(ManualPaymentTaskLedgerSourceKind.PAYMENT_LINK, 75_000L, AMOUNT);
+    }
+
+    @Test
+    void localUnsettledCanceledPaymentLinkDoesNotTouchTaskLedger() {
+        PaymentLink link = paymentLink(131L);
+        link.setAmountKopecks(AMOUNT);
+        link.setStatus(PaymentLinkStatus.CANCELED);
+
+        service.recordAuthoritativePaymentLinkReturn(link);
+
+        verifyNoInteractions(taskLedgerService);
+    }
+
+    @Test
     void externalPaymentLinkPartialRefundReopensTaskWithoutGuessingAmount() {
         Scenario scenario = sourceScenario(ContractorActualPaymentSourceKind.PAYMENT_LINK);
         when(scenario.attribution().getActualManualPaymentTaskTargetKind())
@@ -642,4 +668,3 @@ class ManualPaymentTaskContractorReturnBridgeTest {
     ) {
     }
 }
-

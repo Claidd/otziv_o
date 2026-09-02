@@ -1,19 +1,26 @@
 # Otziv Env Files
 
-Real env files are stored outside the repository:
+The repository and its private project files use one common parent directory:
 
 ```text
-C:\Users\Hunt\.otziv\env\local.env
-C:\Users\Hunt\.otziv\env\prod.env
-C:\Users\Hunt\.otziv\env\prod-local.env
+F:\Works\Projects\otziv
+F:\Works\Projects\.ssh\otziv_vps_ed25519
+F:\Works\Projects\.ssh\known_hosts
+F:\Works\Projects\.otziv\env\local.env
+F:\Works\Projects\.otziv\env\prod.env
+F:\Works\Projects\.otziv\env\prod-local.env
+F:\Works\Projects\.otziv\backups\pre-deploy
 ```
 
-The scripts also accept the old project-style names and resolve them to the safe directory:
+The scripts accept the familiar project-style env names and resolve them to the
+external sibling directory. They also use the sibling `.ssh` directory when an
+SSH key is not passed explicitly:
 
 ```text
-.env            -> C:\Users\Hunt\.otziv\env\local.env
-.env.prod       -> C:\Users\Hunt\.otziv\env\prod.env
-.env.prod-local -> C:\Users\Hunt\.otziv\env\prod-local.env
+.env            -> F:\Works\Projects\.otziv\env\local.env
+.env.prod       -> F:\Works\Projects\.otziv\env\prod.env
+.env.prod-local -> F:\Works\Projects\.otziv\env\prod-local.env
+default SSH key -> F:\Works\Projects\.ssh\otziv_vps_ed25519
 ```
 
 You can override the directory for any script by setting:
@@ -51,21 +58,24 @@ is also the only operation allowed to create the HMAC key. A missing or invalid
 key for an existing snapshot fails closed instead of silently changing the
 allowlist identity.
 
-Production deploy, preserving the familiar command:
+Production deploy from the active checkout:
 
 ```powershell
-& D:\Java\otziv\infrastructure\scripts\prod\deploy-prod.ps1 `
+Set-Location 'F:\Works\Projects\otziv'
+
+& '.\infrastructure\scripts\prod\deploy-prod.ps1' `
   -VpsHost 95.213.248.152 `
   -VpsUser hunt `
   -VpsPort 22022 `
   -VpsPath /docker `
-  -SshKey "$env:USERPROFILE\.ssh\otziv_vps_ed25519" `
-  -EnvFile .env.prod `
   -RemoteEnvFile .env `
-  -Tag 3.29
+  -Tag '6.20'
 ```
 
-On the VPS the uploaded file is still placed in the deploy directory as the name passed with `-RemoteEnvFile`, for example `/docker/.env`.
+The omitted `-EnvFile` and `-SshKey` resolve to the external sibling files
+shown above. Explicit absolute overrides remain supported. On the VPS the
+uploaded file is still placed in the deploy directory as the name passed with
+`-RemoteEnvFile`, for example `/docker/.env`.
 
 ## Secret scanning
 

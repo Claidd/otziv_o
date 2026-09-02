@@ -22,7 +22,7 @@
     [string]$VpsHost = "95.213.248.152",
     [string]$VpsUser = "hunt",
     [ValidateRange(1, 65535)][int]$VpsPort = 22022,
-    [string]$SshKey = "C:\Users\Hunt\.ssh\otziv_vps_ed25519",
+    [string]$SshKey = "",
     [switch]$AllowLocalMessengerSending,
     [string]$LocalLoginUsername = "",
     [string]$LocalKeycloakUserSnapshot = "infrastructure\keycloak\prod-local-user-snapshot.json",
@@ -4443,6 +4443,9 @@ if (-not (Test-Path -LiteralPath $envResolverPath)) {
     throw "Env resolver script not found: $envResolverPath"
 }
 . $envResolverPath
+if ([string]::IsNullOrWhiteSpace($SshKey)) {
+    $SshKey = Join-Path (Get-OtzivSshDirectory -RepoRoot $repoRoot) "otziv_vps_ed25519"
+}
 $composePath = if ([System.IO.Path]::IsPathRooted($ComposeFile)) { $ComposeFile } else { Join-Path $repoRoot $ComposeFile }
 $envPath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot
 $localKeycloakSnapshotPath = if ([System.IO.Path]::IsPathRooted($LocalKeycloakUserSnapshot)) {

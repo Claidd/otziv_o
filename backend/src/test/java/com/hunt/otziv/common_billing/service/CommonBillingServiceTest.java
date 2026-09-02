@@ -6663,6 +6663,34 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void automaticInvoiceSendUsesTrustedPathWithoutWeakeningManualVisibility() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        "worker",
+                        "n/a",
+                        List.of(new SimpleGrantedAuthority("ROLE_WORKER"))
+                )
+        );
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(false);
+
+        assertThrows(ResponseStatusException.class, () -> service.sendInvoice(10L, false));
+        assertDoesNotThrow(() -> service.sendInvoiceAutomatically(10L, false));
+
+        assertEquals(CommonInvoiceStatus.READY, invoice.getStatus());
+        assertTrue(invoice.getLastError().contains("dry_run"));
+        verify(messageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
     void sendInvoiceMarksInProgressOnlyAroundExternalMessageSend() throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);

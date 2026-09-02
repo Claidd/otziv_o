@@ -242,6 +242,120 @@ class PaymentLinkArchiveMySqlIntegrationTest {
     }
 
     @Test
+    void manualReturnReconciliationMarkerKeepsFinancialEvidenceLive() {
+        insertOldLink(LINK_ID, "REFUNDED");
+        jdbc.update("""
+                UPDATE payment_links
+                SET return_recovery_processed_at = CURRENT_TIMESTAMP(6),
+                    return_recovery_outcome = 'MANUAL_RECONCILIATION',
+                    last_error = 'payment_return_manual_reconciliation: legacy snapshot'
+                WHERE id = ?
+                """, LINK_ID);
+
+        assertThat(repository.findArchiveCandidateIds(PAID_CUTOFF, FINAL_CUTOFF, 10)).isEmpty();
+        assertThat(repository.hasLiveArchiveBlockerForOrder(ORDER_ID)).isTrue();
+
+        jdbc.update("""
+                UPDATE payment_links
+                SET return_recovery_outcome = 'APPLIED_MANUALLY',
+                    return_recovery_resolved_at = CURRENT_TIMESTAMP(6),
+                    return_recovery_resolved_by = 'owner@test',
+                    return_recovery_resolution_reason = 'Сверено по выписке'
+                WHERE id = ?
+                """, LINK_ID);
+
+        assertThat(repository.findArchiveCandidateIds(PAID_CUTOFF, FINAL_CUTOFF, 10))
+                .containsExactly(LINK_ID);
+        assertThat(repository.hasLiveArchiveBlockerForOrder(ORDER_ID)).isFalse();
+    }
+
+    @Test
+    void activePaymentCheckKeepsExactSourceLiveUntilFinancialCycleCloses() {
+        insertOldLink(LINK_ID, "REFUNDED");
+        jdbc.update("""
+                INSERT INTO payment_check (check_id, check_payment_link, check_active)
+                VALUES (81, ?, 1)
+                """, LINK_ID);
+        jdbc.update("INSERT INTO archive_payment_links (id) VALUES (?)", LINK_ID);
+
+        assertThat(repository.findArchiveCandidateIds(PAID_CUTOFF, FINAL_CUTOFF, 10)).isEmpty();
+        assertThat(repository.hasLiveArchiveBlockerForOrder(ORDER_ID)).isTrue();
+        assertThat(repository.deleteLiveIds(List.of(LINK_ID))).isZero();
+
+        jdbc.update("UPDATE payment_check SET check_active = 0 WHERE check_id = 81");
+        assertThat(repository.deleteLiveIds(List.of(LINK_ID))).isEqualTo(1);
+    }
+
+    @Test
+    void preparedPaidOrderArchiveCopiesAndDeletesExactActiveCheckSourceAtomically() {
+        insertOldLink(LINK_ID, "REFUNDED");
+        jdbc.update("""
+                INSERT INTO payment_check (check_id, check_payment_link, check_active)
+                VALUES (81, ?, 1)
+                """, LINK_ID);
+
+        assertThat(repository.archivePreparedOrderIds(
+                List.of(LINK_ID),
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                "paid order archive",
+                9L
+        )).isEqualTo(1);
+        assertThat(repository.deletePreparedOrderLiveIds(List.of(LINK_ID))).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM archive_payment_links WHERE id = ?",
+                Integer.class,
+                LINK_ID
+        )).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM payment_links WHERE id = ?",
+                Integer.class,
+                LINK_ID
+        )).isZero();
+    }
+
+    @Test
+    void preparedRearchiveReplacesRestoredSourceSnapshotInsteadOfKeepingStaleMarker() {
+        insertOldLink(LINK_ID, "REFUNDED");
+        jdbc.update("""
+                INSERT INTO payment_check (check_id, check_payment_link, check_active)
+                VALUES (81, ?, 1)
+                """, LINK_ID);
+        assertThat(repository.archivePreparedOrderIds(
+                List.of(LINK_ID),
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                "first archive",
+                8L
+        )).isEqualTo(1);
+
+        jdbc.update("""
+                UPDATE payment_links
+                SET status = 'CANCELED',
+                    return_recovery_processed_at = CURRENT_TIMESTAMP(6),
+                    return_recovery_payment_check_id = 81,
+                    return_recovery_outcome = 'APPLIED'
+                WHERE id = ?
+                """, LINK_ID);
+
+        assertThat(repository.deleteArchivedSnapshotsForPreparedRearchive(List.of(LINK_ID))).isEqualTo(1);
+        assertThat(repository.archivePreparedOrderIds(
+                List.of(LINK_ID),
+                LocalDateTime.of(2026, 2, 1, 0, 0),
+                "rearchive",
+                9L
+        )).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT status FROM archive_payment_links WHERE id = ?",
+                String.class,
+                LINK_ID
+        )).isEqualTo("CANCELED");
+        assertThat(jdbc.queryForObject(
+                "SELECT return_recovery_outcome FROM archive_payment_links WHERE id = ?",
+                String.class,
+                LINK_ID
+        )).isEqualTo("APPLIED");
+    }
+
+    @Test
     void allLiveAndArchiveContractorRouteConstraintsRejectPlaintextCommentSnapshots() {
         assertThatThrownBy(() -> jdbc.update("""
                 INSERT INTO payment_links (
@@ -346,12 +460,44 @@ class PaymentLinkArchiveMySqlIntegrationTest {
         setup.execute("DROP TABLE IF EXISTS archive_common_invoices");
         setup.execute("DROP TABLE IF EXISTS common_invoices");
         setup.execute("DROP TABLE IF EXISTS archive_payment_links");
+        setup.execute("DROP TABLE IF EXISTS payment_check");
         setup.execute("DROP TABLE IF EXISTS payment_links");
         setup.execute("DROP TABLE IF EXISTS contractor_payment_allocations");
         setup.execute("DROP TABLE IF EXISTS orders");
+        setup.execute("DROP TABLE IF EXISTS managers");
+        setup.execute("DROP TABLE IF EXISTS users");
+        setup.execute("DROP TABLE IF EXISTS companies");
+        setup.execute("DROP TABLE IF EXISTS filial");
+        setup.execute("""
+                CREATE TABLE companies (
+                    company_id BIGINT NOT NULL PRIMARY KEY,
+                    company_title VARCHAR(255) NULL
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE filial (
+                    filial_id BIGINT NOT NULL PRIMARY KEY,
+                    filial_title VARCHAR(255) NULL
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE users (
+                    id BIGINT NOT NULL PRIMARY KEY,
+                    fio VARCHAR(255) NULL
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                CREATE TABLE managers (
+                    manager_id BIGINT NOT NULL PRIMARY KEY,
+                    user_id BIGINT NULL
+                ) ENGINE=InnoDB
+                """);
         setup.execute("""
                 CREATE TABLE orders (
                     order_id BIGINT NOT NULL,
+                    order_company BIGINT NULL,
+                    order_filial BIGINT NULL,
+                    order_manager BIGINT NULL,
                     PRIMARY KEY (order_id)
                 ) ENGINE=InnoDB
                 """);
@@ -408,6 +554,12 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                     bank_init_nonce VARCHAR(64) NULL,
                     bank_cancel_nonce VARCHAR(64) NULL,
                     bank_cancel_origin_status VARCHAR(32) NULL,
+                    return_recovery_processed_at DATETIME(6) NULL,
+                    return_recovery_payment_check_id BIGINT NULL,
+                    return_recovery_outcome VARCHAR(32) NULL,
+                    return_recovery_resolved_at DATETIME(6) NULL,
+                    return_recovery_resolved_by VARCHAR(150) NULL,
+                    return_recovery_resolution_reason VARCHAR(512) NULL,
                     last_error VARCHAR(1000) NULL,
                     manual_actual_recipient_frozen_at DATETIME(6) NULL,
                     payment_success_notified_at DATETIME(6) NULL,
@@ -436,6 +588,53 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                     KEY idx_payment_links_shadow_route_generation (shadow_route_generation),
                     KEY idx_payment_links_contractor_evidence_original
                         (contractor_evidence_original_link_id, id)
+                ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                ALTER TABLE payment_links
+                    ADD COLUMN token VARCHAR(96) NULL,
+                    ADD COLUMN amount_kopecks BIGINT NULL,
+                    ADD COLUMN reserved_amount_kopecks BIGINT NULL,
+                    ADD COLUMN confirmed_amount_kopecks BIGINT NULL,
+                    ADD COLUMN description VARCHAR(140) NULL,
+                    ADD COLUMN payer_email VARCHAR(320) NULL,
+                    ADD COLUMN manual_task_id BIGINT NULL,
+                    ADD COLUMN manual_payment_type VARCHAR(32) NULL,
+                    ADD COLUMN tbank_payment_id VARCHAR(64) NULL,
+                    ADD COLUMN tbank_order_id VARCHAR(64) NULL,
+                    ADD COLUMN tbank_terminal_key VARCHAR(64) NULL,
+                    ADD COLUMN payment_profile_id BIGINT NULL,
+                    ADD COLUMN payment_profile_code VARCHAR(64) NULL,
+                    ADD COLUMN payment_profile_name VARCHAR(255) NULL,
+                    ADD COLUMN payment_url VARCHAR(1024) NULL,
+                    ADD COLUMN sbp_qr_payload TEXT NULL,
+                    ADD COLUMN sbp_qr_image MEDIUMTEXT NULL,
+                    ADD COLUMN sbp_qr_data_type VARCHAR(64) NULL,
+                    ADD COLUMN sbp_qr_created_at DATETIME(6) NULL,
+                    ADD COLUMN manual_payment_url VARCHAR(1024) NULL,
+                    ADD COLUMN manual_payment_button_label VARCHAR(120) NULL,
+                    ADD COLUMN manual_reported_at DATETIME(6) NULL,
+                    ADD COLUMN manual_confirmed_by VARCHAR(150) NULL,
+                    ADD COLUMN manual_confirmed_at DATETIME(6) NULL,
+                    ADD COLUMN payment_success_notification_error VARCHAR(1000) NULL,
+                    ADD COLUMN expires_at DATETIME(6) NULL,
+                    ADD COLUMN initiated_at DATETIME(6) NULL,
+                    ADD COLUMN offer_consent_at DATETIME(6) NULL,
+                    ADD COLUMN privacy_consent_at DATETIME(6) NULL,
+                    ADD COLUMN receipt_consent_at DATETIME(6) NULL,
+                    ADD COLUMN consent_ip VARCHAR(64) NULL,
+                    ADD COLUMN consent_user_agent VARCHAR(512) NULL,
+                    ADD COLUMN offer_document_url VARCHAR(1024) NULL,
+                    ADD COLUMN privacy_document_url VARCHAR(1024) NULL,
+                    ADD COLUMN receipt_consent_document_url VARCHAR(1024) NULL
+                """);
+        setup.execute("""
+                CREATE TABLE payment_check (
+                    check_id BIGINT NOT NULL,
+                    check_payment_link BIGINT NULL,
+                    check_active TINYINT(1) NOT NULL DEFAULT 0,
+                    PRIMARY KEY (check_id),
+                    KEY idx_test_payment_check_source (check_payment_link, check_active)
                 ) ENGINE=InnoDB
                 """);
         setup.execute("""
@@ -489,6 +688,12 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                     manual_phone VARCHAR(32) NULL,
                     manual_recipient_name VARCHAR(160) NULL,
                     manual_comment VARCHAR(255) NULL,
+                    return_recovery_processed_at DATETIME(6) NULL,
+                    return_recovery_payment_check_id BIGINT NULL,
+                    return_recovery_outcome VARCHAR(32) NULL,
+                    return_recovery_resolved_at DATETIME(6) NULL,
+                    return_recovery_resolved_by VARCHAR(150) NULL,
+                    return_recovery_resolution_reason VARCHAR(512) NULL,
                     PRIMARY KEY (id),
                     CONSTRAINT ck_archive_payment_links_contractor_pii_blank CHECK (
                         COALESCE(manual_source, '') <> 'CONTRACTOR_PAYMENT_PROFILE'
@@ -499,6 +704,72 @@ class PaymentLinkArchiveMySqlIntegrationTest {
                         )
                     )
                 ) ENGINE=InnoDB
+                """);
+        setup.execute("""
+                ALTER TABLE archive_payment_links
+                    ADD COLUMN token VARCHAR(96) NULL,
+                    ADD COLUMN order_id BIGINT NULL,
+                    ADD COLUMN amount_kopecks BIGINT NULL,
+                    ADD COLUMN reserved_amount_kopecks BIGINT NULL,
+                    ADD COLUMN confirmed_amount_kopecks BIGINT NULL,
+                    ADD COLUMN description VARCHAR(140) NULL,
+                    ADD COLUMN payer_email VARCHAR(320) NULL,
+                    ADD COLUMN status VARCHAR(32) NULL,
+                    ADD COLUMN payment_method VARCHAR(32) NULL,
+                    ADD COLUMN manual_task_id BIGINT NULL,
+                    ADD COLUMN manual_payment_type VARCHAR(32) NULL,
+                    ADD COLUMN tbank_payment_id VARCHAR(64) NULL,
+                    ADD COLUMN tbank_order_id VARCHAR(64) NULL,
+                    ADD COLUMN tbank_terminal_key VARCHAR(64) NULL,
+                    ADD COLUMN payment_profile_id BIGINT NULL,
+                    ADD COLUMN payment_profile_code VARCHAR(64) NULL,
+                    ADD COLUMN payment_profile_name VARCHAR(255) NULL,
+                    ADD COLUMN contractor_allocation_id BIGINT NULL,
+                    ADD COLUMN shadow_route_generation VARCHAR(36) NULL,
+                    ADD COLUMN shadow_route_order_id BIGINT NULL,
+                    ADD COLUMN shadow_route_worker_id BIGINT NULL,
+                    ADD COLUMN shadow_route_worker_user_id BIGINT NULL,
+                    ADD COLUMN shadow_route_manager_id BIGINT NULL,
+                    ADD COLUMN shadow_route_manager_user_id BIGINT NULL,
+                    ADD COLUMN shadow_route_amount_kopecks BIGINT NULL,
+                    ADD COLUMN shadow_route_company_routing_allowed BOOLEAN NULL,
+                    ADD COLUMN shadow_route_prepared_at DATETIME(6) NULL,
+                    ADD COLUMN contractor_evidence_original_link_id BIGINT NULL,
+                    ADD COLUMN payment_url VARCHAR(1024) NULL,
+                    ADD COLUMN sbp_qr_payload TEXT NULL,
+                    ADD COLUMN sbp_qr_image MEDIUMTEXT NULL,
+                    ADD COLUMN sbp_qr_data_type VARCHAR(64) NULL,
+                    ADD COLUMN sbp_qr_created_at DATETIME(6) NULL,
+                    ADD COLUMN manual_bank_name VARCHAR(120) NULL,
+                    ADD COLUMN manual_payment_url VARCHAR(1024) NULL,
+                    ADD COLUMN manual_payment_button_label VARCHAR(120) NULL,
+                    ADD COLUMN manual_reported_at DATETIME(6) NULL,
+                    ADD COLUMN manual_confirmed_by VARCHAR(150) NULL,
+                    ADD COLUMN manual_confirmed_at DATETIME(6) NULL,
+                    ADD COLUMN receipt_status VARCHAR(32) NULL,
+                    ADD COLUMN payment_success_notified_at DATETIME(6) NULL,
+                    ADD COLUMN payment_success_notification_error VARCHAR(1000) NULL,
+                    ADD COLUMN payment_success_notification_retry_eligible TINYINT(1) NULL,
+                    ADD COLUMN last_error VARCHAR(1000) NULL,
+                    ADD COLUMN created_at DATETIME(6) NULL,
+                    ADD COLUMN updated_at DATETIME(6) NULL,
+                    ADD COLUMN expires_at DATETIME(6) NULL,
+                    ADD COLUMN initiated_at DATETIME(6) NULL,
+                    ADD COLUMN paid_at DATETIME(6) NULL,
+                    ADD COLUMN offer_consent_at DATETIME(6) NULL,
+                    ADD COLUMN privacy_consent_at DATETIME(6) NULL,
+                    ADD COLUMN receipt_consent_at DATETIME(6) NULL,
+                    ADD COLUMN consent_ip VARCHAR(64) NULL,
+                    ADD COLUMN consent_user_agent VARCHAR(512) NULL,
+                    ADD COLUMN offer_document_url VARCHAR(1024) NULL,
+                    ADD COLUMN privacy_document_url VARCHAR(1024) NULL,
+                    ADD COLUMN receipt_consent_document_url VARCHAR(1024) NULL,
+                    ADD COLUMN archived_at DATETIME(6) NULL,
+                    ADD COLUMN archive_reason VARCHAR(255) NULL,
+                    ADD COLUMN archive_batch_id BIGINT NULL,
+                    ADD COLUMN company_title_snapshot VARCHAR(255) NULL,
+                    ADD COLUMN filial_title_snapshot VARCHAR(255) NULL,
+                    ADD COLUMN manager_name_snapshot VARCHAR(255) NULL
                 """);
         setup.execute("""
                 CREATE TABLE common_invoices (

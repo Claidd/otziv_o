@@ -11,8 +11,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.server.ResponseStatusException;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
@@ -49,12 +51,15 @@ class OwnerManualCardPaymentApprovalTelegramCallbackServiceTest {
     }
 
     @Test
-    void rejectsForwardedOrGroupButtonWithoutReadingApproval() {
+    void rejectsPrivateButtonWithoutReadingApproval() {
         OwnerManualCardPaymentApprovalTelegramCallbackService service = service();
 
-        Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, -500L));
+        Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, 100L));
 
-        assertEquals("Подтверждение доступно только в личном чате владельца", result.orElseThrow());
+        assertEquals(
+                "Подтверждение доступно только в чате назначенного компании менеджера",
+                result.orElseThrow()
+        );
         verifyNoInteractions(paymentLinkService, userService, telegramService, notificationService);
     }
 
@@ -64,17 +69,20 @@ class OwnerManualCardPaymentApprovalTelegramCallbackServiceTest {
         User owner = user(7L, "owner@example.ru", 100L, "ROLE_OWNER");
         when(userService.findByChatId(100L)).thenReturn(Optional.of(owner));
         when(paymentLinkService.approveOwnerManualCardPayment(
-                eq(91L), eq("token"), eq(owner), any(Authentication.class)
+                eq(91L), eq("token"), eq(-500L), eq(owner), any(Authentication.class)
         )).thenReturn(new PaymentLinkService.OwnerManualCardPaymentApprovalOutcome(
                 91L, 25270L, 5370L, 200_000L, false
         ));
+        when(telegramService.editMessageText(
+                eq(-500L), eq(17), any(), eq("HTML"), any()
+        )).thenReturn(true);
 
-        Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, 100L));
+        Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, -500L));
 
         assertEquals("Поступление владельцу подтверждено, заказ оплачен", result.orElseThrow());
         verify(notificationService).closeOwnerApprovalReminders(91L);
         verify(telegramService).editMessageText(
-                eq(100L), eq(17),
+                eq(-500L), eq(17),
                 org.mockito.ArgumentMatchers.contains("Поступление владельцу подтверждено"),
                 eq("HTML"),
                 org.mockito.ArgumentMatchers.isNull()
@@ -87,10 +95,96 @@ class OwnerManualCardPaymentApprovalTelegramCallbackServiceTest {
         User manager = user(8L, "manager@example.ru", 100L, "ROLE_MANAGER");
         when(userService.findByChatId(100L)).thenReturn(Optional.of(manager));
 
-        Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, 100L));
+        Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, -500L));
 
         assertEquals("Подтвердить поступление может только владелец или администратор", result.orElseThrow());
-        verify(paymentLinkService, never()).approveOwnerManualCardPayment(any(), any(), any(), any());
+        verify(paymentLinkService, never()).approveOwnerManualCardPayment(any(), any(), any(), any(), any());
+        verifyNoInteractions(telegramService, notificationService);
+    }
+
+    @Test
+    void ownerWithoutUsernameIsRejectedBeforeAuthenticationIsCreated() {
+        OwnerManualCardPaymentApprovalTelegramCallbackService service = service();
+        User owner = user(7L, " ", 100L, "ROLE_OWNER");
+        when(userService.findByChatId(100L)).thenReturn(Optional.of(owner));
+
+        Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, -500L));
+
+        assertEquals("Подтвердить поступление может только владелец или администратор", result.orElseThrow());
+        verify(paymentLinkService, never()).approveOwnerManualCardPayment(any(), any(), any(), any(), any());
+        verifyNoInteractions(telegramService, notificationService);
+    }
+
+    @Test
+    void successfulConfirmationSendsTerminalMessageWhenEditReturnsFalse() {
+        OwnerManualCardPaymentApprovalTelegramCallbackService service = service();
+        User owner = user(7L, "owner@example.ru", 100L, "ROLE_OWNER");
+        when(userService.findByChatId(100L)).thenReturn(Optional.of(owner));
+        when(paymentLinkService.approveOwnerManualCardPayment(
+                eq(91L), eq("token"), eq(-500L), eq(owner), any(Authentication.class)
+        )).thenReturn(new PaymentLinkService.OwnerManualCardPaymentApprovalOutcome(
+                91L, 25270L, 5370L, 200_000L, false
+        ));
+        when(telegramService.editMessageText(
+                eq(-500L), eq(17), any(), eq("HTML"), any()
+        )).thenReturn(false);
+
+        service.handle(callback("ompa:a:91:token", 100L, -500L));
+
+        verify(telegramService).sendMessage(
+                eq(-500L),
+                org.mockito.ArgumentMatchers.contains("Поступление владельцу подтверждено"),
+                eq("HTML")
+        );
+    }
+
+    @Test
+    void conflictBecomesPermanentGroupMessageWithoutCallbackToken() {
+        OwnerManualCardPaymentApprovalTelegramCallbackService service = service();
+        User owner = user(7L, "owner@example.ru", 100L, "ROLE_OWNER");
+        when(userService.findByChatId(100L)).thenReturn(Optional.of(owner));
+        when(paymentLinkService.approveOwnerManualCardPayment(
+                eq(91L), eq("secret-token"), eq(-500L), eq(owner), any(Authentication.class)
+        )).thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "Счёт изменился"));
+
+        Optional<String> result = service.handle(callback("ompa:a:91:secret-token", 100L, -500L));
+
+        assertEquals("Счёт изменился", result.orElseThrow());
+        verify(telegramService).sendMessage(
+                eq(-500L),
+                org.mockito.ArgumentMatchers.argThat(text ->
+                        text.contains("Счёт изменился") && !text.contains("secret-token"))
+        );
+    }
+
+    @Test
+    void forbiddenWrongGroupStaysCallbackToastOnly() {
+        OwnerManualCardPaymentApprovalTelegramCallbackService service = service();
+        User owner = user(7L, "owner@example.ru", 100L, "ROLE_OWNER");
+        when(userService.findByChatId(100L)).thenReturn(Optional.of(owner));
+        when(paymentLinkService.approveOwnerManualCardPayment(
+                eq(91L), eq("token"), eq(-999L), eq(owner), any(Authentication.class)
+        )).thenThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Неверный чат"));
+
+        Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, -999L));
+
+        assertEquals("Неверный чат", result.orElseThrow());
+        verifyNoInteractions(telegramService, notificationService);
+    }
+
+    @Test
+    void unexpectedFailureStaysCallbackToastOnly() {
+        OwnerManualCardPaymentApprovalTelegramCallbackService service = service();
+        User owner = user(7L, "owner@example.ru", 100L, "ROLE_OWNER");
+        when(userService.findByChatId(100L)).thenReturn(Optional.of(owner));
+        when(paymentLinkService.approveOwnerManualCardPayment(
+                eq(91L), eq("token"), eq(-500L), eq(owner), any(Authentication.class)
+        )).thenThrow(new IllegalStateException("synthetic failure"));
+
+        Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, -500L));
+
+        assertEquals("Не удалось безопасно подтвердить оплату. Повторите позже", result.orElseThrow());
+        verifyNoInteractions(telegramService, notificationService);
     }
 
     private OwnerManualCardPaymentApprovalTelegramCallbackService service() {

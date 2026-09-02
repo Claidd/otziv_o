@@ -351,6 +351,10 @@ Assert-Order $deploy '& $snapshotValidator' '& $preparedDeployScript @forwardPar
 Assert-Match $deploy 'Remove\(''AllowDirtyWorktree''\)' 'Automatic snapshot recursion must not forward the dirty-worktree bypass.'
 Assert-Match $deploy '\$forwardParameters\[''DeploySnapshotRevision''\]\s*=\s*\$snapshot\.Commit' 'Automatic snapshot recursion must forward the exact immutable snapshot commit.'
 Assert-Match $deploy '\$forwardParameters\[''DeployProtectedMainRevision''\]\s*=\s*\$protectedMainRevision' 'Automatic snapshot recursion must forward the immutable protected origin/main revision.'
+Assert-Match $deploy '\$forwardParameters\[''ProjectFilesRoot''\]\s*=\s*\$ProjectFilesRoot' 'Automatic snapshot recursion must retain the original external project-files root.'
+Assert-Match $deploy '\$forwardParameters\[''SshKey''\]\s*=\s*\$SshKey' 'Automatic snapshot recursion must retain the resolved external SSH private key.'
+Assert-Match $deploy '\$forwardParameters\[''SshKnownHostsFile''\]\s*=\s*\$SshKnownHostsFile' 'Automatic snapshot recursion must retain the resolved external SSH known_hosts file.'
+Assert-Order $deploy '$forwardParameters[''ProjectFilesRoot''] = $ProjectFilesRoot' '& $preparedDeployScript @forwardParameters' 'External project-file paths must be pinned before the temporary snapshot child starts.'
 Assert-Order $deploy 'Automatic deploy snapshot validation was bypassed explicitly.' '[void](Assert-OtzivPreparedDeploySnapshotState -Repository $snapshotWorktree' 'Skipping snapshot tests must not skip the post-validation exact-revision and cleanliness check.'
 Assert-Order $deploy 'Automatic deploy snapshot validation was bypassed explicitly.' '@(''clean'', ''-ffdx'')' 'Generated and ignored validator artifacts must be removed even when validation is bypassed.'
 Assert-Order $deploy '@(''clean'', ''-ffdx'')' '[void](Assert-OtzivPreparedDeploySnapshotState -Repository $snapshotWorktree' 'Snapshot cleanup must finish before the post-validator byte-state check.'
@@ -420,8 +424,18 @@ if ($backup.Contains($unsafeRestoreQuotePrefix)) {
 }
 Assert-Match $deploy 'Flyway history changed after the verified pre-deploy backup' 'The rollout must fail if Flyway history changes after backup creation.'
 Assert-Match $deploy 'PreDeployBackupDirectory must stay outside the Git worktree' 'Downloaded production DB backups must never be written inside the Git worktree.'
-Assert-Match $deploy 'must be a dedicated release subdirectory, not a filesystem root, user profile, or shared backup parent' 'Backup ACL hardening must reject dangerously broad local target directories.'
+Assert-Match $deploy 'Get-OtzivBackupDirectory -RepoRoot \$repoRoot -ProjectFilesRoot \$ProjectFilesRoot[\s\S]{0,300}Join-Path \$otzivBackupDirectory ''pre-deploy''' 'Production backup downloads must default to the external sibling .otziv backup tree.'
+Assert-Match $deploy 'must be a dedicated release subdirectory, not a filesystem root, project-files root, or shared backup parent' 'Backup ACL hardening must reject dangerously broad local target directories.'
 Assert-Match $deploy 'existing custom PreDeployBackupDirectory is not accepted[\s\S]{0,500}Assert-NoReparsePointInExistingPath' 'Backup ACL hardening must require a dedicated custom leaf and reject reparse-point ancestors.'
+Assert-Match $deploy 'IdentitiesOnly=yes[\s\S]{0,200}UserKnownHostsFile=\$sshKnownHostsOptionPath' 'Production SSH and SCP must use only the external project key and known_hosts file.'
+Assert-Match $deploy 'Get-OtzivSshDirectory -RepoRoot \$repoRoot -ProjectFilesRoot \$ProjectFilesRoot' 'Production SSH defaults must resolve from the external sibling .ssh directory.'
+Assert-Match $deploy 'ProjectFilesRoot must be a dedicated directory, not a filesystem root' 'External project storage must reject ambiguous filesystem-root overrides.'
+Assert-Match $deploy 'SSH private key not found:[\s\S]{0,200}Assert-NoReparsePointInExistingPath -Path \$SshKey' 'The external SSH private key must be a real leaf without reparse-point ancestors.'
+Assert-Match $deploy 'SSH known_hosts file not found:[\s\S]{0,200}Assert-NoReparsePointInExistingPath -Path \$SshKnownHostsFile' 'The external SSH trust store must be a real leaf without reparse-point ancestors.'
+Assert-Match $deploy 'StrictHostKeyChecking=accept-new' 'SSH must reject changed host keys while allowing the first verified endpoint connection to be recorded.'
+Assert-NotMatch $deploy 'USERPROFILE|SpecialFolder\]::UserProfile|C:\\Users\\Hunt|D:\\Java\\otziv' 'Production deploy must not fall back to legacy profile or checkout paths.'
+Assert-Match $deploy '\$sshPreflightAttempts = 3[\s\S]{0,500}\$sshPreflightExitCode -ne 255[\s\S]{0,400}Start-Sleep -Seconds 10' 'Production deploy must retry transient read-only SSH preflight failures.'
+Assert-Order $deploy 'Checking VPS SSH access before build/push...' 'Invoke-External -FilePath "docker" -Arguments $buildArgs' 'Production deploy must prove SSH access before spending time on Docker builds.'
 Assert-Match $deploy 'mkdir \$remoteUploadDirectoryQuoted[\s\S]{0,150}chmod 700 \$remoteUploadDirectoryQuoted[\s\S]{0,500}Copy-DeployBundle' 'The secret-bearing deploy bundle must be uploaded only inside a pre-created 0700 directory.'
 Assert-Match $deploy 'WriteAllText\([\s\S]{0,250}\$remoteScript[\s\S]{0,500}Get-FileHash[\s\S]{0,500}Copy-DeployBundle[\s\S]{0,1000}expected_sha256[\s\S]{0,500}sha256sum' 'The complete remote rollout must be uploaded as a hash-verified file before execution.'
 Assert-Match $deploy 'sha256sum -- "`\$rollout_script"[\s\S]{0,500}exec bash "`\$rollout_script" </dev/null' 'The remote rollout must execute the hash-verified file with detached stdin.'
@@ -579,6 +593,22 @@ Assert-Match $maxWebhook 'success[\s\S]{0,100}true' 'MAX webhook release verific
 Assert-Match $maxWebhook 'without exposing token or secret' 'MAX webhook release verification must avoid printing credentials.'
 Assert-Order $deploy 'wait_service_healthy app 1200' 'register-max-webhook.sh' 'MAX webhook registration must happen after the new backend is healthy.'
 Assert-Order $deploy 'register-max-webhook.sh "`$env_file"' 'publish_bundled_mobile_release' 'APK publication must happen only after MAX webhook registration succeeds.'
+Assert-Match $deploy 'Invoke-ExternalWithRetry -FilePath "docker" -Arguments @\("push", \$appImage\) -Attempts 3 -DelaySeconds 10' 'Production deploy must retry transient application image push failures.'
+Assert-Match $deploy 'Invoke-ExternalWithRetry -FilePath "docker" -Arguments @\("push", \$webImage\) -Attempts 3 -DelaySeconds 10' 'Production deploy must retry transient web image push failures.'
+Assert-Match $deploy 'Invoke-ExternalWithRetry -FilePath "docker" -Arguments @\("push", \$externalReviewWorkerImage\) -Attempts 3 -DelaySeconds 10' 'Production deploy must retry transient external review worker image push failures.'
+$mobileVerificationCallCount = [regex]::Matches(
+    $deploy,
+    '(?m)^\s*\$mobileRelease = Confirm-MobileReleaseArtifact -RepoRoot \$repoRoot -Candidate \$mobileRelease\s*$'
+).Count
+if ($mobileVerificationCallCount -ne 1) {
+    throw "Production deploy must verify the selected mobile artifact exactly once; found $mobileVerificationCallCount calls."
+}
+Assert-Order $deploy '$mobileRelease = Confirm-MobileReleaseArtifact -RepoRoot $repoRoot -Candidate $mobileRelease' 'Checking VPS SSH access before build/push...' 'The selected mobile APK must be verified before any VPS access.'
+Assert-Order $deploy '$mobileRelease = Confirm-MobileReleaseArtifact -RepoRoot $repoRoot -Candidate $mobileRelease' 'Invoke-External -FilePath "docker" -Arguments $buildArgs' 'The selected mobile APK must be verified before Docker build/push.'
+Assert-Order $deploy '$remoteMobileOutput = @($remoteMobileCheck | & ssh' '$remoteMobileExitCode = $LASTEXITCODE' 'The mobile release precheck must capture SSH output before immediately preserving the native exit code.'
+Assert-Order $deploy '$remoteMobileExitCode = $LASTEXITCODE' '$remoteMobileState = (($remoteMobileOutput' 'The mobile release precheck must validate the SSH exit code before parsing its output.'
+Assert-Match $deploy '\$remoteMobileAttempts = 3[\s\S]{0,800}\$remoteMobileExitCode -ne 255[\s\S]{0,500}Start-Sleep -Seconds 10' 'The read-only mobile release precheck must retry transient SSH transport failures.'
+Assert-NotMatch $deploy '\(\$remoteMobileCheck \| & ssh[^\r\n]*\)\.Trim\(\)' 'The mobile release precheck must not call Trim before checking the SSH exit code.'
 Assert-Match $deploy 'Published mobile APK reuses the requested versionCode with a different SHA-256' 'The remote precheck must reject same-code mobile artifacts with a different hash.'
 Assert-Match $deploy 'Refusing to reuse mobile versionCode[\s\S]{0,100}different APK SHA-256' 'The publication transaction must enforce immutable versionCode-to-APK mapping.'
 Assert-Match $deploy 'current_actual_sha[\s\S]{0,300}current_metadata_sha' 'Already-published APK files must be verified against release.json before they can be skipped.'

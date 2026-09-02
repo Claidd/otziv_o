@@ -47,15 +47,16 @@ function Escape-SqlString {
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
 $composePath = if ([System.IO.Path]::IsPathRooted($ComposeFile)) { $ComposeFile } else { Join-Path $repoRoot $ComposeFile }
-$envPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Join-Path $repoRoot $EnvFile }
+$envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
+if (-not (Test-Path -LiteralPath $envResolverPath -PathType Leaf)) {
+    throw "Env resolver script not found: $envResolverPath"
+}
+. $envResolverPath
+$envPath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot
 
 if (-not (Test-Path -LiteralPath $composePath)) {
     throw "Compose file not found: $composePath"
 }
-if (-not (Test-Path -LiteralPath $envPath)) {
-    throw "Env file not found: $envPath"
-}
-
 $envValues = Read-EnvFile -Path $envPath
 $mysqlUser = $envValues["MYSQL_USER"]
 $mysqlPassword = $envValues["MYSQL_PASSWORD"]

@@ -82,15 +82,12 @@ if ($Help) {
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
-$envFilePath = if ([System.IO.Path]::IsPathRooted($EnvFile)) {
-    $EnvFile
-} else {
-    Join-Path $repoRoot $EnvFile
+$envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
+if (-not (Test-Path -LiteralPath $envResolverPath -PathType Leaf)) {
+    throw "Env resolver script not found: $envResolverPath"
 }
-
-if (-not (Test-Path -LiteralPath $envFilePath)) {
-    throw "Env file not found: $envFilePath"
-}
+. $envResolverPath
+$envFilePath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot
 
 $token = Get-EnvFileValue -Path $envFilePath -Name "MAX_BOT_TOKEN"
 $secret = Get-EnvFileValue -Path $envFilePath -Name "MAX_BOT_WEBHOOK_SECRET"

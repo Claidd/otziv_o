@@ -73,6 +73,8 @@ Invoke-SnapshotCheck -Name 'infrastructure security contract' -WorkingDirectory 
     -FilePath (Join-Path $securityRoot 'check-infrastructure-contract.ps1')
 Invoke-SnapshotCheck -Name 'production release contract' -WorkingDirectory $root `
     -FilePath (Join-Path $securityRoot 'check-deploy-release-contract.ps1')
+Invoke-SnapshotCheck -Name 'external project-file path resolver' -WorkingDirectory $root `
+    -FilePath (Join-Path $securityRoot 'test-resolve-otziv-env-file.ps1')
 Invoke-SnapshotCheck -Name 'secret scan' -WorkingDirectory $root `
     -FilePath (Join-Path $securityRoot 'run-secret-scan.ps1') -Parameters @{ Mode = 'dir' }
 

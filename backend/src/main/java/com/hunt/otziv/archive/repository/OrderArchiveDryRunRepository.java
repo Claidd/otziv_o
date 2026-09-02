@@ -47,6 +47,45 @@ public class OrderArchiveDryRunRepository {
                 OR pl.bank_init_nonce IS NOT NULL
                 OR pl.bank_cancel_nonce IS NOT NULL
                 OR pl.bank_cancel_origin_status IS NOT NULL
+                OR COALESCE(pl.return_recovery_outcome, '') = 'MANUAL_RECONCILIATION'
+                OR NOT (
+                    (
+                        pl.return_recovery_processed_at IS NULL
+                        AND pl.return_recovery_payment_check_id IS NULL
+                        AND pl.return_recovery_outcome IS NULL
+                        AND pl.return_recovery_resolved_at IS NULL
+                        AND pl.return_recovery_resolved_by IS NULL
+                        AND pl.return_recovery_resolution_reason IS NULL
+                    )
+                    OR (
+                        pl.return_recovery_processed_at IS NOT NULL
+                        AND (
+                            (
+                                COALESCE(pl.return_recovery_outcome, '') = 'APPLIED'
+                                AND pl.return_recovery_payment_check_id IS NOT NULL
+                                AND pl.return_recovery_resolved_at IS NULL
+                                AND pl.return_recovery_resolved_by IS NULL
+                                AND pl.return_recovery_resolution_reason IS NULL
+                            )
+                            OR (
+                                COALESCE(pl.return_recovery_outcome, '') IN (
+                                    'STALE_PAYMENT_CYCLE', 'MANUAL_RECONCILIATION'
+                                )
+                                AND pl.return_recovery_resolved_at IS NULL
+                                AND pl.return_recovery_resolved_by IS NULL
+                                AND pl.return_recovery_resolution_reason IS NULL
+                            )
+                            OR (
+                                COALESCE(pl.return_recovery_outcome, '') IN (
+                                    'APPLIED_MANUALLY', 'ACCEPTED_NOOP'
+                                )
+                                AND pl.return_recovery_resolved_at IS NOT NULL
+                                AND NULLIF(TRIM(pl.return_recovery_resolved_by), '') IS NOT NULL
+                                AND NULLIF(TRIM(pl.return_recovery_resolution_reason), '') IS NOT NULL
+                            )
+                        )
+                    )
+                )
                 OR LOWER(TRIM(COALESCE(pl.last_error, ''))) LIKE 'manual_card_payment_pending:%'
                 OR COALESCE(pl.receipt_status, 'DONE') = 'PENDING'
                 OR (
@@ -59,6 +98,12 @@ public class OrderArchiveDryRunRepository {
                     FROM payment_success_notification_retry_claims notification_claim
                     WHERE notification_claim.payment_link_id = pl.id
                       AND notification_claim.processing_lease_until > CURRENT_TIMESTAMP(6)
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM payment_link_return_reconciliation_outbox return_outbox
+                    WHERE return_outbox.payment_link_id = pl.id
+                      AND return_outbox.status <> 'SUCCEEDED'
                 )
             )
             """;

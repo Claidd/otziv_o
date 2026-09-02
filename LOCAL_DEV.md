@@ -44,7 +44,7 @@ docker compose -f compose.yaml down
 .\infrastructure\scripts\local\prod-like-smoke.ps1
 ```
 
-В Git сохраняется только allowlist с HMAC-идентификаторами. Общий локальный пароль и `OTZIV_LOCAL_LOGIN_ALLOWLIST_HMAC_KEY_BASE64` находятся только в защищённом `C:\Users\Hunt\.otziv\env\prod-local.env`; этот внешний env необходимо хранить в отдельной защищённой резервной копии. Обычные последующие запуски никогда не добавляют новых пользователей из свежего дампа VPS. Они синхронизируют только ранее зафиксированных пользователей, отключают потерявших доступ и не сбрасывают уже установленный пароль.
+В Git сохраняется только allowlist с HMAC-идентификаторами. Общий локальный пароль и `OTZIV_LOCAL_LOGIN_ALLOWLIST_HMAC_KEY_BASE64` находятся только в защищённом `F:\Works\Projects\.otziv\env\prod-local.env`; этот внешний env необходимо хранить в отдельной защищённой резервной копии. Обычные последующие запуски никогда не добавляют новых пользователей из свежего дампа VPS. Они синхронизируют только ранее зафиксированных пользователей, отключают потерявших доступ и не сбрасывают уже установленный пароль.
 
 На новом компьютере после клонирования Git и настройки внешнего `prod-local.env` один раз создай новый локальный пароль и восстанови пользователей в пустом локальном Keycloak:
 
@@ -104,19 +104,16 @@ LOCAL_MYSQL_VOLUME=otziv_mysql_data
 Можно восстановить prod-БД в локальный prod-like volume одной командой:
 
 ```powershell
-.\infrastructure\scripts\local\restore-prod-db-local.ps1 `
-  -VpsHost 95.213.248.152 `
-  -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519
+.\infrastructure\scripts\local\restore-prod-db-local.ps1 -VpsHost 95.213.248.152
 ```
 
-Скрипт скачает dump из контейнера `my-mysql` на VPS, пересоздаст локальный volume `otziv-prod-local_mysql_data`, восстановит dump и проверит `flyway_schema_history` против локальных `backend/src/main/resources/db/migration`. Если старая примененная миграция была изменена, скрипт остановится до запуска backend и покажет конкретный файл.
+Скрипт по умолчанию использует `F:\Works\Projects\.ssh\otziv_vps_ed25519`, скачает dump из контейнера `my-mysql` на VPS, пересоздаст локальный volume `otziv-prod-local_mysql_data`, восстановит dump и проверит `flyway_schema_history` против локальных `backend/src/main/resources/db/migration`. Если старая примененная миграция была изменена, скрипт остановится до запуска backend и покажет конкретный файл.
 
 Обычный `prod-like-smoke.ps1` теперь скачивает prod-БД сам. Если нужны нестандартные параметры VPS, передай их явно:
 
 ```powershell
 .\infrastructure\scripts\local\prod-like-smoke.ps1 `
   -VpsHost 95.213.248.152 `
-  -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519 `
   -OfflineAppBuild
 ```
 

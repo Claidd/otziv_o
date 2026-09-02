@@ -1,6 +1,0 @@
-*** Begin Patch
-*** Update File: backend/src/main/java/com/hunt/otziv/common_billing/service/CommonBillingService.java
-@@
- import com.hunt.otziv.payments.service.ManualPaymentTaskService;
-+import com.hunt.otziv.payments.service.ManualPaymentTaskReceiptIntegrationService;
-*** End Patch

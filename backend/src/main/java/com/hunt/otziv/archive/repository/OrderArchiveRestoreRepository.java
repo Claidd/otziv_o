@@ -1,6 +1,7 @@
 package com.hunt.otziv.archive.repository;
 
 import com.hunt.otziv.archive.dto.ArchiveCandidateCounts;
+import com.hunt.otziv.archive.exception.ArchiveRestoreConflictException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -118,6 +119,7 @@ public class OrderArchiveRestoreRepository {
                 .addValue("targetStatusId", targetStatusId);
 
         long orders = restoreOrders(params);
+        restoreExactLinkedPaymentSource(params);
         long orderDetails = restoreTable(
                 "archive_order_details",
                 "order_details",
@@ -363,6 +365,109 @@ public class OrderArchiveRestoreRepository {
                     sync_marker.processed_at = CURRENT_TIMESTAMP(6)
                 WHERE reward.zp_order = :orderId
                 """, params);
+        return restored;
+    }
+
+    /**
+     * A paid restored order must keep the exact provider source named by its
+     * active financial snapshot.  Restoring the check without that row leaves
+     * cancellation and delayed return handling unable to lock their evidence.
+     *
+     * <p>Only the exact source of the one active archived check is restored;
+     * unrelated historical payment links remain archived.  Unique live keys
+     * are checked explicitly and are still protected by database constraints
+     * at insert time.</p>
+     */
+    long restoreExactLinkedPaymentSource(MapSqlParameterSource params) {
+        Boolean targetIsPaid = jdbc.queryForObject("""
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM order_statuses target_status
+                    WHERE target_status.order_status_id = :targetStatusId
+                      AND target_status.order_status_title = 'Оплачено'
+                )
+                """, params, Boolean.class);
+        if (!Boolean.TRUE.equals(targetIsPaid)) {
+            return 0L;
+        }
+
+        List<Long> sourceIds = jdbc.queryForList("""
+                SELECT apc.check_payment_link
+                FROM archive_payment_check apc
+                WHERE apc.check_order = :orderId
+                  AND apc.check_active = 1
+                  AND apc.check_payment_link IS NOT NULL
+                ORDER BY apc.check_id
+                """, params, Long.class).stream().distinct().toList();
+        if (sourceIds.isEmpty()) {
+            return 0L;
+        }
+        if (sourceIds.size() != 1) {
+            throw new ArchiveRestoreConflictException(
+                    "Paid archive order has multiple active payment sources: " + sourceIds
+            );
+        }
+
+        Long sourceId = sourceIds.getFirst();
+        MapSqlParameterSource sourceParams = new MapSqlParameterSource()
+                .addValue("orderId", params.getValue("orderId"))
+                .addValue("sourceId", sourceId);
+        Integer unresolvedReturn = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM archive_payment_links archived
+                WHERE archived.id = :sourceId
+                  AND archived.order_id = :orderId
+                  AND archived.return_recovery_outcome = 'MANUAL_RECONCILIATION'
+                """, sourceParams, Integer.class);
+        if (unresolvedReturn != null && unresolvedReturn > 0) {
+            throw new ArchiveRestoreConflictException(
+                    "Exact archived payment source requires manual return reconciliation: " + sourceId
+            );
+        }
+        Integer archivedSourceCount = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM archive_payment_links archived
+                WHERE archived.id = :sourceId
+                  AND archived.order_id = :orderId
+                """, sourceParams, Integer.class);
+        if (archivedSourceCount == null || archivedSourceCount != 1) {
+            throw new ArchiveRestoreConflictException(
+                    "Exact archived payment source is missing or belongs to another order: " + sourceId
+            );
+        }
+
+        Integer liveConflicts = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM payment_links live
+                JOIN archive_payment_links archived ON archived.id = :sourceId
+                WHERE live.id = archived.id
+                   OR live.token = archived.token
+                   OR (
+                        archived.tbank_order_id IS NOT NULL
+                        AND live.tbank_order_id = archived.tbank_order_id
+                   )
+                   OR (
+                        archived.contractor_allocation_id IS NOT NULL
+                        AND live.contractor_allocation_id = archived.contractor_allocation_id
+                   )
+                """, sourceParams, Integer.class);
+        if (liveConflicts != null && liveConflicts > 0) {
+            throw new ArchiveRestoreConflictException(
+                    "Live payment source conflicts with archived source " + sourceId
+            );
+        }
+
+        List<String> columns = commonColumns("archive_payment_links", "payment_links");
+        String sql = "INSERT INTO payment_links (" + quoteList(columns) + ") "
+                + "SELECT " + selectList("archived", columns) + " "
+                + "FROM archive_payment_links archived "
+                + "WHERE archived.id = :sourceId AND archived.order_id = :orderId";
+        int restored = jdbc.update(sql, sourceParams);
+        if (restored != 1) {
+            throw new IllegalStateException(
+                    "Exact archived payment source restore failed: " + sourceId
+            );
+        }
         return restored;
     }
 

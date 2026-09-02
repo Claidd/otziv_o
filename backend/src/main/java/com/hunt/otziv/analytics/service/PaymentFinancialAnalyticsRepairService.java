@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
- * Rebuilds every analytics month touched by the V268 payment-check repair and
+ * Rebuilds every analytics month touched by the V268/V281 payment-check repairs and
  * every month whose stored financial totals differ from the archive-aware
  * canonical sources. The durable pending flag is cleared only after each
  * rebuilt month matches, so a restart safely resumes failures.
@@ -74,7 +74,7 @@ public class PaymentFinancialAnalyticsRepairService {
                 && values.stream().anyMatch(value -> "true".equalsIgnoreCase(value == null ? "" : value.trim()));
     }
 
-    private List<LocalDate> affectedMonths() {
+    List<LocalDate> affectedMonths() {
         return jdbcTemplate.query("""
                 WITH payment_history AS (
                     SELECT payment.check_id, payment.check_order, payment.check_date
@@ -98,11 +98,15 @@ public class PaymentFinancialAnalyticsRepairService {
                           AND payment.check_id = CAST(audit_event.entity_id AS UNSIGNED))
                       OR (audit_event.action = 'MISSING_PAYMENT_CHECK_RESTORED'
                           AND payment.check_order = audit_event.order_id)
-                    WHERE audit_event.actor = 'system:flyway-v268'
-                      AND audit_event.action IN (
-                          'PAYMENT_CHECK_QUARANTINED',
-                          'MISSING_PAYMENT_CHECK_RESTORED'
-                      )
+                      OR (audit_event.action = 'PAYMENT_CHECK_WORKER_REATTRIBUTED'
+                          AND payment.check_id = CAST(audit_event.entity_id AS UNSIGNED))
+                    WHERE (audit_event.actor = 'system:flyway-v268'
+                           AND audit_event.action IN (
+                               'PAYMENT_CHECK_QUARANTINED',
+                               'MISSING_PAYMENT_CHECK_RESTORED'
+                           ))
+                       OR (audit_event.actor = 'system:flyway-v281'
+                           AND audit_event.action = 'PAYMENT_CHECK_WORKER_REATTRIBUTED')
                 ),
                 source_payments AS (
                     SELECT DATE_FORMAT(payment.check_date, '%Y-%m-01') AS month_start,

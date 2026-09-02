@@ -464,6 +464,7 @@ Assert-TextMatch $backupConfigImporter 'function Assert-SafeEnvText' 'Protected 
 Assert-TextMatch $backupConfigImporter "Assert-SafeEnvText -Name 'BACKUP_S3_ENDPOINT'" 'Protected backup config import must reject env-file interpolation in the S3 endpoint.'
 Assert-TextMatch $qualityWorkflow 'test-import-prod-backup-config\.ps1' 'Quality gates must execute the protected backup importer contract test.'
 Assert-TextMatch $qualityWorkflow 'test-backup-readiness\.ps1' 'Quality gates must execute behavioral backup readiness guard tests.'
+Assert-TextMatch $qualityWorkflow 'test-resolve-otziv-env-file\.ps1' 'Quality gates must execute external project-file path resolver tests.'
 Assert-TextMatch $restore '\[switch\]\$KeepDownloadedDump' 'Fresh production database downloads must be retained only through an explicit opt-in.'
 Assert-TextMatch $restore '\[ValidateRange\(1, 100\)\]\[int\]\$LocalDumpRetentionCount = 1' 'Local plaintext production dump retention must remain bounded to one by default.'
 Assert-TextMatch $restore 'Removed ephemeral plaintext production dump after verified restore' 'Fresh production database dumps must be removed after restore verification.'

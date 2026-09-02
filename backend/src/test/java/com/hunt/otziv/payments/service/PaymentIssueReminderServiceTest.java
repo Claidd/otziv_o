@@ -19,6 +19,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentIssueReminderServiceTest {
@@ -29,6 +31,8 @@ class PaymentIssueReminderServiceTest {
     private UserService userService;
     @Mock
     private PersonalReminderService personalReminderService;
+    @Mock
+    private PaymentIssueReminderTransactionExecutor transactionExecutor;
     @InjectMocks
     private PaymentIssueReminderService service;
 
@@ -50,12 +54,7 @@ class PaymentIssueReminderServiceTest {
                 "Проверьте оплату"
         );
 
-        verify(personalReminderService).deleteSystemReminderBySource(
-                managerUser,
-                PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED,
-                5208L
-        );
-        verify(personalReminderService).createSystemReminderDueNow(
+        verify(personalReminderService).upsertSystemReminderDueNow(
                 managerUser,
                 "Платёж требует внимания",
                 "Проверьте оплату",
@@ -63,12 +62,7 @@ class PaymentIssueReminderServiceTest {
                 5208L,
                 24378L
         );
-        verify(personalReminderService).deleteSystemReminderBySource(
-                owner,
-                PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED,
-                5208L
-        );
-        verify(personalReminderService).createSystemReminderDueNow(
+        verify(personalReminderService).upsertSystemReminderDueNow(
                 owner,
                 "Платёж требует внимания",
                 "Проверьте оплату",
@@ -88,7 +82,8 @@ class PaymentIssueReminderServiceTest {
 
         service.notifyOrderIssue(order, "PAYMENT_FAIL_CLOSED", 25047L, "title", "text");
 
-        verify(personalReminderService).createSystemReminderDueNow(companyManager, "title", "text", "PAYMENT_FAIL_CLOSED", 25047L, 25047L);
+        verify(personalReminderService).upsertSystemReminderDueNow(
+                companyManager, "title", "text", "PAYMENT_FAIL_CLOSED", 25047L, 25047L);
     }
 
     @Test
@@ -100,22 +95,26 @@ class PaymentIssueReminderServiceTest {
 
     @Test
     void successfulRetryClearsRouteChangeIssueForEveryRecipient() {
-        User managerUser = user(50L, true);
-        User owner = user(60L, true);
-        Order order = order(25_048L, managerUser, null);
-        when(orderRepository.findByIdForOrderDto(25_048L)).thenReturn(Optional.of(order));
-        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
-        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of());
-
         service.resolveOrderIssue(25_048L, "PAYMENT_ROUTE_CHANGE_DELIVERY", 7_262L);
 
-        verify(personalReminderService).deleteSystemReminderBySource(
-                managerUser, "PAYMENT_ROUTE_CHANGE_DELIVERY", 7_262L
-        );
-        verify(personalReminderService).deleteSystemReminderBySource(
-                owner, "PAYMENT_ROUTE_CHANGE_DELIVERY", 7_262L
-        );
+        verify(personalReminderService).deleteSystemRemindersBySource(
+                "PAYMENT_ROUTE_CHANGE_DELIVERY", 7_262L);
         verifyNoMoreInteractions(personalReminderService);
+    }
+
+    @Test
+    void durablePathPropagatesReminderPersistenceFailure() {
+        User managerUser = user(70L, true);
+        Order order = order(25_049L, managerUser, null);
+        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of());
+        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of());
+        doThrow(new IllegalStateException("storage unavailable"))
+                .when(personalReminderService)
+                .upsertSystemReminderDueNow(
+                        managerUser, "title", "text", "PAYMENT_RETURN_RECONCILIATION", 99L, 25_049L);
+
+        assertThrows(IllegalStateException.class, () -> service.ensureOrderIssuePersisted(
+                order, "PAYMENT_RETURN_RECONCILIATION", 99L, "title", "text"));
     }
 
     private Order order(Long id, User orderManagerUser, User companyManagerUser) {

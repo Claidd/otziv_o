@@ -13,6 +13,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class CommonInvoiceOrderPayableChangedListener {
 
     private final CommonBillingService commonBillingService;
+    private final CommonBillingTransactionExecutor transactionExecutor;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onOrderPayableChanged(OrderPayableChangedEvent event) {
@@ -20,7 +21,7 @@ public class CommonInvoiceOrderPayableChangedListener {
             return;
         }
         try {
-            commonBillingService.refreshLinkedOrderAmount(event.orderId());
+            transactionExecutor.required(() -> commonBillingService.refreshLinkedOrderAmount(event.orderId()));
         } catch (RuntimeException e) {
             log.warn("Не удалось обновить общий счёт после изменения суммы заказа {}", event.orderId(), e);
         }

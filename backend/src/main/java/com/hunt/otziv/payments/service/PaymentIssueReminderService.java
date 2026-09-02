@@ -30,10 +30,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class PaymentIssueReminderService {
 
     public static final String SOURCE_PAYMENT_FAIL_CLOSED = "PAYMENT_FAIL_CLOSED";
+    public static final String SOURCE_PAYMENT_RETURN_RECONCILIATION = "PAYMENT_RETURN_RECONCILIATION";
 
     private final OrderRepository orderRepository;
     private final UserService userService;
     private final PersonalReminderService personalReminderService;
+    private final PaymentIssueReminderTransactionExecutor transactionExecutor;
 
     public void notifyOrderIssueAfterCommit(
             Long orderId,
@@ -45,7 +47,21 @@ public class PaymentIssueReminderService {
         if (orderId == null || orderId <= 0) {
             return;
         }
-        Runnable action = () -> notifyOrderIssue(orderId, sourceType, sourceId, title, text);
+        Runnable action = () -> {
+            try {
+                transactionExecutor.executeRequiresNew(
+                        () -> notifyOrderIssue(orderId, sourceType, sourceId, title, text)
+                );
+            } catch (RuntimeException exception) {
+                log.error(
+                        "Не удалось сохранить платёжное замечание после commit: orderId={}, sourceType={}, sourceId={}",
+                        orderId,
+                        sourceType,
+                        sourceId,
+                        exception
+                );
+            }
+        };
         if (TransactionSynchronizationManager.isActualTransactionActive()
                 && TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -84,37 +100,55 @@ public class PaymentIssueReminderService {
             String title,
             String text
     ) {
+        persistOrderIssue(order, sourceType, sourceId, title, text);
+    }
+
+    /**
+     * Durable path for a financial fail-closed transition. The caller's
+     * marker and every visible reminder commit atomically; a reminder failure
+     * therefore keeps the recovery outbox retryable.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void ensureOrderIssuePersisted(
+            Order order,
+            String sourceType,
+            Long sourceId,
+            String title,
+            String text
+    ) {
+        persistOrderIssue(order, sourceType, sourceId, title, text);
+    }
+
+    private void persistOrderIssue(
+            Order order,
+            String sourceType,
+            Long sourceId,
+            String title,
+            String text
+    ) {
         if (order == null || order.getId() == null || order.getId() <= 0) {
-            return;
+            throw new IllegalArgumentException("Заказ платёжного замечания обязателен");
         }
         String cleanSourceType = sourceType(sourceType);
         Long cleanSourceId = sourceId == null || sourceId <= 0 ? order.getId() : sourceId;
         String cleanTitle = limit(valueOrDefault(title, "Нужна проверка оплаты заказа №" + order.getId()), 120);
         String cleanText = limit(valueOrDefault(text, defaultText(order)), 1000);
 
-        for (User recipient : recipients(order).values()) {
-            try {
-                // Treat a repeated fail-closed signal as an update: keep exactly one
-                // open card per recipient/source and refresh its text/updatedAt.
-                personalReminderService.deleteSystemReminderBySource(recipient, cleanSourceType, cleanSourceId);
-                personalReminderService.createSystemReminderDueNow(
-                        recipient,
-                        cleanTitle,
-                        cleanText,
-                        cleanSourceType,
-                        cleanSourceId,
-                        order.getId()
-                );
-            } catch (RuntimeException exception) {
-                log.warn(
-                        "Не удалось создать платёжное замечание orderId={}, sourceType={}, sourceId={}, userId={}",
-                        order.getId(),
-                        cleanSourceType,
-                        cleanSourceId,
-                        recipient.getId(),
-                        exception
-                );
-            }
+        Map<Long, User> recipients = recipients(order);
+        if (recipients.isEmpty()) {
+            throw new IllegalStateException(
+                    "Для платёжной сверки заказа " + order.getId() + " не найден активный получатель напоминания"
+            );
+        }
+        for (User recipient : recipients.values()) {
+            personalReminderService.upsertSystemReminderDueNow(
+                    recipient,
+                    cleanTitle,
+                    cleanText,
+                    cleanSourceType,
+                    cleanSourceId,
+                    order.getId()
+            );
         }
     }
 
@@ -124,28 +158,25 @@ public class PaymentIssueReminderService {
         if (orderId == null || orderId <= 0) {
             return;
         }
-        orderRepository.findByIdForOrderDto(orderId).ifPresent(order -> {
-            String cleanSourceType = sourceType(sourceType);
-            Long cleanSourceId = sourceId == null || sourceId <= 0 ? orderId : sourceId;
-            for (User recipient : recipients(order).values()) {
-                try {
-                    personalReminderService.deleteSystemReminderBySource(
-                            recipient,
-                            cleanSourceType,
-                            cleanSourceId
-                    );
-                } catch (RuntimeException exception) {
-                    log.warn(
-                            "Не удалось закрыть платёжное замечание orderId={}, sourceType={}, sourceId={}, userId={}",
-                            orderId,
-                            cleanSourceType,
-                            cleanSourceId,
-                            recipient.getId(),
-                            exception
-                    );
-                }
-            }
-        });
+        personalReminderService.deleteSystemRemindersBySource(
+                sourceType(sourceType),
+                sourceId == null || sourceId <= 0 ? orderId : sourceId
+        );
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void resolveOrderIssueInCurrentTransaction(String sourceType, Long sourceId) {
+        if (sourceId == null || sourceId <= 0) {
+            throw new IllegalArgumentException("Источник закрываемого платёжного замечания обязателен");
+        }
+        personalReminderService.deleteSystemRemindersBySource(sourceType(sourceType), sourceId);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasOpenOrderIssue(String sourceType, Long sourceId) {
+        return sourceId != null && sourceId > 0
+                && personalReminderService.hasOpenSystemReminderBySource(
+                        sourceType(sourceType), sourceId);
     }
 
     private Map<Long, User> recipients(Order order) {

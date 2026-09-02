@@ -1,7 +1,0 @@
-*** Begin Patch
-*** Update File: backend/src/test/java/com/hunt/otziv/contractor_payments/service/ContractorActualPaymentAttributionServiceTest.java
-@@
- import com.hunt.otziv.contractor_payments.dto.ContractorActualPaymentSource;
-+import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse;
- import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentRecipientResponse;
-*** End Patch

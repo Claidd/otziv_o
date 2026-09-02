@@ -1,18 +1,25 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
+import com.hunt.otziv.contractor_payments.service.ContractorRewardLedgerService;
+import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import com.hunt.otziv.z_zp.model.PaymentCheck;
+import com.hunt.otziv.z_zp.repository.PaymentCheckRepository;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,11 +27,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Restores the payment cycle after a provider has durably confirmed a full
- * refund/reversal.  Contractor/task accounting is deliberately performed by
- * the return reconciler first; this service only changes the order cycle and
- * prepares the next payment instruction.  It is safe to call repeatedly:
- * createForOrder reuses an active link and the status transition is a no-op
- * once the order is already unpaid.
+ * refund/reversal. Contractor route accounting is performed by the return
+ * reconciler first; this service atomically removes the paid-order check,
+ * salary and company totals before reopening the order cycle. It is safe to
+ * call repeatedly: createForOrder reuses an active link and the financial
+ * rollback is a no-op once the order is already unpaid.
  */
 @Service
 @Slf4j
@@ -34,17 +41,21 @@ public class PaymentReturnOrderRecoveryService {
     private static final String STATUS_PAID = "Оплачено";
     private static final String STATUS_NOT_PAID = "Не оплачено";
     private static final String STATUS_REMINDER = "Напоминание";
-    private static final Set<PaymentLinkStatus> FULL_RETURN_STATUSES = EnumSet.of(
-            PaymentLinkStatus.CANCELED,
-            PaymentLinkStatus.REVERSED,
-            PaymentLinkStatus.REFUNDED
-    );
+    private static final String STATUS_TO_PAY = "Выставлен счет";
+    private static final String RECOVERY_APPLIED = PaymentReturnRecoveryState.OUTCOME_APPLIED;
+    private static final String RECOVERY_STALE_CYCLE = PaymentReturnRecoveryState.OUTCOME_STALE_PAYMENT_CYCLE;
+    private static final String RECOVERY_MANUAL = PaymentReturnRecoveryState.OUTCOME_MANUAL_RECONCILIATION;
 
     private final PaymentLinkRepository paymentLinkRepository;
     private final OrderRepository orderRepository;
     private final OrderStatusTransitionService orderStatusTransitionService;
     private final PaymentLinkService paymentLinkService;
     private final ContractorCompletionRewardService contractorCompletionRewardService;
+    private final PaymentCheckRepository paymentCheckRepository;
+    private final CompanyService companyService;
+    private final ContractorRewardLedgerService contractorRewardLedgerService;
+    private final PaymentIssueReminderService paymentIssueReminderService;
+    private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
 
     /**
      * Returns the order id when a new payment cycle was opened.  Partial
@@ -54,51 +65,218 @@ public class PaymentReturnOrderRecoveryService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<Long> reopenAfterFullReturn(PaymentLinkReturnOutboxClaim claim) {
         if (claim == null || claim.paymentLinkId() == null
-                || !FULL_RETURN_STATUSES.contains(claim.observedStatus())) {
+                || !PaymentReturnRecoveryState.isFullReturn(claim.observedStatus())) {
             return Optional.empty();
         }
 
-        PaymentLink link = paymentLinkRepository.findByIdForUpdate(claim.paymentLinkId()).orElse(null);
-        if (link == null || !FULL_RETURN_STATUSES.contains(link.getStatus())) {
+        Long candidateOrderId = paymentLinkRepository.findOrderIdById(claim.paymentLinkId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Платежная ссылка возврата " + claim.paymentLinkId() + " отсутствует в live-таблице"));
+        Order order = orderRepository.findByIdForCounterUpdate(candidateOrderId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Заказ платежной ссылки возврата " + claim.paymentLinkId() + " не найден"));
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(claim.paymentLinkId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Платежная ссылка возврата " + claim.paymentLinkId() + " исчезла после блокировки заказа"));
+        Long lockedLinkOrderId = link.getOrder() == null ? null : link.getOrder().getId();
+        if (!candidateOrderId.equals(lockedLinkOrderId)
+                || !PaymentReturnRecoveryState.isFullReturn(link.getStatus())) {
+            throw new IllegalStateException(
+                    "Платежная ссылка возврата изменила заказ или terminal-статус во время обработки: linkId="
+                            + claim.paymentLinkId());
+        }
+
+        if (!PaymentReturnRecoveryState.isValidMarkerTuple(link)) {
+            markManualReconciliation(link, link.getReturnRecoveryPaymentCheckId(),
+                    "Поврежден или неизвестен маркер обработки возврата; автоматический откат заблокирован");
             return Optional.empty();
         }
-        Order order = link.getOrder();
-        if (order == null || order.getId() == null) {
+        if (!PaymentReturnRecoveryState.isMarkerEmpty(link)) {
+            if (RECOVERY_APPLIED.equals(link.getReturnRecoveryOutcome())
+                    && link.getReturnRecoveryPaymentCheckId() != null) {
+                return STATUS_REMINDER.equals(statusTitle(order))
+                        ? Optional.of(order.getId())
+                        : Optional.empty();
+            }
+            if (RECOVERY_MANUAL.equals(link.getReturnRecoveryOutcome())) {
+                notifyManualReconciliation(link, valueOrDefault(
+                        link.getLastError(),
+                        "Возврат платежа ожидает ручной сверки"
+                ));
+                return Optional.empty();
+            }
+            if (RECOVERY_STALE_CYCLE.equals(link.getReturnRecoveryOutcome())) {
+                return Optional.empty();
+            }
+            if (PaymentReturnRecoveryState.OUTCOME_APPLIED_MANUALLY.equals(
+                    link.getReturnRecoveryOutcome())) {
+                if (!paymentIssueReminderService.hasOpenOrderIssue(
+                        PaymentIssueReminderService.SOURCE_PAYMENT_RETURN_RECONCILIATION,
+                        link.getId())) {
+                    return Optional.empty();
+                }
+                String currentStatus = statusTitle(order);
+                if (STATUS_PAID.equals(currentStatus)) {
+                    paymentIssueReminderService.resolveOrderIssueInCurrentTransaction(
+                            PaymentIssueReminderService.SOURCE_PAYMENT_RETURN_RECONCILIATION,
+                            link.getId()
+                    );
+                    return Optional.empty();
+                }
+                if (!STATUS_REMINDER.equals(currentStatus)
+                        && !STATUS_TO_PAY.equals(currentStatus)
+                        && !STATUS_NOT_PAID.equals(currentStatus)) {
+                    throw new IllegalStateException(
+                            "Ручной откат завершен, но заказ не находится в статусе, допускающем повторное выставление");
+                }
+                return Optional.of(order.getId());
+            }
+            if (PaymentReturnRecoveryState.isResolvedOutcome(link.getReturnRecoveryOutcome())) {
+                return Optional.empty();
+            }
+            throw new IllegalStateException("Необработанное допустимое состояние маркера возврата");
+        }
+
+        // CANCELED is also used for local/unpaid abandonment.  It becomes a
+        // financial return only when this exact link carries settled evidence.
+        // Leave the tuple empty so a later provider payment/return observation
+        // for the same link can still be processed.
+        if (link.getStatus() == PaymentLinkStatus.CANCELED
+                && !STATUS_PAID.equals(statusTitle(order))
+                && !PaymentReturnRecoveryState.hasLinkSpecificSettledEvidence(link)) {
             return Optional.empty();
         }
 
-        boolean settledEvidence = STATUS_PAID.equals(statusTitle(order))
-                || positive(link.getConfirmedAmountKopecks())
-                || link.getPaidAt() != null;
-        if (!settledEvidence) {
-            // A cancellation before any money was confirmed is not a refund.
+        if (STATUS_REMINDER.equals(statusTitle(order))) {
+            markManualReconciliation(
+                    link,
+                    null,
+                    "Заказ уже открыт повторно, но нет маркера финансового отката; нужна ручная сверка"
+            );
             return Optional.empty();
         }
-        if (paymentLinkRepository.existsOtherConfirmedPayment(order.getId(), link.getId())) {
-            log.info("Ignoring provider return because order still has another confirmed payment: orderId={}, returnedLinkId={}",
-                    order.getId(), link.getId());
+        if (!STATUS_PAID.equals(statusTitle(order))) {
+            markRecoveryProcessed(link, null, RECOVERY_STALE_CYCLE);
+            return Optional.empty();
+        }
+
+        List<PaymentCheck> checks = paymentLinkChecks(order.getId());
+        if (checks.size() != 1) {
+            markManualReconciliation(
+                    link,
+                    null,
+                    "Активных чеков " + checks.size() + " вместо 1; автоматический откат заблокирован"
+            );
+            return Optional.empty();
+        }
+        PaymentCheck activeCheck = checks.getFirst();
+        String checkIssue = activePaymentCheckIssue(order, activeCheck);
+        if (checkIssue != null) {
+            markManualReconciliation(link, activeCheck.getId(), checkIssue);
+            return Optional.empty();
+        }
+        if (activeCheck.getPaymentLinkId() == null) {
+            markManualReconciliation(
+                    link,
+                    activeCheck.getId(),
+                    "У активного чека нет привязки к платежной ссылке; автоматический откат заблокирован"
+            );
+            return Optional.empty();
+        }
+        if (!java.util.Objects.equals(activeCheck.getPaymentLinkId(), link.getId())) {
+            markRecoveryProcessed(link, activeCheck.getId(), RECOVERY_STALE_CYCLE);
+            log.warn(
+                    "Historical return belongs to another payment cycle and will not change the current check: "
+                            + "orderId={}, returnedLinkId={}, activeCheckId={}, activeCheckLinkId={}",
+                    order.getId(), link.getId(), activeCheck.getId(), activeCheck.getPaymentLinkId()
+            );
+            return Optional.empty();
+        }
+        if (!PaymentReturnRecoveryState.hasLinkSpecificSettledEvidence(link)) {
+            markManualReconciliation(
+                    link,
+                    activeCheck.getId(),
+                    "Полный возврат не содержит достоверного подтверждения оплаты exact source; автоматический откат заблокирован"
+            );
+            return Optional.empty();
+        }
+        if (commonInvoiceOrderRepository.existsByOrder_Id(order.getId())) {
+            markManualReconciliation(
+                    link,
+                    activeCheck.getId(),
+                    "Заказ входит в live-цикл общего счета; автоматический откат standalone-чека заблокирован"
+            );
+            return Optional.empty();
+        }
+        if (paymentLinkRepository.existsOtherPaymentBlockingReturn(order.getId(), link.getId())) {
+            markManualReconciliation(
+                    link,
+                    activeCheck.getId(),
+                    "У заказа есть другой подтвержденный или неоднозначный платеж; автоматический откат заблокирован"
+            );
             return Optional.empty();
         }
         if (paymentLinkRepository.existsNewerManualPaidClosure(
                 order.getId(), link.getId(), returnedAt(link))) {
-            log.info("Ignoring historical provider return because order has a newer manual paid closure: orderId={}, returnedLinkId={}",
-                    order.getId(), link.getId());
+            markManualReconciliation(
+                    link,
+                    activeCheck.getId(),
+                    "После возвращенного платежа зафиксировано более новое ручное закрытие; нужна ручная сверка"
+            );
+            return Optional.empty();
+        }
+        Integer returnedAmountSnapshot = activeCheck.getPaidAmount();
+        if (returnedAmountSnapshot == null || returnedAmountSnapshot < 0) {
+            markManualReconciliation(
+                    link,
+                    activeCheck.getId(),
+                    "В активном чеке нет достоверного снимка количества оплаченных работ; автоматический откат заблокирован"
+            );
+            return Optional.empty();
+        }
+        try {
+            contractorRewardLedgerService.lockActiveOrderRewardsAndRequireCancellationRepresentable(order.getId());
+        } catch (ResponseStatusException deterministicConflict) {
+            markManualReconciliation(
+                    link,
+                    activeCheck.getId(),
+                    valueOrDefault(deterministicConflict.getReason(), "Начисления нельзя откатить автоматически")
+            );
+            return Optional.empty();
+        }
+        BigDecimal returnedSum = activeCheck.getSum();
+        int returnedAmount = returnedAmountSnapshot;
+        Company company;
+        try {
+            company = requireCompanyRollback(order, returnedSum, returnedAmount);
+        } catch (IllegalStateException | UsernameNotFoundException deterministicConflict) {
+            markManualReconciliation(
+                    link,
+                    activeCheck.getId(),
+                    valueOrDefault(deterministicConflict.getMessage(), "Итоги компании требуют ручной сверки")
+            );
             return Optional.empty();
         }
 
-        if (!STATUS_REMINDER.equals(statusTitle(order))) {
-            contractorCompletionRewardService.deactivateOrderPaymentAccruals(
-                    order.getId(),
-                    "provider_full_return:" + link.getStatus()
+        markRecoveryProcessed(link, activeCheck.getId(), RECOVERY_APPLIED);
+        activeCheck.setActive(false);
+        paymentCheckRepository.save(activeCheck);
+        // V268 protects an active check with an FK to the paid order status.
+        // Force the deactivation to SQL before changing the status.
+        orderRepository.flush();
+
+        contractorCompletionRewardService.deactivateOrderPaymentAccruals(
+                order.getId(),
+                "provider_full_return:" + link.getStatus()
+        );
+        applyCompanyRollback(order, company, returnedSum, returnedAmount);
+        try {
+            orderStatusTransitionService.changeStatusAfterPaymentReturn(order.getId(), STATUS_REMINDER);
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Не удалось вернуть заказ " + order.getId() + " в статус \"Напоминание\"",
+                    e
             );
-            try {
-                orderStatusTransitionService.changeStatusAfterPaymentReturn(order.getId(), STATUS_REMINDER);
-            } catch (Exception e) {
-                throw new IllegalStateException(
-                        "Не удалось вернуть заказ " + order.getId() + " в статус \"Напоминание\"",
-                        e
-                );
-            }
         }
 
         log.info("Payment cycle reopened after full provider return: orderId={}, linkId={}",
@@ -129,8 +307,114 @@ public class PaymentReturnOrderRecoveryService {
         }
     }
 
-    private boolean positive(Long amount) {
-        return amount != null && amount > 0;
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void completeManualReturnFollowUp(Long paymentLinkId) {
+        if (paymentLinkId == null || paymentLinkId <= 0) {
+            return;
+        }
+        Long orderId = paymentLinkRepository.findOrderIdById(paymentLinkId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Платежная ссылка ручного follow-up отсутствует: " + paymentLinkId));
+        orderRepository.findByIdForCounterUpdate(orderId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Заказ ручного follow-up отсутствует: " + orderId));
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(paymentLinkId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Платежная ссылка ручного follow-up исчезла: " + paymentLinkId));
+        if (PaymentReturnRecoveryState.OUTCOME_APPLIED_MANUALLY.equals(
+                link.getReturnRecoveryOutcome())) {
+            paymentIssueReminderService.resolveOrderIssueInCurrentTransaction(
+                    PaymentIssueReminderService.SOURCE_PAYMENT_RETURN_RECONCILIATION,
+                    paymentLinkId
+            );
+        }
+    }
+
+    private List<PaymentCheck> paymentLinkChecks(Long orderId) {
+        List<PaymentCheck> checks = paymentCheckRepository.findByOrderIdAndActiveTrue(orderId);
+        return checks == null ? List.of() : checks;
+    }
+
+    private String activePaymentCheckIssue(Order order, PaymentCheck check) {
+        Long companyId = order.getCompany() == null ? null : order.getCompany().getId();
+        Long statusId = order.getStatus() == null ? null : order.getStatus().getId();
+        if (!check.isActive()
+                || !java.util.Objects.equals(check.getOrderId(), order.getId())
+                || check.getSum() == null
+                || check.getSum().signum() < 0
+                || companyId == null
+                || !java.util.Objects.equals(check.getCompanyId(), companyId)
+                || statusId == null
+                || !java.util.Objects.equals(check.getPaymentStatusGuard(), statusId)) {
+            return "Активный чек не согласован с заказом; автоматический откат заблокирован";
+        }
+        return null;
+    }
+
+    private Company requireCompanyRollback(Order order, BigDecimal returnedSum, int returnedAmount) {
+        if (order.getCompany() == null || order.getCompany().getId() == null) {
+            throw new IllegalStateException("У оплаченного заказа не определена компания");
+        }
+        Company company = companyService.getCompaniesById(order.getCompany().getId());
+        if (company == null) {
+            throw new IllegalStateException("Компания оплаченного заказа не найдена");
+        }
+        if (returnedAmount < 0
+                || company.getCounterPay() < returnedAmount
+                || safeMoney(company.getSumTotal()).compareTo(returnedSum) < 0) {
+            throw new IllegalStateException(
+                    "Итоги компании не согласованы с возвращаемой оплатой заказа " + order.getId()
+            );
+        }
+        return company;
+    }
+
+    private void applyCompanyRollback(
+            Order order,
+            Company company,
+            BigDecimal returnedSum,
+            int returnedAmount
+    ) {
+        company.setCounterPay(company.getCounterPay() - returnedAmount);
+        company.setSumTotal(safeMoney(company.getSumTotal()).subtract(returnedSum));
+        companyService.save(company);
+        order.setCompany(company);
+    }
+
+    private BigDecimal safeMoney(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private void markManualReconciliation(PaymentLink link, Long paymentCheckId, String reason) {
+        markRecoveryProcessed(link, paymentCheckId, RECOVERY_MANUAL);
+        String message = "payment_return_manual_reconciliation: " + reason;
+        link.setLastError(message.length() <= 512 ? message : message.substring(0, 512));
+        notifyManualReconciliation(link, reason);
+        log.error("{}: linkId={}, orderId={}, paymentCheckId={}",
+                reason,
+                link.getId(),
+                link.getOrder() == null ? null : link.getOrder().getId(),
+                paymentCheckId);
+    }
+
+    private void notifyManualReconciliation(PaymentLink link, String reason) {
+        Long orderId = link.getOrder() == null ? null : link.getOrder().getId();
+        paymentIssueReminderService.ensureOrderIssuePersisted(
+                link.getOrder(),
+                PaymentIssueReminderService.SOURCE_PAYMENT_RETURN_RECONCILIATION,
+                link.getId(),
+                "Нужна сверка возврата по заказу №" + orderId,
+                "Возврат по платежной ссылке №" + link.getId()
+                        + " не применен автоматически. " + valueOrDefault(reason, "Проверьте финансовый цикл вручную.")
+        );
+    }
+
+    private String valueOrDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private void markRecoveryProcessed(PaymentLink link, Long paymentCheckId, String outcome) {
+        PaymentReturnRecoveryState.markProcessed(link, paymentCheckId, outcome);
     }
 
     private LocalDateTime returnedAt(PaymentLink link) {

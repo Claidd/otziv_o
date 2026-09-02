@@ -39,6 +39,10 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
 
     List<ScheduledClientMessageState> findByOrderIdIn(Collection<Long> orderIds);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM ScheduledClientMessageState s WHERE s.orderId IN :orderIds ORDER BY s.id ASC")
+    List<ScheduledClientMessageState> findByOrderIdInForUpdate(@Param("orderIds") Collection<Long> orderIds);
+
     @Query("""
         SELECT s
         FROM ScheduledClientMessageState s, Order o
@@ -251,6 +255,7 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
           AND state.next_attempt_at IS NOT NULL
           AND state.next_attempt_at <= :now
           AND (state.locked_until IS NULL OR state.locked_until < :now)
+          AND state.delivery_status IS NULL
           AND (company_status.status_title IS NULL OR LOWER(TRIM(company_status.status_title)) <> 'бан')
           AND state.scenario IN (
               'CLIENT_TEXT_REMINDER',
@@ -622,6 +627,7 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
           AND state.next_attempt_at IS NOT NULL
           AND state.next_attempt_at <= :now
           AND (state.locked_until IS NULL OR state.locked_until < :now)
+          AND state.delivery_status IS NULL
         """, nativeQuery = true)
     int lockDueState(@Param("id") Long id,
                      @Param("now") LocalDateTime now,
@@ -640,6 +646,7 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
         WHERE state.state_id = :id
           AND state.state_status = 'ACTIVE'
           AND (state.locked_until IS NULL OR state.locked_until < :now)
+          AND state.delivery_status IS NULL
         """, nativeQuery = true)
     int lockActiveState(@Param("id") Long id,
                         @Param("now") LocalDateTime now,

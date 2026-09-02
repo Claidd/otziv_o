@@ -1,6 +1,0 @@
-diff --git a/frontend/src/app/features/home/home.component.html b/frontend/src/app/features/home/home.component.html
---- a/frontend/src/app/features/home/home.component.html
-+++ b/frontend/src/app/features/home/home.component.html
-@@ -593,1 +593,1 @@
--                [disabled]="manualTaskAccountingTargetsLoading() || !manualTaskTargetKopecks()"
-+                [disabled]="manualTaskAccountingTargetsLoading() || !manualTaskAmountRubles()"

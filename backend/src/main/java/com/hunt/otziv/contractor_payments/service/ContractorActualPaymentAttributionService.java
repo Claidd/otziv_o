@@ -1842,7 +1842,12 @@ public class ContractorActualPaymentAttributionService {
             return com.hunt.otziv.payments.service.ManualPaymentTaskLedgerService.candidateKey(
                     link.getManualActualTaskId(), link.getManualActualTaskGeneration());
         }
-        return recipientKey(link.getManualActualRecipientType(), link.getManualActualRecipientProfileId());
+        return publicRecipientKey(
+                link.getManualActualRecipientType(), link.getManualActualRecipientProfileId());
+    }
+
+    private String publicRecipientKey(ContractorRecipientType type, Long profileId) {
+        return type == ContractorRecipientType.OWNER ? "OWNER" : "PROFILE:" + profileId;
     }
 
     private ContractorActualPaymentSource paymentLinkSource(

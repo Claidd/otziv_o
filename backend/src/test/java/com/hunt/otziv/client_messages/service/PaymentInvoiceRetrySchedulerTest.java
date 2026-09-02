@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentInvoiceRetrySchedulerTest {
@@ -93,7 +95,7 @@ class PaymentInvoiceRetrySchedulerTest {
                 ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY,
                 ScheduledMessageStateStatus.ACTIVE
         );
-        when(stateRepository.findByOrderIdIn(List.of(25047L)))
+        when(stateRepository.findByOrderIdInForUpdate(List.of(25047L)))
                 .thenReturn(List.of(activeReminder, pausedAutoBan, unrelated));
 
         int changed = scheduler.cancelPaymentAutomation(25047L, "Оплата подтверждена");
@@ -107,6 +109,123 @@ class PaymentInvoiceRetrySchedulerTest {
         assertEquals("manual_card_payment_confirmed", activeReminder.getLastErrorCode());
         assertEquals("Оплата подтверждена", pausedAutoBan.getLastErrorMessage());
         verify(stateRepository).saveAll(List.of(activeReminder, pausedAutoBan));
+    }
+
+    @Test
+    void preparedBadReviewInvoiceCannotBeCanceledWhileExternalSendIsInFlight() {
+        PaymentInvoiceRetryScheduler scheduler = scheduler();
+        Order order = order();
+        ScheduledClientMessageState prepared = state(
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                ScheduledMessageStateStatus.ACTIVE
+        );
+        prepared.setDeliveryStatus(ClientMessageStateSafety.DELIVERY_PREPARED);
+        prepared.setLastErrorCode("delivery_prepared");
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                "bad-review-invoice:order:25047"
+        )).thenReturn(Optional.of(prepared));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> scheduler.cancelBadReviewInvoiceRetry(order, "Отмена задачи")
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, prepared.getStatus());
+        assertEquals(ClientMessageStateSafety.DELIVERY_PREPARED, prepared.getDeliveryStatus());
+        verify(stateRepository, never()).save(any());
+    }
+
+    @Test
+    void manualPaymentCannotCrossPreparedInvoiceSend() {
+        PaymentInvoiceRetryScheduler scheduler = scheduler();
+        ScheduledClientMessageState prepared = state(
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                ScheduledMessageStateStatus.ACTIVE
+        );
+        prepared.setDeliveryStatus(ClientMessageStateSafety.DELIVERY_PREPARED);
+        prepared.setLastErrorCode("delivery_prepared");
+        when(stateRepository.findByOrderIdInForUpdate(List.of(25047L)))
+                .thenReturn(List.of(prepared));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> scheduler.assertPaymentAutomationMutable(25047L)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, prepared.getStatus());
+        verify(stateRepository, never()).save(any());
+    }
+
+    @Test
+    void secondBadReviewCompletionCannotRearmPreparedInvoice() {
+        PaymentInvoiceRetryScheduler scheduler = scheduler();
+        Order order = order();
+        ScheduledClientMessageState prepared = state(
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                ScheduledMessageStateStatus.ACTIVE
+        );
+        prepared.setDeliveryStatus(ClientMessageStateSafety.DELIVERY_PREPARED);
+        prepared.setLastErrorCode("delivery_prepared");
+        stubBadReviewSchedule(prepared);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> scheduler.scheduleBadReviewInvoiceRetry(order)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(ClientMessageStateSafety.DELIVERY_PREPARED, prepared.getDeliveryStatus());
+        verify(stateRepository, never()).save(any());
+    }
+
+    @Test
+    void uncertainBadReviewDeliveryCannotBeAutomaticallyRearmed() {
+        PaymentInvoiceRetryScheduler scheduler = scheduler();
+        ScheduledClientMessageState uncertain = state(
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                ScheduledMessageStateStatus.ACTIVE
+        );
+        uncertain.setDeliveryStatus(ClientMessageStateSafety.DELIVERY_OUTCOME_UNKNOWN);
+        uncertain.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+        stubBadReviewSchedule(uncertain);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> scheduler.scheduleBadReviewInvoiceRetry(order())
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(ClientMessageStateSafety.DELIVERY_OUTCOME_UNKNOWN, uncertain.getDeliveryStatus());
+        verify(stateRepository, never()).save(any());
+    }
+
+    @Test
+    void completedDeliveryCanBeRearmedForNextBadReviewAndClearsOldFence() {
+        PaymentInvoiceRetryScheduler scheduler = scheduler();
+        Order order = order();
+        ScheduledClientMessageState sent = state(
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                ScheduledMessageStateStatus.DONE
+        );
+        sent.setDeliveryStatus("SENT");
+        sent.setDeliveryToken("old-token");
+        sent.setDeliveryMessage("old-message");
+        sent.setDeliveryTaskId(40L);
+        sent.setDeliveryPreparedAt(LocalDateTime.now());
+        stubBadReviewSchedule(sent);
+
+        scheduler.scheduleBadReviewInvoiceRetry(order);
+
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, sent.getStatus());
+        assertNull(sent.getDeliveryStatus());
+        assertNull(sent.getDeliveryToken());
+        assertNull(sent.getDeliveryMessage());
+        assertNull(sent.getDeliveryTaskId());
+        assertNull(sent.getDeliveryPreparedAt());
+        verify(stateRepository).save(sent);
     }
 
     @Test
@@ -145,6 +264,32 @@ class PaymentInvoiceRetrySchedulerTest {
         ));
         verify(appSettingService, never()).getBoolean(
                 eq(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED), anyBoolean());
+    }
+
+    private PaymentInvoiceRetryScheduler scheduler() {
+        return new PaymentInvoiceRetryScheduler(stateRepository, appSettingService, slotPlanner);
+    }
+
+    private Order order() {
+        Company company = new Company();
+        company.setId(70L);
+        Order order = new Order();
+        order.setId(25047L);
+        order.setCompany(company);
+        return order;
+    }
+
+    private void stubBadReviewSchedule(ScheduledClientMessageState state) {
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                "bad-review-invoice:order:25047"
+        )).thenReturn(Optional.of(state));
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
+                ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
+        )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private ScheduledClientMessageState state(

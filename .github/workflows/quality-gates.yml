@@ -41,6 +41,9 @@ jobs:
       - name: Test protected production backup importer
         shell: pwsh
         run: ./infrastructure/scripts/security/test-import-prod-backup-config.ps1
+      - name: Test external project-file path resolution
+        shell: pwsh
+        run: ./infrastructure/scripts/security/test-resolve-otziv-env-file.ps1
       - name: Reject oversized Git blobs
         if: github.event_name != 'push' || github.event.deleted != true
         shell: pwsh

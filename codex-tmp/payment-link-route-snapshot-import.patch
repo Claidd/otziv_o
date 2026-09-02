@@ -1,6 +1,0 @@
-*** Begin Patch
-*** Update File: backend/src/test/java/com/hunt/otziv/payments/PaymentLinkServiceTest.java
-@@
- import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
-+import com.hunt.otziv.payments.dto.ManualPaymentTaskRouteSnapshot;
-*** End Patch

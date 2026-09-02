@@ -6,12 +6,15 @@ import com.hunt.otziv.z_zp.dto.PaymentCheckStatView;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface PaymentCheckRepository extends CrudRepository<PaymentCheck, Long>  {
@@ -19,6 +22,10 @@ public interface PaymentCheckRepository extends CrudRepository<PaymentCheck, Lon
     List<PaymentCheck> findAll();
 
     List<PaymentCheck> findByOrderIdAndActiveTrue(Long orderId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM PaymentCheck p WHERE p.id = :id")
+    Optional<PaymentCheck> findByIdForUpdate(@Param("id") Long id);
 
 //    @Query("SELECT p FROM PaymentCheck p WHERE YEAR(p.created) = YEAR(:localDate) AND MONTH(p.created) = MONTH(:localDate)")
 //    List<PaymentCheck> findAllToDate(LocalDate localDate);

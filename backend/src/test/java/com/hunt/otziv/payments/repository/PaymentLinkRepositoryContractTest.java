@@ -51,7 +51,7 @@ class PaymentLinkRepositoryContractTest {
     @Test
     void remainingConfirmedPaymentGuardIsOrderWideAndNotTimeOrdered() throws NoSuchMethodException {
         Method method = PaymentLinkRepository.class.getMethod(
-                "existsOtherConfirmedPayment",
+                "existsOtherPaymentBlockingReturn",
                 Long.class,
                 Long.class
         );
@@ -64,6 +64,9 @@ class PaymentLinkRepositoryContractTest {
                 .contains("link.id <> :returnedLinkId")
                 .contains("PaymentLinkStatus.CONFIRMED")
                 .contains("PaymentLinkStatus.AMOUNT_MISMATCH")
+                .contains("PaymentLinkStatus.NEEDS_RECONCILIATION")
+                .doesNotContain("PaymentLinkStatus.INITIATED")
+                .doesNotContain("PaymentLinkStatus.WAITING_MANUAL_PAYMENT")
                 .doesNotContain("paidAt")
                 .doesNotContain("createdAt")
                 .doesNotContain("returnedAt");

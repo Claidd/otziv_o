@@ -64,7 +64,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.springframework.web.server.ResponseStatusException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -1785,6 +1787,56 @@ class ScheduledClientMessageServiceTest {
         );
         deliveryOrder.verify(transactionRunner).callInNewTransaction(any());
         deliveryOrder.verify(transactionRunner).runInNewTransaction(any(Runnable.class));
+    }
+
+    @Test
+    void expiredPreparedBadReviewDeliveryCannotBeClaimedOrSentAgain() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(507L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("bad-review-invoice:order:56")
+                .companyId(26L)
+                .orderId(56L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lockedUntil(LocalDateTime.now().minusMinutes(1))
+                .deliveryToken("delivery-507")
+                .deliveryStatus(ClientMessageStateSafety.DELIVERY_PREPARED)
+                .deliveryMessage("К оплате: 1300 руб.")
+                .deliveryTaskId(11L)
+                .deliveryPreparedAt(LocalDateTime.now().minusMinutes(20))
+                .build();
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(stateRepository.findByScenarioAndTargetKey(
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                "bad-review-invoice:order:56"
+        )).thenReturn(Optional.of(state));
+
+        service.deliverBadReviewInvoiceImmediately(11L, 56L);
+
+        verify(stateRepository, never()).lockActiveState(any(), any(), any(), anyString(), anyString());
+        verify(messageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void manualRetryRejectsPreparedDeliveryBeforeClaim() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(508L)
+                .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .deliveryStatus(ClientMessageStateSafety.DELIVERY_PREPARED)
+                .build();
+        when(stateRepository.findById(508L)).thenReturn(Optional.of(state));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.retryNow(508L)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        verify(stateRepository, never()).lockActiveState(any(), any(), any(), anyString(), anyString());
     }
 
     @Test

@@ -1,5 +1,26 @@
 Set-StrictMode -Version Latest
 
+function Get-OtzivProjectFilesRoot {
+    param([string]$RepoRoot = "")
+
+    $configured = [Environment]::GetEnvironmentVariable("OTZIV_PROJECT_FILES_ROOT")
+    if (-not [string]::IsNullOrWhiteSpace($configured)) {
+        return $configured
+    }
+
+    if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
+        throw "RepoRoot is not set. Pass -RepoRoot or set OTZIV_PROJECT_FILES_ROOT."
+    }
+
+    $repoPath = [System.IO.Path]::GetFullPath($RepoRoot)
+    $repoParent = [System.IO.Directory]::GetParent($repoPath)
+    if ($null -eq $repoParent) {
+        throw "Cannot determine the project-files root from RepoRoot: $repoPath"
+    }
+
+    return $repoParent.FullName
+}
+
 function Get-OtzivEnvDirectory {
     param([string]$RepoRoot = "")
 
@@ -8,11 +29,34 @@ function Get-OtzivEnvDirectory {
         return $configured
     }
 
-    if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
-        throw "USERPROFILE is not set. Set OTZIV_ENV_DIR to the directory with Otziv env files."
+    $projectFilesRoot = Get-OtzivProjectFilesRoot -RepoRoot $RepoRoot
+    return Join-Path (Join-Path $projectFilesRoot ".otziv") "env"
+}
+
+function Get-OtzivSshDirectory {
+    param(
+        [string]$RepoRoot = "",
+        [string]$ProjectFilesRoot = ""
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ProjectFilesRoot)) {
+        $ProjectFilesRoot = Get-OtzivProjectFilesRoot -RepoRoot $RepoRoot
     }
 
-    return Join-Path $env:USERPROFILE ".otziv\env"
+    return Join-Path $ProjectFilesRoot ".ssh"
+}
+
+function Get-OtzivBackupDirectory {
+    param(
+        [string]$RepoRoot = "",
+        [string]$ProjectFilesRoot = ""
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ProjectFilesRoot)) {
+        $ProjectFilesRoot = Get-OtzivProjectFilesRoot -RepoRoot $RepoRoot
+    }
+
+    return Join-Path (Join-Path $ProjectFilesRoot ".otziv") "backups"
 }
 
 function Get-OtzivEnvAliasFileName {
@@ -39,12 +83,19 @@ function Resolve-OtzivEnvFile {
     if ([System.IO.Path]::IsPathRooted($EnvFile)) {
         [void]$candidates.Add($EnvFile)
     } else {
-        [void]$candidates.Add((Join-Path $RepoRoot $EnvFile))
-
         $envDirectory = Get-OtzivEnvDirectory -RepoRoot $RepoRoot
+        $envFileLeaf = Split-Path -Leaf $EnvFile
         $aliasFileName = Get-OtzivEnvAliasFileName -EnvFile $EnvFile
+        $isCanonicalAlias = $envFileLeaf -in @(".env", ".env.prod", ".env.prod-local")
+
+        if (-not $isCanonicalAlias) {
+            [void]$candidates.Add((Join-Path $RepoRoot $EnvFile))
+        }
+
         [void]$candidates.Add((Join-Path $envDirectory $aliasFileName))
-        [void]$candidates.Add((Join-Path $envDirectory (Split-Path -Leaf $EnvFile)))
+        if ($envFileLeaf -ne $aliasFileName) {
+            [void]$candidates.Add((Join-Path $envDirectory $envFileLeaf))
+        }
     }
 
     foreach ($candidate in $candidates) {

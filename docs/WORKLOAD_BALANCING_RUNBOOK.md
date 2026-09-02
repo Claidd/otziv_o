@@ -579,7 +579,7 @@ Workload health намеренно не переводит общий `/actuator
 Работать из корня репозитория:
 
 ```powershell
-Set-Location D:\Java\otziv
+Set-Location 'F:\Works\Projects\otziv'
 git status --short
 ```
 
@@ -642,11 +642,13 @@ $tag = "<NEW_UNIQUE_TAG>"
   -VpsUser hunt `
   -VpsPort 22022 `
   -VpsPath /docker `
-  -SshKey "$env:USERPROFILE\.ssh\otziv_vps_ed25519" `
-  -EnvFile .env.prod `
   -RemoteEnvFile .env `
   -Tag $tag
 ```
+
+Без явных overrides скрипт использует
+`F:\Works\Projects\.otziv\env\prod.env` и
+`F:\Works\Projects\.ssh\otziv_vps_ed25519`.
 
 Скрипт:
 

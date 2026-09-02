@@ -18,6 +18,8 @@ public interface PaymentCheckService {
 
     boolean save(Order order);
     boolean save(Order order, BigDecimal sum);
+    boolean save(Order order, BigDecimal sum, int paidAmount);
+    void assertActiveCheckBoundToPaymentLink(Long orderId, Long paymentLinkId);
     List<CheckDTO> getAllCheckDTO();
     List<PaymentCheck> findAll();
 

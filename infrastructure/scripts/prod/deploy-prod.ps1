@@ -9,7 +9,9 @@ param(
     [string]$VpsUser = "hunt",
     [ValidateRange(1, 65535)][int]$VpsPort = 22022,
     [string]$VpsPath = "/opt/otziv",
+    [string]$ProjectFilesRoot = "",
     [string]$SshKey = "",
+    [string]$SshKnownHostsFile = "",
     [string]$EnvFile = ".env.prod",
     [string]$RemoteEnvFile = ".env.prod",
     [switch]$DockerLogin,
@@ -39,9 +41,12 @@ function Show-Help {
 Deploy Otziv production stack from this local computer.
 
 Example:
-  .\infrastructure\scripts\prod\deploy-prod.ps1 -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022 -VpsPath /docker -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519 -RemoteEnvFile .env -SkipEnvUpload
+  & 'F:\Works\Projects\otziv\infrastructure\scripts\prod\deploy-prod.ps1' -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022 -VpsPath /docker -RemoteEnvFile .env -Tag 6.20
 
 Useful options:
+  -ProjectFilesRoot <path>       External project files root. Defaults to the repository parent.
+  -SshKey <path>                 SSH private key. Defaults to <project-files-root>\.ssh\otziv_vps_ed25519.
+  -SshKnownHostsFile <path>      SSH host keys. Defaults to <project-files-root>\.ssh\known_hosts.
   -DockerHubNamespace claid38     Docker Hub namespace or username.
   -DockerLoginUsername claid38    Docker Hub login username. Defaults to DockerHubNamespace.
   -Tag 20260507-1                Release name. Exact snapshot SHA is appended automatically.
@@ -122,7 +127,7 @@ function Assert-NoReparsePointInExistingPath {
         if (Test-Path -LiteralPath $cursor) {
             $item = Get-Item -LiteralPath $cursor -Force
             if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-                throw "Sensitive backup path contains a reparse-point component: $cursor"
+                throw "Sensitive path contains a reparse-point component: $cursor"
             }
         }
         $parent = [IO.Path]::GetDirectoryName($cursor)
@@ -575,6 +580,59 @@ if (-not (Test-Path -LiteralPath $envResolverPath)) {
 }
 . $envResolverPath
 
+if ([string]::IsNullOrWhiteSpace($ProjectFilesRoot)) {
+    $ProjectFilesRoot = Get-OtzivProjectFilesRoot -RepoRoot $repoRoot
+} elseif (-not [IO.Path]::IsPathRooted($ProjectFilesRoot)) {
+    $ProjectFilesRoot = Join-Path (Split-Path -Parent $repoRoot) $ProjectFilesRoot
+}
+$projectFilesRootFullPath = [IO.Path]::GetFullPath($ProjectFilesRoot)
+$projectFilesRootDriveRoot = [IO.Path]::GetPathRoot($projectFilesRootFullPath)
+if ($projectFilesRootFullPath.Equals($projectFilesRootDriveRoot, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'ProjectFilesRoot must be a dedicated directory, not a filesystem root.'
+}
+$ProjectFilesRoot = $projectFilesRootFullPath.TrimEnd('\', '/')
+if (-not (Test-Path -LiteralPath $ProjectFilesRoot -PathType Container)) {
+    throw "External project files root not found: $ProjectFilesRoot"
+}
+Assert-NoReparsePointInExistingPath -Path $ProjectFilesRoot
+$repoRootForExternalFiles = [IO.Path]::GetFullPath($repoRoot).TrimEnd('\', '/')
+$repoExternalFilesPrefix = $repoRootForExternalFiles + [IO.Path]::DirectorySeparatorChar
+if ($ProjectFilesRoot.Equals($repoRootForExternalFiles, [StringComparison]::OrdinalIgnoreCase) -or
+    $ProjectFilesRoot.StartsWith($repoExternalFilesPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'ProjectFilesRoot must stay outside the Git worktree.'
+}
+
+$sshDirectory = Get-OtzivSshDirectory -RepoRoot $repoRoot -ProjectFilesRoot $ProjectFilesRoot
+if ([string]::IsNullOrWhiteSpace($SshKey)) {
+    $SshKey = Join-Path $sshDirectory 'otziv_vps_ed25519'
+} elseif (-not [IO.Path]::IsPathRooted($SshKey)) {
+    $SshKey = Join-Path $ProjectFilesRoot $SshKey
+}
+$SshKey = [IO.Path]::GetFullPath($SshKey)
+if (-not (Test-Path -LiteralPath $SshKey -PathType Leaf)) {
+    throw "SSH private key not found: $SshKey"
+}
+Assert-NoReparsePointInExistingPath -Path $SshKey
+
+if ([string]::IsNullOrWhiteSpace($SshKnownHostsFile)) {
+    $SshKnownHostsFile = Join-Path $sshDirectory 'known_hosts'
+} elseif (-not [IO.Path]::IsPathRooted($SshKnownHostsFile)) {
+    $SshKnownHostsFile = Join-Path $ProjectFilesRoot $SshKnownHostsFile
+}
+$SshKnownHostsFile = [IO.Path]::GetFullPath($SshKnownHostsFile)
+if (-not (Test-Path -LiteralPath $SshKnownHostsFile -PathType Leaf)) {
+    throw "SSH known_hosts file not found: $SshKnownHostsFile"
+}
+Assert-NoReparsePointInExistingPath -Path $SshKnownHostsFile
+$sshKnownHostsOptionPath = $SshKnownHostsFile.Replace('\', '/')
+
+if (-not [string]::IsNullOrWhiteSpace($PreDeployBackupDirectory)) {
+    if (-not [IO.Path]::IsPathRooted($PreDeployBackupDirectory)) {
+        $PreDeployBackupDirectory = Join-Path $repoRoot $PreDeployBackupDirectory
+    }
+    $PreDeployBackupDirectory = [IO.Path]::GetFullPath($PreDeployBackupDirectory)
+}
+
 $snapshotLibraryPath = Join-Path $scriptRoot 'DeploySnapshot.ps1'
 if (-not (Test-Path -LiteralPath $snapshotLibraryPath -PathType Leaf)) {
     throw "Deploy snapshot library not found: $snapshotLibraryPath"
@@ -730,7 +788,13 @@ if ($PreparedDeploySnapshot) {
         $forwardParameters['DeploySnapshotRevision'] = $snapshot.Commit
         $forwardParameters['DeployProtectedMainRevision'] = $protectedMainRevision
         $forwardParameters['Tag'] = $Tag
+        $forwardParameters['ProjectFilesRoot'] = $ProjectFilesRoot
+        $forwardParameters['SshKey'] = $SshKey
+        $forwardParameters['SshKnownHostsFile'] = $SshKnownHostsFile
         $forwardParameters['EnvFile'] = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot -AllowMissing:$SkipEnvUpload
+        if (-not [string]::IsNullOrWhiteSpace($PreDeployBackupDirectory)) {
+            $forwardParameters['PreDeployBackupDirectory'] = $PreDeployBackupDirectory
+        }
 
         if ($null -ne $snapshotMobileRelease) {
             $forwardParameters['MobileApkPath'] = $snapshotMobileRelease.File.FullName
@@ -848,6 +912,10 @@ $remoteDeployLockAcquired = $false
 $remotePreBackupInvocationStarted = $false
 $remoteRolloutStarted = $false
 $mobileRelease = if ($SkipMobileApkUpload) { $null } else { Get-MobileReleaseCandidate -RepoRoot $repoRoot -RequestedPath $MobileApkPath }
+if ($null -ne $mobileRelease) {
+    Write-Host "Verifying mobile APK before VPS access and Docker build/push..."
+    $mobileRelease = Confirm-MobileReleaseArtifact -RepoRoot $repoRoot -Candidate $mobileRelease
+}
 $sshArgs = @()
 $scpArgs = @()
 if (-not [string]::IsNullOrWhiteSpace($SshKey)) {
@@ -858,6 +926,8 @@ $sshKeepAliveArgs = @(
     "-o", "BatchMode=yes",
     "-o", "ConnectTimeout=15",
     "-o", "ConnectionAttempts=2",
+    "-o", "IdentitiesOnly=yes",
+    "-o", "UserKnownHostsFile=$sshKnownHostsOptionPath",
     "-o", "StrictHostKeyChecking=accept-new",
     "-o", "ServerAliveInterval=20",
     "-o", "ServerAliveCountMax=12",
@@ -916,6 +986,9 @@ if ($null -ne $localDeployBackupKeyBase64) {
 }
 
 Write-Host "Building and pushing:"
+Write-Host "  PROJECT_FILES_ROOT=$ProjectFilesRoot"
+Write-Host "  SSH_KEY=$SshKey"
+Write-Host "  SSH_KNOWN_HOSTS=$SshKnownHostsFile"
 Write-Host "  APP_IMAGE=$appImage"
 Write-Host "  WEB_IMAGE=$webImage"
 if ($EnableExternalReviewWorker) {
@@ -932,6 +1005,21 @@ if ($null -ne $mobileRelease) {
     Write-Host "  MOBILE_APK_CANDIDATE=$($mobileRelease.File.FullName) (version $($mobileRelease.VersionName), code $($mobileRelease.VersionCode))"
 } elseif (-not $SkipMobileApkUpload) {
     Write-Warning "No release APK found in mobile/builds. Mobile publication will be skipped."
+}
+
+Write-Host "Checking VPS SSH access before build/push..."
+$sshPreflightAttempts = 3
+for ($sshPreflightAttempt = 1; $sshPreflightAttempt -le $sshPreflightAttempts; $sshPreflightAttempt++) {
+    & ssh @sshArgs $remote "true"
+    $sshPreflightExitCode = $LASTEXITCODE
+    if ($sshPreflightExitCode -eq 0) {
+        break
+    }
+    if ($sshPreflightExitCode -ne 255 -or $sshPreflightAttempt -ge $sshPreflightAttempts) {
+        throw "VPS SSH preflight failed before build/push (ssh exit code $sshPreflightExitCode)."
+    }
+    Write-Warning "VPS SSH preflight failed on attempt ${sshPreflightAttempt}/${sshPreflightAttempts} (exit code $sshPreflightExitCode). Retrying in 10s..."
+    Start-Sleep -Seconds 10
 }
 
 if ($DockerLogin) {
@@ -961,12 +1049,12 @@ if (-not $SkipBuildPush) {
                 -ExpectedRevision $preparedSnapshotRevision)
     }
     Write-Host "Pushing application image..."
-    Invoke-External -FilePath "docker" -Arguments @("push", $appImage)
+    Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $appImage) -Attempts 3 -DelaySeconds 10
     Write-Host "Pushing web image..."
-    Invoke-External -FilePath "docker" -Arguments @("push", $webImage)
+    Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $webImage) -Attempts 3 -DelaySeconds 10
     if ($EnableExternalReviewWorker) {
         Write-Host "Pushing external review worker image..."
-        Invoke-External -FilePath "docker" -Arguments @("push", $externalReviewWorkerImage)
+        Invoke-ExternalWithRetry -FilePath "docker" -Arguments @("push", $externalReviewWorkerImage) -Attempts 3 -DelaySeconds 10
     }
     Write-Host "Docker images pushed successfully."
 } else {
@@ -1028,18 +1116,29 @@ else
   printf 'MISSING'
 fi
 "@
-    $remoteMobileState = ($remoteMobileCheck | & ssh @sshArgs $remote "tr -d '\r' | bash -s").Trim()
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to check the mobile release on VPS."
+    $remoteMobileOutput = @()
+    $remoteMobileExitCode = $null
+    $remoteMobileAttempts = 3
+    for ($remoteMobileAttempt = 1; $remoteMobileAttempt -le $remoteMobileAttempts; $remoteMobileAttempt++) {
+        $remoteMobileOutput = @($remoteMobileCheck | & ssh @sshArgs $remote "tr -d '\r' | bash -s")
+        $remoteMobileExitCode = $LASTEXITCODE
+        if ($remoteMobileExitCode -eq 0) {
+            break
+        }
+        if ($remoteMobileExitCode -ne 255 -or $remoteMobileAttempt -ge $remoteMobileAttempts) {
+            throw "Failed to check the mobile release on VPS (ssh exit code $remoteMobileExitCode)."
+        }
+        Write-Warning "Mobile release check SSH connection failed on attempt ${remoteMobileAttempt}/${remoteMobileAttempts} (exit code $remoteMobileExitCode). Retrying in 10s..."
+        Start-Sleep -Seconds 10
     }
+    $remoteMobileState = (($remoteMobileOutput | ForEach-Object { [string]$_ }) -join "`n").Trim()
     if ($remoteMobileState -eq "PRESENT") {
         Write-Host "Mobile APK code $($mobileRelease.VersionCode) or newer is already present on VPS; excluding it from the deploy bundle."
         $mobileRelease = $null
     } elseif ($remoteMobileState -ne "MISSING") {
         throw "Unexpected mobile release check response from VPS: $remoteMobileState"
     } else {
-        Write-Host "Mobile APK code $($mobileRelease.VersionCode) is newer than the published VPS release; verifying before bundling..."
-        $mobileRelease = Confirm-MobileReleaseArtifact -RepoRoot $repoRoot -Candidate $mobileRelease
+        Write-Host "Mobile APK code $($mobileRelease.VersionCode) is newer than the published VPS release; including the verified artifact in the deploy bundle."
     }
 }
 
@@ -1368,12 +1467,12 @@ retain_deploy_lock="1"
     }
 
     $customBackupDirectoryRequested = -not [string]::IsNullOrWhiteSpace($PreDeployBackupDirectory)
-    $userProfilePath = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
-    if ([string]::IsNullOrWhiteSpace($userProfilePath)) {
-        throw 'Unable to resolve a protected local directory for the pre-deploy database backup.'
-    }
+    $otzivBackupDirectory = Get-OtzivBackupDirectory -RepoRoot $repoRoot -ProjectFilesRoot $ProjectFilesRoot
+    $trustedBackupRoot = [IO.Path]::GetFullPath(
+        (Join-Path $otzivBackupDirectory 'pre-deploy')
+    ).TrimEnd('\', '/')
     if (-not $customBackupDirectoryRequested) {
-        $PreDeployBackupDirectory = Join-Path $userProfilePath ".otziv\backups\pre-deploy\$Tag"
+        $PreDeployBackupDirectory = Join-Path $trustedBackupRoot $Tag
     } elseif (-not [IO.Path]::IsPathRooted($PreDeployBackupDirectory)) {
         $PreDeployBackupDirectory = Join-Path $repoRoot $PreDeployBackupDirectory
     }
@@ -1385,22 +1484,19 @@ retain_deploy_lock="1"
         throw 'PreDeployBackupDirectory must stay outside the Git worktree so a production database backup cannot be committed.'
     }
     $backupPathRoot = [IO.Path]::GetFullPath([IO.Path]::GetPathRoot($PreDeployBackupDirectory)).TrimEnd('\', '/')
-    $userProfileForBackupGuard = [IO.Path]::GetFullPath($userProfilePath).TrimEnd('\', '/')
-    $trustedBackupRoot = [IO.Path]::GetFullPath(
-        (Join-Path $userProfileForBackupGuard '.otziv\backups\pre-deploy')
-    ).TrimEnd('\', '/')
+    $projectFilesRootForBackupGuard = [IO.Path]::GetFullPath($ProjectFilesRoot).TrimEnd('\', '/')
     $trustedBackupPrefix = $trustedBackupRoot + [IO.Path]::DirectorySeparatorChar
-    $profileContainsPrefix = $PreDeployBackupDirectory + [IO.Path]::DirectorySeparatorChar
+    $backupContainsProjectFilesPrefix = $PreDeployBackupDirectory + [IO.Path]::DirectorySeparatorChar
     $protectedBackupParents = @(
         $backupPathRoot,
-        $userProfileForBackupGuard,
-        [IO.Path]::GetFullPath((Join-Path $userProfileForBackupGuard '.otziv')).TrimEnd('\', '/'),
-        [IO.Path]::GetFullPath((Join-Path $userProfileForBackupGuard '.otziv\backups')).TrimEnd('\', '/'),
+        $projectFilesRootForBackupGuard,
+        [IO.Path]::GetFullPath((Join-Path $projectFilesRootForBackupGuard '.otziv')).TrimEnd('\', '/'),
+        [IO.Path]::GetFullPath($otzivBackupDirectory).TrimEnd('\', '/'),
         $trustedBackupRoot
     )
     if ($protectedBackupParents -contains $PreDeployBackupDirectory -or
-        $userProfileForBackupGuard.StartsWith($profileContainsPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'PreDeployBackupDirectory must be a dedicated release subdirectory, not a filesystem root, user profile, or shared backup parent.'
+        $projectFilesRootForBackupGuard.StartsWith($backupContainsProjectFilesPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'PreDeployBackupDirectory must be a dedicated release subdirectory, not a filesystem root, project-files root, or shared backup parent.'
     }
     $backupDirectoryExists = Test-Path -LiteralPath $PreDeployBackupDirectory
     $insideTrustedBackupRoot = $PreDeployBackupDirectory.StartsWith(

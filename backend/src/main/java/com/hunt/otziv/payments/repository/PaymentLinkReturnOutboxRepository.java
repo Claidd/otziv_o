@@ -28,6 +28,18 @@ public class PaymentLinkReturnOutboxRepository {
                 .addValue("observedStatus", observedStatus));
     }
 
+    /** Inserts the manual follow-up generation once; every exact replay is a full-row no-op. */
+    public void requeue(Long paymentLinkId, long sourceVersion, String observedStatus) {
+        jdbc.update("""
+                INSERT IGNORE INTO payment_link_return_reconciliation_outbox (
+                    payment_link_id, source_version, observed_status
+                ) VALUES (:paymentLinkId, :sourceVersion, :observedStatus)
+                """, new MapSqlParameterSource()
+                .addValue("paymentLinkId", paymentLinkId)
+                .addValue("sourceVersion", sourceVersion)
+                .addValue("observedStatus", observedStatus));
+    }
+
     public Optional<Long> lockNextDueId() {
         List<Long> ids = jdbc.query("""
                 SELECT outbox_id

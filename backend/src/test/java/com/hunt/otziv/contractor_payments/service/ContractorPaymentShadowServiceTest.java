@@ -1397,6 +1397,52 @@ class ContractorPaymentShadowServiceTest {
     }
 
     @Test
+    void providerCanceledAfterSettledEvidenceReturnsConfirmedAllocation() {
+        LocalDateTime observedAt = LocalDateTime.of(2026, 8, 7, 12, 0);
+        PaymentLink link = new PaymentLink();
+        link.setId(73L);
+        link.setStatus(PaymentLinkStatus.CANCELED);
+        link.setConfirmedAmountKopecks(80_000L);
+        link.setPaidAt(observedAt.minusHours(1));
+        link.setUpdatedAt(observedAt);
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(74L);
+        allocation.setMode(ContractorAllocationMode.LIVE);
+        allocation.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        allocation.setSourceId(73L);
+        allocation.setAmountKopecks(80_000L);
+        allocation.setConfirmedKopecks(80_000L);
+        allocation.setStatus(ContractorAllocationStatus.CONFIRMED);
+
+        ReflectionTestUtils.invokeMethod(service, "applyLinkStatus", allocation, link, observedAt);
+
+        assertEquals(80_000L, allocation.getReturnedKopecks());
+        assertEquals(ContractorAllocationStatus.RETURNED, allocation.getStatus());
+    }
+
+    @Test
+    void localCanceledWithoutSettledEvidenceDoesNotReturnConfirmedAllocation() {
+        LocalDateTime observedAt = LocalDateTime.of(2026, 8, 7, 12, 0);
+        PaymentLink link = new PaymentLink();
+        link.setId(75L);
+        link.setStatus(PaymentLinkStatus.CANCELED);
+        link.setUpdatedAt(observedAt);
+        ContractorPaymentAllocation allocation = new ContractorPaymentAllocation();
+        allocation.setId(76L);
+        allocation.setMode(ContractorAllocationMode.LIVE);
+        allocation.setSourceType(ContractorAllocationSourceType.PAYMENT_LINK);
+        allocation.setSourceId(75L);
+        allocation.setAmountKopecks(80_000L);
+        allocation.setConfirmedKopecks(80_000L);
+        allocation.setStatus(ContractorAllocationStatus.CONFIRMED);
+
+        ReflectionTestUtils.invokeMethod(service, "applyLinkStatus", allocation, link, observedAt);
+
+        assertEquals(0L, allocation.getReturnedKopecks());
+        assertEquals(ContractorAllocationStatus.CONFIRMED, allocation.getStatus());
+    }
+
+    @Test
     void repeatedPartialReturnObservationReopensPendingAndRecordsOnlyNewDelta() {
         LocalDateTime observedAt = LocalDateTime.of(2026, 8, 7, 12, 0);
         PaymentLink link = paymentLink(711L, order(371L, null, null), 100_000L);

@@ -200,7 +200,8 @@ public class PaymentLinkArchiveService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        repository.archiveIds(ids, now, "ORDER_ARCHIVED", archiveBatchId);
+        repository.deleteArchivedSnapshotsForPreparedRearchive(ids);
+        repository.archivePreparedOrderIds(ids, now, "ORDER_ARCHIVED", archiveBatchId);
         int archived = repository.countArchivedIds(ids);
         if (archived != ids.size()) {
             throw new IllegalStateException(
@@ -208,7 +209,7 @@ public class PaymentLinkArchiveService {
             );
         }
 
-        int deleted = repository.deleteLiveIds(ids);
+        int deleted = repository.deletePreparedOrderLiveIds(ids);
         if (deleted != ids.size()) {
             throw new IllegalStateException(
                     "Payment link delete verification failed: selected=" + ids.size() + ", deleted=" + deleted

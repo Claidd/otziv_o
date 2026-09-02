@@ -236,6 +236,14 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             // Durable retry state is committed atomically with DONE. The
             // immediate post-commit delivery cancels it after a successful send.
             paymentInvoiceRetryScheduler.scheduleBadReviewInvoiceRetry(savedTask.getOrder());
+        } else {
+            // Close an older standalone route in the same transaction as the
+            // common-invoice mutation. Waiting until after commit leaves a race
+            // in which that stale message can be claimed for external send.
+            paymentInvoiceRetryScheduler.cancelBadReviewInvoiceRetry(
+                    savedTask.getOrder(),
+                    "Заказ обслуживается общим платежным циклом"
+            );
         }
         runCompletionSideEffectsAfterCommit(savedTask, linkedToCommonInvoice);
         auditTaskCompleted(savedTask);
@@ -254,18 +262,35 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private void runCompletionSideEffects(BadReviewTask savedTask, boolean linkedToCommonInvoice) {
         Long orderId = savedTask.getOrder() != null ? savedTask.getOrder().getId() : null;
         try {
-            BadReviewTaskSummary summary = orderId == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(orderId);
-            expireStalePaymentLinks(savedTask.getOrder());
-            sendBadReviewInvoiceIfEnabled(savedTask, summary, linkedToCommonInvoice);
-            createTaskCompletionReminder(savedTask, summary);
-            createOrderReadyReminderIfNeeded(savedTask.getOrder(), summary);
+            CompletionInvoiceDelivery delivery = prepareCompletionSideEffects(savedTask, linkedToCommonInvoice);
+            deliverCompletionInvoice(delivery);
         } catch (RuntimeException e) {
             log.warn("Плохая задача {} уже отмечена выполненной, но пост-действия не завершились. orderId={}",
                     savedTask.getId(), orderId, e);
         }
     }
 
-    private void sendBadReviewInvoiceIfEnabled(
+    private CompletionInvoiceDelivery prepareCompletionSideEffects(
+            BadReviewTask savedTask,
+            boolean linkedToCommonInvoice
+    ) {
+        if (savedTask == null || savedTask.getStatus() != BadReviewTaskStatus.DONE) {
+            return null;
+        }
+        Long orderId = savedTask.getOrder() != null ? savedTask.getOrder().getId() : null;
+        BadReviewTaskSummary summary = orderId == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(orderId);
+        expireStalePaymentLinks(savedTask.getOrder());
+        CompletionInvoiceDelivery delivery = prepareBadReviewInvoiceIfEnabled(
+                savedTask,
+                summary,
+                linkedToCommonInvoice
+        );
+        createTaskCompletionReminder(savedTask, summary);
+        createOrderReadyReminderIfNeeded(savedTask.getOrder(), summary);
+        return delivery;
+    }
+
+    private CompletionInvoiceDelivery prepareBadReviewInvoiceIfEnabled(
             BadReviewTask task,
             BadReviewTaskSummary summary,
             boolean linkedToCommonInvoice
@@ -275,35 +300,37 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             log.warn("Счет после плохого отзыва не отправлен: заказ не найден, taskId={}", task == null ? null : task.getId());
             recordBadReviewInvoiceAttempt(task, null, ScheduledMessageAttemptStatus.FAILED, null, "order_missing",
                     "Заказ для счета после плохого отзыва не найден", null, 0);
-            return;
+            return null;
         }
         if (isBadReviewFinalInvoice(summary)) {
             paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Финальный счет после плохих пересчитывается");
         }
         if (linkedToCommonInvoice) {
-            paymentInvoiceRetryScheduler.cancelBadReviewInvoiceRetry(
-                    order,
-                    "Заказ обслуживается общим платежным циклом"
-            );
             log.info("Счет после плохого отзыва не отправлен отдельно: заказ {} входит в общий счет", order.getId());
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "common_billing_linked",
                     "Заказ входит в общий счет; сумма общего счета пересчитана", safeBadReviewInvoicePreview(order, summary), 0);
-            return;
+            return null;
         }
         if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)) {
             log.info("Счет после плохого отзыва пропущен настройкой, orderId={}, taskId={}", order.getId(), task.getId());
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "bad_review_invoice_disabled",
                     "Отправка счета после плохого отзыва выключена настройкой", safeBadReviewInvoicePreview(order, summary), 0);
-            return;
+            return null;
         }
         if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)) {
             log.info("Счет после плохого отзыва пропущен: моментальные клиентские сообщения выключены, orderId={}, taskId={}",
                     order.getId(), task.getId());
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "immediate_messages_disabled",
                     "Моментальные клиентские сообщения выключены", safeBadReviewInvoicePreview(order, summary), 0);
-            return;
+            return null;
         }
-        completionPostActionOrchestrator.deliverInvoice(task.getId(), order.getId());
+        return new CompletionInvoiceDelivery(task.getId(), order.getId());
+    }
+
+    private void deliverCompletionInvoice(CompletionInvoiceDelivery delivery) {
+        if (delivery != null) {
+            completionPostActionOrchestrator.deliverInvoice(delivery.taskId(), delivery.orderId());
+        }
     }
 
     private boolean isBadReviewFinalInvoice(BadReviewTaskSummary summary) {
@@ -514,7 +541,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
     private void runCompletionSideEffectsById(Long taskId, boolean linkedToCommonInvoice) {
         try {
-            runCompletionSideEffects(requireTask(taskId), linkedToCommonInvoice);
+            CompletionInvoiceDelivery delivery = transactionRunner.required(() ->
+                    prepareCompletionSideEffects(requireTask(taskId), linkedToCommonInvoice)
+            );
+            // The runner has committed and released the task row lock. The
+            // orchestrator may now open its own short transaction safely.
+            deliverCompletionInvoice(delivery);
         } catch (RuntimeException e) {
             log.warn("Пост-действия выполненной дополнительной задачи не запущены: taskId={}, reason={}",
                     taskId, readableException(e), e);
@@ -626,6 +658,10 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         }
         orderRepository.findByIdForCounterUpdate(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Заказ дополнительной задачи не найден"));
+        // Fence the durable delivery state before touching a payment link.
+        // Immediate delivery also follows Order -> state -> PaymentLink, which
+        // keeps concurrent task mutations out of the PREPARED/send window.
+        paymentInvoiceRetryScheduler.assertPaymentAutomationMutable(orderId);
         PaymentLinkService paymentLinkService = paymentLinkServiceProvider.getIfAvailable();
         if (paymentLinkService != null) {
             paymentLinkService.retireOpenLinksBeforePayableChange(orderId, reason);
@@ -983,6 +1019,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         return badReviewTaskRepository.findByIdForMutation(taskId)
                 .or(() -> badReviewTaskRepository.findById(taskId))
                 .orElseThrow(() -> new EntityNotFoundException("Плохая задача не найдена: " + taskId));
+    }
+
+    private record CompletionInvoiceDelivery(Long taskId, Long orderId) {
     }
 
     private boolean isPaid(BadReviewTask task) {

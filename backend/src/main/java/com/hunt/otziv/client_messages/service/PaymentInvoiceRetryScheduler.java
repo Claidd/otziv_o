@@ -17,8 +17,10 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @Slf4j
@@ -166,7 +168,10 @@ public class PaymentInvoiceRetryScheduler {
         if (orderId == null || orderId <= 0) {
             return 0;
         }
-        List<ScheduledClientMessageState> states = stateRepository.findByOrderIdIn(List.of(orderId));
+        List<ScheduledClientMessageState> states = lockedMutablePaymentAutomationStates(
+                orderId,
+                "cancel_payment_automation"
+        );
         LocalDateTime now = LocalDateTime.now(clock);
         List<ScheduledClientMessageState> changed = new ArrayList<>();
         for (ScheduledClientMessageState state : states) {
@@ -192,6 +197,32 @@ public class PaymentInvoiceRetryScheduler {
         return changed.size();
     }
 
+    /**
+     * Fences a payment mutation against a message whose external send has
+     * already started. The caller keeps these row locks until its surrounding
+     * transaction commits, so a delivery cannot cross the payment mutation.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void assertPaymentAutomationMutable(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return;
+        }
+        lockedMutablePaymentAutomationStates(orderId, "payment_mutation_preflight");
+    }
+
+    private List<ScheduledClientMessageState> lockedMutablePaymentAutomationStates(
+            Long orderId,
+            String operation
+    ) {
+        List<ScheduledClientMessageState> states = stateRepository.findByOrderIdInForUpdate(List.of(orderId));
+        for (ScheduledClientMessageState state : states) {
+            if (PAYMENT_AUTOMATION_SCENARIOS.contains(state.getScenario())) {
+                requireSafeStateMutation(state, operation);
+            }
+        }
+        return states;
+    }
+
     private void cancelActiveState(
             Order order,
             ClientMessageScenario scenario,
@@ -215,6 +246,7 @@ public class PaymentInvoiceRetryScheduler {
             if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
                 return;
             }
+            requireSafeStateMutation(state, "cancel_state");
             state.setStatus(ScheduledMessageStateStatus.DONE);
             state.setNextAttemptAt(null);
             state.setLockedUntil(null);
@@ -259,8 +291,12 @@ public class PaymentInvoiceRetryScheduler {
                         scenario,
                         state.getLastErrorCode()
                 );
+                if (scenario == ClientMessageScenario.BAD_REVIEW_INVOICE) {
+                    throw unsafeStateMutation(state);
+                }
                 return;
             }
+            clearPreviousDeliveryCycle(state);
             state.setCompanyId(order.getCompany().getId());
             state.setOrderId(order.getId());
             state.setArchiveOrderId(null);
@@ -288,6 +324,36 @@ public class PaymentInvoiceRetryScheduler {
                 .build();
         stateRepository.save(state);
         log.info("Scheduled client message retry scenario={} orderId={} targetKey={}", scenario, order.getId(), targetKey);
+    }
+
+    private void requireSafeStateMutation(ScheduledClientMessageState state, String operation) {
+        if (!ClientMessageStateSafety.blocksAutomaticRearm(state)) {
+            return;
+        }
+        log.warn(
+                "Scheduled client message mutation blocked operation={} stateId={} scenario={} code={} deliveryStatus={}",
+                operation,
+                state.getId(),
+                state.getScenario(),
+                state.getLastErrorCode(),
+                state.getDeliveryStatus()
+        );
+        throw unsafeStateMutation(state);
+    }
+
+    private ResponseStatusException unsafeStateMutation(ScheduledClientMessageState state) {
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Отправка счета уже выполняется или ее результат не определен. Проверьте чат клиента и повторите действие после сверки"
+        );
+    }
+
+    private void clearPreviousDeliveryCycle(ScheduledClientMessageState state) {
+        state.setDeliveryToken(null);
+        state.setDeliveryStatus(null);
+        state.setDeliveryMessage(null);
+        state.setDeliveryTaskId(null);
+        state.setDeliveryPreparedAt(null);
     }
 
     private boolean canSchedule(Order order) {

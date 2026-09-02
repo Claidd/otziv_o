@@ -322,6 +322,30 @@ class ContractorActualPaymentAttributionServiceTest {
     }
 
     @Test
+    void repeatedFreezeAcceptsEveryPublicRecipientKeyEmittedByDto() {
+        ManualCardPaymentRecipientResponse owner = new ManualCardPaymentRecipientResponse(
+                ContractorRecipientType.OWNER, null, null,
+                "Владелец", 0L, 0L, true);
+        ManualCardPaymentRecipientResponse profile = new ManualCardPaymentRecipientResponse(
+                ContractorRecipientType.MANAGER, manager.getId(), manager.getUser().getId(),
+                "Мария Менеджер", 0L, 0L, true);
+        ManualCardPaymentRecipientResponse task = new ManualCardPaymentRecipientResponse(
+                ContractorRecipientType.OWNER, null, null,
+                "Получатель задания", 0L, 0L, true,
+                "TASK:91:4", ContractorCashDestinationKind.MANUAL_PAYMENT_TASK,
+                91L, 4L, ManualPaymentTaskAccountingTargetKind.OWNER,
+                "Держатель карты", "Владелец", "Сумма будет зачтена в платёжное задание");
+
+        assertFrozenReplayAccepts(owner);
+        assertFrozenReplayAccepts(profile);
+        assertFrozenReplayAccepts(task);
+
+        assertThat(owner.key()).isEqualTo("OWNER");
+        assertThat(profile.key()).isEqualTo("PROFILE:" + manager.getId());
+        assertThat(task.key()).isEqualTo("TASK:91:4");
+    }
+
+    @Test
     void confirmsOriginalRecipientWithoutCreatingSecondAllocation() {
         ContractorPaymentAllocation original = sourceAllocation(
                 100L, ContractorAllocationMode.LIVE, specialist, ContractorAllocationStatus.RESERVED
@@ -658,6 +682,9 @@ class ContractorActualPaymentAttributionServiceTest {
         evidence.setId(600L);
         evidence.setAmountKopecks(1_000L);
         evidence.setPaidAt(EFFECTIVE_AT);
+        ManualCardPaymentRecipientResponse uiRecipient = new ManualCardPaymentRecipientResponse(
+                ContractorRecipientType.MANAGER, manager.getId(), manager.getUser().getId(),
+                "Мария Менеджер", 0L, 0L, false);
 
         ContractorActualPaymentAttribution row = service.recordPaymentLinkFinalAttribution(
                 order, original, evidence
@@ -673,7 +700,7 @@ class ContractorActualPaymentAttributionServiceTest {
         service.requireCompletedPaymentReplay(
                 original,
                 1_000L,
-                "MANAGER:" + manager.getId(),
+                uiRecipient.key(),
                 ContractorRecipientType.MANAGER,
                 manager.getId(),
                 "Клиент перевёл менеджеру",
@@ -696,7 +723,7 @@ class ContractorActualPaymentAttributionServiceTest {
         assertThatThrownBy(() -> service.requireCompletedPaymentReplay(
                 original,
                 1_000L,
-                "MANAGER:" + manager.getId(),
+                uiRecipient.key(),
                 ContractorRecipientType.MANAGER,
                 manager.getId(),
                 "Клиент перевёл менеджеру",
@@ -796,6 +823,27 @@ class ContractorActualPaymentAttributionServiceTest {
                 source(originalAllocationId, clientFacingAllocationId, originalType, originalProfile),
                 List.of(command(actualType, actualProfile))
         ).getFirst();
+    }
+
+    private void assertFrozenReplayAccepts(ManualCardPaymentRecipientResponse recipient) {
+        String reason = "Клиент оплатил выбранному получателю";
+        LocalDateTime frozenAt = EFFECTIVE_AT.minusMinutes(1);
+        PaymentLink link = new PaymentLink();
+        link.setManualActualCashDestinationKind(recipient.cashDestinationKind());
+        link.setManualActualTaskId(recipient.manualPaymentTaskId());
+        link.setManualActualTaskGeneration(recipient.manualPaymentTaskGeneration());
+        link.setManualActualTaskTargetKind(recipient.taskTargetKind());
+        link.setManualActualRecipientType(recipient.recipientType());
+        link.setManualActualRecipientProfileId(recipient.recipientProfileId());
+        link.setManualActualReason(reason);
+        link.setManualActualActor("manager@example.ru");
+        link.setManualActualRecipientFrozenAt(frozenAt);
+
+        service.freezePaymentLinkRecipientIntent(
+                null, link, recipient.key(), recipient.recipientType(), recipient.recipientProfileId(),
+                reason, null, "manager@example.ru");
+
+        assertThat(link.getManualActualRecipientFrozenAt()).isEqualTo(frozenAt);
     }
 
     private ContractorActualPaymentSource source(

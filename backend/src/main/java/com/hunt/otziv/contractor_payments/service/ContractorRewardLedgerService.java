@@ -270,6 +270,44 @@ public class ContractorRewardLedgerService {
     }
 
     /**
+     * Locks every active reward source for an order before acquiring any
+     * contractor profile lock. Profile locks are then acquired once per user
+     * in ascending user-id order, preserving the canonical ledger lock order.
+     */
+    @Transactional(noRollbackFor = ResponseStatusException.class)
+    public List<Zp> lockActiveOrderRewardsAndRequireCancellationRepresentable(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return List.of();
+        }
+
+        List<Zp> lockedRewards =
+                zpRepository.findActiveByOrderIdForContractorLedgerUpdate(orderId);
+        Map<Long, List<ContractorPaymentProfile>> lockedProfilesByUserId = new LinkedHashMap<>();
+        Set<Long> userIds = new TreeSet<>();
+        for (Zp reward : lockedRewards) {
+            if (reward != null && reward.getUserId() != null) {
+                userIds.add(reward.getUserId());
+            }
+        }
+        for (Long userId : userIds) {
+            lockedProfilesByUserId.put(
+                    userId,
+                    profileRepository.findAllByUserIdForUpdate(userId)
+            );
+        }
+        for (Zp reward : lockedRewards) {
+            if (reward == null || reward.getUserId() == null) {
+                continue;
+            }
+            requireCancellationRepresentable(
+                    reward,
+                    lockedProfilesByUserId.getOrDefault(reward.getUserId(), List.of())
+            );
+        }
+        return List.copyOf(lockedRewards);
+    }
+
+    /**
      * A source at or before a profile cutover is represented only by the
      * manually entered opening balance, not by a reversible ledger row. Never
      * silently deactivate it: an administrator must first make an audited
@@ -286,18 +324,25 @@ public class ContractorRewardLedgerService {
             }
             List<ContractorPaymentProfile> profiles =
                     profileRepository.findAllByUserIdForUpdate(reward.getUserId());
-            boolean preCutover = profiles.stream().anyMatch(profile ->
-                    reward.getId() <= profile.getTrackingStartZpId()
-                            && (reward.getContractorRole() == null
-                            || reward.getContractorRole() == profile.getRole())
+            requireCancellationRepresentable(reward, profiles);
+        }
+    }
+
+    private void requireCancellationRepresentable(
+            Zp reward,
+            List<ContractorPaymentProfile> profiles
+    ) {
+        boolean preCutover = profiles.stream().anyMatch(profile ->
+                reward.getId() <= profile.getTrackingStartZpId()
+                        && (reward.getContractorRole() == null
+                        || reward.getContractorRole() == profile.getRole())
+        );
+        if (preCutover) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Начисление входит в переходящий остаток платёжного профиля. "
+                            + "Сначала оформите корректировку остатка с причиной, затем повторите отмену"
             );
-            if (preCutover) {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Начисление входит в переходящий остаток платёжного профиля. "
-                                + "Сначала оформите корректировку остатка с причиной, затем повторите отмену"
-                );
-            }
         }
     }
 

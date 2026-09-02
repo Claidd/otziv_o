@@ -73,7 +73,7 @@ class PaymentLinkArchiveServiceTest {
         List<Long> ids = List.of(10L, 11L);
         when(repository.findLiveIdsForPreparedOrderArchiveCandidatesForUpdate()).thenReturn(ids);
         when(repository.countArchivedIds(ids)).thenReturn(2);
-        when(repository.deleteLiveIds(ids)).thenReturn(2);
+        when(repository.deletePreparedOrderLiveIds(ids)).thenReturn(2);
 
         int deleted = service().archiveForPreparedOrderArchiveCandidates(77L);
 
@@ -82,8 +82,10 @@ class PaymentLinkArchiveServiceTest {
         order.verify(repository).findLiveIdsForPreparedOrderArchiveCandidatesForUpdate();
         order.verify(repository).deleteExpiredIneligibleNotificationClaimsForLockedPaymentLinks(ids);
         order.verify(repository).hasPreparedOrderArchiveBlocker();
-        order.verify(repository).archiveIds(eq(ids), any(LocalDateTime.class), eq("ORDER_ARCHIVED"), eq(77L));
-        order.verify(repository).deleteLiveIds(ids);
+        order.verify(repository).deleteArchivedSnapshotsForPreparedRearchive(ids);
+        order.verify(repository).archivePreparedOrderIds(
+                eq(ids), any(LocalDateTime.class), eq("ORDER_ARCHIVED"), eq(77L));
+        order.verify(repository).deletePreparedOrderLiveIds(ids);
     }
 
     @Test
@@ -98,7 +100,7 @@ class PaymentLinkArchiveServiceTest {
         );
 
         assertEquals("Payment link archive verification failed: selected=2, archived=1", exception.getMessage());
-        verify(repository, never()).deleteLiveIds(ids);
+        verify(repository, never()).deletePreparedOrderLiveIds(ids);
     }
 
     @Test
@@ -141,7 +143,7 @@ class PaymentLinkArchiveServiceTest {
         order.verify(repository).findLiveIdsForPreparedOrderArchiveCandidatesForUpdate();
         order.verify(repository).deleteExpiredIneligibleNotificationClaimsForLockedPaymentLinks(List.of(10L));
         order.verify(repository).hasPreparedOrderArchiveBlocker();
-        verify(repository, never()).archiveIds(any(), any(), any(), any());
+        verify(repository, never()).archivePreparedOrderIds(any(), any(), any(), any());
     }
 
     @Test

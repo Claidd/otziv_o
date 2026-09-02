@@ -28,7 +28,7 @@ The script restores into a dedicated local Docker volume by default and validate
 Flyway checksums before the local backend is started.
 
 Example:
-  .\infrastructure\scripts\local\restore-prod-db-local.ps1 -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022 -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519
+  .\infrastructure\scripts\local\restore-prod-db-local.ps1 -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022
 
 Useful options:
   -DumpPath .\data\mysql_backup\prod.sql.gz   Restore an already downloaded dump.
@@ -612,6 +612,9 @@ if (-not (Test-Path -LiteralPath $envResolverPath)) {
     throw "Env resolver script not found: $envResolverPath"
 }
 . $envResolverPath
+if ([string]::IsNullOrWhiteSpace($SshKey)) {
+    $SshKey = Join-Path (Get-OtzivSshDirectory -RepoRoot $repoRoot) "otziv_vps_ed25519"
+}
 $composePath = if ([System.IO.Path]::IsPathRooted($ComposeFile)) { $ComposeFile } else { Join-Path $repoRoot $ComposeFile }
 $envPath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot
 $migrationDir = Join-Path $repoRoot "backend\src\main\resources\db\migration"

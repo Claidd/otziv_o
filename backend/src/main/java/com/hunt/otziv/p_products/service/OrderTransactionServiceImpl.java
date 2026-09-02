@@ -106,7 +106,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
             BadReviewTaskSummary badReviewSummary = badReviewTaskService.getSummaryForOrder(order.getId());
             BigDecimal baseSum = safeMoney(order.getSum());
             BigDecimal payableSum = baseSum.add(badReviewSummary.doneSum());
-            int payableAmount = order.getAmount() + badReviewSummary.done();
+            int payableAmount = Math.addExact(order.getAmount(), badReviewSummary.done());
             log.info(
                     "Оплата заказа {}: основной заказ {} руб./{} шт., плохие выполнены {} на {} руб., ожидают отмены {}, итого {} руб./{} шт.",
                     order.getId(),
@@ -135,7 +135,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
                 log.info(paymentAccounting
                         ? "Подготовили оплату для канонического начисления"
                         : "Сохранили начисления");
-                paymentCheckService.save(order, payableSum);
+                paymentCheckService.save(order, payableSum, payableAmount);
                 log.info("Сохранили чек");
 
                 Company company = companyService.getCompaniesById(order.getCompany().getId());

@@ -75,6 +75,8 @@ class OrderArchiveDryRunRepositoryContractTest {
         assertFalse(contract.contains("manual_card_payment_completed:"));
         assertTrue(contract.contains("payment_success_notification_retry_claims"));
         assertTrue(contract.contains("notification_claim.processing_lease_until > CURRENT_TIMESTAMP(6)"));
+        assertTrue(contract.contains("payment_link_return_reconciliation_outbox"));
+        assertTrue(contract.contains("return_outbox.status <> 'SUCCEEDED'"));
         assertTrue(contract.contains("COALESCE(pl.status, '') NOT IN"));
         assertTrue(contract.contains("UPPER(TRIM(COALESCE(ref.status, ''))) NOT IN"));
         assertTrue(contract.contains("'APPLIED'"));

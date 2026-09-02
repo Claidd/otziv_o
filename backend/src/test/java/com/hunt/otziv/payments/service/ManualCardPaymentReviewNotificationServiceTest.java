@@ -23,6 +23,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -191,11 +193,7 @@ class ManualCardPaymentReviewNotificationServiceTest {
     }
 
     @Test
-    void ownerApprovalUsesPrivateTelegramButtonAndDoesNotMarkPaymentComplete() {
-        User owner = user(10L, 100L, true);
-        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of(owner));
-        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of());
-
+    void ownerApprovalUsesResponsibleManagerAuditGroup() {
         service.notifyOwnerApprovalAfterCommit(
                 new ManualCardPaymentReviewNotificationService.OwnerApprovalRequest(
                         91L,
@@ -206,35 +204,31 @@ class ManualCardPaymentReviewNotificationServiceTest {
                         200_000L,
                         "manager@example.ru",
                         "Клиент оплатил на старый Альфа-Банк",
-                        "INITIATED"
+                        "INITIATED",
+                        17L,
+                        -100_000_000_017L
                 )
         );
 
         verify(telegramService).sendMessageWithInlineButton(
-                eq(100L),
+                eq(-100_000_000_017L),
                 contains("Нажмите кнопку только после проверки поступления"),
                 eq("✅ Подтвердить поступление владельцу"),
                 eq("ompa:a:91:callback-token")
         );
-        verify(personalReminderService).createSystemReminderDueNow(
-                eq(owner),
-                eq("Подтвердить поступление владельцу по заказу №25270"),
-                contains("Сумма: 2000 ₽"),
+        verifyNoMoreInteractions(telegramService);
+        verifyNoInteractions(userService, personalReminderService);
+        verify(paymentIssueReminderService).notifyOrderIssue(
+                eq(25270L),
                 eq(ManualCardPaymentReviewNotificationService.OWNER_APPROVAL_REMINDER_SOURCE),
                 eq(91L),
-                eq(25270L)
+                eq("Подтвердить поступление владельцу по заказу №25270"),
+                contains("Сумма: 2000 ₽")
         );
     }
 
     @Test
-    void ownerApprovalForUnlinkedHuntIsDeliveredToLinkedAdminChat() {
-        User hunt = user(10L, null, true);
-        hunt.setUsername("hunt");
-        User admin = user(20L, 200L, true);
-        admin.setUsername("alex");
-        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of(hunt));
-        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of(admin));
-
+    void ownerApprovalWithoutGroupDoesNotFallbackToPersonalChats() {
         service.notifyOwnerApprovalAfterCommit(
                 new ManualCardPaymentReviewNotificationService.OwnerApprovalRequest(
                         92L,
@@ -245,31 +239,19 @@ class ManualCardPaymentReviewNotificationServiceTest {
                         200_000L,
                         "hunt",
                         "Клиент оплатил на счёт владельца",
-                        "MANUAL_REPORTED"
+                        "MANUAL_REPORTED",
+                        18L,
+                        200L
                 )
         );
 
-        verify(telegramService, times(1)).sendMessageWithInlineButton(
-                eq(200L),
-                contains("Менеджер: hunt"),
-                eq("✅ Подтвердить поступление владельцу"),
-                eq("ompa:a:92:callback-token")
-        );
-        verify(personalReminderService).createSystemReminderDueNow(
-                eq(hunt),
-                eq("Подтвердить поступление владельцу по заказу №25271"),
-                contains("Сумма: 2000 ₽"),
+        verifyNoInteractions(userService, personalReminderService, telegramService);
+        verify(paymentIssueReminderService).notifyOrderIssue(
+                eq(25271L),
                 eq(ManualCardPaymentReviewNotificationService.OWNER_APPROVAL_REMINDER_SOURCE),
                 eq(92L),
-                eq(25271L)
-        );
-        verify(personalReminderService).createSystemReminderDueNow(
-                eq(admin),
                 eq("Подтвердить поступление владельцу по заказу №25271"),
-                contains("Сумма: 2000 ₽"),
-                eq(ManualCardPaymentReviewNotificationService.OWNER_APPROVAL_REMINDER_SOURCE),
-                eq(92L),
-                eq(25271L)
+                contains("Сумма: 2000 ₽")
         );
     }
 

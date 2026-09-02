@@ -17,6 +17,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.service.OrderTransactionService;
+import com.hunt.otziv.z_zp.service.PaymentCheckService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
@@ -151,6 +152,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
@@ -177,6 +179,9 @@ class PaymentLinkServiceTest {
 
     @Mock
     private OrderTransactionService orderTransactionService;
+
+    @Mock
+    private PaymentCheckService paymentCheckService;
 
     @Mock
     private TbankClient tbankClient;
@@ -5162,6 +5167,8 @@ class PaymentLinkServiceTest {
         assertEquals("manager", manualEvidence.getManualConfirmedBy());
         assertNotNull(manualEvidence.getManualConfirmedAt());
         assertEquals(PaymentReceiptStatus.PENDING, manualEvidence.getReceiptStatus());
+        verify(paymentCheckService).assertActiveCheckBoundToPaymentLink(25047L, manualEvidence.getId());
+        verify(paymentCheckService, never()).assertActiveCheckBoundToPaymentLink(25047L, 5208L);
         verify(tbankClient, times(1)).getState(any(TbankPaymentProfile.class), eq("payment-5208"));
         verify(tbankClient, times(1)).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService, times(1)).handlePaymentStatus(order);
@@ -5645,6 +5652,8 @@ class PaymentLinkServiceTest {
     void managerOwnerSelectionCreatesApprovalWithoutReadingOrCancelingTbank() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(25270L, "Старые реквизиты владельца", BigDecimal.valueOf(1000));
+        order.getManager().setAuditTelegramGroupChatId(-10025270L);
+        order.getCompany().setManager(order.getManager());
         PaymentLink link = initiatedBankLink(5370L, order, 100_000L);
         when(orderRepository.findByIdForCounterUpdate(25270L)).thenReturn(Optional.of(order));
         when(paymentLinkRepository.findByOrderIdForUpdate(25270L)).thenReturn(List.of(link));
@@ -5695,6 +5704,35 @@ class PaymentLinkServiceTest {
         verify(manualCardPaymentReviewNotificationService).notifyOwnerApprovalAfterCommit(request.capture());
         assertEquals(91L, request.getValue().approvalId());
         assertFalse(request.getValue().callbackToken().isBlank());
+        assertEquals(25270L, request.getValue().managerId());
+        assertEquals(-10025270L, request.getValue().managerGroupChatId());
+    }
+
+    @Test
+    void managerRoleCannotApproveOwnerPaymentDirectly() {
+        PaymentLinkService service = service(properties());
+        User manager = new User();
+        manager.setId(17L);
+        manager.setUsername("manager@example.ru");
+        manager.setActive(true);
+        Role managerRole = new Role();
+        managerRole.setName("ROLE_MANAGER");
+        manager.setRoles(List.of(managerRole));
+        when(authentication.getName()).thenReturn("manager@example.ru");
+
+        ResponseStatusException denied = assertThrows(
+                ResponseStatusException.class,
+                () -> service.approveOwnerManualCardPayment(
+                        91L, "token", -10025270L, manager, authentication)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, denied.getStatusCode());
+        verifyNoInteractions(
+                ownerManualCardPaymentApprovalRepository,
+                managerAccessService,
+                contractorPaymentTargetAccessPolicy,
+                tbankClient
+        );
     }
 
     @Test
@@ -5703,6 +5741,8 @@ class PaymentLinkServiceTest {
         properties.setEnabled(true);
         PaymentLinkService service = service(properties);
         Order order = order(25271L, "Подтверждение владельца", BigDecimal.valueOf(1000));
+        order.getManager().setAuditTelegramGroupChatId(-10025271L);
+        order.getCompany().setManager(order.getManager());
         PaymentLink link = initiatedBankLink(5371L, order, 100_000L);
         java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
                 new java.util.concurrent.atomic.AtomicReference<>();
@@ -5737,8 +5777,6 @@ class PaymentLinkServiceTest {
                 });
         when(ownerManualCardPaymentApprovalRepository.findByIdForUpdate(92L))
                 .thenAnswer(invocation -> Optional.ofNullable(approvalRef.get()));
-        when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5371")))
-                .thenReturn(tbankState("NEW", "payment-5371", "order-5371", 100_000L));
         when(tbankClient.cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class)))
                 .thenReturn(new TbankCancelResponse(
                         true, "0", null, null, "terminal", "CANCELED",
@@ -5762,11 +5800,53 @@ class PaymentLinkServiceTest {
         ownerRole.setName("ROLE_OWNER");
         owner.setRoles(List.of(ownerRole));
         when(authentication.getName()).thenReturn("owner@example.ru");
+        lenient().doThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Скрытая contractor-ссылка"))
+                .when(contractorPaymentTargetAccessPolicy).requireCanManagePaymentLink(5371L);
+        clearInvocations(managerAccessService, tbankClient, contractorPaymentTargetAccessPolicy);
+        ResponseStatusException accessDenied =
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден");
+        java.util.concurrent.atomic.AtomicInteger accessChecks = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicBoolean accessGranted = new java.util.concurrent.atomic.AtomicBoolean();
+        doAnswer(invocation -> {
+            if (accessChecks.getAndIncrement() == 0) {
+                throw accessDenied;
+            }
+            accessGranted.set(true);
+            return null;
+        }).when(managerAccessService).requireOrderAccess(25271L, authentication);
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-5371")))
+                .thenAnswer(invocation -> {
+                    assertTrue(accessGranted.get());
+                    return tbankState("NEW", "payment-5371", "order-5371", 100_000L);
+                });
+
+        ResponseStatusException invalidToken = assertThrows(
+                ResponseStatusException.class,
+                () -> service.approveOwnerManualCardPayment(
+                        92L, "invalid-token", -10025271L, owner, authentication)
+        );
+        assertEquals(HttpStatus.FORBIDDEN, invalidToken.getStatusCode());
+
+        ResponseStatusException wrongGroup = assertThrows(
+                ResponseStatusException.class,
+                () -> service.approveOwnerManualCardPayment(
+                        92L, request.getValue().callbackToken(), -10099999L, owner, authentication)
+        );
+        assertEquals(HttpStatus.FORBIDDEN, wrongGroup.getStatusCode());
+
+        ResponseStatusException denied = assertThrows(
+                ResponseStatusException.class,
+                () -> service.approveOwnerManualCardPayment(
+                        92L, request.getValue().callbackToken(), -10025271L, owner, authentication)
+        );
+        assertSame(accessDenied, denied);
+        verify(tbankClient, never()).getState(any(TbankPaymentProfile.class), anyString());
+        verify(contractorPaymentTargetAccessPolicy, never()).requireCanManagePaymentLink(5371L);
 
         var first = service.approveOwnerManualCardPayment(
-                92L, request.getValue().callbackToken(), owner, authentication);
+                92L, request.getValue().callbackToken(), -10025271L, owner, authentication);
         var replay = service.approveOwnerManualCardPayment(
-                92L, request.getValue().callbackToken(), owner, authentication);
+                92L, request.getValue().callbackToken(), -10025271L, owner, authentication);
 
         assertFalse(first.alreadyCompleted());
         assertTrue(replay.alreadyCompleted());
@@ -5775,6 +5855,8 @@ class PaymentLinkServiceTest {
         verify(tbankClient, times(1)).getState(any(TbankPaymentProfile.class), eq("payment-5371"));
         verify(tbankClient, times(1)).cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class));
         verify(orderTransactionService, times(1)).handlePaymentStatus(order);
+        verify(contractorPaymentTargetAccessPolicy, never()).requireCanManagePaymentLink(5371L);
+        verify(managerAccessService, atLeastOnce()).requireOrderAccess(25271L, authentication);
     }
 
     @Test
@@ -5827,6 +5909,8 @@ class PaymentLinkServiceTest {
     void ownerTelegramApprovalCompletesSpecialistRequisitesRouteWithoutTbankCall() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(25274L, "Старый счет владельца", BigDecimal.valueOf(1000));
+        order.getManager().setAuditTelegramGroupChatId(-10025274L);
+        order.getCompany().setManager(order.getManager());
         PaymentLink link = contractorManualLink(
                 5374L, order, 100_000L, PaymentLinkStatus.MANUAL_REPORTED, 803L);
         java.util.concurrent.atomic.AtomicReference<OwnerManualCardPaymentApproval> approvalRef =
@@ -5882,7 +5966,7 @@ class PaymentLinkServiceTest {
         when(authentication.getName()).thenReturn("owner@example.ru");
 
         var result = service.approveOwnerManualCardPayment(
-                94L, request.getValue().callbackToken(), owner, authentication);
+                94L, request.getValue().callbackToken(), -10025274L, owner, authentication);
 
         assertFalse(result.alreadyCompleted());
         assertEquals(OwnerManualCardPaymentApprovalStatus.CONFIRMED, approvalRef.get().getStatus());
@@ -9153,6 +9237,7 @@ class PaymentLinkServiceTest {
                 badReviewTaskService,
                 reviewRecoveryGateService,
                 orderTransactionService,
+                paymentCheckService,
                 properties,
                 runtimeSettingsService,
                 paymentProfileService,
