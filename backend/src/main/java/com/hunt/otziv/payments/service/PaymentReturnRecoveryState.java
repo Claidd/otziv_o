@@ -2,9 +2,11 @@ package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.model.PaymentMethod;
 
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -33,6 +35,24 @@ public final class PaymentReturnRecoveryState {
 
     public static boolean isFullReturn(PaymentLinkStatus status) {
         return status != null && FULL_RETURN_STATUSES.contains(status);
+    }
+
+    /**
+     * Test-provider operations never represent a real customer-money cycle and
+     * therefore must not enter financial order recovery. Only immutable facts
+     * captured on the link are trusted: payment-profile test_mode is a mutable
+     * routing setting and can also accompany a real manual transfer.
+     */
+    public static boolean isTestPayment(PaymentLink link) {
+        if (link == null) {
+            return false;
+        }
+        if (link.getPaymentMethod() != PaymentMethod.BANK_FORM
+                && link.getPaymentMethod() != PaymentMethod.SBP_QR) {
+            return false;
+        }
+        return isDemoTerminal(link.getTbankTerminalKey())
+                || link.getBankCancelOriginStatus() == PaymentLinkStatus.TEST_CONFIRMED;
     }
 
     public static boolean hasLinkSpecificSettledEvidence(PaymentLink link) {
@@ -115,5 +135,10 @@ public final class PaymentReturnRecoveryState {
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static boolean isDemoTerminal(String terminalKey) {
+        return terminalKey != null
+                && terminalKey.trim().toUpperCase(Locale.ROOT).endsWith("DEMO");
     }
 }

@@ -13,7 +13,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
@@ -25,6 +27,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.z_zp.model.PaymentCheck;
 import com.hunt.otziv.z_zp.repository.PaymentCheckRepository;
@@ -73,6 +76,9 @@ class PaymentReturnOrderRecoveryServiceTest {
 
     @Mock
     private CommonInvoiceOrderRepository commonInvoiceOrderRepository;
+
+    @Mock
+    private BusinessAuditService businessAuditService;
 
     @Test
     void fullRefundReopensOrderWithoutPreparingReplacementInsideStatusTransaction() throws Exception {
@@ -673,6 +679,67 @@ class PaymentReturnOrderRecoveryServiceTest {
     }
 
     @Test
+    void queuedTestReturnIsAuditedAndClosedWithoutFinancialMutation() {
+        Order order = order(42L, "Напоминание");
+        PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
+        PaymentProfile profile = new PaymentProfile();
+        profile.setTestMode(true);
+        link.setPaymentProfile(profile);
+        link.setTbankTerminalKey("1779443245436DEMO");
+        link.setReturnRecoveryProcessedAt(LocalDateTime.now());
+        link.setReturnRecoveryPaymentCheckId(81L);
+        link.setReturnRecoveryOutcome("MANUAL_RECONCILIATION");
+        link.setLastError("payment_return_manual_reconciliation: legacy test payment");
+        stubLockedReturn(link);
+
+        assertEquals(Optional.empty(), service().reopenAfterFullReturn(
+                new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
+                        7L, PaymentLinkStatus.REFUNDED)));
+
+        assertEquals("ACCEPTED_NOOP", link.getReturnRecoveryOutcome());
+        assertEquals(81L, link.getReturnRecoveryPaymentCheckId());
+        assertEquals("system:test-payment-return-filter", link.getReturnRecoveryResolvedBy());
+        assertTrue(link.getReturnRecoveryResolvedAt() != null);
+        assertTrue(link.getReturnRecoveryResolutionReason().contains("Тестовый платеж"));
+        verify(paymentLinkRepository).saveAndFlush(link);
+        verify(paymentIssueReminderService).resolveOrderIssueInCurrentTransaction(
+                PaymentIssueReminderService.SOURCE_PAYMENT_RETURN_RECONCILIATION,
+                7L);
+        verify(businessAuditService).recordRequiredInCurrentTransaction(
+                eq("PAYMENT_RETURN_TEST_RECOVERY_IGNORED"),
+                eq("PAYMENT_LINK"),
+                eq(7L),
+                eq(42L),
+                isNull(),
+                eq("MANUAL_RECONCILIATION"),
+                eq("ACCEPTED_NOOP"),
+                anyString()
+        );
+        verify(paymentCheckRepository, never()).findByOrderIdAndActiveTrue(42L);
+        verifyNoInteractions(companyService, contractorCompletionRewardService,
+                contractorRewardLedgerService, orderStatusTransitionService);
+    }
+
+    @Test
+    void legacyDemoTerminalWithEmptyMarkerNeverEntersFinancialRecovery() {
+        Order order = order(42L, "Оплачено");
+        PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
+        link.setTbankTerminalKey("1779443245436demo");
+        stubLockedReturn(link);
+
+        assertEquals(Optional.empty(), service().reopenAfterFullReturn(
+                new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
+                        7L, PaymentLinkStatus.REFUNDED)));
+
+        assertEquals("ACCEPTED_NOOP", link.getReturnRecoveryOutcome());
+        assertEquals("system:test-payment-return-filter", link.getReturnRecoveryResolvedBy());
+        verify(paymentCheckRepository, never()).findByOrderIdAndActiveTrue(42L);
+        verify(paymentIssueReminderService).resolveOrderIssueInCurrentTransaction(
+                PaymentIssueReminderService.SOURCE_PAYMENT_RETURN_RECONCILIATION,
+                7L);
+    }
+
+    @Test
     void manuallyAppliedMarkerReturnsOrderForDurableWorkerFollowUp() {
         Order order = order(42L, "Напоминание");
         PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
@@ -691,6 +758,33 @@ class PaymentReturnOrderRecoveryServiceTest {
                 new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
                         7L, PaymentLinkStatus.REFUNDED)));
 
+        verify(paymentLinkService, never()).createForOrder(42L);
+    }
+
+    @Test
+    void alreadyResolvedTestMarkerClosesStaleIssueWithoutStartingFollowUp() {
+        Order order = order(42L, "Напоминание");
+        PaymentLink link = link(7L, PaymentLinkStatus.REFUNDED, order);
+        PaymentProfile profile = new PaymentProfile();
+        profile.setTestMode(true);
+        link.setPaymentProfile(profile);
+        link.setTbankTerminalKey("1779443245436DEMO");
+        link.setReturnRecoveryProcessedAt(LocalDateTime.now());
+        link.setReturnRecoveryPaymentCheckId(81L);
+        link.setReturnRecoveryOutcome("APPLIED_MANUALLY");
+        link.setReturnRecoveryResolvedAt(LocalDateTime.now());
+        link.setReturnRecoveryResolvedBy("owner@test");
+        link.setReturnRecoveryResolutionReason("Legacy test marker");
+        stubLockedReturn(link);
+
+        assertEquals(Optional.empty(), service().reopenAfterFullReturn(
+                new PaymentReturnOrderRecoveryService.PaymentLinkReturnOutboxClaim(
+                        7L, PaymentLinkStatus.REFUNDED)));
+
+        verify(paymentIssueReminderService).resolveOrderIssueInCurrentTransaction(
+                PaymentIssueReminderService.SOURCE_PAYMENT_RETURN_RECONCILIATION,
+                7L);
+        verifyNoInteractions(businessAuditService);
         verify(paymentLinkService, never()).createForOrder(42L);
     }
 
@@ -795,7 +889,8 @@ class PaymentReturnOrderRecoveryServiceTest {
                 companyService,
                 contractorRewardLedgerService,
                 paymentIssueReminderService,
-                commonInvoiceOrderRepository
+                commonInvoiceOrderRepository,
+                businessAuditService
         );
     }
 

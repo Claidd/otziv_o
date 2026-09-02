@@ -178,6 +178,117 @@ function Invoke-ExternalWithRetry {
     throw $lastError
 }
 
+function Invoke-ProcessWithWallClockTimeout {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [ValidateRange(1, 3600)][int]$TimeoutSeconds
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $FilePath
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $Arguments) {
+        [void]$startInfo.ArgumentList.Add($argument)
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    $stdoutTask = $null
+    $stderrTask = $null
+
+    try {
+        try {
+            $started = $process.Start()
+        } catch {
+            $diagnostic = "Unable to start process: $($_.Exception.Message)"
+            return [pscustomobject]@{
+                ExitCode   = $null
+                TimedOut   = $false
+                Diagnostic = $diagnostic
+            }
+        }
+
+        if (-not $started) {
+            return [pscustomobject]@{
+                ExitCode   = $null
+                TimedOut   = $false
+                Diagnostic = 'Unable to start process.'
+            }
+        }
+
+        # Drain both redirected streams asynchronously so a noisy child process
+        # cannot fill an OS pipe and prevent the bounded wait from returning.
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $timedOut = -not $process.WaitForExit($TimeoutSeconds * 1000)
+
+        if ($timedOut) {
+            try {
+                $process.Kill($true)
+            } catch {
+                try {
+                    $process.Kill()
+                } catch {
+                    # The process may have exited between the bounded wait and kill.
+                }
+            }
+        } else {
+            try {
+                [void][System.Threading.Tasks.Task]::WaitAll(
+                    [System.Threading.Tasks.Task[]]@($stdoutTask, $stderrTask),
+                    2000
+                )
+            } catch {
+                # Diagnostics are best-effort; process completion remains authoritative.
+            }
+        }
+
+        $diagnosticParts = [System.Collections.Generic.List[string]]::new()
+        if ($null -ne $stdoutTask -and $stdoutTask.IsCompletedSuccessfully) {
+            $stdout = $stdoutTask.GetAwaiter().GetResult().Trim()
+            if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+                $diagnosticParts.Add($stdout)
+            }
+        }
+        if ($null -ne $stderrTask -and $stderrTask.IsCompletedSuccessfully) {
+            $stderr = $stderrTask.GetAwaiter().GetResult().Trim()
+            if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+                $diagnosticParts.Add($stderr)
+            }
+        }
+
+        $diagnostic = ($diagnosticParts -join [Environment]::NewLine).Replace([string][char]0, '')
+        $diagnostic = [regex]::Replace(
+            $diagnostic,
+            '(?im)\b(password|passwd|pwd|secret|token|api[_-]?key)\b(\s*[:=]\s*)\S+',
+            '$1$2[REDACTED]'
+        )
+        if ($diagnostic.Length -gt 2000) {
+            $diagnostic = $diagnostic.Substring(0, 2000) + '... [truncated]'
+        }
+        if ($timedOut) {
+            $timeoutDiagnostic = "Process exceeded the ${TimeoutSeconds}s wall-clock timeout."
+            $diagnostic = if ([string]::IsNullOrWhiteSpace($diagnostic)) {
+                $timeoutDiagnostic
+            } else {
+                "$timeoutDiagnostic $diagnostic"
+            }
+        }
+
+        return [pscustomobject]@{
+            ExitCode   = if ($timedOut) { $null } else { $process.ExitCode }
+            TimedOut   = $timedOut
+            Diagnostic = $diagnostic
+        }
+    } finally {
+        $process.Dispose()
+    }
+}
+
 function Copy-DeployBundle {
     param(
         [Parameter(Mandatory = $true)][string[]]$ScpArgs,
@@ -1008,17 +1119,34 @@ if ($null -ne $mobileRelease) {
 }
 
 Write-Host "Checking VPS SSH access before build/push..."
+$sshPreflightProcessTimeoutSeconds = 25
 $sshPreflightAttempts = 3
 for ($sshPreflightAttempt = 1; $sshPreflightAttempt -le $sshPreflightAttempts; $sshPreflightAttempt++) {
-    & ssh @sshArgs $remote "true"
-    $sshPreflightExitCode = $LASTEXITCODE
-    if ($sshPreflightExitCode -eq 0) {
+    $sshPreflightResult = Invoke-ProcessWithWallClockTimeout `
+        -FilePath 'ssh' `
+        -Arguments ($sshArgs + @($remote, 'true')) `
+        -TimeoutSeconds $sshPreflightProcessTimeoutSeconds
+    if (-not $sshPreflightResult.TimedOut -and $sshPreflightResult.ExitCode -eq 0) {
         break
     }
-    if ($sshPreflightExitCode -ne 255 -or $sshPreflightAttempt -ge $sshPreflightAttempts) {
-        throw "VPS SSH preflight failed before build/push (ssh exit code $sshPreflightExitCode)."
+
+    $sshPreflightFailure = if ($sshPreflightResult.TimedOut) {
+        "timed out after ${sshPreflightProcessTimeoutSeconds}s"
+    } elseif ($null -eq $sshPreflightResult.ExitCode) {
+        'could not start ssh'
+    } else {
+        "ssh exit code $($sshPreflightResult.ExitCode)"
     }
-    Write-Warning "VPS SSH preflight failed on attempt ${sshPreflightAttempt}/${sshPreflightAttempts} (exit code $sshPreflightExitCode). Retrying in 10s..."
+    $sshPreflightDiagnosticSuffix = if ([string]::IsNullOrWhiteSpace($sshPreflightResult.Diagnostic)) {
+        ''
+    } else {
+        " Diagnostic: $($sshPreflightResult.Diagnostic)"
+    }
+    $sshPreflightTransient = $sshPreflightResult.TimedOut -or $sshPreflightResult.ExitCode -eq 255
+    if (-not $sshPreflightTransient -or $sshPreflightAttempt -ge $sshPreflightAttempts) {
+        throw "VPS SSH preflight failed before build/push ($sshPreflightFailure).$sshPreflightDiagnosticSuffix"
+    }
+    Write-Warning "VPS SSH preflight failed on attempt ${sshPreflightAttempt}/${sshPreflightAttempts} ($sshPreflightFailure). Retrying in 10s.$sshPreflightDiagnosticSuffix"
     Start-Sleep -Seconds 10
 }
 

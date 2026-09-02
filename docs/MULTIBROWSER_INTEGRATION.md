@@ -43,7 +43,7 @@ docker compose -f compose.yaml -f compose.local-integration.yaml up -d --build
 docker compose -f compose.yaml -f compose.local-integration.yaml -f compose.local-direct-proxy.yaml up -d --build
 
 # otziv repository
-docker compose --env-file C:/Users/Hunt/.otziv/env/prod-local.env \
+docker compose --env-file F:/Works/Projects/.otziv/env/prod-local.env \
   -f compose.prod-local.yaml -f compose.multibrowser-local.yaml up -d --build
 ```
 

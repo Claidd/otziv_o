@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.service.CompanyService;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
@@ -56,6 +57,7 @@ public class PaymentReturnOrderRecoveryService {
     private final ContractorRewardLedgerService contractorRewardLedgerService;
     private final PaymentIssueReminderService paymentIssueReminderService;
     private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
+    private final BusinessAuditService businessAuditService;
 
     /**
      * Returns the order id when a new payment cycle was opened.  Partial
@@ -89,6 +91,19 @@ public class PaymentReturnOrderRecoveryService {
         if (!PaymentReturnRecoveryState.isValidMarkerTuple(link)) {
             markManualReconciliation(link, link.getReturnRecoveryPaymentCheckId(),
                     "Поврежден или неизвестен маркер обработки возврата; автоматический откат заблокирован");
+            return Optional.empty();
+        }
+        if (PaymentReturnRecoveryState.isTestPayment(link)) {
+            if (PaymentReturnRecoveryState.isMarkerEmpty(link)
+                    || RECOVERY_MANUAL.equals(link.getReturnRecoveryOutcome())) {
+                acceptTestPaymentWithoutFinancialRecovery(link);
+            } else if (PaymentReturnRecoveryState.isResolvedOutcome(
+                    link.getReturnRecoveryOutcome())) {
+                paymentIssueReminderService.resolveOrderIssueInCurrentTransaction(
+                        PaymentIssueReminderService.SOURCE_PAYMENT_RETURN_RECONCILIATION,
+                        link.getId()
+                );
+            }
             return Optional.empty();
         }
         if (!PaymentReturnRecoveryState.isMarkerEmpty(link)) {
@@ -395,6 +410,44 @@ public class PaymentReturnOrderRecoveryService {
                 link.getId(),
                 link.getOrder() == null ? null : link.getOrder().getId(),
                 paymentCheckId);
+    }
+
+    private void acceptTestPaymentWithoutFinancialRecovery(PaymentLink link) {
+        String previousOutcome = valueOrDefault(link.getReturnRecoveryOutcome(), "EMPTY");
+        String originalManualCause = valueOrDefault(link.getLastError(), "none");
+        String reason = "Тестовый платеж исключен из финансового recovery; "
+                + "откат заказа, чека и итогов компании не выполнялся";
+        LocalDateTime resolvedAt = LocalDateTime.now();
+        if (link.getReturnRecoveryProcessedAt() == null) {
+            link.setReturnRecoveryProcessedAt(resolvedAt);
+        }
+        link.setReturnRecoveryOutcome(PaymentReturnRecoveryState.OUTCOME_ACCEPTED_NOOP);
+        link.setReturnRecoveryResolvedAt(resolvedAt);
+        link.setReturnRecoveryResolvedBy("system:test-payment-return-filter");
+        link.setReturnRecoveryResolutionReason(reason);
+        String summary = "payment_return_manual_resolution_resolved: outcome="
+                + PaymentReturnRecoveryState.OUTCOME_ACCEPTED_NOOP + "; reason=" + reason;
+        link.setLastError(summary.length() <= 512 ? summary : summary.substring(0, 512));
+        paymentLinkRepository.saveAndFlush(link);
+
+        paymentIssueReminderService.resolveOrderIssueInCurrentTransaction(
+                PaymentIssueReminderService.SOURCE_PAYMENT_RETURN_RECONCILIATION,
+                link.getId()
+        );
+        businessAuditService.recordRequiredInCurrentTransaction(
+                "PAYMENT_RETURN_TEST_RECOVERY_IGNORED",
+                "PAYMENT_LINK",
+                link.getId(),
+                link.getOrder() == null ? null : link.getOrder().getId(),
+                null,
+                previousOutcome,
+                PaymentReturnRecoveryState.OUTCOME_ACCEPTED_NOOP,
+                "originalManualCause=" + originalManualCause
+                        + "; test payment excluded from financial order recovery; "
+                        + "no order, payment check, company or reward mutation was performed"
+        );
+        log.info("Test payment return excluded from financial recovery: linkId={}, orderId={}",
+                link.getId(), link.getOrder() == null ? null : link.getOrder().getId());
     }
 
     private void notifyManualReconciliation(PaymentLink link, String reason) {
