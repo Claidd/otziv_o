@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { hostedPaths, profileText, assertRendererSandbox, removeOwnedProfile } from './hosted-sandbox.mjs';
+import { hostedPaths, profileText, assertRendererSandbox, removeOwnedProfile, sandboxProbeLaunchOptions } from './hosted-sandbox.mjs';
 
 const env = { GITHUB_ACTIONS: 'true', RUNNER_OS: 'Linux', GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1', HOME: '/home/runner', RUNNER_TEMP: '/home/runner/work/_temp' };
 const paths = hostedPaths(env, '1228');
 const healthy = { arguments: ['/exact/chrome', '--headless'], status: 'NoNewPrivs:\t1\nSeccomp:\t2\n', uidMap: '0 1001 1\n', profile: `${paths.name} (unconfined)` };
+
+test('sandbox probe opts into command-line introspection without disabling sandbox or changing executable', () => {
+  const options = sandboxProbeLaunchOptions(paths.executable);
+  assert.equal(options.executablePath, paths.executable);
+  assert.equal(options.chromiumSandbox, true);
+  assert.equal(options.headless, true);
+  assert.deepEqual(options.args, ['--enable-automation']);
+});
 
 test('profile grants userns only to the exact pinned executable without wildcard or host-wide change', () => {
   const text = profileText(paths);

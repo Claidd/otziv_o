@@ -71,9 +71,14 @@ export async function removeOwnedProfile(paths, io = fs, run = sudo) {
   return 'PASS';
 }
 
+export function sandboxProbeLaunchOptions(executable) {
+  // Browser.getBrowserCommandLine requires explicit automation mode in Chromium.
+  return { executablePath: executable, chromiumSandbox: true, headless: true, args: ['--enable-automation'] };
+}
+
 async function proveSandbox(paths) {
   const { chromium } = await import('@playwright/test');
-  const browser = await chromium.launch({ executablePath: paths.executable, chromiumSandbox: true, headless: true });
+  const browser = await chromium.launch(sandboxProbeLaunchOptions(paths.executable));
   try {
     const context = await browser.newContext({ serviceWorkers: 'block' });
     await context.route('**/*', route => route.abort());

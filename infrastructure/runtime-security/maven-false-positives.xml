@@ -164,4 +164,104 @@ Exact package/version and listed CVEs only. Does not accept a vulnerability or s
     <cve>CVE-2021-27351</cve>
     <cve>CVE-2021-36769</cve>
   </suppress>
+  <suppress>
+    <notes>Exact Java Telegram Bot API SDK metadata/model artifact; reported advisories concern separately versioned Telegram Android, iOS, macOS, Windows or desktop messenger clients and native rlottie. Existing telegrambots selector does not cover this distinct artifact.
+Artifact SHA-256: 6a87f4a1f3de4fd5371ac69c5371eca5f63076301ca52b03678524d6e69c19a2
+Primary evidence:
+https://repo.maven.apache.org/maven2/org/telegram/telegrambots-meta/6.9.7.1/telegrambots-meta-6.9.7.1.pom
+https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1/telegrambots-meta
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.telegram/telegrambots-meta@6.9.7.1</packageUrl>
+    <cve>CVE-2019-10044</cve>
+    <cve>CVE-2021-31320</cve>
+    <cve>CVE-2021-31321</cve>
+    <cve>CVE-2024-7014</cve>
+    <cve>CVE-2021-27204</cve>
+    <cve>CVE-2021-27205</cve>
+    <cve>CVE-2021-31315</cve>
+    <cve>CVE-2021-31317</cve>
+    <cve>CVE-2021-31318</cve>
+    <cve>CVE-2021-31319</cve>
+    <cve>CVE-2021-31322</cve>
+    <cve>CVE-2021-31323</cve>
+    <cve>CVE-2021-27351</cve>
+    <cve>CVE-2021-36769</cve>
+  </suppress>
+  <suppress>
+    <notes>Boot executable archive packaging tools are not the STS4 Eclipse / VSCode YAML editor products named by the vendor.
+Artifact SHA-256: 260e52aa495965a5833f7568d26f80094bcf4eb73eb7a38f748338ebd72493b8
+Primary evidence:
+https://spring.io/security/cve-2022-31691/
+https://repo.maven.apache.org/maven2/org/springframework/boot/spring-boot-loader-tools/4.0.8/spring-boot-loader-tools-4.0.8.pom
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.springframework.boot/spring-boot-loader-tools@4.0.8</packageUrl>
+    <cve>CVE-2022-31691</cve>
+  </suppress>
+  <suppress>
+    <notes>The CNA names Nimbus JOSE JWT and explicitly states this advisory is independent of the Gson issue. Exact Gson artifact is not Nimbus. This correction does not assert Gson recursion is fixed or accept its other findings.
+Artifact SHA-256: c96d60551331a196dac54b745aa642cd078ef89b6f267146b705f2c2cbef052d
+Primary evidence:
+https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2025/53xxx/CVE-2025-53864.json
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/com.google.code.gson/gson@2.9.0</packageUrl>
+    <cve>CVE-2025-53864</cve>
+  </suppress>
+  <suppress>
+    <notes>H2 maintainer states the console-tool authorization flaw is fixed since 1.4.198. Exact 2.4.240 WebApp tools.do still requires checkAdmin; the finding targets the old 1.4.197 behavior.
+Artifact SHA-256: 29b70e427cc1c40cdc376283adbb0cc62853073797bb5fe5761f81fe73d57ce0
+Primary evidence:
+https://github.com/h2database/h2database/issues/1294#issuecomment-1227877194
+https://raw.githubusercontent.com/h2database/h2database/version-2.4.240/h2/src/main/org/h2/server/web/WebApp.java
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/com.h2database/h2@2.4.240</packageUrl>
+    <cve>CVE-2018-14335</cve>
+  </suppress>
+  <suppress>
+    <notes>Apache CNA affected range is [5.6,5.6.1) with other versions unaffected. SCRAM was introduced in 5.6; 5.5.1 has no SCRAM source. Shaded 5.5.1 retains its other real advisories; this is only a version-range correction.
+Artifact SHA-256: f381d1bde581bb36992f14674a9ac88f7362b3e35c48a99805bc56e1df931647
+Primary evidence:
+https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/40xxx/CVE-2026-40542.json
+https://github.com/apache/httpcomponents-client/tree/rel/v5.5.1
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.1</packageUrl>
+    <cve>CVE-2026-40542</cve>
+  </suppress>
+  <suppress>
+    <notes>Apache CNA affected range is [5.6,5.6.1) with other versions unaffected. 5.5.2 is outside that range; other reported HTTP Client advisories remain.
+Artifact SHA-256: 5aec3f3447ec816e593e380b59fbe3e42083318af6b215bc177386f7742f6146
+Primary evidence:
+https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/40xxx/CVE-2026-40542.json
+Exact package/version and listed CVEs only; no other product, version, vulnerability or risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.2</packageUrl>
+    <cve>CVE-2026-40542</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor limits this continuation to Spring Security5/6. Its related7.0 issue CVE-2026-22747 affects7.0.0-7.0.4 and is fixed7.0.5. Exact7.0.7 is outside47838 affected branches. This does not assert deprecated SubjectDnX509PrincipalExtractor safe or suppress22747 on another version.
+Artifact SHA-256: b9935b0ab3ddbf4df963b2c7fa8fc98245687398ef3e22253c26e1d53db75388
+Primary evidence:
+https://spring.io/security/cve-2026-47838/
+https://spring.io/security/cve-2026-22747/
+Exact package/version and listed CVE only; no risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.springframework.security/spring-security-web@7.0.7</packageUrl>
+    <cve>CVE-2026-47838</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor identifies7.0.0-7.0.6 affected and7.0.7 as the OSS fix. Correct the exact version-range finding only. The old deprecated AesBytesEncryptor compatibility API remains unsuitable; applications using it still need the vendor migration. No reachability or blanket-crypto exemption is asserted.
+Artifact SHA-256: e03b7570b6bac4a7d4837542e9317bc65158cfc96485564a29e7bb6747f218aa
+Primary evidence:
+https://spring.io/security/cve-2026-47842/
+Exact package/version and listed CVE only; no risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.springframework.security/spring-security-crypto@7.0.7</packageUrl>
+    <cve>CVE-2026-47842</cve>
+  </suppress>
+  <suppress>
+    <notes>Vendor fix changes KAPT build-cache deserialization. Exact kotlin-reflect JAR contains2144classes and no KAPT/build-cache classes or ObjectInputStream references. This Java runtime reflection artifact is not the independently deployed Kotlin Gradle/KAPT/compiler build tool; those artifacts are not exempt.
+Artifact SHA-256: 44380abf37d245ce5c0f294f43512d1c39a59642bfa463922c74e96877cf49f8
+Primary evidence:
+https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6
+https://www.jetbrains.com/privacy-security/issues-fixed/
+Exact package/version and listed CVE only; no risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-reflect@2.2.21</packageUrl>
+    <cve>CVE-2026-53914</cve>
+  </suppress>
 </suppressions>

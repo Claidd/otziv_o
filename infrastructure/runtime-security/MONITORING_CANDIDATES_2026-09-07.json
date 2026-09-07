@@ -396,7 +396,16 @@
   "hostedCiFollowup": {
     "evidence": "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md",
     "changes": "POSIX scanner bind ownership and hosted execution adapters; candidate images, dependency versions and prior runtime evidence unchanged",
-    "hostedAcceptance": "PENDING",
-    "priorRegistrySha256": "e422b57d6c1dd94d70cca2fd9116e736b6d77857ea7eeda82191206ebb4b0a0a"
+    "hostedAcceptance": "FOUR_CANDIDATES_PASS_GRAFANA_RAW_FINDINGS_BLOCK",
+    "priorRegistrySha256": "e422b57d6c1dd94d70cca2fd9116e736b6d77857ea7eeda82191206ebb4b0a0a",
+    "completedRun": "https://github.com/Claidd/otziv_o/actions/runs/34156192193",
+    "resultEvidence": "infrastructure/runtime-security/HOSTED_CI_REVIEW_2026-09-08.json",
+    "grafana": {
+      "storageChecksPassed": 12,
+      "high": 2,
+      "critical": 0,
+      "exceptionsAccepted": 0
+    },
+    "productionPinsChanged": false
   }
 }

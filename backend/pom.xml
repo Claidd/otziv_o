@@ -29,6 +29,9 @@
 		<httpclient5.version>5.6.4</httpclient5.version>
 		<httpcore5.version>5.4.3</httpcore5.version>
 		<mysql.version>26.7.0</mysql.version>
+		<!-- Both Jackson families ship the XML datatype length checks for CVE-2026-68497. -->
+		<jackson-2-bom.version>2.21.6</jackson-2-bom.version>
+		<jackson-bom.version>3.1.6</jackson-bom.version>
 	</properties>
 
 	<dependencyManagement>
@@ -188,7 +191,7 @@
 		<dependency>
 			<groupId>org.jsoup</groupId>
 			<artifactId>jsoup</artifactId>
-			<version>1.22.2</version>
+			<version>1.23.2</version>
 		</dependency>
 		<!-- Explicit HTTP transport: the crawler pins each validated DNS answer to the
 		     socket connection, preventing DNS-rebinding between validation and connect. -->
@@ -348,6 +351,18 @@
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-site-plugin</artifactId>
 					<version>3.22.0</version>
+				<dependencies>
+					<dependency>
+						<groupId>org.jsoup</groupId>
+						<artifactId>jsoup</artifactId>
+						<version>1.23.2</version>
+					</dependency>
+					<dependency>
+						<groupId>commons-beanutils</groupId>
+						<artifactId>commons-beanutils</artifactId>
+						<version>1.11.0</version>
+					</dependency>
+				</dependencies>
 				</plugin>
 			</plugins>
 		</pluginManagement>
@@ -357,6 +372,16 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
                 <dependencies>
+                    <dependency>
+                        <groupId>tools.jackson.core</groupId>
+                        <artifactId>jackson-core</artifactId>
+                        <version>3.1.6</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>tools.jackson.core</groupId>
+                        <artifactId>jackson-databind</artifactId>
+                        <version>3.1.6</version>
+                    </dependency>
                     <dependency><groupId>org.apache.httpcomponents.client5</groupId><artifactId>httpclient5</artifactId><version>5.6.4</version></dependency>
                     <dependency><groupId>org.apache.httpcomponents.core5</groupId><artifactId>httpcore5</artifactId><version>5.4.3</version></dependency>
                     <dependency><groupId>org.apache.httpcomponents.core5</groupId><artifactId>httpcore5-h2</artifactId><version>5.4.3</version></dependency>
@@ -455,6 +480,21 @@
 						<version>13.0.0</version>
 						<!-- Plugin realms do not inherit the application's dependencyManagement. -->
 						<dependencies>
+							<dependency>
+								<groupId>com.fasterxml.jackson.core</groupId>
+								<artifactId>jackson-core</artifactId>
+								<version>2.22.2</version>
+							</dependency>
+							<dependency>
+								<groupId>com.fasterxml.jackson.core</groupId>
+								<artifactId>jackson-databind</artifactId>
+								<version>2.22.2</version>
+							</dependency>
+							<dependency>
+								<groupId>org.jsoup</groupId>
+								<artifactId>jsoup</artifactId>
+								<version>1.23.2</version>
+							</dependency>
 							<dependency>
 								<groupId>org.apache.httpcomponents.client5</groupId>
 								<artifactId>httpclient5</artifactId>

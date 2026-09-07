@@ -1,6 +1,6 @@
 {
   "schema": "otziv-architecture-finding-registry-v1",
-  "updatedAt": "2026-09-07T19:15:48.056012+00:00",
+  "updatedAt": "2026-09-07T20:21:55.511277+00:00",
   "scope": "All original F01–F20 findings; implementation and release acceptance are separate",
   "closedFindings": 0,
   "findings": [
@@ -361,11 +361,13 @@
       "evidence": [
         "infrastructure/runtime-security/MAVEN_AUDIT_2026-09-07.md",
         "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
-        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md",
+        "infrastructure/runtime-security/MAVEN_HOSTED_AUDIT_2026-09-08.md",
+        "infrastructure/runtime-security/BACKEND_ADVISORY_VALIDATION_2026-09-08.json"
       ],
       "remainingAcceptance": [
         "Remaining real build/test dependencies and monitored-image fixes",
-        "Authenticated Sonatype scan; vendor-unfixed risk owners and maintained S3 decision",
+        "Post-correction dependency gate; vendor-unfixed risk owners and maintained S3 decision",
         "Publish reviewed runtime images and perform controlled production migration"
       ],
       "productionReleased": false,

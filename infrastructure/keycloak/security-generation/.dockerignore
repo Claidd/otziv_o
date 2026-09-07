@@ -2,3 +2,7 @@
 !target/
 target/*
 !target/otziv-security-generation.jar
+!build-patches/
+build-patches/*
+!build-patches/QuarkusDescriptorOrderingPatch.java
+!build-patches/DescriptorOrderingProof.java
