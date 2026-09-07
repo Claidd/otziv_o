@@ -1,5 +1,6 @@
+import { CompaniesApi } from '../core/companies.api';
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { inject, Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { IonContent, IonModal } from '@ionic/angular/standalone';
@@ -1659,6 +1660,7 @@ type PersonalReminderDraft = {
   `]
 })
 export class LeadsPage implements OnInit, OnDestroy {
+  private readonly companiesApi = inject(CompaniesApi);
   private readonly commentSaveTimers = new Map<number, ReturnType<typeof setTimeout>>();
   private readonly commentSaveVersions = new Map<number, number>();
   private searchTimer?: ReturnType<typeof setTimeout>;
@@ -2708,7 +2710,7 @@ export class LeadsPage implements OnInit, OnDestroy {
     this.companyError.set(null);
 
     try {
-      await firstValueFrom(this.api.createCompany(this.companyRequestFromDraft(draft)));
+      await firstValueFrom(this.companiesApi.createCompany(this.companyRequestFromDraft(draft)));
       this.companyLead.set(null);
       this.companyPayload.set(null);
       this.companyDraft.set(null);
@@ -3106,7 +3108,7 @@ export class LeadsPage implements OnInit, OnDestroy {
     this.companyError.set(null);
 
     try {
-      const payload = await firstValueFrom(this.api.getCompanyCreatePayload('manager', lead.id, managerId));
+      const payload = await firstValueFrom(this.companiesApi.getCompanyCreatePayload('manager', lead.id, managerId));
       this.companyPayload.set(payload);
       this.companySubCategories.set(payload.subCategories ?? []);
       this.companyDraft.set({
@@ -3122,7 +3124,7 @@ export class LeadsPage implements OnInit, OnDestroy {
 
   private async loadCompanySubCategories(categoryId: number): Promise<void> {
     try {
-      this.companySubCategories.set(await firstValueFrom(this.api.getCompanySubcategories(categoryId)));
+      this.companySubCategories.set(await firstValueFrom(this.companiesApi.getCompanySubcategories(categoryId)));
     } catch (error) {
       this.companyError.set(error instanceof Error ? error.message : 'Не удалось загрузить подкатегории.');
     }

@@ -61,7 +61,7 @@ class OrderStatusNotificationServiceTest {
         Order order = orderWithManager(10L, "Компания", 123L);
         OrderStatus success = status("На проверке");
 
-        when(whatsAppService.sendMessageToGroup("client", "group", "message")).thenReturn("ok");
+        when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq("message"), org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> "{\"status\":\"ok\",\"state\":\"SUCCEEDED\",\"operationId\":\""+call.getArgument(3)+"\",\"messageId\":\"fixture-receipt\"}");
         when(orderStatusService.getOrderStatusByTitle("На проверке")).thenReturn(success);
 
         boolean result = service.sendMessageToGroup(
@@ -94,7 +94,7 @@ class OrderStatusNotificationServiceTest {
         order.getCompany().setTelegramGroupChatId(-100L);
         OrderStatus success = status("На проверке");
 
-        when(telegramService.sendMessage(-100L, "message")).thenReturn(true);
+        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("message"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(java.util.Optional.of(71));
         when(orderStatusService.getOrderStatusByTitle("На проверке")).thenReturn(success);
 
         boolean result = service.sendMessageToGroup(
@@ -108,7 +108,7 @@ class OrderStatusNotificationServiceTest {
 
         assertTrue(result);
         assertSame(success, order.getStatus());
-        verify(telegramService).sendMessage(-100L, "message");
+        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("message"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
         verify(orderRepository).save(order);
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(maxBotClient);
@@ -122,10 +122,7 @@ class OrderStatusNotificationServiceTest {
         order.getCompany().setTelegramGroupChatId(-100L);
         OrderStatus success = status("Выставлен счет");
 
-        when(telegramService.sendMessageWithCopyTextButton(
-                -100L, "Оплата по карте 2202208238396676",
-                "Скопировать номер карты", "2202208238396676"
-        )).thenReturn(true);
+        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("Оплата по карте 2202208238396676"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(java.util.Optional.of(71));
         when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(success);
 
         boolean result = service.sendMessageToGroup(
@@ -134,10 +131,7 @@ class OrderStatusNotificationServiceTest {
         );
 
         assertTrue(result);
-        verify(telegramService).sendMessageWithCopyTextButton(
-                -100L, "Оплата по карте 2202208238396676",
-                "Скопировать номер карты", "2202208238396676"
-        );
+        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("Оплата по карте 2202208238396676"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.argThat(keyboard -> !keyboard.isEmpty()));
         verify(telegramService, never()).sendMessage(-100L, "Оплата по карте 2202208238396676");
         verify(telegramService, never()).sendMessage(-100L, "2202208238396676");
     }
@@ -149,8 +143,8 @@ class OrderStatusNotificationServiceTest {
         OrderStatus success = status("Выставлен счет");
         String message = "Оплата по карте 2202208238396676";
 
-        when(whatsAppService.sendMessageToGroup("client", "group", message)).thenReturn("ok");
-        when(whatsAppService.sendMessageToGroup("client", "group", "2202208238396676")).thenReturn("ok");
+        when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq(message), org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> "{\"status\":\"ok\",\"state\":\"SUCCEEDED\",\"operationId\":\""+call.getArgument(3)+"\",\"messageId\":\"fixture-receipt\"}");
+        when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq("2202208238396676"), org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> "{\"status\":\"ok\",\"state\":\"SUCCEEDED\",\"operationId\":\""+call.getArgument(3)+"\",\"messageId\":\"fixture-receipt\"}");
         when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(success);
 
         boolean result = service.sendMessageToGroup(
@@ -160,8 +154,8 @@ class OrderStatusNotificationServiceTest {
 
         assertTrue(result);
         InOrder delivery = inOrder(whatsAppService);
-        delivery.verify(whatsAppService).sendMessageToGroup("client", "group", message);
-        delivery.verify(whatsAppService).sendMessageToGroup("client", "group", "2202208238396676");
+        delivery.verify(whatsAppService).sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq(message), org.mockito.ArgumentMatchers.anyString());
+        delivery.verify(whatsAppService).sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq("2202208238396676"), org.mockito.ArgumentMatchers.anyString());
         verifyNoInteractions(telegramService);
         verifyNoInteractions(maxBotClient);
     }
@@ -175,7 +169,7 @@ class OrderStatusNotificationServiceTest {
         order.getCompany().setMaxGroupChatId(-200L);
         OrderStatus success = status("Выставлен счет");
 
-        when(maxBotClient.sendMessageToChat(-200L, "message")).thenReturn(true);
+        when(maxBotClient.sendMessageToChatOnce(-200L, "message")).thenReturn(new MaxBotClient.SendOnceResult("max-fixture",null));
         when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(success);
 
         boolean result = service.sendMessageToGroup(
@@ -189,7 +183,7 @@ class OrderStatusNotificationServiceTest {
 
         assertTrue(result);
         assertSame(success, order.getStatus());
-        verify(maxBotClient).sendMessageToChat(-200L, "message");
+        verify(maxBotClient).sendMessageToChatOnce(-200L, "message");
         verify(orderRepository).save(order);
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(telegramService);
@@ -204,8 +198,8 @@ class OrderStatusNotificationServiceTest {
         OrderStatus success = status("Выставлен счет");
         String message = "Оплата по телефону 89149528806";
 
-        when(maxBotClient.sendMessageToChat(-200L, message)).thenReturn(true);
-        when(maxBotClient.sendMessageToChat(-200L, "89149528806")).thenReturn(true);
+        when(maxBotClient.sendMessageToChatOnce(-200L, message)).thenReturn(new MaxBotClient.SendOnceResult("max-fixture",null));
+        when(maxBotClient.sendMessageToChatOnce(-200L, "89149528806")).thenReturn(new MaxBotClient.SendOnceResult("max-fixture",null));
         when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(success);
 
         boolean result = service.sendMessageToGroup(
@@ -215,8 +209,8 @@ class OrderStatusNotificationServiceTest {
 
         assertTrue(result);
         InOrder delivery = inOrder(maxBotClient);
-        delivery.verify(maxBotClient).sendMessageToChat(-200L, message);
-        delivery.verify(maxBotClient).sendMessageToChat(-200L, "89149528806");
+        delivery.verify(maxBotClient).sendMessageToChatOnce(-200L, message);
+        delivery.verify(maxBotClient).sendMessageToChatOnce(-200L, "89149528806");
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(telegramService);
     }
@@ -227,9 +221,9 @@ class OrderStatusNotificationServiceTest {
         Order order = orderWithManager(10L, "Компания", 123L);
         OrderStatus success = status("Выставлен счет");
 
-        when(whatsAppService.sendMessageToGroup("client", "group", "Оплата по карте 2202208238396676"))
-                .thenReturn("ok");
-        when(whatsAppService.sendMessageToGroup("client", "group", "2202208238396676"))
+        when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq("Оплата по карте 2202208238396676"), org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(call -> "{\"status\":\"ok\",\"state\":\"SUCCEEDED\",\"operationId\":\""+call.getArgument(3)+"\",\"messageId\":\"fixture-receipt\"}");
+        when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq("2202208238396676"), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn("error");
         when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(success);
 
@@ -256,7 +250,7 @@ class OrderStatusNotificationServiceTest {
         order.getCompany().setMaxGroupChatId(-200L);
         OrderStatus fallback = status("Опубликовано");
 
-        when(whatsAppService.sendMessageToGroup("client", "group", "message")).thenReturn("error");
+        when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq("message"), org.mockito.ArgumentMatchers.anyString())).thenReturn("error");
         when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(fallback);
 
         boolean result = service.sendMessageToGroup(
@@ -310,7 +304,7 @@ class OrderStatusNotificationServiceTest {
         Order order = orderWithManager(10L, "Компания", 123L);
         OrderStatus fallback = status("Опубликовано");
 
-        when(whatsAppService.sendMessageToGroup("client", "group", "message"))
+        when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq("message"), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn("{\"status\":\"error\",\"code\":\"whatsapp_not_ready\",\"error\":\"authenticated=false state=qr\"}");
         when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(fallback);
         boolean result = service.sendMessageToGroup(
@@ -347,7 +341,7 @@ class OrderStatusNotificationServiceTest {
         Order order = orderWithManager(10L, "Компания", 123L);
         OrderStatus fallback = status("Опубликовано");
 
-        when(whatsAppService.sendMessageToGroup("client", "group", "message"))
+        when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq("message"), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn("{\"status\":\"error\",\"code\":\"not_ready\",\"error\":\"authenticated=true state=authenticated hasQr=false client is not ready\"}");
         when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(fallback);
         boolean result = service.sendMessageToGroup(
@@ -391,7 +385,7 @@ class OrderStatusNotificationServiceTest {
 
         assertFalse(result);
         assertSame(fallback, order.getStatus());
-        verify(telegramService).sendMessage(-100L, "message");
+        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("message"),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
         verify(telegramService).sendMessage(
                 123L,
                 "Компания готов - На проверку\nhttps://o-ogo.ru/orders/all_orders?status=В%20проверку"
@@ -410,8 +404,7 @@ class OrderStatusNotificationServiceTest {
         OrderStatus currentStatus = status("Публикация");
         order.setStatus(currentStatus);
 
-        when(telegramService.sendPublicationProgressMessage(-100L, "Компания. Опубликован новый отзыв 3 / 10.", null))
-                .thenReturn(true);
+        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("Компания. Опубликован новый отзыв 3 / 10."),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(java.util.Optional.of(71));
 
         boolean result = service.sendProgressMessageToClientChat(
                 order,
@@ -422,7 +415,7 @@ class OrderStatusNotificationServiceTest {
 
         assertTrue(result);
         assertSame(currentStatus, order.getStatus());
-        verify(telegramService).sendPublicationProgressMessage(-100L, "Компания. Опубликован новый отзыв 3 / 10.", null);
+        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq("Компания. Опубликован новый отзыв 3 / 10."),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(maxBotClient);
         verifyNoInteractions(orderRepository);
@@ -436,12 +429,12 @@ class OrderStatusNotificationServiceTest {
         String messageWithHint = message + "\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nОтправьте команду: отключить уведомления";
 
         when(publicationProgressPreferenceService.appendPlainOptOutHint(message)).thenReturn(messageWithHint);
-        when(whatsAppService.sendMessageToGroup("client", "group", messageWithHint)).thenReturn("ok");
+        when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq(messageWithHint), org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> "{\"status\":\"ok\",\"state\":\"SUCCEEDED\",\"operationId\":\""+call.getArgument(3)+"\",\"messageId\":\"fixture-receipt\"}");
 
         boolean result = service.sendProgressMessageToClientChat(order, "client", "group", message);
 
         assertTrue(result);
-        verify(whatsAppService).sendMessageToGroup("client", "group", messageWithHint);
+        verify(whatsAppService).sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq(messageWithHint), org.mockito.ArgumentMatchers.anyString());
         verifyNoInteractions(telegramService);
         verifyNoInteractions(maxBotClient);
         verifyNoInteractions(orderRepository);
@@ -453,12 +446,12 @@ class OrderStatusNotificationServiceTest {
         Order order = orderWithManager(10L, "Компания", 123L);
         String message = "Компания. Опубликован новый отзыв 3 / 10.";
 
-        when(whatsAppService.sendMessageToGroup("client", "group", message)).thenReturn("ok");
+        when(whatsAppService.sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq(message), org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> "{\"status\":\"ok\",\"state\":\"SUCCEEDED\",\"operationId\":\""+call.getArgument(3)+"\",\"messageId\":\"fixture-receipt\"}");
 
         boolean result = service.sendProgressMessageToClientChat(order, "client", "group", message, false);
 
         assertTrue(result);
-        verify(whatsAppService).sendMessageToGroup("client", "group", message);
+        verify(whatsAppService).sendMessageToGroup(org.mockito.ArgumentMatchers.eq("client"), org.mockito.ArgumentMatchers.eq("group"), org.mockito.ArgumentMatchers.eq(message), org.mockito.ArgumentMatchers.anyString());
         verify(publicationProgressPreferenceService, never()).appendPlainOptOutHint(message);
         verifyNoInteractions(telegramService);
         verifyNoInteractions(maxBotClient);
@@ -475,12 +468,12 @@ class OrderStatusNotificationServiceTest {
         String messageWithHint = message + "\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nОтправьте команду: отключить уведомления";
 
         when(publicationProgressPreferenceService.appendPlainOptOutHint(message)).thenReturn(messageWithHint);
-        when(maxBotClient.sendMessageToChat(-200L, messageWithHint)).thenReturn(true);
+        when(maxBotClient.sendMessageToChatOnce(-200L, messageWithHint)).thenReturn(new MaxBotClient.SendOnceResult("max-fixture",null));
 
         boolean result = service.sendProgressMessageToClientChat(order, "client", "group", message);
 
         assertTrue(result);
-        verify(maxBotClient).sendMessageToChat(-200L, messageWithHint);
+        verify(maxBotClient).sendMessageToChatOnce(-200L, messageWithHint);
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(telegramService);
         verifyNoInteractions(orderRepository);
@@ -494,12 +487,12 @@ class OrderStatusNotificationServiceTest {
         order.getCompany().setTelegramGroupChatId(-100L);
         String message = "Компания. Опубликован новый отзыв 3 / 10.";
 
-        when(telegramService.sendMessage(-100L, message)).thenReturn(true);
+        when(telegramService.sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq(message),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList())).thenReturn(java.util.Optional.of(71));
 
         boolean result = service.sendProgressMessageToClientChat(order, "client", "group", message, false);
 
         assertTrue(result);
-        verify(telegramService).sendMessage(-100L, message);
+        verify(telegramService).sendMessageOnceWithInlineKeyboardMessageId(eq(-100L),eq(message),org.mockito.ArgumentMatchers.isNull(),org.mockito.ArgumentMatchers.anyList());
         verify(telegramService, never()).sendPublicationProgressMessage(-100L, message, order.getCompany().getId());
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(maxBotClient);
@@ -525,20 +518,20 @@ class OrderStatusNotificationServiceTest {
     }
 
     private OrderStatusNotificationService service() {
-        return new OrderStatusNotificationService(
-                orderRepository,
-                orderStatusService,
-                whatsAppService,
-                telegramService,
-                maxBotClient,
-                whatsAppAuthAlertService,
-                publicationProgressPreferenceService
-        );
+        var occurrences=org.mockito.Mockito.mock(OrderNotificationOccurrences.class);
+        org.mockito.Mockito.lenient().when(occurrences.reserve(org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyLong())).thenReturn("fixture-operation");
+        var fence=org.mockito.Mockito.mock(com.hunt.otziv.client_messages.service.ClientMessageOperationFence.class);
+        org.mockito.Mockito.lenient().when(fence.execute(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.nullable(String.class),org.mockito.ArgumentMatchers.anyString(),any()))
+                .thenAnswer(call -> call.<java.util.function.Supplier<com.hunt.otziv.client_messages.dto.ClientMessageSendResult>>getArgument(4).get());
+        var delivery=new com.hunt.otziv.client_messages.service.ClientChatMessageSender(whatsAppService,telegramService,maxBotClient,
+                com.hunt.otziv.whatsapp.support.WhatsAppOperationsFixture.echo(),fence,publicationProgressPreferenceService);
+        return new OrderStatusNotificationService(orderRepository,orderStatusService,telegramService,whatsAppAuthAlertService,occurrences,delivery);
     }
 
     private Order orderWithManager(Long id, String companyTitle, Long telegramChatId) {
         Order order = new Order();
         order.setId(id);
+        order.setClientMessageGeneration(1);
         order.setCompany(company(companyTitle));
 
         Manager manager = new Manager();
@@ -554,6 +547,7 @@ class OrderStatusNotificationServiceTest {
     private Order orderWithLazyManager(Long id, String companyTitle) {
         Order order = new Order();
         order.setId(id);
+        order.setClientMessageGeneration(1);
         order.setCompany(company(companyTitle));
 
         Manager manager = new Manager() {

@@ -1,5 +1,7 @@
 package com.hunt.otziv.review_recovery.service;
 
+import com.hunt.otziv.worker_activity.account_action.WorkerAccountActionCooldownService;
+
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.service.BotService;
 import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
@@ -66,6 +68,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ReviewRecoveryTaskServiceImplTest {
+    @Mock
+    private WorkerAccountActionCooldownService accountActionCooldownService;
 
     @Mock
     private ReviewRecoveryBatchRepository batchRepository;
@@ -424,6 +428,7 @@ class ReviewRecoveryTaskServiceImplTest {
         );
 
         assertEquals("Нет свободных выгулянных аккаунтов для восстановления", exception.getReason());
+        verify(accountActionCooldownService).admitCurrentAction();
         assertSame(oldBot, task.getBot());
         verify(botExclusionService).reject(40L, oldBot, "CHANGE");
         verify(botService, never()).claimReserveBotForCity(any(), anyCollection());
@@ -477,6 +482,7 @@ class ReviewRecoveryTaskServiceImplTest {
         assertTrue(currentBot.isActive());
         assertSame(currentBot, task.getBot());
         verify(botExclusionService, never()).reject(any(), any(), any());
+        verify(accountActionCooldownService, never()).admitCurrentAction();
         verify(botService, never()).save(any());
         verify(taskRepository, never()).save(any());
         verify(reviewRepository, never()).save(any());

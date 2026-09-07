@@ -2,7 +2,7 @@ package com.hunt.otziv.p_products.payment.service;
 
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyRecordOperations;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.contractor_payments.service.ContractorCompletionRewardService;
@@ -64,7 +64,7 @@ public class OrderPaymentCancellationService {
     private final OrderRepository orderRepository;
     private final OrderStatusService orderStatusService;
     private final OrderCompanyStatusService orderCompanyStatusService;
-    private final CompanyService companyService;
+    private final CompanyRecordOperations companyService;
     private final PaymentCheckRepository paymentCheckRepository;
     private final NextOrderRequestRepository nextOrderRequestRepository;
     private final OrderDeletionService orderDeletionService;

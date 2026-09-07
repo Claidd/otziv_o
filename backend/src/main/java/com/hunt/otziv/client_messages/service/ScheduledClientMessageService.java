@@ -1,4 +1,5 @@
 package com.hunt.otziv.client_messages.service;
+import com.hunt.otziv.whatsapp.service.WhatsAppOperationKey;
 
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
@@ -1279,26 +1280,19 @@ public class ScheduledClientMessageService {
             TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
                     .fromFrozenTransferNumber(prepared.telegramCopyTransferNumber())
                     .orElse(null);
-            result = copyButton == null
-                    ? messageSender.send(
-                            prepared.company(),
-                            prepared.managerClientId(),
-                            prepared.groupId(),
-                            prepared.message()
-                    )
-                    : messageSender.send(
-                            prepared.company(),
-                            prepared.managerClientId(),
-                            prepared.groupId(),
-                            prepared.message(),
-                            copyButton
-                    );
+            result = messageSender.sendWithOperationId(
+                    prepared.company(), prepared.managerClientId(), prepared.groupId(),
+                    prepared.message(), copyButton,
+                    WhatsAppOperationKey.of("bad-review-invoice-v1", prepared.stateId(), prepared.deliveryToken())
+            );
             if (result == null) {
                 outcomeUnknown = true;
                 result = ClientMessageSendResult.failed(
                         ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN,
                         "Канал отправки не вернул результат"
                 );
+            } else if (result.errorCode() != null && result.errorCode().startsWith("operation_")) {
+                outcomeUnknown = true;
             }
         } catch (RuntimeException e) {
             outcomeUnknown = true;
@@ -2417,6 +2411,10 @@ public class ScheduledClientMessageService {
         String message = "Заказ #" + order.getId() + " автоматически переведен в Бан: после финального счета за плохие отзывы прошло "
                 + badReviewAutoBanDelayDays() + " дн., оплаты нет.";
         try {
+            // The status transition cancels active auto-ban jobs. Complete our own claim
+            // in this same transaction so that cancellation does not reject it as in flight.
+            state.setStatus(ScheduledMessageStateStatus.DONE);
+            stateRepository.save(state);
             boolean changed = orderStatusTransitionService.changeStatusForOrder(order.getId(), STATUS_BAN);
             if (changed) {
                 recordAttempt(state, ScheduledMessageAttemptStatus.SENT, "system", null, null, message, 0);
@@ -2424,8 +2422,10 @@ public class ScheduledClientMessageService {
                 log.info("Bad review auto-ban applied orderId={} stateId={}", order.getId(), state.getId());
                 return;
             }
+            state.setStatus(ScheduledMessageStateStatus.ACTIVE);
             registerFailure(state, nowStorage, "status_change_failed", "Статус заказа не изменен", message, 0);
         } catch (Exception e) {
+            state.setStatus(ScheduledMessageStateStatus.ACTIVE);
             registerFailure(state, nowStorage, "bad_review_auto_ban_exception", readableException(e), message, 0);
         }
     }
@@ -2600,20 +2600,11 @@ public class ScheduledClientMessageService {
         TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
                 .fromFrozenTransferNumber(frozenTransferNumber)
                 .orElse(null);
-        ClientMessageSendResult result = copyButton == null
-                ? messageSender.send(
-                        company,
-                        manager == null ? null : manager.getClientId(),
-                        company.getGroupId(),
-                        message
-                )
-                : messageSender.send(
-                        company,
-                        manager == null ? null : manager.getClientId(),
-                        company.getGroupId(),
-                        message,
-                        copyButton
-                );
+        String operationId = com.hunt.otziv.whatsapp.service.WhatsAppOperationKey.of(
+                "scheduled-client-message-v1", state.getId(), state.getScenario(), state.getSentCount());
+        ClientMessageSendResult result = messageSender.sendWithOperationId(
+                company, manager == null ? null : manager.getClientId(), company.getGroupId(),
+                message, copyButton, operationId);
         long durationMs = System.currentTimeMillis() - startedAt;
 
         if (result.sent()) {
@@ -2848,6 +2839,9 @@ public class ScheduledClientMessageService {
             int consecutiveFailures,
             LocalDateTime nowStorage
     ) {
+        if (code.startsWith("operation_") || "invalid_operation_id".equals(code)) {
+            return new FailureRetryPolicy(null, true, false, false);
+        }
         if (isWhatsAppAuthUnavailable(code, readable)) {
             return new FailureRetryPolicy(nextWhatsAppAuthAttemptAt(nowStorage), false, true, false);
         }

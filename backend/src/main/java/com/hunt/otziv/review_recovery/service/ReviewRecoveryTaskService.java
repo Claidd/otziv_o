@@ -1,5 +1,6 @@
 package com.hunt.otziv.review_recovery.service;
 
+import org.springframework.security.core.Authentication;
 import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
@@ -26,17 +27,27 @@ public interface ReviewRecoveryTaskService {
 
     ReviewRecoveryTask updateTask(Long taskId, String recoveryText, String recoveryAnswer, LocalDate scheduledDate);
 
+    ReviewRecoveryTask updateTask(Long taskId, String recoveryText, String recoveryAnswer, LocalDate scheduledDate, Authentication authentication);
+
     ReviewRecoveryTask reassignTask(Long taskId, Worker worker);
+
+    ReviewRecoveryTask reassignTask(Long taskId, Worker worker, Authentication authentication);
 
     int reassignPendingTasksForOrder(Long orderId, Worker worker);
 
     ReviewRecoveryTask completeTask(Long taskId, User completedBy);
 
+    ReviewRecoveryTask completeTask(Long taskId, User completedBy, Authentication authentication);
+
     ReviewRecoveryTask cancelTask(Long taskId);
 
     ReviewRecoveryTask changeTaskBot(Long taskId);
 
+    ReviewRecoveryTask changeTaskBot(Long taskId, Authentication authentication);
+
     ReviewRecoveryTask deactivateAndChangeTaskBot(Long taskId, Long botId);
+
+    ReviewRecoveryTask deactivateAndChangeTaskBot(Long taskId, Long botId, Authentication authentication);
 
     ReviewRecoveryBatch markClientNotified(Long batchId, User notifiedBy);
 

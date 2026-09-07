@@ -142,6 +142,23 @@ describe('WorkerReviewEditModalComponent', () => {
     expect(selectedWorkerId).toBe(202);
   });
 
+  it('blocks new account during the shared cooldown while leaving the editor usable', async () => {
+    const fixture = TestBed.createComponent(WorkerReviewEditModalComponent);
+    const component = fixture.componentInstance;
+    component.review = review();
+    component.draft = draft();
+    component.accountActionCooldownLocked = true;
+    component.accountActionCooldownTitle = 'Смена и блокировка доступны через 00:42';
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+    const accountButton = element.querySelector<HTMLButtonElement>('button.review-new-account')!;
+    expect(accountButton.disabled).toBe(true);
+    expect(accountButton.title).toContain('00:42');
+    expect(element.querySelector<HTMLButtonElement>('.lead-edit-close')?.disabled).toBe(false);
+    expect(element.querySelector<HTMLButtonElement>('button.review-save-action')?.disabled).toBe(false);
+  });
+
   it('emits form actions', async () => {
     const fixture = TestBed.createComponent(WorkerReviewEditModalComponent);
     const component = fixture.componentInstance;

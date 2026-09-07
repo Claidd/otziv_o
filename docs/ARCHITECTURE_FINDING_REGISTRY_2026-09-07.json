@@ -1,0 +1,545 @@
+{
+  "schema": "otziv-architecture-finding-registry-v1",
+  "updatedAt": "2026-09-07T17:52:57.734360+00:00",
+  "scope": "All original F01–F20 findings; implementation and release acceptance are separate",
+  "closedFindings": 0,
+  "findings": [
+    {
+      "id": "F01",
+      "title": "Мобильный редактор может сохранить другой заказ",
+      "packages": [
+        "P01"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Mobile",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "docs/CLIENT_RELEASE_COMPATIBILITY_2026-09-07.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Signed native upgrade and release observation"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F02",
+      "title": "Retry сохраняет пустой JSON вместо данных лида",
+      "packages": [
+        "P03",
+        "P04"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Backend integrations",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [
+        "backend/src/main/resources/db/migration/V1_10_293__lead_command_delivery.sql",
+        "backend/src/main/resources/db/migration/V1_10_298__lead_command_consumer_compatibility_fence.sql",
+        "backend/src/main/resources/db/migration/V1_10_299__lead_blocking_scope_index.sql",
+        "backend/src/main/resources/db/migration/V1_10_302__maintenance_checkpoints_and_legacy_send_operations.sql",
+        "backend/src/main/resources/db/migration/V1_10_306__lead_versioned_delivery_protocol.sql"
+      ],
+      "evidence": [
+        "docs/LEAD_VERSIONED_DELIVERY_PROTOCOL.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Receiver/sender rollout and controlled activation"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F03",
+      "title": "Исчерпанные retry-записи могут заблокировать всю очередь синхронизации",
+      "packages": [
+        "P04"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Backend integrations",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [
+        "backend/src/main/resources/db/migration/V1_10_293__lead_command_delivery.sql",
+        "backend/src/main/resources/db/migration/V1_10_298__lead_command_consumer_compatibility_fence.sql",
+        "backend/src/main/resources/db/migration/V1_10_299__lead_blocking_scope_index.sql",
+        "backend/src/main/resources/db/migration/V1_10_302__maintenance_checkpoints_and_legacy_send_operations.sql"
+      ],
+      "evidence": [
+        "docs/LEAD_VERSIONED_DELIVERY_PROTOCOL.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Production cutover; observed legacy queue has zero rows"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F04",
+      "title": "Репозиторный контур восстановления не охватывает БД Keycloak",
+      "packages": [
+        "P07"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Operations",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "infrastructure/recovery/README.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Independent recovery storage and named owner",
+        "Agreed RPO/RTO and production-sized rehearsal"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F05",
+      "title": "Компоненты мониторинга имеют прямой доступ к Docker daemon",
+      "packages": [
+        "P08"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Operations",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "docs/ARCHITECTURE_IMPLEMENTATION_STATUS_2026-09-07.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Production observer/consumer rollout with actual log checks"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F06",
+      "title": "Границы backend-предметных областей проницаемы и цикличны",
+      "packages": [
+        "P16",
+        "P18"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Backend architecture",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "docs/ARCHITECTURE_IMPLEMENTATION_STATUS_2026-09-07.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Review and publish bounded baselines; existing accepted debt remains explicit"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F07",
+      "title": "Центральные сервисы и UI-классы объединяют слишком много обязанностей",
+      "packages": [
+        "P18",
+        "P19"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Backend and client owners",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "docs/CLIENT_RELEASE_COMPATIBILITY_2026-09-07.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Native release and agreed production performance acceptance"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F08",
+      "title": "Уведомления о готовности публикации повторяются на каждом scheduler tick",
+      "packages": [
+        "P13"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Backend performers",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [
+        "backend/src/main/resources/db/migration/V1_10_288__performer_scoped_delivery.sql",
+        "backend/src/main/resources/db/migration/V1_10_289__single_active_performer_offer.sql",
+        "backend/src/main/resources/db/migration/V1_10_300__performer_readiness_intent_index.sql",
+        "backend/src/main/resources/db/migration/V1_10_302__maintenance_checkpoints_and_legacy_send_operations.sql",
+        "backend/src/main/resources/db/migration/V1_10_305__order_notification_occurrences.sql"
+      ],
+      "evidence": [
+        "docs/PERFORMER_STATE_TRANSITIONS.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Controlled delivery activation; observed production assignments zero"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F09",
+      "title": "Переходы предложения исполнителю не имеют общей защиты от конкурентных изменений",
+      "packages": [
+        "P12"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Backend performers",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [
+        "backend/src/main/resources/db/migration/V1_10_288__performer_scoped_delivery.sql",
+        "backend/src/main/resources/db/migration/V1_10_289__single_active_performer_offer.sql",
+        "backend/src/main/resources/db/migration/V1_10_300__performer_readiness_intent_index.sql",
+        "backend/src/main/resources/db/migration/V1_10_302__maintenance_checkpoints_and_legacy_send_operations.sql"
+      ],
+      "evidence": [
+        "docs/PERFORMER_STATE_TRANSITIONS.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Release migration/writer fence and production observation"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F10",
+      "title": "Гарантия доставки внешних изменений и сообщений непоследовательна",
+      "packages": [
+        "P14",
+        "P15"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Integration owners",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [
+        "backend/src/main/resources/db/migration/V1_10_293__lead_command_delivery.sql",
+        "backend/src/main/resources/db/migration/V1_10_298__lead_command_consumer_compatibility_fence.sql",
+        "backend/src/main/resources/db/migration/V1_10_299__lead_blocking_scope_index.sql",
+        "backend/src/main/resources/db/migration/V1_10_301__manager_client_reply_operations.sql",
+        "backend/src/main/resources/db/migration/V1_10_302__maintenance_checkpoints_and_legacy_send_operations.sql",
+        "backend/src/main/resources/db/migration/V1_10_303__common_invoice_message_operation.sql",
+        "backend/src/main/resources/db/migration/V1_10_304__client_message_operation_fence.sql",
+        "backend/src/main/resources/db/migration/V1_10_305__order_notification_occurrences.sql",
+        "backend/src/main/resources/db/migration/V1_10_306__lead_versioned_delivery_protocol.sql"
+      ],
+      "evidence": [
+        "docs/LEAD_VERSIONED_DELIVERY_PROTOCOL.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Coordinated receiver/sender cutover",
+        "Real WhatsApp session acceptance"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F11",
+      "title": "Лимит параллелизма worker/gateway освобождается раньше завершения работы",
+      "packages": [
+        "P05"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Node integration owners",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "docs/WHATSAPP_REMOTE_SESSION_RECOVERY.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Production lifecycle rollout and observation"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F12",
+      "title": "Мобильная авторизация считает неудачный refresh успешным при истёкшем access token",
+      "packages": [
+        "P02"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Mobile",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "docs/CLIENT_RELEASE_COMPATIBILITY_2026-09-07.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Native browser/provider login and upgrade",
+        "Observe login/refresh/401 after release"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F13",
+      "title": "Немедленный отзыв JWT после смены пароля ещё не завершён",
+      "packages": [
+        "P11"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Identity and backend owners",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [
+        "backend/src/main/resources/db/migration/V1_10_294__durable_auth_session_revocation.sql",
+        "infrastructure/keycloak/security-generation/src/main/resources/META-INF/otziv-security-generation.xml"
+      ],
+      "evidence": [
+        "docs/ISSUER_SECURITY_GENERATION.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Production paired recovery prerequisite",
+        "Mixed fleet bootstrap/shadow/drain and controlled enforcement"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F14",
+      "title": "npm audit сообщает об уязвимых зависимостях",
+      "packages": [
+        "P06"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Dependency and release owners",
+      "releaseOwner": null,
+      "status": "IMPLEMENTATION_AND_ACCEPTANCE_OPEN",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "infrastructure/runtime-security/MAVEN_AUDIT_2026-09-07.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Remaining real build/test dependencies and monitored-image fixes",
+        "Authenticated Sonatype scan; vendor-unfixed risk owners and maintained S3 decision",
+        "Publish reviewed runtime images and perform controlled production migration"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F15",
+      "title": "Ручные контракты и правила дублируются между web и mobile",
+      "packages": [
+        "P20"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Client API owners",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "docs/CLIENT_RELEASE_COMPATIBILITY_2026-09-07.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Product minimum supported version",
+        "Signed native upgrade and published recovery target"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F16",
+      "title": "Проверки не полностью охватывают runtime-сценарии и архитектурные границы",
+      "packages": [
+        "P00",
+        "P01",
+        "P21"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "QA and CI",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "docs/ARCHITECTURE_IMPLEMENTATION_STATUS_2026-09-07.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Publish tested revision and actual required branch checks",
+        "Observe actual runtime scheduler registration; the authorized endpoint returned 401",
+        "Blocked native acceptance and final release observation"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F17",
+      "title": "Метрики и backup-механизмы не образуют проверяемый внешний контур оповещения",
+      "packages": [
+        "P09"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Operations on-call",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "infrastructure/monitoring/README.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Independent monitor/receiver, schedule and named recipient",
+        "Agreed thresholds and delivered/acknowledged failure drills"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F18",
+      "title": "HTTP health worker не подтверждает готовность Chromium/OCR",
+      "packages": [
+        "P10"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Worker owner",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "docs/ARCHITECTURE_IMPLEMENTATION_STATUS_2026-09-07.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Exact release image checks on deployment host and controlled rollout"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F19",
+      "title": "Бизнес-сценарии частично реализованы в HTTP-контроллере",
+      "packages": [
+        "P17"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Backend scenario owners",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [],
+      "evidence": [
+        "docs/ARCHITECTURE_IMPLEMENTATION_STATUS_2026-09-07.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Review and publish selected workflow ownership changes"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    },
+    {
+      "id": "F20",
+      "title": "Предложения исполнителям отправляются до завершения транзакции БД",
+      "packages": [
+        "P13"
+      ],
+      "implementationOwner": "Codex — current authorized implementation task",
+      "releaseOwnerRole": "Backend performers",
+      "releaseOwner": null,
+      "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
+      "pullRequest": null,
+      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "migrations": [
+        "backend/src/main/resources/db/migration/V1_10_288__performer_scoped_delivery.sql",
+        "backend/src/main/resources/db/migration/V1_10_289__single_active_performer_offer.sql",
+        "backend/src/main/resources/db/migration/V1_10_300__performer_readiness_intent_index.sql",
+        "backend/src/main/resources/db/migration/V1_10_302__maintenance_checkpoints_and_legacy_send_operations.sql",
+        "backend/src/main/resources/db/migration/V1_10_305__order_notification_occurrences.sql"
+      ],
+      "evidence": [
+        "docs/PERFORMER_STATE_TRANSITIONS.md",
+        "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
+        "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md"
+      ],
+      "remainingAcceptance": [
+        "Controlled notification activation and observation"
+      ],
+      "productionReleased": false,
+      "rollout": "See package runbook; local proof is not production activation"
+    }
+  ]
+}

@@ -5,9 +5,10 @@ import { AppLauncher } from '@capacitor/app-launcher';
 import { Browser } from '@capacitor/browser';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { mobileEnvironment, webRedirectUri } from './mobile-environment';
-import type { AuthStatus, AuthUser, StoredTokens, TokenEndpointResponse } from './auth.models';
+import { AuthTemporarilyUnavailableError, type AuthRefreshResult, type AuthStatus, type AuthUser, type StoredTokens, type TokenEndpointResponse } from './auth.models';
 import { MobileAuthDiagnosticsService, type MobileAuthDiagnosticValue } from './mobile-auth-diagnostics.service';
 import { MobileAuthStorageService } from './mobile-auth-storage.service';
+import { AuthStorageDurabilityError } from './auth-storage-durability.plugin';
 import { MobilePushService } from './mobile-push.service';
 
 export type MobileLogoutSource = 'home_actions' | 'header_menu' | 'profile' | 'unknown';
@@ -22,7 +23,8 @@ class TokenEndpointHttpError extends Error {
 export class AuthService {
   private readonly isNative = Capacitor.isNativePlatform();
   private refreshTimerId: ReturnType<typeof setTimeout> | undefined;
-  private refreshPromise: Promise<boolean> | null = null;
+  private refreshPromise: Promise<AuthRefreshResult> | null = null;
+  private tokenStorageWork: Promise<void> = Promise.resolve();
   private sessionGeneration = 0;
   private initialized = false;
   private readonly handledNativeAuthUrls = new Set<string>();
@@ -45,16 +47,23 @@ export class AuthService {
     }
 
     this.initialized = true;
+    const generation = this.sessionGeneration;
+    const initialTokens = this.tokens();
     this.diagnostics().initialize();
     void this.recordAuthDiagnostic('auth.init_started');
     await this.registerNativeDeepLinks().catch(() => undefined);
+    if (generation !== this.sessionGeneration || this.tokens() !== initialTokens) return;
 
     const stored = await this.storage.readTokens().catch(async () => {
-      await this.recordAuthDiagnostic('auth.storage_read_failed');
-      await this.storage.clearTokens().catch(() => undefined);
+      if (generation !== this.sessionGeneration || this.tokens() !== initialTokens) return null;
+      void this.recordAuthDiagnostic('auth.storage_read_failed');
+      const clearedGeneration = this.sessionGeneration + 1;
+      await this.clearSession('anonymous', 'auth_storage_read_failed').catch(() => undefined);
+      if (this.sessionGeneration !== clearedGeneration || this.tokens()) return null;
       this.error.set('Сессия была повреждена и очищена. Войдите заново.');
       return null;
     });
+    if (generation !== this.sessionGeneration || this.tokens() !== initialTokens) return;
     if (!stored) {
       void this.recordAuthDiagnostic('auth.no_stored_session');
       this.clearState('anonymous');
@@ -65,8 +74,10 @@ export class AuthService {
       this.tokens.set(stored);
       this.syncUser(stored.accessToken);
     } catch {
-      await this.recordAuthDiagnostic('auth.stored_session_invalid');
-      await this.clearSession('anonymous', 'stored_session_invalid').catch(() => this.clearState('anonymous'));
+      void this.recordAuthDiagnostic('auth.stored_session_invalid');
+      const clearedGeneration = this.sessionGeneration + 1;
+      await this.clearSession('anonymous', 'stored_session_invalid').catch(() => undefined);
+      if (this.sessionGeneration !== clearedGeneration || this.tokens()) return;
       this.error.set('Сессия была повреждена и очищена. Войдите заново.');
       return;
     }
@@ -80,10 +91,7 @@ export class AuthService {
     }
 
     void this.recordAuthDiagnostic('auth.init_refresh_required', this.tokenDiagnosticDetails(stored));
-    const refreshed = await this.refreshTokens();
-    if (!refreshed) {
-      await this.clearSession('anonymous', 'init_refresh_unavailable');
-    }
+    await this.refreshTokens();
   }
 
   isAuthenticated(): boolean {
@@ -104,7 +112,8 @@ export class AuthService {
       return true;
     }
 
-    return this.refreshTokens();
+    const refreshed = await this.refreshTokens();
+    return refreshed.status === 'ready' && this.isAuthenticated();
   }
 
   hasRealmRole(role: string): boolean {
@@ -151,6 +160,7 @@ export class AuthService {
   }
 
   async completeLoginFromCallback(callbackUrl: string): Promise<void> {
+    const generation = this.sessionGeneration;
     try {
       const url = new URL(callbackUrl);
       const error = url.searchParams.get('error');
@@ -162,6 +172,7 @@ export class AuthService {
       if (error) {
         void this.recordAuthDiagnostic('auth.callback_oidc_error', { oidcError: error });
         await this.storage.clearPendingLogin();
+        if (generation !== this.sessionGeneration) return;
         this.error.set(url.searchParams.get('error_description') ?? error);
         this.status.set('error');
         await this.router.navigateByUrl('/login', { replaceUrl: true });
@@ -171,6 +182,7 @@ export class AuthService {
       const code = url.searchParams.get('code');
       const state = url.searchParams.get('state');
       const pending = await this.storage.readPendingLogin();
+      if (generation !== this.sessionGeneration) return;
 
       if (!code || !state || !pending || state !== pending.state) {
         void this.recordAuthDiagnostic('auth.callback_rejected', {
@@ -180,6 +192,7 @@ export class AuthService {
           stateMatched: Boolean(state && pending && state === pending.state)
         });
         await this.storage.clearPendingLogin();
+        if (generation !== this.sessionGeneration) return;
         this.error.set('Не удалось подтвердить ответ Keycloak.');
         this.status.set('error');
         await this.router.navigateByUrl('/login', { replaceUrl: true });
@@ -195,20 +208,30 @@ export class AuthService {
         code_verifier: pending.codeVerifier
       });
 
-      await this.acceptTokens(response);
+      if (!await this.acceptTokens(response, undefined, generation)) {
+        return;
+      }
       await this.recordAuthDiagnostic('auth.login_succeeded');
+      if (generation !== this.sessionGeneration) return;
       const acceptedAccessToken = this.tokens()?.accessToken;
       if (acceptedAccessToken) {
         void this.flushDiagnostics(acceptedAccessToken);
       }
       await this.storage.clearPendingLogin();
+      if (generation !== this.sessionGeneration) return;
       await Browser.close().catch(() => undefined);
+      if (generation !== this.sessionGeneration) return;
       await this.router.navigateByUrl(pending.targetUrl || '/tabs/home', { replaceUrl: true });
     } catch (error: unknown) {
+      if (generation !== this.sessionGeneration) return;
       void this.recordAuthDiagnostic('auth.login_failed', this.errorDiagnosticDetails(error));
       await Browser.close().catch(() => undefined);
+      if (generation !== this.sessionGeneration) return;
       await this.storage.clearPendingLogin().catch(() => undefined);
-      await this.clearSession('error', 'login_callback_failed').catch(() => this.clearState('error'));
+      if (generation !== this.sessionGeneration) return;
+      const clearedGeneration = this.sessionGeneration + 1;
+      await this.clearSession('error', 'login_callback_failed').catch(() => undefined);
+      if (this.sessionGeneration !== clearedGeneration || this.tokens()) return;
       this.error.set(this.errorMessage(error));
       await this.router.navigateByUrl('/login', { replaceUrl: true });
     }
@@ -225,7 +248,10 @@ export class AuthService {
     }
 
     const refreshed = await this.refreshTokens();
-    return refreshed ? this.tokens()?.accessToken ?? null : null;
+    if (refreshed.status === 'temporary-unavailable') {
+      throw new AuthTemporarilyUnavailableError();
+    }
+    return refreshed.status === 'ready' ? this.getOptionalAccessToken(0) : null;
   }
 
   getOptionalAccessToken(minValiditySeconds = 5): string | null {
@@ -236,14 +262,19 @@ export class AuthService {
     return tokens.accessToken;
   }
 
-  async refreshTokens(): Promise<boolean> {
+  async refreshTokens(): Promise<AuthRefreshResult> {
     const tokens = this.tokens();
     if (!tokens?.refreshToken || this.isRefreshExpired(tokens)) {
       void this.recordAuthDiagnostic('auth.refresh_unavailable', {
         hasRefreshToken: Boolean(tokens?.refreshToken),
         refreshExpired: Boolean(tokens && this.isRefreshExpired(tokens))
       });
-      return false;
+      if (tokens) {
+        const clearedGeneration = this.sessionGeneration + 1;
+        await this.clearSession('anonymous', 'refresh_unavailable');
+        if (this.sessionGeneration !== clearedGeneration || this.tokens()) return { status: 'superseded' };
+      }
+      return { status: 'session-invalid' };
     }
 
     if (this.refreshPromise) {
@@ -253,44 +284,65 @@ export class AuthService {
     const refreshGeneration = this.sessionGeneration;
     this.status.set('refreshing');
     void this.recordAuthDiagnostic('auth.refresh_started', this.tokenDiagnosticDetails(tokens));
-    this.refreshPromise = this.requestToken({
+    const refresh: Promise<AuthRefreshResult> = this.requestToken({
       grant_type: 'refresh_token',
       client_id: mobileEnvironment.keycloak.clientId,
       refresh_token: tokens.refreshToken
     })
       .then(async (response) => {
-        if (refreshGeneration !== this.sessionGeneration) {
-          return false;
+        if (refreshGeneration !== this.sessionGeneration || this.tokens() !== tokens) {
+          return { status: 'superseded' } as const;
         }
-        await this.acceptTokens(response, tokens.refreshToken);
+        if (!await this.acceptTokens(response, tokens.refreshToken, refreshGeneration)) {
+          return { status: 'superseded' } as const;
+        }
         await this.recordAuthDiagnostic('auth.refresh_succeeded');
-        const refreshedAccessToken = this.tokens()?.accessToken;
+        if (refreshGeneration !== this.sessionGeneration) {
+          return { status: 'superseded' } as const;
+        }
+        const refreshedAccessToken = this.getOptionalAccessToken(0);
         if (refreshedAccessToken) {
           void this.flushDiagnostics(refreshedAccessToken);
         }
-        return true;
+        if (!refreshedAccessToken) {
+          this.status.set('retrying');
+          return { status: 'temporary-unavailable' } as const;
+        }
+        return { status: 'ready', accessToken: refreshedAccessToken, refreshed: true } as const;
       })
       .catch(async (error: unknown) => {
-        if (refreshGeneration !== this.sessionGeneration) {
-          return false;
+        if (refreshGeneration !== this.sessionGeneration || this.tokens() !== tokens) {
+          return { status: 'superseded' } as const;
         }
         if (!this.isTerminalRefreshError(error)) {
           void this.recordAuthDiagnostic('auth.refresh_transient_failure', this.errorDiagnosticDetails(error));
-          this.status.set('authenticated');
+          const usableToken = this.getOptionalAccessToken(0);
+          this.status.set(usableToken ? 'authenticated' : 'retrying');
           this.error.set('Не удалось обновить сессию. Проверьте соединение, приложение повторит попытку автоматически.');
           this.scheduleRefresh();
-          return true;
+          return usableToken
+            ? { status: 'ready', accessToken: usableToken, refreshed: false } as const
+            : { status: 'temporary-unavailable' } as const;
         }
         await this.recordAuthDiagnostic('auth.refresh_terminal_failure', this.errorDiagnosticDetails(error));
+        if (refreshGeneration !== this.sessionGeneration) {
+          return { status: 'superseded' } as const;
+        }
+        if (this.tokens() !== tokens) return { status: 'superseded' } as const;
+        const clearedGeneration = this.sessionGeneration + 1;
         await this.clearSession('anonymous', 'refresh_terminal_failure');
+        if (this.sessionGeneration !== clearedGeneration || this.tokens()) return { status: 'superseded' } as const;
         this.error.set(this.errorMessage(error));
-        return false;
+        return { status: 'session-invalid' } as const;
       })
       .finally(() => {
-        this.refreshPromise = null;
+        if (this.refreshPromise === refresh) {
+          this.refreshPromise = null;
+        }
       });
 
-    return this.refreshPromise;
+    this.refreshPromise = refresh;
+    return refresh;
   }
 
   async logout(): Promise<void> {
@@ -319,7 +371,9 @@ export class AuthService {
     await this.revokeCurrentPushTokenBestEffort();
     await this.clearSession('anonymous');
     void this.recordAuthDiagnostic('auth.logout_local_session_cleared', { ...diagnosticDetails, source });
-    await this.storage.clearPendingLogin().catch(() => undefined);
+    await this.storage.clearPendingLogin().catch(error => {
+      if (error instanceof AuthStorageDurabilityError) throw error;
+    });
 
     const logoutUrl = new URL(`${this.issuerUrl()}/protocol/openid-connect/logout`, window.location.origin);
     logoutUrl.searchParams.set('client_id', mobileEnvironment.keycloak.clientId);
@@ -345,16 +399,19 @@ export class AuthService {
     }
   }
 
-  async handleUnauthorized(tryRefresh = true): Promise<void> {
+  async handleUnauthorized(tryRefresh = true, expectedAccessToken?: string | null): Promise<void> {
+    if (expectedAccessToken !== undefined && (this.tokens()?.accessToken ?? null) !== expectedAccessToken) return;
     void this.recordAuthDiagnostic('auth.unauthorized_handled', { tryRefresh });
     if (tryRefresh) {
       const refreshed = await this.refreshTokens();
-      if (refreshed) {
+      if (refreshed.status !== 'session-invalid' || this.tokens()) {
         return;
       }
     }
 
+    const clearedGeneration = this.sessionGeneration + 1;
     await this.clearSession('anonymous', 'api_unauthorized');
+    if (this.sessionGeneration !== clearedGeneration || this.tokens()) return;
     await this.router.navigateByUrl('/login', { replaceUrl: true });
   }
 
@@ -419,12 +476,13 @@ export class AuthService {
     }
 
     this.lastResumeCheckAt = now;
+    const generation = this.sessionGeneration;
     const tokens = this.tokens();
     await this.recordAuthDiagnostic('auth.resume_check', {
       hasTokens: Boolean(tokens),
       ...this.tokenDiagnosticDetails(tokens)
     });
-    if (!tokens) {
+    if (!tokens || generation !== this.sessionGeneration || this.tokens() !== tokens) {
       return;
     }
 
@@ -438,8 +496,16 @@ export class AuthService {
     await this.refreshTokens();
   }
 
-  private async acceptTokens(response: TokenEndpointResponse, fallbackRefreshToken?: string): Promise<void> {
+  private async acceptTokens(
+    response: TokenEndpointResponse,
+    fallbackRefreshToken?: string,
+    expectedGeneration = this.sessionGeneration
+  ): Promise<boolean> {
+    if (expectedGeneration !== this.sessionGeneration) {
+      return false;
+    }
     const previousSubject = this.user()?.subject;
+    const previousTokens = this.tokens();
     const now = Date.now();
     const tokens: StoredTokens = {
       accessToken: response.access_token,
@@ -451,15 +517,25 @@ export class AuthService {
       scope: response.scope
     };
 
+    const user = this.userFromToken(tokens.accessToken);
+    await this.serializeTokenStorage(async () => {
+      if (expectedGeneration !== this.sessionGeneration || this.tokens() !== previousTokens) return;
+      await this.storage.writeTokens(tokens);
+    });
+    if (expectedGeneration !== this.sessionGeneration || this.tokens() !== previousTokens) {
+      return false;
+    }
+    // Publish only a durably acknowledged session. A failed native commit must
+    // not leave a new token usable or hide the error as a superseded refresh.
     this.tokens.set(tokens);
-    this.syncUser(tokens.accessToken);
-    if (previousSubject !== undefined && previousSubject !== this.user()?.subject) {
+    this.user.set(user);
+    if (previousSubject !== undefined && previousSubject !== user.subject) {
       this.resetPushRegistrationState();
     }
     this.status.set('authenticated');
     this.error.set(null);
-    await this.storage.writeTokens(tokens);
     this.scheduleRefresh();
+    return true;
   }
 
   private async requestToken(params: Record<string, string>): Promise<TokenEndpointResponse> {
@@ -492,7 +568,8 @@ export class AuthService {
         Accept: 'application/json',
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body
+      body,
+      signal: AbortSignal.timeout(30_000)
     });
 
     if (!response.ok) {
@@ -558,6 +635,10 @@ export class AuthService {
   }
 
   private syncUser(accessToken: string): void {
+    this.user.set(this.userFromToken(accessToken));
+  }
+
+  private userFromToken(accessToken: string): AuthUser {
     const claims = this.parseJwt(accessToken);
     const subject = this.stringClaim(claims, 'sub');
     if (!subject) {
@@ -565,13 +646,13 @@ export class AuthService {
     }
     const preferredUsername = this.stringClaim(claims, 'preferred_username') || subject;
 
-    this.user.set({
+    return {
       subject,
       preferredUsername,
       email: this.stringClaim(claims, 'email'),
       name: this.stringClaim(claims, 'name'),
       roles: this.extractRoles(claims)
-    });
+    };
   }
 
   private extractRoles(claims: Record<string, unknown>): string[] {
@@ -682,7 +763,7 @@ export class AuthService {
   }
 
   private async clearSession(status: AuthStatus, reason = 'unspecified'): Promise<void> {
-    await this.recordAuthDiagnostic('auth.session_clear_started', {
+    void this.recordAuthDiagnostic('auth.session_clear_started', {
       reason,
       targetStatus: status,
       ...this.tokenDiagnosticDetails(this.tokens())
@@ -694,8 +775,14 @@ export class AuthService {
     }
 
     this.clearState(status);
-    await this.storage.clearTokens();
+    await this.serializeTokenStorage(() => this.storage.clearTokens());
     void this.recordAuthDiagnostic('auth.session_cleared', { reason, targetStatus: status });
+  }
+
+  private serializeTokenStorage(operation: () => Promise<void>): Promise<void> {
+    const work = this.tokenStorageWork.then(operation, operation);
+    this.tokenStorageWork = work.catch(() => undefined);
+    return work;
   }
 
   private diagnostics(): MobileAuthDiagnosticsService {

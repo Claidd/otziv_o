@@ -3,3 +3,6 @@ FROM ${RUNTIME_IMAGE}
 
 WORKDIR /app
 COPY otziv-1.jar /app/app.jar
+
+# Old runtime bases may use a shell as PID 1. Forward SIGTERM to the JVM.
+ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS:-} -jar /app/app.jar"]

@@ -71,7 +71,7 @@ public class ConfirmedPrepaymentRecoveryService {
     public int recoverReadyPrepayments() {
         LocalDateTime attemptBefore = LocalDateTime.now().minusMinutes(RETRY_MINUTES);
         List<Long> orderIds = paymentLinkRepository.findConfirmedPrepaymentRecoveryOrderIds(
-                PaymentLinkService.PREPAID_WAITING_ORDER_COMPLETION,
+                PaymentLinkSettlementService.PREPAID_WAITING_ORDER_COMPLETION,
                 attemptBefore,
                 PageRequest.of(0, BATCH_SIZE)
         );

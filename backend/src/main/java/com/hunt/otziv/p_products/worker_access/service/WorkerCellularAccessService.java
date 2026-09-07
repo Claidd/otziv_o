@@ -61,21 +61,28 @@ public class WorkerCellularAccessService {
     }
 
     public void enforceSection(String section) {
+        enforceSection(section, SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    public void enforceSection(String section, Authentication authentication) {
         String normalized = normalizeSection(section);
         if (!PROTECTED_SECTIONS.contains(normalized)) {
             return;
         }
-        enforceProtectedAccess(normalized);
+        enforceProtectedAccess(normalized, authentication);
     }
 
     public void enforceProtectedAccess(String scope) {
+        enforceProtectedAccess(scope, SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    public void enforceProtectedAccess(String scope, Authentication authentication) {
         WorkerCellularAccessRuntimeSettingsService.AccessPolicy policy = accessPolicy();
         WorkerCellularAccessProperties.Mode mode = policy.mode();
         if (mode == WorkerCellularAccessProperties.Mode.OFF) {
             return;
         }
 
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (!isWorkerOnly(authentication)) {
             return;
         }

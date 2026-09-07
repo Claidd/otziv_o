@@ -44,6 +44,9 @@ public class Order {
     private LocalDate changed;
     @Column(name = "order_status_changed_at")
     private LocalDateTime statusChangedAt;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name="client_message_generation",nullable=false)
+    private long clientMessageGeneration;
     @Column(name = "order_pay_day")
     private LocalDate payDay;
     @Column(name = "order_amount")
@@ -111,6 +114,10 @@ public class Order {
 
     @PrePersist
     protected void onCreate() {
+        // This callback applies only to genuinely new rows, never a historical migration.
+        if (clientMessageGeneration == 0) {
+            clientMessageGeneration = 1;
+        }
         if (statusChangedAt == null) {
             statusChangedAt = LocalDateTime.now();
         }

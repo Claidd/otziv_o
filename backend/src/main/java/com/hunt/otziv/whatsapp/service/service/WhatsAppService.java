@@ -11,6 +11,9 @@ import java.util.Optional;
 public interface WhatsAppService {
     String sendMessage(String clientId, String phone, String message);
     String sendMessageToGroup(String clientId, String groupId, String message);
+    String sendMessage(String clientId, String phone, String message, String operationId);
+    String sendMessageToGroup(String clientId, String groupId, String message, String operationId);
+    com.hunt.otziv.whatsapp.dto.WhatsAppOperationStatus getOperationStatus(String clientId, String operationId);
     List<WhatsAppGroupInfo> listGroups(String clientId);
     default List<WhatsAppGroupInfo> listGroups(String clientId, boolean forceRefresh) {
         return listGroups(clientId);

@@ -3,7 +3,7 @@ package com.hunt.otziv.p_products.service;
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyRecordOperations;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.contractor_payments.service.ContractorPaymentRolloutStateService;
@@ -43,7 +43,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OrderTransactionServiceImplObservabilityTest {
 
-    @Mock private CompanyService companyService;
+    @Mock private CompanyRecordOperations companyService;
     @Mock private ZpService zpService;
     @Mock private PaymentCheckService paymentCheckService;
     @Mock private OrderRepository orderRepository;

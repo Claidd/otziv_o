@@ -25,28 +25,36 @@ public class FilialServiceImpl implements FilialService{
     private final CityRepository cityRepository;
     private final OrderRepository orderRepository;
     private final ReviewRepository reviewRepository;
+    private final CompanyOrganizationIdentityService identityService;
 
     public FilialServiceImpl(
             FilialRepository filialRepository,
             CityRepository cityRepository,
             OrderRepository orderRepository,
-            ReviewRepository reviewRepository
+            ReviewRepository reviewRepository,
+            CompanyOrganizationIdentityService identityService
     ) {
         this.filialRepository = filialRepository;
         this.cityRepository = cityRepository;
         this.orderRepository = orderRepository;
         this.reviewRepository = reviewRepository;
+        this.identityService = identityService;
     }
 
+    @Transactional
     public Filial save(FilialDTO filialDTO){ // Сохранение филиала в БД
         Filial filial = new Filial();
         filial.setTitle(filialDTO.getTitle());
         filial.setUrl(filialDTO.getUrl());
         filial.setCity(cityRepository.findById(filialDTO.getCity().getId()));
+        identityService.prepareSave(filial, true);
         return filialRepository.save(filial);
     } // Сохранение филиала в БД
 
+    @Transactional
     public Filial save(Filial filial2){ // Сохранение филиала в БД2
+        String storedUrl = filial2.getId() == null ? null : filialRepository.findStoredUrl(filial2.getId());
+        identityService.prepareSave(filial2, filial2.getId() == null || !Objects.equals(storedUrl, filial2.getUrl()));
         return filialRepository.save(filial2);
     } // Сохранение филиала в БД2
 
@@ -59,7 +67,14 @@ public class FilialServiceImpl implements FilialService{
     } // Взять филиал по названию и ссылке
 
     public Filial findFilialByUrl(String url) { // Взять филиал по названию и ссылке
-        return filialRepository.findByUrl(url);
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        String identity = identityService.resolve(url);
+        if (identity == null) {
+            return filialRepository.findByUrl(url);
+        }
+        return filialRepository.findFirstByTwoGisOrganizationIdOrderByIdAsc(identity).orElse(null);
     } // Взять филиал по названию и ссылке
 
     @Override
@@ -175,6 +190,7 @@ public class FilialServiceImpl implements FilialService{
         if (!Objects.equals(filialDTO.getUrl(), saveFilial.getUrl())){ /*Проверка смены URL*/
             log.info("Обновляем URL");
             saveFilial.setUrl(filialDTO.getUrl());
+            identityService.prepareSave(saveFilial, true);
             isChanged = true;
         }
 

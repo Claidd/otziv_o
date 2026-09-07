@@ -1,0 +1,57 @@
+--- a/modules/frontend/queue/queue.go
++++ b/modules/frontend/queue/queue.go
+@@ -51,6 +51,7 @@
+ 	cond    contextCond // Notified when request is enqueued or dequeued, or querier is disconnected.
+ 	queues  *queues
+ 	stopped bool
++	draining bool
+ 
+ 	queueLength       *prometheus.GaugeVec   // Per user and reason.
+ 	discardedRequests *prometheus.CounterVec // Per user.
+@@ -76,7 +77,7 @@
+ 	q.mtx.RLock()
+ 	// don't defer a release. we won't know what we need to release until we call getQueueUnderRlock
+ 
+-	if q.stopped {
++	if q.stopped || q.draining {
+ 		q.mtx.RUnlock()
+ 		return ErrStopped
+ 	}
+@@ -121,6 +122,11 @@
+ 		q.mtx.Unlock()
+ 	}
+ 
++	// Shutdown may have won the lock while this producer upgraded its RLock.
++	if q.stopped || q.draining {
++		return nil, cleanup, ErrStopped
++	}
++
+ 	queue := q.queues.getOrAddQueue(userID)
+ 	if queue == nil {
+ 		// This can only happen if userID is "".
+@@ -163,6 +169,9 @@
+ 	if queue != nil {
+ 		// this is all threadsafe b/c all users queues are blocked by q.mtx
+ 		batchBuffer := q.getBatchBuffer(batchBuffer, userID, queue)
++		if q.draining {
++			q.cond.Broadcast()
++		}
+ 		return batchBuffer, last, nil
+ 	}
+ 
+@@ -212,7 +221,14 @@
+ 	q.mtx.Lock()
+ 	defer q.mtx.Unlock()
+ 
+-	for q.queues.len() > 0 {
++	// The cleanup timer has already stopped. Keep admitting no new work, but
++	// let queriers dispatch every queued request before marking the queue stopped.
++	q.draining = true
++	for {
++		q.queues.deleteEmptyQueues()
++		if q.queues.len() == 0 {
++			break
++		}
+ 		q.cond.Wait(context.Background())
+ 	}
+ 

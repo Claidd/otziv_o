@@ -182,6 +182,12 @@ public class ManagerReportReviewIssueService {
     }
 
     @Transactional(readOnly = true)
+    public Optional<ManagerReportReviewDispute> explanationDispute(ManagerReportReviewSession review) {
+        return dispute(review, List.of(ManagerReportReviewDisputeStatus.DRAFT,
+                ManagerReportReviewDisputeStatus.NEEDS_CONTEXT));
+    }
+
+    @Transactional(readOnly = true)
     public Optional<ManagerReportReviewDispute> openDispute(ManagerReportReviewSession review) {
         return dispute(review, List.of(
                 ManagerReportReviewDisputeStatus.OPEN,
@@ -202,11 +208,13 @@ public class ManagerReportReviewIssueService {
             ManagerReportReviewSession review,
             String managerText
     ) {
-        ManagerReportReviewDispute dispute = draftDispute(review)
+        ManagerReportReviewDispute dispute = explanationDispute(review)
                 .orElseThrow(() -> new IllegalStateException("Сначала выберите замечание"));
         dispute.setManagerText(limit(managerText, 2000));
         dispute.setSubmittedAt(LocalDateTime.now());
         dispute.setStatus(ManagerReportReviewDisputeStatus.OPEN);
+        dispute.setResolvedAt(null);
+        dispute.setResolvedByUserId(null);
         disputeRepository.save(dispute);
         ManagerReportReviewIssue issue = dispute.getIssue();
         issue.setStatus(ManagerReportReviewIssueStatus.DISPUTED);

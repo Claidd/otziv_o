@@ -1,0 +1,57 @@
+# Explicit overlay: docker compose --env-file <selected-env> -f docker-compose.yaml -f compose.monitoring.yaml --profile monitor-signals ...
+# It publishes observed signals only. It does not install or activate the external alert receiver/watchdog.
+services:
+  app:
+    environment:
+      OTZIV_MONITORING_ENABLED: "true"
+      OTZIV_MONITORING_SHARED_SECRET: ${OTZIV_MONITORING_SHARED_SECRET:?A separate backend monitoring secret is required}
+  signals-publisher:
+    profiles: [monitor-signals]
+    image: ${SIGNALS_PUBLISHER_IMAGE:?An explicit publisher deployment image tag or digest is required}
+    build:
+      context: ./infrastructure/monitoring
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
+    stop_grace_period: 15s
+    tmpfs: [/tmp:rw,noexec,nosuid,size=16m,mode=1777]
+    env_file:
+      - ${MONITOR_PUBLISHER_SECRETS_FILE:?Publisher token file is required}
+    environment:
+      BACKEND_MONITOR_TOKEN: ${OTZIV_MONITORING_SHARED_SECRET:?A separate backend monitoring secret is required}
+      WORKER_MONITOR_TOKEN: ${EXTERNAL_REVIEW_WORKER_SHARED_SECRET:-}
+      WHATSAPP_MONITOR_TOKEN: ${WHATSAPP_GATEWAY_SHARED_SECRET:-}
+    ports:
+      - "${MONITOR_SIGNALS_BIND_ADDRESS:-127.0.0.1}:${MONITOR_SIGNALS_PORT:-9444}:9444"
+    volumes:
+      - type: bind
+        source: ${MONITOR_PUBLISHER_CONFIG_FILE:?Publisher source inventory is required}
+        target: /config/publisher.json
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${MONITOR_PUBLISHER_TLS_DIRECTORY:?Publisher TLS certificate directory is required}
+        target: /etc/otziv-monitor/tls
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${MYSQL_BACKUP_RECEIPTS_DIRECTORY:?Actual MySQL receipt directory is required}
+        target: /evidence/mysql
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${POSTGRES_BACKUP_RECEIPTS_DIRECTORY:?Actual PostgreSQL receipt directory is required}
+        target: /evidence/postgres
+        read_only: true
+        bind: {create_host_path: false}
+    networks: [internal_net, external_review_net, messaging_net]
+networks:
+  internal_net: {}
+  external_review_net: {}
+  messaging_net: {}

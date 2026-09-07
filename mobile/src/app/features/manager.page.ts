@@ -1,4 +1,15 @@
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { commonInvoiceDeliveryWarning } from '@otziv/client-common/billing-payments';
+import { ManagerCompanyActionsApi } from '../core/manager-company-actions.api';
+import { ManagerOrdersApi } from '../core/manager-orders.api';
+import { CommonBillingApi } from '../core/common-billing.api';
+import { WorkerApi } from '../core/worker.api';
+import { OrderReviewsApi } from '../core/order-reviews.api';
+import { ManagerBoardApi } from '../core/manager-board.api';
+import { CompaniesApi } from '../core/companies.api';
+import { ManagerCompanyEditorApi } from '../core/manager-company-editor.api';
+import { ManagerCompanyEditorFacade } from './manager/manager-company-editor.facade';
+import { ManagerCompanyBillingApi } from '../core/manager-company-billing.api';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
@@ -11,7 +22,7 @@ import {
 } from '@ionic/angular/standalone';
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
-  ApiService,
+  type ApiService,
   CompanyChatBindingRepair,
   CommonBillingAccountResponse,
   CompanyEditPayload,
@@ -37,6 +48,9 @@ import {
   Page
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { EditorSession } from '../core/editor-session';
+import { PageWriteTracker } from '../core/page-write-tracker';
+import { ManagerOrderEditorFacade } from './manager/manager-order-editor.facade';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { millisecondsUntilNextBusinessDay } from '../shared/business-date';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
@@ -93,7 +107,6 @@ type ManagerListState = {
   selectedCompany: SelectedCompany | null;
   updatedAt: number;
 };
-type CompanyFilialEditDraft = CompanyFilialUpdateRequest & { filialId: number };
 type CompanyNoteSaveState = ManagerNoteSaveState;
 type OrderNoteSaveState = CompanyNoteSaveState;
 type CompanyCreateDraft = {
@@ -115,12 +128,6 @@ type CompanyCreateDraft = {
   filialUrl: string;
 };
 
-type CompanyBillingDraft = {
-  name: string;
-  enabled: boolean;
-  autoRepeatOrders: boolean;
-};
-
 type CompanyPreservedFields = Pick<
   CompanyCreateDraft,
   'title' | 'urlChat' | 'urlSite' | 'telephone' | 'city' | 'email' | 'commentsCompany' | 'categoryId' | 'subCategoryId' | 'workerId' | 'filialCityId' | 'filialTitle' | 'filialUrl'
@@ -128,6 +135,7 @@ type CompanyPreservedFields = Pick<
 
 @Component({
   selector: 'app-manager',
+  providers: [ManagerOrderEditorFacade, PageWriteTracker],
   imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileCompanyCardComponent, MobileHeaderComponent, MobileOrderCardComponent, MobileRemindersComponent, MobileSearchBarComponent, MobileStatusSliderComponent],
   template: `
     <div class="ion-page">
@@ -2112,6 +2120,13 @@ type CompanyPreservedFields = Pick<
   `]
 })
 export class ManagerPage implements OnInit, OnDestroy {
+  private readonly managerCompanyActionsApi = inject(ManagerCompanyActionsApi);
+  private readonly managerOrdersApi = inject(ManagerOrdersApi);
+  private readonly commonBillingApi = inject(CommonBillingApi);
+  private readonly workerApi = inject(WorkerApi);
+  private readonly orderReviewsApi = inject(OrderReviewsApi);
+  private readonly managerBoardApi = inject(ManagerBoardApi);
+  private readonly companiesApi = inject(CompaniesApi);
   private initialized = false;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly companyNoteTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -2124,6 +2139,36 @@ export class ManagerPage implements OnInit, OnDestroy {
   private lastMobileNavKey = '';
   private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private loadEpoch = 0;
+  private readonly boardReads = new EditorSession();
+  private readonly writes = inject(PageWriteTracker);
+  private pageVisible = true;
+  private destroyed = false;
+  private reconciliationQueued = false;
+  private readonly reconciliationSubscription = this.writes.reconciliationRequired.subscribe(() => {
+    if (this.reconciliationQueued) return;
+    this.reconciliationQueued = true;
+    queueMicrotask(() => {
+      this.reconciliationQueued = false;
+      if (this.pageVisible && !this.destroyed) void this.load();
+    });
+  });
+  private readonly orderEditor = inject(ManagerOrderEditorFacade);
+  private readonly companyEditor: ManagerCompanyEditorFacade = new ManagerCompanyEditorFacade({
+    writes: this.writes,
+    api: inject(ManagerCompanyEditorApi), billingApi: inject(ManagerCompanyBillingApi),
+    confirm: inject(MobileConfirmService),
+    patchCompany: company => this.patchCompanyFromEdit(company),
+    reloadBoard: () => this.load(),
+    errorMessage: (error, fallback) => this.apiErrorMessage(error, fallback),
+    showSavedWarning: company => {
+      const warning = this.chatBindingWarningForCompanyEdit(company);
+      this.error.set(warning ? `Ссылка сохранена, но группа не привязана: ${warning}. Проверьте, что подключенный аккаунт состоит в этой группе и ссылка открывает нужный чат.` : null);
+    }
+  });
+  private readonly companyBilling = this.companyEditor.billing;
+
+  private readonly orderCreateSession = new EditorSession();
+  private readonly companyCreateSession = new EditorSession();
 
   readonly board = signal<ManagerBoard | null>(null);
   readonly activeSection = signal<ManagerBoardSection>('companies');
@@ -2153,26 +2198,26 @@ export class ManagerPage implements OnInit, OnDestroy {
   readonly companyLoading = signal(false);
   readonly companySaving = signal(false);
   readonly companyError = signal<string | null>(null);
-  readonly companyEditOpen = signal(false);
-  readonly companyEdit = signal<CompanyEditPayload | null>(null);
-  readonly companyEditDraft = signal<CompanyUpdateRequest | null>(null);
-  readonly companyEditLoading = signal(false);
-  readonly companyEditSaving = signal(false);
-  readonly companyEditError = signal<string | null>(null);
-  readonly companyEditDeleteKey = signal<string | null>(null);
-  readonly companyFilialDraft = signal<CompanyFilialEditDraft | null>(null);
-  readonly companyBillingAccounts = signal<CommonBillingAccountResponse[]>([]);
-  readonly companyBillingSelectedId = signal<number | null>(null);
-  readonly companyBillingDraft = signal<CompanyBillingDraft | null>(null);
-  readonly companyBillingLoading = signal(false);
-  readonly companyBillingMutating = signal<string | null>(null);
-  readonly orderEditOpen = signal(false);
-  readonly orderEdit = signal<OrderEditPayload | null>(null);
-  readonly orderEditDraft = signal<OrderUpdateRequest | null>(null);
-  readonly orderEditLoading = signal(false);
-  readonly orderEditSaving = signal(false);
-  readonly orderEditDeleting = signal(false);
-  readonly orderEditError = signal<string | null>(null);
+  readonly companyEditOpen = this.companyEditor.companyEditOpen;
+  readonly companyEdit = this.companyEditor.companyEdit;
+  readonly companyEditDraft = this.companyEditor.companyEditDraft;
+  readonly companyEditLoading = this.companyEditor.companyEditLoading;
+  readonly companyEditSaving = this.companyEditor.companyEditSaving;
+  readonly companyEditError = this.companyEditor.companyEditError;
+  readonly companyEditDeleteKey = this.companyEditor.companyEditDeleteKey;
+  readonly companyFilialDraft = this.companyEditor.companyFilialDraft;
+  readonly companyBillingAccounts = this.companyBilling.companyBillingAccounts;
+  readonly companyBillingSelectedId = this.companyBilling.companyBillingSelectedId;
+  readonly companyBillingDraft = this.companyBilling.companyBillingDraft;
+  readonly companyBillingLoading = this.companyBilling.companyBillingLoading;
+  readonly companyBillingMutating = this.companyBilling.companyBillingMutating;
+  readonly orderEditOpen = this.orderEditor.opened;
+  readonly orderEdit = this.orderEditor.payload;
+  readonly orderEditDraft = this.orderEditor.draft;
+  readonly orderEditLoading = this.orderEditor.loading;
+  readonly orderEditSaving = this.orderEditor.saving;
+  readonly orderEditDeleting = this.orderEditor.deleting;
+  readonly orderEditError = this.orderEditor.error;
   readonly orderCreateOpen = signal(false);
   readonly orderCreatePayload = signal<CompanyOrderCreatePayload | null>(null);
   readonly orderCreateDraft = signal<CompanyOrderCreateRequest | null>(null);
@@ -2217,14 +2262,9 @@ export class ManagerPage implements OnInit, OnDestroy {
     return payload?.products.find((product) => product.id === draft?.productId) ?? null;
   });
   readonly orderCreateTotal = computed(() => (this.selectedOrderCreateProduct()?.price ?? 0) * (this.orderCreateDraft()?.amount ?? 0));
-  readonly selectedCompanyBillingAccount = computed(() => {
-    const selectedId = this.companyBillingSelectedId();
-    return this.companyBillingAccounts().find((account) => account.id === selectedId) ?? null;
-  });
+  readonly selectedCompanyBillingAccount = this.companyBilling.selectedCompanyBillingAccount;
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly auth: AuthService,
+  constructor(private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly confirm: MobileConfirmService,
@@ -2261,19 +2301,27 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   ionViewWillEnter(): void {
+    const returning = !this.pageVisible;
+    this.pageVisible = true;
+    this.writes.enter();
+    this.scheduleMidnightRefresh();
     if (!this.initialized) {
       return;
     }
 
     const changed = this.applyRouteSection();
-    if (changed) {
-      this.pageNumber.set(0);
+    if (changed) this.pageNumber.set(0);
+    if (changed || returning) {
       void this.load();
     }
     this.applyMobileNavIntent(false);
   }
 
   ngOnDestroy(): void {
+    this.ionViewWillLeave();
+    this.destroyed = true;
+    this.writes.destroy();
+    this.reconciliationSubscription.unsubscribe();
     this.loadEpoch += 1;
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
@@ -2283,6 +2331,27 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.companyNoteTimers.clear();
     this.orderNoteTimers.forEach((timer) => clearTimeout(timer));
     this.orderNoteTimers.clear();
+    this.clearMidnightRefresh();
+  }
+
+  ionViewWillLeave(): void {
+    this.pageVisible = false;
+    this.writes.leave();
+    this.boardReads.close();
+    this.loading.set(false);
+    this.loadEpoch += 1;
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+      this.searchTimer = null;
+    }
+    this.orderEditSaving.set(false);
+    this.orderEditDeleting.set(false);
+    this.orderCreateSaving.set(false);
+    this.companySaving.set(false);
+    this.orderEditor.close(true);
+    this.companyEditor.closeCompanyEdit(true);
+    this.closeCompanyOrderCreate();
+    this.closeCompanyCreate();
     this.clearMidnightRefresh();
   }
 
@@ -2534,42 +2603,16 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.companyDetails.set(null);
   }
 
-  openCompanyEdit(company: CompanyItem): void {
-    this.companyEditOpen.set(true);
-    this.companyEdit.set(null);
-    this.companyEditDraft.set(null);
-    this.companyFilialDraft.set(null);
-    this.companyBillingAccounts.set([]);
-    this.companyBillingSelectedId.set(null);
-    this.companyBillingDraft.set(null);
-    this.companyBillingMutating.set(null);
-    this.companyEditError.set(null);
-    void this.loadCompanyEdit(company.id);
-  }
+  readonly openCompanyEdit = this.companyEditor.openCompanyEdit.bind(this.companyEditor);
 
-  closeCompanyEdit(): void {
-    if (this.companyEditSaving() || this.companyEditDeleteKey()) {
-      return;
-    }
-
-    this.companyEditOpen.set(false);
-    this.companyEdit.set(null);
-    this.companyEditDraft.set(null);
-    this.companyFilialDraft.set(null);
-    this.companyBillingAccounts.set([]);
-    this.companyBillingSelectedId.set(null);
-    this.companyBillingDraft.set(null);
-    this.companyBillingLoading.set(false);
-    this.companyBillingMutating.set(null);
-    this.companyEditError.set(null);
-    this.companyEditLoading.set(false);
-  }
+  readonly closeCompanyEdit = this.companyEditor.closeCompanyEdit.bind(this.companyEditor);
 
   openCompanyOrderCreate(company: CompanyItem): void {
     if (this.orderCreateSaving()) {
       return;
     }
 
+    this.orderCreateSession.open(company.id);
     this.orderCreateOpen.set(true);
     this.orderCreatePayload.set(null);
     this.orderCreateDraft.set(null);
@@ -2582,6 +2625,7 @@ export class ManagerPage implements OnInit, OnDestroy {
       return;
     }
 
+    this.orderCreateSession.close();
     this.orderCreateOpen.set(false);
     this.orderCreatePayload.set(null);
     this.orderCreateDraft.set(null);
@@ -2599,10 +2643,12 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   async saveCompanyOrder(): Promise<void> {
+    const ticket = this.orderCreateSession.capture();
+    if (!ticket) { return; }
     const payload = this.orderCreatePayload();
     const draft = this.orderCreateDraft();
 
-    if (!payload || !draft || !this.canSaveOrderCreate()) {
+    if (!payload || payload.companyId !== ticket.entityId || !draft || !this.canSaveOrderCreate() || this.orderCreateSaving()) {
       this.orderCreateError.set('Выберите продукт, количество, специалиста и филиал.');
       return;
     }
@@ -2611,14 +2657,19 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.orderCreateError.set(null);
 
     try {
-      const result = await firstValueFrom(this.api.createManagerCompanyOrder(payload.companyId, this.normalizedOrderCreateDraft(draft)));
+      const result = await firstValueFrom(this.writes.track(this.managerCompanyActionsApi.createManagerCompanyOrder(ticket.entityId, this.normalizedOrderCreateDraft(draft))));
+      if (!this.orderCreateSession.accepts(ticket)) { return; }
       this.orderCreateSaving.set(false);
       this.closeCompanyOrderCreate();
       await this.openCreatedCompanyOrders(result);
+      if (!this.orderCreateSession.accepts(ticket)) { return; }
     } catch (error) {
+      if (!this.orderCreateSession.accepts(ticket)) { return; }
       this.orderCreateError.set(this.apiErrorMessage(error, 'Заказ не создан.'));
     } finally {
-      this.orderCreateSaving.set(false);
+      if (this.orderCreateSession.accepts(ticket)) {
+        this.orderCreateSaving.set(false);
+      }
     }
   }
 
@@ -2627,32 +2678,15 @@ export class ManagerPage implements OnInit, OnDestroy {
       this.openOrderDetails(order);
       return;
     }
-
-    if (this.orderEditSaving() || this.orderEditDeleting()) {
-      return;
-    }
-
-    this.orderEditOpen.set(true);
-    this.orderEdit.set(null);
-    this.orderEditDraft.set(null);
-    this.orderEditError.set(null);
-    void this.loadOrderEdit(order.id);
+    this.orderEditor.open(order.id);
   }
 
   closeOrderEdit(): void {
-    if (this.orderEditSaving() || this.orderEditDeleting()) {
-      return;
-    }
-
-    this.orderEditOpen.set(false);
-    this.orderEdit.set(null);
-    this.orderEditDraft.set(null);
-    this.orderEditError.set(null);
-    this.orderEditLoading.set(false);
+    this.orderEditor.close();
   }
 
   setOrderEditField<K extends keyof OrderUpdateRequest>(field: K, value: OrderUpdateRequest[K]): void {
-    this.orderEditDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
+    this.orderEditor.setField(field, value);
   }
 
   numericValue(value: unknown): number {
@@ -2665,402 +2699,63 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   canSaveOrderEdit(): boolean {
-    const draft = this.orderEditDraft();
-    return Boolean(draft && Number.isFinite(draft.counter));
+    return this.orderEditor.canSave();
   }
 
   async saveOrderEdit(): Promise<void> {
-    const order = this.orderEdit();
-    const draft = this.orderEditDraft();
-    if (!order || !draft || !this.canSaveOrderEdit()) {
-      this.orderEditError.set('Проверьте данные заказа.');
-      return;
-    }
-
-    this.orderEditSaving.set(true);
-    this.orderEditError.set(null);
-
-    try {
-      const updated = await firstValueFrom(this.api.updateManagerOrder(order.id, this.normalizedOrderEditDraft(draft)));
-      this.applyOrderEditPayload(updated);
+    await this.orderEditor.save(async updated => {
       this.patchOrderFromEdit(updated);
       await this.load();
-      this.orderEditSaving.set(false);
-      this.closeOrderEdit();
-    } catch (error) {
-      this.orderEditError.set(this.apiErrorMessage(error, 'Заказ не сохранен.'));
-    } finally {
-      this.orderEditSaving.set(false);
-    }
+    });
   }
 
   async deleteOrderEdit(event?: Event): Promise<void> {
     event?.preventDefault();
     event?.stopPropagation();
-
-    const order = this.orderEdit();
-    if (!order || !order.canDelete) {
-      return;
-    }
-
-    const confirmed = await this.confirm.confirm({
-      title: 'Удалить заказ',
-      message: 'Удалить заказ?',
-      confirmText: 'Удалить',
-      danger: true
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    this.orderEditDeleting.set(true);
-    this.orderEditError.set(null);
-
-    try {
-      await firstValueFrom(this.api.deleteManagerOrder(order.id));
-      await this.load();
-      this.orderEditDeleting.set(false);
-      this.closeOrderEdit();
-    } catch (error) {
-      this.orderEditError.set(this.apiErrorMessage(error, 'Заказ не удален.'));
-    } finally {
-      this.orderEditDeleting.set(false);
-    }
+    await this.orderEditor.remove(() => this.load());
   }
 
-  setCompanyEditField<K extends keyof CompanyUpdateRequest>(field: K, value: CompanyUpdateRequest[K]): void {
-    this.companyEditDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
-  }
+  readonly setCompanyEditField = this.companyEditor.setCompanyEditField.bind(this.companyEditor);
 
-  setCompanyBillingDraftField<K extends keyof CompanyBillingDraft>(field: K, value: CompanyBillingDraft[K]): void {
-    this.companyBillingDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
-  }
+  readonly setCompanyBillingDraftField = this.companyBilling.setCompanyBillingDraftField.bind(this.companyBilling);
 
-  companyBillingStatusLabel(): string {
-    const account = this.selectedCompanyBillingAccount();
-    if (!account) {
-      return 'Создайте связь, чтобы новые заказы попадали в общий счет';
-    }
-    return account.enabled ? 'Подключено' : 'Связь выключена';
-  }
+  readonly companyBillingStatusLabel = this.companyBilling.companyBillingStatusLabel.bind(this.companyBilling);
 
-  canSaveCompanyBillingAccount(): boolean {
-    const account = this.selectedCompanyBillingAccount();
-    const draft = this.companyBillingDraft();
-    return Boolean(
-      account
-      && draft
-      && draft.name.trim()
-      && (
-        draft.name.trim() !== account.name
-        || draft.enabled !== account.enabled
-        || draft.autoRepeatOrders !== account.autoRepeatOrders
-      )
-    );
-  }
+  readonly canSaveCompanyBillingAccount = this.companyBilling.canSaveCompanyBillingAccount.bind(this.companyBilling);
 
-  async createCompanyBillingAccount(): Promise<void> {
-    const company = this.companyEdit();
-    const draft = this.companyBillingDraft();
-    if (!company || !draft || this.companyBillingMutating() || !draft.name.trim()) {
-      return;
-    }
+  readonly createCompanyBillingAccount = this.companyBilling.createCompanyBillingAccount.bind(this.companyBilling);
 
-    this.companyBillingMutating.set('create');
-    this.companyEditError.set(null);
-    try {
-      const account = await firstValueFrom(this.api.createCommonBillingAccount({
-        name: draft.name.trim(),
-        enabled: draft.enabled,
-        autoRepeatOrders: draft.autoRepeatOrders,
-        managerId: company.manager?.id ?? null,
-        invoiceCompanyId: company.id,
-        companyIds: [company.id]
-      }));
-      this.upsertCompanyBillingAccount(account);
-      this.companyBillingSelectedId.set(account.id);
-      this.companyBillingDraft.set(this.companyBillingDraftFromAccount(account, company));
-      await this.load();
-    } catch (error) {
-      this.companyEditError.set(this.apiErrorMessage(error, 'Не удалось создать общий счет.'));
-    } finally {
-      this.companyBillingMutating.set(null);
-    }
-  }
+  readonly saveCompanyBillingAccount = this.companyBilling.saveCompanyBillingAccount.bind(this.companyBilling);
 
-  async saveCompanyBillingAccount(): Promise<void> {
-    const company = this.companyEdit();
-    const account = this.selectedCompanyBillingAccount();
-    const draft = this.companyBillingDraft();
-    if (!company || !account || !draft || this.companyBillingMutating() || !draft.name.trim()) {
-      return;
-    }
-
-    this.companyBillingMutating.set('save');
-    this.companyEditError.set(null);
-    try {
-      const accountCompanyIds = account.companies
-        .filter((item) => item.enabled || item.companyId === company.id)
-        .map((item) => item.companyId);
-      const companyIds = Array.from(new Set([...accountCompanyIds, company.id]));
-      const updated = await firstValueFrom(this.api.updateCommonBillingAccount(account.id, {
-        name: draft.name.trim(),
-        enabled: draft.enabled,
-        autoRepeatOrders: draft.autoRepeatOrders,
-        managerId: account.managerId ?? company.manager?.id ?? null,
-        invoiceCompanyId: account.invoiceCompanyId ?? company.id,
-        companyIds
-      }));
-      this.upsertCompanyBillingAccount(updated);
-      this.companyBillingDraft.set(this.companyBillingDraftFromAccount(updated, company));
-      await this.load();
-    } catch (error) {
-      this.companyEditError.set(this.apiErrorMessage(error, 'Не удалось сохранить общий счет.'));
-    } finally {
-      this.companyBillingMutating.set(null);
-    }
-  }
-
-  async removeCompanyFromBillingAccount(companyId: number): Promise<void> {
-    const account = this.selectedCompanyBillingAccount();
-    if (!account || this.companyBillingMutating()) {
-      return;
-    }
-
-    const confirmed = await this.confirm.confirm({
-      title: 'Исключить компанию',
-      message: 'Исключить компанию из будущих общих счетов?',
-      confirmText: 'Исключить',
-      danger: true
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    const detachCurrent = await this.confirm.confirm({
-      title: 'Текущий счет',
-      message: 'Отключить неоплаченные заказы этой компании из текущего общего счета?',
-      confirmText: 'Отключить',
-      cancelText: 'Оставить'
-    });
-
-    this.companyBillingMutating.set(`remove-${companyId}`);
-    this.companyEditError.set(null);
-    try {
-      const updated = await firstValueFrom(this.api.removeCommonBillingCompany(account.id, companyId, detachCurrent));
-      this.upsertCompanyBillingAccount(updated);
-      const currentCompanyId = this.companyEdit()?.id;
-      if (currentCompanyId === companyId && !updated.companies.some((item) => item.companyId === companyId && item.enabled)) {
-        this.companyBillingSelectedId.set(null);
-        this.companyBillingDraft.set(this.companyBillingDraftFromCompany(this.companyEdit()));
-      } else {
-        this.companyBillingDraft.set(this.companyBillingDraftFromAccount(updated, this.companyEdit()));
-      }
-      await this.load();
-    } catch (error) {
-      this.companyEditError.set(this.apiErrorMessage(error, 'Не удалось исключить компанию из общего счета.'));
-    } finally {
-      this.companyBillingMutating.set(null);
-    }
-  }
+  readonly removeCompanyFromBillingAccount = this.companyBilling.removeCompanyFromBillingAccount.bind(this.companyBilling);
 
   openCommonInvoice(invoiceId: number): void {
     void this.router.navigate(['/tabs/common-billing', invoiceId]);
   }
 
-  changeCompanyEditCategory(categoryId: number | null): void {
-    this.companyEditDraft.update((draft) => draft ? { ...draft, categoryId, subCategoryId: null } : draft);
-    this.companyEdit.update((company) => company ? { ...company, subCategories: [] } : company);
+  readonly changeCompanyEditCategory = this.companyEditor.changeCompanyEditCategory.bind(this.companyEditor);
 
-    if (!categoryId) {
-      return;
-    }
+  readonly canSaveCompanyEdit = this.companyEditor.canSaveCompanyEdit.bind(this.companyEditor);
 
-    void this.loadCompanyEditSubCategories(categoryId);
-  }
+  readonly saveCompanyEdit = this.companyEditor.saveCompanyEdit.bind(this.companyEditor);
 
-  canSaveCompanyEdit(): boolean {
-    const draft = this.companyEditDraft();
-    return Boolean(
-      draft?.title.trim()
-      && draft.telephone.trim()
-      && draft.urlChat.trim()
-      && draft.city.trim()
-      && draft.statusId
-    );
-  }
+  readonly deleteCompanyWorker = this.companyEditor.deleteCompanyWorker.bind(this.companyEditor);
 
-  async saveCompanyEdit(): Promise<void> {
-    const company = this.companyEdit();
-    const draft = this.companyEditDraft();
-    if (!company || !draft || !this.canSaveCompanyEdit()) {
-      this.companyEditError.set('Заполните обязательные поля компании.');
-      return;
-    }
+  readonly deleteCompanyFilial = this.companyEditor.deleteCompanyFilial.bind(this.companyEditor);
 
-    this.companyEditSaving.set(true);
-    this.companyEditError.set(null);
+  readonly restoreCompanyFilial = this.companyEditor.restoreCompanyFilial.bind(this.companyEditor);
 
-    try {
-      const updated = await firstValueFrom(this.api.updateManagerCompany(company.id, this.normalizedCompanyEditDraft(draft)));
-      this.applyCompanyEditPayload(updated);
-      this.patchCompanyFromEdit(updated);
-      await this.load();
-      this.closeCompanyEdit();
-      const chatWarning = this.chatBindingWarningForCompanyEdit(updated);
-      this.error.set(chatWarning
-        ? `Ссылка сохранена, но группа не привязана: ${chatWarning}. Проверьте, что подключенный аккаунт состоит в этой группе и ссылка открывает нужный чат.`
-        : null);
-    } catch (error) {
-      this.companyEditError.set(this.apiErrorMessage(error, 'Компания не сохранена.'));
-    } finally {
-      this.companyEditSaving.set(false);
-    }
-  }
+  readonly hasArchivedCompanyFilials = this.companyEditor.hasArchivedCompanyFilials.bind(this.companyEditor);
 
-  async deleteCompanyWorker(worker: ManagerOption): Promise<void> {
-    const company = this.companyEdit();
-    if (!company || this.companyEditSaving() || this.companyEditDeleteKey()) {
-      return;
-    }
+  readonly startFilialEdit = this.companyEditor.startFilialEdit.bind(this.companyEditor);
 
-    const key = `worker-${worker.id}`;
-    this.companyEditDeleteKey.set(key);
-    this.companyEditError.set(null);
+  readonly cancelFilialEdit = this.companyEditor.cancelFilialEdit.bind(this.companyEditor);
 
-    try {
-      const confirmed = await this.confirm.confirm({
-        title: 'Убрать специалиста',
-        message: `Убрать специалиста «${worker.label || `#${worker.id}`}» из компании?`,
-        confirmText: 'Убрать',
-        danger: true
-      });
-      if (!confirmed) {
-        return;
-      }
-      const updated = await firstValueFrom(this.api.deleteManagerCompanyWorker(company.id, worker.id));
-      this.applyCompanyEditPayload(updated);
-      this.patchCompanyFromEdit(updated);
-    } catch (error) {
-      this.companyEditError.set(this.apiErrorMessage(error, 'Специалист не удален.'));
-    } finally {
-      this.companyEditDeleteKey.set(null);
-    }
-  }
+  readonly setFilialDraftField = this.companyEditor.setFilialDraftField.bind(this.companyEditor);
 
-  async deleteCompanyFilial(filial: CompanyFilialEditItem): Promise<void> {
-    const company = this.companyEdit();
-    if (!company || this.companyEditSaving() || this.companyEditDeleteKey()) {
-      return;
-    }
+  readonly canSaveFilialEdit = this.companyEditor.canSaveFilialEdit.bind(this.companyEditor);
 
-    const key = `filial-${filial.id}`;
-    this.companyEditDeleteKey.set(key);
-    this.companyEditError.set(null);
-
-    try {
-      const preview = await firstValueFrom(this.api.getManagerCompanyFilialDeletionPreview(company.id, filial.id));
-      const label = filial.title || `#${filial.id}`;
-      const message = preview.willArchive
-        ? `Филиал "${label}" используется в ${preview.orderCount} заказах и будет отправлен в архив. Продолжить?`
-        : `У филиала "${label}" нет заказов. Удалить его окончательно?`;
-      const confirmed = await this.confirm.confirm({
-        title: preview.willArchive ? 'Архивировать филиал' : 'Удалить филиал',
-        message,
-        confirmText: preview.willArchive ? 'В архив' : 'Удалить',
-        danger: true
-      });
-      if (!confirmed) {
-        return;
-      }
-      const updated = await firstValueFrom(this.api.deleteManagerCompanyFilial(company.id, filial.id));
-      this.applyCompanyEditPayload(updated);
-      this.patchCompanyFromEdit(updated);
-    } catch (error) {
-      this.companyEditError.set(this.apiErrorMessage(error, 'Филиал не удален.'));
-    } finally {
-      this.companyEditDeleteKey.set(null);
-    }
-  }
-
-  async restoreCompanyFilial(filial: CompanyFilialEditItem): Promise<void> {
-    const company = this.companyEdit();
-    if (!company) {
-      return;
-    }
-    const key = `filial-restore-${filial.id}`;
-    this.companyEditDeleteKey.set(key);
-    this.companyEditError.set(null);
-    try {
-      const updated = await firstValueFrom(this.api.restoreManagerCompanyFilial(company.id, filial.id));
-      this.applyCompanyEditPayload(updated);
-      this.patchCompanyFromEdit(updated);
-    } catch (error) {
-      this.companyEditError.set(this.apiErrorMessage(error, 'Филиал не восстановлен.'));
-    } finally {
-      this.companyEditDeleteKey.set(null);
-    }
-  }
-
-  hasArchivedCompanyFilials(): boolean {
-    return this.companyEdit()?.filials.some((filial) => filial.archived) ?? false;
-  }
-
-  startFilialEdit(filial: CompanyFilialEditItem): void {
-    this.companyFilialDraft.set({
-      filialId: filial.id,
-      title: filial.title ?? '',
-      url: filial.url ?? '',
-      cityId: filial.cityId ?? null
-    });
-  }
-
-  cancelFilialEdit(): void {
-    this.companyFilialDraft.set(null);
-  }
-
-  setFilialDraftField<K extends keyof CompanyFilialUpdateRequest>(field: K, value: CompanyFilialUpdateRequest[K]): void {
-    this.companyFilialDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
-  }
-
-  canSaveFilialEdit(): boolean {
-    const draft = this.companyFilialDraft();
-    return Boolean(
-      draft
-      && draft.title.trim()
-      && draft.url.trim()
-      && draft.cityId
-      && !this.companyEditSaving()
-      && !this.companyEditDeleteKey()
-    );
-  }
-
-  async saveFilialEdit(): Promise<void> {
-    const company = this.companyEdit();
-    const draft = this.companyFilialDraft();
-    if (!company || !draft || !this.canSaveFilialEdit()) {
-      return;
-    }
-
-    const key = `filial-edit-${draft.filialId}`;
-    this.companyEditDeleteKey.set(key);
-    this.companyEditError.set(null);
-
-    try {
-      const updated = await firstValueFrom(this.api.updateManagerCompanyFilial(company.id, draft.filialId, {
-        title: draft.title.trim(),
-        url: draft.url.trim(),
-        cityId: draft.cityId
-      }));
-      this.applyCompanyEditPayload(updated);
-      this.patchCompanyFromEdit(updated);
-      this.companyFilialDraft.set(null);
-    } catch (error) {
-      this.companyEditError.set(this.apiErrorMessage(error, 'Филиал не сохранен.'));
-    } finally {
-      this.companyEditDeleteKey.set(null);
-    }
-  }
+  readonly saveFilialEdit = this.companyEditor.saveFilialEdit.bind(this.companyEditor);
 
   showAllCompanyOrders(): void {
     this.activeSection.set('orders');
@@ -3078,6 +2773,7 @@ export class ManagerPage implements OnInit, OnDestroy {
       return;
     }
 
+    this.companyCreateSession.open(0);
     this.companyCreateOpen.set(true);
     this.companyPayload.set(null);
     this.companyDraft.set(null);
@@ -3091,6 +2787,7 @@ export class ManagerPage implements OnInit, OnDestroy {
       return;
     }
 
+    this.companyCreateSession.close();
     this.companyCreateOpen.set(false);
     this.companyPayload.set(null);
     this.companyDraft.set(null);
@@ -3109,6 +2806,7 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   changeCompanyCategory(categoryId: number | null): void {
+    this.companyCreateSession.beginRead('subcategories');
     this.companyDraft.update((draft) => draft ? { ...draft, categoryId, subCategoryId: null } : draft);
     this.companySubCategories.set([]);
 
@@ -3136,8 +2834,10 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   async saveCompany(): Promise<void> {
+    const ticket = this.companyCreateSession.capture();
+    if (!ticket) { return; }
     const draft = this.companyDraft();
-    if (!draft || !this.canSaveCompany()) {
+    if (!draft || !this.canSaveCompany() || this.companySaving()) {
       this.companyError.set('Заполните обязательные поля компании.');
       return;
     }
@@ -3146,7 +2846,8 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.companyError.set(null);
 
     try {
-      await firstValueFrom(this.api.createCompany(this.companyRequestFromDraft(draft)));
+      await firstValueFrom(this.writes.track(this.companiesApi.createCompany(this.companyRequestFromDraft(draft))));
+      if (!this.companyCreateSession.accepts(ticket)) { return; }
       this.companyCreateOpen.set(false);
       this.companyPayload.set(null);
       this.companyDraft.set(null);
@@ -3159,10 +2860,14 @@ export class ManagerPage implements OnInit, OnDestroy {
       this.pageNumber.set(0);
       this.listExpanded.set(false);
       await this.load();
+      if (!this.companyCreateSession.accepts(ticket)) { return; }
     } catch (error) {
+      if (!this.companyCreateSession.accepts(ticket)) { return; }
       this.companyError.set(this.apiErrorMessage(error, 'Не удалось создать компанию.'));
     } finally {
-      this.companySaving.set(false);
+      if (this.companyCreateSession.accepts(ticket)) {
+        this.companySaving.set(false);
+      }
     }
   }
 
@@ -3195,7 +2900,7 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.mutationKey.set(key);
 
     try {
-      await firstValueFrom(this.api.updateManagerCompanyStatus(company.id, action.status));
+      await firstValueFrom(this.writes.track(this.managerCompanyActionsApi.updateManagerCompanyStatus(company.id, action.status)));
       this.patchCompany(company.id, { status: action.status });
       this.companyDetails.update((current) => current?.id === company.id ? { ...current, status: action.status } : current);
       await this.load();
@@ -3216,9 +2921,11 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.mutationKey.set(key);
 
     try {
+      let deliveryWarning: string | null = null;
       if (order.commonInvoice) {
-        const changed = await this.applyCommonInvoiceStatus(order, action.status);
-        if (!changed) {
+        const outcome = await this.applyCommonInvoiceStatus(order, action.status);
+        deliveryWarning = outcome.deliveryWarning ?? null;
+        if (!outcome.changed) {
           return;
         }
       } else {
@@ -3228,7 +2935,7 @@ export class ManagerPage implements OnInit, OnDestroy {
         }
       }
       await this.load();
-      this.error.set(null);
+      this.error.set(deliveryWarning);
     } catch (error) {
       this.error.set(this.apiErrorMessage(error, order.commonInvoice ? 'Не удалось изменить общий счет.' : 'Не удалось изменить статус заказа.'));
     } finally {
@@ -3251,14 +2958,13 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   private async applyStandaloneOrderStatus(order: OrderItem, status: string): Promise<boolean> {
     if (status !== 'Оплачено') {
-      await firstValueFrom(this.api.updateManagerOrderStatus(order.id, status));
+      await firstValueFrom(this.writes.track(this.managerOrdersApi.updateManagerOrderStatus(order.id, status)));
       this.patchOrder(order.id, { status, waitingForClient: false });
       return true;
     }
 
-
     try {
-      await firstValueFrom(this.api.updateManagerOrderStatus(order.id, status));
+      await firstValueFrom(this.writes.track(this.managerOrdersApi.updateManagerOrderStatus(order.id, status)));
     } catch (error) {
       if (!this.canUsePrivilegedPaymentFallback() || !this.isUnfinishedProviderPaymentConflict(error)) {
         throw error;
@@ -3281,7 +2987,7 @@ export class ManagerPage implements OnInit, OnDestroy {
     return error instanceof HttpErrorResponse && isManualCardPaymentFallbackConflict(error);
   }
 
-  private async applyCommonInvoiceStatus(order: OrderItem, status: string): Promise<boolean> {
+  private async applyCommonInvoiceStatus(order: OrderItem, status: string): Promise<{ changed: boolean; deliveryWarning?: string | null }> {
     const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
     if (!invoiceId) {
       throw new Error('Не найден ID общего счета');
@@ -3289,19 +2995,21 @@ export class ManagerPage implements OnInit, OnDestroy {
 
     switch (status) {
       case 'Выставлен счет':
-        await firstValueFrom(this.api.sendCommonInvoice(invoiceId));
-        return true;
-      case 'Напоминание':
-        await firstValueFrom(this.api.remindCommonInvoice(invoiceId));
-        return true;
+      case 'Напоминание': {
+        const request = status === 'Выставлен счет'
+          ? this.commonBillingApi.sendCommonInvoice(invoiceId)
+          : this.commonBillingApi.remindCommonInvoice(invoiceId);
+        const details = await firstValueFrom(this.writes.track(request));
+        return { changed: true, deliveryWarning: commonInvoiceDeliveryWarning(details.summary.lastError) };
+      }
       case 'Не оплачено':
-        await firstValueFrom(this.api.markCommonInvoiceUnpaid(invoiceId));
-        return true;
+        await firstValueFrom(this.writes.track(this.commonBillingApi.markCommonInvoiceUnpaid(invoiceId)));
+        return { changed: true };
       case 'Бан':
-        await firstValueFrom(this.api.markCommonInvoiceBan(invoiceId));
-        return true;
+        await firstValueFrom(this.writes.track(this.commonBillingApi.markCommonInvoiceBan(invoiceId)));
+        return { changed: true };
       case 'Оплачено': {
-        const mode = await firstValueFrom(this.api.getCommonManualPaymentMode(invoiceId));
+        const mode = await firstValueFrom(this.commonBillingApi.getCommonManualPaymentMode(invoiceId));
         if (mode.attributionRequired) {
           const fallback = (order.commonInvoiceStatus ?? '').toUpperCase() === 'NEEDS_ATTENTION'
             && (order.commonInvoiceLastError ?? '').trim().toLowerCase()
@@ -3310,14 +3018,14 @@ export class ManagerPage implements OnInit, OnDestroy {
             invoiceId,
             fallback ? 'TBANK_FALLBACK' : 'STANDARD'
           );
-          return details !== null;
+          return { changed: details !== null };
         }
         const evidence = await this.requestCommonInvoiceManualPaymentEvidence(invoiceId);
         if (!evidence) {
-          return false;
+          return { changed: false };
         }
-        await firstValueFrom(this.api.markCommonInvoicePaid(invoiceId, evidence));
-        return true;
+        await firstValueFrom(this.writes.track(this.commonBillingApi.markCommonInvoicePaid(invoiceId, evidence)));
+        return { changed: true };
       }
       default:
         throw new Error('Для общего счета нет такого действия');
@@ -3369,7 +3077,7 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.mutationKey.set(key);
 
     try {
-      await firstValueFrom(this.api.updateManagerOrderClientWaiting(order.id, waitingForClient));
+      await firstValueFrom(this.writes.track(this.workerApi.updateManagerOrderClientWaiting(order.id, waitingForClient)));
       this.patchOrder(order.id, { waitingForClient });
       this.error.set(null);
     } catch (error) {
@@ -3454,7 +3162,7 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.setCompanyNoteSaveState(company.id, 'saving');
 
     try {
-      await firstValueFrom(this.api.updateManagerCompanyNote(company.id, companyComments));
+      await firstValueFrom(this.writes.track(this.managerCompanyActionsApi.updateManagerCompanyNote(company.id, companyComments)));
       if (this.companyNoteVersions.get(company.id) !== version) {
         return;
       }
@@ -3559,7 +3267,7 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.setOrderNoteSaveState(order.id, 'saving');
 
     try {
-      const notes = await firstValueFrom(this.api.updateManagerOrderNote(order.id, orderComments));
+      const notes = await firstValueFrom(this.writes.track(this.orderReviewsApi.updateManagerOrderNote(order.id, orderComments)));
       if (this.orderNoteVersions.get(order.id) !== version) {
         return;
       }
@@ -3627,7 +3335,7 @@ export class ManagerPage implements OnInit, OnDestroy {
       popup.opener = null;
     }
 
-    this.api.repairManagerCompanyChatBinding(companyId).subscribe({
+    this.managerCompanyActionsApi.repairManagerCompanyChatBinding(companyId).subscribe({
       next: (response) => {
         this.applyChatBindingRepair(response);
         if (response.repaired) {
@@ -4069,12 +3777,16 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   private async load(): Promise<void> {
+    if (!this.pageVisible || this.destroyed) return;
     const requestId = ++this.loadEpoch;
+    this.boardReads.open(0);
+    const ticket = this.boardReads.beginRead('board');
+    if (!ticket) return;
     this.storeListState();
     this.loading.set(true);
 
     try {
-      const board = await firstValueFrom(this.api.getManagerBoard({
+      const board = await this.boardReads.read(ticket, this.managerBoardApi.getManagerBoard({
         section: this.activeSection(),
         status: this.currentStatus(),
         keyword: this.appliedKeyword(),
@@ -4083,7 +3795,7 @@ export class ManagerPage implements OnInit, OnDestroy {
         pageSize: this.pageSize(),
         sortDirection: this.sortDirection()
       }));
-      if (requestId !== this.loadEpoch) {
+      if (!board || requestId !== this.loadEpoch) {
         return;
       }
       this.board.set(board);
@@ -4318,47 +4030,25 @@ export class ManagerPage implements OnInit, OnDestroy {
     });
   }
 
-  private async loadCompanyEdit(companyId: number): Promise<void> {
-    this.companyEditLoading.set(true);
-    this.companyEditError.set(null);
 
-    try {
-      const payload = await firstValueFrom(this.api.getManagerCompanyEdit(companyId));
-      this.applyCompanyEditPayload(payload);
-      await this.loadCompanyBilling(payload);
-    } catch (error) {
-      this.companyEditError.set(this.apiErrorMessage(error, 'Не удалось загрузить редактор компании.'));
-    } finally {
-      this.companyEditLoading.set(false);
-    }
-  }
-
-  private async loadOrderEdit(orderId: number): Promise<void> {
-    this.orderEditLoading.set(true);
-    this.orderEditError.set(null);
-
-    try {
-      const payload = await firstValueFrom(this.api.getManagerOrderEdit(orderId));
-      this.applyOrderEditPayload(payload);
-    } catch (error) {
-      this.orderEditError.set(this.apiErrorMessage(error, 'Не удалось загрузить редактор заказа.'));
-    } finally {
-      this.orderEditLoading.set(false);
-    }
-  }
 
   private async loadCompanyOrderCreate(companyId: number): Promise<void> {
+    const ticket = this.orderCreateSession.beginRead('payload');
+    if (!ticket) { return; }
     this.orderCreateLoading.set(true);
     this.orderCreateError.set(null);
-
     try {
-      const payload = await firstValueFrom(this.api.getManagerCompanyOrderCreate(companyId));
+      const payload = await this.orderCreateSession.read(ticket, this.managerCompanyActionsApi.getManagerCompanyOrderCreate(companyId));
+      if (!payload || !this.orderCreateSession.accepts(ticket)) { return; }
+      if (payload.companyId !== companyId) { throw new Error('Ответ сервера относится к другой записи.'); }
       this.orderCreatePayload.set(payload);
       this.orderCreateDraft.set(this.orderCreateDraftFromPayload(payload));
     } catch (error) {
-      this.orderCreateError.set(this.apiErrorMessage(error, 'Не удалось загрузить создание заказа.'));
+      if (this.orderCreateSession.accepts(ticket)) {
+        this.orderCreateError.set(this.apiErrorMessage(error, 'Не удалось загрузить редактор.'));
+      }
     } finally {
-      this.orderCreateLoading.set(false);
+      if (this.orderCreateSession.accepts(ticket)) { this.orderCreateLoading.set(false); }
     }
   }
 
@@ -4397,31 +4087,7 @@ export class ManagerPage implements OnInit, OnDestroy {
       .replace(/\s+/g, '');
   }
 
-  private applyOrderEditPayload(payload: OrderEditPayload): void {
-    this.orderEdit.set(payload);
-    this.orderEditDraft.set(this.orderEditDraftFromPayload(payload));
-  }
 
-  private orderEditDraftFromPayload(payload: OrderEditPayload): OrderUpdateRequest {
-    return {
-      filialId: payload.filial?.id ?? null,
-      workerId: payload.worker?.id ?? null,
-      managerId: payload.manager?.id ?? null,
-      counter: payload.counter ?? 0,
-      orderComments: payload.orderComments ?? '',
-      commentsCompany: payload.commentsCompany ?? '',
-      complete: !!payload.complete
-    };
-  }
-
-  private normalizedOrderEditDraft(draft: OrderUpdateRequest): OrderUpdateRequest {
-    return {
-      ...draft,
-      counter: Number.isFinite(draft.counter) ? draft.counter : 0,
-      orderComments: draft.orderComments.trim(),
-      commentsCompany: draft.commentsCompany.trim()
-    };
-  }
 
   private patchOrderFromEdit(payload: OrderEditPayload): void {
     this.patchOrder(payload.id, {
@@ -4437,108 +4103,15 @@ export class ManagerPage implements OnInit, OnDestroy {
     });
   }
 
-  private async loadCompanyEditSubCategories(categoryId: number): Promise<void> {
-    try {
-      const subCategories = await firstValueFrom(this.api.getManagerCompanySubcategories(categoryId));
-      this.companyEdit.update((company) => company ? { ...company, subCategories } : company);
-    } catch (error) {
-      this.companyEditError.set(this.apiErrorMessage(error, 'Не удалось загрузить подкатегории.'));
-    }
-  }
 
-  private applyCompanyEditPayload(payload: CompanyEditPayload): void {
-    this.companyEdit.set(payload);
-    this.companyEditDraft.set(this.companyEditDraftFromPayload(payload));
-  }
 
-  private async loadCompanyBilling(company: CompanyEditPayload): Promise<void> {
-    this.companyBillingLoading.set(true);
-    try {
-      const accounts = await firstValueFrom(this.api.getCommonBillingAccountsForCompany(company.id));
-      this.companyBillingAccounts.set(accounts);
-      const selected = accounts.find((account) =>
-        account.companies.some((item) => item.companyId === company.id && item.enabled)
-      ) ?? accounts[0] ?? null;
-      this.companyBillingSelectedId.set(selected?.id ?? null);
-      this.companyBillingDraft.set(selected
-        ? this.companyBillingDraftFromAccount(selected, company)
-        : this.companyBillingDraftFromCompany(company)
-      );
-    } catch (error) {
-      this.companyBillingAccounts.set([]);
-      this.companyBillingSelectedId.set(null);
-      this.companyBillingDraft.set(this.companyBillingDraftFromCompany(company));
-      this.companyEditError.set(this.apiErrorMessage(error, 'Настройки общего счета не загрузились.'));
-    } finally {
-      this.companyBillingLoading.set(false);
-    }
-  }
 
-  private companyBillingDraftFromAccount(
-    account: CommonBillingAccountResponse,
-    company?: CompanyEditPayload | null
-  ): CompanyBillingDraft {
-    return {
-      name: account.name || this.defaultCompanyBillingName(company),
-      enabled: account.enabled,
-      autoRepeatOrders: account.autoRepeatOrders
-    };
-  }
 
-  private companyBillingDraftFromCompany(company?: CompanyEditPayload | null): CompanyBillingDraft {
-    return {
-      name: this.defaultCompanyBillingName(company),
-      enabled: true,
-      autoRepeatOrders: true
-    };
-  }
 
-  private defaultCompanyBillingName(company?: CompanyEditPayload | null): string {
-    return company?.title ? `${company.title} - общий счет` : 'Новый общий счет';
-  }
 
-  private upsertCompanyBillingAccount(account: CommonBillingAccountResponse): void {
-    this.companyBillingAccounts.update((accounts) => [
-      account,
-      ...accounts.filter((item) => item.id !== account.id)
-    ]);
-  }
 
-  private companyEditDraftFromPayload(payload: CompanyEditPayload): CompanyUpdateRequest {
-    return {
-      title: payload.title ?? '',
-      urlChat: payload.urlChat ?? '',
-      urlSite: payload.urlSite ?? '',
-      telephone: payload.telephone ?? '',
-      city: payload.city ?? '',
-      email: payload.email ?? '',
-      categoryId: payload.category?.id ?? null,
-      subCategoryId: payload.subCategory?.id ?? null,
-      statusId: payload.status?.id ?? null,
-      managerId: payload.manager?.id ?? null,
-      commentsCompany: payload.commentsCompany ?? '',
-      active: payload.active,
-      newWorkerId: null,
-      newFilialCityId: null,
-      newFilialTitle: '',
-      newFilialUrl: ''
-    };
-  }
 
-  private normalizedCompanyEditDraft(draft: CompanyUpdateRequest): CompanyUpdateRequest {
-    return {
-      ...draft,
-      title: draft.title.trim(),
-      urlChat: draft.urlChat.trim(),
-      urlSite: draft.urlSite.trim(),
-      telephone: draft.telephone.trim(),
-      city: draft.city.trim(),
-      email: draft.email.trim(),
-      commentsCompany: draft.commentsCompany.trim(),
-      newFilialTitle: draft.newFilialTitle.trim(),
-      newFilialUrl: draft.newFilialUrl.trim()
-    };
-  }
+
 
   private patchCompanyFromEdit(payload: CompanyEditPayload): void {
     const patch = {
@@ -4591,11 +4164,14 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   private async loadCompanyPayload(managerId?: number | null, preserved?: CompanyPreservedFields): Promise<void> {
+    const ticket = this.companyCreateSession.beginRead('payload');
+    if (!ticket) { return; }
     this.companyLoading.set(true);
     this.companyError.set(null);
 
     try {
-      const payload = await firstValueFrom(this.api.getCompanyCreatePayload('manual', null, managerId));
+      const payload = await this.companyCreateSession.read(ticket, this.companiesApi.getCompanyCreatePayload('manual', null, managerId));
+      if (!payload || !this.companyCreateSession.accepts(ticket)) { return; }
       this.companyPayload.set(payload);
       this.companySubCategories.set(payload.subCategories ?? []);
       this.companyDraft.set({
@@ -4603,17 +4179,24 @@ export class ManagerPage implements OnInit, OnDestroy {
         ...preserved
       });
     } catch (error) {
+      if (!this.companyCreateSession.accepts(ticket)) { return; }
       this.companyError.set(this.apiErrorMessage(error, 'Не удалось загрузить данные для компании.'));
     } finally {
-      this.companyLoading.set(false);
+      if (this.companyCreateSession.accepts(ticket)) { this.companyLoading.set(false); }
     }
   }
 
   private async loadCompanySubCategories(categoryId: number): Promise<void> {
+    const ticket = this.companyCreateSession.beginRead('subcategories');
+    if (!ticket) { return; }
     try {
-      this.companySubCategories.set(await firstValueFrom(this.api.getCompanySubcategories(categoryId)));
+      const subCategories = await this.companyCreateSession.read(ticket, this.companiesApi.getCompanySubcategories(categoryId));
+      if (!subCategories || !this.companyCreateSession.accepts(ticket) || this.companyDraft()?.categoryId !== categoryId) { return; }
+      this.companySubCategories.set(subCategories);
     } catch (error) {
-      this.companyError.set(this.apiErrorMessage(error, 'Не удалось загрузить подкатегории.'));
+      if (this.companyCreateSession.accepts(ticket) && this.companyDraft()?.categoryId === categoryId) {
+        this.companyError.set(this.apiErrorMessage(error, 'Не удалось загрузить подкатегории.'));
+      }
     }
   }
 

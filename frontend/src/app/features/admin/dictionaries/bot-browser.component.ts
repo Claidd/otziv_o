@@ -2,7 +2,8 @@ import { Component, HostListener, OnDestroy, computed, inject, signal } from '@a
 import { DomSanitizer } from '@angular/platform-browser';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { AdminDictionariesApi, BotBrowserMetadata } from '../../../core/admin-dictionaries.api';
+import type { BotBrowserMetadata } from '../../../core/admin-dictionaries.api';
+import { AdminAccountsApi } from '../../../core/admin-accounts.api';
 import { appEnvironment } from '../../../core/app-environment';
 import { prepareBotBrowserVncUrl } from '../../../core/bot-browser-vnc-url';
 import { apiErrorMessage } from '../../../shared/api-error-message';
@@ -17,7 +18,7 @@ import { LoadErrorCardComponent } from '../../../shared/load-error-card.componen
 export class BotBrowserComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly sanitizer = inject(DomSanitizer);
-  private readonly dictionariesApi = inject(AdminDictionariesApi);
+  private readonly dictionariesApi = inject(AdminAccountsApi);
   private botId = 0;
   private sessionBotId = 0;
   private sessionOpen = false;

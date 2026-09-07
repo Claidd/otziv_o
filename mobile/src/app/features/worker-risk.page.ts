@@ -1,3 +1,5 @@
+import { inject } from '@angular/core';
+import { ManagerWorkerRiskApi } from '../core/manager-worker-risk.api';
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, computed, signal } from '@angular/core';
@@ -9,7 +11,7 @@ import {
   RefresherCustomEvent
 } from '@ionic/angular/standalone';
 import {
-  ApiService,
+  type ApiService,
   Page,
   WorkerRiskIncident,
   WorkerRiskIncidentLevel,
@@ -627,6 +629,7 @@ const EMPTY_RISK_PAGE: Page<WorkerRiskIncident> = {
   `]
 })
 export class WorkerRiskPage implements OnInit {
+  private readonly managerWorkerRiskApi = inject(ManagerWorkerRiskApi);
   readonly tabs: RiskStatusTab[] = [
     { key: 'OPEN', label: 'Открытые', icon: 'warning' },
     { key: 'RESOLVED', label: 'Проверенные', icon: 'task_alt' },
@@ -645,9 +648,7 @@ export class WorkerRiskPage implements OnInit {
   readonly highRiskCount = computed(() => this.incidents().filter((incident) => incident.level === 'HIGH_RISK').length);
   readonly managerReviewCount = computed(() => this.incidents().filter((incident) => incident.level === 'MANAGER_REVIEW').length);
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly router: Router,
+  constructor(private readonly router: Router,
     private readonly confirm: MobileConfirmService
   ) {}
 
@@ -671,7 +672,7 @@ export class WorkerRiskPage implements OnInit {
   load(done?: () => void): void {
     this.loading.set(true);
     this.error.set(null);
-    this.api.getManagerWorkerRiskIncidents(this.status()).subscribe({
+    this.managerWorkerRiskApi.getManagerWorkerRiskIncidents(this.status()).subscribe({
       next: (page) => {
         this.page.set(page);
         this.loading.set(false);
@@ -722,7 +723,7 @@ export class WorkerRiskPage implements OnInit {
     }
 
     this.mutatingId.set(incident.id);
-    this.api.rollbackManagerWorkerRiskIncident(incident.id).subscribe({
+    this.managerWorkerRiskApi.rollbackManagerWorkerRiskIncident(incident.id).subscribe({
       next: (updated) => {
         this.notice.set(updated.rollbackMessage || 'Действие обработано.');
         this.mutatingId.set(null);
@@ -789,7 +790,7 @@ export class WorkerRiskPage implements OnInit {
 
     this.mutatingId.set(incident.id);
     this.error.set(null);
-    this.api.setManagerWorkerRiskIncidentResolution(incident.id, action, penaltyPoints).subscribe({
+    this.managerWorkerRiskApi.setManagerWorkerRiskIncidentResolution(incident.id, action, penaltyPoints).subscribe({
       next: () => {
         this.notice.set(this.noticeFor(action));
         this.mutatingId.set(null);

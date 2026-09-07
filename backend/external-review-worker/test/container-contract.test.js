@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(testDirectory, "../../..");
 const node22Base = "node:22-bookworm-slim";
-const node22Digest = "sha256:f32b81066cde10a75dbac96646099533316d94bac4150c55da1636e1f0ffdc46";
+const node22Digest = "sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5";
 
 test("external worker image is Node 22, lockfile based and non-root with writable-path check", () => {
   const rawDockerfile = read("backend/external-review-worker/Dockerfile");

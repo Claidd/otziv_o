@@ -6,7 +6,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "lead_sync_queue")
+@Table(name = "lead_command_queue")
 @Data
 @Builder
 @NoArgsConstructor
@@ -30,7 +30,7 @@ public class LeadSyncQueue {
 
     /** Полный JSON-пэйлоад, который будем ретраить как есть */
     @Lob
-    @Column(name = "payload_json", columnDefinition = "TEXT")
+    @Column(name = "payload_json", columnDefinition = "MEDIUMTEXT")
     private String payloadJson;
 
     /** Количество неудачных попыток */

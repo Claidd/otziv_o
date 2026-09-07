@@ -979,6 +979,7 @@ $webImage = "${DockerHubNamespace}/${WebRepository}:${Tag}"
 $externalReviewWorkerImage = "${DockerHubNamespace}/${ExternalReviewWorkerRepository}:${Tag}"
 $deployBundlePaths = @(
     "docker-compose.yaml",
+    "compose.monitoring.yaml",
     ".dockerignore",
     "Dockerfile.whatsapp",
     "whatsapp\package.json",
@@ -987,6 +988,13 @@ $deployBundlePaths = @(
     "whatsapp\chromium-launch.js",
     "whatsapp\chromium-smoke.js",
     "whatsapp\internal-auth.js",
+    "whatsapp\operation-ledger.js",
+    "whatsapp\outbound-routes.js",
+    "whatsapp\task-limiter.js",
+    "whatsapp\client-lifecycle.js",
+    "whatsapp\remote-session-fence.js",
+    "whatsapp\remote-session-admin.js",
+    "whatsapp\puppeteer-compatibility.js",
     "whatsapp\message-webhook.js",
     "whatsapp\raw-chat-reconciliation.js",
     "whatsapp\group-invite.js",
@@ -999,11 +1007,15 @@ $deployBundlePaths = @(
     "infrastructure\loki",
     "infrastructure\tempo",
     "infrastructure\alloy",
+    "infrastructure\docker-observer",
+    "infrastructure\runtime-security",
+    "infrastructure\monitoring",
     "infrastructure\grafana",
     "infrastructure\systemd\otziv-prod-up.timer",
     "infrastructure\systemd\otziv-prod-up.service.in",
     "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh",
     "infrastructure\scripts\prod\validate-flyway-migrations.sh",
+    "infrastructure\scripts\prod\rollout-docker-observer.sh",
     "infrastructure\scripts\prod\create-pre-deploy-db-backup.sh",
     "infrastructure\scripts\prod\otziv-prod-up.sh",
     "infrastructure\scripts\prod\register-max-webhook.sh",
@@ -2989,6 +3001,9 @@ compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_
 compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh whatsapp_vika -c 'node_uid="`$(id -u node)"; node_gid="`$(id -g node)"; chown -R "`$node_uid:`$node_gid" /auth' </dev/null
 recreate_service_with_retry whatsapp_lika
 recreate_service_with_retry whatsapp_vika
+. infrastructure/scripts/prod/rollout-docker-observer.sh
+rollout_docker_observer
+# Prune obsolete profile services only after each observer consumer passed log flow.
 if [ "`$deploy_external_review_worker" = "1" ]; then
   compose --profile external-review up -d --remove-orphans --no-deps dozzle alloy
 else

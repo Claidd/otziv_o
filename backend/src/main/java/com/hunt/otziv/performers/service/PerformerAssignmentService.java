@@ -37,6 +37,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+import java.util.function.Supplier;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -66,6 +71,10 @@ public class PerformerAssignmentService {
     private final PerformerRolloutService rolloutService;
     private final PerformerAssignmentScreenshotStorage screenshotStorage;
     private final CityDistanceService cityDistanceService;
+    private final PerformerMutationLockService mutationLocks;
+    private final PerformerNotificationService notifications;
+    private final PerformerNotificationRepository notificationRepository;
+    private final PlatformTransactionManager transactionManager;
 
     @Value("${performers.offer.ttl-minutes:10}")
     private int offerTtlMinutes;
@@ -88,8 +97,9 @@ public class PerformerAssignmentService {
     @Value("${performers.payout.default-amount:0}")
     private BigDecimal defaultPayoutAmount;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int createAssignmentsForOrder(Long orderId) {
+        mutationLocks.order(orderId);
         Order order = orderRepository.findByIdForOrderDto(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         List<Review> reviews = reviewRepository.getAllByOrderId(orderId);
@@ -108,16 +118,20 @@ public class PerformerAssignmentService {
         return created;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int createDueAssignments() {
         LocalDate cutoffDate = assignmentCutoffDate();
-        List<Review> reviews = reviewRepository.findPerformerAssignmentCandidates(
+        List<Long> reviews = reviewRepository.findPerformerAssignmentCandidates(
                 cutoffDate,
                 PageRequest.of(0, assignmentBatchSize)
-        );
+        ).stream().map(Review::getId).toList();
         int created = 0;
-        for (Review review : reviews) {
-            if (createAssignmentIfEligible(order(review), review, cutoffDate)) {
+        for (Long reviewId : reviews) {
+            if (inTransaction(() -> {
+                mutationLocks.review(reviewId);
+                Review review = reviewRepository.findById(reviewId).orElseThrow();
+                return createAssignmentIfEligible(order(review), review, cutoffDate);
+            })) {
                 created++;
             }
         }
@@ -127,55 +141,39 @@ public class PerformerAssignmentService {
         return created;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int offerQueuedAssignments() {
-        List<ReviewPerformerAssignment> assignments = assignmentRepository.findQueue(
-                List.of(PerformerAssignmentStatus.CREATED),
-                PageRequest.of(0, offerBatchSize)
-        );
+        List<Long> assignments = assignmentRepository.findQueuedIds(PageRequest.of(0, offerBatchSize));
         int offered = 0;
-        for (ReviewPerformerAssignment assignment : assignments) {
-            if (!rolloutService.isAllowed(assignment)) {
-                continue;
-            }
-            if (createOffer(assignment)) {
+        for (Long id : assignments) {
+            if (inTransaction(() -> {
+                ReviewPerformerAssignment assignment = mutationLocks.assignment(id);
+                return assignment.getStatus() == PerformerAssignmentStatus.CREATED
+                        && rolloutService.isAllowed(assignment) && createOffer(assignment);
+            })) {
                 offered++;
             }
         }
         return offered;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int expireOffers() {
-        List<ReviewPerformerOffer> offers = offerRepository.findExpired(LocalDateTime.now(), PageRequest.of(0, offerBatchSize));
+        List<Long> offers = offerRepository.findExpiredIds(notificationRepository.now(), PageRequest.of(0, offerBatchSize));
         int expired = 0;
-        for (ReviewPerformerOffer offer : offers) {
-            offer.setStatus(PerformerOfferStatus.EXPIRED);
-            offer.setRespondedAt(LocalDateTime.now());
-            offerRepository.save(offer);
-
-            PerformerProfile performer = offer.getPerformer();
-            performer.setExpiredOfferCount(performer.getExpiredOfferCount() + 1);
-            performerProfileRepository.save(performer);
-
-            ReviewPerformerAssignment assignment = offer.getAssignment();
-            if (assignment.getStatus() == PerformerAssignmentStatus.OFFERING) {
-                assignment.setStatus(PerformerAssignmentStatus.CREATED);
-                assignmentRepository.save(assignment);
-            }
-            expired++;
+        for (Long offerId : offers) {
+            if (inTransaction(() -> expireLockedOffer(mutationLocks.offer(offerId)))) expired++;
         }
         return expired;
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int notifyReadyToPublish() {
-        List<ReviewPerformerAssignment> assignments = assignmentRepository.findReadyToPublish(
-                LocalDateTime.now(),
-                PageRequest.of(0, offerBatchSize)
-        );
-        assignments.forEach(telegramNotificationService::sendReadyToPublish);
-        return assignments.size();
+        int created = 0;
+        for (Long id : notificationRepository.readyAssignmentIds(offerBatchSize)) {
+            if (notifications.reconcileReady(id)) created++;
+        }
+        return created;
     }
 
     @Transactional(readOnly = true)
@@ -209,8 +207,7 @@ public class PerformerAssignmentService {
             Long telegramUserId,
             Long telegramChatId
     ) {
-        ReviewPerformerOffer offer = offerRepository.findByIdForAction(offerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Предложение не найдено"));
+        ReviewPerformerOffer offer = mutationLocks.offer(offerId);
         PerformerProfile performer = requireActiveTelegramPerformer(offer, telegramUserId, telegramChatId);
         return acceptOfferInternal(offer, performer.getId());
     }
@@ -223,8 +220,7 @@ public class PerformerAssignmentService {
 
     @Transactional
     public void declineOfferFromTelegram(Long offerId, Long telegramUserId, Long telegramChatId) {
-        ReviewPerformerOffer offer = offerRepository.findByIdForAction(offerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Предложение не найдено"));
+        ReviewPerformerOffer offer = mutationLocks.offer(offerId);
         PerformerProfile performer = requireActiveTelegramPerformer(offer, telegramUserId, telegramChatId);
         declineOfferInternal(offer, performer.getId(), "Отказ из Telegram");
     }
@@ -240,11 +236,13 @@ public class PerformerAssignmentService {
         assignment.setStatus(PerformerAssignmentStatus.WAITING_PUBLICATION);
         assignment.setWalkedAt(now);
         assignment.setPublishAvailableAt(now.plusDays(Math.max(0, publishDelayDays)));
+        assignment.setPublicationGeneration(Math.addExact(assignment.getPublicationGeneration(), 1));
         if (assignment.getReview() != null) {
             assignment.getReview().setVigul(true);
             reviewRepository.save(assignment.getReview());
         }
         assignmentRepository.save(assignment);
+        notifications.ready(assignment);
         evidenceRepository.save(PerformerTaskEvidence.builder()
                 .assignment(assignment)
                 .type(PerformerTaskEvidenceType.WALK)
@@ -319,6 +317,10 @@ public class PerformerAssignmentService {
         PerformerProfile performer = performer(username);
         ReviewPerformerAssignment assignment = assignmentForPerformer(assignmentId, performer);
         String comment = request == null ? "" : request.getComment();
+        if (!List.of(PerformerAssignmentStatus.ACCEPTED, PerformerAssignmentStatus.WAITING_PUBLICATION,
+                PerformerAssignmentStatus.PUBLISHED_CLAIMED).contains(assignment.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Задание уже обработано");
+        }
         if (!hasText(comment)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Опишите проблему");
         }
@@ -338,7 +340,9 @@ public class PerformerAssignmentService {
 
     @Transactional
     public void markVerifiedByReview(Long reviewId) {
+        mutationLocks.review(reviewId);
         ReviewPerformerAssignment assignment = assignmentRepository.findByReviewId(reviewId).orElse(null);
+        if (assignment != null) assignment = mutationLocks.assignment(assignment.getId());
         if (assignment == null || assignment.getStatus() == PerformerAssignmentStatus.VERIFIED || assignment.getStatus() == PerformerAssignmentStatus.PAID) {
             return;
         }
@@ -364,6 +368,11 @@ public class PerformerAssignmentService {
     }
 
     private boolean createOffer(ReviewPerformerAssignment assignment) {
+        if (!offerRepository.findByAssignmentIdAndStatuses(assignment.getId(), List.of(PerformerOfferStatus.OFFERED)).isEmpty()) {
+            // A legacy inconsistent assignment must not create a second live offer.
+            assignment.setStatus(PerformerAssignmentStatus.OFFERING);
+            return false;
+        }
         if (assignment.getCity() == null || assignment.getOrder() == null) {
             assignment.setStatus(PerformerAssignmentStatus.REJECTED);
             assignment.setRejectReason("Не указан город задания");
@@ -383,6 +392,8 @@ public class PerformerAssignmentService {
         }
 
         PerformerProfile performer = bestCandidate(assignment.getCity().getId(), candidates);
+        performer = mutationLocks.profile(performer.getId());
+        if (performer.getStatus() != PerformerProfileStatus.ACTIVE) return false;
         LocalDateTime now = LocalDateTime.now();
         ReviewPerformerOffer offer = ReviewPerformerOffer.builder()
                 .assignment(assignment)
@@ -391,17 +402,15 @@ public class PerformerAssignmentService {
                 .offeredAt(now)
                 .expiresAt(now.plusMinutes(Math.max(1, offerTtlMinutes)))
                 .telegramChatId(performer.getUser().getTelegramChatId())
+                .deliveryState("PENDING")
+                .responseTtlMinutes(Math.max(1, Math.min(offerTtlMinutes, 1440)))
                 .build();
         offerRepository.save(offer);
 
         assignment.setStatus(PerformerAssignmentStatus.OFFERING);
         assignmentRepository.save(assignment);
 
-        telegramNotificationService.sendOffer(offer)
-                .ifPresent(messageId -> {
-                    offer.setTelegramMessageId(messageId);
-                    offerRepository.save(offer);
-                });
+        notifications.offer(offer);
         return true;
     }
 
@@ -481,8 +490,7 @@ public class PerformerAssignmentService {
     }
 
     private PerformerAssignmentResponse acceptOfferInternal(Long offerId, Long performerId) {
-        ReviewPerformerOffer offer = offerRepository.findByIdForAction(offerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Предложение не найдено"));
+        ReviewPerformerOffer offer = mutationLocks.offer(offerId);
         return acceptOfferInternal(offer, performerId);
     }
 
@@ -490,13 +498,13 @@ public class PerformerAssignmentService {
         if (!Objects.equals(offer.getPerformer().getId(), performerId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это предложение назначено другому исполнителю");
         }
+        requireActive(mutationLocks.profile(performerId));
         if (offer.getStatus() != PerformerOfferStatus.OFFERED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Предложение уже обработано");
         }
-        if (offer.getExpiresAt().isBefore(LocalDateTime.now())) {
-            offer.setStatus(PerformerOfferStatus.EXPIRED);
-            offer.setRespondedAt(LocalDateTime.now());
-            offerRepository.save(offer);
+        // Pending/UNKNOWN delivery does not start the response deadline. The
+        // authenticated cabinet remains a valid alternative acceptance channel.
+        if (deadlineApplies(offer) && !offer.getExpiresAt().isAfter(notificationRepository.now())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Время предложения истекло");
         }
         ReviewPerformerAssignment assignment = offer.getAssignment();
@@ -521,13 +529,12 @@ public class PerformerAssignmentService {
         assignment.setStatus(PerformerAssignmentStatus.ACCEPTED);
         assignment.setAcceptedAt(LocalDateTime.now());
         assignmentRepository.save(assignment);
-        telegramNotificationService.sendAccepted(assignment);
+        notifications.accepted(assignment);
         return mapper.toResponse(assignment);
     }
 
     private void declineOfferInternal(Long offerId, Long performerId, String reason) {
-        ReviewPerformerOffer offer = offerRepository.findByIdForAction(offerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Предложение не найдено"));
+        ReviewPerformerOffer offer = mutationLocks.offer(offerId);
         declineOfferInternal(offer, performerId, reason);
     }
 
@@ -535,6 +542,7 @@ public class PerformerAssignmentService {
         if (!Objects.equals(offer.getPerformer().getId(), performerId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Это предложение назначено другому исполнителю");
         }
+        requireActive(mutationLocks.profile(performerId));
         if (offer.getStatus() != PerformerOfferStatus.OFFERED) {
             return;
         }
@@ -628,7 +636,7 @@ public class PerformerAssignmentService {
                 .build();
         payoutRepository.save(payout);
 
-        PerformerProfile performer = assignment.getPerformer();
+        PerformerProfile performer = mutationLocks.profile(assignment.getPerformer().getId());
         performer.setCompletedCount(performer.getCompletedCount() + 1);
         performer.setLastActiveAt(LocalDateTime.now());
         performerProfileRepository.save(performer);
@@ -651,12 +659,44 @@ public class PerformerAssignmentService {
     }
 
     private ReviewPerformerAssignment assignmentForPerformer(Long assignmentId, PerformerProfile performer) {
-        ReviewPerformerAssignment assignment = assignmentRepository.findByIdForDetails(assignmentId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Задание не найдено"));
+        ReviewPerformerAssignment assignment = mutationLocks.assignment(assignmentId);
+        requireActive(mutationLocks.profile(performer.getId()));
         if (assignment.getPerformer() == null || !Objects.equals(assignment.getPerformer().getId(), performer.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Задание назначено другому исполнителю");
         }
         return assignment;
+    }
+
+    private void requireActive(PerformerProfile performer) {
+        if (performer.getStatus() != PerformerProfileStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Профиль исполнителя еще не активирован");
+        }
+    }
+
+    static boolean deadlineApplies(ReviewPerformerOffer offer) {
+        return List.of("DELIVERED", "LEGACY_CONFIRMED", "LEGACY_UNKNOWN").contains(offer.getDeliveryState());
+    }
+
+    private boolean expireLockedOffer(ReviewPerformerOffer offer) {
+        LocalDateTime now = notificationRepository.now();
+        if (offer.getStatus() != PerformerOfferStatus.OFFERED || !deadlineApplies(offer)
+                || offer.getExpiresAt().isAfter(now)) return false;
+        offer.setStatus(PerformerOfferStatus.EXPIRED);
+        offer.setRespondedAt(now);
+        // Missing historical evidence is not evidence of the performer's fault.
+        if (List.of("DELIVERED", "LEGACY_CONFIRMED").contains(offer.getDeliveryState())) {
+            PerformerProfile performer = mutationLocks.profile(offer.getPerformer().getId());
+            performer.setExpiredOfferCount(performer.getExpiredOfferCount() + 1);
+        }
+        ReviewPerformerAssignment assignment = offer.getAssignment();
+        if (assignment.getStatus() == PerformerAssignmentStatus.OFFERING) assignment.setStatus(PerformerAssignmentStatus.CREATED);
+        return true;
+    }
+
+    private <T> T inTransaction(Supplier<T> work) {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return transaction.execute(status -> work.get());
     }
 
     private PerformerProfile performer(String username) {

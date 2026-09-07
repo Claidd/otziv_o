@@ -1,5 +1,34 @@
+import { ManualPaymentTasksApi } from './manual-payment-tasks.api';
+import { ManagerBoardApi } from './manager-board.api';
+import { ManagerControlApi } from './manager-control.api';
+import { ManagerReportsApi } from './manager-reports.api';
+import { ManagerWorkerRiskApi } from './manager-worker-risk.api';
+import { ManagerArchiveApi } from './manager-archive.api';
+import { ManagerCompanyActionsApi } from './manager-company-actions.api';
+import { ManagerOrdersApi } from './manager-orders.api';
+import { ManagerManualPaymentsApi } from './manager-manual-payments.api';
+import { ManagerReviewActionsApi } from './manager-review-actions.api';
+import { ManagerReviewTasksApi } from './manager-review-tasks.api';
+import { PublicPaymentsApi } from './public-payments.api';
+import { PaymentAdministrationApi } from './payment-administration.api';
+import { PaymentConfigurationApi } from './payment-configuration.api';
+import { WorkerApi } from './worker.api';
+import { CompaniesApi } from './companies.api';
+import { CommonBillingApi } from './common-billing.api';
+import { DictionariesApi } from './dictionaries.api';
+import { OrderReviewsApi } from './order-reviews.api';
+import { OrderPaymentApi } from './order-payment.api';
+import { OrderCompanyReportApi } from './order-company-report.api';
+import { decodePublicPaymentLink, decodeCommonBillingAccounts } from '@otziv/client-common/billing-payments';
+import type { CommonBillingCompanyResponse, CommonInvoiceSummaryResponse, CommonBillingAccountResponse, InvoicePaymentMode, PublicPaymentLink } from '@otziv/client-common/billing-payments';
+export type { CommonBillingCompanyResponse, CommonInvoiceSummaryResponse, CommonBillingAccountResponse, InvoicePaymentMode, PublicPaymentLink } from '@otziv/client-common/billing-payments';
+import { ManagerCompanyEditorApi } from './manager-company-editor.api';
+import { ManagerCompanyBillingApi } from './manager-company-billing.api';
+import type { OrderEditPayload } from '@otziv/client-common/order-editor';
+export type { OrderEditPayload } from '@otziv/client-common/order-editor';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { ManagerOrderEditorApi } from './manager-order-editor.api';
 import { forkJoin, map, Observable } from 'rxjs';
 import {
   botBrowserApiPaths,
@@ -354,34 +383,6 @@ export interface TbankPaymentStatus {
   failUrl: string;
 }
 
-export interface PublicPaymentLink {
-  token: string;
-  orderId?: number | null;
-  companyTitle: string;
-  filialTitle: string;
-  serviceTitle: string;
-  amount: number;
-  amountKopecks: number;
-  description: string;
-  payerEmail?: string | null;
-  status: string;
-  paymentMethod?: PaymentMethod;
-  provider?: 'T_BANK' | 'TOCHKA' | string | null;
-  sbpBankSelectionSupported?: boolean | null;
-  expiresAt: string;
-  payable: boolean;
-  paymentPageMode?: TbankPaymentPageMode;
-  tpayEnabled?: boolean;
-  sberpayEnabled?: boolean;
-  mirpayEnabled?: boolean;
-  manualPaymentType?: ManualPaymentType | string | null;
-  manualPhone?: string | null;
-  manualRecipientName?: string | null;
-  manualPaymentUrl?: string | null;
-  manualPaymentButtonLabel?: string | null;
-  manualComment?: string | null;
-  receiptStatus?: PaymentReceiptStatus | string | null;
-}
 
 export interface PublicPaymentInitResponse {
   paymentUrl: string;
@@ -872,13 +873,7 @@ export interface ClientMessageStatus {
   sentCount: number;
 }
 
-export interface CommonBillingCompanyResponse {
-  companyId: number;
-  companyTitle: string;
-  enabled: boolean;
-}
 
-export type InvoicePaymentMode = 'AUTO_ROUTING' | 'OWNER_PAPER_INVOICE';
 
 export type CommonInvoicePaymentRouteChangeTarget =
   | 'EMPLOYEE_REQUISITES'
@@ -916,62 +911,7 @@ export interface CommonInvoiceArchivePreviewResponse {
   blockers: string[];
 }
 
-export interface CommonInvoiceSummaryResponse {
-  id: number;
-  accountId: number;
-  accountName: string;
-  title: string;
-  token: string;
-  publicUrl: string;
-  status: string;
-  totalOrders: number;
-  readyOrders: number;
-  paidOrders: number;
-  amount: number;
-  paid: number;
-  remaining: number;
-  amountKopecks: number;
-  paidKopecks: number;
-  remainingKopecks: number;
-  sentAt?: string | null;
-  lastReminderAt?: string | null;
-  nextReminderAt?: string | null;
-  closedAt?: string | null;
-  closedBy?: string | null;
-  closeReason?: string | null;
-  lastError?: string | null;
-  paymentSuccessNotificationError?: string | null;
-  tbankOrderId?: string | null;
-  tbankPaymentId?: string | null;
-  tbankPaymentAmountKopecks?: number | null;
-  tbankTerminalLabel?: string | null;
-  tbankTerminalKey?: string | null;
-  paymentRouteType?: string | null;
-  paymentRouteProvider?: string | null;
-  paymentRouteProfileName?: string | null;
-  paymentRouteRecipient?: string | null;
-  paymentRouteManualTaskId?: number | null;
-  contractorPaymentRoute: boolean;
-  paymentRouteSelectedAt?: string | null;
-  invoicePurpose?: string | null;
-  supersedesInvoiceId?: number | null;
-  invoicePaymentMode?: InvoicePaymentMode | null;
-  paperInvoiceIssuedAt?: string | null;
-}
 
-export interface CommonBillingAccountResponse {
-  id: number;
-  name: string;
-  enabled: boolean;
-  autoRepeatOrders: boolean;
-  managerId?: number | null;
-  managerName?: string | null;
-  invoiceCompanyId?: number | null;
-  invoiceCompanyTitle?: string | null;
-  companies: CommonBillingCompanyResponse[];
-  currentInvoice?: CommonInvoiceSummaryResponse | null;
-  invoicePaymentMode?: InvoicePaymentMode | null;
-}
 
 export interface CommonBillingAccountRequest {
   name: string;
@@ -1035,29 +975,6 @@ export interface OrderNotesResponse {
   companyComments: string;
 }
 
-export interface OrderEditPayload {
-  id: number;
-  companyId: number;
-  companyTitle: string;
-  status: string;
-  sum?: number;
-  amount?: number;
-  counter?: number;
-  created: string;
-  changed: string;
-  payDay: string;
-  orderComments: string;
-  commentsCompany: string;
-  complete: boolean;
-  filial?: ManagerOption | null;
-  manager?: ManagerOption | null;
-  worker?: ManagerOption | null;
-  filials: ManagerOption[];
-  managers: ManagerOption[];
-  workers: ManagerOption[];
-  canComplete: boolean;
-  canDelete: boolean;
-}
 
 export interface OrderUpdateRequest {
   filialId: number | null;
@@ -3380,6 +3297,30 @@ export interface PersonalReminderRequest {
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
+  private readonly manualPaymentTasksApi = inject(ManualPaymentTasksApi);
+  private readonly managerBoardApi = inject(ManagerBoardApi);
+  private readonly managerControlApi = inject(ManagerControlApi);
+  private readonly managerReportsApi = inject(ManagerReportsApi);
+  private readonly managerWorkerRiskApi = inject(ManagerWorkerRiskApi);
+  private readonly managerArchiveApi = inject(ManagerArchiveApi);
+  private readonly managerCompanyActionsApi = inject(ManagerCompanyActionsApi);
+  private readonly managerOrdersApi = inject(ManagerOrdersApi);
+  private readonly managerManualPaymentsApi = inject(ManagerManualPaymentsApi);
+  private readonly managerReviewActionsApi = inject(ManagerReviewActionsApi);
+  private readonly managerReviewTasksApi = inject(ManagerReviewTasksApi);
+  private readonly publicPaymentsApi = inject(PublicPaymentsApi);
+  private readonly paymentAdministrationApi = inject(PaymentAdministrationApi);
+  private readonly paymentConfigurationApi = inject(PaymentConfigurationApi);
+  private readonly workerApi = inject(WorkerApi);
+  private readonly companiesApi = inject(CompaniesApi);
+  private readonly commonBillingApi = inject(CommonBillingApi);
+  private readonly dictionariesApi = inject(DictionariesApi);
+  private readonly orderReviewsApi = inject(OrderReviewsApi);
+  private readonly orderPaymentApi = inject(OrderPaymentApi);
+  private readonly companyReportApi = inject(OrderCompanyReportApi);
+  private readonly companyEditorApi = inject(ManagerCompanyEditorApi);
+  private readonly companyBillingApi = inject(ManagerCompanyBillingApi);
+  private readonly orderEditorApi = inject(ManagerOrderEditorApi);
   constructor(private readonly http: HttpClient) {}
 
   getCurrentUser(): Observable<CurrentUser> {
@@ -3430,225 +3371,80 @@ export class ApiService {
 
   getManagerManualPaymentSettings(
     options: { forceRefresh?: boolean } = {}
-  ): Observable<ManagerManualPaymentSettings> {
-    let params = new HttpParams();
-    if (options.forceRefresh) {
-      params = params.set('refresh', 'true');
-    }
-    return this.http.get<ManagerManualPaymentSettings>(
-      this.apiUrl('/api/cabinet/payment-profile/manual'),
-      { params }
-    );
-  }
+  ): Observable<ManagerManualPaymentSettings> { return this.manualPaymentTasksApi.getManagerManualPaymentSettings(options); }
 
   updateManagerManualPaymentSettings(
     request: UpdateManagerManualPaymentSettingsRequest
-  ): Observable<ManagerManualPaymentSettings> {
-    return this.http.put<ManagerManualPaymentSettings>(
-      this.apiUrl('/api/cabinet/payment-profile/manual'),
-      request
-    );
-  }
+  ): Observable<ManagerManualPaymentSettings> { return this.manualPaymentTasksApi.updateManagerManualPaymentSettings(request); }
 
   getManagerManualPaymentTasks(
     options: { forceRefresh?: boolean } = {}
-  ): Observable<ManualPaymentTaskResponse[]> {
-    let params = new HttpParams();
-    if (options.forceRefresh) {
-      params = params.set('refresh', 'true');
-    }
-    return this.http.get<ManualPaymentTaskResponse[]>(
-      this.apiUrl('/api/cabinet/manual-payment-tasks'),
-      { params }
-    );
-  }
+  ): Observable<ManualPaymentTaskResponse[]> { return this.manualPaymentTasksApi.getManagerManualPaymentTasks(options); }
 
   getManagerManualPaymentTaskAccountingTargets(
     targetAmountKopecks: number,
     taskId?: number | null
-  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
-    let params = new HttpParams().set('targetAmountKopecks', targetAmountKopecks);
-    if (taskId != null) {
-      params = params.set('taskId', taskId);
-    }
-    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
-      this.apiUrl('/api/cabinet/manual-payment-tasks/accounting-targets'),
-      { params }
-    );
-  }
+  ): Observable<ManualPaymentTaskAccountingTargetOption[]> { return this.manualPaymentTasksApi.getManagerManualPaymentTaskAccountingTargets(targetAmountKopecks, taskId); }
 
   createManagerManualPaymentTask(
     request: CreateManualPaymentTaskRequest
-  ): Observable<ManualPaymentTaskResponse> {
-    return this.http.post<ManualPaymentTaskResponse>(
-      this.apiUrl('/api/cabinet/manual-payment-tasks'),
-      request
-    );
-  }
+  ): Observable<ManualPaymentTaskResponse> { return this.manualPaymentTasksApi.createManagerManualPaymentTask(request); }
 
   updateManagerManualPaymentTaskStatus(
     taskId: number,
     status: ManualPaymentTaskStatus
-  ): Observable<ManualPaymentTaskResponse> {
-    return this.http.put<ManualPaymentTaskResponse>(
-      this.apiUrl(`/api/cabinet/manual-payment-tasks/${taskId}/status`),
-      { status }
-    );
-  }
+  ): Observable<ManualPaymentTaskResponse> { return this.manualPaymentTasksApi.updateManagerManualPaymentTaskStatus(taskId, status); }
 
   updateManagerManualPaymentTask(
     taskId: number,
     request: UpdateManualPaymentTaskRequest
-  ): Observable<ManualPaymentTaskResponse> {
-    return this.http.put<ManualPaymentTaskResponse>(
-      this.apiUrl(`/api/cabinet/manual-payment-tasks/${taskId}`),
-      request
-    );
-  }
+  ): Observable<ManualPaymentTaskResponse> { return this.manualPaymentTasksApi.updateManagerManualPaymentTask(taskId, request); }
 
-  getDictionarySummary(includeAdminTabs: boolean): Observable<DictionarySummary> {
-    const categories$ = this.http.get<unknown[]>(this.apiUrl('/api/admin/categories'));
+  getDictionarySummary(includeAdminTabs: boolean): Observable<DictionarySummary>{ return this.dictionariesApi.getDictionarySummary(includeAdminTabs); }
 
-    if (!includeAdminTabs) {
-      return categories$.pipe(
-        map((categories) => ({
-          items: [
-            {
-              key: 'categories',
-              title: 'Категории',
-              icon: 'category',
-              count: categories.length,
-              description: 'доступные категории компаний'
-            }
-          ]
-        }))
-      );
-    }
+  getAdminCategories(keyword = ''): Observable<AdminCategory[]>{ return this.dictionariesApi.getAdminCategories(keyword); }
 
-    return forkJoin({
-      categories: categories$,
-      cities: this.http.get<unknown[]>(this.apiUrl('/api/admin/cities')),
-      products: this.http.get<{ products?: unknown[] }>(this.apiUrl('/api/admin/products')),
-      phones: this.http.get<{ phones?: unknown[] }>(this.apiUrl('/api/admin/phones')),
-      accounts: this.http.get<BotCountResponse>(this.apiUrl('/api/admin/bots/count')),
-      promo: this.http.get<unknown[]>(this.apiUrl('/api/admin/promo-texts')),
-      managerTexts: this.http.get<unknown[]>(this.apiUrl('/api/admin/manager-texts'))
-    }).pipe(
-      map((response) => ({
-        items: [
-          { key: 'categories', title: 'Категории', icon: 'category', count: response.categories.length, description: 'типы компаний и подкатегории' },
-          { key: 'cities', title: 'Города', icon: 'location_city', count: response.cities.length, description: 'города филиалов и заказов' },
-          { key: 'products', title: 'Продукты', icon: 'inventory_2', count: response.products.products?.length ?? 0, description: 'услуги и цены заказов' },
-          { key: 'phones', title: 'Телефоны', icon: 'phone_iphone', count: response.phones.phones?.length ?? 0, description: 'телефоны операторов' },
-          { key: 'accounts', title: 'Аккаунты', icon: 'manage_accounts', count: response.accounts.count ?? 0, description: 'боты и рабочие аккаунты' },
-          { key: 'promo', title: 'Промо', icon: 'smart_button', count: response.promo.length, description: 'шаблоны сообщений' },
-          { key: 'managerTexts', title: 'Тексты менеджеров', icon: 'article', count: response.managerTexts.length, description: 'персональные тексты' }
-        ]
-      }))
-    );
-  }
+  createAdminCategory(request: TitleRequest): Observable<AdminCategory>{ return this.dictionariesApi.createAdminCategory(request); }
 
-  getAdminCategories(keyword = ''): Observable<AdminCategory[]> {
-    return this.http.get<AdminCategory[]>(this.apiUrl('/api/admin/categories'), {
-      params: this.keywordParams(keyword)
-    });
-  }
+  updateAdminCategory(id: number, request: TitleRequest): Observable<AdminCategory>{ return this.dictionariesApi.updateAdminCategory(id, request); }
 
-  createAdminCategory(request: TitleRequest): Observable<AdminCategory> {
-    return this.http.post<AdminCategory>(this.apiUrl('/api/admin/categories'), request);
-  }
+  deleteAdminCategory(id: number): Observable<void>{ return this.dictionariesApi.deleteAdminCategory(id); }
 
-  updateAdminCategory(id: number, request: TitleRequest): Observable<AdminCategory> {
-    return this.http.put<AdminCategory>(this.apiUrl(`/api/admin/categories/${id}`), request);
-  }
+  getAdminSubCategories(keyword = '', categoryId?: number | null): Observable<AdminSubCategory[]>{ return this.dictionariesApi.getAdminSubCategories(keyword, categoryId); }
 
-  deleteAdminCategory(id: number): Observable<void> {
-    return this.http.delete<void>(this.apiUrl(`/api/admin/categories/${id}`));
-  }
+  createAdminSubCategory(request: SubCategoryRequest): Observable<AdminSubCategory>{ return this.dictionariesApi.createAdminSubCategory(request); }
 
-  getAdminSubCategories(keyword = '', categoryId?: number | null): Observable<AdminSubCategory[]> {
-    let params = this.keywordParams(keyword);
-    if (categoryId != null) {
-      params = params.set('categoryId', String(categoryId));
-    }
-    return this.http.get<AdminSubCategory[]>(this.apiUrl('/api/admin/subcategories'), { params });
-  }
+  updateAdminSubCategory(id: number, request: SubCategoryRequest): Observable<AdminSubCategory>{ return this.dictionariesApi.updateAdminSubCategory(id, request); }
 
-  createAdminSubCategory(request: SubCategoryRequest): Observable<AdminSubCategory> {
-    return this.http.post<AdminSubCategory>(this.apiUrl('/api/admin/subcategories'), request);
-  }
+  deleteAdminSubCategory(id: number): Observable<void>{ return this.dictionariesApi.deleteAdminSubCategory(id); }
 
-  updateAdminSubCategory(id: number, request: SubCategoryRequest): Observable<AdminSubCategory> {
-    return this.http.put<AdminSubCategory>(this.apiUrl(`/api/admin/subcategories/${id}`), request);
-  }
+  getAdminCities(keyword = ''): Observable<AdminCity[]>{ return this.dictionariesApi.getAdminCities(keyword); }
 
-  deleteAdminSubCategory(id: number): Observable<void> {
-    return this.http.delete<void>(this.apiUrl(`/api/admin/subcategories/${id}`));
-  }
+  createAdminCity(request: TitleRequest): Observable<AdminCity>{ return this.dictionariesApi.createAdminCity(request); }
 
-  getAdminCities(keyword = ''): Observable<AdminCity[]> {
-    return this.http.get<AdminCity[]>(this.apiUrl('/api/admin/cities'), {
-      params: this.keywordParams(keyword)
-    });
-  }
+  updateAdminCity(id: number, request: TitleRequest): Observable<AdminCity>{ return this.dictionariesApi.updateAdminCity(id, request); }
 
-  createAdminCity(request: TitleRequest): Observable<AdminCity> {
-    return this.http.post<AdminCity>(this.apiUrl('/api/admin/cities'), request);
-  }
+  deleteAdminCity(id: number): Observable<void>{ return this.dictionariesApi.deleteAdminCity(id); }
 
-  updateAdminCity(id: number, request: TitleRequest): Observable<AdminCity> {
-    return this.http.put<AdminCity>(this.apiUrl(`/api/admin/cities/${id}`), request);
-  }
+  getAdminProducts(keyword = ''): Observable<ProductsResponse>{ return this.dictionariesApi.getAdminProducts(keyword); }
 
-  deleteAdminCity(id: number): Observable<void> {
-    return this.http.delete<void>(this.apiUrl(`/api/admin/cities/${id}`));
-  }
+  createAdminProduct(request: ProductRequest): Observable<AdminProduct>{ return this.dictionariesApi.createAdminProduct(request); }
 
-  getAdminProducts(keyword = ''): Observable<ProductsResponse> {
-    return this.http.get<ProductsResponse>(this.apiUrl('/api/admin/products'), {
-      params: this.keywordParams(keyword)
-    });
-  }
+  updateAdminProduct(id: number, request: ProductRequest): Observable<AdminProduct>{ return this.dictionariesApi.updateAdminProduct(id, request); }
 
-  createAdminProduct(request: ProductRequest): Observable<AdminProduct> {
-    return this.http.post<AdminProduct>(this.apiUrl('/api/admin/products'), request);
-  }
+  deleteAdminProduct(id: number): Observable<void>{ return this.dictionariesApi.deleteAdminProduct(id); }
 
-  updateAdminProduct(id: number, request: ProductRequest): Observable<AdminProduct> {
-    return this.http.put<AdminProduct>(this.apiUrl(`/api/admin/products/${id}`), request);
-  }
+  getAdminBots(keyword = '', page = 0, size = 50): Observable<BotsResponse>{ return this.dictionariesApi.getAdminBots(keyword, page, size); }
 
-  deleteAdminProduct(id: number): Observable<void> {
-    return this.http.delete<void>(this.apiUrl(`/api/admin/products/${id}`));
-  }
+  getAdminBot(id: number): Observable<AdminBot>{ return this.dictionariesApi.getAdminBot(id); }
 
-  getAdminBots(keyword = '', page = 0, size = 50): Observable<BotsResponse> {
-    return this.http.get<BotsResponse>(this.apiUrl('/api/admin/bots'), {
-      params: this.keywordParams(keyword).set('page', String(page)).set('size', String(size))
-    });
-  }
+  createAdminBot(request: BotRequest): Observable<AdminBot>{ return this.dictionariesApi.createAdminBot(request); }
 
-  getAdminBot(id: number): Observable<AdminBot> {
-    return this.http.get<AdminBot>(this.apiUrl(`/api/admin/bots/${id}`));
-  }
+  updateAdminBot(id: number, request: BotRequest): Observable<AdminBot>{ return this.dictionariesApi.updateAdminBot(id, request); }
 
-  createAdminBot(request: BotRequest): Observable<AdminBot> {
-    return this.http.post<AdminBot>(this.apiUrl('/api/admin/bots'), request);
-  }
+  deleteAdminBot(id: number): Observable<void>{ return this.dictionariesApi.deleteAdminBot(id); }
 
-  updateAdminBot(id: number, request: BotRequest): Observable<AdminBot> {
-    return this.http.put<AdminBot>(this.apiUrl(`/api/admin/bots/${id}`), request);
-  }
-
-  deleteAdminBot(id: number): Observable<void> {
-    return this.http.delete<void>(this.apiUrl(`/api/admin/bots/${id}`));
-  }
-
-  importAdminBots(file: File): Observable<BotImportResponse> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return this.http.post<BotImportResponse>(this.apiUrl('/api/admin/bots/import'), formData);
-  }
+  importAdminBots(file: File): Observable<BotImportResponse>{ return this.dictionariesApi.importAdminBots(file); }
 
   openAdminBotBrowser(botId: number): Observable<BotBrowserOpenResponse> {
     return this.http.post<BotBrowserOpenResponse>(
@@ -3710,39 +3506,19 @@ export class ApiService {
     return this.http.put<UserAssignments>(this.apiUrl(`/api/admin/users/${id}/assignments`), request);
   }
 
-  getAdminPromoTextManagement(keyword = ''): Observable<PromoTextManagementResponse> {
-    return this.http.get<PromoTextManagementResponse>(this.apiUrl('/api/admin/promo-texts/management'), {
-      params: this.keywordParams(keyword)
-    });
-  }
+  getAdminPromoTextManagement(keyword = ''): Observable<PromoTextManagementResponse>{ return this.dictionariesApi.getAdminPromoTextManagement(keyword); }
 
-  createAdminPromoText(request: PromoTextRequest): Observable<AdminPromoText> {
-    return this.http.post<AdminPromoText>(this.apiUrl('/api/admin/promo-texts'), request);
-  }
+  createAdminPromoText(request: PromoTextRequest): Observable<AdminPromoText>{ return this.dictionariesApi.createAdminPromoText(request); }
 
-  updateAdminPromoText(id: number, request: PromoTextRequest): Observable<AdminPromoText> {
-    return this.http.put<AdminPromoText>(this.apiUrl(`/api/admin/promo-texts/${id}`), request);
-  }
+  updateAdminPromoText(id: number, request: PromoTextRequest): Observable<AdminPromoText>{ return this.dictionariesApi.updateAdminPromoText(id, request); }
 
-  saveAdminPromoTextAssignment(request: PromoTextAssignmentRequest): Observable<PromoTextAssignment> {
-    return this.http.put<PromoTextAssignment>(this.apiUrl('/api/admin/promo-text-assignments'), request);
-  }
+  saveAdminPromoTextAssignment(request: PromoTextAssignmentRequest): Observable<PromoTextAssignment>{ return this.dictionariesApi.saveAdminPromoTextAssignment(request); }
 
-  resetAdminPromoTextAssignment(managerId: number, section: string, buttonKey: string): Observable<void> {
-    return this.http.delete<void>(
-      this.apiUrl(`/api/admin/promo-text-assignments/${managerId}/${section}/${buttonKey}`)
-    );
-  }
+  resetAdminPromoTextAssignment(managerId: number, section: string, buttonKey: string): Observable<void>{ return this.dictionariesApi.resetAdminPromoTextAssignment(managerId, section, buttonKey); }
 
-  getAdminManagerTexts(keyword = ''): Observable<AdminManagerText[]> {
-    return this.http.get<AdminManagerText[]>(this.apiUrl('/api/admin/manager-texts'), {
-      params: this.keywordParams(keyword)
-    });
-  }
+  getAdminManagerTexts(keyword = ''): Observable<AdminManagerText[]>{ return this.dictionariesApi.getAdminManagerTexts(keyword); }
 
-  updateAdminManagerText(managerId: number, request: ManagerTextRequest): Observable<AdminManagerText> {
-    return this.http.put<AdminManagerText>(this.apiUrl(`/api/admin/manager-texts/${managerId}`), request);
-  }
+  updateAdminManagerText(managerId: number, request: ManagerTextRequest): Observable<AdminManagerText>{ return this.dictionariesApi.updateAdminManagerText(managerId, request); }
 
   getAdminNagulSettings(): Observable<AdminNagulSettings> {
     return this.http.get<AdminNagulSettings>(this.apiUrl('/api/admin/settings/nagul'));
@@ -3865,737 +3641,313 @@ export class ApiService {
     );
   }
 
-  getManagerBoard(query: ManagerBoardQuery = {}): Observable<ManagerBoard> {
-    let params = new HttpParams()
-      .set('section', query.section ?? 'companies')
-      .set('status', query.status?.trim() || 'Все')
-      .set('keyword', query.keyword?.trim() ?? '')
-      .set('pageNumber', String(query.pageNumber ?? 0))
-      .set('pageSize', String(query.pageSize ?? 10))
-      .set('sortDirection', query.sortDirection ?? 'desc');
+  getManagerBoard(query: ManagerBoardQuery = {}): Observable<ManagerBoard> { return this.managerBoardApi.getManagerBoard(query); }
 
-    if (query.companyId != null) {
-      params = params.set('companyId', String(query.companyId));
-    }
+  getManagerControlToday(): Observable<ManagerControlSummary> { return this.managerControlApi.getManagerControlToday(); }
 
-    return this.http.get<ManagerBoard>(this.apiUrl('/api/manager/board'), { params });
-  }
-
-  getManagerControlToday(): Observable<ManagerControlSummary> {
-    return this.http.get<ManagerControlSummary>(this.apiUrl('/api/admin/manager-control/today'));
-  }
-
-  sendManagerDailyAuditToTelegram(date?: string): Observable<ManagerSummaryTelegramSendResponse> {
-    return this.http.post<ManagerSummaryTelegramSendResponse>(
-      this.apiUrl('/api/admin/manager-daily-summary/send-test'),
-      {},
-      { params: date ? { date } : {} }
-    );
-  }
+  sendManagerDailyAuditToTelegram(date?: string): Observable<ManagerSummaryTelegramSendResponse> { return this.managerReportsApi.sendManagerDailyAuditToTelegram(date); }
 
   startManagerReportReviewTest(
     date?: string,
     managerId?: number
-  ): Observable<ManagerReportReviewTestStartResponse> {
-    const params: Record<string, string> = {};
-    if (date) params['date'] = date;
-    if (managerId) params['managerId'] = String(managerId);
-    return this.http.post<ManagerReportReviewTestStartResponse>(
-      this.apiUrl('/api/admin/manager-daily-summary/review-test'),
-      {},
-      { params }
-    );
-  }
+  ): Observable<ManagerReportReviewTestStartResponse> { return this.managerReportsApi.startManagerReportReviewTest(date, managerId); }
 
-  getManagerReportReviews(date?: string): Observable<ManagerReportReview[]> {
-    return this.http.get<ManagerReportReview[]>(
-      this.apiUrl('/api/admin/manager-daily-summary/review-sessions'),
-      { params: date ? { date } : {} }
-    );
-  }
+  getManagerReportReviews(date?: string): Observable<ManagerReportReview[]> { return this.managerReportsApi.getManagerReportReviews(date); }
 
   resolveManagerReportDispute(
     reviewId: number,
     payload: ManagerReportDisputeResolutionPayload
-  ): Observable<void> {
-    return this.http.post<void>(
-      this.apiUrl(`/api/admin/manager-daily-summary/review-sessions/${reviewId}/resolve-dispute`),
-      payload
-    );
-  }
+  ): Observable<void> { return this.managerReportsApi.resolveManagerReportDispute(reviewId, payload); }
 
-  syncManagerControlToday(): Observable<ManagerControlSummary> {
-    return this.http.post<ManagerControlSummary>(this.apiUrl('/api/admin/manager-control/today/sync'), {});
-  }
+  syncManagerControlToday(): Observable<ManagerControlSummary> { return this.managerControlApi.syncManagerControlToday(); }
 
-  getManagerControlDetails(managerId: number): Observable<ManagerControlManagerDetail> {
-    return this.http.get<ManagerControlManagerDetail>(
-      this.apiUrl(`/api/admin/manager-control/managers/${managerId}/today`)
-    );
-  }
+  getManagerControlDetails(managerId: number): Observable<ManagerControlManagerDetail> { return this.managerControlApi.getManagerControlDetails(managerId); }
 
-  syncManagerControlDetails(managerId: number): Observable<ManagerControlManagerDetail> {
-    return this.http.post<ManagerControlManagerDetail>(
-      this.apiUrl(`/api/admin/manager-control/managers/${managerId}/today/sync`),
-      {}
-    );
-  }
+  syncManagerControlDetails(managerId: number): Observable<ManagerControlManagerDetail> { return this.managerControlApi.syncManagerControlDetails(managerId); }
 
-  reconcileManagerControlClientMessages(managerId: number): Observable<ManagerControlClientMessageReconciliation> {
-    return this.http.post<ManagerControlClientMessageReconciliation>(
-      this.apiUrl(`/api/admin/manager-control/managers/${managerId}/today/reconcile-client-messages`),
-      {}
-    );
-  }
+  reconcileManagerControlClientMessages(managerId: number): Observable<ManagerControlClientMessageReconciliation> { return this.managerControlApi.reconcileManagerControlClientMessages(managerId); }
 
-  acceptManagerControl(controlId: number): Observable<ManagerControlManagerDetail> {
-    return this.http.post<ManagerControlManagerDetail>(
-      this.apiUrl(`/api/admin/manager-control/controls/${controlId}/accept`),
-      {}
-    );
-  }
+  acceptManagerControl(controlId: number): Observable<ManagerControlManagerDetail> { return this.managerControlApi.acceptManagerControl(controlId); }
 
-  markManagerControlStage(controlId: number, payload: ManagerControlStagePayload): Observable<ManagerControlManagerDetail> {
-    return this.http.post<ManagerControlManagerDetail>(
-      this.apiUrl(`/api/admin/manager-control/controls/${controlId}/stage`),
-      payload
-    );
-  }
+  markManagerControlStage(controlId: number, payload: ManagerControlStagePayload): Observable<ManagerControlManagerDetail> { return this.managerControlApi.markManagerControlStage(controlId, payload); }
 
-  closeManagerControlDay(controlId: number, payload: ManagerControlClosePayload): Observable<ManagerControlCloseResponse> {
-    return this.http.post<ManagerControlCloseResponse>(
-      this.apiUrl(`/api/admin/manager-control/controls/${controlId}/close`),
-      payload
-    );
-  }
+  closeManagerControlDay(controlId: number, payload: ManagerControlClosePayload): Observable<ManagerControlCloseResponse> { return this.managerControlApi.closeManagerControlDay(controlId, payload); }
 
-  actionManagerControlItem(itemId: number, payload: ManagerControlActionPayload): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/admin/manager-control/items/${itemId}/action`), payload);
-  }
+  actionManagerControlItem(itemId: number, payload: ManagerControlActionPayload): Observable<void> { return this.managerControlApi.actionManagerControlItem(itemId, payload); }
 
   actionManagerControlConcreteItem(
     concreteItemId: number,
     payload: ManagerControlActionPayload
-  ): Observable<ManagerControlConcreteItem> {
-    return this.http.post<ManagerControlConcreteItem>(
-      this.apiUrl(`/api/admin/manager-control/concrete-items/${concreteItemId}/action`),
-      payload
-    );
-  }
+  ): Observable<ManagerControlConcreteItem> { return this.managerControlApi.actionManagerControlConcreteItem(concreteItemId, payload); }
 
-  sendManagerControlClientMessage(concreteItemId: number): Observable<ManagerControlConcreteItem> {
-    return this.http.post<ManagerControlConcreteItem>(
-      this.apiUrl(`/api/admin/manager-control/concrete-items/${concreteItemId}/send-client-message`),
-      {}
-    );
-  }
+  sendManagerControlClientMessage(concreteItemId: number): Observable<ManagerControlConcreteItem> { return this.managerControlApi.sendManagerControlClientMessage(concreteItemId); }
 
   replyManagerControlClientMessage(
     concreteItemId: number,
     payload: ManagerControlClientReplyPayload
-  ): Observable<ManagerControlConcreteItem> {
-    return this.http.post<ManagerControlConcreteItem>(
-      this.apiUrl(`/api/admin/manager-control/concrete-items/${concreteItemId}/reply`),
-      payload
-    );
-  }
+  ): Observable<ManagerControlConcreteItem> { return this.managerControlApi.replyManagerControlClientMessage(concreteItemId, payload); }
 
-  repairManagerControlConcreteItem(concreteItemId: number): Observable<ManagerControlConcreteItem> {
-    return this.http.post<ManagerControlConcreteItem>(
-      this.apiUrl(`/api/admin/manager-control/concrete-items/${concreteItemId}/repair`),
-      {}
-    );
-  }
+  repairManagerControlConcreteItem(concreteItemId: number): Observable<ManagerControlConcreteItem> { return this.managerControlApi.repairManagerControlConcreteItem(concreteItemId); }
 
   getManagerWorkerRiskIncidents(
     status: WorkerRiskIncidentStatus = 'OPEN',
     page = 0,
     size = 50
-  ): Observable<Page<WorkerRiskIncident>> {
-    const params = new HttpParams()
-      .set('status', status)
-      .set('page', String(page))
-      .set('size', String(size));
-
-    return this.http.get<Page<WorkerRiskIncident>>(this.apiUrl('/api/manager/worker-risk/incidents'), { params });
-  }
+  ): Observable<Page<WorkerRiskIncident>> { return this.managerWorkerRiskApi.getManagerWorkerRiskIncidents(status, page, size); }
 
   setManagerWorkerRiskIncidentResolution(
     incidentId: number,
     action: WorkerRiskResolutionAction,
     penaltyPoints?: number,
     comment?: string | null
-  ): Observable<WorkerRiskIncident> {
-    return this.http.post<WorkerRiskIncident>(
-      this.apiUrl(`/api/manager/worker-risk/incidents/${incidentId}/resolution`),
-      { action, penaltyPoints, comment }
-    );
-  }
+  ): Observable<WorkerRiskIncident> { return this.managerWorkerRiskApi.setManagerWorkerRiskIncidentResolution(incidentId, action, penaltyPoints, comment); }
 
-  rollbackManagerWorkerRiskIncident(incidentId: number): Observable<WorkerRiskIncident> {
-    return this.http.post<WorkerRiskIncident>(
-      this.apiUrl(`/api/manager/worker-risk/incidents/${incidentId}/rollback`),
-      {}
-    );
-  }
+  rollbackManagerWorkerRiskIncident(incidentId: number): Observable<WorkerRiskIncident> { return this.managerWorkerRiskApi.rollbackManagerWorkerRiskIncident(incidentId); }
 
-  getManagerArchiveOrders(query: ManagerArchiveOrdersQuery = {}): Observable<Page<ArchiveOrderListItem>> {
-    const params = new HttpParams()
-      .set('keyword', query.keyword?.trim() ?? '')
-      .set('mode', query.mode ?? 'all')
-      .set('pageNumber', String(query.pageNumber ?? 0))
-      .set('pageSize', String(query.pageSize ?? 10))
-      .set('sortDirection', query.sortDirection ?? 'desc');
+  getManagerArchiveOrders(query: ManagerArchiveOrdersQuery = {}): Observable<Page<ArchiveOrderListItem>> { return this.managerArchiveApi.getManagerArchiveOrders(query); }
 
-    return this.http.get<Page<ArchiveOrderListItem>>(this.apiUrl('/api/manager/archive/orders'), { params });
-  }
+  getManagerArchiveOrder(orderId: number): Observable<ArchiveOrderDetailsPayload> { return this.managerArchiveApi.getManagerArchiveOrder(orderId); }
 
-  getManagerArchiveOrder(orderId: number): Observable<ArchiveOrderDetailsPayload> {
-    return this.http.get<ArchiveOrderDetailsPayload>(this.apiUrl(`/api/manager/archive/orders/${orderId}`));
-  }
+  restoreManagerArchiveOrder(orderId: number, targetStatus = 'Архив'): Observable<ArchiveRestoreResult> { return this.managerArchiveApi.restoreManagerArchiveOrder(orderId, targetStatus); }
 
-  restoreManagerArchiveOrder(orderId: number, targetStatus = 'Архив'): Observable<ArchiveRestoreResult> {
-    const params = new HttpParams()
-      .set('targetStatus', targetStatus)
-      .set('confirm', 'true');
+  updateManagerCompanyStatus(companyId: number, status: string): Observable<void> { return this.managerCompanyActionsApi.updateManagerCompanyStatus(companyId, status); }
 
-    return this.http.post<ArchiveRestoreResult>(
-      this.apiUrl(`/api/manager/archive/orders/${orderId}/restore`),
-      {},
-      { params }
-    );
-  }
+  updateManagerOrderStatus(orderId: number, status: string): Observable<void> { return this.managerOrdersApi.updateManagerOrderStatus(orderId, status); }
 
-  updateManagerCompanyStatus(companyId: number, status: string): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/manager/companies/${companyId}/status`), { status });
-  }
-
-  updateManagerOrderStatus(orderId: number, status: string): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/manager/orders/${orderId}/status`), { status });
-  }
-
-  getManagerManualCardPaymentContext(orderId: number): Observable<ManualCardPaymentContext> {
-    return this.http.get<ManualCardPaymentContext>(
-      this.apiUrl(`/api/manager/orders/${orderId}/manual-card-payment-context`)
-    );
-  }
+  getManagerManualCardPaymentContext(orderId: number): Observable<ManualCardPaymentContext> { return this.managerManualPaymentsApi.getManagerManualCardPaymentContext(orderId); }
 
   confirmManagerManualCardPayment(
     orderId: number,
     request: ManualCardPaymentConfirmationRequest
-  ): Observable<ManagerManualCardPaymentResult> {
-    return this.http.post<ManagerManualCardPaymentResult>(
-      this.apiUrl(`/api/manager/orders/${orderId}/confirm-manual-card-payment`),
-      request
-    );
-  }
+  ): Observable<ManagerManualCardPaymentResult> { return this.managerManualPaymentsApi.confirmManagerManualCardPayment(orderId, request); }
 
-  updateManagerOrderClientWaiting(orderId: number, waitingForClient: boolean): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/orders/${orderId}/client-waiting`), { waitingForClient });
-  }
+  updateManagerOrderClientWaiting(orderId: number, waitingForClient: boolean): Observable<void>{ return this.workerApi.updateManagerOrderClientWaiting(orderId, waitingForClient); }
 
-  getManagerCompanyOrderCreate(companyId: number): Observable<CompanyOrderCreatePayload> {
-    return this.http.get<CompanyOrderCreatePayload>(this.apiUrl(`/api/manager/companies/${companyId}/order-create`));
-  }
+  getManagerCompanyOrderCreate(companyId: number): Observable<CompanyOrderCreatePayload> { return this.managerCompanyActionsApi.getManagerCompanyOrderCreate(companyId); }
 
   createManagerCompanyOrder(
     companyId: number,
     request: CompanyOrderCreateRequest
-  ): Observable<CompanyOrderCreateResult> {
-    return this.http.post<CompanyOrderCreateResult>(this.apiUrl(`/api/manager/companies/${companyId}/orders`), request);
-  }
+  ): Observable<CompanyOrderCreateResult> { return this.managerCompanyActionsApi.createManagerCompanyOrder(companyId, request); }
 
   getManagerOrderEdit(orderId: number): Observable<OrderEditPayload> {
-    return this.http.get<OrderEditPayload>(this.apiUrl(`/api/manager/orders/${orderId}/edit`));
+    return this.orderEditorApi.getEdit(orderId);
   }
 
   updateManagerOrder(orderId: number, request: OrderUpdateRequest): Observable<OrderEditPayload> {
-    return this.http.put<OrderEditPayload>(this.apiUrl(`/api/manager/orders/${orderId}`), request);
+    return this.orderEditorApi.update(orderId, request);
   }
 
   deleteManagerOrder(orderId: number): Observable<void> {
-    return this.http.delete<void>(this.apiUrl(`/api/manager/orders/${orderId}`));
+    return this.orderEditorApi.delete(orderId);
   }
 
-  getManagerOrderDetails(orderId: number): Observable<OrderDetailsPayload> {
-    return this.http.get<OrderDetailsPayload>(this.apiUrl(`/api/manager/orders/${orderId}/details`));
-  }
+  getManagerOrderDetails(orderId: number): Observable<OrderDetailsPayload> { return this.managerOrdersApi.getManagerOrderDetails(orderId); }
 
-  getManagerOrderCompanyReport(orderId: number): Observable<CompanyDeepReportState> {
-    return this.http.get<CompanyDeepReportState>(this.apiUrl(`/api/manager/orders/${orderId}/company-report`));
-  }
+  getManagerOrderCompanyReport(orderId: number): Observable<CompanyDeepReportState> { return this.companyReportApi.getManagerOrderCompanyReport(orderId); }
 
-  startManagerOrderCompanyReport(orderId: number): Observable<CompanyDeepReportState> {
-    return this.http.post<CompanyDeepReportState>(this.apiUrl(`/api/manager/orders/${orderId}/company-report`), {});
-  }
+  startManagerOrderCompanyReport(orderId: number): Observable<CompanyDeepReportState> { return this.companyReportApi.startManagerOrderCompanyReport(orderId); }
 
-  refreshManagerOrderCompanyReport(orderId: number): Observable<CompanyDeepReportState> {
-    return this.http.post<CompanyDeepReportState>(this.apiUrl(`/api/manager/orders/${orderId}/company-report/refresh`), {});
-  }
+  refreshManagerOrderCompanyReport(orderId: number): Observable<CompanyDeepReportState> { return this.companyReportApi.refreshManagerOrderCompanyReport(orderId); }
 
-  addManagerOrderReview(orderId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(this.apiUrl(`/api/manager/orders/${orderId}/reviews`), {});
-  }
+  addManagerOrderReview(orderId: number): Observable<OrderDetailsPayload> { return this.managerReviewActionsApi.addManagerOrderReview(orderId); }
 
-  updateManagerOrderReviewText(orderId: number, reviewId: number, text: string): Observable<OrderReviewItem> {
-    return this.http.put<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/text`), { text });
-  }
+  updateManagerOrderReviewText(orderId: number, reviewId: number, text: string): Observable<OrderReviewItem>{ return this.orderReviewsApi.updateManagerOrderReviewText(orderId, reviewId, text); }
 
-  updateManagerOrderReviewAnswer(orderId: number, reviewId: number, answer: string): Observable<OrderReviewItem> {
-    return this.http.put<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/answer`), { answer });
-  }
+  updateManagerOrderReviewAnswer(orderId: number, reviewId: number, answer: string): Observable<OrderReviewItem>{ return this.orderReviewsApi.updateManagerOrderReviewAnswer(orderId, reviewId, answer); }
 
-  updateManagerOrderReviewNote(orderId: number, reviewId: number, comment: string): Observable<OrderReviewItem> {
-    return this.http.put<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/note`), { comment });
-  }
+  updateManagerOrderReviewNote(orderId: number, reviewId: number, comment: string): Observable<OrderReviewItem>{ return this.orderReviewsApi.updateManagerOrderReviewNote(orderId, reviewId, comment); }
 
-  updateManagerOrderReview(orderId: number, reviewId: number, request: ReviewUpdateRequest): Observable<OrderReviewItem> {
-    return this.http.put<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}`), request);
-  }
+  updateManagerOrderReview(orderId: number, reviewId: number, request: ReviewUpdateRequest): Observable<OrderReviewItem>{ return this.orderReviewsApi.updateManagerOrderReview(orderId, reviewId, request); }
 
-  uploadManagerOrderReviewPhoto(orderId: number, reviewId: number, file: File): Observable<OrderReviewItem> {
-    const formData = new FormData();
-    formData.append('file', file);
+  uploadManagerOrderReviewPhoto(orderId: number, reviewId: number, file: File): Observable<OrderReviewItem>{ return this.orderReviewsApi.uploadManagerOrderReviewPhoto(orderId, reviewId, file); }
 
-    return this.http.post<OrderReviewItem>(
-      this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/photo`),
-      formData
-    );
-  }
+  deleteManagerOrderReview(orderId: number, reviewId: number): Observable<OrderDetailsPayload>{ return this.orderReviewsApi.deleteManagerOrderReview(orderId, reviewId); }
 
-  deleteManagerOrderReview(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
-    return this.http.delete<OrderDetailsPayload>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}`));
-  }
+  publishManagerOrderReview(orderId: number, reviewId: number, source?: WorkerActivitySource): Observable<OrderDetailsPayload> { return this.managerReviewActionsApi.publishManagerOrderReview(orderId, reviewId, source); }
 
-  publishManagerOrderReview(orderId: number, reviewId: number, source?: WorkerActivitySource): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/publish`), source ?? {});
-  }
+  changeManagerOrderReviewText(orderId: number, reviewId: number): Observable<OrderReviewItem> { return this.managerReviewActionsApi.changeManagerOrderReviewText(orderId, reviewId); }
 
-  changeManagerOrderReviewText(orderId: number, reviewId: number): Observable<OrderReviewItem> {
-    return this.http.post<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/change-text`), {});
-  }
+  assignManagerOrderReviewNewAccount(orderId: number, reviewId: number, source?: WorkerActivitySource): Observable<OrderReviewItem> { return this.managerReviewActionsApi.assignManagerOrderReviewNewAccount(orderId, reviewId, source); }
 
-  assignManagerOrderReviewNewAccount(orderId: number, reviewId: number, source?: WorkerActivitySource): Observable<OrderReviewItem> {
-    return this.http.post<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/new-account`), source ?? {});
-  }
+  changeManagerOrderReviewBot(orderId: number, reviewId: number, source?: WorkerActivitySource): Observable<OrderReviewItem> { return this.managerReviewActionsApi.changeManagerOrderReviewBot(orderId, reviewId, source); }
 
-  changeManagerOrderReviewBot(orderId: number, reviewId: number, source?: WorkerActivitySource): Observable<OrderReviewItem> {
-    return this.http.post<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/change-bot`), source ?? {});
-  }
-
-  deactivateManagerOrderReviewBot(orderId: number, reviewId: number, botId: number, source?: WorkerActivitySource): Observable<OrderReviewItem> {
-    return this.http.post<OrderReviewItem>(
-      this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/bots/${botId}/deactivate`),
-      source ?? {}
-    );
-  }
+  deactivateManagerOrderReviewBot(orderId: number, reviewId: number, botId: number, source?: WorkerActivitySource): Observable<OrderReviewItem> { return this.managerReviewActionsApi.deactivateManagerOrderReviewBot(orderId, reviewId, botId, source); }
 
   revealManagerOrderReviewCredential(
     orderId: number,
     reviewId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<CredentialRevealResponse> {
-    return this.http.post<CredentialRevealResponse>(
-      this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/credential-reveal`),
-      { ...source, field }
-    );
-  }
+  ): Observable<CredentialRevealResponse> { return this.managerReviewActionsApi.revealManagerOrderReviewCredential(orderId, reviewId, field, source); }
 
   revealManagerBadReviewTaskCredential(
     orderId: number,
     taskId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<CredentialRevealResponse> {
-    return this.http.post<CredentialRevealResponse>(
-      this.apiUrl(`/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/credential-reveal`),
-      { ...source, field }
-    );
-  }
+  ): Observable<CredentialRevealResponse> { return this.managerReviewTasksApi.revealManagerBadReviewTaskCredential(orderId, taskId, field, source); }
 
   revealManagerRecoveryTaskCredential(
     orderId: number,
     taskId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<CredentialRevealResponse> {
-    return this.http.post<CredentialRevealResponse>(
-      this.apiUrl(`/api/manager/orders/${orderId}/recovery-tasks/${taskId}/credential-reveal`),
-      { ...source, field }
-    );
-  }
+  ): Observable<CredentialRevealResponse> { return this.managerReviewTasksApi.revealManagerRecoveryTaskCredential(orderId, taskId, field, source); }
 
-  cancelManagerBadReviewTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
-      this.apiUrl(`/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/cancel`),
-      {}
-    );
-  }
+  cancelManagerBadReviewTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> { return this.managerReviewTasksApi.cancelManagerBadReviewTask(orderId, taskId); }
 
-  completeManagerBadReviewTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
-      this.apiUrl(`/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/complete`),
-      {}
-    );
-  }
+  completeManagerBadReviewTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> { return this.managerReviewTasksApi.completeManagerBadReviewTask(orderId, taskId); }
 
   updateManagerBadReviewTask(
     orderId: number,
     taskId: number,
     request: BadReviewTaskUpdateRequest
-  ): Observable<OrderDetailsPayload> {
-    return this.http.put<OrderDetailsPayload>(
-      this.apiUrl(`/api/manager/orders/${orderId}/bad-review-tasks/${taskId}`),
-      request
-    );
-  }
+  ): Observable<OrderDetailsPayload> { return this.managerReviewTasksApi.updateManagerBadReviewTask(orderId, taskId, request); }
 
-  changeManagerBadReviewTaskBot(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
-      this.apiUrl(`/api/manager/orders/${orderId}/bad-review-tasks/${taskId}/change-bot`),
-      {}
-    );
-  }
+  changeManagerBadReviewTaskBot(orderId: number, taskId: number): Observable<OrderDetailsPayload> { return this.managerReviewTasksApi.changeManagerBadReviewTaskBot(orderId, taskId); }
 
-  createManagerReviewRecoveryTask(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
-      this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/recovery-tasks`),
-      {}
-    );
-  }
+  createManagerReviewRecoveryTask(orderId: number, reviewId: number): Observable<OrderDetailsPayload> { return this.managerReviewTasksApi.createManagerReviewRecoveryTask(orderId, reviewId); }
 
   updateManagerReviewRecoveryTask(
     orderId: number,
     taskId: number,
     request: ReviewRecoveryTaskUpdateRequest
-  ): Observable<OrderDetailsPayload> {
-    return this.http.put<OrderDetailsPayload>(
-      this.apiUrl(`/api/manager/orders/${orderId}/recovery-tasks/${taskId}`),
-      request
-    );
-  }
+  ): Observable<OrderDetailsPayload> { return this.managerReviewTasksApi.updateManagerReviewRecoveryTask(orderId, taskId, request); }
 
-  completeManagerReviewRecoveryTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
-      this.apiUrl(`/api/manager/orders/${orderId}/recovery-tasks/${taskId}/complete`),
-      {}
-    );
-  }
+  completeManagerReviewRecoveryTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> { return this.managerReviewTasksApi.completeManagerReviewRecoveryTask(orderId, taskId); }
 
-  deleteManagerReviewRecoveryTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
-    return this.http.delete<OrderDetailsPayload>(
-      this.apiUrl(`/api/manager/orders/${orderId}/recovery-tasks/${taskId}`)
-    );
-  }
+  deleteManagerReviewRecoveryTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> { return this.managerReviewTasksApi.deleteManagerReviewRecoveryTask(orderId, taskId); }
 
-  markManagerRecoveryClientNotified(orderId: number, batchId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
-      this.apiUrl(`/api/manager/orders/${orderId}/recovery-batches/${batchId}/client-notified`),
-      {}
-    );
-  }
+  markManagerRecoveryClientNotified(orderId: number, batchId: number): Observable<OrderDetailsPayload> { return this.managerReviewTasksApi.markManagerRecoveryClientNotified(orderId, batchId); }
 
-  createManagerReviewHelpDrafts(orderId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/help-drafts`), {});
-  }
+  createManagerReviewHelpDrafts(orderId: number): Observable<OrderDetailsPayload> { return this.managerReviewActionsApi.createManagerReviewHelpDrafts(orderId); }
 
-  createManagerReviewHelpDraftForCard(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(
-      this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/help-drafts`),
-      {}
-    );
-  }
+  createManagerReviewHelpDraftForCard(orderId: number, reviewId: number): Observable<OrderDetailsPayload> { return this.managerReviewActionsApi.createManagerReviewHelpDraftForCard(orderId, reviewId); }
 
-  updateManagerCompanyNote(companyId: number, companyComments: string): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/manager/companies/${companyId}/note`), { companyComments });
-  }
+  updateManagerCompanyNote(companyId: number, companyComments: string): Observable<void> { return this.managerCompanyActionsApi.updateManagerCompanyNote(companyId, companyComments); }
 
-  updateManagerOrderNote(orderId: number, orderComments: string): Observable<OrderNotesResponse> {
-    return this.http.put<OrderNotesResponse>(this.apiUrl(`/api/manager/orders/${orderId}/note`), { orderComments });
-  }
+  updateManagerOrderNote(orderId: number, orderComments: string): Observable<OrderNotesResponse>{ return this.orderReviewsApi.updateManagerOrderNote(orderId, orderComments); }
 
-  updateManagerOrderCompanyNote(orderId: number, companyComments: string): Observable<OrderNotesResponse> {
-    return this.http.put<OrderNotesResponse>(this.apiUrl(`/api/manager/orders/${orderId}/company-note`), { companyComments });
-  }
+  updateManagerOrderCompanyNote(orderId: number, companyComments: string): Observable<OrderNotesResponse>{ return this.orderReviewsApi.updateManagerOrderCompanyNote(orderId, companyComments); }
 
-  getCommonBillingAccounts(): Observable<CommonBillingAccountResponse[]> {
-    return this.http.get<CommonBillingAccountResponse[]>(this.apiUrl('/api/common-billing/accounts'));
-  }
+  getCommonBillingAccounts(): Observable<CommonBillingAccountResponse[]>{ return this.commonBillingApi.getCommonBillingAccounts(); }
 
   getCommonBillingAccountsForCompany(companyId: number): Observable<CommonBillingAccountResponse[]> {
-    return this.http.get<CommonBillingAccountResponse[]>(
-      this.apiUrl(`/api/common-billing/accounts/by-company/${companyId}`)
-    );
+    return this.companyBillingApi.getCommonBillingAccountsForCompany(companyId);
   }
 
   createCommonBillingAccount(request: CommonBillingAccountRequest): Observable<CommonBillingAccountResponse> {
-    return this.http.post<CommonBillingAccountResponse>(this.apiUrl('/api/common-billing/accounts'), request);
+    return this.companyBillingApi.createCommonBillingAccount(request);
   }
 
   updateCommonBillingAccount(
     accountId: number,
     request: CommonBillingAccountRequest
   ): Observable<CommonBillingAccountResponse> {
-    return this.http.put<CommonBillingAccountResponse>(
-      this.apiUrl(`/api/common-billing/accounts/${accountId}`),
-      request
-    );
+    return this.companyBillingApi.updateCommonBillingAccount(accountId, request);
   }
 
-  addCommonBillingCompany(accountId: number, companyId: number): Observable<CommonBillingAccountResponse> {
-    return this.http.post<CommonBillingAccountResponse>(
-      this.apiUrl(`/api/common-billing/accounts/${accountId}/companies/${companyId}`),
-      {}
-    );
-  }
+  addCommonBillingCompany(accountId: number, companyId: number): Observable<CommonBillingAccountResponse>{ return this.commonBillingApi.addCommonBillingCompany(accountId, companyId); }
 
   removeCommonBillingCompany(
     accountId: number,
     companyId: number,
     detachCurrent = false
   ): Observable<CommonBillingAccountResponse> {
-    const params = new HttpParams().set('detachCurrent', String(detachCurrent));
-    return this.http.delete<CommonBillingAccountResponse>(
-      this.apiUrl(`/api/common-billing/accounts/${accountId}/companies/${companyId}`),
-      { params }
-    );
+    return this.companyBillingApi.removeCommonBillingCompany(accountId, companyId, detachCurrent);
   }
 
-  getCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.get<CommonInvoiceDetailsResponse>(this.apiUrl(`/api/common-billing/invoices/${invoiceId}`));
-  }
+  getCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.getCommonInvoice(invoiceId); }
 
-  sendCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/send`),
-      {}
-    );
-  }
+  sendCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.sendCommonInvoice(invoiceId); }
 
   changeCommonInvoicePaymentMode(
     invoiceId: number,
     mode: InvoicePaymentMode
-  ): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-mode`),
-      { mode, confirmedUnpaid: true }
-    );
-  }
+  ): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.changeCommonInvoicePaymentMode(invoiceId, mode); }
 
   getCommonInvoicePaymentRouteChangeContext(
     invoiceId: number
-  ): Observable<CommonInvoicePaymentRouteChangeContextResponse> {
-    return this.http.get<CommonInvoicePaymentRouteChangeContextResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-route-change-context`)
-    );
-  }
+  ): Observable<CommonInvoicePaymentRouteChangeContextResponse>{ return this.commonBillingApi.getCommonInvoicePaymentRouteChangeContext(invoiceId); }
 
   changeCommonInvoicePaymentRoute(
     invoiceId: number,
     target: CommonInvoicePaymentRouteChangeTarget,
     expectedPaymentEvidenceToken: string,
     expectedTargetPaymentProfileId?: number | null
-  ): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-route-change`),
-      { target, confirmedUnpaid: true, expectedPaymentEvidenceToken, expectedTargetPaymentProfileId }
-    );
-  }
+  ): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.changeCommonInvoicePaymentRoute(invoiceId, target, expectedPaymentEvidenceToken, expectedTargetPaymentProfileId); }
 
-  markCommonInvoicePaperInvoiceIssued(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/paper-invoice/issued`),
-      {}
-    );
-  }
+  markCommonInvoicePaperInvoiceIssued(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.markCommonInvoicePaperInvoiceIssued(invoiceId); }
 
   markCommonInvoicePaperInvoicePaid(
     invoiceId: number,
     request: ManualPaymentConfirmationRequest
-  ): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/paper-invoice/paid`),
-      request
-    );
-  }
+  ): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.markCommonInvoicePaperInvoicePaid(invoiceId, request); }
 
-  remindCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/remind`),
-      {}
-    );
-  }
+  remindCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.remindCommonInvoice(invoiceId); }
 
   markCommonInvoicePaid(
     invoiceId: number,
     request: ManualPaymentConfirmationRequest
 
-  ): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/paid`),
-      request
-    );
-  }
+  ): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.markCommonInvoicePaid(invoiceId, request); }
 
-  getCommonManualPaymentMode(invoiceId: number): Observable<CommonManualPaymentAttributionModeResponse> {
-    return this.http.get<CommonManualPaymentAttributionModeResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/manual-payment-mode`)
-    );
-  }
+  getCommonManualPaymentMode(invoiceId: number): Observable<CommonManualPaymentAttributionModeResponse>{ return this.commonBillingApi.getCommonManualPaymentMode(invoiceId); }
 
-  getCommonManualPaymentOptions(invoiceId: number): Observable<CommonManualPaymentOptions> {
-    return this.http.get<CommonManualPaymentOptions>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/manual-payment-options`)
-    );
-  }
+  getCommonManualPaymentOptions(invoiceId: number): Observable<CommonManualPaymentOptions>{ return this.commonBillingApi.getCommonManualPaymentOptions(invoiceId); }
 
   confirmCommonManualPayment(
     invoiceId: number,
     mode: CommonManualPaymentMode,
     request: CommonManualPaymentAttributionRequest
-  ): Observable<CommonInvoiceDetailsResponse> {
-    const action = mode === 'TBANK_FALLBACK'
-      ? 'attention/manual-card-paid-with-attributions'
-      : 'paid-with-attributions';
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/${action}`),
-      request
-    );
-  }
+  ): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.confirmCommonManualPayment(invoiceId, mode, request); }
 
-  reportCommonInvoiceManualCardPayment(invoiceId: number, reason: string): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/manual-card-paid`),
-      { reason }
-    );
-  }
+  reportCommonInvoiceManualCardPayment(invoiceId: number, reason: string): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.reportCommonInvoiceManualCardPayment(invoiceId, reason); }
 
   confirmCommonInvoiceContractorSource(
     invoiceId: number,
     request: ContractorCommonSourceConfirmationRequest
-  ): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/contractor-confirmation`),
-      request
-    );
-  }
+  ): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.confirmCommonInvoiceContractorSource(invoiceId, request); }
 
-  repairCommonInvoicePaymentRoute(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/repair-payment-route`),
-      {}
-    );
-  }
+  repairCommonInvoicePaymentRoute(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.repairCommonInvoicePaymentRoute(invoiceId); }
 
-  resolveCommonInvoiceTechnicalTail(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/technical-tail/resolve`),
-      {}
-    );
-  }
+  resolveCommonInvoiceTechnicalTail(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.resolveCommonInvoiceTechnicalTail(invoiceId); }
 
-  resolveCommonInvoicePaymentNotification(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/payment-notification/resolve`),
-      {}
-    );
-  }
+  resolveCommonInvoicePaymentNotification(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.resolveCommonInvoicePaymentNotification(invoiceId); }
 
-  markCommonInvoiceUnpaid(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/unpaid`),
-      {}
-    );
-  }
+  markCommonInvoiceUnpaid(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.markCommonInvoiceUnpaid(invoiceId); }
 
-  markCommonInvoiceBan(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/ban`),
-      {}
-    );
-  }
+  markCommonInvoiceBan(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.markCommonInvoiceBan(invoiceId); }
 
-  getCommonInvoiceArchivePreview(invoiceId: number): Observable<CommonInvoiceArchivePreviewResponse> {
-    return this.http.get<CommonInvoiceArchivePreviewResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/archive-preview`)
-    );
-  }
+  getCommonInvoiceArchivePreview(invoiceId: number): Observable<CommonInvoiceArchivePreviewResponse>{ return this.commonBillingApi.getCommonInvoiceArchivePreview(invoiceId); }
 
-  archiveCommonInvoice(invoiceId: number, comment = ''): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/archive`),
-      { confirm: true, comment }
-    );
-  }
+  archiveCommonInvoice(invoiceId: number, comment = ''): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.archiveCommonInvoice(invoiceId, comment); }
 
-  retryCommonInvoiceAttention(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/retry`),
-      {}
-    );
-  }
+  retryCommonInvoiceAttention(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.retryCommonInvoiceAttention(invoiceId); }
 
-  resolveCommonInvoiceAttention(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/resolve`),
-      {}
-    );
-  }
+  resolveCommonInvoiceAttention(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.resolveCommonInvoiceAttention(invoiceId); }
 
-  applyCommonInvoiceLatePayment(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/apply-late-payment`),
-      {}
-    );
-  }
+  applyCommonInvoiceLatePayment(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.applyCommonInvoiceLatePayment(invoiceId); }
 
-  confirmCommonInvoiceFinalPaymentCancelCheck(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/confirm-final-cancel-check`),
-      {}
-    );
-  }
+  confirmCommonInvoiceFinalPaymentCancelCheck(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.confirmCommonInvoiceFinalPaymentCancelCheck(invoiceId); }
 
   confirmCommonInvoicePaymentInitCheck(
     invoiceId: number,
     evidenceToken?: string | null
-  ): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/confirm-payment-init-check`),
-      { evidenceToken: evidenceToken ?? null }
-    );
-  }
+  ): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.confirmCommonInvoicePaymentInitCheck(invoiceId, evidenceToken); }
 
   markCommonInvoiceOrderPaid(
     invoiceId: number,
     orderId: number,
     request: ManualPaymentConfirmationRequest
-  ): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/orders/${orderId}/paid`),
-      request
-    );
-  }
+  ): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.markCommonInvoiceOrderPaid(invoiceId, orderId, request); }
 
-  approveCommonInvoiceReviewOrders(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.post<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/orders/approve-review`),
-      {}
-    );
-  }
+  approveCommonInvoiceReviewOrders(invoiceId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.approveCommonInvoiceReviewOrders(invoiceId); }
 
-  detachCommonInvoiceOrder(invoiceId: number, orderId: number): Observable<CommonInvoiceDetailsResponse> {
-    return this.http.delete<CommonInvoiceDetailsResponse>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/orders/${orderId}`)
-    );
-  }
+  detachCommonInvoiceOrder(invoiceId: number, orderId: number): Observable<CommonInvoiceDetailsResponse>{ return this.commonBillingApi.detachCommonInvoiceOrder(invoiceId, orderId); }
 
-  deleteCommonInvoiceWithOrders(invoiceId: number): Observable<void> {
-    return this.http.delete<void>(
-      this.apiUrl(`/api/common-billing/invoices/${invoiceId}`)
-    );
-  }
+  deleteCommonInvoiceWithOrders(invoiceId: number): Observable<void>{ return this.commonBillingApi.deleteCommonInvoiceWithOrders(invoiceId); }
 
   getReviewCheck(orderDetailId: string, capabilityToken?: string | null): Observable<ReviewCheckPayload> {
     return this.http.get<ReviewCheckPayload>(
@@ -4680,43 +4032,33 @@ export class ApiService {
   }
 
   getManagerCompanyEdit(companyId: number): Observable<CompanyEditPayload> {
-    return this.http.get<CompanyEditPayload>(this.apiUrl(`/api/manager/companies/${companyId}/edit`));
+    return this.companyEditorApi.getManagerCompanyEdit(companyId);
   }
 
   updateManagerCompany(companyId: number, request: CompanyUpdateRequest): Observable<CompanyEditPayload> {
-    return this.http.put<CompanyEditPayload>(this.apiUrl(`/api/manager/companies/${companyId}`), request);
+    return this.companyEditorApi.updateManagerCompany(companyId, request);
   }
 
-  repairManagerCompanyChatBinding(companyId: number): Observable<CompanyChatBindingRepair> {
-    return this.http.post<CompanyChatBindingRepair>(
-      this.apiUrl(`/api/manager/companies/${companyId}/chat-binding/repair`),
-      {}
-    );
-  }
+  repairManagerCompanyChatBinding(companyId: number): Observable<CompanyChatBindingRepair> { return this.managerCompanyActionsApi.repairManagerCompanyChatBinding(companyId); }
 
   getManagerCompanySubcategories(categoryId: number): Observable<ManagerOption[]> {
-    return this.http.get<ManagerOption[]>(this.apiUrl(`/api/manager/categories/${categoryId}/subcategories`));
+    return this.companyEditorApi.getManagerCompanySubcategories(categoryId);
   }
 
   deleteManagerCompanyWorker(companyId: number, workerId: number): Observable<CompanyEditPayload> {
-    return this.http.delete<CompanyEditPayload>(this.apiUrl(`/api/manager/companies/${companyId}/workers/${workerId}`));
+    return this.companyEditorApi.deleteManagerCompanyWorker(companyId, workerId);
   }
 
   deleteManagerCompanyFilial(companyId: number, filialId: number): Observable<CompanyEditPayload> {
-    return this.http.delete<CompanyEditPayload>(this.apiUrl(`/api/manager/companies/${companyId}/filials/${filialId}`));
+    return this.companyEditorApi.deleteManagerCompanyFilial(companyId, filialId);
   }
 
   getManagerCompanyFilialDeletionPreview(companyId: number, filialId: number): Observable<FilialDeletionPreview> {
-    return this.http.get<FilialDeletionPreview>(
-      this.apiUrl(`/api/manager/companies/${companyId}/filials/${filialId}/deletion-preview`)
-    );
+    return this.companyEditorApi.getManagerCompanyFilialDeletionPreview(companyId, filialId);
   }
 
   restoreManagerCompanyFilial(companyId: number, filialId: number): Observable<CompanyEditPayload> {
-    return this.http.post<CompanyEditPayload>(
-      this.apiUrl(`/api/manager/companies/${companyId}/filials/${filialId}/restore`),
-      {}
-    );
+    return this.companyEditorApi.restoreManagerCompanyFilial(companyId, filialId);
   }
 
   updateManagerCompanyFilial(
@@ -4724,159 +4066,77 @@ export class ApiService {
     filialId: number,
     request: CompanyFilialUpdateRequest
   ): Observable<CompanyEditPayload> {
-    return this.http.put<CompanyEditPayload>(
-      this.apiUrl(`/api/manager/companies/${companyId}/filials/${filialId}`),
-      request
-    );
+    return this.companyEditorApi.updateManagerCompanyFilial(companyId, filialId, request);
   }
 
-  getWorkerBoard(query: WorkerBoardQuery = {}): Observable<WorkerBoard> {
-    let params = new HttpParams()
-      .set('section', query.section ?? 'all')
-      .set('keyword', query.keyword?.trim() ?? '')
-      .set('pageNumber', String(query.pageNumber ?? 0))
-      .set('pageSize', String(query.pageSize ?? 10))
-      .set('sortDirection', query.sortDirection ?? 'desc');
+  getWorkerBoard(query: WorkerBoardQuery = {}): Observable<WorkerBoard>{ return this.workerApi.getWorkerBoard(query); }
 
-    if (query.workerId) {
-      params = params.set('workerId', String(query.workerId));
-    }
+  getWorkerOverdueOrders(): Observable<ManagerOverdueOrders>{ return this.workerApi.getWorkerOverdueOrders(); }
 
-    return this.http.get<WorkerBoard>(this.apiUrl('/api/worker/board'), { params });
-  }
+  updateWorkerOrderStatus(orderId: number, status: string): Observable<void>{ return this.workerApi.updateWorkerOrderStatus(orderId, status); }
 
-  getWorkerOverdueOrders(): Observable<ManagerOverdueOrders> {
-    return this.http.get<ManagerOverdueOrders>(this.apiUrl('/api/worker/overdue-orders'));
-  }
+  updateWorkerOrderClientWaiting(orderId: number, waitingForClient: boolean): Observable<void>{ return this.workerApi.updateWorkerOrderClientWaiting(orderId, waitingForClient); }
 
-  updateWorkerOrderStatus(orderId: number, status: string): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/orders/${orderId}/status`), { status });
-  }
+  updateWorkerOrderNote(orderId: number, orderComments: string): Observable<void>{ return this.workerApi.updateWorkerOrderNote(orderId, orderComments); }
 
-  updateWorkerOrderClientWaiting(orderId: number, waitingForClient: boolean): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/orders/${orderId}/client-waiting`), { waitingForClient });
-  }
+  updateWorkerOrderCompanyNote(orderId: number, companyComments: string): Observable<void>{ return this.workerApi.updateWorkerOrderCompanyNote(orderId, companyComments); }
 
-  updateWorkerOrderNote(orderId: number, orderComments: string): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/orders/${orderId}/note`), { orderComments });
-  }
+  changeWorkerReviewBot(reviewId: number, source?: WorkerActivitySource): Observable<BotChangeResponse>{ return this.workerApi.changeWorkerReviewBot(reviewId, source); }
 
-  updateWorkerOrderCompanyNote(orderId: number, companyComments: string): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/orders/${orderId}/company-note`), { companyComments });
-  }
+  deactivateWorkerReviewBot(reviewId: number, botId: number, source?: WorkerActivitySource): Observable<void>{ return this.workerApi.deactivateWorkerReviewBot(reviewId, botId, source); }
 
-  changeWorkerReviewBot(reviewId: number, source?: WorkerActivitySource): Observable<BotChangeResponse> {
-    return this.http.post<BotChangeResponse>(this.apiUrl(`/api/worker/reviews/${reviewId}/change-bot`), source ?? {});
-  }
+  publishWorkerReview(reviewId: number): Observable<void>{ return this.workerApi.publishWorkerReview(reviewId); }
 
-  deactivateWorkerReviewBot(reviewId: number, botId: number, source?: WorkerActivitySource): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/bots/${botId}/deactivate`), source ?? {});
-  }
+  nagulWorkerReview(reviewId: number): Observable<WorkerActionResponse>{ return this.workerApi.nagulWorkerReview(reviewId); }
 
-  publishWorkerReview(reviewId: number): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/publish`), {});
-  }
+  completeWorkerBadReviewTask(taskId: number): Observable<void>{ return this.workerApi.completeWorkerBadReviewTask(taskId); }
 
-  nagulWorkerReview(reviewId: number): Observable<WorkerActionResponse> {
-    return this.http.post<WorkerActionResponse>(this.apiUrl(`/api/worker/reviews/${reviewId}/nagul`), {});
-  }
+  updateWorkerBadReviewTask(taskId: number, taskText: string, scheduledDate?: string | null): Observable<void>{ return this.workerApi.updateWorkerBadReviewTask(taskId, taskText, scheduledDate); }
 
-  completeWorkerBadReviewTask(taskId: number): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/bad-review-tasks/${taskId}/complete`), {});
-  }
+  changeWorkerBadReviewTaskBot(taskId: number): Observable<BotChangeResponse>{ return this.workerApi.changeWorkerBadReviewTaskBot(taskId); }
 
-  updateWorkerBadReviewTask(taskId: number, taskText: string, scheduledDate?: string | null): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/bad-review-tasks/${taskId}`), {
-      taskText,
-      scheduledDate: scheduledDate || null
-    });
-  }
-
-  changeWorkerBadReviewTaskBot(taskId: number): Observable<BotChangeResponse> {
-    return this.http.post<BotChangeResponse>(this.apiUrl(`/api/worker/bad-review-tasks/${taskId}/change-bot`), {});
-  }
-
-  deactivateWorkerBadReviewTaskBot(taskId: number, botId: number): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/bad-review-tasks/${taskId}/bots/${botId}/deactivate`), {});
-  }
+  deactivateWorkerBadReviewTaskBot(taskId: number, botId: number): Observable<void>{ return this.workerApi.deactivateWorkerBadReviewTaskBot(taskId, botId); }
 
   updateWorkerRecoveryTask(
     taskId: number,
     recoveryText: string,
     scheduledDate?: string | null,
     recoveryAnswer?: string | null
-  ): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/recovery-tasks/${taskId}`), {
-      recoveryText,
-      recoveryAnswer,
-      scheduledDate: scheduledDate || null
-    });
-  }
+  ): Observable<void>{ return this.workerApi.updateWorkerRecoveryTask(taskId, recoveryText, scheduledDate, recoveryAnswer); }
 
-  completeWorkerRecoveryTask(taskId: number): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/recovery-tasks/${taskId}/complete`), {});
-  }
+  completeWorkerRecoveryTask(taskId: number): Observable<void>{ return this.workerApi.completeWorkerRecoveryTask(taskId); }
 
-  changeWorkerRecoveryTaskBot(taskId: number): Observable<BotChangeResponse> {
-    return this.http.post<BotChangeResponse>(this.apiUrl(`/api/worker/recovery-tasks/${taskId}/change-bot`), {});
-  }
+  changeWorkerRecoveryTaskBot(taskId: number): Observable<BotChangeResponse>{ return this.workerApi.changeWorkerRecoveryTaskBot(taskId); }
 
-  deactivateWorkerRecoveryTaskBot(taskId: number, botId: number): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/recovery-tasks/${taskId}/bots/${botId}/deactivate`), {});
-  }
+  deactivateWorkerRecoveryTaskBot(taskId: number, botId: number): Observable<void>{ return this.workerApi.deactivateWorkerRecoveryTaskBot(taskId, botId); }
 
   revealWorkerReviewCredential(
     reviewId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<CredentialRevealResponse> {
-    return this.http.post<CredentialRevealResponse>(
-      this.apiUrl(`/api/worker/reviews/${reviewId}/credential-reveal`),
-      { ...source, field }
-    );
-  }
+  ): Observable<CredentialRevealResponse>{ return this.workerApi.revealWorkerReviewCredential(reviewId, field, source); }
 
   revealWorkerBadReviewTaskCredential(
     taskId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<CredentialRevealResponse> {
-    return this.http.post<CredentialRevealResponse>(
-      this.apiUrl(`/api/worker/bad-review-tasks/${taskId}/credential-reveal`),
-      { ...source, field }
-    );
-  }
+  ): Observable<CredentialRevealResponse>{ return this.workerApi.revealWorkerBadReviewTaskCredential(taskId, field, source); }
 
   revealWorkerRecoveryTaskCredential(
     taskId: number,
     field: 'login' | 'password',
     source?: WorkerActivitySource
-  ): Observable<CredentialRevealResponse> {
-    return this.http.post<CredentialRevealResponse>(
-      this.apiUrl(`/api/worker/recovery-tasks/${taskId}/credential-reveal`),
-      { ...source, field }
-    );
-  }
+  ): Observable<CredentialRevealResponse>{ return this.workerApi.revealWorkerRecoveryTaskCredential(taskId, field, source); }
 
-  deleteWorkerBot(botId: number): Observable<void> {
-    return this.http.delete<void>(this.apiUrl(`/api/worker/bots/${botId}`));
-  }
+  deleteWorkerBot(botId: number): Observable<void>{ return this.workerApi.deleteWorkerBot(botId); }
 
-  updateWorkerReviewText(reviewId: number, orderId: number, text: string, source?: WorkerActivitySource): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/text`), { orderId, text, ...source });
-  }
+  updateWorkerReviewText(reviewId: number, orderId: number, text: string, source?: WorkerActivitySource): Observable<void>{ return this.workerApi.updateWorkerReviewText(reviewId, orderId, text, source); }
 
-  updateWorkerReviewBotName(reviewId: number, botName: string): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/bot-name`), { botName });
-  }
+  updateWorkerReviewBotName(reviewId: number, botName: string): Observable<void>{ return this.workerApi.updateWorkerReviewBotName(reviewId, botName); }
 
-  updateWorkerReviewAnswer(reviewId: number, orderId: number, answer: string, source?: WorkerActivitySource): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/answer`), { orderId, answer, ...source });
-  }
+  updateWorkerReviewAnswer(reviewId: number, orderId: number, answer: string, source?: WorkerActivitySource): Observable<void>{ return this.workerApi.updateWorkerReviewAnswer(reviewId, orderId, answer, source); }
 
-  updateWorkerReviewNote(reviewId: number, orderId: number, comment: string, source?: WorkerActivitySource): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/note`), { orderId, comment, ...source });
-  }
+  updateWorkerReviewNote(reviewId: number, orderId: number, comment: string, source?: WorkerActivitySource): Observable<void>{ return this.workerApi.updateWorkerReviewNote(reviewId, orderId, comment, source); }
 
   getLeadBoard(query: LeadBoardQuery = {}): Observable<LeadBoard> {
     const params = new HttpParams()
@@ -4945,27 +4205,11 @@ export class ApiService {
     source: CompanyCreateSource,
     leadId?: number | null,
     managerId?: number | null
-  ): Observable<CompanyCreatePayload> {
-    let params = new HttpParams().set('source', source);
+  ): Observable<CompanyCreatePayload>{ return this.companiesApi.getCompanyCreatePayload(source, leadId, managerId); }
 
-    if (leadId != null) {
-      params = params.set('leadId', String(leadId));
-    }
+  getCompanySubcategories(categoryId: number): Observable<CompanyCreateOption[]>{ return this.companiesApi.getCompanySubcategories(categoryId); }
 
-    if (managerId != null) {
-      params = params.set('managerId', String(managerId));
-    }
-
-    return this.http.get<CompanyCreatePayload>(this.apiUrl('/api/companies/create-payload'), { params });
-  }
-
-  getCompanySubcategories(categoryId: number): Observable<CompanyCreateOption[]> {
-    return this.http.get<CompanyCreateOption[]>(this.apiUrl(`/api/companies/categories/${categoryId}/subcategories`));
-  }
-
-  createCompany(request: CompanyCreateRequest): Observable<CompanyCreateResult> {
-    return this.http.post<CompanyCreateResult>(this.apiUrl('/api/companies'), request);
-  }
+  createCompany(request: CompanyCreateRequest): Observable<CompanyCreateResult>{ return this.companiesApi.createCompany(request); }
 
   getPersonalReminders(): Observable<PersonalReminder[]> {
     return this.http.get<PersonalReminder[]>(this.apiUrl('/api/personal-reminders'));
@@ -5009,40 +4253,21 @@ export class ApiService {
     return this.http.post<void>(this.apiUrl(`/api/operator/leads/${id}/status/to-work`), { commentsLead });
   }
 
-  getOperatorPhones(keyword = ''): Observable<OperatorPhonesResponse> {
-    const params = this.keywordParams(keyword);
-    return this.http.get<OperatorPhonesResponse>(this.apiUrl('/api/admin/phones'), { params });
-  }
+  getOperatorPhones(keyword = ''): Observable<OperatorPhonesResponse>{ return this.dictionariesApi.getOperatorPhones(keyword); }
 
-  createOperatorPhone(request: OperatorPhoneRequest): Observable<OperatorPhone> {
-    return this.http.post<OperatorPhone>(this.apiUrl('/api/admin/phones'), request);
-  }
+  createOperatorPhone(request: OperatorPhoneRequest): Observable<OperatorPhone>{ return this.dictionariesApi.createOperatorPhone(request); }
 
-  updateOperatorPhone(id: number, request: OperatorPhoneRequest): Observable<OperatorPhone> {
-    return this.http.put<OperatorPhone>(this.apiUrl(`/api/admin/phones/${id}`), request);
-  }
+  updateOperatorPhone(id: number, request: OperatorPhoneRequest): Observable<OperatorPhone>{ return this.dictionariesApi.updateOperatorPhone(id, request); }
 
-  deleteOperatorPhone(id: number): Observable<void> {
-    return this.http.delete<void>(this.apiUrl(`/api/admin/phones/${id}`));
-  }
+  deleteOperatorPhone(id: number): Observable<void>{ return this.dictionariesApi.deleteOperatorPhone(id); }
 
-  deleteOperatorPhoneDeviceToken(phoneId: number, token: string): Observable<void> {
-    return this.http.delete<void>(
-      this.apiUrl(`/api/admin/phones/${phoneId}/device-tokens/${encodeURIComponent(token)}`)
-    );
-  }
+  deleteOperatorPhoneDeviceToken(phoneId: number, token: string): Observable<void>{ return this.dictionariesApi.deleteOperatorPhoneDeviceToken(phoneId, token); }
 
-  getTbankStatus(): Observable<TbankPaymentStatus> {
-    return this.http.get<TbankPaymentStatus>(this.apiUrl('/api/admin/payments/tbank-status'));
-  }
+  getTbankStatus(): Observable<TbankPaymentStatus>{ return this.orderPaymentApi.getTbankStatus(); }
 
-  getPublicPaymentLink(token: string): Observable<PublicPaymentLink> {
-    return this.http.get<PublicPaymentLink>(this.apiUrl(`/api/payments/public/${encodeURIComponent(token)}`));
-  }
+  getPublicPaymentLink(token: string): Observable<PublicPaymentLink> { return this.publicPaymentsApi.getPublicPaymentLink(token); }
 
-  getPublicCommonInvoice(token: string): Observable<PublicCommonInvoice> {
-    return this.http.get<PublicCommonInvoice>(this.apiUrl(`/api/payments/public/group/${encodeURIComponent(token)}`));
-  }
+  getPublicCommonInvoice(token: string): Observable<PublicCommonInvoice> { return this.publicPaymentsApi.getPublicCommonInvoice(token); }
 
   initPublicPayment(
     token: string,
@@ -5050,12 +4275,7 @@ export class ApiService {
     offerConsent: boolean,
     privacyConsent: boolean,
     receiptConsent: boolean
-  ): Observable<PublicPaymentInitResponse> {
-    return this.http.post<PublicPaymentInitResponse>(
-      this.apiUrl(`/api/payments/public/${encodeURIComponent(token)}/init`),
-      { email, offerConsent, privacyConsent, receiptConsent }
-    );
-  }
+  ): Observable<PublicPaymentInitResponse> { return this.publicPaymentsApi.initPublicPayment(token, email, offerConsent, privacyConsent, receiptConsent); }
 
   initPublicCommonInvoicePayment(
     token: string,
@@ -5063,19 +4283,9 @@ export class ApiService {
     offerConsent: boolean,
     privacyConsent: boolean,
     receiptConsent: boolean
-  ): Observable<PublicPaymentInitResponse> {
-    return this.http.post<PublicPaymentInitResponse>(
-      this.apiUrl(`/api/payments/public/group/${encodeURIComponent(token)}/init`),
-      { email, offerConsent, privacyConsent, receiptConsent }
-    );
-  }
+  ): Observable<PublicPaymentInitResponse> { return this.publicPaymentsApi.initPublicCommonInvoicePayment(token, email, offerConsent, privacyConsent, receiptConsent); }
 
-  reportPublicCommonInvoicePaid(token: string): Observable<PublicCommonInvoice> {
-    return this.http.post<PublicCommonInvoice>(
-      this.apiUrl(`/api/payments/public/group/${encodeURIComponent(token)}/reported-paid`),
-      {}
-    );
-  }
+  reportPublicCommonInvoicePaid(token: string): Observable<PublicCommonInvoice> { return this.publicPaymentsApi.reportPublicCommonInvoicePaid(token); }
 
   initPublicSbpPayment(
     token: string,
@@ -5084,25 +4294,11 @@ export class ApiService {
     privacyConsent: boolean,
     receiptConsent: boolean,
     sbpBankId?: string | null
-  ): Observable<PublicPaymentInitResponse> {
-    return this.http.post<PublicPaymentInitResponse>(
-      this.apiUrl(`/api/payments/public/${encodeURIComponent(token)}/sbp`),
-      { email, offerConsent, privacyConsent, receiptConsent, sbpBankId }
-    );
-  }
+  ): Observable<PublicPaymentInitResponse> { return this.publicPaymentsApi.initPublicSbpPayment(token, email, offerConsent, privacyConsent, receiptConsent, sbpBankId); }
 
-  getPublicSbpBanks(token: string): Observable<PublicSbpBank[]> {
-    return this.http.get<PublicSbpBank[]>(
-      this.apiUrl(`/api/payments/public/${encodeURIComponent(token)}/sbp/banks`)
-    );
-  }
+  getPublicSbpBanks(token: string): Observable<PublicSbpBank[]> { return this.publicPaymentsApi.getPublicSbpBanks(token); }
 
-  reportPublicManualPayment(token: string): Observable<PublicPaymentLink> {
-    return this.http.post<PublicPaymentLink>(
-      this.apiUrl(`/api/payments/public/${encodeURIComponent(token)}/manual-paid`),
-      {}
-    );
-  }
+  reportPublicManualPayment(token: string): Observable<PublicPaymentLink> { return this.publicPaymentsApi.reportPublicManualPayment(token); }
 
   registerClient(request: RegisterClientRequest): Observable<ProvisionedUserResponse> {
     return this.http.post<ProvisionedUserResponse>(this.apiUrl('/api/auth/register'), request);
@@ -5124,35 +4320,16 @@ export class ApiService {
     return this.http.get<WhatsAppClientStatus>(this.apiUrl('/api/cabinet/whatsapp'));
   }
 
-  createManagerOrderPaymentLink(orderId: number): Observable<ManagerPaymentLinkResponse> {
-    return this.http.post<ManagerPaymentLinkResponse>(
-      this.apiUrl(`/api/manager/orders/${orderId}/payment-link`),
-      {}
-    );
-  }
+  createManagerOrderPaymentLink(orderId: number): Observable<ManagerPaymentLinkResponse>{ return this.orderPaymentApi.createManagerOrderPaymentLink(orderId); }
 
-  getManagerOrderPaymentRouteChangeContext(orderId: number): Observable<PaymentRouteChangeContext> {
-    return this.http.get<PaymentRouteChangeContext>(
-      this.apiUrl(`/api/manager/orders/${orderId}/payment-route-change-context`)
-    );
-  }
+  getManagerOrderPaymentRouteChangeContext(orderId: number): Observable<PaymentRouteChangeContext>{ return this.orderPaymentApi.getManagerOrderPaymentRouteChangeContext(orderId); }
 
   changeManagerOrderPaymentRoute(
     orderId: number,
     request: PaymentRouteChangeRequest
-  ): Observable<PaymentRouteChangeResponse> {
-    return this.http.post<PaymentRouteChangeResponse>(
-      this.apiUrl(`/api/manager/orders/${orderId}/payment-route-change`),
-      request
-    );
-  }
+  ): Observable<PaymentRouteChangeResponse>{ return this.orderPaymentApi.changeManagerOrderPaymentRoute(orderId, request); }
 
-  markManagerOrderPaperInvoiceIssued(orderId: number): Observable<unknown> {
-    return this.http.post(
-      this.apiUrl(`/api/manager/orders/${orderId}/paper-invoice/issued`),
-      {}
-    );
-  }
+  markManagerOrderPaperInvoiceIssued(orderId: number): Observable<unknown>{ return this.orderPaymentApi.markManagerOrderPaperInvoiceIssued(orderId); }
 
   getAdminTbankPaymentLinks(params?: {
     page?: number;
@@ -5162,146 +4339,55 @@ export class ApiService {
     source?: PaymentLinkListSource;
     from?: string;
     to?: string;
-  }): Observable<AdminPaymentLinksPageResponse> {
-    let httpParams = new HttpParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && String(value).trim() !== '') {
-          httpParams = httpParams.set(key, String(value));
-        }
-      });
-    }
-    return this.http.get<AdminPaymentLinksPageResponse>(
-      this.apiUrl('/api/admin/payments/tbank-links'),
-      { params: httpParams }
-    );
-  }
+  }): Observable<AdminPaymentLinksPageResponse> { return this.paymentAdministrationApi.getAdminTbankPaymentLinks(params); }
 
-  runAdminPaymentLinkArchive(dryRun: boolean, batchSize?: number): Observable<PaymentLinkArchiveRunResponse> {
-    let params = new HttpParams().set('dryRun', String(dryRun));
-    if (batchSize != null && Number.isFinite(batchSize) && batchSize > 0) {
-      params = params.set('batchSize', String(batchSize));
-    }
-    return this.http.post<PaymentLinkArchiveRunResponse>(
-      this.apiUrl('/api/admin/payments/tbank-links/archive/run'),
-      {},
-      { params }
-    );
-  }
+  runAdminPaymentLinkArchive(dryRun: boolean, batchSize?: number): Observable<PaymentLinkArchiveRunResponse> { return this.paymentAdministrationApi.runAdminPaymentLinkArchive(dryRun, batchSize); }
 
-  cancelAdminTbankPaymentLink(linkId: number): Observable<AdminPaymentLinkResponse> {
-    return this.http.post<AdminPaymentLinkResponse>(
-      this.apiUrl(`/api/admin/payments/tbank-links/${linkId}/cancel`),
-      {}
-    );
-  }
+  cancelAdminTbankPaymentLink(linkId: number): Observable<AdminPaymentLinkResponse> { return this.paymentAdministrationApi.cancelAdminTbankPaymentLink(linkId); }
 
-  confirmAdminManualPaymentLink(linkId: number): Observable<AdminPaymentLinkResponse> {
-    return this.http.post<AdminPaymentLinkResponse>(
-      this.apiUrl(`/api/admin/payments/manual-links/${linkId}/confirm`),
-      {}
-    );
-  }
+  confirmAdminManualPaymentLink(linkId: number): Observable<AdminPaymentLinkResponse> { return this.paymentAdministrationApi.confirmAdminManualPaymentLink(linkId); }
 
-  markAdminManualPaymentReceipt(linkId: number): Observable<AdminPaymentLinkResponse> {
-    return this.http.post<AdminPaymentLinkResponse>(
-      this.apiUrl(`/api/admin/payments/manual-links/${linkId}/receipt`),
-      {}
-    );
-  }
+  markAdminManualPaymentReceipt(linkId: number): Observable<AdminPaymentLinkResponse> { return this.paymentAdministrationApi.markAdminManualPaymentReceipt(linkId); }
 
-  getAdminTbankPaymentProfiles(): Observable<TbankPaymentProfilesResponse> {
-    return this.http.get<TbankPaymentProfilesResponse>(this.apiUrl('/api/admin/payments/tbank-profiles'));
-  }
+  getAdminTbankPaymentProfiles(): Observable<TbankPaymentProfilesResponse> { return this.paymentConfigurationApi.getAdminTbankPaymentProfiles(); }
 
-  getAdminTbankRuntimeSettings(): Observable<TbankRuntimeSettings> {
-    return this.http.get<TbankRuntimeSettings>(this.apiUrl('/api/admin/payments/tbank-runtime-settings'));
-  }
+  getAdminTbankRuntimeSettings(): Observable<TbankRuntimeSettings> { return this.paymentConfigurationApi.getAdminTbankRuntimeSettings(); }
 
   updateAdminTbankRuntimeSettings(
     request: UpdateTbankRuntimeSettingsRequest
-  ): Observable<TbankRuntimeSettings> {
-    return this.http.put<TbankRuntimeSettings>(
-      this.apiUrl('/api/admin/payments/tbank-runtime-settings'),
-      request
-    );
-  }
+  ): Observable<TbankRuntimeSettings> { return this.paymentConfigurationApi.updateAdminTbankRuntimeSettings(request); }
 
   updateAdminTbankPaymentProfileAssignments(
     assignments: ManagerPaymentProfileAssignmentRequest[]
-  ): Observable<TbankPaymentProfilesResponse> {
-    return this.http.put<TbankPaymentProfilesResponse>(
-      this.apiUrl('/api/admin/payments/tbank-profiles/manager-assignments'),
-      { assignments }
-    );
-  }
+  ): Observable<TbankPaymentProfilesResponse> { return this.paymentConfigurationApi.updateAdminTbankPaymentProfileAssignments(assignments); }
 
   updateAdminPaymentProfilePolicies(
     profiles: PaymentProfilePolicyRequest[]
-  ): Observable<TbankPaymentProfilesResponse> {
-    return this.http.put<TbankPaymentProfilesResponse>(
-      this.apiUrl('/api/admin/payments/tbank-profiles/policies'),
-      { profiles }
-    );
-  }
+  ): Observable<TbankPaymentProfilesResponse> { return this.paymentConfigurationApi.updateAdminPaymentProfilePolicies(profiles); }
 
-  getAdminManualPaymentTasks(): Observable<ManualPaymentTaskResponse[]> {
-    return this.http.get<ManualPaymentTaskResponse[]>(this.apiUrl('/api/admin/payments/manual-tasks'));
-  }
+  getAdminManualPaymentTasks(): Observable<ManualPaymentTaskResponse[]> { return this.manualPaymentTasksApi.getAdminManualPaymentTasks(); }
 
   getAdminManualPaymentTaskAccountingTargets(
     managerId: number,
     targetAmountKopecks: number,
     taskId?: number | null
-  ): Observable<ManualPaymentTaskAccountingTargetOption[]> {
-    let params = new HttpParams()
-      .set('managerId', managerId)
-      .set('targetAmountKopecks', targetAmountKopecks);
-    if (taskId != null) {
-      params = params.set('taskId', taskId);
-    }
-    return this.http.get<ManualPaymentTaskAccountingTargetOption[]>(
-      this.apiUrl('/api/admin/payments/manual-tasks/accounting-targets'),
-      { params }
-    );
-  }
+  ): Observable<ManualPaymentTaskAccountingTargetOption[]> { return this.manualPaymentTasksApi.getAdminManualPaymentTaskAccountingTargets(managerId, targetAmountKopecks, taskId); }
 
-  getAdminManualRecipientMonthlySummary(month: string): Observable<ManualPaymentRecipientMonthlySummaryResponse> {
-    const params = month ? new HttpParams().set('month', month) : new HttpParams();
-    return this.http.get<ManualPaymentRecipientMonthlySummaryResponse>(
-      this.apiUrl('/api/admin/payments/manual-recipients/monthly-summary'),
-      { params }
-    );
-  }
+  getAdminManualRecipientMonthlySummary(month: string): Observable<ManualPaymentRecipientMonthlySummaryResponse> { return this.manualPaymentTasksApi.getAdminManualRecipientMonthlySummary(month); }
 
   createAdminManualPaymentTask(
     request: CreateManualPaymentTaskRequest
-  ): Observable<ManualPaymentTaskResponse> {
-    return this.http.post<ManualPaymentTaskResponse>(
-      this.apiUrl('/api/admin/payments/manual-tasks'),
-      request
-    );
-  }
+  ): Observable<ManualPaymentTaskResponse> { return this.manualPaymentTasksApi.createAdminManualPaymentTask(request); }
 
   updateAdminManualPaymentTaskStatus(
     taskId: number,
     status: ManualPaymentTaskStatus
-  ): Observable<ManualPaymentTaskResponse> {
-    return this.http.put<ManualPaymentTaskResponse>(
-      this.apiUrl(`/api/admin/payments/manual-tasks/${taskId}/status`),
-      { status }
-    );
-  }
+  ): Observable<ManualPaymentTaskResponse> { return this.manualPaymentTasksApi.updateAdminManualPaymentTaskStatus(taskId, status); }
 
   updateAdminManualPaymentTask(
     taskId: number,
     request: UpdateManualPaymentTaskRequest
-  ): Observable<ManualPaymentTaskResponse> {
-    return this.http.put<ManualPaymentTaskResponse>(
-      this.apiUrl(`/api/admin/payments/manual-tasks/${taskId}`),
-      request
-    );
-  }
+  ): Observable<ManualPaymentTaskResponse> { return this.manualPaymentTasksApi.updateAdminManualPaymentTask(taskId, request); }
 
   imageUrl(imageId = 1): string {
     return `${mobileEnvironment.backendBaseUrl}/images/${imageId}`;

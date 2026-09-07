@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class ManagerAccessServiceTest {
@@ -160,6 +161,55 @@ class ManagerAccessServiceTest {
         when(orderRepository.existsByIdAndManager_IdIn(10L, Set.of(9L))).thenReturn(false);
 
         assertThrows(ResponseStatusException.class, () -> service.requireOrderAccess(10L, managerAuth));
+    }
+
+    @Test
+    void currentLockedOrderScopeRejectsMissingAndWorkerActors() {
+        assertFalse(service.canAccessCurrentOrderManager(9L, null));
+        Authentication untrusted = authentication("admin", "ROLE_ADMIN");
+        untrusted.setAuthenticated(false);
+        assertFalse(service.canAccessCurrentOrderManager(9L, untrusted));
+        assertFalse(service.canAccessCurrentOrderManager(9L, authentication(" ", "ROLE_ADMIN")));
+        assertFalse(service.canAccessCurrentOrderManager(9L, authentication("worker", "ROLE_WORKER")));
+        assertFalse(service.canAccessCurrentOrderManager(9L, authentication("client", "ROLE_CLIENT")));
+        verifyNoInteractions(orderRepository, companyRepository);
+    }
+
+    @Test
+    void currentLockedOrderScopePreservesAdminAccessToUnassignedOrder() {
+        assertTrue(service.canAccessCurrentOrderManager(null, authentication("admin", "ROLE_ADMIN")));
+        verifyNoInteractions(orderRepository, companyRepository, managerService);
+    }
+
+    @Test
+    void currentLockedOrderScopePreservesGlobalOwnerAccessToUnassignedOrder() {
+        User owner = User.builder().id(2L).username("owner-all").ownerControlViewMode("ALL_MANAGERS").build();
+        when(userService.findByUserName("owner-all")).thenReturn(Optional.of(owner));
+        Authentication actor = authentication("owner-all", "ROLE_OWNER");
+        assertTrue(service.canAccessCurrentOrderManager(null, actor));
+        assertTrue(service.canAccessCurrentOrderManager(99L, actor));
+        verifyNoInteractions(orderRepository, companyRepository, managerService);
+    }
+
+    @Test
+    void currentLockedOrderScopeChecksActualManagerInsteadOfOldOrderSnapshot() {
+        Authentication actor = authentication("manager", "ROLE_MANAGER");
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(User.builder().id(3L).build()));
+        when(managerService.getManagerByUserId(3L)).thenReturn(manager(9L));
+        assertTrue(service.canAccessCurrentOrderManager(9L, actor));
+        assertFalse(service.canAccessCurrentOrderManager(10L, actor));
+        assertFalse(service.canAccessCurrentOrderManager(null, actor));
+        verifyNoInteractions(orderRepository, companyRepository);
+    }
+
+    @Test
+    void currentLockedOrderScopePreservesRestrictedOwnerManagerMembership() {
+        Authentication actor = authentication("owner", "ROLE_OWNER");
+        when(userService.findManagersByUserName("owner")).thenReturn(Set.of(manager(7L)));
+        assertTrue(service.canAccessCurrentOrderManager(7L, actor));
+        assertFalse(service.canAccessCurrentOrderManager(8L, actor));
+        assertFalse(service.canAccessCurrentOrderManager(null, actor));
+        verifyNoInteractions(orderRepository, companyRepository);
     }
 
     private Manager manager(Long id) {

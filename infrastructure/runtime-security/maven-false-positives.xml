@@ -1,0 +1,167 @@
+<?xml version='1.0' encoding='utf-8'?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+  <suppress>
+    <notes>The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: 5a1218a54c149540b48c28762438cddabb0ba502f1a7ec87c63b1ea191d9920f
+Observed CPEs:
+cpe:2.3:a:grpc:grpc:1.76.3:*:*:*:*:*:*:*
+cpe:2.3:a:opentelemetry:opentelemetry:1.76.3:*:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.grpc/grpc-opentelemetry@1.76.3</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>Vendor patch changes KAPT incremental-cache deserialization in plugins/kapt3/kapt3-base; kotlin-stdlib does not contain org/jetbrains/kotlin/kapt3 classes. No Kotlin Gradle plugin or KAPT artifact is in this Maven project dependency graph.
+Artifact SHA-256: 6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd
+Observed CPEs:
+cpe:2.3:a:jetbrains:kotlin:2.2.21:*:*:*:*:*:*:*
+Primary evidence:
+https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.2.21</packageUrl>
+    <cve>CVE-2026-53914</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: 387b4bf98631fc2ede9470879a8ff28dd8c5cb2d3dcf5b6ef77f5ee2bdb7b4f1
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:1.55.0:*:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry/opentelemetry-api@1.55.0</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go SDK resource detector; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: 5ca38a9ecdf2c93183069dae1d7d76ec12e9cf4feb3c2209d04566e82fc4df3c
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:1.35.0:alpha:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-9h8m-3fm2-qjrq
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-hfvc-g4fc-pqhx
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry/opentelemetry-extension-incubator@1.35.0-alpha</packageUrl>
+    <cve>CVE-2026-39883</cve>
+    <cve>CVE-2026-24051</cve>
+    <cve>CVE-2026-39882</cve>
+    <cve>CVE-2026-41178</cve>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go SDK resource detector; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: f7b6baddfbbe57f0e3e1e3cc08eb68bb61c29ef6c17898ce7ce35b1f3029d3e6
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:1.37.0:alpha:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-9h8m-3fm2-qjrq
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-hfvc-g4fc-pqhx
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-mh2q-q3fh-2475
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry.contrib/opentelemetry-gcp-resources@1.37.0-alpha</packageUrl>
+    <cve>CVE-2026-29181</cve>
+    <cve>CVE-2026-39883</cve>
+    <cve>CVE-2026-24051</cve>
+    <cve>CVE-2026-39882</cve>
+    <cve>CVE-2026-41178</cve>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: 7c033f0c8c8c8159c396b21922460ecfb7a5f004258f8fcdc4ce9979261e1ac9
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:2.1.0:alpha:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry.instrumentation/opentelemetry-grpc-1.6@2.1.0-alpha</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: 4f6ac1247c7372c103c23ef2594413418a496b114e13ef237031255a2d3ce361
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:2.1.0:*:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry.instrumentation/opentelemetry-instrumentation-api@2.1.0</packageUrl>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The advisory affects .NET OpenTelemetry.Api; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects C++ OTLP HTTP exporter; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go OTLP HTTP exporters; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects Go baggage parser; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+The advisory affects JavaScript W3C baggage propagator; the exact detected Maven artifact is a Java implementation, not that independently versioned product.
+Artifact SHA-256: c551873983e22b308c738860da0903cdff2e47182140cf2a8dd9abb1adf31d08
+Observed CPEs:
+cpe:2.3:a:opentelemetry:opentelemetry:1.8.0:alpha:*:*:*:*:*:*
+Primary evidence:
+https://github.com/open-telemetry/opentelemetry-cpp/issues/3958
+https://github.com/open-telemetry/opentelemetry-dotnet/security/advisories/GHSA-g94r-2vxg-569j
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-5wrp-cwcj-q835
+https://github.com/open-telemetry/opentelemetry-go/security/advisories/GHSA-w8rr-5gcm-pp58
+https://github.com/open-telemetry/opentelemetry-js/security/advisories/GHSA-8988-4f7v-96qf
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/io.opentelemetry.proto/opentelemetry-proto@1.8.0-alpha</packageUrl>
+    <cve>CVE-2026-39882</cve>
+    <cve>CVE-2026-40894</cve>
+    <cve>CVE-2026-41178</cve>
+    <cve>CVE-2026-44967</cve>
+    <cve>CVE-2026-54285</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor advisory names STS4 Eclipse and VSCode editor extensions, not Spring Boot Devtools application library.
+Artifact SHA-256: 66d491824019bfdf19494b21ffd9c52570936f856dc80e5e97daa17ae1748c06
+Observed CPEs:
+cpe:2.3:a:vmware:spring_boot:4.0.8:*:*:*:*:*:*:*
+cpe:2.3:a:vmware:spring_boot_tools:4.0.8:*:*:*:*:*:*:*
+cpe:2.3:a:vmware:spring_tools:4.0.8:*:*:*:*:*:*:*
+Primary evidence:
+https://spring.io/security/cve-2022-31691/
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/org.springframework.boot/spring-boot-devtools@4.0.8</packageUrl>
+    <cve>CVE-2022-31691</cve>
+  </suppress>
+  <suppress>
+    <notes>The exact artifact is RubenLaguses Java Telegram Bot SDK; the reported CPE represents Telegram Android/iOS/macOS/Desktop messenger applications. Their native media/UI/client-session code is not this Java Bot API SDK.
+Artifact SHA-256: bfcca1f6b2c4a0d4e0fd85288f7cbda9483af2415e66d1db69c2661c35ff511f
+Observed CPEs:
+cpe:2.3:a:telegram:telegram:6.9.7.1:*:*:*:*:*:*:*
+Primary evidence:
+https://github.com/rubenlagus/TelegramBots/tree/v6.9.7.1
+https://repo.maven.apache.org/maven2/org/telegram/telegrambots/6.9.7.1/telegrambots-6.9.7.1.pom
+Exact package/version and listed CVEs only. Does not accept a vulnerability or suppress new advisories.</notes>
+    <packageUrl>pkg:maven/org.telegram/telegrambots@6.9.7.1</packageUrl>
+    <cve>CVE-2019-10044</cve>
+    <cve>CVE-2021-31320</cve>
+    <cve>CVE-2021-31321</cve>
+    <cve>CVE-2024-7014</cve>
+    <cve>CVE-2021-27204</cve>
+    <cve>CVE-2021-27205</cve>
+    <cve>CVE-2021-31315</cve>
+    <cve>CVE-2021-31317</cve>
+    <cve>CVE-2021-31318</cve>
+    <cve>CVE-2021-31319</cve>
+    <cve>CVE-2021-31322</cve>
+    <cve>CVE-2021-31323</cve>
+    <cve>CVE-2021-27351</cve>
+    <cve>CVE-2021-36769</cve>
+  </suppress>
+</suppressions>

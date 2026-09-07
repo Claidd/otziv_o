@@ -1,9 +1,12 @@
+import { PublicPaymentsApi } from '../core/public-payments.api';
+import { watchPublicPaymentNavigation } from './public-payment-navigation-lifecycle';
+import { ClientContractError } from '@otziv/client-common/billing-payments';
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/standalone';
 import { Subscription } from 'rxjs';
-import { ApiService, PublicPaymentLink, PublicSbpBank, TbankPaymentPageMode } from '../core/api.service';
+import { type ApiService, PublicPaymentLink, PublicSbpBank } from '../core/api.service';
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 import { configuredPaymentTarget, type PaymentNavigationPurpose } from '../shared/payment-navigation';
@@ -142,9 +145,14 @@ import { manualTransferDestinationPresentation } from '../shared/manual-transfer
   `]
 })
 export class PublicPayPage implements OnDestroy {
+  private readonly publicPaymentsApi = inject(PublicPaymentsApi);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly routeEpoch = new RouteEpochGuard();
+  private viewActive = true;
+  private routeToken: string | null = null;
   private routeSubscription?: Subscription;
+  private navigationSubscription?: Subscription;
   private paymentLoadSubscription?: Subscription;
   private sbpBanksLoadSubscription?: Subscription;
 
@@ -175,7 +183,7 @@ export class PublicPayPage implements OnDestroy {
   readonly manualTransferDestinationLabel = computed(() => this.manualTransferDestination().fieldLabel);
   readonly manualTransferCopyLabel = computed(() => this.manualTransferDestination().copyLabel);
   readonly statusLabel = computed(() => this.statusText(this.payment()?.status));
-  readonly paymentPageMode = computed<TbankPaymentPageMode>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
+  readonly paymentPageMode = computed<string>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
   readonly sbpBankSelectionSupported = computed(() => this.payment()?.sbpBankSelectionSupported !== false);
   readonly lockedTochkaPaymentMethod = computed<null | 'BANK_FORM' | 'SBP_QR'>(() => {
     const payment = this.payment();
@@ -214,19 +222,36 @@ export class PublicPayPage implements OnDestroy {
   readonly paymentCompleteTitle = computed(() => this.payment()?.status === 'TEST_CONFIRMED' ? 'Тестовая оплата подтверждена' : 'Оплата прошла успешно');
   readonly paymentCompleteText = computed(() => this.payment()?.status === 'TEST_CONFIRMED' ? 'Повторная оплата по этой ссылке больше не нужна.' : 'Электронный чек будет отправлен на указанный e-mail.');
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly externalLink: MobileExternalLinkService
+  constructor(private readonly externalLink: MobileExternalLinkService
   ) {
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
-      this.activatePaymentRoute(params.get('token'));
+      this.routeToken = params.get('token');
+      if (this.viewActive) this.activatePaymentRoute(this.routeToken);
     });
+    this.navigationSubscription = watchPublicPaymentNavigation(this.router, false,
+      () => this.routeToken, () => this.viewActive,
+      () => this.ionViewWillLeave(), () => this.ionViewWillEnter());
+  }
+
+  ionViewWillLeave(): void {
+    // IonRouterOutlet caches this component, so leaving must invalidate late callbacks.
+    this.viewActive = false;
+    this.routeEpoch.change(null);
+    this.cancelRouteReads();
+  }
+
+  ionViewWillEnter(): void {
+    if (this.viewActive) return;
+    this.viewActive = true;
+    this.activatePaymentRoute(this.routeToken);
   }
 
   ngOnDestroy(): void {
+    this.viewActive = false;
     this.routeEpoch.destroy();
     this.cancelRouteReads();
     this.routeSubscription?.unsubscribe();
+    this.navigationSubscription?.unsubscribe();
   }
 
   @HostListener('window:pageshow') onPageShow(): void { this.refreshPaymentAfterReturn(); }
@@ -262,7 +287,7 @@ export class PublicPayPage implements OnDestroy {
     const token = this.token();
     this.sbpSubmitting.set(true);
     this.clearFeedback();
-    this.api.initPublicSbpPayment(token, this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent(), this.selectedSbpBankId() || null).subscribe({
+    this.publicPaymentsApi.initPublicSbpPayment(token, this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent(), this.selectedSbpBankId() || null).subscribe({
       next: (response) => {
         if (!this.isActiveRoute(routeTicket)) {
           return;
@@ -305,7 +330,7 @@ export class PublicPayPage implements OnDestroy {
     const token = this.token();
     this.bankSubmitting.set(true);
     this.clearFeedback();
-    this.api.initPublicPayment(token, this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent()).subscribe({
+    this.publicPaymentsApi.initPublicPayment(token, this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent()).subscribe({
       next: (response) => {
         if (!this.isActiveRoute(routeTicket)) {
           return;
@@ -339,7 +364,7 @@ export class PublicPayPage implements OnDestroy {
     const token = this.token();
     this.manualSubmitting.set(true);
     this.clearFeedback();
-    this.api.reportPublicManualPayment(token).subscribe({
+    this.publicPaymentsApi.reportPublicManualPayment(token).subscribe({
       next: (payment) => {
         if (!this.isActiveRoute(routeTicket)) {
           return;
@@ -394,7 +419,7 @@ export class PublicPayPage implements OnDestroy {
     if (!this.isActiveRoute(routeTicket)) {
       return;
     }
-    void this.externalLink.openPayment(value, purpose).then((opened) => {
+    void this.externalLink.openPayment(value, purpose, () => this.isActiveRoute(routeTicket)).then((opened) => {
       if (this.isActiveRoute(routeTicket) && !opened) {
         this.error.set('Ссылка оплаты имеет недопустимый формат. Переход отменен.');
       }
@@ -424,7 +449,7 @@ export class PublicPayPage implements OnDestroy {
     this.paymentLoadSubscription?.unsubscribe();
     this.paymentLoadSubscription = undefined;
     this.loading.set(true);
-    const subscription = this.api.getPublicPaymentLink(token).subscribe({
+    const subscription = this.publicPaymentsApi.getPublicPaymentLink(token).subscribe({
       next: (payment) => {
         if (!this.isActiveRoute(routeTicket)) {
           return;
@@ -436,6 +461,7 @@ export class PublicPayPage implements OnDestroy {
         if (!this.isActiveRoute(routeTicket)) {
           return;
         }
+        if (error instanceof ClientContractError) this.payment.set(null);
         this.error.set(this.errorMessage(error, 'Не удалось открыть платежную ссылку.'));
         this.loading.set(false);
       }
@@ -479,7 +505,7 @@ export class PublicPayPage implements OnDestroy {
     }
     this.sbpBanksLoadSubscription?.unsubscribe();
     this.sbpBanksLoadSubscription = undefined;
-    const subscription = this.api.getPublicSbpBanks(token).subscribe({
+    const subscription = this.publicPaymentsApi.getPublicSbpBanks(token).subscribe({
       next: (banks) => {
         if (this.isActiveRoute(routeTicket)) {
           this.sbpBanks.set(banks ?? []);
@@ -498,7 +524,7 @@ export class PublicPayPage implements OnDestroy {
 
   private refreshPaymentAfterReturn(): void {
     const now = Date.now();
-    if (now - this.lastReturnRefreshAt < 1200 || this.loading() || this.refreshingPayment() || !this.token() || this.isPaymentComplete()) {
+    if (!this.viewActive || now - this.lastReturnRefreshAt < 1200 || this.loading() || this.refreshingPayment() || !this.token() || this.isPaymentComplete()) {
       return;
     }
     this.lastReturnRefreshAt = now;
@@ -511,7 +537,7 @@ export class PublicPayPage implements OnDestroy {
     }
     this.paymentLoadSubscription?.unsubscribe();
     this.paymentLoadSubscription = undefined;
-    const subscription = this.api.getPublicPaymentLink(token).subscribe({
+    const subscription = this.publicPaymentsApi.getPublicPaymentLink(token).subscribe({
       next: (payment) => {
         if (!this.isActiveRoute(routeTicket)) {
           return;
@@ -519,8 +545,12 @@ export class PublicPayPage implements OnDestroy {
         this.applyPayment(payment, true);
         this.refreshingPayment.set(false);
       },
-      error: () => {
+      error: (error) => {
         if (this.isActiveRoute(routeTicket)) {
+          if (error instanceof ClientContractError) {
+            this.payment.set(null);
+            this.error.set('Данные платежа изменились. Обновите страницу перед оплатой.');
+          }
           this.refreshingPayment.set(false);
         }
       }

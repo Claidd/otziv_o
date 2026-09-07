@@ -1,0 +1,9 @@
+[
+  { "input": {}, "recipient": "Получатель не указан", "destination": "Фактическое направление не определено", "source": "По фактическому получателю оплаты" },
+  { "input": { "manualRecipientName": " Старое имя ", "accountingRecipientLabel": " Наталья ", "accountingDestinationKind": "CONTRACTOR_PROFILE", "accountingRecipientType": "SPECIALIST", "accountingRecipientProfileId": 27 }, "recipient": "Наталья", "destination": "Профиль специалиста · профиль №27", "source": "По фактическому получателю оплаты" },
+  { "input": { "manualRecipientName": "  ", "attributionKnown": false, "accountingDestinationKind": "OWNER" }, "recipient": "Получатель не указан", "destination": "Нет точной атрибуции: требуется сверка старых оплат", "source": "Старая подтверждённая оплата без данных о получателе" },
+  { "input": { "accountingDestinationKind": "OWNER" }, "recipient": "Получатель не указан", "destination": "Фактически зачтено владельцу", "source": "По фактическому получателю оплаты" },
+  { "input": { "accountingDestinationKind": "MANUAL_PAYMENT_TASK", "manualPaymentTaskTargetKind": "EXTERNAL_TASK", "manualPaymentTaskId": 9, "manualPaymentTaskGeneration": 2 }, "recipient": "Получатель не указан", "destination": "Внешний получатель · задание №9 · версия 2", "source": "По фактическому получателю оплаты" },
+  { "input": { "accountingDestinationKind": "MANUAL_PAYMENT_TASK", "manualPaymentTaskTargetKind": "FUTURE_KIND" }, "recipient": "Получатель не указан", "destination": "Получатель задания не определён · задание №?", "source": "По фактическому получателю оплаты" },
+  { "input": { "accountingDestinationKind": "FUTURE_DESTINATION", "manualRecipientName": "Получатель" }, "recipient": "Получатель", "destination": "Фактическое направление не определено", "source": "По фактическому получателю оплаты" }
+]

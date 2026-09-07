@@ -1,73 +1,15 @@
+import { decodeCommonBillingAccounts } from '@otziv/client-common/billing-payments';
+import type { CommonBillingCompanyResponse, CommonInvoiceSummaryResponse, CommonBillingAccountResponse, InvoicePaymentMode } from '@otziv/client-common/billing-payments';
+export type { CommonBillingCompanyResponse, CommonInvoiceSummaryResponse, CommonBillingAccountResponse, InvoicePaymentMode } from '@otziv/client-common/billing-payments';
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
 import type { OrderCardItem } from './manager.api';
 
-export type InvoicePaymentMode = 'AUTO_ROUTING' | 'OWNER_PAPER_INVOICE';
 
-export interface CommonBillingCompanyResponse {
-  companyId: number;
-  companyTitle: string;
-  enabled: boolean;
-}
 
-export interface CommonInvoiceSummaryResponse {
-  id: number;
-  accountId: number;
-  accountName: string;
-  title: string;
-  token: string;
-  publicUrl: string;
-  status: string;
-  totalOrders: number;
-  readyOrders: number;
-  paidOrders: number;
-  amount: number;
-  paid: number;
-  remaining: number;
-  amountKopecks: number;
-  paidKopecks: number;
-  remainingKopecks: number;
-  sentAt?: string | null;
-  lastReminderAt?: string | null;
-  nextReminderAt?: string | null;
-  closedAt?: string | null;
-  closedBy?: string | null;
-  closeReason?: string | null;
-  lastError?: string | null;
-  paymentSuccessNotificationError?: string | null;
-  tbankOrderId?: string | null;
-  tbankPaymentId?: string | null;
-  tbankPaymentAmountKopecks?: number | null;
-  tbankTerminalLabel?: string | null;
-  tbankTerminalKey?: string | null;
-  paymentRouteType?: string | null;
-  paymentRouteProfileName?: string | null;
-  paymentRouteProvider?: string | null;
-  paymentRouteRecipient?: string | null;
-  paymentRouteManualTaskId?: number | null;
-  contractorPaymentRoute: boolean;
-  paymentRouteSelectedAt?: string | null;
-  invoicePurpose?: string | null;
-  supersedesInvoiceId?: number | null;
-  invoicePaymentMode?: InvoicePaymentMode | null;
-  paperInvoiceIssuedAt?: string | null;
-}
 
-export interface CommonBillingAccountResponse {
-  id: number;
-  name: string;
-  enabled: boolean;
-  autoRepeatOrders: boolean;
-  managerId?: number | null;
-  managerName?: string | null;
-  invoiceCompanyId?: number | null;
-  invoiceCompanyTitle?: string | null;
-  companies: CommonBillingCompanyResponse[];
-  currentInvoice?: CommonInvoiceSummaryResponse | null;
-  invoicePaymentMode?: InvoicePaymentMode | null;
-}
 
 export interface CommonBillingAccountRequest {
   name: string;
@@ -235,15 +177,15 @@ export class CommonBillingApi {
   constructor(private readonly http: HttpClient) {}
 
   accounts(): Observable<CommonBillingAccountResponse[]> {
-    return this.http.get<CommonBillingAccountResponse[]>(
+    return this.http.get<unknown>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/accounts`
-    );
+    ).pipe(map(decodeCommonBillingAccounts));
   }
 
   accountsForCompany(companyId: number): Observable<CommonBillingAccountResponse[]> {
-    return this.http.get<CommonBillingAccountResponse[]>(
+    return this.http.get<unknown>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/accounts/by-company/${companyId}`
-    );
+    ).pipe(map(decodeCommonBillingAccounts));
   }
 
   createAccount(request: CommonBillingAccountRequest): Observable<CommonBillingAccountResponse> {

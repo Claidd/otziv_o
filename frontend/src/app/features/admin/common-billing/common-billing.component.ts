@@ -1,3 +1,4 @@
+import { ClientContractError, commonInvoiceDeliveryWarning } from '@otziv/client-common/billing-payments';
 import { DatePipe } from '@angular/common';
 import { Component, ElementRef, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -645,6 +646,13 @@ export class CommonBillingComponent implements OnDestroy {
       error: (err) => {
         if (!this.isCurrentAccountLoad(loadRun)) {
           return;
+        }
+        if (err instanceof ClientContractError) {
+          this.invalidateInvoiceView();
+          this.accounts.set([]);
+          this.selectedAccountId.set(null);
+          this.invoiceDetails.set(null);
+          this.applySelectedDraft();
         }
         const message = apiErrorDetail(err, 'Не удалось загрузить общие счета');
         this.error.set(message);
@@ -2183,7 +2191,13 @@ export class CommonBillingComponent implements OnDestroy {
           return { ...account, currentInvoice: details.summary };
         }));
         this.mutating.set('');
-        this.toastService.success(successTitle);
+        const deliveryWarning = key === 'send-invoice'
+          ? commonInvoiceDeliveryWarning(details.summary.lastError) : null;
+        if (deliveryWarning) {
+          this.toastService.warning('Отправка общего счета не подтверждена', deliveryWarning);
+        } else {
+          this.toastService.success(successTitle);
+        }
       },
       error: (err) => {
         if (this.isCurrentInvoiceView(viewGeneration, invoiceId) && this.mutating() === key) {

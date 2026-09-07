@@ -8,6 +8,7 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -26,6 +27,14 @@ public class ReviewEditService {
     @Transactional
     public boolean updateReviewText(Long orderId, Long reviewId, String text) {
         return updateReviewTextInternal(orderId, reviewId, text, true);
+    }
+
+    @Transactional
+    public boolean updateReviewText(Long orderId, Long reviewId, String text, Authentication authentication) {
+        // The explicit actor is checked under the canonical lock in this TX;
+        // the shared body must not replace it with an ambient thread identity.
+        assignmentMutationGuardService.assertReview(reviewId, authentication);
+        return updateReviewTextInternal(orderId, reviewId, text, false);
     }
 
     @Transactional
@@ -53,6 +62,12 @@ public class ReviewEditService {
     }
 
     @Transactional
+    public boolean updateReviewAnswer(Long orderId, Long reviewId, String answer, Authentication authentication) {
+        assignmentMutationGuardService.assertReview(reviewId, authentication);
+        return updateReviewAnswerInternal(orderId, reviewId, answer, false);
+    }
+
+    @Transactional
     public boolean updateReviewAnswerFromSharedCheck(Long orderId, Long reviewId, String answer) {
         return updateReviewAnswerInternal(orderId, reviewId, answer, false);
     }
@@ -73,11 +88,23 @@ public class ReviewEditService {
 
     @Transactional
     public boolean updateReviewNote(Long orderId, Long reviewId, String comment) {
+        return updateReviewNoteInternal(orderId, reviewId, comment, true);
+    }
+
+    @Transactional
+    public boolean updateReviewNote(Long orderId, Long reviewId, String comment, Authentication authentication) {
+        assignmentMutationGuardService.assertReview(reviewId, authentication);
+        return updateReviewNoteInternal(orderId, reviewId, comment, false);
+    }
+
+    private boolean updateReviewNoteInternal(Long orderId, Long reviewId, String comment, boolean requireAssignment) {
         Review review = findReviewForOrder(orderId, reviewId);
         if (review == null || review.getOrderDetails() == null) {
             return false;
         }
-        assignmentMutationGuardService.assertReview(reviewId);
+        if (requireAssignment) {
+            assignmentMutationGuardService.assertReview(reviewId);
+        }
 
         OrderDetails orderDetails = review.getOrderDetails();
         orderDetails.setComment(comment);

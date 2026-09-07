@@ -484,9 +484,11 @@ public class ApiManagerCompanyController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для филиала нужны город, адрес и ссылка 2ГИС");
         }
 
-        Filial existingByUrl = filialService.findFilialByUrl(url);
-        if (existingByUrl != null && !Objects.equals(existingByUrl.getId(), filialId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Такой url филиала уже есть в базе");
+        if (!com.hunt.otziv.c_companies.service.TwoGisUrl.supports(url)) {
+            Filial existingByUrl = filialService.findFilialByUrl(url);
+            if (existingByUrl != null && !Objects.equals(existingByUrl.getId(), filialId)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Такой url филиала уже есть в базе");
+            }
         }
 
         try {

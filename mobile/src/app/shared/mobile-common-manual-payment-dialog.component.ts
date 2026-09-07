@@ -1,3 +1,5 @@
+import { inject } from '@angular/core';
+import { CommonBillingApi } from '../core/common-billing.api';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, Input, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -14,7 +16,7 @@ import {
 } from '@ionic/angular/standalone';
 import { firstValueFrom } from 'rxjs';
 import {
-  ApiService,
+  type ApiService,
   type CommonInvoiceDetailsResponse,
   type CommonManualPaymentAttributionRequest,
   type CommonManualPaymentMode,
@@ -66,6 +68,7 @@ export function mobileCommonPaymentRublesToKopecks(raw: string): number | null {
   styleUrl: './mobile-common-manual-payment-dialog.component.scss'
 })
 export class MobileCommonManualPaymentDialogComponent implements OnInit {
+  private readonly commonBillingApi = inject(CommonBillingApi);
   @Input({ required: true }) invoiceId!: number;
   @Input() mode: CommonManualPaymentMode = 'STANDARD';
 
@@ -118,9 +121,7 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
       && !this.saving()
   ));
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly modalController: ModalController
+  constructor(private readonly modalController: ModalController
   ) {}
 
   ngOnInit(): void {
@@ -133,7 +134,7 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
     this.loading.set(true);
     this.error.set('');
     try {
-      const options = await firstValueFrom(this.api.getCommonManualPaymentOptions(this.invoiceId));
+      const options = await firstValueFrom(this.commonBillingApi.getCommonManualPaymentOptions(this.invoiceId));
       const normalized = {
         ...options,
         candidates: options.candidates ?? [],
@@ -257,7 +258,7 @@ export class MobileCommonManualPaymentDialogComponent implements OnInit {
     this.error.set('');
     try {
       const details = await firstValueFrom(
-        this.api.confirmCommonManualPayment(this.invoiceId, this.mode, request)
+        this.commonBillingApi.confirmCommonManualPayment(this.invoiceId, this.mode, request)
       );
       const result: MobileCommonManualPaymentCompleted = { details };
       await this.modalController.dismiss(result, 'completed');

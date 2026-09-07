@@ -84,6 +84,7 @@ public class ExternalReviewCheckService {
         if (!runtimeSwitch.isEnabled()) {
             return 0;
         }
+        if (!workerClient.isReady()) return 0;
 
         LocalDateTime now = currentTime();
         int maxAttempts = Math.max(1, properties.getMaxAttempts());
@@ -151,6 +152,7 @@ public class ExternalReviewCheckService {
         if (!runtimeSwitch.isEnabled()) {
             return false;
         }
+        if (!workerClient.isReady()) return false;
         ClaimedCheck claim = transactions.claim(checkId).orElse(null);
         if (claim == null) {
             return false;
@@ -164,7 +166,7 @@ public class ExternalReviewCheckService {
         ExternalReviewWorkerResponse response;
         try {
             response = workerClient.verify(claim.request());
-        } catch (ExternalReviewWorkerDisabledException disabled) {
+        } catch (ExternalReviewWorkerDisabledException | ExternalReviewWorkerAdmissionException disabled) {
             transactions.releaseUnconsumed(claim);
             return false;
         } catch (Exception exception) {

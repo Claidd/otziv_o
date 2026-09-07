@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import { apiTransportSource } from './api-source.mjs';
 
-const apiSource = fs.readFileSync('src/app/core/api.service.ts', 'utf8');
+const apiSource = apiTransportSource();
 const dialogSource = fs.readFileSync(
   'src/app/shared/mobile-manual-card-payment-dialog.component.ts',
   'utf8'
@@ -82,7 +83,7 @@ test('manual-card dialog preserves the exact pending/completed backend outcome i
   );
   assert.match(
     submit,
-    /const\s+\w+\s*=\s*await firstValueFrom\(\s*this\.api\.confirmManagerManualCardPayment\(/
+    /const\s+\w+\s*=\s*await firstValueFrom\(\s*this\.managerManualPaymentsApi\.confirmManagerManualCardPayment\(/
   );
   assert.match(
     submit,

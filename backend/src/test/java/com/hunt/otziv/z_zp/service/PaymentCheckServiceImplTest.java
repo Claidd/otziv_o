@@ -9,7 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyStatisticsOperations;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.u_users.model.Manager;
@@ -30,7 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class PaymentCheckServiceImplTest {
 
     @Mock private PaymentCheckRepository paymentCheckRepository;
-    @Mock private CompanyService companyService;
+    @Mock private CompanyStatisticsOperations companyService;
     @InjectMocks private PaymentCheckServiceImpl service;
 
     @Test

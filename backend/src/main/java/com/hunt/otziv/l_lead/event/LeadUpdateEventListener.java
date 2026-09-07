@@ -4,7 +4,6 @@ import com.hunt.otziv.l_lead.dto.LeadUpdatedEvent;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.service.LeadService;
 import com.hunt.otziv.l_lead.service.LeadTransferService;
-import com.hunt.otziv.l_lead.service.VpsSyncService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,47 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
-/**
-
-    🔄 Пошагово как работает синхронизация
-
-    1. Пользователь на сайте нажимает кнопку "Сменить статус на 'В работе'"
-    2. Контроллер или сервис меняет поле lead.lidStatus и вызывает leadService.save(lead)
-    3. После успешного сохранения вызывается leadEventPublisher.publishUpdate(lead)
-    4. Событие LeadUpdatedEvent помещается в очередь Spring’а
-    5. После окончания транзакции Spring вызывает onLeadUpdated(...)
-    6. Внутри listener-а подгружается обновлённый Lead из базы
-    7. Вызывается sendLeadUpdate(lead), он мапится в LeadUpdateDto и отправляется на сервер
-    8. Если сервер не отвечает — делается 3 попытки с логированием
-    9. На сервере контроллер принимает PATCH, обновляет запись в базе
-**/
-
-
-//@Slf4j
-//@Component
-//@RequiredArgsConstructor
-//@ConditionalOnProperty(name = "lead.sync.outbound.enabled", havingValue = "true", matchIfMissing = false)
-//public class LeadUpdateEventListener {
-//    private final LeadService leadService;
-//    private final VpsSyncService vpsSyncService;
-//
-//    @PostConstruct
-//    public void init() { log.info("✅ LeadUpdateEventListener инициализирован"); }
-//
-//    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-//    public void onLeadUpdated(LeadUpdatedEvent event) {
-//        log.info("📡 Получено событие LeadUpdatedEvent для лида {}", event.leadId());
-//        Lead lead = leadService.findByIdOptional(event.leadId()).orElse(null);
-//        if (lead == null) {
-//            log.warn("⚠️ Лид {} не найден в базе", event.leadId());
-//            return;
-//        }
-//        vpsSyncService.sendLeadAsync(lead);
-//    }
-//}
-
-
-
+/** Stores the frozen outbound command in the same transaction as the lead change. */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -67,8 +26,8 @@ public class LeadUpdateEventListener {
         log.info("✅ LeadUpdateEventListener инициализирован");
     }
 
-    // Важно, чтобы запись уже была закоммичена перед вызовом внешнего API
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    // Здесь нет HTTP: ошибка записи намерения откатывает бизнес-изменение.
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onLeadUpdated(LeadUpdatedEvent event) {
         log.info("📡 Получено событие LeadUpdatedEvent для лида {}", event.leadId());
         Lead lead = leadService.findByIdOptional(event.leadId()).orElse(null);
@@ -79,4 +38,3 @@ public class LeadUpdateEventListener {
         leadTransferService.sendLeadUpdate(lead);
     }
 }
-

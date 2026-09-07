@@ -23,9 +23,14 @@ const {
 const { selectGroupsCache } = require("./groups-cache");
 const {
   boundedBodyBytes,
-  createConcurrencyMiddleware,
   createInternalAuthMiddleware,
 } = require("./internal-auth");
+const { TaskLimiter } = require("./task-limiter");
+const { ClientLifecycle } = require("./client-lifecycle");
+const { RemoteSessionFence } = require("./remote-session-fence");
+const { OperationLedger, OperationLedgerError } = require("./operation-ledger");
+const { createOutboundHandler } = require("./outbound-routes");
+const { installPuppeteerCompatibility } = require("./puppeteer-compatibility");
 const { chromiumLaunchArgs } = require("./chromium-launch");
 const { fetchRecentMessagesFromRawChat } = require("./raw-chat-reconciliation");
 const { createLastSeenLookup } = require("./last-seen");
@@ -114,7 +119,6 @@ let lastQrAt = null;
 let lastReadyAt = null;
 let lastState = "starting";
 let lastError = null;
-let restartTimer = null;
 let readyWatchdogTimer = null;
 let groupsCache = null;
 let groupsCacheAt = null;
@@ -156,6 +160,16 @@ const participantPhoneResolver = new ParticipantPhoneResolver({
   },
 });
 
+const taskLimiter = new TaskLimiter(WHATSAPP_HTTP_MAX_CONCURRENCY);
+const operationLedger = new OperationLedger(
+  process.env.WHATSAPP_OPERATION_LEDGER_PATH || path.join(AUTH_PATH, "outbound-operations"),
+  { maxRecords: process.env.WHATSAPP_OPERATION_LEDGER_MAX_RECORDS }
+);
+const remoteSessionFence = REMOTE_BROWSER_ENABLED ? new RemoteSessionFence({
+  directory: path.join(AUTH_PATH, "remote-sessions"), clientId: CLIENT_ID,
+  profileId: BROWSER_PROFILE_ID || undefined, browserUrl: WHATSAPP_BROWSER_URL,
+}) : null;
+let shuttingDown = false;
 const app = express();
 
 function log(level, message, extra = {}) {
@@ -221,14 +235,16 @@ function handleProcessError(kind, error) {
 
 async function withTimeout(promiseFactory, timeoutMs, description) {
   let timer = null;
+  const control = taskLimiter.control();
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
+      control.timeout();
       reject(new Error(`${description} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
   });
 
   try {
-    return await Promise.race([Promise.resolve().then(promiseFactory), timeout]);
+    return await Promise.race([taskLimiter.track(Promise.resolve().then(promiseFactory)), timeout]);
   } finally {
     if (timer) {
       clearTimeout(timer);
@@ -374,7 +390,7 @@ function minimalStatusPayload() {
 }
 
 function requireReady(res) {
-  if (ready && client) {
+  if (ready && client && !shuttingDown && operationLedger.healthy) {
     return true;
   }
   res.status(503).json({
@@ -386,14 +402,13 @@ function requireReady(res) {
 }
 
 function asyncRoute(handler) {
-  return (req, res, next) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
-  };
+  return taskLimiter.wrap(handler);
 }
 
 async function createClient() {
   if (REMOTE_BROWSER_ENABLED) {
     const browserURL = await resolveRemoteBrowserUrl(WHATSAPP_BROWSER_URL);
+    const generation = await remoteSessionFence.begin(browserURL);
     const instance = new Client({
       // Authentication lives in the persistent peoples profile. Disabling the
       // library UA override preserves the fingerprint already applied by peoples.
@@ -408,12 +423,20 @@ async function createClient() {
         protocolTimeout: WHATSAPP_PUPPETEER_TIMEOUT_MS,
       },
     });
-    return installRemoteBrowserLifecycle(instance);
+    const initialize = instance.initialize.bind(instance);
+    instance.initialize = async (...args) => {
+      await initialize(...args);
+      await remoteSessionFence.capture(instance, generation);
+    };
+    return installRemoteBrowserLifecycle(installPuppeteerCompatibility(instance), {
+      beforeDestroy: current => remoteSessionFence.capture(current, generation),
+      afterDestroy: () => remoteSessionFence.complete(browserURL, generation),
+    });
   }
 
   removeStaleChromiumLocks(AUTH_PATH);
   const launchArgs = chromiumLaunchArgs(proxyServerArg());
-  return new Client({
+  return installPuppeteerCompatibility(new Client({
     authStrategy: new LocalAuth({
       clientId: CLIENT_ID,
       dataPath: AUTH_PATH,
@@ -431,11 +454,12 @@ async function createClient() {
       protocolTimeout: WHATSAPP_PUPPETEER_TIMEOUT_MS,
       args: launchArgs,
     },
-  });
+  }));
 }
 
-function wireClientEvents(instance) {
+function wireClientEvents(instance, current, trackEvent) {
   instance.on("qr", async (qr) => {
+    if (!current()) return;
     currentQr = qr;
     lastQrAt = new Date().toISOString();
     lastState = "qr";
@@ -443,8 +467,11 @@ function wireClientEvents(instance) {
     authenticated = false;
     authenticatedAt = null;
     try {
-      currentQrDataUrl = await QRCode.toDataURL(qr);
+      const dataUrl = await QRCode.toDataURL(qr);
+      if (!current() || currentQr !== qr) return;
+      currentQrDataUrl = dataUrl;
     } catch (error) {
+      if (!current() || currentQr !== qr) return;
       currentQrDataUrl = null;
       lastError = error.message;
       log("warn", "QR data URL generation failed", { error: error.message });
@@ -456,6 +483,7 @@ function wireClientEvents(instance) {
   });
 
   instance.on("authenticated", () => {
+    if (!current()) return;
     authenticated = true;
     authenticatedAt = new Date().toISOString();
     lastState = "authenticated";
@@ -463,6 +491,7 @@ function wireClientEvents(instance) {
   });
 
   instance.on("auth_failure", (message) => {
+    if (!current()) return;
     authenticated = false;
     ready = false;
     authenticatedAt = null;
@@ -473,6 +502,7 @@ function wireClientEvents(instance) {
   });
 
   instance.on("ready", () => {
+    if (!current()) return;
     ready = true;
     authenticated = true;
     currentQr = null;
@@ -485,11 +515,13 @@ function wireClientEvents(instance) {
   });
 
   instance.on("change_state", (state) => {
+    if (!current()) return;
     lastState = String(state || "unknown");
     log("info", "State changed", { state: lastState });
   });
 
   instance.on("disconnected", (reason) => {
+    if (!current()) return;
     ready = false;
     authenticated = false;
     authenticatedAt = null;
@@ -500,7 +532,8 @@ function wireClientEvents(instance) {
   });
 
   instance.on("message_create", (message) => {
-    handleIncomingMessage(message).catch((error) => {
+    if (!current()) return;
+    trackEvent(() => handleIncomingMessage(message)).catch((error) => {
       log("warn", "Message webhook failed", {
         stage: error.stage || "delivery",
         path: error.path,
@@ -512,30 +545,38 @@ function wireClientEvents(instance) {
   });
 }
 
-async function startClient() {
-  ready = false;
-  authenticated = false;
-  authenticatedAt = null;
-  currentQr = null;
-  currentQrDataUrl = null;
-  lastQrAt = null;
-  clientStartedAt = new Date().toISOString();
-  lastState = "starting";
-  client = await createClient();
-  wireClientEvents(client);
-  log("info", "Initializing WhatsApp client", {
-    authPath: AUTH_PATH,
-    browserProfileId: BROWSER_PROFILE_ID,
-    browserMode: REMOTE_BROWSER_ENABLED ? "peoples-profile" : "local",
-    groupWebhookEnabled: GROUP_WEBHOOK_ENABLED,
-    proxyEnabled: WHATSAPP_PROXY_ENABLED,
-    proxyConfigured: Boolean(proxyServerArg()),
-    proxyHost: WHATSAPP_PROXY_ENABLED && WHATSAPP_PROXY_HOST ? WHATSAPP_PROXY_HOST : undefined,
-    proxyPort: WHATSAPP_PROXY_ENABLED && WHATSAPP_PROXY_HOST ? WHATSAPP_PROXY_PORT : undefined,
-    proxyType: WHATSAPP_PROXY_ENABLED && WHATSAPP_PROXY_HOST ? WHATSAPP_PROXY_TYPE : undefined,
-  });
-  await client.initialize();
-}
+const clientLifecycle = new ClientLifecycle({
+  limiter: taskLimiter,
+  createClient,
+  wireClient: (instance, current, trackEvent) => {
+    client = instance;
+    wireClientEvents(instance, current, trackEvent);
+  },
+  onStarting: () => {
+    ready = false;
+    authenticated = false;
+    authenticatedAt = null;
+    currentQr = null;
+    currentQrDataUrl = null;
+    lastQrAt = null;
+    groupsCache = null;
+    groupsCacheAt = null;
+    clientStartedAt = new Date().toISOString();
+    lastState = "starting";
+    log("info", "Initializing WhatsApp client", { browserMode: REMOTE_BROWSER_ENABLED ? "peoples-profile" : "local" });
+  },
+  onBlocked: () => {
+    ready = false;
+    authenticated = false;
+    currentQr = null;
+    currentQrDataUrl = null;
+    lastState = "draining";
+  },
+  terminate: code => process.exit(code),
+  drainTimeoutMs: Math.min(parsePositiveInt(process.env.WHATSAPP_DRAIN_TIMEOUT_MS, 30000), 300000),
+  cleanupTimeoutMs: 5000,
+  startupTimeoutMs: WHATSAPP_STARTUP_READY_TIMEOUT_MS,
+});
 
 function startReadyWatchdog() {
   if (readyWatchdogTimer) {
@@ -543,7 +584,7 @@ function startReadyWatchdog() {
   }
 
   readyWatchdogTimer = setInterval(() => {
-    if (ready || restartTimer) {
+    if (ready || clientLifecycle.transition || shuttingDown) {
       return;
     }
 
@@ -580,26 +621,8 @@ function startReadyWatchdog() {
 }
 
 function scheduleRestart() {
-  if (restartTimer) {
-    return;
-  }
-  restartTimer = setTimeout(async () => {
-    restartTimer = null;
-    try {
-      if (client) {
-        await client.destroy();
-      }
-    } catch (error) {
-      log("warn", "Destroy before restart failed", { error: error.message });
-    }
-    try {
-      await startClient();
-    } catch (error) {
-      lastError = error.message;
-      log("error", "Restart failed", { error: error.message });
-      scheduleRestart();
-    }
-  }, 5000);
+  // Invalidate the current session synchronously, before its next event/callback.
+  void clientLifecycle.restart();
 }
 
 const handleIncomingMessage = createMessageHandler({
@@ -927,7 +950,7 @@ app.get("/health", (req, res) => {
 });
 
 app.get("/ready", (req, res) => {
-  if (!ready || !authenticated) {
+  if (!ready || !authenticated || shuttingDown || !operationLedger.healthy) {
     res.status(503).json(minimalStatusPayload());
     return;
   }
@@ -941,15 +964,20 @@ app.use(createInternalAuthMiddleware({
 }));
 
 app.get("/internal/ready", (req, res) => {
-  if (!ready || !authenticated) {
+  if (!ready || !authenticated || shuttingDown || !operationLedger.healthy) {
     res.status(503).json(minimalStatusPayload());
     return;
   }
   res.json(minimalStatusPayload());
 });
 
+app.get("/internal/task-metrics", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!GATEWAY_SHARED_SECRET.trim()) return res.sendStatus(503);
+  res.json(taskLimiter.snapshot());
+});
+
 app.use(express.json({ limit: WHATSAPP_HTTP_BODY_LIMIT, strict: true }));
-app.use(createConcurrencyMiddleware(WHATSAPP_HTTP_MAX_CONCURRENCY));
 
 app.get("/qr", asyncRoute(async (req, res) => {
   if (!currentQr) {
@@ -972,68 +1000,60 @@ app.get("/qr", asyncRoute(async (req, res) => {
   });
 }));
 
-app.post("/send", asyncRoute(async (req, res) => {
-  if (!requireReady(res)) {
-    return;
+function canStartOutbound() {
+  const allowed = ready && authenticated && client && !shuttingDown && operationLedger.healthy;
+  if (!allowed) taskLimiter.reject("not_ready");
+  return allowed;
+}
+
+async function observedSendMessage(destination, message) {
+  try { return await client.sendMessage(destination, message); }
+  catch (error) {
+    if (/timeout|timed out/iu.test(String(error?.message || ""))) taskLimiter.control().timeout();
+    throw error;
   }
+}
 
-  const phone = normalizePhone(req.body.phone || req.body.to || req.body.number);
-  const message = String(req.body.message || "").trim();
-  if (!phone || !message || message.length > WHATSAPP_MAX_MESSAGE_CHARS) {
-    res.status(400).json({ status: "error", code: "invalid_request" });
-    return;
-  }
+async function sendPersonalMessage(destination, message) {
+  const sent = await observedSendMessage(destination, message);
+  return sent?.id?._serialized || null;
+}
 
-  const sent = await client.sendMessage(phone, message);
-  res.json({
-    status: "ok",
-    clientId: CLIENT_ID,
-    to: phone,
-    messageId: sent && sent.id ? sent.id._serialized : null,
-  });
-}));
-
-app.post("/send-group", asyncRoute(async (req, res) => {
-  if (!requireReady(res)) {
-    return;
-  }
-
-  const groupId = normalizeGroupId(req.body.groupId || req.body.chatId || req.body.to);
-  const message = String(req.body.message || "").trim();
-  if (!groupId || !message || message.length > WHATSAPP_MAX_MESSAGE_CHARS) {
-    res.status(400).json({ status: "error", code: "invalid_request" });
-    return;
-  }
-
-  const outboundToken = outboundRegistry.begin(groupId, message);
-  let sent;
+async function sendGroupMessage(destination, message) {
+  const outboundToken = outboundRegistry.begin(destination, message);
   try {
-    sent = await client.sendMessage(groupId, message);
-    const sentMessageId = sent && sent.id ? sent.id._serialized : null;
+    const sent = await observedSendMessage(destination, message);
+    const sentMessageId = sent?.id?._serialized || null;
     outboundRegistry.complete(outboundToken, sentMessageId);
     if (sentMessageId) {
       try {
         await deliveryIdempotencyStore.mark(
-          generatedOutboundKey(sentMessageId),
-          Date.now() + WHATSAPP_OUTBOUND_DURABLE_TTL_MS
+          generatedOutboundKey(sentMessageId), Date.now() + WHATSAPP_OUTBOUND_DURABLE_TTL_MS
         );
-      } catch (error) {
-        log("warn", "Generated outbound identity persistence failed", {
-          messageId: sentMessageId,
-          error: errorMessage(error),
-        });
+      } catch {
+        log("warn", "Generated outbound identity persistence failed");
       }
     }
+    return sentMessageId;
   } catch (error) {
     outboundRegistry.cancel(outboundToken);
     throw error;
   }
-  res.json({
-    status: "ok",
-    clientId: CLIENT_ID,
-    groupId,
-    messageId: sent && sent.id ? sent.id._serialized : null,
-  });
+}
+
+app.post("/send", asyncRoute(createOutboundHandler({
+  ledger: operationLedger, clientId: CLIENT_ID, kind: "send",
+  normalizeDestination: normalizePhone, maximumChars: WHATSAPP_MAX_MESSAGE_CHARS,
+  canStart: canStartOutbound, send: sendPersonalMessage,
+})));
+app.post("/send-group", asyncRoute(createOutboundHandler({
+  ledger: operationLedger, clientId: CLIENT_ID, kind: "send-group",
+  normalizeDestination: normalizeGroupId, maximumChars: WHATSAPP_MAX_MESSAGE_CHARS,
+  canStart: canStartOutbound, send: sendGroupMessage,
+})));
+app.get("/operations/:operationId", asyncRoute(async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ operationId: req.params.operationId, ...operationLedger.lookup(req.params.operationId) });
 }));
 
 app.get("/groups", asyncRoute(async (req, res) => {
@@ -1293,6 +1313,13 @@ app.get("/lastseen/:phone", asyncRoute(async (req, res) => {
 }));
 
 app.use((error, req, res, next) => {
+  if (error instanceof OperationLedgerError) {
+    if (!res.headersSent && !res.destroyed) {
+      res.set("Cache-Control", "no-store");
+      res.status(error.statusCode).json({ status: "error", code: error.code });
+    }
+    return;
+  }
   lastError = errorMessage(error);
   log("error", "HTTP request failed", {
     path: req.path,
@@ -1325,12 +1352,12 @@ process.on("uncaughtException", (error) => {
   handleProcessError("exception", error);
 });
 
-app.listen(PORT, () => {
+const httpServer = app.listen(PORT, () => {
   log("info", "WhatsApp gateway HTTP server started", { port: PORT, serverUrl: SERVER_URL });
 });
 
 startReadyWatchdog();
-startClient().catch((error) => {
+clientLifecycle.start().catch((error) => {
   lastError = error.message;
   lastState = "startup_failed";
   log("error", "Initial WhatsApp client startup failed", { error: error.message });
@@ -1338,24 +1365,13 @@ startClient().catch((error) => {
 });
 
 async function shutdown(signal) {
-  log("info", "Shutting down WhatsApp gateway", { signal });
-  if (restartTimer) {
-    clearTimeout(restartTimer);
-    restartTimer = null;
-  }
-  if (readyWatchdogTimer) {
-    clearInterval(readyWatchdogTimer);
-    readyWatchdogTimer = null;
-  }
-  try {
-    if (client) {
-      await client.destroy();
-    }
-  } catch (error) {
-    log("warn", "Client destroy during shutdown failed", { error: error.message });
-  } finally {
-    process.exit(0);
-  }
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log("info", "Draining WhatsApp gateway", { signal });
+  if (readyWatchdogTimer) clearInterval(readyWatchdogTimer);
+  httpServer.close();
+  httpServer.closeIdleConnections();
+  await clientLifecycle.shutdown();
 }
 
 process.on("SIGTERM", () => {

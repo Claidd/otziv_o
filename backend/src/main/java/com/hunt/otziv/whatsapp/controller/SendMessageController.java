@@ -23,10 +23,12 @@ import java.util.Map;
 @RequestMapping("/whatsapp")
 public class SendMessageController {
     private final WhatsAppService whatsAppService;
+    private final com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations operations;
 
 
     @GetMapping()
-    public ModelAndView showForm(Map<String, Object> model) {
+    public ModelAndView showForm(Map<String, Object> model, java.security.Principal principal) {
+        model.put("operationId", operations.createManualOperation(principal.getName()));
         return new ModelAndView("lead/layouts/whatsapp", model);// send.html
     }
 
@@ -35,23 +37,33 @@ public class SendMessageController {
             @RequestParam String clientId,
             @RequestParam String phone,
             @RequestParam String message,
+            @RequestParam(required=false) String operationId,
+            java.security.Principal principal,
             Model model
     ) {
-        String result = whatsAppService.sendMessage(clientId, phone, message);
+        String result;
+        try {
+            operations.requireManualOwner(operationId, principal.getName());
+            var frozen=operations.freeze(operationId,clientId,"send",phone,message);
+            operations.requireMatches(operationId,clientId,"send",phone,message);
+            result=whatsAppService.sendMessage(frozen.clientId(),frozen.destination(),frozen.message(),frozen.operationId());
+            model.addAttribute("operationId",operationId);
+        } catch(IllegalArgumentException error) {
+            result=com.hunt.otziv.whatsapp.dto.WhatsAppSendResult.error("operation_invalid", "Откройте новую форму отправки; содержимое существующей операции менять нельзя").toJson();
+            model.addAttribute("operationId",operationId==null?operations.createManualOperation(principal.getName()):operationId);
+        }
         model.addAttribute("result", result);
         return "lead/layouts/whatsapp";
     }
 
     @GetMapping("/toChat")
-    public ModelAndView toChat(Map<String, Object> model) {
-        whatsAppService.sendMessage("client1", "79086431055", "Погуляем сегодня?");
-        return new ModelAndView("lead/layouts/whatsapp", model);// send.html
+    public ModelAndView toChat(Map<String, Object> model, java.security.Principal principal) {
+        return showForm(model,principal);
     }
 
     @GetMapping("/toGroup")
-    public ModelAndView toGroup(Map<String, Object> model) {
-        whatsAppService.sendMessageToGroup("client1", "79086431055", "Погуляем сегодня?");
-        return new ModelAndView("lead/layouts/whatsapp", model);// send.html
+    public ModelAndView toGroup(Map<String, Object> model, java.security.Principal principal) {
+        return showForm(model,principal);
     }
 
 

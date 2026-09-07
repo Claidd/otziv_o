@@ -45,35 +45,3 @@ export function createInternalAuthMiddleware({ secret = "", required = false } =
     next();
   };
 }
-
-export function createConcurrencyMiddleware(configuredLimit, slotTimeoutMs = 300_000) {
-  const parsed = Number.parseInt(String(configuredLimit || ""), 10);
-  const limit = Number.isFinite(parsed) ? Math.max(1, Math.min(parsed, 8)) : 1;
-  let active = 0;
-
-  return (req, res, next) => {
-    if (active >= limit) {
-      res.set("Retry-After", "1");
-      res.status(429).json({ status: "ERROR", code: "worker_busy" });
-      return;
-    }
-
-    active += 1;
-    let released = false;
-    let timer;
-    const release = () => {
-      if (!released) {
-        released = true;
-        if (timer) {
-          clearTimeout(timer);
-        }
-        active -= 1;
-      }
-    };
-    timer = setTimeout(release, Math.max(30_000, Number(slotTimeoutMs) || 300_000));
-    timer.unref();
-    res.once("finish", release);
-    res.once("close", release);
-    next();
-  };
-}

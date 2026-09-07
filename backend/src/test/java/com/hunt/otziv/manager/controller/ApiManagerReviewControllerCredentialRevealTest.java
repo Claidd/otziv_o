@@ -101,6 +101,7 @@ class ApiManagerReviewControllerCredentialRevealTest {
         controller = new ApiManagerReviewController(
                 companyService,
                 orderService,
+                org.mockito.Mockito.mock(com.hunt.otziv.p_products.api.ReviewPublicationCommands.class),
                 productService,
                 reviewService,
                 autoTextService,

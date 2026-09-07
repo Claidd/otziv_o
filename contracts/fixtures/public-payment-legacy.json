@@ -1,0 +1,12 @@
+{
+  "token": "payment-token",
+  "companyTitle": "Компания",
+  "filialTitle": "Филиал",
+  "serviceTitle": "Отзывы",
+  "amount": 1250.5,
+  "amountKopecks": 125050,
+  "description": "Заказ 202",
+  "status": "CREATED",
+  "expiresAt": "2026-09-08T12:30:00",
+  "payable": true
+}

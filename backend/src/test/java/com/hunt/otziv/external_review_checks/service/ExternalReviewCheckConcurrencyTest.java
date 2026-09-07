@@ -42,6 +42,7 @@ class ExternalReviewCheckConcurrencyTest {
     void twoApplicationNodesCallWorkerOnlyOnceForTheSameCheck() throws Exception {
         ReviewExternalCheckRepository repository = mock(ReviewExternalCheckRepository.class);
         ExternalReviewWorkerClient workerClient = mock(ExternalReviewWorkerClient.class);
+        when(workerClient.isReady()).thenReturn(true);
         ExternalReviewScreenshotStorage screenshotStorage = mock(ExternalReviewScreenshotStorage.class);
         ExternalReviewCheckTransactionService transactions = mock(ExternalReviewCheckTransactionService.class);
         ExternalReviewCheckProperties properties = enabledProperties();
@@ -99,6 +100,7 @@ class ExternalReviewCheckConcurrencyTest {
     void switchFlipAfterClaimReleasesAttemptBeforeAnyNetworkCall() {
         ReviewExternalCheckRepository repository = mock(ReviewExternalCheckRepository.class);
         ExternalReviewWorkerClient workerClient = mock(ExternalReviewWorkerClient.class);
+        when(workerClient.isReady()).thenReturn(true);
         ExternalReviewScreenshotStorage screenshotStorage = mock(ExternalReviewScreenshotStorage.class);
         ExternalReviewCheckTransactionService transactions = mock(ExternalReviewCheckTransactionService.class);
         ExternalReviewCheckProperties properties = enabledProperties();
@@ -132,6 +134,7 @@ class ExternalReviewCheckConcurrencyTest {
     void switchFlipAfterWorkerSkipsS3ButStillFinalizesTheClaim() {
         ReviewExternalCheckRepository repository = mock(ReviewExternalCheckRepository.class);
         ExternalReviewWorkerClient workerClient = mock(ExternalReviewWorkerClient.class);
+        when(workerClient.isReady()).thenReturn(true);
         ExternalReviewScreenshotStorage screenshotStorage = mock(ExternalReviewScreenshotStorage.class);
         ExternalReviewCheckTransactionService transactions = mock(ExternalReviewCheckTransactionService.class);
         ExternalReviewCheckRuntimeSwitch runtimeSwitch = mock(ExternalReviewCheckRuntimeSwitch.class);
@@ -162,6 +165,7 @@ class ExternalReviewCheckConcurrencyTest {
     void screenshotFailureCannotTurnACompletedWorkerCallIntoProviderRetry() {
         ReviewExternalCheckRepository repository = mock(ReviewExternalCheckRepository.class);
         ExternalReviewWorkerClient workerClient = mock(ExternalReviewWorkerClient.class);
+        when(workerClient.isReady()).thenReturn(true);
         ExternalReviewScreenshotStorage screenshotStorage = mock(ExternalReviewScreenshotStorage.class);
         ExternalReviewCheckTransactionService transactions = mock(ExternalReviewCheckTransactionService.class);
         ExternalReviewCheckRuntimeSwitch runtimeSwitch = mock(ExternalReviewCheckRuntimeSwitch.class);
@@ -193,6 +197,7 @@ class ExternalReviewCheckConcurrencyTest {
     void uploadedScreenshotIsCompensatedWhenFencedCompletionLoses() {
         ReviewExternalCheckRepository repository = mock(ReviewExternalCheckRepository.class);
         ExternalReviewWorkerClient workerClient = mock(ExternalReviewWorkerClient.class);
+        when(workerClient.isReady()).thenReturn(true);
         ExternalReviewScreenshotStorage screenshotStorage = mock(ExternalReviewScreenshotStorage.class);
         ExternalReviewCheckTransactionService transactions = mock(ExternalReviewCheckTransactionService.class);
         ExternalReviewCheckRuntimeSwitch runtimeSwitch = mock(ExternalReviewCheckRuntimeSwitch.class);
@@ -223,6 +228,7 @@ class ExternalReviewCheckConcurrencyTest {
     void successfulReplacementCleansThePreviousScreenshot() {
         ReviewExternalCheckRepository repository = mock(ReviewExternalCheckRepository.class);
         ExternalReviewWorkerClient workerClient = mock(ExternalReviewWorkerClient.class);
+        when(workerClient.isReady()).thenReturn(true);
         ExternalReviewScreenshotStorage screenshotStorage = mock(ExternalReviewScreenshotStorage.class);
         ExternalReviewCheckTransactionService transactions = mock(ExternalReviewCheckTransactionService.class);
         ExternalReviewCheckRuntimeSwitch runtimeSwitch = mock(ExternalReviewCheckRuntimeSwitch.class);
@@ -262,6 +268,7 @@ class ExternalReviewCheckConcurrencyTest {
     void workerExceptionIsPersistedAsLocalTypeCodeWithoutRawMessage() {
         ReviewExternalCheckRepository repository = mock(ReviewExternalCheckRepository.class);
         ExternalReviewWorkerClient workerClient = mock(ExternalReviewWorkerClient.class);
+        when(workerClient.isReady()).thenReturn(true);
         ExternalReviewScreenshotStorage screenshotStorage = mock(ExternalReviewScreenshotStorage.class);
         ExternalReviewCheckTransactionService transactions = mock(ExternalReviewCheckTransactionService.class);
         ExternalReviewCheckRuntimeSwitch runtimeSwitch = mock(ExternalReviewCheckRuntimeSwitch.class);
@@ -291,6 +298,7 @@ class ExternalReviewCheckConcurrencyTest {
     void enqueueSwallowsOnlyConfirmedDedupConstraintViolation() {
         ReviewExternalCheckRepository repository = mock(ReviewExternalCheckRepository.class);
         ExternalReviewWorkerClient workerClient = mock(ExternalReviewWorkerClient.class);
+        when(workerClient.isReady()).thenReturn(true);
         ExternalReviewScreenshotStorage screenshotStorage = mock(ExternalReviewScreenshotStorage.class);
         ExternalReviewCheckTransactionService transactions = mock(ExternalReviewCheckTransactionService.class);
         ExternalReviewCheckRuntimeSwitch runtimeSwitch = mock(ExternalReviewCheckRuntimeSwitch.class);
@@ -319,6 +327,7 @@ class ExternalReviewCheckConcurrencyTest {
     void enqueueRethrowsOtherIntegrityViolationsWithoutTreatingThemAsDedup() {
         ReviewExternalCheckRepository repository = mock(ReviewExternalCheckRepository.class);
         ExternalReviewWorkerClient workerClient = mock(ExternalReviewWorkerClient.class);
+        when(workerClient.isReady()).thenReturn(true);
         ExternalReviewScreenshotStorage screenshotStorage = mock(ExternalReviewScreenshotStorage.class);
         ExternalReviewCheckTransactionService transactions = mock(ExternalReviewCheckTransactionService.class);
         ExternalReviewCheckRuntimeSwitch runtimeSwitch = mock(ExternalReviewCheckRuntimeSwitch.class);

@@ -2,7 +2,7 @@ package com.hunt.otziv.p_products.status.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyRecordOperations;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
@@ -23,7 +23,7 @@ import static org.mockito.Mockito.when;
 class OrderCompanyStatusServiceTest {
 
     @Mock
-    private CompanyService companyService;
+    private CompanyRecordOperations companyService;
 
     @Mock
     private CompanyStatusService companyStatusService;

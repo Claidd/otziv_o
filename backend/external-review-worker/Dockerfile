@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim@sha256:f32b81066cde10a75dbac96646099533316d94bac4150c55da1636e1f0ffdc46
+FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
 
 ENV NODE_ENV=production \
     PORT=3097 \
@@ -9,7 +9,7 @@ ENV NODE_ENV=production \
     TESSERACT_CACHE_PATH=/tmp/tesseract-cache
 
 RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "60";\nAcquire::https::Timeout "60";\n' > /etc/apt/apt.conf.d/80-retries && \
-    apt-get update && apt-get install -y --fix-missing \
+    apt-get update && apt-get upgrade -y && apt-get install -y --fix-missing \
     chromium \
     ca-certificates \
     fonts-liberation \
@@ -27,6 +27,10 @@ RUN npm ci --omit=dev && npm cache clean --force && \
 
 COPY --chown=node:node src ./src
 COPY --chown=node:node README.md ./
+
+# Installation tools are build-only; runtime entrypoints and probes invoke node directly.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* && \
+    rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx
 
 USER node
 

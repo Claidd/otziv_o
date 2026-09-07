@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "versionCode": 73,
+  "versionName": "1.0.73",
+  "minSupportedVersionCode": 0,
+  "required": false,
+  "fileSize": 4220762,
+  "sha256": "CE3560902EEE6F98F3E934901FC444A1EA05E3C649E38AA2D213573AE9BF9150",
+  "publishedAt": "2026-09-02T09:50:53.768915800Z",
+  "source": "https://o-ogo.ru/api/mobile-update",
+  "observedAt": "2026-09-07T11:37:36.730895+00:00"
+}

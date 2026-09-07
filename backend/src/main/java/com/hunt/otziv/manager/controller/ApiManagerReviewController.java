@@ -86,6 +86,7 @@ public class ApiManagerReviewController {
 
     private final CompanyService companyService;
     private final OrderService orderService;
+    private final com.hunt.otziv.p_products.api.ReviewPublicationCommands publication;
     private final ProductService productService;
     private final ReviewService reviewService;
     private final AutoTextService autoTextService;
@@ -558,6 +559,8 @@ public class ApiManagerReviewController {
                     "review",
                     withSource("newAccount=true", source)
             );
+        } catch (ResponseStatusException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Новый аккаунт не назначен: " + exception.getMessage(), exception);
         }
@@ -603,26 +606,10 @@ public class ApiManagerReviewController {
             Authentication authentication,
             @RequestBody(required = false) ReviewActivitySourceRequest source
     ) throws Exception {
-        managerAccessService.requireOrderAccess(orderId, authentication);
-        requireReviewForOrder(orderId, reviewId);
-        Review review = reviewService.getReviewById(reviewId);
-        if (!orderService.changeStatusAndOrderCounter(reviewId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не отмечен опубликованным");
-        }
-        workerActivityService.recordSafely(
-                authentication,
-                WorkerActivityAction.REVIEW_PUBLISH,
-                "review",
-                reviewId,
-                orderId,
-                reviewId,
-                "publish",
-                withSource(
-                        "botId=" + valueOrDash(review == null || review.getBot() == null ? null : review.getBot().getId()) + ";",
-                        source
-                )
-        );
-        credentialPreparationService.clear(authentication, WorkerCredentialPreparationScope.PUBLISH);
+        com.hunt.otziv.p_products.controller.OrderCommandHttpAdapter.invoke(() -> {
+            publication.publishManager(orderId,reviewId,authentication,withSource("",source));
+            return null;
+        });
 
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
     }

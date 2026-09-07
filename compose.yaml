@@ -1,4 +1,6 @@
 networks:
+  docker_observer_net:
+    internal: true
   internal_net:
 
 volumes:
@@ -10,6 +12,21 @@ volumes:
   frontend_node_modules:
 
 services:
+  docker-observer:
+    build:
+      context: ./infrastructure/docker-observer
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker_observer_net
+
   mysql:
     # Match production and avoid an implicit upgrade through the latest tag.
     image: mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
@@ -49,6 +66,7 @@ services:
       internal_net:
 
   app:
+    stop_grace_period: 120s
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -156,6 +174,7 @@ services:
       internal_net:
 
   external-review-worker:
+    stop_grace_period: 400s
     image: ${EXTERNAL_REVIEW_WORKER_IMAGE:-otziv-external-review-worker:local}
     build:
       context: ./backend/external-review-worker
@@ -222,7 +241,7 @@ services:
       internal_net:
 
   log-viewer:
-    image: amir20/dozzle@sha256:1c1060cfb5402093c4e0f03f3534d7deaffeb0a6f6dd034e7c5f244603f35fb3
+    image: amir20/dozzle@sha256:27128281cc1f93b0f849f2a5fb4ef9c12a0cce1135ab3b6fede27f9867c8a1c2
     profiles: ["observability"]
     container_name: log-viewer
     ports:
@@ -338,13 +357,13 @@ services:
     volumes:
       - ./infrastructure/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - ./data/app-logs:/var/log/otziv-app:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - alloy_data:/var/lib/alloy/data
     depends_on:
       - loki
       - tempo
     restart: unless-stopped
     networks:
+      - docker_observer_net
       - internal_net
 
   grafana:

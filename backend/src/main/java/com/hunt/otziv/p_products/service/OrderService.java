@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.service;
 
+import org.springframework.security.core.Authentication;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
@@ -26,6 +27,8 @@ public interface OrderService {
 //    boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO);
     boolean changeStatusForOrder(Long orderID, String title) throws Exception;
     boolean changeStatusForPrivilegedOrder(Long orderID, String title) throws Exception;
+    boolean changeStatusForOrder(Long orderID,String title,org.springframework.security.core.Authentication actor) throws Exception;
+    boolean changeStatusForPrivilegedOrder(Long orderID,String title,org.springframework.security.core.Authentication actor) throws Exception;
     OrderDTO getOrderDTO(Long orderId);
     Order getOrder(Long orderId);
     List<OrderDTO> getAllOrderDTO();
@@ -69,6 +72,8 @@ public interface OrderService {
 
     void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId);
     boolean changeStatusAndOrderCounter(Long reviewId) throws Exception;
+
+    boolean changeStatusAndOrderCounter(Long reviewId, Authentication authentication) throws Exception;
     Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize);
     Page<OrderDTOList> getAllOrderDTOCompanyIdAndKeyword(Long companyId, String keyword, int pageNumber, int pageSize, String sortDirection);
 

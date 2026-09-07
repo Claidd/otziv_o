@@ -216,6 +216,8 @@ class CompanyServiceImplTest {
         return new CompanyServiceImpl(
                 companyRepository,
                 companyInfoRepository,
+                new CompanyRecordService(companyRepository, companyInfoRepository),
+                new CompanyStatisticsService(companyRepository),
                 leadService,
                 userService,
                 managerService,

@@ -1,1 +1,6 @@
 *.sh text eol=lf
+backend/mvnw text eol=lf
+
+# Generated contracts are compared byte-for-byte by the drift checks.
+contracts/generated/*.json text eol=lf
+shared/client-common/src/*.generated.ts text eol=lf

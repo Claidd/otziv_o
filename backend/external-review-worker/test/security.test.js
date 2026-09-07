@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   boundedBodyBytes,
   constantTimeMatches,
-  createConcurrencyMiddleware,
   createInternalAuthMiddleware,
   INTERNAL_AUTH_HEADER,
 } from "../src/internal-auth.js";
@@ -69,31 +68,6 @@ test("internal auth accepts only the configured token without reflecting it", ()
   assert.equal(JSON.stringify(rejected.body).includes(secret), false);
 });
 
-test("concurrency middleware releases slots on both close and finish", () => {
-  const middleware = createConcurrencyMiddleware(1);
-  const first = responseStub();
-  const second = responseStub();
-  const third = responseStub();
-  const fourth = responseStub();
-  let firstAccepted = false;
-  let thirdAccepted = false;
-  let fifthAccepted = false;
-
-  middleware({}, first, () => { firstAccepted = true; });
-  middleware({}, second, () => assert.fail("second request must be rejected"));
-  assert.equal(firstAccepted, true);
-  assert.equal(second.statusCode, 429);
-
-  first.emit("close");
-  middleware({}, third, () => { thirdAccepted = true; });
-  assert.equal(thirdAccepted, true);
-
-  middleware({}, fourth, () => assert.fail("fourth request must be rejected"));
-  assert.equal(fourth.statusCode, 429);
-  third.emit("finish");
-  middleware({}, responseStub(), () => { fifthAccepted = true; });
-  assert.equal(fifthAccepted, true);
-});
 
 test("top-level parser allows only credential-free HTTP(S) URLs", () => {
   assert.equal(parseTopLevelHttpUrl("https://maps.example.org/reviews").protocol, "https:");

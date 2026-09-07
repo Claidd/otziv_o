@@ -7,6 +7,8 @@ x-default-logging: &default-logging
     max-file: "5"
 
 networks:
+  docker_observer_net:
+    internal: true
   internal_net:
     driver: bridge
   external_review_net:
@@ -26,6 +28,21 @@ volumes:
   prometheus_data:
 
 services:
+  docker-observer:
+    build:
+      context: ./infrastructure/docker-observer
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker_observer_net
+
   mysql:
     # Production-verified MySQL 9.0.0; pin the registry digest to prevent an
     # unattended major upgrade when somebody refreshes the former latest tag.
@@ -111,7 +128,7 @@ services:
       - internal_net
 
   keycloak:
-    image: quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9
+    image: ${OTZIV_KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: ${KEYCLOAK_MEMORY_LIMIT:-2g}
@@ -159,6 +176,7 @@ services:
       - internal_net
 
   app:
+    stop_grace_period: 120s
     image: ${APP_IMAGE:?APP_IMAGE must be an immutable release tag or digest}
     restart: unless-stopped
     init: true
@@ -197,6 +215,14 @@ services:
       OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_WINDOW: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_WINDOW:-PT15M}
       OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_BUCKETS: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_BUCKETS:-10000}
       OTZIV_SECURITY_LOCAL_STATE_EXEMPT_CLIENT_IDS: ${OTZIV_SECURITY_LOCAL_STATE_EXEMPT_CLIENT_IDS:-}
+      OTZIV_SECURITY_SESSION_REVOCATION_MODE: ${OTZIV_SECURITY_SESSION_REVOCATION_MODE:-off}
+      OTZIV_SECURITY_SESSION_REVOCATION_DISPATCH_ENABLED: ${OTZIV_SECURITY_SESSION_REVOCATION_DISPATCH_ENABLED:-false}
+      OTZIV_SECURITY_SESSION_REVOCATION_CUTOVER_CONFIRMED: ${OTZIV_SECURITY_SESSION_REVOCATION_CUTOVER_CONFIRMED:-false}
+      OTZIV_SECURITY_ISSUER_GENERATION_REQUIRED: ${OTZIV_SECURITY_ISSUER_GENERATION_REQUIRED:-false}
+      PERFORMERS_NOTIFICATIONS_DISPATCH_ENABLED: ${PERFORMERS_NOTIFICATIONS_DISPATCH_ENABLED:-false}
+      LEAD_COMMANDS_DISPATCH_ENABLED: ${LEAD_COMMANDS_DISPATCH_ENABLED:-false}
+      SERVER_SHUTDOWN: graceful
+      SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 90s
       OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED: ${OTZIV_CREDENTIAL_ENCRYPTION_REQUIRED:-true}
       OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID: ${OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_ID:-primary}
       OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64: ${OTZIV_CREDENTIAL_ENCRYPTION_ACTIVE_KEY_BASE64:-}
@@ -587,6 +613,7 @@ services:
       - messaging_net
 
   external-review-worker:
+    stop_grace_period: 400s
     profiles: ["external-review"]
     image: ${EXTERNAL_REVIEW_WORKER_IMAGE:?EXTERNAL_REVIEW_WORKER_IMAGE must be an explicit deployment tag or digest}
     build:
@@ -598,6 +625,7 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+      - seccomp=./infrastructure/runtime-security/chromium-seccomp.json
     cap_drop:
       - ALL
     pids_limit: ${EXTERNAL_REVIEW_WORKER_PIDS_LIMIT:-256}
@@ -635,6 +663,7 @@ services:
       - external_review_net
 
   whatsapp_lika:
+    stop_grace_period: 330s
     image: ${WHATSAPP_IMAGE:?WHATSAPP_IMAGE must be an explicit deployment tag}
     build:
       context: .
@@ -646,14 +675,12 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+      - seccomp=./infrastructure/runtime-security/chromium-seccomp.json
     cap_drop:
       - ALL
     # These entries admit the namespace/chroot syscalls through Docker's
     # default seccomp policy. USER node + no-new-privileges keeps the gateway
     # process itself on an empty effective capability set.
-    cap_add:
-      - SYS_ADMIN
-      - SYS_CHROOT
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=512m,mode=1777
     pids_limit: ${WHATSAPP_PIDS_LIMIT:-512}
@@ -709,6 +736,7 @@ services:
       - messaging_net
 
   whatsapp_vika:
+    stop_grace_period: 330s
     image: ${WHATSAPP_IMAGE:?WHATSAPP_IMAGE must be an explicit deployment tag}
     build:
       context: .
@@ -720,11 +748,9 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+      - seccomp=./infrastructure/runtime-security/chromium-seccomp.json
     cap_drop:
       - ALL
-    cap_add:
-      - SYS_ADMIN
-      - SYS_CHROOT
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=512m,mode=1777
     pids_limit: ${WHATSAPP_PIDS_LIMIT:-512}
@@ -827,7 +853,7 @@ services:
       - internal_net
 
   dozzle:
-    image: amir20/dozzle@sha256:1c1060cfb5402093c4e0f03f3534d7deaffeb0a6f6dd034e7c5f244603f35fb3
+    image: amir20/dozzle@sha256:27128281cc1f93b0f849f2a5fb4ef9c12a0cce1135ab3b6fede27f9867c8a1c2
     container_name: log-viewer
     restart: unless-stopped
     logging: *default-logging
@@ -836,11 +862,14 @@ services:
     cpus: ${DOZZLE_CPU_LIMIT:-1.0}
     ports:
       - "127.0.0.1:8081:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
+      DOZZLE_REMOTE_HOST: tcp://docker-observer:2375
       DOZZLE_LEVEL: info
+    depends_on:
+      docker-observer:
+        condition: service_healthy
     networks:
+      - docker_observer_net
       - internal_net
     healthcheck:
       test: [ "CMD", "/dozzle", "healthcheck" ]
@@ -937,7 +966,6 @@ services:
     volumes:
       - ./infrastructure/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - ./data/app-logs:/var/log/otziv-app:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - alloy_data:/var/lib/alloy/data
     healthcheck:
       test: ["CMD-SHELL", "alloy validate /etc/alloy/config.alloy >/dev/null"]
@@ -948,7 +976,10 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+      docker-observer:
+        condition: service_healthy
     networks:
+      - docker_observer_net
       - internal_net
 
   grafana:

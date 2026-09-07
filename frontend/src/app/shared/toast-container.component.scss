@@ -1,7 +1,7 @@
 .toast-stack {
   position: fixed;
   z-index: 120;
-  top: 1rem;
+  top: var(--toast-stack-top, 1rem);
   right: 1rem;
   display: grid;
   width: min(24rem, calc(100vw - 2rem));

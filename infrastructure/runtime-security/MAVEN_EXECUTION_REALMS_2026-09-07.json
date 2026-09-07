@@ -1,0 +1,373 @@
+{
+  "schema": "otziv-current-maven-execution-review-v1",
+  "observedAt": "2026-09-07T18:17:02.419985+00:00",
+  "rootPomSha256": "cef061f2018f509de7bce4d9ed93189879c1e2f83013fad3c728a0cacb7729f9",
+  "rawHistoricalReport": ".codex-tmp/rc26/security-audit-v3/target/dependency-check-report.json",
+  "rawHistoricalReportSha256": "8c3fd6da0ca7cf469c419dda62c2d6b0b3d5ca22ca3ed92a620b7189340f5016",
+  "historicalUnsuppressedPairs": 26,
+  "currentWholeGraphAuditCount": null,
+  "reasonCurrentCountUnavailable": "No Sonatype credential and no fullgraph rerun; frozen raw report is not a current count.",
+  "evidenceRoot": ".codex-tmp/finalization-20260907/maven-remaining-feasibility",
+  "groups": [
+    {
+      "historicalArtifact": "commons-beanutils-1.9.4.jar",
+      "packageUrls": [
+        "pkg:maven/commons-beanutils/commons-beanutils@1.9.4"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2025-48734",
+          "severity": "HIGH"
+        }
+      ],
+      "currentDisposition": "OPEN_COMPATIBLE_CANDIDATE_NOT_TESTED",
+      "evidence": [],
+      "explanation": "Same-line1.11.0 vendor fix is available, but Site rendering/introspection behavior not yet tested; no new override applied.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "commons-io-2.11.0.jar",
+      "packageUrls": [
+        "pkg:maven/commons-io/commons-io@2.11.0"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2024-47554",
+          "severity": "MEDIUM"
+        }
+      ],
+      "currentDisposition": "CORRECTED_IN_VERIFIED_STANDARD_PLUGIN_REALMS",
+      "evidence": [
+        "final-proposal-summary.json",
+        "actual-realms/",
+        "plexus-extraction-proof.json"
+      ],
+      "explanation": "New plugin versions / plugin-local Plexus replace this code in observed executions. Published-POM scanner may still list old declared Plexus. No new wholegraph count claimed.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "commons-lang3-3.12.0.jar",
+      "packageUrls": [
+        "pkg:maven/org.apache.commons/commons-lang3@3.12.0"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2025-48924",
+          "severity": "MEDIUM"
+        }
+      ],
+      "currentDisposition": "CORRECTED_IN_VERIFIED_STANDARD_PLUGIN_REALMS",
+      "evidence": [
+        "final-proposal-summary.json",
+        "actual-realms/",
+        "plexus-extraction-proof.json"
+      ],
+      "explanation": "New plugin versions / plugin-local Plexus replace this code in observed executions. Published-POM scanner may still list old declared Plexus. No new wholegraph count claimed.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "commons-lang3-3.14.0.jar",
+      "packageUrls": [
+        "pkg:maven/org.apache.commons/commons-lang3@3.14.0"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2025-48924",
+          "severity": "MEDIUM"
+        }
+      ],
+      "currentDisposition": "CORRECTED_IN_VERIFIED_STANDARD_PLUGIN_REALMS",
+      "evidence": [
+        "final-proposal-summary.json",
+        "actual-realms/",
+        "plexus-extraction-proof.json"
+      ],
+      "explanation": "New plugin versions / plugin-local Plexus replace this code in observed executions. Published-POM scanner may still list old declared Plexus. No new wholegraph count claimed.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "commons-lang3-3.16.0.jar",
+      "packageUrls": [
+        "pkg:maven/org.apache.commons/commons-lang3@3.16.0"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2025-48924",
+          "severity": "MEDIUM"
+        }
+      ],
+      "currentDisposition": "CORRECTED_IN_VERIFIED_APPLIED_BOOT_PLUGIN_REALM",
+      "evidence": [
+        "boot-transport-proposal-summary.json",
+        "boot-fixed-realms/",
+        "boot-realm-linkage-proof.json",
+        "boot-transport-http-proof.json"
+      ],
+      "explanation": "Applied Boot4.0.8 plugin loads Client5.6.4/Core+H2 5.4.3/Lang3.20.0. Runtime remains byte-identical. Root approved application after exact source hash assertion; application evidence is preserved.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "docker-java-transport-zerodep-3.7.1.jar (shaded: org.apache.httpcomponents.client5:httpclient5:5.5.1)",
+      "packageUrls": [
+        "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.1"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2026-71290",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "CVE-2026-64607",
+          "severity": "MEDIUM"
+        }
+      ],
+      "currentDisposition": "OPEN_SHADED_UPSTREAM_RELEASE_NOT_AVAILABLE",
+      "evidence": [],
+      "explanation": "Published TC2.0.5/docker-java3.7.1 remain latest stable. Shaded Client5.5.1 bytecode cannot be replaced by BOM dependency management.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "httpclient5-5.5.2.jar",
+      "packageUrls": [
+        "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.2"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2026-71290",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "CVE-2026-64607",
+          "severity": "MEDIUM"
+        }
+      ],
+      "currentDisposition": "CORRECTED_IN_VERIFIED_APPLIED_BOOT_PLUGIN_REALM",
+      "evidence": [
+        "boot-transport-proposal-summary.json",
+        "boot-fixed-realms/",
+        "boot-realm-linkage-proof.json",
+        "boot-transport-http-proof.json"
+      ],
+      "explanation": "Applied Boot4.0.8 plugin loads Client5.6.4/Core+H2 5.4.3/Lang3.20.0. Runtime remains byte-identical. Root approved application after exact source hash assertion; application evidence is preserved.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "httpclient5-5.6.3.jar",
+      "packageUrls": [
+        "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.6.3"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2026-71290",
+          "severity": "CRITICAL"
+        }
+      ],
+      "currentDisposition": "DECLARED_GRAPH_DISCREPANCY_ACTUAL_REALM_FIXED",
+      "evidence": [
+        "../owasp13-actual-plugin-realm.json"
+      ],
+      "explanation": "ODC13 actual plugin realm has5.6.4; published plugin POM still declares5.6.3. Neither hiding nor equating declared and executed graphs.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "httpcore5-5.3.6.jar",
+      "packageUrls": [
+        "pkg:maven/org.apache.httpcomponents.core5/httpcore5@5.3.6"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2026-54399",
+          "severity": "HIGH"
+        },
+        {
+          "id": "CVE-2026-54428",
+          "severity": "HIGH"
+        }
+      ],
+      "currentDisposition": "CORRECTED_IN_VERIFIED_APPLIED_BOOT_PLUGIN_REALM",
+      "evidence": [
+        "boot-transport-proposal-summary.json",
+        "boot-fixed-realms/",
+        "boot-realm-linkage-proof.json",
+        "boot-transport-http-proof.json"
+      ],
+      "explanation": "Applied Boot4.0.8 plugin loads Client5.6.4/Core+H2 5.4.3/Lang3.20.0. Runtime remains byte-identical. Root approved application after exact source hash assertion; application evidence is preserved.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "jetty-io-9.4.58.v20250814.jar",
+      "packageUrls": [
+        "pkg:maven/org.eclipse.jetty/jetty-io@9.4.58.v20250814"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2026-2332",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "CVE-2026-10050",
+          "severity": "HIGH"
+        },
+        {
+          "id": "CVE-2026-5795",
+          "severity": "HIGH"
+        },
+        {
+          "id": "CVE-2025-11143",
+          "severity": "MEDIUM"
+        },
+        {
+          "id": "CVE-2026-6790",
+          "severity": "MEDIUM"
+        }
+      ],
+      "currentDisposition": "OPEN_VENDOR_EOL_DISTRIBUTION_OR_SITE_MIGRATION",
+      "evidence": [],
+      "explanation": "Site3.22.0 declares Jetty9.4.58. Patched9.4.63 is available through private EOL vendor support, not publicCentral; no entitlement established. A Jetty12 API migration is not a compatible version substitution.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "jetty-server-9.4.58.v20250814.jar",
+      "packageUrls": [
+        "pkg:maven/org.eclipse.jetty/jetty-server@9.4.58.v20250814"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2026-2332",
+          "severity": "CRITICAL"
+        },
+        {
+          "id": "CVE-2026-10050",
+          "severity": "HIGH"
+        },
+        {
+          "id": "CVE-2026-5795",
+          "severity": "HIGH"
+        },
+        {
+          "id": "CVE-2025-11143",
+          "severity": "MEDIUM"
+        },
+        {
+          "id": "CVE-2026-6790",
+          "severity": "MEDIUM"
+        }
+      ],
+      "currentDisposition": "OPEN_VENDOR_EOL_DISTRIBUTION_OR_SITE_MIGRATION",
+      "evidence": [],
+      "explanation": "Site3.22.0 declares Jetty9.4.58. Patched9.4.63 is available through private EOL vendor support, not publicCentral; no entitlement established. A Jetty12 API migration is not a compatible version substitution.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "plexus-utils-3.5.1.jar",
+      "packageUrls": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@3.5.1"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2025-67030",
+          "severity": "HIGH"
+        }
+      ],
+      "currentDisposition": "CORRECTED_IN_VERIFIED_STANDARD_PLUGIN_REALMS",
+      "evidence": [
+        "final-proposal-summary.json",
+        "actual-realms/",
+        "plexus-extraction-proof.json"
+      ],
+      "explanation": "New plugin versions / plugin-local Plexus replace this code in observed executions. Published-POM scanner may still list old declared Plexus. No new wholegraph count claimed.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "plexus-utils-4.0.1.jar",
+      "packageUrls": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@4.0.1"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2025-67030",
+          "severity": "HIGH"
+        }
+      ],
+      "currentDisposition": "CORRECTED_IN_VERIFIED_STANDARD_PLUGIN_REALMS",
+      "evidence": [
+        "final-proposal-summary.json",
+        "actual-realms/",
+        "plexus-extraction-proof.json"
+      ],
+      "explanation": "New plugin versions / plugin-local Plexus replace this code in observed executions. Published-POM scanner may still list old declared Plexus. No new wholegraph count claimed.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "plexus-utils-4.0.2.jar",
+      "packageUrls": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@4.0.2"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2025-67030",
+          "severity": "HIGH"
+        }
+      ],
+      "currentDisposition": "CORRECTED_IN_VERIFIED_STANDARD_PLUGIN_REALMS",
+      "evidence": [
+        "final-proposal-summary.json",
+        "actual-realms/",
+        "plexus-extraction-proof.json"
+      ],
+      "explanation": "New plugin versions / plugin-local Plexus replace this code in observed executions. Published-POM scanner may still list old declared Plexus. No new wholegraph count claimed.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    },
+    {
+      "historicalArtifact": "snappy-0.4.jar",
+      "packageUrls": [
+        "pkg:maven/org.iq80.snappy/snappy@0.4"
+      ],
+      "advisories": [
+        {
+          "id": "CVE-2024-36124",
+          "severity": "MEDIUM"
+        }
+      ],
+      "currentDisposition": "CORRECTED_IN_VERIFIED_STANDARD_PLUGIN_REALMS",
+      "evidence": [
+        "final-proposal-summary.json",
+        "actual-realms/",
+        "plexus-extraction-proof.json"
+      ],
+      "explanation": "New plugin versions / plugin-local Plexus replace this code in observed executions. Published-POM scanner may still list old declared Plexus. No new wholegraph count claimed.",
+      "riskAccepted": false,
+      "assignedOwner": null,
+      "acceptedRiskExpiry": null
+    }
+  ],
+  "noNewSuppressionOrPolicyRelaxation": true
+}

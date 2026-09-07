@@ -3,6 +3,8 @@ HELP.md
 *.crt
 *.pem
 *.yaml
+!compose.monitoring.yaml
+!compose.monitoring-security-upgrade.yaml
 !backend/src/main/resources/application.yaml
 target/
 !backend/.mvn/wrapper/maven-wrapper.jar

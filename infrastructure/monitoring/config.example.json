@@ -1,0 +1,30 @@
+{
+  "schema": "otziv-external-monitor-v1",
+  "serviceAlias": "otziv",
+  "owner": "REQUIRED",
+  "runbook": "REQUIRED",
+  "receiverContract": "idempotency-key-dedup-v1",
+  "outsideApplicationHostConfirmed": false,
+  "availabilityUrl": "https://REQUIRED.invalid/actuator/health",
+  "signalsUrl": "https://REQUIRED.invalid/private/monitor-signals",
+  "alertUrl": "https://REQUIRED.invalid/alerts",
+  "watchdogUrl": "https://REQUIRED.invalid/watchdog",
+  "stateFile": "/var/lib/otziv-monitor/state.json",
+  "thresholds": {
+    "httpTimeoutMs": 10000,
+    "heartbeatMaxAgeSeconds": null,
+    "backupMysqlMaxAgeSeconds": null,
+    "backupPostgresMaxAgeSeconds": null,
+    "backupCompletionMaxAgeSeconds": null,
+    "repeatAlertSeconds": null,
+    "maximumMaintenanceSeconds": null,
+    "errorRate": null,
+    "latencyP95Ms": null,
+    "saturationRatio": null,
+    "oldestDueSeconds": null,
+    "deadCount": null,
+    "unknownCount": null,
+    "oldestCleanupSeconds": null
+  },
+  "maintenance": null
+}

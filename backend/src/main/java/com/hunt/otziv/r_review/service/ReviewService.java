@@ -1,5 +1,6 @@
 package com.hunt.otziv.r_review.service;
 
+import org.springframework.security.core.Authentication;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.dto.NagulResult;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
@@ -125,13 +126,19 @@ public interface ReviewService {
 
     boolean updateReviewText(Long orderId, Long reviewId, String text);
 
+    boolean updateReviewText(Long orderId, Long reviewId, String text, Authentication authentication);
+
     boolean updateReviewAnswer(Long orderId, Long reviewId, String answer);
+
+    boolean updateReviewAnswer(Long orderId, Long reviewId, String answer, Authentication authentication);
 
     boolean updateReviewTextFromSharedCheck(Long orderId, Long reviewId, String text);
 
     boolean updateReviewAnswerFromSharedCheck(Long orderId, Long reviewId, String answer);
 
     boolean updateReviewNote(Long orderId, Long reviewId, String comment);
+
+    boolean updateReviewNote(Long orderId, Long reviewId, String comment, Authentication authentication);
 
     Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize);
 
@@ -162,6 +169,8 @@ public interface ReviewService {
     void changeNagulReview(Long reviewId);
 
     void performNagulWithExceptions(Long reviewId, String username);
+
+    void performNagulWithExceptions(Long reviewId, String username, Authentication authentication);
 
     int countOrdersByWorkerAndStatusPublish(Worker worker, LocalDate localDate);
 

@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { MobileNativeService } from '../core/mobile-native.service';
+import { AuthService } from '../core/auth.service';
 
 @Component({
   selector: 'app-mobile-native-status',
@@ -9,6 +10,11 @@ import { MobileNativeService } from '../core/mobile-native.service';
       <div class="native-status offline" role="status" aria-live="polite">
         <span class="material-icons-sharp">wifi_off</span>
         <span>Нет сети. Данные обновятся после подключения.</span>
+      </div>
+    } @else if (auth.status() === 'retrying') {
+      <div class="native-status offline" role="status" aria-live="polite">
+        <span class="material-icons-sharp">sync_problem</span>
+        <span>Сессия сохранена. Повторяем подключение к серверу.</span>
       </div>
     } @else if (native.runtimeError()) {
       <div class="native-status runtime" role="alert" aria-live="assertive">
@@ -59,4 +65,5 @@ import { MobileNativeService } from '../core/mobile-native.service';
 })
 export class MobileNativeStatusComponent {
   readonly native = inject(MobileNativeService);
+  readonly auth = inject(AuthService);
 }

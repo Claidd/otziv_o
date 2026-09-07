@@ -5,6 +5,7 @@ import com.hunt.otziv.business_audit.repository.BusinessAuditEventRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -90,6 +91,48 @@ public class BusinessAuditService {
         )));
     }
 
+    /** Records the captured command actor without consulting thread-local authentication. */
+    public void recordStrict(
+            Authentication authentication,
+            String action,
+            String entityType,
+            Object entityId,
+            Long orderId,
+            Long reviewId,
+            Object oldValue,
+            Object newValue,
+            String details
+    ) {
+        String actor = explicitActor(authentication);
+        transactionTemplate.executeWithoutResult(status -> repository.save(event(
+                actor, action, entityType, entityId, orderId, reviewId, oldValue, newValue, details
+        )));
+    }
+
+    /** Preserves best-effort persistence while attributing the event to the captured command actor. */
+    public void recordSafely(
+            Authentication authentication,
+            String action,
+            String entityType,
+            Object entityId,
+            Long orderId,
+            Long reviewId,
+            Object oldValue,
+            Object newValue,
+            String details
+    ) {
+        String actor = explicitActor(authentication);
+        try {
+            transactionTemplate.executeWithoutResult(status -> repository.save(event(
+                    actor, action, entityType, entityId, orderId, reviewId, oldValue, newValue, details
+            )));
+        } catch (Exception e) {
+            log.warn("Бизнес-аудит не записан action={}, entityType={}, entityId={}: {}",
+                    action, entityType, entityId, e.getMessage());
+            log.debug("Business audit write failed", e);
+        }
+    }
+
     /**
      * Writes the audit row inside the caller's transaction. Financial state
      * changes use this variant so the mutation and audit commit atomically.
@@ -127,8 +170,22 @@ public class BusinessAuditService {
             Object newValue,
             String details
     ) {
+        return event(currentActor(), action, entityType, entityId, orderId, reviewId, oldValue, newValue, details);
+    }
+
+    private BusinessAuditEvent event(
+            String actor,
+            String action,
+            String entityType,
+            Object entityId,
+            Long orderId,
+            Long reviewId,
+            Object oldValue,
+            Object newValue,
+            String details
+    ) {
         BusinessAuditEvent event = new BusinessAuditEvent();
-        event.setActor(currentActor());
+        event.setActor(actor);
         event.setSource(currentSource());
         event.setAction(limit(action, 80));
         event.setEntityType(limit(entityType, 40));
@@ -139,6 +196,14 @@ public class BusinessAuditService {
         event.setNewValue(limit(valueToString(newValue), VALUE_LIMIT));
         event.setDetails(limit(details, DETAILS_LIMIT));
         return event;
+    }
+
+    private String explicitActor(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken || !hasText(authentication.getName())) {
+            throw new AccessDeniedException("An authenticated audit actor is required");
+        }
+        return limit(authentication.getName(), 150);
     }
 
     private String currentActor() {

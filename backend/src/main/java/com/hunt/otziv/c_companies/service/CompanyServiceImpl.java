@@ -6,6 +6,7 @@ import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.service.CategoryService;
 import com.hunt.otziv.c_categories.service.SubCategoryService;
+import com.hunt.otziv.c_companies.api.CompanyStatisticsOperations;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.CompanyContactDTO;
 import com.hunt.otziv.c_companies.dto.CompanyInfoDTO;
@@ -83,6 +84,8 @@ public class CompanyServiceImpl implements CompanyService{
 
     private final CompanyRepository companyRepository;
     private final CompanyInfoRepository companyInfoRepository;
+    private final CompanyRecordService companyRecords;
+    private final CompanyStatisticsOperations companyStatistics;
     private final LeadService leadService;
     private final UserService userService;
     private final ManagerService managerService;
@@ -104,8 +107,7 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Transactional
     public void save(Company company){
-        Company saved = companyRepository.save(company);
-        persistTransientCompanyInfo(saved);
+        companyRecords.save(company);
     } // Сохранение компании в БД
 
     //    Метод подготовки ДТО при создании компании из Лида менеджером
@@ -477,9 +479,7 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public Company getCompaniesById(Long id) { // Берем компанию по Id
-        return companyRepository.findById(id).orElseThrow(() -> new UsernameNotFoundException(
-                String.format("Компания '%d' не найден", id)
-        ));
+        return companyRecords.getCompaniesById(id);
     } // Берем компанию по Id
 
     @Override
@@ -952,7 +952,7 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public List<Object[]> getAllNewCompanies2(LocalDate firstDayOfMonth, LocalDate lastDayOfMonth) {
-        return companyRepository.getAllNewCompanies(firstDayOfMonth, lastDayOfMonth);
+        return companyStatistics.countNewCompaniesByManager(firstDayOfMonth, lastDayOfMonth);
     }
 
     @Override
@@ -1648,7 +1648,7 @@ public class CompanyServiceImpl implements CompanyService{
         filialDTO.setUrl(clean(filialDTO.getUrl()));
         Filial existingFilial = filialService.findFilialByTitleAndUrl(filialDTO.getTitle(), filialDTO.getUrl());
         if (existingFilial != null) {
-            return Collections.singleton(existingFilial);
+            throw new IllegalArgumentException("Этот филиал уже существует. Используйте существующую компанию");
         } else {
             Filial newFilial = filialService.save(filialDTO);
             return Collections.singleton(newFilial);
@@ -1820,11 +1820,7 @@ public class CompanyServiceImpl implements CompanyService{
     }
 
     private void persistTransientCompanyInfo(Company company) {
-        if (company == null || company.getInfo() == null) {
-            return;
-        }
-        company.getInfo().setCompany(company);
-        company.setInfo(companyInfoRepository.save(company.getInfo()));
+        companyRecords.persistTransientCompanyInfo(company);
     }
 
     private boolean companyInfoSame(CompanyInfo currentInfo, CompanyInfo updatedInfo) {

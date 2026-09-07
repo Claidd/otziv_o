@@ -15,6 +15,7 @@ import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.LeadStatus;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
+import com.hunt.otziv.l_lead.repository.LeadInboundCommandRepository;
 import com.hunt.otziv.u_users.service.ManagerService;
 import com.hunt.otziv.u_users.service.MarketologService;
 import com.hunt.otziv.u_users.service.OperatorService;
@@ -22,7 +23,6 @@ import com.hunt.otziv.u_users.service.UserService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
-import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import com.hunt.otziv.z_zp.service.ZpService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
@@ -57,12 +57,13 @@ public class LeadServiceImpl implements LeadService {
     private final TelephoneService telephoneService;
     private final LeadMapper leadMapper;
     private final LeadEventPublisher leadEventPublisher;
-    private final WhatsAppService whatsAppService;
     private final GamificationEventService gamificationEventService;
     private final AppSettingService appSettingService;
     private final LeadAccessService leadAccessService;
+    private final LeadWorkNotificationService workNotifications;
+    private final LeadInboundCommandRepository inboundCommands;
 
-    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService, LeadMapper leadMapper, LeadEventPublisher leadEventPublisher, WhatsAppService whatsAppService, GamificationEventService gamificationEventService, AppSettingService appSettingService, LeadAccessService leadAccessService) {
+    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService, LeadMapper leadMapper, LeadEventPublisher leadEventPublisher, GamificationEventService gamificationEventService, AppSettingService appSettingService, LeadAccessService leadAccessService, LeadWorkNotificationService workNotifications, LeadInboundCommandRepository inboundCommands) {
         this.leadsRepository = leadsRepository;
         this.userRepository = userRepository;
         this.managerService = managerService;
@@ -73,10 +74,11 @@ public class LeadServiceImpl implements LeadService {
         this.telephoneService = telephoneService;
         this.leadMapper = leadMapper;
         this.leadEventPublisher = leadEventPublisher;
-        this.whatsAppService = whatsAppService;
         this.gamificationEventService = gamificationEventService;
         this.appSettingService = appSettingService;
         this.leadAccessService = leadAccessService;
+        this.workNotifications = workNotifications;
+        this.inboundCommands = inboundCommands;
     }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
@@ -1201,10 +1203,15 @@ public class LeadServiceImpl implements LeadService {
     public void changeStatusLeadToWork(Long leadId, String newComment) {
         log.info("🚀 Начинаем обработку перевода лида {} в статус TO_WORK", leadId);
 
-        Lead lead = findByLeadId(leadId).orElseThrow(() -> {
+        Lead lead = leadsRepository.findByIdForWorkTransition(leadId).orElseThrow(() -> {
             log.error("❌ Лид с ID {} не найден в системе", leadId);
             return new UsernameNotFoundException(String.format("Пользователь с ID '%s' не найден", leadId));
         });
+
+        if (LeadStatus.TO_WORK.title.equals(lead.getLidStatus())) {
+            workNotifications.prepare(lead);
+            return;
+        }
 
         // Обновляем комментарий, если он изменился
         if (newComment != null && !newComment.equals(lead.getCommentsLead())) {
@@ -1217,10 +1224,11 @@ public class LeadServiceImpl implements LeadService {
         assignManagerBasedOnOperatorCount(lead, operator);
 
         lead.setLidStatus(LeadStatus.TO_WORK.title);
+        lead.setWhatsappWorkGeneration(Math.addExact(lead.getWhatsappWorkGeneration(), 1));
         leadsRepository.save(lead);
         log.info("✅ Статус лида {} установлен в '{}'", lead.getId(), LeadStatus.TO_WORK.title);
 
-        pushToWhatsApp(lead); //  Отправляем уведомление в Ватсапп
+        workNotifications.prepare(lead);
 
         toggleOperatorManagerCount(operator); //  меняем счетчик у оператора
         leadEventPublisher.publishUpdate(lead); //  Отправляем уведомление в Ватсаппотправляем изменения на сервер
@@ -1244,38 +1252,6 @@ public class LeadServiceImpl implements LeadService {
         operatorService.save(operator);
         log.info("🔁 Счётчик оператора {} изменён: {} → {}", operator.getId(), oldCount, updatedCount);
     }
-
-    private void pushToWhatsApp(Lead lead) {
-        Long managerId = lead.getManager().getId();
-        String groupId = switch (managerId.intValue()) {
-            case 2 -> ""; // Можно заменить на реальную группу
-            case 3 -> "120363399937937645@g.us";
-            default -> null;
-        };
-
-        String clientId = lead.getManager().getClientId();
-
-        if (clientId == null || clientId.isBlank()) {
-            log.warn("❌ Неизвестный клиент (clientId = null) для менеджера ID: {} — сообщение в WhatsApp не отправлено", managerId);
-            return;
-        }
-
-        if (groupId != null && !groupId.isEmpty()) {
-            String message = String.format("📨 Новая фирма:\n📞 %s\n🌆 %s\n💬 %s",
-                    lead.getTelephoneLead(), lead.getCityLead(), lead.getCommentsLead());
-
-            log.info("🚀 Попытка отправить сообщение в группу через {} на {}", clientId, groupId);
-            whatsAppService.sendMessageToGroup(clientId, groupId, message);
-            log.info("📲 Сообщение отправлено в WhatsApp-группу {} от менеджера {}", groupId, managerId);
-        } else {
-            log.warn("⚠️ WhatsApp-группа не указана для менеджера ID: {} — сообщение не отправлено", managerId);
-        }
-    }
-
-
-
-
-
 
     @Override
     public void changeCountToOperator(Long leadId) {
@@ -1630,6 +1606,9 @@ public class LeadServiceImpl implements LeadService {
     @Override
     @Transactional
     public void saveOrUpdateByTelephoneLead(Lead incomingLead) {
+        // Reverse GET synchronization is an unversioned external writer too. Serialize
+        // it before loading the target, and never overwrite an already-bound source.
+        inboundCommands.lockTarget(LeadCommandProtocol.phoneKey(incomingLead.getTelephoneLead()), null);
         log.info("📨 saveOrUpdateByTelephoneLead: {}", maskPhone(incomingLead.getTelephoneLead()));
 
         Optional<Lead> existing = leadsRepository.findByTelephoneLead(incomingLead.getTelephoneLead());

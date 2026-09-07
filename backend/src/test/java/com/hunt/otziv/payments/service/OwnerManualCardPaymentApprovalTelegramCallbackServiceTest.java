@@ -187,6 +187,22 @@ class OwnerManualCardPaymentApprovalTelegramCallbackServiceTest {
         verifyNoInteractions(telegramService, notificationService);
     }
 
+    @Test
+    void supersededRequestDoesNotReportAnUnpaidOrderToTheGroup() {
+        OwnerManualCardPaymentApprovalTelegramCallbackService service = service();
+        User owner = user(7L, "owner@example.ru", 100L, "ROLE_OWNER");
+        when(userService.findByChatId(100L)).thenReturn(Optional.of(owner));
+        when(paymentLinkService.approveOwnerManualCardPayment(
+                eq(91L), eq("token"), eq(-500L), eq(owner), any(Authentication.class)
+        )).thenThrow(new ResponseStatusException(HttpStatus.GONE,
+                "Запрос закрыт: заказ уже оплачен по другому счёту"));
+
+        Optional<String> result = service.handle(callback("ompa:a:91:token", 100L, -500L));
+
+        assertEquals("Запрос закрыт: заказ уже оплачен по другому счёту", result.orElseThrow());
+        verifyNoInteractions(telegramService, notificationService);
+    }
+
     private OwnerManualCardPaymentApprovalTelegramCallbackService service() {
         return new OwnerManualCardPaymentApprovalTelegramCallbackService(
                 paymentLinkService,

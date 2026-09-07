@@ -33,6 +33,8 @@ public class ReviewBotAssignmentGuardService {
     private final BadReviewTaskRepository badReviewTaskRepository;
     private final ReviewRecoveryTaskRepository recoveryTaskRepository;
     private final BotsRepository botsRepository;
+    private final com.hunt.otziv.c_companies.repository.CompanyOrganizationIdentityRepository identityRepository;
+    private final ReviewBotCurrentUsageRepository currentUsageRepository;
 
     public AssignmentScope scope(Long companyId, Long excludedReviewId) {
         return new AssignmentScope(companyId, excludedReviewId, null, null);
@@ -51,7 +53,14 @@ public class ReviewBotAssignmentGuardService {
         requireCompany(scope);
         try {
             Set<Long> blocked = new HashSet<>();
-            addAll(blocked, reviewRepository.findUsedBotIdsByCompanyId(scope.companyId()));
+            Set<Long> companyIds = identityRepository.relatedCompanyIds(scope.companyId());
+            for (Long companyId : companyIds) {
+                addAll(blocked, reviewRepository.findUsedBotIdsByCompanyId(companyId));
+                addAll(blocked, badReviewTaskRepository.findBotIdsByCompanyIdAndStatusIn(
+                        companyId, COMPANY_BAD_TASK_STATUSES, scope.excludedBadTaskId()));
+                addAll(blocked, recoveryTaskRepository.findBotIdsByCompanyIdAndStatusIn(
+                        companyId, COMPANY_RECOVERY_TASK_STATUSES, scope.excludedRecoveryTaskId()));
+            }
             addAll(blocked, reviewRepository.findReservedBotIdsByUnpublishedReviews(scope.excludedReviewId()));
             addAll(blocked, badReviewTaskRepository.findBotIdsByStatus(
                     BadReviewTaskStatus.NEW,
@@ -59,16 +68,6 @@ public class ReviewBotAssignmentGuardService {
             ));
             addAll(blocked, recoveryTaskRepository.findBotIdsByStatus(
                     ReviewRecoveryTaskStatus.PLANNED,
-                    scope.excludedRecoveryTaskId()
-            ));
-            addAll(blocked, badReviewTaskRepository.findBotIdsByCompanyIdAndStatusIn(
-                    scope.companyId(),
-                    COMPANY_BAD_TASK_STATUSES,
-                    scope.excludedBadTaskId()
-            ));
-            addAll(blocked, recoveryTaskRepository.findBotIdsByCompanyIdAndStatusIn(
-                    scope.companyId(),
-                    COMPANY_RECOVERY_TASK_STATUSES,
                     scope.excludedRecoveryTaskId()
             ));
             blocked.remove(null);
@@ -96,7 +95,8 @@ public class ReviewBotAssignmentGuardService {
         }
 
         Set<Long> blocked = blockedBotIds(scope);
-        if (blocked.contains(locked.getId())) {
+        if (blocked.contains(locked.getId()) || currentUsageRepository.isUsed(
+                locked.getId(), identityRepository.relatedCompanyIds(scope.companyId()), scope)) {
             log.info("Аккаунт {} отклонен общей проверкой назначения для компании {}",
                     locked.getId(), scope.companyId());
             return Optional.empty();

@@ -1,3 +1,7 @@
+import { inject } from '@angular/core';
+import { ManagerControlApi } from '../core/manager-control.api';
+import { ManagerReportsApi } from '../core/manager-reports.api';
+import { ManagerWorkerRiskApi } from '../core/manager-worker-risk.api';
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
@@ -11,7 +15,7 @@ import {
   RefresherCustomEvent
 } from '@ionic/angular/standalone';
 import {
-  ApiService,
+  type ApiService,
   ManagerControlActionPayload,
   ManagerControlConcreteItem,
   ManagerControlItemStatus,
@@ -897,6 +901,9 @@ import {
   `]
 })
 export class ManagerControlPage implements OnInit, OnDestroy {
+  private readonly managerControlApi = inject(ManagerControlApi);
+  private readonly managerReportsApi = inject(ManagerReportsApi);
+  private readonly managerWorkerRiskApi = inject(ManagerWorkerRiskApi);
   private routeSubscription?: Subscription;
   private clockTimer?: ReturnType<typeof setInterval>;
 
@@ -929,9 +936,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     return managers.find((manager) => manager.managerId === selectedId) ?? managers[0] ?? null;
   });
 
-  constructor(
-    readonly auth: AuthService,
-    private readonly api: ApiService,
+  constructor(readonly auth: AuthService,
     private readonly externalLink: MobileExternalLinkService,
     private readonly route: ActivatedRoute,
     private readonly router: Router
@@ -967,8 +972,8 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     this.error.set(null);
     try {
       const summary = forceSync
-        ? await this.api.syncManagerControlToday().toPromise()
-        : await this.api.getManagerControlToday().toPromise();
+        ? await this.managerControlApi.syncManagerControlToday().toPromise()
+        : await this.managerControlApi.getManagerControlToday().toPromise();
       this.summary.set(summary ?? null);
       const managerId = this.resolveManagerId(summary ?? null);
       this.selectedManagerId.set(managerId);
@@ -1001,7 +1006,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     this.auditSending.set(true);
     this.error.set(null);
     try {
-      const result = await this.api.sendManagerDailyAuditToTelegram(this.summary()?.date || undefined).toPromise();
+      const result = await this.managerReportsApi.sendManagerDailyAuditToTelegram(this.summary()?.date || undefined).toPromise();
       this.notice.set(
         result
           ? `Аудит отправлен в Telegram: ${result.managerCount} менеджеров, сообщений — ${result.messageCount}.`
@@ -1022,7 +1027,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     this.auditTestStarting.set(true);
     this.error.set(null);
     try {
-      const result = await this.api.startManagerReportReviewTest(
+      const result = await this.managerReportsApi.startManagerReportReviewTest(
         this.summary()?.date || undefined
       ).toPromise();
       this.notice.set(
@@ -1044,7 +1049,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     }
     this.auditReviewsLoading.set(true);
     try {
-      const reviews = await this.api.getManagerReportReviews(this.summary()?.date || undefined).toPromise();
+      const reviews = await this.managerReportsApi.getManagerReportReviews(this.summary()?.date || undefined).toPromise();
       this.managerReportReviews.set(reviews ?? []);
     } catch (error) {
       this.managerReportReviews.set([]);
@@ -1154,7 +1159,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     this.resolvingReportReviewIds.update((ids) => new Set(ids).add(review.reviewId));
     this.error.set(null);
     try {
-      await this.api.resolveManagerReportDispute(review.reviewId, { action, comment }).toPromise();
+      await this.managerReportsApi.resolveManagerReportDispute(review.reviewId, { action, comment }).toPromise();
       this.notice.set(
         action === 'REPORT_INCORRECT'
           ? 'Выбранное замечание снято. Остальные пункты аудита сохранены.'
@@ -1532,7 +1537,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
       this.notice.set('Сначала обновите контроль.');
       return;
     }
-    await this.runControlMutation(() => this.api.acceptManagerControl(id).toPromise(), 'Контроль принят.');
+    await this.runControlMutation(() => this.managerControlApi.acceptManagerControl(id).toPromise(), 'Контроль принят.');
   }
 
   async markStage(stage: 'MORNING_DONE' | 'FINAL_CHECK'): Promise<void> {
@@ -1542,7 +1547,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
       return;
     }
     await this.runControlMutation(
-      () => this.api.markManagerControlStage(id, { stage }).toPromise(),
+      () => this.managerControlApi.markManagerControlStage(id, { stage }).toPromise(),
       'Этап отмечен.'
     );
   }
@@ -1556,7 +1561,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     this.mutating.set(true);
     this.error.set(null);
     try {
-      const result = await this.api.closeManagerControlDay(id, { comment: 'Закрыто из мобильного приложения.' }).toPromise();
+      const result = await this.managerControlApi.closeManagerControlDay(id, { comment: 'Закрыто из мобильного приложения.' }).toPromise();
       this.notice.set(result?.closed ? 'Контроль дня закрыт.' : 'Контроль пока нельзя закрыть.');
       const managerId = this.selectedManagerId();
       if (managerId) {
@@ -1620,7 +1625,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     this.mutatingId.set(id);
     this.error.set(null);
     try {
-      const result = await this.api.reconcileManagerControlClientMessages(managerId).toPromise();
+      const result = await this.managerControlApi.reconcileManagerControlClientMessages(managerId).toPromise();
       this.notice.set(result && result.closedItems > 0
         ? 'Ответ найден. Отвеченные карточки закрыты.'
         : 'Ответ не найден. Карточка остаётся в замечаниях.');
@@ -1638,7 +1643,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     if (!id || this.mutatingId() === id) {
       return;
     }
-    await this.runCardMutation(id, () => this.api.sendManagerControlClientMessage(id).toPromise(), 'Сообщение клиенту отправлено.');
+    await this.runCardMutation(id, () => this.managerControlApi.sendManagerControlClientMessage(id).toPromise(), 'Сообщение клиенту отправлено.');
   }
 
   async replyClient(card: ManagerControlConcreteItem): Promise<void> {
@@ -1649,7 +1654,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     }
     await this.runCardMutation(
       id,
-      () => this.api.replyManagerControlClientMessage(id, { message }).toPromise(),
+      () => this.managerControlApi.replyManagerControlClientMessage(id, { message }).toPromise(),
       'Ответ клиенту отправлен.'
     );
     this.replies.update((replies) => ({ ...replies, [id]: '' }));
@@ -1660,7 +1665,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     if (!id || this.mutatingId() === id) {
       return;
     }
-    await this.runCardMutation(id, () => this.api.repairManagerControlConcreteItem(id).toPromise(), 'Починка запущена.');
+    await this.runCardMutation(id, () => this.managerControlApi.repairManagerControlConcreteItem(id).toPromise(), 'Починка запущена.');
   }
 
   async markItemAction(item: ManagerControlItemDetail, actionType: ManagerControlActionPayload['actionType']): Promise<void> {
@@ -1675,7 +1680,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     this.mutatingItemId.set(item.itemId);
     this.error.set(null);
     try {
-      await this.api.actionManagerControlItem(item.itemId, { actionType, comment }).toPromise();
+      await this.managerControlApi.actionManagerControlItem(item.itemId, { actionType, comment }).toPromise();
       this.notice.set(this.actionLabel(actionType));
       const managerId = this.selectedManagerId();
       if (managerId) {
@@ -1765,8 +1770,8 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     this.mutatingId.set(itemId);
     this.error.set(null);
     try {
-      await this.api.setManagerWorkerRiskIncidentResolution(incidentId, action, penaltyPoints, comment).toPromise();
-      await this.api.actionManagerControlConcreteItem(itemId, { actionType: controlAction, comment }).toPromise();
+      await this.managerWorkerRiskApi.setManagerWorkerRiskIncidentResolution(incidentId, action, penaltyPoints, comment).toPromise();
+      await this.managerControlApi.actionManagerControlConcreteItem(itemId, { actionType: controlAction, comment }).toPromise();
       this.notice.set(successMessage);
       const managerId = this.selectedManagerId();
       if (managerId) {
@@ -1782,10 +1787,10 @@ export class ManagerControlPage implements OnInit, OnDestroy {
 
   private async loadDetails(managerId: number, forceSync = false): Promise<void> {
     const detail = forceSync
-      ? await this.api.syncManagerControlDetails(managerId).toPromise()
-      : await this.api.getManagerControlDetails(managerId).toPromise();
+      ? await this.managerControlApi.syncManagerControlDetails(managerId).toPromise()
+      : await this.managerControlApi.getManagerControlDetails(managerId).toPromise();
     if (!forceSync && detail && this.needsDetailSync(detail)) {
-      const syncedDetail = await this.api.syncManagerControlDetails(managerId).toPromise();
+      const syncedDetail = await this.managerControlApi.syncManagerControlDetails(managerId).toPromise();
       this.applyDetail(syncedDetail ?? detail);
       return;
     }
@@ -1854,7 +1859,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     }
     await this.runCardMutation(
       id,
-      () => this.api.actionManagerControlConcreteItem(id, payload).toPromise(),
+      () => this.managerControlApi.actionManagerControlConcreteItem(id, payload).toPromise(),
       successMessage
     );
   }
@@ -1903,7 +1908,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
 
   private async loadSummaryOnly(): Promise<void> {
     try {
-      this.summary.set(await this.api.getManagerControlToday().toPromise() ?? null);
+      this.summary.set(await this.managerControlApi.getManagerControlToday().toPromise() ?? null);
     } catch {
       // Details are already updated; summary can refresh on the next pull-to-refresh.
     }

@@ -38,6 +38,12 @@ class ReviewBotAssignmentGuardServiceTest {
     @Mock
     private BotsRepository botsRepository;
 
+    @Mock
+    private com.hunt.otziv.c_companies.repository.CompanyOrganizationIdentityRepository identityRepository;
+
+    @Mock
+    private ReviewBotCurrentUsageRepository currentUsageRepository;
+
     private ReviewBotAssignmentGuardService service;
 
     @BeforeEach
@@ -46,8 +52,11 @@ class ReviewBotAssignmentGuardServiceTest {
                 reviewRepository,
                 badReviewTaskRepository,
                 recoveryTaskRepository,
-                botsRepository
+                botsRepository,
+                identityRepository,
+                currentUsageRepository
         );
+        org.mockito.Mockito.lenient().when(identityRepository.relatedCompanyIds(10L)).thenReturn(Set.of(10L));
     }
 
     @Test
@@ -128,5 +137,30 @@ class ReviewBotAssignmentGuardServiceTest {
         bot.setId(id);
         bot.setActive(true);
         return bot;
+    }
+
+    @Test
+    void combinesHistoryAcrossDuplicateCompaniesIncludingCompletedTasks() {
+        when(reviewRepository.findUsedBotIdsByCompanyId(org.mockito.ArgumentMatchers.anyLong())).thenReturn(Set.of());
+        when(badReviewTaskRepository.findBotIdsByCompanyIdAndStatusIn(
+                org.mockito.ArgumentMatchers.anyLong(), anyCollection(), isNull())).thenReturn(Set.of());
+        when(recoveryTaskRepository.findBotIdsByCompanyIdAndStatusIn(
+                org.mockito.ArgumentMatchers.anyLong(), anyCollection(), isNull())).thenReturn(Set.of());
+        when(identityRepository.relatedCompanyIds(10L)).thenReturn(Set.of(10L, 20L, 30L));
+        when(reviewRepository.findUsedBotIdsByCompanyId(20L)).thenReturn(Set.of(51L));
+        when(badReviewTaskRepository.findBotIdsByCompanyIdAndStatusIn(eq(30L), anyCollection(), isNull()))
+                .thenReturn(Set.of(52L));
+        when(recoveryTaskRepository.findBotIdsByCompanyIdAndStatusIn(eq(20L), anyCollection(), isNull()))
+                .thenReturn(Set.of(53L));
+        assertEquals(Set.of(51L, 52L, 53L), service.blockedBotIds(service.scope(10L, null)));
+    }
+
+    @Test
+    void rejectsConcurrentReservationEvenWhenSnapshotSaysFree() {
+        Bot candidate = activeBot(22L);
+        var scope = service.scope(10L, 100L);
+        when(botsRepository.findByIdForAssignmentLock(22L)).thenReturn(Optional.of(candidate));
+        when(currentUsageRepository.isUsed(22L, Set.of(10L), scope)).thenReturn(true);
+        assertTrue(service.lockIfEligible(candidate, scope).isEmpty());
     }
 }

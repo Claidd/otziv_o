@@ -40,6 +40,7 @@ public class OrderController {
 
     private final ProductService productService;
     private final OrderService orderService;
+    private final com.hunt.otziv.p_products.api.OrderStatusCommands statusCommands;
     private final ReviewService reviewService;
     private final AmountService amountService;
     private final PromoTextService promoTextService;
@@ -208,10 +209,8 @@ public class OrderController {
 
 //    =========================================== СМЕНА СТАТУСА ========================================================
     @PostMapping ("/status_for_checking/{companyID}/{orderID}") // смена статуса на "в проверку"
-    @Transactional
     String changeStatusForChecking( @PathVariable Long orderID, @PathVariable Long companyID, Model model, RedirectAttributes rm, Authentication authentication) throws Exception {
-        requireWorkerSubmissionAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "В проверку")) {
+        if(changeLegacyStatus(orderID,companyID,"В проверку",authentication,true)) {
             log.info("статус заказа успешно изменен на на проверке");
             rm.addFlashAttribute("saveSuccess", "true");
 //            return "redirect:/ordersDetails/{companyID}/{orderID}";
@@ -223,10 +222,8 @@ public class OrderController {
     } // смена статуса на "на проверке"
 
     @PostMapping ("/status_on_checking/{companyID}/{orderID}") // смена статуса на "на проверке"
-    @Transactional
     String changeStatusOnChecking( @PathVariable Long orderID, @PathVariable Long companyID, @RequestParam(defaultValue = "В проверку") String status, @RequestParam(defaultValue = "0") int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "На проверке")) {
+        if(changeLegacyStatus(orderID,companyID,"На проверке",authentication,false)) {
             log.info("статус заказа успешно изменен на на проверке");
         } else {
             log.info("ошибка при изменении статуса заказа на на проверке");
@@ -237,10 +234,8 @@ public class OrderController {
     } // смена статуса на "на проверке"
 
     @PostMapping ("/status_for_correct/{companyID}/{orderID}") // смена статуса на "Коррекция"
-    @Transactional
     String changeStatusForCorrect( @PathVariable Long orderID, @PathVariable Long companyID, @RequestParam(defaultValue = "На проверке") String status, @RequestParam(defaultValue = "0") int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Коррекция")) {
+        if(changeLegacyStatus(orderID,companyID,"Коррекция",authentication,false)) {
             log.info("статус заказа успешно изменен на Коррекция");
         } else {
             log.info("ошибка при изменении статуса заказа на Коррекция");
@@ -250,10 +245,8 @@ public class OrderController {
     } // смена статуса на "Коррекция"
 
     @PostMapping ("/order_to_archive/{companyID}/{orderID}") // смена статуса на "Архив"
-    @Transactional
     String changeStatusForArchive( @PathVariable Long orderID, @PathVariable Long companyID, @RequestParam(defaultValue = "На проверке") String status, @RequestParam(defaultValue = "0") int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Архив")) {
+        if(changeLegacyStatus(orderID,companyID,"Архив",authentication,false)) {
             log.info("статус заказа успешно изменен на Архив");
         } else {
             log.info("ошибка при изменении статуса заказа на Архив");
@@ -264,14 +257,9 @@ public class OrderController {
 
 
     @PostMapping ("/status_for_publish/{companyID}/{orderID}") // смена статуса на "Публикация"
-    @Transactional
     String changeStatusForPublish(@PathVariable Long orderID, @PathVariable Long companyID, @RequestParam(defaultValue = "На проверке") String status, @RequestParam(defaultValue = "0") int pageNumber, Authentication authentication) throws Exception {
 
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Публикация")) {
-            Order order = orderService.getOrder(orderID);
-            OrderDetailsDTO orderDetailDTO = orderDetailsService.getOrderDetailDTOById(order.getDetails().iterator().next().getId());
-            reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailDTO);
+        if(changeLegacyStatus(orderID,companyID,"Публикация",authentication,false)) {
             log.info("статус заказа успешно изменен на Публикация");
         } else {
             log.info("ошибка при изменении статуса заказа на Публикация");
@@ -282,11 +270,8 @@ public class OrderController {
     } // смена статуса на "Публикация"
 
     @PostMapping ("/status_for_publish_ok/{companyID}/{orderID}") // смена статуса на "Опубликовано"
-    @Transactional
     String changeStatusForPublishOk(@PathVariable Long orderID, @PathVariable Long companyID, @RequestParam(defaultValue = "Публикация") String status, @RequestParam(defaultValue = "0") int pageNumber, Authentication authentication) throws Exception {
-        Order order = requireOrderMutationAccess(orderID, companyID, authentication);
-        if (order.getAmount() <= order.getCounter()) {
-            orderService.changeStatusForOrder(orderID, "Опубликовано");
+        if (changeLegacyStatus(orderID,companyID,"Опубликовано",authentication,false)) {
             log.info("статус заказа успешно изменен на Опубликовано");
         }
          else {
@@ -299,10 +284,8 @@ public class OrderController {
 
 
     @PostMapping ("/status_to_pay/{companyID}/{orderID}") // смена статуса на "Выставлен счет"
-    @Transactional
     String changeStatusToPay(@PathVariable Long orderID, @PathVariable Long companyID, @RequestParam(defaultValue = "Опубликовано") String status, @RequestParam(defaultValue = "0") int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Выставлен счет")) {
+        if(changeLegacyStatus(orderID,companyID,"Выставлен счет",authentication,false)) {
             log.info("статус заказа успешно изменен на Выставлен счет");
             String encodedStatus = UriUtils.encode(status, StandardCharsets.UTF_8);
             return "redirect:/orders/all_orders?pageNumber=" + pageNumber + "&status=" + encodedStatus;
@@ -314,10 +297,8 @@ public class OrderController {
     } // смена статуса на "Выставлен счет"
 
     @PostMapping ("/remember/{companyID}/{orderID}") // смена статуса на "Напоминание"
-    @Transactional
     String changeStatusRemember(@PathVariable Long orderID, @PathVariable Long companyID, @RequestParam(defaultValue = "Выставлен счет") String status, @RequestParam(defaultValue = "0") int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Напоминание")) {
+        if(changeLegacyStatus(orderID,companyID,"Напоминание",authentication,false)) {
             log.info("статус заказа успешно изменен на Напоминание");
         } else {
             log.info("ошибка при изменении статуса заказа на Напоминание");
@@ -328,10 +309,8 @@ public class OrderController {
     } // смена статуса на "Напоминание"
 
     @PostMapping ("/status_no_pay/{companyID}/{orderID}") // смена статуса на "Не оплачено"
-    @Transactional
     String changeStatusNoPay(@PathVariable Long orderID, @PathVariable Long companyID, @RequestParam(defaultValue = "Напоминание") String status, @RequestParam(defaultValue = "0") int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Не оплачено")) {
+        if(changeLegacyStatus(orderID,companyID,"Не оплачено",authentication,false)) {
             log.info("статус заказа успешно изменен на Не оплачено");
         } else {
             log.info("ошибка при изменении статуса заказа на Не оплачено");
@@ -342,11 +321,8 @@ public class OrderController {
     } // смена статуса на "Не оплачено"
 
     @PostMapping ("/status_pay/{companyID}/{orderID}") // смена статуса на "Оплачено"
-    @Transactional
     String changeStatusPay(@PathVariable Long orderID, @PathVariable Long companyID, @RequestParam(defaultValue = "Выставлен счет") String status, @RequestParam(defaultValue = "0") int pageNumber, Authentication authentication) throws Exception {
-        Order order = requireOrderMutationAccess(orderID, companyID, authentication);
-        if (order.getAmount() <= order.getCounter()){
-            orderService.changeStatusForOrder(orderID, "Оплачено");
+        if (changeLegacyStatus(orderID,companyID,"Оплачено",authentication,false)) {
             log.info("статус заказа успешно изменен на Оплачено");
         }
         else {
@@ -360,10 +336,8 @@ public class OrderController {
 
     //    =========================================== СМЕНА СТАТУСА ========================================================
     @PostMapping ("/status_for_checking2/{companyID}/{orderID}") // смена статуса на "в проверку"
-    @Transactional
     String changeStatusForChecking2( @PathVariable Long orderID, @PathVariable Long companyID, Model model, @RequestParam int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "В проверку")) {
+        if(changeLegacyStatus(orderID,companyID,"В проверку",authentication,false)) {
             log.info("статус заказа успешно изменен на на проверке");
             model.addAttribute("companyId", companyID);
         } else {
@@ -373,10 +347,8 @@ public class OrderController {
     } // смена статуса на "на проверке"
 
     @PostMapping ("/status_on_checking2/{companyID}/{orderID}") // смена статуса на "на проверке"
-    @Transactional
     String changeStatusOnChecking2( @PathVariable Long orderID, @PathVariable Long companyID, Model model, @RequestParam int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "На проверке")) {
+        if(changeLegacyStatus(orderID,companyID,"На проверке",authentication,false)) {
             log.info("статус заказа успешно изменен на на проверке");
         } else {
             log.info("ошибка при изменении статуса заказа на на проверке");
@@ -385,10 +357,8 @@ public class OrderController {
     } // смена статуса на "на проверке"
 
     @PostMapping ("/status_for_correct2/{companyID}/{orderID}") // смена статуса на "Коррекция"
-    @Transactional
     String changeStatusForCorrect2( @PathVariable Long orderID, @PathVariable Long companyID, Model model, @RequestParam int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Коррекция")) {
+        if(changeLegacyStatus(orderID,companyID,"Коррекция",authentication,false)) {
             log.info("статус заказа успешно изменен на Коррекция");
         } else {
             log.info("ошибка при изменении статуса заказа на Коррекция");
@@ -397,10 +367,8 @@ public class OrderController {
     } // смена статуса на "Коррекция"
 
     @PostMapping ("/order_to_archive2/{companyID}/{orderID}") // смена статуса на "Коррекция"
-    @Transactional
     String changeStatusForArchive2( @PathVariable Long orderID, @PathVariable Long companyID, Model model, @RequestParam int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Архив")) {
+        if(changeLegacyStatus(orderID,companyID,"Архив",authentication,false)) {
             log.info("статус заказа успешно изменен на Архив");
         } else {
             log.info("ошибка при изменении статуса заказа на Архив");
@@ -409,13 +377,8 @@ public class OrderController {
     } // смена статуса на "Коррекция"
 
     @PostMapping ("/status_for_publish2/{companyID}/{orderID}") // смена статуса на "Публикация"
-    @Transactional
     String changeStatusForPublish2( @PathVariable Long orderID, @PathVariable Long companyID, Model model, @RequestParam int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Публикация")) {
-            Order order = orderService.getOrder(orderID);
-            OrderDetailsDTO orderDetailDTO = orderDetailsService.getOrderDetailDTOById(order.getDetails().iterator().next().getId());
-            reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailDTO);
+        if(changeLegacyStatus(orderID,companyID,"Публикация",authentication,false)) {
             log.info("статус заказа успешно изменен на Публикация");
         } else {
             log.info("ошибка при изменении статуса заказа на Публикация");
@@ -424,11 +387,8 @@ public class OrderController {
     } // смена статуса на "Публикация"
 
     @PostMapping ("/status_for_publish_ok2/{companyID}/{orderID}") // смена статуса на "Опубликовано"
-    @Transactional
     String changeStatusForPublishOk2( @PathVariable Long orderID, @PathVariable Long companyID, Model model, @RequestParam int pageNumber, Authentication authentication) throws Exception {
-        Order order = requireOrderMutationAccess(orderID, companyID, authentication);
-        if (order.getAmount() <= order.getCounter()) {
-            orderService.changeStatusForOrder(orderID, "Опубликовано");
+        if (changeLegacyStatus(orderID,companyID,"Опубликовано",authentication,false)) {
             log.info("статус заказа успешно изменен на Опубликовано");
         }
         else {
@@ -439,10 +399,8 @@ public class OrderController {
 
 
     @PostMapping ("/status_to_pay2/{companyID}/{orderID}") // смена статуса на "Выставлен счет"
-    @Transactional
     String changeStatusToPay2( @PathVariable Long orderID, @PathVariable Long companyID, Model model, @RequestParam int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Выставлен счет")) {
+        if(changeLegacyStatus(orderID,companyID,"Выставлен счет",authentication,false)) {
             log.info("статус заказа успешно изменен на Выставлен счет");
             return "redirect:/ordersCompany/ordersDetails/{companyID}";
         } else {
@@ -452,10 +410,8 @@ public class OrderController {
     } // смена статуса на "Выставлен счет"
 
     @PostMapping ("/remember2/{companyID}/{orderID}") // смена статуса на "Напоминание"
-    @Transactional
     String changeStatusRemember2( @PathVariable Long orderID, @PathVariable Long companyID, Model model, @RequestParam int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Напоминание")) {
+        if(changeLegacyStatus(orderID,companyID,"Напоминание",authentication,false)) {
             log.info("статус заказа успешно изменен на Напоминание");
         } else {
             log.info("ошибка при изменении статуса заказа на Напоминание");
@@ -464,10 +420,8 @@ public class OrderController {
     } // смена статуса на "Напоминание"
 
     @PostMapping ("/status_no_pay2/{companyID}/{orderID}") // смена статуса на "Не оплачено"
-    @Transactional
     String changeStatusNoPay2( @PathVariable Long orderID, @PathVariable Long companyID, Model model, @RequestParam int pageNumber, Authentication authentication) throws Exception {
-        requireOrderMutationAccess(orderID, companyID, authentication);
-        if(orderService.changeStatusForOrder(orderID, "Не оплачено")) {
+        if(changeLegacyStatus(orderID,companyID,"Не оплачено",authentication,false)) {
             log.info("статус заказа успешно изменен на Не оплачено");
         } else {
             log.info("ошибка при изменении статуса заказа на Не оплачено");
@@ -476,11 +430,8 @@ public class OrderController {
     } // смена статуса на "Не оплачено"
 
     @PostMapping ("/status_pay2/{companyID}/{orderID}") // смена статуса на "Оплачено"
-    @Transactional
     String changeStatusPay2( @PathVariable Long orderID, @PathVariable Long companyID, Model model, @RequestParam int pageNumber, Authentication authentication) throws Exception {
-        Order order = requireOrderMutationAccess(orderID, companyID, authentication);
-        if (order.getAmount() <= order.getCounter()){
-            orderService.changeStatusForOrder(orderID, "Оплачено");
+        if (changeLegacyStatus(orderID,companyID,"Оплачено",authentication,false)) {
             log.info("статус заказа успешно изменен на Оплачено");
         }
         else {
@@ -489,6 +440,12 @@ public class OrderController {
         return "redirect:/ordersCompany/ordersDetails/" + companyID + "?pageNumber=" + pageNumber;
     } // смена статуса на "Оплачено"
 
+
+    private boolean changeLegacyStatus(Long orderId,Long companyId,String status,Authentication actor,boolean workerSubmission) throws Exception {
+        return OrderCommandHttpAdapter.invoke(() -> statusCommands.changeStatus(orderId,companyId,status,actor,
+                workerSubmission?com.hunt.otziv.p_products.api.OrderStatusCommands.EntryPoint.LEGACY_WORKER_SUBMISSION:
+                        com.hunt.otziv.p_products.api.OrderStatusCommands.EntryPoint.LEGACY_STAFF));
+    }
 
     private void checkTimeMethod(String text, long startTime){
         long endTime = System.nanoTime();

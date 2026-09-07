@@ -1,0 +1,26 @@
+{
+  "schema": "otziv-required-check-policy-v1",
+  "repository": "Claidd/otziv_o",
+  "branch": "main",
+  "state": "DRAFT_REQUIRES_PUBLISHED_SUCCESSFUL_CHECKS_AND_REVIEW",
+  "expectedCheckNames": [
+    "Repository contracts", "Backend (full Testcontainers suite)",
+    "Issuer security generation (real Keycloak and PostgreSQL)",
+    "Frontend (unit and production build)", "Mobile web (unit and production build)",
+    "WhatsApp gateway (unit)", "External review worker (syntax and health)",
+    "Built web and mobile browser scenarios", "Android native tests, lint and debug assembly",
+    "Shared client package and compatibility fixtures",
+    "Built integration image (backend)", "Built integration image (web)",
+    "Built integration image (worker)", "Built integration image (whatsapp)",
+    "Built integration image (observer)", "Built integration image (publisher)",
+    "Dependency audit gate", "Upstream image security gate", "gitleaks", "SQL injection guard"
+  ],
+  "proposedPolicy": {
+    "required_status_checks": {"strict": true, "checks": []},
+    "enforce_admins": true,
+    "required_pull_request_reviews": null,
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  }
+}

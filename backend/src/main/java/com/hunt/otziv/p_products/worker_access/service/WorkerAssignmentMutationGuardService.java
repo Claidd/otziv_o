@@ -29,15 +29,35 @@ public class WorkerAssignmentMutationGuardService {
         if (!guardedStaff(authentication)) {
             return;
         }
+        assertOrder(orderId, authentication);
+    }
+
+    /** Explicit application boundary: absent/untrusted actor never inherits a thread-local exemption. */
+    public void assertOrder(long orderId, Authentication authentication) {
+        requireStaff(authentication);
         lockOrderWhenTransactional(orderId, authentication);
         if (isAdministrator(authentication)) {
             return;
         }
         if (isManagerial(authentication)) {
-            managerAccessService.requireOrderAccess(orderId, authentication);
+            if (TransactionSynchronizationManager.isActualTransactionActive()) requireManagerialOrderAccess(orderId, authentication);
+            else managerAccessService.requireOrderAccess(orderId, authentication);
             return;
         }
-        assertOwned(repository.countOwnedOrder(orderId, authentication.getName()), authentication);
+        // A normal COUNT can reuse an earlier InnoDB REPEATABLE READ snapshot.
+        // Read current ownership only after the canonical Order lock has been acquired.
+        boolean owned = TransactionSynchronizationManager.isActualTransactionActive()
+                ? repository.lockOwnedOrder(orderId, authentication.getName()).isPresent()
+                : repository.countOwnedOrder(orderId, authentication.getName()) == 1L;
+        assertOwned(owned ? 1L : 0L, authentication);
+    }
+
+    /** Returns the current relationship only after the actor check and canonical parent/child locks. */
+    @org.springframework.transaction.annotation.Transactional(propagation=org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public long requireReviewOrder(long reviewId,Authentication authentication) {
+        assertReview(reviewId,authentication);
+        return repository.findCurrentOrderIdByReviewId(reviewId).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND,"Отзыв не найден"));
     }
 
     public void assertReview(long reviewId) {
@@ -45,6 +65,11 @@ public class WorkerAssignmentMutationGuardService {
         if (!guardedStaff(authentication)) {
             return;
         }
+        assertReview(reviewId, authentication);
+    }
+
+    public void assertReview(long reviewId, Authentication authentication) {
+        requireStaff(authentication);
         if (isAdministrator(authentication)
                 && !TransactionSynchronizationManager.isActualTransactionActive()) {
             return;
@@ -52,6 +77,7 @@ public class WorkerAssignmentMutationGuardService {
         Long orderId = resolveCanonicalOrder(
                 reviewId,
                 repository::findOrderIdByReviewId,
+                repository::findCurrentOrderIdByReviewId,
                 authentication
         );
         if (isAdministrator(authentication)) {
@@ -61,7 +87,12 @@ public class WorkerAssignmentMutationGuardService {
             requireManagerialOrderAccess(orderId, authentication);
             return;
         }
-        assertOwned(repository.countOwnedReview(reviewId, authentication.getName()), authentication);
+        // A normal COUNT can reuse an earlier InnoDB REPEATABLE READ snapshot.
+        // Read current ownership only after the canonical Order lock has been acquired.
+        boolean owned = TransactionSynchronizationManager.isActualTransactionActive()
+                ? repository.lockOwnedReview(reviewId, authentication.getName()).isPresent()
+                : repository.countOwnedReview(reviewId, authentication.getName()) == 1L;
+        assertOwned(owned ? 1L : 0L, authentication);
     }
 
     public void assertBadTask(long taskId) {
@@ -69,6 +100,11 @@ public class WorkerAssignmentMutationGuardService {
         if (!guardedStaff(authentication)) {
             return;
         }
+        assertBadTask(taskId, authentication);
+    }
+
+    public void assertBadTask(long taskId, Authentication authentication) {
+        requireStaff(authentication);
         if (isAdministrator(authentication)
                 && !TransactionSynchronizationManager.isActualTransactionActive()) {
             return;
@@ -76,6 +112,7 @@ public class WorkerAssignmentMutationGuardService {
         Long orderId = resolveCanonicalOrder(
                 taskId,
                 repository::findOrderIdByBadTaskId,
+                repository::findCurrentOrderIdByBadTaskId,
                 authentication
         );
         if (isAdministrator(authentication)) {
@@ -85,7 +122,12 @@ public class WorkerAssignmentMutationGuardService {
             requireManagerialOrderAccess(orderId, authentication);
             return;
         }
-        assertOwned(repository.countOwnedBadTask(taskId, authentication.getName()), authentication);
+        // A normal COUNT can reuse an earlier InnoDB REPEATABLE READ snapshot.
+        // Read current ownership only after the canonical Order lock has been acquired.
+        boolean owned = TransactionSynchronizationManager.isActualTransactionActive()
+                ? repository.lockOwnedBadTask(taskId, authentication.getName()).isPresent()
+                : repository.countOwnedBadTask(taskId, authentication.getName()) == 1L;
+        assertOwned(owned ? 1L : 0L, authentication);
     }
 
     public void assertRecoveryTask(long taskId) {
@@ -93,6 +135,11 @@ public class WorkerAssignmentMutationGuardService {
         if (!guardedStaff(authentication)) {
             return;
         }
+        assertRecoveryTask(taskId, authentication);
+    }
+
+    public void assertRecoveryTask(long taskId, Authentication authentication) {
+        requireStaff(authentication);
         if (isAdministrator(authentication)
                 && !TransactionSynchronizationManager.isActualTransactionActive()) {
             return;
@@ -102,6 +149,7 @@ public class WorkerAssignmentMutationGuardService {
             Long lockedOrderId = resolveCanonicalOrder(
                     taskId,
                     repository::findOrderIdByRecoveryTaskId,
+                    repository::findCurrentOrderIdByRecoveryTaskId,
                     authentication,
                     liveOrderId.get()
             );
@@ -112,14 +160,26 @@ public class WorkerAssignmentMutationGuardService {
                 requireManagerialOrderAccess(lockedOrderId, authentication);
                 return;
             }
-            assertOwned(repository.countOwnedRecoveryTask(taskId, authentication.getName()), authentication);
+            // A normal COUNT can reuse an earlier InnoDB REPEATABLE READ snapshot.
+            // Read current ownership only after the canonical Order lock has been acquired.
+            boolean owned = TransactionSynchronizationManager.isActualTransactionActive()
+                    ? repository.lockOwnedRecoveryTask(taskId, authentication.getName()).isPresent()
+                    : repository.countOwnedRecoveryTask(taskId, authentication.getName()) == 1L;
+            assertOwned(owned ? 1L : 0L, authentication);
             return;
+        }
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && repository.findCurrentOrderIdByRecoveryTaskId(taskId).isPresent()) {
+            throw rejectedObject(authentication);
         }
         if (isAdministrator(authentication)) {
             return;
         }
         if (isManagerial(authentication)) {
-            boolean managerAllowed = repository.findManagerIdByRecoveryTaskId(taskId)
+            Optional<Long> currentManagerId = TransactionSynchronizationManager.isActualTransactionActive()
+                    ? repository.findCurrentManagerIdByRecoveryTaskId(taskId)
+                    : repository.findManagerIdByRecoveryTaskId(taskId);
+            boolean managerAllowed = currentManagerId
                     .filter(managerId -> managerAccessService.canAccessManager(managerId, authentication))
                     .isPresent();
             if (!managerAllowed) {
@@ -148,16 +208,18 @@ public class WorkerAssignmentMutationGuardService {
     private Long resolveCanonicalOrder(
             long entityId,
             Function<Long, Optional<Long>> orderIdQuery,
+            Function<Long, Optional<Long>> currentOrderIdQuery,
             Authentication authentication
     ) {
         Long candidateOrderId = orderIdQuery.apply(entityId)
                 .orElseThrow(() -> rejectedObject(authentication));
-        return resolveCanonicalOrder(entityId, orderIdQuery, authentication, candidateOrderId);
+        return resolveCanonicalOrder(entityId, orderIdQuery, currentOrderIdQuery, authentication, candidateOrderId);
     }
 
     private Long resolveCanonicalOrder(
             long entityId,
             Function<Long, Optional<Long>> orderIdQuery,
+            Function<Long, Optional<Long>> currentOrderIdQuery,
             Authentication authentication,
             Long candidateOrderId
     ) {
@@ -165,7 +227,7 @@ public class WorkerAssignmentMutationGuardService {
             return candidateOrderId;
         }
         lockOrderWhenTransactional(candidateOrderId, authentication);
-        Long currentOrderId = orderIdQuery.apply(entityId)
+        Long currentOrderId = currentOrderIdQuery.apply(entityId)
                 .orElseThrow(() -> rejectedObject(authentication));
         if (!Objects.equals(candidateOrderId, currentOrderId)) {
             throw rejectedObject(authentication);
@@ -174,9 +236,10 @@ public class WorkerAssignmentMutationGuardService {
     }
 
     private void requireManagerialOrderAccess(Long orderId, Authentication authentication) {
-        if (!managerAccessService.canAccessOrder(orderId, authentication)) {
-            throw notFound();
-        }
+        boolean allowed = TransactionSynchronizationManager.isActualTransactionActive()
+                ? managerAccessService.canAccessCurrentOrderManager(repository.findCurrentManagerIdByOrderId(orderId).orElse(null), authentication)
+                : managerAccessService.canAccessOrder(orderId, authentication);
+        if (!allowed) throw notFound();
     }
 
     private void lockOrderWhenTransactional(long orderId, Authentication authentication) {
@@ -195,6 +258,12 @@ public class WorkerAssignmentMutationGuardService {
 
     private Authentication currentAuthentication() {
         return SecurityContextHolder.getContext().getAuthentication();
+    }
+
+    private void requireStaff(Authentication authentication) {
+        if (!guardedStaff(authentication) || authentication.getName() == null || authentication.getName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Операция недоступна");
+        }
     }
 
     private boolean isAdministrator(Authentication authentication) {

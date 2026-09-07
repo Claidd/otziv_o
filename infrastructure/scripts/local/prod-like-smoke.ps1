@@ -4266,7 +4266,13 @@ function Test-RegistryBuildFailure {
         return $false
     }
 
-    return $Output -match "registry-1\.docker\.io|docker/dockerfile|failed to resolve source metadata|Docker Desktop has no HTTPS proxy|lookup .* no such host|no such host|network is unreachable|i/o timeout|TLS handshake timeout"
+    # A successful Dockerfile frontend/registry line appears in every normal
+    # build. It must not disguise a compiler/test failure as registry downtime.
+    if ($Output -match '(?im)\[ERROR\].*(COMPILATION ERROR|cannot find symbol|Compilation failure|There are test failures|RequireJavaVersion|Detected JDK)' -or
+        $Output -match '(?im)^.*(?:npm ERR!|error TS\d+|error NG\d+)') {
+        return $false
+    }
+    return $Output -match '(?im)^.*(?:ERROR|failed to solve|failed to resolve|failed to do request|error getting credentials).*(?:registry-1\.docker\.io|docker/dockerfile|source metadata|no HTTPS proxy|no such host|network is unreachable|i/o timeout|TLS handshake timeout)'
 }
 
 function Test-DockerComposeMissingNetwork {

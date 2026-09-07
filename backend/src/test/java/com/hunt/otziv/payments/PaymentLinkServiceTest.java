@@ -5,7 +5,7 @@ import com.hunt.otziv.bad_reviews.service.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
-import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.common_billing.api.CommonInvoicePaymentOperations;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.contractor_payments.dto.ContractorPaymentRequisitesSnapshot;
 import com.hunt.otziv.contractor_payments.dto.ManualCardPaymentContextResponse;
@@ -1512,7 +1512,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void createForOrderBlocksStandaloneRouteWhenOrderIsAlreadyInActiveCommonInvoice() {
-        CommonBillingService commonBillingService = org.mockito.Mockito.mock(CommonBillingService.class);
+        CommonInvoicePaymentOperations commonBillingService = org.mockito.Mockito.mock(CommonInvoicePaymentOperations.class);
         PaymentLinkService service = service(properties(), new TbankTokenSigner(), commonBillingService);
         Order order = order(901L, "ООО Общий счет", BigDecimal.valueOf(1000));
         when(orderRepository.findByIdForMutation(901L)).thenReturn(Optional.of(order));
@@ -1537,7 +1537,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void publicInitBlocksLegacyStandaloneTokenAfterOrderMovesToCommonInvoice() {
-        CommonBillingService commonBillingService = org.mockito.Mockito.mock(CommonBillingService.class);
+        CommonInvoicePaymentOperations commonBillingService = org.mockito.Mockito.mock(CommonInvoicePaymentOperations.class);
         PaymentLinkService service = service(properties(), new TbankTokenSigner(), commonBillingService);
         Order order = order(903L, "ООО Общий счет", BigDecimal.valueOf(1000));
         PaymentLink link = new PaymentLink();
@@ -3371,7 +3371,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void confirmManualPaymentForCommonInvoiceDoesNotOpenNextOrderBeforeInvoiceCloses() throws Exception {
-        CommonBillingService commonBillingService = org.mockito.Mockito.mock(CommonBillingService.class);
+        CommonInvoicePaymentOperations commonBillingService = org.mockito.Mockito.mock(CommonInvoicePaymentOperations.class);
         PaymentLinkService service = service(properties(), new TbankTokenSigner(), commonBillingService);
         Order order = order(16L, "ООО Общий счет", BigDecimal.valueOf(500));
         PaymentLink link = new PaymentLink();
@@ -3502,7 +3502,7 @@ class PaymentLinkServiceTest {
         properties.setPassword("password");
         properties.setApplyConfirmedPayments(true);
         TbankTokenSigner signer = new TbankTokenSigner();
-        CommonBillingService commonBillingService = org.mockito.Mockito.mock(CommonBillingService.class);
+        CommonInvoicePaymentOperations commonBillingService = org.mockito.Mockito.mock(CommonInvoicePaymentOperations.class);
         PaymentLinkService service = service(properties, signer, commonBillingService);
         when(paymentProfileService.toRuntimeForTerminal(any(PaymentProfile.class), eq("terminal"))).thenReturn(new TbankPaymentProfile(
                 1L,
@@ -5777,6 +5777,8 @@ class PaymentLinkServiceTest {
                 });
         when(ownerManualCardPaymentApprovalRepository.findByIdForUpdate(92L))
                 .thenAnswer(invocation -> Optional.ofNullable(approvalRef.get()));
+        when(ownerManualCardPaymentApprovalRepository.findBindingById(92L))
+                .thenAnswer(invocation -> approvalBinding(approvalRef.get()));
         when(tbankClient.cancel(any(TbankPaymentProfile.class), any(TbankCancelCommand.class)))
                 .thenReturn(new TbankCancelResponse(
                         true, "0", null, null, "terminal", "CANCELED",
@@ -5945,6 +5947,8 @@ class PaymentLinkServiceTest {
                 });
         when(ownerManualCardPaymentApprovalRepository.findByIdForUpdate(94L))
                 .thenAnswer(invocation -> Optional.ofNullable(approvalRef.get()));
+        when(ownerManualCardPaymentApprovalRepository.findBindingById(94L))
+                .thenAnswer(invocation -> approvalBinding(approvalRef.get()));
         when(paymentLinkRepository.saveAndFlush(link)).thenReturn(link);
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
@@ -6378,7 +6382,7 @@ class PaymentLinkServiceTest {
 
     @Test
     void manualCardPaymentRejectsAnotherAuthorizedRouteAndActiveCommonInvoice() throws Exception {
-        CommonBillingService commonBillingService = org.mockito.Mockito.mock(CommonBillingService.class);
+        CommonInvoicePaymentOperations commonBillingService = org.mockito.Mockito.mock(CommonInvoicePaymentOperations.class);
         PaymentLinkService service = service(properties(), new TbankTokenSigner(), commonBillingService);
         Order order = order(25052L, "Общий или второй платеж", BigDecimal.valueOf(1000));
         PaymentLink selected = initiatedBankLink(5214L, order, 100_000L);
@@ -8862,7 +8866,7 @@ class PaymentLinkServiceTest {
         properties.setTerminalKey("terminal");
         properties.setPassword("password");
         TbankTokenSigner signer = new TbankTokenSigner();
-        CommonBillingService commonBillingService = org.mockito.Mockito.mock(CommonBillingService.class);
+        CommonInvoicePaymentOperations commonBillingService = org.mockito.Mockito.mock(CommonInvoicePaymentOperations.class);
         PaymentLinkService service = service(properties, signer, commonBillingService);
         Order order = order(53L, "ООО Возврат после оплаты", BigDecimal.valueOf(11.11));
         PaymentLink link = new PaymentLink();
@@ -9212,7 +9216,7 @@ class PaymentLinkServiceTest {
     private PaymentLinkService service(
             TbankPaymentProperties properties,
             TbankTokenSigner signer,
-            CommonBillingService commonBillingService
+            CommonInvoicePaymentOperations commonBillingService
     ) {
         return service(
                 properties,
@@ -9225,50 +9229,110 @@ class PaymentLinkServiceTest {
     private PaymentLinkService service(
             TbankPaymentProperties properties,
             TbankTokenSigner signer,
-            CommonBillingService commonBillingService,
+            CommonInvoicePaymentOperations commonBillingService,
             PaymentLinkTransactionExecutor transactionExecutor
     ) {
-        @SuppressWarnings("unchecked")
-        ObjectProvider<CommonBillingService> commonBillingServiceProvider = org.mockito.Mockito.mock(ObjectProvider.class);
-        org.mockito.Mockito.lenient().when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        if (commonBillingService == null) commonBillingService = org.mockito.Mockito.mock(CommonInvoicePaymentOperations.class);
+        var observations = new com.hunt.otziv.payments.service.PaymentBankObservationService(runtimeSettingsService,
+                paymentProfileService, tbankClient, tochkaPaymentProfileResolver, tochkaClient, tochkaPaymentOperationMapper);
+        var routes = new com.hunt.otziv.payments.service.CommonInvoiceRouteSelector(observations, paymentLinkRepository,
+                runtimeSettingsService, paymentProfileService, tochkaPaymentProfileResolver, manualPaymentTaskService,
+                taskReceiptIntegrationService, contractorPaymentLiveRoutingService, actualPaymentAttributionService);
+        var presenter = new com.hunt.otziv.payments.service.PaymentLinkPresenter(
+                routes, observations, properties, runtimeSettingsService, paymentProfileService,
+                tochkaPaymentProfileResolver, appSettingService);
+        var cancellation = new com.hunt.otziv.payments.service.PaymentLinkCancellationWorkflow(
+                presenter, routes, observations, paymentLinkRepository, orderRepository, tbankClient,
+                tochkaPaymentProfileResolver, tochkaClient, contractorPaymentShadowService,
+                paymentLinkReturnOutboxService, contractorPaymentTargetAccessPolicy, transactionExecutor);
+        var amounts = new com.hunt.otziv.payments.service.PaymentLinkAmountPolicy(badReviewTaskService);
+        var settlement = new com.hunt.otziv.payments.service.PaymentLinkSettlementService(
+                amounts, cancellation, presenter, routes, paymentLinkRepository, orderRepository,
+                reviewRecoveryGateService, orderTransactionService, paymentCheckService,
+                runtimeSettingsService, paymentProfileService, tochkaPaymentProfileResolver,
+                paymentSuccessNotificationDeliveryService, paymentInvoiceRetryScheduler,
+                commonBillingService, paymentLinkReturnOutboxService, transactionExecutor);
+        var lifecycle = new com.hunt.otziv.payments.service.PaymentLinkLifecycleService(
+                amounts, presenter, paymentLinkRepository, taskReceiptIntegrationService, orderPaymentIntegrityService);
+        var manualConfirmation = new com.hunt.otziv.payments.service.ManualPaymentConfirmationWorkflow(
+                amounts, settlement, lifecycle, cancellation, presenter, routes, paymentLinkRepository, orderRepository,
+                manualPaymentRecipientTelegramNotificationService, manualPaymentTaskService,
+                taskReceiptIntegrationService, managerAccessService, contractorPaymentLiveRoutingService,
+                actualPaymentAttributionService, contractorPaymentTargetAccessPolicy, transactionExecutor);
+        var initializationState = new com.hunt.otziv.payments.service.BankInitializationStateService(
+                lifecycle, presenter, routes, paymentLinkRepository);
+        var preparation = new com.hunt.otziv.payments.service.PaymentLinkPreparationWorkflow(
+                amounts, lifecycle, initializationState, presenter, routes, observations,
+                paymentLinkRepository, orderRepository, properties, runtimeSettingsService, paymentProfileService,
+                taskReceiptIntegrationService, manualPaymentTaskRepository, commonBillingService,
+                orderPaymentIntegrityService, managerAccessService, contractorPaymentLiveRoutingService,
+                contractorPaymentShadowService, contractorPaymentRuntimeSwitch, actualPaymentAttributionService,
+                paymentIssueReminderService, transactionExecutor);
+        var publicResolution = new com.hunt.otziv.payments.service.PublicPaymentLinkResolutionService(
+                lifecycle, preparation, presenter, paymentLinkRepository, runtimeSettingsService);
+        var initialization = new com.hunt.otziv.payments.service.PaymentLinkInitializationWorkflow(
+                settlement, lifecycle, initializationState, preparation, publicResolution, cancellation,
+                presenter, routes, observations, paymentLinkRepository, orderRepository, properties,
+                paymentProfileService, tbankClient, tochkaPaymentProfileResolver, tochkaClient,
+                tochkaPaymentOperationMapper, orderPaymentIntegrityService, paymentLinkReturnOutboxService,
+                contractorPaymentTargetAccessPolicy, transactionExecutor);
+        var manualRoutePolicy = new com.hunt.otziv.payments.service.ManualCardRoutePolicy(
+                lifecycle, manualConfirmation, presenter, contractorPaymentRuntimeSwitch, actualPaymentAttributionService);
+        var observationApplication = new com.hunt.otziv.payments.service.BankObservationApplicationService(
+                settlement, lifecycle, cancellation, presenter, routes, observations, paymentLinkRepository,
+                tochkaPaymentProfileResolver, paymentLinkReturnOutboxService);
+        var manualCardPayments = new com.hunt.otziv.payments.service.ManualCardPaymentWorkflow(
+                settlement, lifecycle, manualConfirmation, preparation, manualRoutePolicy, observationApplication,
+                cancellation, presenter, routes, observations, paymentLinkRepository, orderRepository, properties,
+                tbankClient, manualPaymentRecipientTelegramNotificationService, manualPaymentTaskService,
+                taskReceiptIntegrationService, paymentInvoiceRetryScheduler, orderPaymentIntegrityService,
+                managerAccessService, actualPaymentAttributionService, contractorPaymentTargetAccessPolicy,
+                transactionExecutor);
+        var ownerApproval = new com.hunt.otziv.payments.service.OwnerManualCardApprovalWorkflow(
+                lifecycle, preparation, manualRoutePolicy, manualCardPayments, presenter, routes,
+                paymentLinkRepository, orderRepository, managerAccessService, manualCardPaymentReviewNotificationService,
+                ownerManualCardPaymentApprovalRepository, transactionExecutor);
+        var bankPaymentReconciliation = new com.hunt.otziv.payments.service.BankPaymentReconciliationWorkflow(
+                settlement, lifecycle, initializationState, observationApplication, cancellation, presenter, routes,
+                observations, paymentLinkRepository, orderRepository, paymentProfileService,
+                tochkaPaymentProfileResolver, tochkaPaymentOperationMapper, tochkaWebhookJwtVerifier,
+                signer, commonBillingService, transactionExecutor);
+        var orderPaymentLinks = new com.hunt.otziv.payments.service.OrderPaymentLinkWorkflow(
+                amounts, lifecycle, preparation, observationApplication, presenter, routes, observations,
+                paymentLinkRepository, orderRepository, taskReceiptIntegrationService,
+                contractorPaymentLiveRoutingService, transactionExecutor);
+        var publicPaymentPages = new com.hunt.otziv.payments.service.PublicPaymentPageWorkflow(
+                lifecycle, manualConfirmation, initializationState, publicResolution, observationApplication,
+                cancellation, presenter, routes, observations, paymentLinkRepository, orderRepository,
+                paymentProfileService, tbankClient, contractorPaymentLiveRoutingService, transactionExecutor);
+        var paymentRouteReplacement = new com.hunt.otziv.payments.service.PaymentRouteReplacementWorkflow(
+                amounts, lifecycle, preparation, presenter, routes, observations, paymentLinkRepository,
+                orderRepository, paymentProfileService, taskReceiptIntegrationService, orderPaymentIntegrityService,
+                managerAccessService, contractorPaymentLiveRoutingService, actualPaymentAttributionService);
+        var paymentAdminBoard = new com.hunt.otziv.payments.service.PaymentLinkAdminBoardWorkflow(
+                preparation, presenter, paymentLinkRepository, paymentLinkArchiveService,
+                contractorPaymentTargetAccessPolicy);
         return new PaymentLinkService(
-                paymentLinkRepository,
-                orderRepository,
-                badReviewTaskService,
-                reviewRecoveryGateService,
-                orderTransactionService,
-                paymentCheckService,
-                properties,
-                runtimeSettingsService,
-                paymentProfileService,
-                tbankClient,
-                tochkaPaymentProfileResolver,
-                tochkaClient,
-                tochkaPaymentOperationMapper,
-                tochkaWebhookJwtVerifier,
-                signer,
-                paymentSuccessNotificationDeliveryService,
-                manualPaymentRecipientTelegramNotificationService,
-                manualPaymentTaskService,
-                taskReceiptIntegrationService,
-                manualPaymentTaskRepository,
-                paymentInvoiceRetryScheduler,
+                amounts, settlement, manualConfirmation, preparation, initialization, manualCardPayments,
+                ownerApproval, bankPaymentReconciliation, orderPaymentLinks, publicPaymentPages,
+                paymentRouteReplacement, paymentAdminBoard, cancellation, presenter, routes,
                 paymentLinkArchiveService,
-                appSettingService,
-                commonBillingServiceProvider,
-                orderPaymentIntegrityService,
-                managerAccessService,
-                manualCardPaymentReviewNotificationService,
-                ownerManualCardPaymentApprovalRepository,
-                contractorPaymentLiveRoutingService,
-                contractorPaymentShadowService,
-                contractorPaymentRuntimeSwitch,
-                paymentLinkReturnOutboxService,
-                actualPaymentAttributionService,
-                contractorPaymentTargetAccessPolicy,
-                paymentIssueReminderService,
-                transactionExecutor
+                contractorPaymentTargetAccessPolicy
         );
+    }
+
+    private Optional<OwnerManualCardPaymentApprovalRepository.ApprovalBinding> approvalBinding(
+            OwnerManualCardPaymentApproval approval
+    ) {
+        if (approval == null) return Optional.empty();
+        Long orderId = approval.getOrderId();
+        Long paymentLinkId = approval.getPaymentLinkId();
+        String callbackTokenHash = approval.getCallbackTokenHash();
+        return Optional.of(new OwnerManualCardPaymentApprovalRepository.ApprovalBinding() {
+            public Long getOrderId() { return orderId; }
+            public Long getPaymentLinkId() { return paymentLinkId; }
+            public String getCallbackTokenHash() { return callbackTokenHash; }
+        });
     }
 
     private TbankPaymentProperties properties() {

@@ -13,6 +13,18 @@ import org.springframework.stereotype.Repository;
 public interface OwnerManualCardPaymentApprovalRepository
         extends JpaRepository<OwnerManualCardPaymentApproval, Long> {
 
+    /** Scalar snapshot avoids caching a stale managed approval before taking canonical locks. */
+    @Query("SELECT approval.orderId AS orderId, approval.paymentLinkId AS paymentLinkId, "
+            + "approval.callbackTokenHash AS callbackTokenHash "
+            + "FROM OwnerManualCardPaymentApproval approval WHERE approval.id = :id")
+    Optional<ApprovalBinding> findBindingById(@Param("id") Long id);
+
+    interface ApprovalBinding {
+        Long getOrderId();
+        Long getPaymentLinkId();
+        String getCallbackTokenHash();
+    }
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT approval FROM OwnerManualCardPaymentApproval approval WHERE approval.id = :id")
     Optional<OwnerManualCardPaymentApproval> findByIdForUpdate(@Param("id") Long id);

@@ -31,6 +31,20 @@ class GroupReplyServiceImplTest {
     @InjectMocks
     private GroupReplyServiceImpl service;
 
+    @org.junit.jupiter.api.BeforeEach
+    void frozenOperations() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"businessOperations",com.hunt.otziv.whatsapp.support.WhatsAppOperationsFixture.echo());
+    }
+
+    @org.junit.jupiter.api.Test void preferenceWithoutDurableInboundIdIsRejectedBeforeBusinessWrites() {
+        var reply=new WhatsAppGroupReplyDTO();reply.setMessage("отключить уведомления");
+        org.mockito.Mockito.when(publicationProgressPreferenceService.isPreferenceCommand(reply.getMessage())).thenReturn(true);
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->service.processGroupReply(reply))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class).hasMessageContaining("messageId is required");
+        verifyNoInteractions(companyService,groupCompanyLinker,whatsAppService,clientChatMessageTrackerService);
+        org.mockito.Mockito.verify(publicationProgressPreferenceService,org.mockito.Mockito.never()).handleWhatsAppCommand(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             "[Вложение: broadcast_notification]",

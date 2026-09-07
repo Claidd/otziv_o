@@ -1,0 +1,396 @@
+{
+  "schema": "otziv-monitoring-candidates-v1",
+  "recordedAt": "2026-09-07T18:51:59.370690+00:00",
+  "scope": "LOCAL_SYNTHETIC_FIXTURES",
+  "productionRollout": "NOT_PERFORMED",
+  "releasePublication": "NOT_PERFORMED",
+  "productionHistoricalData": "NOT_TESTED",
+  "candidates": [
+    {
+      "component": "prometheus",
+      "version": "3.13.3-otziv.1",
+      "localImageId": "sha256:e38b95e5cb5fa4f5108cffcf14d93ef6ce9a910f9134025171472d06243405a7",
+      "sourceCommit": "b273ae3adeb64ad630d65ef7f16440df95658410",
+      "published": false,
+      "dockerfile": {
+        "path": "infrastructure/runtime-security/builds/Prometheus.Dockerfile",
+        "sha256": "fb2a723e8de9f32237dcebca94a558d33c575b07ba6b450cc4f3d97adf895cd8"
+      },
+      "vulnerabilityReport": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/prometheus-rebuilt-vulnerabilities.json",
+        "sha256": "e276b9ebbc0a49e62875e60011d25a120b530be0deb3234ce52c041ec350a0b3"
+      },
+      "sbom": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/prometheus-rebuilt-vulnerabilities.sbom.cdx.json",
+        "sha256": "404238dea60522c992b02306e93d2b36c0bbdad0db8a37e74204338dd7042c5a"
+      },
+      "scanCreatedAt": "2026-09-07T16:00:09.209788135Z",
+      "rawHigh": 0,
+      "rawCritical": 0,
+      "fixableHighCritical": 0,
+      "unfixedHighCritical": [],
+      "riskReview": "NONE",
+      "storageProof": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/prometheus-rebuilt-final-v2/proof.json",
+        "sha256": "2324a726a23d46e00c2ef44a1cd2fa37a1661c70f6ad021a686c6d599fa94a8b"
+      },
+      "storageChecks": 12,
+      "storageFinishedAt": "2026-09-07T17:45:23.464Z",
+      "cleanup": "PASS",
+      "provenance": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/prometheus-built-provenance.json",
+        "sha256": "0823ecd5fc98b841fc53ad6c9ed2e4f413e693f1bf1cb20e32cf4d382c99a8ea"
+      }
+    },
+    {
+      "component": "loki",
+      "version": "3.7.7-otziv.1",
+      "localImageId": "sha256:12af3627697b240427c2d5211fe6c8a070e860ba845ee0a4fcfc5ada06a5b62c",
+      "sourceCommit": "7a40404f32b3e6464c9cfc6cc7dd75a40f3931da",
+      "published": false,
+      "dockerfile": {
+        "path": "infrastructure/runtime-security/builds/Loki.Dockerfile",
+        "sha256": "4575c3892e85926794ba48f9104072fa9514dfb48edef09fc9ae611d7256ee38"
+      },
+      "vulnerabilityReport": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/loki-rebuilt-vulnerabilities.json",
+        "sha256": "e02cabaedf9b9c710914b6666bd03f17525ae07451345f5ba413a070e4e76f04"
+      },
+      "sbom": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/loki-rebuilt-vulnerabilities.sbom.cdx.json",
+        "sha256": "0f4021a6887a750db480ea82f35fefcb13137d71961c0bfcb8ec8ee88f9c4257"
+      },
+      "scanCreatedAt": "2026-09-07T16:12:41.748070741Z",
+      "rawHigh": 0,
+      "rawCritical": 0,
+      "fixableHighCritical": 0,
+      "unfixedHighCritical": [],
+      "riskReview": "NONE",
+      "storageProof": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/loki-rebuilt-final-v2/proof.json",
+        "sha256": "b24f334428cf6222f247947c7b762a4afbd7fea279f5da42cdfcf6e7d50e29cd"
+      },
+      "storageChecks": 14,
+      "storageFinishedAt": "2026-09-07T17:47:16.396Z",
+      "cleanup": "PASS",
+      "provenance": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/loki-built-provenance.json",
+        "sha256": "855e860558cb78e75e60c1e3211d4fcae31bf630b73fe3c647facd9b0856ebd6"
+      }
+    },
+    {
+      "component": "alloy",
+      "version": "1.19.2-otziv.1",
+      "localImageId": "sha256:e35f97a3f60588794d24d7530f95554c87fd505722081f699977221ae578d0db",
+      "sourceCommit": "becfd489a7bb459c0496893b555fb87a003296b1",
+      "published": false,
+      "dockerfile": {
+        "path": "infrastructure/runtime-security/builds/Alloy.Dockerfile",
+        "sha256": "713509a4d988d813b1c2738a3ee6d896c386d2d350594998c9934357b46c9915"
+      },
+      "vulnerabilityReport": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/alloy-rebuilt-vulnerabilities.json",
+        "sha256": "61a1a9f29731e95d6384331211b370d3f6ffc69b8424fd0c5612ac760889ee7e"
+      },
+      "sbom": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/alloy-rebuilt-vulnerabilities.sbom.cdx.json",
+        "sha256": "c53f062d8e6f710a7f0a157cf543720be9fbb6395a855b4ccb2d269b31f6cddd"
+      },
+      "scanCreatedAt": "2026-09-07T17:46:12.47887779Z",
+      "rawHigh": 2,
+      "rawCritical": 0,
+      "fixableHighCritical": 0,
+      "unfixedHighCritical": [
+        {
+          "cve": "CVE-2026-41567",
+          "package": "github.com/docker/docker",
+          "installed": "v28.5.2+incompatible"
+        },
+        {
+          "cve": "CVE-2026-42306",
+          "package": "github.com/docker/docker",
+          "installed": "v28.5.2+incompatible"
+        }
+      ],
+      "riskReview": "REQUIRED",
+      "storageProof": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/alloy-rebuilt-upgrade-v1/proof.json",
+        "sha256": "16f653e46dc79c2b67635343ca36aec883f5365b37b6a82ac84b84202e4a0130"
+      },
+      "storageChecks": 13,
+      "storageFinishedAt": "2026-09-07T17:43:48.538Z",
+      "cleanup": "PASS",
+      "provenance": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/alloy-built-provenance.json",
+        "sha256": "a18ba16930f6ac1d7eed30f7b42462cd25245b6897cfb9f9f645e6819de2983d"
+      }
+    },
+    {
+      "component": "tempo",
+      "version": "2.10.8-otziv.2",
+      "localImageId": "sha256:dee455ed0c802c8e2e42ff7ee843effd457cf8ac312893c210800ade8e201102",
+      "sourceCommit": "f0f3ed59197bfe9f54f3b0f8015ccca112f9e544",
+      "published": false,
+      "dockerfile": {
+        "path": "infrastructure/runtime-security/builds/Tempo.Dockerfile",
+        "sha256": "e416cd31a741742716dcc4dc0c23484a16c07ef0bb634b0dbb484e18e449ad93"
+      },
+      "sourcePatch": {
+        "path": "infrastructure/runtime-security/builds/tempo-queue-shutdown.patch",
+        "sha256": "b0541616322bf96b757afc5db202563ad56a424a01d6886369ab95fcfc12e229"
+      },
+      "queueRegressionSource": {
+        "path": "infrastructure/runtime-security/builds/tempo-queue-shutdown_test.go",
+        "sha256": "fdefe3516894cea39c2c9034570b2622dbef8931b79fd71e3f6da30fd79b81cd"
+      },
+      "vulnerabilityReport": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/vulnerabilities-v2.json",
+        "sha256": "347c7c5fdd82733e73ad51f0b57ddbaf7bf28a690c000fe2ed5599df62195ddb"
+      },
+      "sbom": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/vulnerabilities-v2.sbom.cdx.json",
+        "sha256": "066841bdd5249a90f980c74e91538ede5e7fa38af9d5e49a2bb87a420a2aa174"
+      },
+      "scanCreatedAt": "2026-09-07T18:21:36.258356545Z",
+      "rawHigh": 0,
+      "rawCritical": 0,
+      "fixableHighCritical": 0,
+      "unfixedHighCritical": [],
+      "riskReview": "NONE",
+      "storageProof": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/trace-upgrade-v2/proof.json",
+        "sha256": "3a3ea5c1e733d314f0554ab8c3444a88597ca8c06aa8a79ffa360073145cc76d"
+      },
+      "storageChecks": 14,
+      "storageFinishedAt": "2026-09-07T18:22:50.480Z",
+      "cleanup": "PASS",
+      "provenance": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/provenance-v2.json",
+        "sha256": "c5b5a6b6169398b052f9dfb9be6accdb183b09f1cc839894e8cfe2687e8abd6d"
+      },
+      "queuePackageTopLevelTests": 9,
+      "queuePackageSubtests": 10,
+      "queueRaceExecutions": 20,
+      "healthHelperTests": 3,
+      "baselineQueueRed": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/queue-red.log",
+        "sha256": "6bd43efb318649a2e287647be8f00424933979b8a615f90ce636def1f75c8261"
+      },
+      "firstRuntimeFailure": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/trace-upgrade-v1/proof.json",
+        "sha256": "d8ec7e4028e2da44af55b2f95a085f094b9e744a42a1f68418df498e7829f5cc"
+      },
+      "currentPinChanged": false
+    },
+    {
+      "component": "grafana",
+      "version": "12.4.10+otziv.1",
+      "localImageId": "sha256:3a438cefccf81756412057b54c62ed6b5552fd01fc941c3246baf05122ef8ca6",
+      "sourceCommit": "81407c71e96e8351b4600164c1b4d30c8baf41d6",
+      "published": false,
+      "dockerfile": {
+        "path": "infrastructure/runtime-security/builds/Grafana.Dockerfile",
+        "sha256": "01a13f2c0685041bfc6843cf7d079476f3c21cf3aad2bfc29a987d54379a1b6d"
+      },
+      "vulnerabilityReport": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/vulnerabilities-v2.json",
+        "sha256": "da9eb877fdb2e8e1a9361dfcd47042eb97bfc25d2f2b156c057984973c77f90a"
+      },
+      "sbom": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/vulnerabilities-v2.sbom.cdx.json",
+        "sha256": "7e8cbff9fb371fb06059a16ae6ec4f150a6ffe3d9b682c05f4b9d6ead5985e46"
+      },
+      "scanCreatedAt": "2026-09-07T18:45:46.741942859Z",
+      "rawHigh": 2,
+      "rawCritical": 0,
+      "fixableHighCritical": 2,
+      "unfixedHighCritical": [],
+      "rawSecurityGate": "FAIL",
+      "riskReview": "PRIMARY_FIX_ANCESTRY_PRESENT; NO_SCANNER_EXCEPTION_OR_RELEASE_ACCEPTANCE",
+      "retainedFindings": [
+        {
+          "id": "CVE-2026-21728",
+          "module": "github.com/grafana/tempo",
+          "installedVersion": "v1.5.1-0.20260427112133-525d1bab07e0",
+          "scannerFixedVersions": "2.8.4, 2.9.2, 2.10.2",
+          "severity": "HIGH"
+        },
+        {
+          "id": "CVE-2026-28377",
+          "module": "github.com/grafana/tempo",
+          "installedVersion": "v1.5.1-0.20260427112133-525d1bab07e0",
+          "scannerFixedVersions": "2.10.3",
+          "severity": "HIGH"
+        }
+      ],
+      "primarySourceAncestry": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/tempo-ancestry-reference.json",
+        "sha256": "f874ab08e3f1694d1a880c73d3835ae91fa3b0ab00b71e2f6da3b1325cbbe22c"
+      },
+      "storageProof": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/upgrade-v2/proof.json",
+        "sha256": "e629e10dc047e34842dc13bcfacaab63b9308a8404f6ab5757db8cd15d43ea8a"
+      },
+      "storageChecks": 12,
+      "storageFinishedAt": "2026-09-07T18:42:39.659Z",
+      "cleanup": "PASS",
+      "provenance": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/build-provenance-v2.json",
+        "sha256": "a93234cf5e3701d5335d8e032a77bca6a7cee3198ba7342f2145e70521235e17"
+      },
+      "assetParity": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/asset-preservation.json",
+        "sha256": "599ad2caff48ba62b31498124ddb2260de4e7a5acafbba25bbb5437004937a12"
+      },
+      "assetFiles": 11569,
+      "currentPinChanged": false
+    }
+  ],
+  "consumerProofs": [
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/consumers-default-new-dozzle-v1.log",
+      "sha256": "c369278e50777714000127cdb6d290fccb2786c50c537f1ea01e3b7914b57541"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/consumers-derivatives-final-v1.log",
+      "sha256": "3eccdcf470939fae17d1e5f2f9341399062eabd6e9a95865577502f7355c911b"
+    }
+  ],
+  "validation": [
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/final-units-v3.log",
+      "sha256": "5b1002199823d4a93dec08643007af4c92e04df0697cb0d8a9289719c382e979"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/aggregate-contracts-v2.log",
+      "sha256": "a6a70b941ff03c9f359a3c4b6aab0cbbbf23354f2c788a99150f33190419d190"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/actionlint-v3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/overlay-validation-v2.log",
+      "sha256": "b4e0a1adf05416762d1f4fdb3ec9ab74efdf5f9a0ecbd44249d2c35ca187e059"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/sql-guard-v2.log",
+      "sha256": "aac63ff29eafbdc5a2e955c9b12a9f3495c4c48bfebb353dba8b0deb160990c9"
+    }
+  ],
+  "sourceFiles": {
+    ".github/workflows/quality-gates.yml": "956276efc745e62cec4629f31c6f6516f038cd948ccf62af22c702668b2b2f77",
+    "compose.monitoring-security-upgrade.yaml": "174fb412ff47df06b09c62b5e2d23bf764b05f834f1e45b4fc1da285654a7bcc",
+    "infrastructure/recovery/process.mjs": "3cd5893b07aaeab259c1e8a825e4272490204690030b9f5a1d6ef4cec187afdc",
+    "infrastructure/runtime-security/monitoring-release.mjs": "9cd85a4779bfedce0a02d5b3500da3de53ff5589be30e58255e4d53f33fa5c0e",
+    "infrastructure/runtime-security/monitoring-release.test.mjs": "187d42846e33ac79dffc87594da0cc949ccab2fcb768837bd98dff31a8fbac23",
+    "infrastructure/runtime-security/MONITORING_UPGRADE_2026-09-07.md": "7702578ef32a10e260c5de2613b9d8a63b6f89a292481628768e883199542445",
+    "infrastructure/docker-observer/consumer-smoke.mjs": "5ee5a11c6465b9b27ab91b63de8aa22735d52ac14de94b1b6c0feac5b8dfbb9b",
+    ".gitignore": "77f5e0b4c9aae590cef4f85f5289adc9d20212f515140e53b95e531e22ddaa7c",
+    "infrastructure/runtime-security/builds/.gitattributes": "f068b55fb82bf3b6cfc6c0409e42b0e6cdbb748ca1d44432307f9439f0ece9b3",
+    "infrastructure/runtime-security/builds/Tempo.Dockerfile": "e416cd31a741742716dcc4dc0c23484a16c07ef0bb634b0dbb484e18e449ad93",
+    "infrastructure/runtime-security/builds/tempo-queue-shutdown.patch": "b0541616322bf96b757afc5db202563ad56a424a01d6886369ab95fcfc12e229",
+    "infrastructure/runtime-security/builds/tempo-queue-shutdown_test.go": "fdefe3516894cea39c2c9034570b2622dbef8931b79fd71e3f6da30fd79b81cd",
+    "infrastructure/runtime-security/TEMPO_DERIVATIVE_2026-09-07.md": "6feaf41b733c502dfc46a159d4bb4b0a5a0d140c25b4e994e350b68647cd4f64",
+    "infrastructure/runtime-security/GRAFANA_DERIVATIVE_2026-09-07.md": "669455586b6ef934b2c8be3151aacfc604e2d80f1a90dc0b77ca3e9f748d94cb",
+    "infrastructure/runtime-security/builds/Grafana.Dockerfile": "01a13f2c0685041bfc6843cf7d079476f3c21cf3aad2bfc29a987d54379a1b6d",
+    "infrastructure/scripts/security/test-sql-injection-guard.ps1": "2e6298f355654f41e843a1df7648288631687028d74ed27344f8801fad0c48e6"
+  },
+  "remainingReleaseBlocks": [
+    {
+      "component": "grafana",
+      "version": "12.4.10+otziv.1",
+      "rawHigh": 2,
+      "rawCritical": 0,
+      "fixableHighCritical": 2,
+      "status": "REVIEW_CANDIDATE_RAW_SECURITY_GATE_FAIL",
+      "scan": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/vulnerabilities-v2.json",
+        "sha256": "da9eb877fdb2e8e1a9361dfcd47042eb97bfc25d2f2b156c057984973c77f90a"
+      },
+      "sourceAncestryEvidence": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/tempo-ancestry-reference.json",
+        "sha256": "f874ab08e3f1694d1a880c73d3835ae91fa3b0ab00b71e2f6da3b1325cbbe22c"
+      },
+      "currentPinChanged": false,
+      "published": false
+    }
+  ],
+  "dozzle": {
+    "version": "10.10.0",
+    "image": "amir20/dozzle@sha256:27128281cc1f93b0f849f2a5fb4ef9c12a0cce1135ab3b6fede27f9867c8a1c2",
+    "rawHighCritical": 0,
+    "scan": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/dozzle-vulnerabilities.json",
+      "sha256": "e5cd1d45fe25aba05b648cf32f646c0e9414a02c3d1a07f9147f0894c7b3968c"
+    },
+    "composePinsChanged": [
+      "compose.yaml",
+      "compose.prod-local.yaml",
+      "docker-compose.yaml"
+    ]
+  },
+  "previousRegistry": {
+    "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/monitoring-registry-before-grafana.json",
+    "sha256": "95a15b9287766399a84bef2ad8371c517005ff60f319376e76580a4ae49f65b5"
+  },
+  "priorValidation": [
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/final-units-v1.log",
+      "sha256": "aa487ad33c275a8cbd8d497526e38ace1505f689748a4895df12f925fdf7f66f"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/aggregate-contracts-v1.log",
+      "sha256": "10e4b3369e669f5150f981962f710c2a79d87dae3ac3f30d1be174fbe3223700"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/release-tests-v2.log",
+      "sha256": "1b8d2ca26abf05d76eaaba1a6545cec5744ac74f58529c77f32f2f9f5a2b0cd4"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/actionlint-v3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/overlay-validation.log",
+      "sha256": "a96911f3b7b2ac03416c86ec59f9f66a42bb46c48a80015ceab07e83db17204b"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/final-units.log",
+      "sha256": "b6041606b1782a86a59e7ff0b71014130b3843de2b1951ed02a5b41288376436"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/aggregate-contracts.log",
+      "sha256": "5f34de358fb3faf5f1621c22f69ee964bbdc6a82693d8b4f4b531c68e7fd04fb"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/actionlint.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/overlay-validation.log",
+      "sha256": "1cde8b7b7f51b5e8514327ea2cfd45cb71542ba4c06a9c077ead21f6e9adbea9"
+    }
+  ],
+  "persistentChecks": 65,
+  "rejectedAlternatives": [
+    {
+      "component": "grafana",
+      "version": "13.2.1",
+      "rawHigh": 159,
+      "rawCritical": 3,
+      "fixableHighCritical": 162,
+      "scan": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana1321-vulnerabilities.json",
+        "sha256": "e3d156a68fab94900e33a31ef116a8350779111e3dd8800a4ea985e1afebf10c"
+      },
+      "storageProof": {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana1321-upgrade-v1/proof.json",
+        "sha256": "733215ed0790c20bddd211da278974ad66ce5d6096c62f8b0608ea6303ba6d6f"
+      },
+      "storageChecks": 12,
+      "currentPinChanged": false
+    }
+  ],
+  "publicationFormattingNote": "Unified-diff patch files retain required context whitespace; the scoped Git whitespace attribute changed, patch bytes and all runtime proof inputs remain unchanged."
+}

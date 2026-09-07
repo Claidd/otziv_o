@@ -70,6 +70,8 @@ export class WorkerReviewCardComponent {
   @Input() savedSideNoteKey: string | null = null;
   @Input() requireCredentialCopyBeforeAccountAction = false;
   @Input() accountActionCredentialsCopied = false;
+  @Input() accountActionCooldownLocked = false;
+  @Input() accountActionCooldownTitle = '';
   @Input() publishLockedByCredentialWait = false;
   @Input() publishCredentialWaitTitle = 'Действие с отзывом';
   isReviewTitleExpanded = false;
@@ -503,6 +505,7 @@ export class WorkerReviewCardComponent {
   }
 
   accountActionTitle(): string {
+    if (this.accountActionCooldownLocked) return this.accountActionCooldownTitle;
     return this.accountActionLocked()
       ? 'Сначала скопируйте логин и пароль аккаунта'
       : 'Действие с аккаунтом';

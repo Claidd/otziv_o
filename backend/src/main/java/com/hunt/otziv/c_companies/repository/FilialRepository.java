@@ -13,6 +13,12 @@ public interface FilialRepository extends CrudRepository<Filial, Long> {
 
     Filial findByUrl(String url);
 
+    java.util.Optional<Filial> findFirstByTwoGisOrganizationIdOrderByIdAsc(String identity);
+
+    @Query(value = "SELECT filial_url FROM filial WHERE filial_id = :id", nativeQuery = true)
+    @org.springframework.data.jpa.repository.QueryHints(@jakarta.persistence.QueryHint(name = "org.hibernate.flushMode", value = "COMMIT"))
+    String findStoredUrl(@Param("id") Long id);
+
     @Query("SELECT f FROM Filial f WHERE f.city.id = :cityId AND f.archived = false")
     List<Filial> findByCityId(@Param("cityId") Long cityId);
 
