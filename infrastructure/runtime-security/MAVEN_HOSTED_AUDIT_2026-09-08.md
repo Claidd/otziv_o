@@ -2,6 +2,8 @@
 
 The authenticated audit is now proven. The mandatory security gate remains **failed**, with genuine build/test findings and a documented plugin-graph limitation. This report supersedes the earlier **missing Sonatype result** gap; it does not overwrite historical reports or grant risk acceptance.
 
+The subsequent [C4 result and Kotlin correction](MAVEN_HOSTED_C4_AUDIT_2026-09-08.md) record the actual 46-pair/24-HIGH-or-CRITICAL failed gate, cache reuse, corrected runtime versions, and two separately tested exact compatibility-JAR corrections. C2/C3 observations below remain historical and unchanged.
+
 ## Hosted evidence
 
 | Run | Result |

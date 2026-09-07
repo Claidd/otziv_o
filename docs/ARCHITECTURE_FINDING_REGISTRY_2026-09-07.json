@@ -1,6 +1,6 @@
 {
   "schema": "otziv-architecture-finding-registry-v1",
-  "updatedAt": "2026-09-07T20:21:55.511277+00:00",
+  "updatedAt": "2026-09-07T21:08:53.201707+00:00",
   "scope": "All original F01–F20 findings; implementation and release acceptance are separate",
   "closedFindings": 0,
   "findings": [
@@ -363,7 +363,8 @@
         "docs/ARCHITECTURE_REMEDIATION_PLAN_2026-09-07.md",
         "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md",
         "infrastructure/runtime-security/MAVEN_HOSTED_AUDIT_2026-09-08.md",
-        "infrastructure/runtime-security/BACKEND_ADVISORY_VALIDATION_2026-09-08.json"
+        "infrastructure/runtime-security/BACKEND_ADVISORY_VALIDATION_2026-09-08.json",
+        "infrastructure/runtime-security/MAVEN_HOSTED_C4_AUDIT_2026-09-08.md"
       ],
       "remainingAcceptance": [
         "Remaining real build/test dependencies and monitored-image fixes",

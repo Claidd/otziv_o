@@ -269,3 +269,40 @@ candidate прошёл 12 storage/rollback проверок, но raw scan со�
 с ошибочным сопоставлением Tempo pseudoversion; исключения не добавлены.
 Проверки выпуска и branch protection нельзя считать завершёнными до устранения
 блокировок и подтверждённого server-side применения политики.
+
+## Завершённый C4 CI и точная коррекция Kotlin
+
+На commit `c990a5bf0988c9d367c70504f6c4f530e956e3ab` оба Quality workflow завершились:
+22 SUCCESS и 16 FAIL в каждом. [Фактическая приёмка C4](../infrastructure/runtime-security/HOSTED_C4_ACCEPTANCE_2026-09-08.json)
+содержит все 20 обязательных check names и реальные App IDs: **18 SUCCESS,
+2 FAIL** — Dependency audit gate и Upstream image security gate. Это подтверждает
+работу проверок, но не означает успешный выпуск или включённую защиту main.
+
+Backend: 4712 тестов / 0 FAIL/ERROR / 15 skips, плюс отдельный CTE-тест;
+22 web/mobile UI-сценария и настоящий Linux sandbox; issuer 20 protocol,
+4 ordinary startup, 21 paired recovery и PostgreSQL upgrade 10 — PASS.
+Очищены собственные временные стенды. Все шесть прикладных image checks прошли.
+У самого backend и issuer 0 HIGH/CRITICAL. У PostgreSQL сохраняются 73 HIGH и
+13 CRITICAL без FixedVersion: автоматический gate пропускает отсутствие
+доступных исправлений, но явно требует отдельного risk review. Принятия риска нет.
+
+Четыре monitoring candidates прошли. Grafana прошёл 12 storage/rollback проверок,
+но два raw HIGH для Tempo pseudoversion остаются блокирующими. Ещё 14 старых
+pinned upstream images завершились FAIL по настоящим scanner reports; технических
+отказов сканера среди них нет.
+
+[Авторизованный C4 Maven audit](../infrastructure/runtime-security/MAVEN_HOSTED_C4_AUDIT_2026-09-08.md)
+завершён с кэшем: 490 dependency entries, 46 artifact/advisory pairs, из них
+24 HIGH/CRITICAL. Jackson 2.21.6/3.1.6 и jsoup 1.23.2 находок не имеют.
+Сохранены уязвимости Site Jetty и shaded Docker transport, а также расхождение
+опубликованных plugin POM с уже исправленными фактическими execution realms.
+
+Последнее дополнение меняет только две точные Kotlin package/version/CVE rules,
+их доказательство и отчёты. В JAR jdk7/jdk8 есть только module-info.class;
+перегруппировка Dependency-Check сделала их новым представителем прежней
+ошибочной Kotlin/KAPT записи. Настоящий parser/suppression engine/bundler прошёл
+129 проверок, в том числе сохранение неизвестных CVE, других версий и KAPT.
+На неизменном отчёте контрольная модель даёт 45 pairs / 23 HIGH/CRITICAL;
+это не выдаётся за последующий hosted rescan. POM, backend, клиенты, контракты
+и workflow сохранены; результаты последнего автоматического аудита отражаются
+в PR вместе с его точным commit, без переписывания исходных C4 evidence.

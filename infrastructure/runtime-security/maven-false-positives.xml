@@ -264,4 +264,24 @@ Exact package/version and listed CVE only; no risk acceptance.</notes>
     <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-reflect@2.2.21</packageUrl>
     <cve>CVE-2026-53914</cve>
   </suppress>
+  <suppress>
+    <notes>The vendor fix changes KAPT incremental-cache deserialization. This exact 945-byte compatibility JAR contains only META-INF/versions/9/module-info.class, with no executable KAPT implementation or ObjectInputStream reference. The distinct Kotlin Gradle/KAPT/compiler artifacts are not exempt.
+Artifact SHA-256: b785922f11e6d91a6dd1d75cb0aef1ce37b83f8de0e3a2139139dfb823bb8a2c
+Primary evidence:
+https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6
+https://www.jetbrains.com/privacy-security/issues-fixed/
+Exact package/version and listed CVE only; no risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@2.2.21</packageUrl>
+    <cve>CVE-2026-53914</cve>
+  </suppress>
+  <suppress>
+    <notes>The vendor fix changes KAPT incremental-cache deserialization. This exact 951-byte compatibility JAR contains only META-INF/versions/9/module-info.class, with no executable KAPT implementation or ObjectInputStream reference. The distinct Kotlin Gradle/KAPT/compiler artifacts are not exempt.
+Artifact SHA-256: c62275c50ee591ca2f82c7ba42696b791600c25844f47e84bd9460302a0d5238
+Primary evidence:
+https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6
+https://www.jetbrains.com/privacy-security/issues-fixed/
+Exact package/version and listed CVE only; no risk acceptance.</notes>
+    <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@2.2.21</packageUrl>
+    <cve>CVE-2026-53914</cve>
+  </suppress>
 </suppressions>
