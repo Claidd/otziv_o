@@ -11,6 +11,12 @@
 пользователя. Производственное развёртывание, включение внешних отправок,
 публикация APK и изменение GitHub branch protection не выполнялись.
 
+Проверенный снимок опубликован коммитом `25579270c5494eedb6f3badc0ad3737b041ba9d6`
+в ветке `codex/architecture-remediation-20260907` и [draft PR №2](https://github.com/Claidd/otziv_o/pull/2).
+Все записи F01–F20 связаны с этим PR; успешная приёмка CI и выпуска ещё не подтверждена.
+Публикационный индекс содержит только проверенные версии backend: поздние параллельные
+WorkerRisk-изменения и посторонняя диагностика сохранены отдельно в исходном рабочем дереве.
+
 ## Проверка всех пакетов
 
 | Пакет | Выполненная доработка и проверка | Остаток приёмки |
@@ -36,7 +42,7 @@
 | P18 | Финансовые/manager hotspots разделены по сценариям; сохранены public API, денежные транзакции и порядок locks. Before/after SQL, latency, throughput и EXPLAIN сопоставляются одним harness. | Согласованные продуктовые пороги производительности и наблюдение production. |
 | P19 | 84 метода в 14 feature APIs; order-details использует PageWriteTracker для всех выбранных записей, включая payment/notes. Поздняя запись вызывает сверку того же ресурса, скрытый экран не читает его преждевременно. | Native приёмка. |
 | P20 | Общий SDK 1.1.0: 187 операций, 172 пути, 204 input/output/error схемы из скомпилированных Spring/Jackson mappings. Сохранены auth/permission metadata, writes, pagination и compatibility fixtures. | Официальная нижняя поддерживаемая версия, подписанное обновление, опубликованный recovery target. |
-| P21 | Реальные runtime/MySQL/architecture/browser/recovery/image проверки и release-lineage gate в CI; F01–F20 имеют отдельные записи с migrations/evidence/remaining acceptance. Закрытие без PR, владельца и выпуска запрещено verifier. Git Credential Manager настроен штатным device flow; push dry-run через `origin` прошёл с включённым pre-push hook. | Публикация успешных checks и фактическое включение branch protection; native/DR/alert/production acceptance. Dry-run не публикует ветку и не подтверждает успешный CI. |
+| P21 | Реальные runtime/MySQL/architecture/browser/recovery/image проверки и release-lineage gate в CI; F01–F20 имеют отдельные записи с migrations/evidence/remaining acceptance. Закрытие без PR, владельца и выпуска запрещено verifier. Проверенный снимок опубликован в [draft PR №2](https://github.com/Claidd/otziv_o/pull/2); F01–F20 связаны с реальным PR. Штатные pre-commit и pre-push hooks прошли. | Успешные checks на актуальном commit и фактическое включение branch protection; native/DR/alert/production acceptance. Создание PR не подтверждает успешный CI. |
 
 ## Доказательства завершённых проверок
 
@@ -61,7 +67,7 @@
 | Infra/CI | 71 Node security/recovery/monitoring проверка, infrastructure contracts, release-lineage regression и actionlint PASS на указанном срезе. Первый широкий прогон выявил отсутствующий OpenSSL в PATH; повтор использовал уже установленный Git OpenSSL. |
 | Штатный local smoke | Повторный `prod-like-smoke.ps1` PASS после нового BOM; `local-final-bom-smoke.log`, приложение healthy на `http://localhost:8088`. |
 | Monitoring candidates | Prometheus 12, Loki 14, Alloy 13, Tempo 14 и Grafana 12 проверок сохранённых данных/cursors, restart и rollback PASS: всего 65. Реальные Docker/file streams PASS; у Grafana сохранены 11 569 файлов официальных UI/plugins/config/CA и проверена расшифровка секрета. В Tempo воспроизведено и исправлено зависание drain; исходный RED сохранён, очередь и 20 запусков регрессий с race detector прошли. Заключительный срез пяти кандидатов: 30 unit/contract checks, 12 SQL guard cases, Compose с пятью проверками отсутствующего digest и actionlint PASS. Проверены 53 ссылки на артефакты и 16 хешей исходников без расхождений. Точные образы и хеши: `infrastructure/runtime-security/MONITORING_CANDIDATES_2026-09-07.json`. |
-| Проверка секретов | Финальный срез первой monitoring wave: Gitleaks PASS, 146,29 MB, 0 находок; `final-secret-scan-v3.log`. Конфигурация и allowlist не расширялись. Предыдущие находки были тестовыми литералами/текстом отчёта и исправлены в исходниках. |
+| Проверка секретов | Первый полный monitoring срез: Gitleaks PASS, 146,29 MB, 0 находок; `final-secret-scan-v3.log`. Дополнительно фактический pre-commit перед публикацией: 18 072 137 bytes, 0 находок, `publication/publication-commit-longpaths.log`; 275 изменённых Java-файлов прошли SQL guard, large-blob gate PASS. Конфигурация Gitleaks и allowlist не расширялись. Предыдущие находки были тестовыми литералами/текстом отчёта и исправлены в исходниках. |
 | Свежий checkout и SQL guard | Воспроизведён CRLF-сбой трёх генераторов; узкие LF-правила для generated JSON/TypeScript прошли настоящие Windows/Linux checkout и Linux Node container. Два SQL004 замечания проверены как внутренние статические идентификаторы: разрешение ограничено точным путём, двумя строками и SHA всего файла из проверяемого index. 12 причинных проверок подтверждают отказ при изменении происхождения SQL, другого запроса, пути или правила; Java-код не менялся. |
 | Required checks | GET-only наблюдение: main UNPROTECTED, 20 checks не закреплены; `final-branch-policy-observation-v2.json`. Удалённых изменений 0. |
 
@@ -131,10 +137,12 @@ planned/short fallback остаются и проверяются своими �
 В браузере подтверждён вход владельца GitHub и доступ к Settings; classic branch
 protection и rulesets отсутствуют. Git Credential Manager завершил штатный device
 flow, учётные данные сохранены его обычным Windows-механизмом. Проверка
-`push --dry-run origin` разрешила новую ветку с включённым pre-push hook;
-удалённая ветка этой проверкой не создавалась. Успешные новые checks ещё не
-опубликованы, их привязку к реальному GitHub Actions app нельзя подменить списком
-названий. GET-only verifier отклоняет дублирующиеся/неоднозначные результаты,
+`push --dry-run origin` первоначально подтвердила доступ. Затем обычный
+`git push --set-upstream origin codex/architecture-remediation-20260907`
+успешно опубликовал коммит `25579270…` с включённым pre-push hook; создан
+[draft PR №2](https://github.com/Claidd/otziv_o/pull/2). Первые workflow запущены, их завершение
+ещё проверяется. Привязку обязательных checks к реальному GitHub Actions app
+нельзя подменить списком названий. GET-only verifier отклоняет дублирующиеся/неоднозначные результаты,
 неверный commit, незавершённые или старше семи дней checks; правила rulesets
 помечает отдельно как не проверенные, а не приравнивает к classic protection.
 

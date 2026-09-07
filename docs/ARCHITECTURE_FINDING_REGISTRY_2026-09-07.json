@@ -1,6 +1,6 @@
 {
   "schema": "otziv-architecture-finding-registry-v1",
-  "updatedAt": "2026-09-07T17:52:57.734360+00:00",
+  "updatedAt": "2026-09-07T19:15:48.056012+00:00",
   "scope": "All original F01–F20 findings; implementation and release acceptance are separate",
   "closedFindings": 0,
   "findings": [
@@ -14,8 +14,7 @@
       "releaseOwnerRole": "Mobile",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "docs/CLIENT_RELEASE_COMPATIBILITY_2026-09-07.md",
@@ -39,8 +38,7 @@
       "releaseOwnerRole": "Backend integrations",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [
         "backend/src/main/resources/db/migration/V1_10_293__lead_command_delivery.sql",
         "backend/src/main/resources/db/migration/V1_10_298__lead_command_consumer_compatibility_fence.sql",
@@ -69,8 +67,7 @@
       "releaseOwnerRole": "Backend integrations",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [
         "backend/src/main/resources/db/migration/V1_10_293__lead_command_delivery.sql",
         "backend/src/main/resources/db/migration/V1_10_298__lead_command_consumer_compatibility_fence.sql",
@@ -98,8 +95,7 @@
       "releaseOwnerRole": "Operations",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "infrastructure/recovery/README.md",
@@ -123,8 +119,7 @@
       "releaseOwnerRole": "Operations",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "docs/ARCHITECTURE_IMPLEMENTATION_STATUS_2026-09-07.md",
@@ -148,8 +143,7 @@
       "releaseOwnerRole": "Backend architecture",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "docs/ARCHITECTURE_IMPLEMENTATION_STATUS_2026-09-07.md",
@@ -173,8 +167,7 @@
       "releaseOwnerRole": "Backend and client owners",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "docs/CLIENT_RELEASE_COMPATIBILITY_2026-09-07.md",
@@ -197,8 +190,7 @@
       "releaseOwnerRole": "Backend performers",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [
         "backend/src/main/resources/db/migration/V1_10_288__performer_scoped_delivery.sql",
         "backend/src/main/resources/db/migration/V1_10_289__single_active_performer_offer.sql",
@@ -227,8 +219,7 @@
       "releaseOwnerRole": "Backend performers",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [
         "backend/src/main/resources/db/migration/V1_10_288__performer_scoped_delivery.sql",
         "backend/src/main/resources/db/migration/V1_10_289__single_active_performer_offer.sql",
@@ -257,8 +248,7 @@
       "releaseOwnerRole": "Integration owners",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [
         "backend/src/main/resources/db/migration/V1_10_293__lead_command_delivery.sql",
         "backend/src/main/resources/db/migration/V1_10_298__lead_command_consumer_compatibility_fence.sql",
@@ -292,8 +282,7 @@
       "releaseOwnerRole": "Node integration owners",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "docs/WHATSAPP_REMOTE_SESSION_RECOVERY.md",
@@ -316,8 +305,7 @@
       "releaseOwnerRole": "Mobile",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "docs/CLIENT_RELEASE_COMPATIBILITY_2026-09-07.md",
@@ -341,8 +329,7 @@
       "releaseOwnerRole": "Identity and backend owners",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [
         "backend/src/main/resources/db/migration/V1_10_294__durable_auth_session_revocation.sql",
         "infrastructure/keycloak/security-generation/src/main/resources/META-INF/otziv-security-generation.xml"
@@ -369,8 +356,7 @@
       "releaseOwnerRole": "Dependency and release owners",
       "releaseOwner": null,
       "status": "IMPLEMENTATION_AND_ACCEPTANCE_OPEN",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "infrastructure/runtime-security/MAVEN_AUDIT_2026-09-07.md",
@@ -395,8 +381,7 @@
       "releaseOwnerRole": "Client API owners",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "docs/CLIENT_RELEASE_COMPATIBILITY_2026-09-07.md",
@@ -422,8 +407,7 @@
       "releaseOwnerRole": "QA and CI",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "docs/ARCHITECTURE_IMPLEMENTATION_STATUS_2026-09-07.md",
@@ -448,8 +432,7 @@
       "releaseOwnerRole": "Operations on-call",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "infrastructure/monitoring/README.md",
@@ -473,8 +456,7 @@
       "releaseOwnerRole": "Worker owner",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "docs/ARCHITECTURE_IMPLEMENTATION_STATUS_2026-09-07.md",
@@ -497,8 +479,7 @@
       "releaseOwnerRole": "Backend scenario owners",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [],
       "evidence": [
         "docs/ARCHITECTURE_IMPLEMENTATION_STATUS_2026-09-07.md",
@@ -521,8 +502,7 @@
       "releaseOwnerRole": "Backend performers",
       "releaseOwner": null,
       "status": "IMPLEMENTED_ACCEPTANCE_IN_PROGRESS",
-      "pullRequest": null,
-      "pullRequestMissingReason": "GitHub owner browser access is verified; tested changes and required checks have not yet been published",
+      "pullRequest": "https://github.com/Claidd/otziv_o/pull/2",
       "migrations": [
         "backend/src/main/resources/db/migration/V1_10_288__performer_scoped_delivery.sql",
         "backend/src/main/resources/db/migration/V1_10_289__single_active_performer_offer.sql",
