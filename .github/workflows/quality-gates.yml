@@ -34,7 +34,11 @@ jobs:
         shell: pwsh
         env:
           BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
-        run: ./infrastructure/scripts/security/check-repository-hygiene.ps1 -BaseRevision $env:BASE_REVISION
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          . ./infrastructure/scripts/security/resolve-ci-base-revision.ps1
+          $baseRevision = Resolve-CiBaseRevision -BaseRevision $env:BASE_REVISION -DefaultBranch $env:DEFAULT_BRANCH
+          ./infrastructure/scripts/security/check-repository-hygiene.ps1 -BaseRevision $baseRevision
       - name: Enforce infrastructure security contracts
         shell: pwsh
         run: ./infrastructure/scripts/security/check-infrastructure-contract.ps1
@@ -57,6 +61,8 @@ jobs:
         run: node contracts/generate.mjs --check
       - name: Test recovery, monitoring and runtime security gates
         run: node --test infrastructure/recovery/*.test.mjs infrastructure/monitoring/*.test.mjs infrastructure/runtime-security/*.test.mjs
+      - name: Reproduce Linux scanner bind permissions with the pinned scanner
+        run: node infrastructure/runtime-security/scanner-bind-smoke.mjs "$RUNNER_TEMP/scanner-bind-proof.json"
       - name: Test notification media production importer
         shell: bash
         run: python3 -m unittest infrastructure/scripts/security/test_notification_media_import.py -v
@@ -78,23 +84,28 @@ jobs:
       - name: Test SQL guard against staged-source and malicious-worktree cases
         shell: pwsh
         run: ./infrastructure/scripts/security/test-sql-injection-guard.ps1
+      - name: Test new-branch and pull-request Git range enforcement
+        shell: pwsh
+        run: ./infrastructure/scripts/security/test-ci-base-revision.ps1
       - name: Reject oversized Git blobs
         if: github.event_name != 'push' || github.event.deleted != true
         shell: pwsh
         env:
           BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'main' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          $baseRevision = $env:BASE_REVISION
-          if ([string]::IsNullOrWhiteSpace($baseRevision) -or $baseRevision -match '^0+$') {
-            $baseRevision = "origin/$env:DEFAULT_BRANCH"
-          }
+          . ./infrastructure/scripts/security/resolve-ci-base-revision.ps1
+          $baseRevision = Resolve-CiBaseRevision -BaseRevision $env:BASE_REVISION -DefaultBranch $env:DEFAULT_BRANCH
           ./infrastructure/scripts/security/check-large-git-files.ps1 -Mode range -BaseRevision $baseRevision -TargetRevision HEAD
       - name: Enforce append-only Flyway migrations
         shell: pwsh
         env:
           BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
-        run: ./infrastructure/scripts/security/check-flyway-contract.ps1 -BaseRevision $env:BASE_REVISION
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          . ./infrastructure/scripts/security/resolve-ci-base-revision.ps1
+          $baseRevision = Resolve-CiBaseRevision -BaseRevision $env:BASE_REVISION -DefaultBranch $env:DEFAULT_BRANCH
+          ./infrastructure/scripts/security/check-flyway-contract.ps1 -BaseRevision $baseRevision
       - name: Validate Compose models
         shell: bash
         run: |
@@ -299,7 +310,19 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Exercise browser UI using loopback fixtures only
         working-directory: infrastructure/browser-smoke
-        run: npm test
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test hosted-sandbox.test.mjs
+          cleanup() {
+            result=$?
+            trap - EXIT
+            if ! node hosted-sandbox.mjs cleanup; then result=1; fi
+            exit "$result"
+          }
+          trap cleanup EXIT
+          node hosted-sandbox.mjs prepare
+          npm test
       - name: Preserve browser reports, failure screenshots and traces
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -308,6 +331,7 @@ jobs:
           path: |
             infrastructure/browser-smoke/playwright-report/
             infrastructure/browser-smoke/test-results/
+            ${{ runner.temp }}/otziv-hosted-sandbox-proof.json
           if-no-files-found: warn
           retention-days: 14
 
@@ -328,7 +352,13 @@ jobs:
           java-version: "21"
           cache: gradle
       - name: Install required hosted Android SDK packages
-        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk_root"
+          sdk_manager="$sdk_root/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$sdk_manager"
+          "$sdk_manager" --sdk_root="$sdk_root" "platforms;android-36" "build-tools;35.0.0"
       - name: Build and sync mobile assets without push or release signing
         working-directory: mobile
         run: |

@@ -191,3 +191,25 @@ web/mobile также проверены с отдельным совмести�
 схеме. Старый опубликованный бинарник не допускается к V305/V306 посредством
 возвращения удалённой legacy-таблицы. Подробности и границы native proof:
 [CLIENT_RELEASE_COMPATIBILITY](CLIENT_RELEASE_COMPATIBILITY_2026-09-07.md).
+
+## Устранение ошибок первого hosted CI
+
+[Первый PR workflow](https://github.com/Claidd/otziv_o/actions/runs/34154787670)
+и push workflow на `25579270…` обнаружили отличия Linux runner от локальной
+Windows-проверки. Все пять npm-аудитов первого PR прошли. Maven-попытка
+`34154787682` отменена новым коммитом до запуска анализатора: это не результат Sonatype.
+
+| Причина | Исправление и проверка |
+| --- | --- |
+| Trivy не мог записать `/scratch`: root без DAC_OVERRIDE не владеет bind-каталогом runner. | Scanner и converter на POSIX запускаются с UID/GID владельца временных каталогов; возможности контейнера не расширены. Настоящий Linux volume: исходный отказ воспроизведён, запись scratch/report/SBOM-путей новым пользователем прошла, 3 проверки; 2 unit-теста дополнительно прошли на Linux. Это проверка прав, полный hosted scan должен завершиться отдельно. |
+| Новый push передавал нулевой SHA; Git-проверка оставляла exit 1 и пропускала сравнение миграций. | Все три range gate используют проверенный commit основной ветки из GitHub metadata. Неизвестная база прекращает проверку. 16 причинных Git-проверок PASS, реальные Flyway/large-blob проверки отклоняют нарушения; проверенный publication snapshot прошёл hygiene и 387 append-only миграций с нулевым входным SHA. |
+| `sdkmanager` отсутствует в PATH Ubuntu runner. | Используется точный путь внутри установленного ANDROID_HOME/SDK_ROOT. 6 проверок Bash-адаптера PASS; настоящую установку SDK подтверждает следующий hosted job. |
+| Capacitor mocks переходили между файлами тестов при повторном использовании Linux workers. | Включён `test.isolate=true`; код приложения и ожидания тестов сохранены. Причинный Linux прогон: 28 FAIL → 175/175 PASS; Windows после изменения: 175/175 PASS. |
+| Worker-тест требовал удалённые SYS_ADMIN/SYS_CHROOT. | Проверяет текущий более строгий production contract: отдельный seccomp profile и отсутствие дополнительных capabilities/privileged/unconfined. 32/32 PASS. |
+| AppArmor Ubuntu не разрешал user namespace скачанному Chromium. | CI helper создаёт профиль только для точного установленного headless-shell, проверяет настоящий renderer sandbox и удаляет собственный профиль через EXIT trap. 6 проверок границ/cleanup PASS; фактический Ubuntu preflight и 22 UI-сценария требуют нового hosted запуска. Общесистемные ограничения и Chromium sandbox не отключаются. |
+
+Финальный Actionlint для обоих workflow PASS. Доказательства находятся в
+`hosted-scanner-bind-proof.json`, `ci-base-revision-proof.json`,
+`.codex-tmp/rc26/mobile-hosted-ci/result.json` и
+`.codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/`.
+Повторный CI и исходные security findings остаются открытыми до фактических результатов.

@@ -17,6 +17,8 @@ npm test
 
 CI installs Chromium's Linux dependencies with `npx playwright install --with-deps chromium`. Node 24.18.0 and Playwright 1.61.1 are pinned. Chromium's sandbox stays enabled. Ports 43171 and 43172 must be free; an existing server is never reused. The server refuses absent builds and has no API proxy fallback.
 
+On the disposable Ubuntu GitHub runner, `hosted-sandbox.mjs prepare` installs a root-owned AppArmor profile for the exact installed headless-shell executable. It grants that executable `userns` following [Canonical's per-application policy](https://ubuntu.com/blog/ubuntu-23-10-restricted-unprivileged-user-namespaces). Host-wide namespace restrictions stay enabled. A real browser preflight verifies the applied profile, renderer user-namespace mapping, `NoNewPrivs=1`, seccomp filtering and absence of sandbox-disabling flags. The workflow must trap exit and call `hosted-sandbox.mjs cleanup`; cleanup refuses an altered or foreign profile. The preflight JSON lives in `$RUNNER_TEMP/otziv-hosted-sandbox-proof.json` because Playwright clears its test-results directory before running. This helper is CI-only; it does not change deployment hosts.
+
 ## Coverage
 
 - Desktop and mobile web: unknown payment status cannot grant payment capability; all three consents are required; a pending request cannot submit twice; HTTP 503 with an unknown outcome and a transport timeout do not replay a write or claim success; malformed capabilities on a return refresh clear previously actionable data; receipt edits survive status reads; only a confirmed status read renders success.

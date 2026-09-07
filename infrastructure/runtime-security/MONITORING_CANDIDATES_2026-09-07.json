@@ -279,7 +279,7 @@
     }
   ],
   "sourceFiles": {
-    ".github/workflows/quality-gates.yml": "956276efc745e62cec4629f31c6f6516f038cd948ccf62af22c702668b2b2f77",
+    ".github/workflows/quality-gates.yml": "bae9ac342c04084755f41123db28f5a08977b0213ca08b4d5eec5805f92bed86",
     "compose.monitoring-security-upgrade.yaml": "174fb412ff47df06b09c62b5e2d23bf764b05f834f1e45b4fc1da285654a7bcc",
     "infrastructure/recovery/process.mjs": "3cd5893b07aaeab259c1e8a825e4272490204690030b9f5a1d6ef4cec187afdc",
     "infrastructure/runtime-security/monitoring-release.mjs": "9cd85a4779bfedce0a02d5b3500da3de53ff5589be30e58255e4d53f33fa5c0e",
@@ -392,5 +392,11 @@
       "currentPinChanged": false
     }
   ],
-  "publicationFormattingNote": "Unified-diff patch files retain required context whitespace; the scoped Git whitespace attribute changed, patch bytes and all runtime proof inputs remain unchanged."
+  "publicationFormattingNote": "Unified-diff patch files retain required context whitespace; the scoped Git whitespace attribute changed, patch bytes and all runtime proof inputs remain unchanged.",
+  "hostedCiFollowup": {
+    "evidence": "docs/ARCHITECTURE_FINALIZATION_2026-09-07.md",
+    "changes": "POSIX scanner bind ownership and hosted execution adapters; candidate images, dependency versions and prior runtime evidence unchanged",
+    "hostedAcceptance": "PENDING",
+    "priorRegistrySha256": "e422b57d6c1dd94d70cca2fd9116e736b6d77857ea7eeda82191206ebb4b0a0a"
+  }
 }

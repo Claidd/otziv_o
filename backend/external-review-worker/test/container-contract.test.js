@@ -68,10 +68,12 @@ test("production compose isolates integration workers and applies compatible bou
   assert.match(worker, /EXTERNAL_REVIEW_WORKER_AUTH_REQUIRED:/u);
   assert.match(whatsAppLika, /no-new-privileges:true/u);
   assert.match(whatsAppLika, /cap_drop:\s+- ALL/u);
-  assert.match(whatsAppLika, /cap_add:\s+- SYS_ADMIN\s+- SYS_CHROOT/u);
   assert.match(whatsAppVika, /no-new-privileges:true/u);
   assert.match(whatsAppVika, /cap_drop:\s+- ALL/u);
-  assert.match(whatsAppVika, /cap_add:\s+- SYS_ADMIN\s+- SYS_CHROOT/u);
+  for (const browserWorker of [worker, whatsAppLika, whatsAppVika]) {
+    assert.match(browserWorker, /- seccomp=\.\/infrastructure\/runtime-security\/chromium-seccomp\.json/u);
+    assert.doesNotMatch(browserWorker, /^\s*cap_add:|^\s*privileged:\s*true|(?:seccomp|apparmor)[=:]unconfined/mu);
+  }
   assert.match(whatsAppLika, /networks:\s+- messaging_net/u);
   assert.doesNotMatch(worker, /messaging_net/u);
   assert.doesNotMatch(whatsAppLika, /external_review_net/u);

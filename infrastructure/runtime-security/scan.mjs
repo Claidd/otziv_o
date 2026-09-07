@@ -8,6 +8,16 @@ import { buildTriage } from './triage-report.mjs';
 
 export const TRIVY_IMAGE = 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'; // 0.74.0
 
+export function scannerUserArguments(platform = process.platform, uid = process.getuid?.(), gid = process.getgid?.()) {
+  // A root process without DAC_OVERRIDE cannot write a runner-owned 0755 bind.
+  // Match the owner of mkdtemp on POSIX; Windows Docker mounts use their own ACL mapping.
+  if (platform === 'win32') return [];
+  if (!Number.isSafeInteger(uid) || uid < 0 || !Number.isSafeInteger(gid) || gid < 0) {
+    throw new Error('scanner_local_identity_missing');
+  }
+  return ['--user', `${uid}:${gid}`];
+}
+
 export function summarizeReport(report, requireJava = false) {
   if (!Array.isArray(report.Results) || !report.Results.length) throw new Error('scanner_no_supported_artifacts');
   if (requireJava && !report.Results.some(result => ['jar', 'pom'].includes(result.Type))) throw new Error('scanner_java_artifact_missing');
@@ -23,6 +33,7 @@ export async function scan(kind, source, output) {
   if (!['image', 'java'].includes(kind)) throw new Error('scanner_mode_invalid');
   await assertLocalDocker();
   const destination = resolve(output);
+  const userArguments = scannerUserArguments();
   await mkdir(dirname(destination), { recursive: true });
   const local = await mkdtemp(join(tmpdir(), 'otziv-scan-'));
   try {
@@ -35,7 +46,7 @@ export async function scan(kind, source, output) {
       for (const jar of jars) await copyFile(join(source, jar), join(input, basename(jar)));
     }
     // Scan an exported image, never expose the Docker socket to a third-party scanner.
-    const scanner = startProcess('docker', ['run', '--rm', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges:true',
+    const scanner = startProcess('docker', ['run', '--rm', ...userArguments, '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges:true',
       '--tmpfs', '/tmp:rw,nosuid,size=512m', '--memory', '2g', '--pids-limit', '256',
       '--mount', `type=bind,source=${input},target=/input,readonly`,
       '--mount', `type=bind,source=${cache},target=/cache`,
@@ -59,7 +70,7 @@ export async function scan(kind, source, output) {
     await copyFile(join(results, 'report.json'), destination);
     const summary = summarizeReport(report, kind === 'java');
     await writeFile(destination.replace(/\.json$/, '') + '.triage.json', JSON.stringify(buildTriage(report, reportBytes), null, 2) + '\n');
-    await run('docker', ['run', '--rm', '--network', 'none', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges:true',
+    await run('docker', ['run', '--rm', ...userArguments, '--network', 'none', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges:true',
       '--tmpfs', '/tmp:rw,nosuid,size=128m', '--memory', '1g', '--pids-limit', '128',
       '--mount', `type=bind,source=${results},target=/results`, TRIVY_IMAGE,
       'convert', '--format', 'cyclonedx', '--output', '/results/sbom.cdx.json', '/results/report.json'], { timeoutMs: 120_000 });
