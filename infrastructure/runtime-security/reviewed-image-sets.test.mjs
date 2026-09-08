@@ -35,7 +35,7 @@ test('omitted selector preserves exact C7 path, bytes and twelve-component inven
   assert.deepEqual(loaded.bytes, baselineBytes);
   assert.equal(loaded.sha256, BASELINE_MANIFEST_SHA256);
   assert.equal(validateManifest(loaded.manifest).length, 12);
-  assert.equal((await validateRepositoryDefaults(root)).length, 30);
+  assert.equal((await validateRepositoryDefaults(root)).length, 32);
 });
 
 for (const name of ['', '../baseline', '../reviewed-images.json', 'infrastructure/runtime-security/reviewed-images.json',

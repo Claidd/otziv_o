@@ -13,7 +13,7 @@ import { loadAlloyProof, matchingAlloyFindings, effectiveAlloySummary } from './
 import { effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
 import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
-import { assertPublicationSet, reviewedImageSet, validateReviewedImageSet } from './reviewed-image-sets.mjs';
+import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -63,11 +63,11 @@ export async function validateAlloyReassessment(image, entry, publication, proof
 }
 
 export async function resolveActivationManifest(image, entry, manifestBytes, proof) {
+  if (['mc', 'minio'].includes(image.component)) assert.ok(entry.manifest, 'activation_versioned_manifest_required');
   if (entry.manifest === undefined) return { image, manifestBytes, manifestSet: 'baseline' };
-  assert.equal(image.component, 'phpmyadmin', 'activation_versioned_manifest_component');
   assert.ok(entry.manifest && typeof entry.manifest === 'object', 'activation_versioned_manifest_missing');
   assert.deepEqual(Object.keys(entry.manifest).sort(), ['path', 'sha256'], 'activation_versioned_manifest_fields');
-  const selected = reviewedImageSet('c12-phpmyadmin');
+  const selected = reviewedImageSetForComponent(image.component);
   assert.equal(entry.manifest.path, selected.path, 'activation_versioned_manifest_path');
   const loaded = await proof(entry.manifest);
   const manifest = validateReviewedImageSet(selected.name, loaded.bytes, manifestBytes);
@@ -147,8 +147,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   return entry.reference;
 }
 
-export async function validateReviewedDefaults(rows, manifestBytes, activations, read) {
-  const images = validateManifest(JSON.parse(manifestBytes));
+export async function validateReviewedDefaults(rows, manifestBytes, activations, read, includeSupplementalSources = false) {
+  assert.equal(typeof includeSupplementalSources, 'boolean', 'activation_supplemental_sources_flag');
+  const images = [...validateManifest(JSON.parse(manifestBytes)), ...(includeSupplementalSources ? supplementalReviewedSources() : [])];
   if (activations) assert.equal(activations.schema, 'otziv-reviewed-image-activations-v1', 'activation_index_schema');
   const entries = activations?.images || [];
   assert.ok(Array.isArray(entries), 'activation_index_images');
@@ -280,7 +281,7 @@ export async function validateRepositoryDefaults(root = process.cwd(), rows) {
   let activations;
   try { activations = JSON.parse(await read(ACTIVATIONS)); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
-  return validateReviewedDefaults(rows || await repositoryInventory(root), manifest, activations, read);
+  return validateReviewedDefaults(rows || await repositoryInventory(root), manifest, activations, read, true);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

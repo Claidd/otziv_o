@@ -7,12 +7,37 @@ export const BASELINE_MANIFEST_SHA256 = 'd48bdb7d6d869cde5d6f1a7b089491765e3eeaf
 const BASELINE_PATH = 'infrastructure/runtime-security/reviewed-images.json';
 const C12_PATH = 'infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json';
 const C12_CONTEXT = 'infrastructure/runtime-security/builds/phpmyadmin-alpine';
+const RELEASE_SETS = Object.freeze({
+  'c12-phpmyadmin': { component: 'phpmyadmin', path: C12_PATH, context: C12_CONTEXT, dockerfile: C12_CONTEXT + '/Dockerfile' },
+  'c14-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c14-mc.json',
+    context: 'infrastructure/runtime-security/builds/minio', dockerfile: 'infrastructure/runtime-security/builds/minio/mc.Dockerfile' },
+  'c14-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c14-minio.json',
+    context: 'infrastructure/runtime-security/builds/minio', dockerfile: 'infrastructure/runtime-security/builds/minio/server.Dockerfile' },
+  'c14-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c14-postgres.json',
+    context: 'infrastructure/runtime-security/builds/postgres-c14', dockerfile: 'infrastructure/runtime-security/builds/postgres-c14/Dockerfile' },
+});
+// These two local-stack dependencies were absent from the immutable C7 manifest.
+// Keep their original pins and service coverage explicit when adding publication.
+export function supplementalReviewedSources() {
+  return [
+    { component: 'mc', sourceBeforeRef: 'minio/mc@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3',
+      defaultReferencesBefore: [{ path: 'compose.prod-local.yaml', service: 'minio-init' }] },
+    { component: 'minio', sourceBeforeRef: 'minio/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e',
+      defaultReferencesBefore: [{ path: 'compose.prod-local.yaml', service: 'minio' }] },
+  ];
+}
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
 // Public entry points accept these names, never a caller-supplied manifest path.
 export function reviewedImageSet(name = 'baseline') {
-  assert.ok(name === 'baseline' || name === 'c12-phpmyadmin', 'reviewed_image_set_unknown');
-  return Object.freeze({ name, path: name === 'baseline' ? BASELINE_PATH : C12_PATH });
+  assert.ok(typeof name === 'string' && (name === 'baseline' || Object.hasOwn(RELEASE_SETS, name)), 'reviewed_image_set_unknown');
+  return Object.freeze({ name, path: name === 'baseline' ? BASELINE_PATH : RELEASE_SETS[name].path });
+}
+
+export function reviewedImageSetForComponent(component) {
+  const match = Object.entries(RELEASE_SETS).find(([, value]) => value.component === component);
+  assert.ok(match, 'activation_versioned_manifest_component');
+  return reviewedImageSet(match[0]);
 }
 
 export function selectedReviewedImageSet(environment = process.env) {
@@ -32,10 +57,11 @@ export function validateReviewedImageSet(name, manifestBytes, baselineBytes = ma
   assert.equal(manifest.publicationSet, selected.name, 'reviewed_image_set_manifest_mismatch');
   assert.equal(manifest.baselineManifestSha256, BASELINE_MANIFEST_SHA256, 'reviewed_image_set_baseline_binding');
   assert.ok(Array.isArray(manifest.images) && manifest.images.length === 1, 'reviewed_image_set_single_component_required');
-  const image = manifest.images[0], original = baseline.images.find(item => item.component === 'phpmyadmin');
-  assert.equal(image.component, 'phpmyadmin', 'reviewed_image_set_component');
-  assert.equal(image.context, C12_CONTEXT, 'reviewed_image_set_context');
-  assert.equal(image.dockerfile, C12_CONTEXT + '/Dockerfile', 'reviewed_image_set_dockerfile');
+  const definition = RELEASE_SETS[name];
+  const image = manifest.images[0], original = [...baseline.images, ...supplementalReviewedSources()].find(item => item.component === definition.component);
+  assert.equal(image.component, definition.component, 'reviewed_image_set_component');
+  assert.equal(image.context, definition.context, 'reviewed_image_set_context');
+  assert.equal(image.dockerfile, definition.dockerfile, 'reviewed_image_set_dockerfile');
   assert.match(image.dockerfileSha256 || '', /^[a-f0-9]{64}$/, 'reviewed_image_set_dockerfile_hash');
   assert.equal(image.platform, 'linux/amd64', 'reviewed_image_set_platform');
   assert.equal(image.prepare, undefined, 'reviewed_image_set_preparation_forbidden');

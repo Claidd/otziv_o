@@ -9,13 +9,16 @@ on:
         required: false
         default: false
       reviewed-image-set:
-        description: Reviewed publication set; the C12 set publishes only phpMyAdmin
+        description: Reviewed publication set; named sets publish one component and never deploy it
         type: choice
         required: false
         default: baseline
         options:
           - baseline
           - c12-phpmyadmin
+          - c14-mc
+          - c14-minio
+          - c14-postgres
   pull_request:
   push:
 
@@ -23,7 +26,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: quality-gates-${{ github.event.pull_request.number || github.ref }}-${{ inputs.publish-reviewed-images && 'publication' || 'verification' }}
+  group: quality-gates-${{ github.event.pull_request.number || github.ref }}-${{ inputs.publish-reviewed-images && 'publication' || 'verification' }}-${{ inputs.publish-reviewed-images && inputs.reviewed-image-set || 'baseline' }}
   cancel-in-progress: true
 
 jobs:

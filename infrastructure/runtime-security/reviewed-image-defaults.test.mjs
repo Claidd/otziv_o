@@ -8,6 +8,7 @@ import { createEvidenceReader, validateActivation, validateReviewedDefaults, val
 import { BUILDKIT, REPOSITORY, SBOM_GENERATOR } from './publish-reviewed-images.mjs';
 import { checkedJson, SOURCE_REPOSITORY, verifyRegistryEvidence } from './registry-evidence.mjs';
 import { inventory } from './upstream-images.mjs';
+import { supplementalReviewedSources } from './reviewed-image-sets.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const bytes = value => Buffer.from(JSON.stringify(value));
@@ -185,7 +186,8 @@ async function repositoryFixture(action) {
     await rm(actual, { recursive: true });
   }
 }
-const originalRepositoryRows = () => reviewed.images.map(image => ({ image: image.sourceBeforeRef,
+const originalRepositoryImages = [...reviewed.images, ...supplementalReviewedSources()];
+const originalRepositoryRows = () => originalRepositoryImages.map(image => ({ image: image.sourceBeforeRef,
   references: image.defaultReferencesBefore.map(reference => ({ ...reference })) }));
 
 test('repository contract freezes C7 manifest bytes so five production checks cannot be removed without an index', async () => {
@@ -195,14 +197,14 @@ test('repository contract freezes C7 manifest bytes so five production checks ca
     const manifestPath = join(evidence, 'reviewed-images.json');
     await writeFile(manifestPath, reviewedBytes);
     const baseline = await validateRepositoryDefaults(root, originalRepositoryRows());
-    assert.equal(baseline.length, 30);
+    assert.equal(baseline.length, 32);
     const changed = new Set(['prometheus', 'loki', 'tempo', 'alloy', 'grafana']);
     const altered = structuredClone(reviewed);
     for (const image of altered.images) if (changed.has(image.component))
       image.defaultReferencesBefore = image.defaultReferencesBefore.filter(reference => reference.path !== 'docker-compose.yaml');
     const alteredRows = [];
     for (const [index, row] of originalRepositoryRows().entries()) {
-      if (!changed.has(reviewed.images[index].component)) { alteredRows.push(row); continue; }
+      if (!changed.has(originalRepositoryImages[index].component)) { alteredRows.push(row); continue; }
       alteredRows.push({ ...row, references: row.references.filter(reference => reference.path !== 'docker-compose.yaml') });
       alteredRows.push({ image: 'ghcr.io/example/unreviewed@sha256:' + 'd'.repeat(64),
         references: row.references.filter(reference => reference.path === 'docker-compose.yaml') });

@@ -32,9 +32,9 @@ function fixture() {
   return { entry, files, pub, get, set, proof };
 }
 
-test('all nine current activations validate with retained registry bytes; database holds remain', async () => {
+test('all current activations validate with retained registry bytes; database holds remain', async () => {
   const result = await validateRepositoryDefaults(fileURLToPath(root));
-  assert.equal(result.length, 30);
+  assert.equal(result.length, 32);
   assert.ok(result.filter(row => ['mysql', 'postgres'].includes(row.component)).every(row => row.mode === 'EXACT_ORIGINAL_SOURCE'));
   assert.ok(result.filter(row => row.component === 'alloy').every(row => row.mode === 'PAIRED_PUBLICATION_AND_ANONYMOUS_EVIDENCE'));
   assert.equal(publication.security.unresolvedRiskReview, 'REQUIRED'); // C7 history was not rewritten.

@@ -16,3 +16,5 @@ infrastructure/runtime-security/adjudications/alloy-daemon/** -text
 
 infrastructure/runtime-security/builds/phpmyadmin-alpine/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json text eol=lf
+infrastructure/runtime-security/reviewed-images-c14-*.json text eol=lf
+infrastructure/runtime-security/builds/minio/** text eol=lf

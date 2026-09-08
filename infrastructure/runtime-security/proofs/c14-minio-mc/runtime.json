@@ -1,0 +1,50 @@
+{
+  "schema": "otziv-c14-mc-compatibility-v1",
+  "result": "PASS",
+  "timestamp": "2026-09-08T13:28:37.881Z",
+  "image": "sha256:6564a3b3ce6655e72f0c6b484508869eb84b54b8604e19c478a69dceaecba202",
+  "baselineServer": "minio/minio@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e",
+  "syntheticOnly": true,
+  "checks": [
+    "internal_network",
+    "no_published_ports",
+    "server_ready",
+    "client_1_exit_no_oom",
+    "compose_init_idempotent_0",
+    "client_2_exit_no_oom",
+    "compose_init_idempotent_1",
+    "client_3_exit_no_oom",
+    "public_anonymous_http_bytes",
+    "private_anonymous_http_403",
+    "public_anonymous_bytes",
+    "private_anonymous_denied",
+    "private_authenticated_bytes",
+    "client_4_exit_no_oom",
+    "two_distinct_object_versions",
+    "client_5_exit_no_oom",
+    "client_6_exit_no_oom",
+    "each_version_readable",
+    "client_7_exit_no_oom",
+    "latest_version_readable",
+    "object_copy_restore_bytes",
+    "server_graceful_stop"
+  ],
+  "cleanup": [
+    {
+      "kind": "container",
+      "result": "PASS"
+    },
+    {
+      "kind": "volume",
+      "result": "PASS"
+    },
+    {
+      "kind": "network",
+      "result": "PASS"
+    }
+  ],
+  "failure": null,
+  "limits": [
+    "CLI compatibility with the pinned current standalone server; full server upgrade and physical backup restoration are a separate proof."
+  ]
+}

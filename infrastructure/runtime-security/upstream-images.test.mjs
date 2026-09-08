@@ -29,7 +29,8 @@ test('empty inventory cannot silently pass a release scan', () => {
 test('actual Compose models cover database, issuer, monitoring and optional upstreams', async () => {
   const rows = await repositoryInventory();
   const reviewed = await validateRepositoryDefaults(process.cwd(), rows);
-  assert.equal(new Set(reviewed.map(item => item.component)).size, 12);
+  assert.equal(new Set(reviewed.map(item => item.component)).size, 14);
+  for (const component of ['minio', 'mc']) assert.ok(reviewed.some(item => item.component === component), component);
   for (const repository of ['amir20/dozzle', 'minio/minio', 'minio/mc'])
     assert.ok(rows.some(row => row.image.startsWith(repository + '@')), repository);
   assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
