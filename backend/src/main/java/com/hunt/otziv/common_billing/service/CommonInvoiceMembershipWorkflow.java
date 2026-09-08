@@ -66,7 +66,7 @@ import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFl
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CommonInvoiceMembershipWorkflow {
+public class CommonInvoiceMembershipWorkflow implements com.hunt.otziv.common_billing.api.PublicationInvoiceCompletion {
 
     private final CommonInvoiceManualPaymentWorkflow manualPaymentWorkflow;
 
@@ -542,31 +542,7 @@ public class CommonInvoiceMembershipWorkflow {
             @Override
             public void afterCommit() {
                 try {
-                    writeTransaction(() -> {
-                        CommonInvoice locked = lockedInvoice(invoiceId).orElse(null);
-                        if (locked == null || locked.getStatus() == CommonInvoiceStatus.PAID) {
-                            return null;
-                        }
-                        List<CommonInvoiceOrder> lockedItems = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
-                        if (allOrdersReady(lockedItems)) {
-                            recalculateInvoice(locked, lockedItems);
-                            if (!applyCommonInvoicePrepaymentIfReady(locked, lockedItems) && isInvoiceReady(invoiceId)) {
-                                locked.setStatus(CommonInvoiceStatus.READY);
-                                invoiceRepository.save(locked);
-                                // Every member Order is already locked by
-                                // lockedInvoice(invoiceId), so this cannot
-                                // introduce an Order->Order reverse edge.
-                                markInvoiceOrdersPublished(lockedItems);
-                                if (immediateClientMessagesEnabled()) {
-                                    sendInvoiceAfterCommit(invoiceId, false);
-                                } else {
-                                    locked.setLastError("auto_send_disabled: моментальные клиентские сообщения выключены");
-                                    invoiceRepository.save(locked);
-                                }
-                            }
-                        }
-                        return null;
-                    });
+                    finalizeReadyPublicationInvoice(invoiceId, null);
                 } catch (RuntimeException e) {
                     // Ready flags and any PREPAID ref are durable. A later
                     // refresh retries under the same canonical lock order.
@@ -575,6 +551,46 @@ public class CommonInvoiceMembershipWorkflow {
             }
         });
         return true;
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NEVER)
+    public boolean finalizePublishedInvoiceForOrder(long orderId) {
+        // Scalar discovery precedes a fresh transaction which locks every member
+        // Order in ascending order, then account/invoice and revalidates membership.
+        var binding = invoiceOrderRepository.findCurrentInvoiceBindingsByOrderIds(List.of(orderId)).stream().findFirst();
+        return binding.isEmpty() || finalizeReadyPublicationInvoice(binding.orElseThrow().getInvoiceId(), orderId);
+    }
+
+    boolean finalizeReadyPublicationInvoice(Long invoiceId, Long expectedOrderId) {
+        return writeTransaction(() -> {
+            CommonInvoice locked = lockedInvoice(invoiceId).orElse(null);
+            if (locked == null) return true;
+            List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+            if (expectedOrderId != null && items.stream().noneMatch(item -> item.isActiveMembership()
+                    && item.getOrder() != null && Objects.equals(expectedOrderId, item.getOrder().getId()))) return false;
+            // Replaying an acknowledged phase must never resurrect a terminal,
+            // attention or already delivered invoice or re-send an existing READY one.
+            if (locked.getStatus() != CommonInvoiceStatus.COLLECTING) return true;
+            if (items.stream().map(CommonInvoiceOrder::getOrder).filter(Objects::nonNull)
+                    .map(this::statusTitle)
+                    .anyMatch(title -> Set.of("Не оплачено", "Бан", "Архив").contains(title == null ? "" : title))) return true;
+            if (!allOrdersReady(items)) return false;
+            recalculateInvoice(locked, items);
+            if (applyCommonInvoicePrepaymentIfReady(locked, items)) return true;
+            if (!isInvoiceReady(invoiceId)) return false;
+            locked.setStatus(CommonInvoiceStatus.READY);
+            invoiceRepository.save(locked);
+            markInvoiceOrdersPublished(items);
+            if (immediateClientMessagesEnabled()) sendInvoiceAfterCommit(invoiceId, false);
+            else {
+                locked.setLastError("auto_send_disabled: моментальные клиентские сообщения выключены");
+                invoiceRepository.save(locked);
+            }
+            // READY/PARTIALLY_PAID are already durable sources for the existing
+            // unsent-invoice scheduler if its immediate-send callback is lost.
+            return true;
+        });
     }
 
     void ensureCompanyNotEnabledInAnotherAccount(Long accountId, Long companyId) {

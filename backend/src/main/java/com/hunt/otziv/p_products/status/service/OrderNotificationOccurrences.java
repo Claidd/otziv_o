@@ -14,6 +14,16 @@ public class OrderNotificationOccurrences {
 
     @Transactional(propagation=Propagation.REQUIRES_NEW)
     public String reserve(long orderId,String kind,long businessGeneration) {
+        return reserveCurrent(orderId, kind, businessGeneration);
+    }
+
+    /** Durable publication intent and its identity must commit with the publication itself. */
+    @Transactional(propagation=Propagation.MANDATORY)
+    public String reserveInCurrentTransaction(long orderId,String kind,long businessGeneration) {
+        return reserveCurrent(orderId, kind, businessGeneration);
+    }
+
+    private String reserveCurrent(long orderId,String kind,long businessGeneration) {
         if(orderId<=0||kind==null||kind.isBlank()||kind.length()>180||businessGeneration<0)
             throw new IllegalArgumentException("Invalid order notification occurrence");
         if (businessGeneration == 0) {
@@ -36,6 +46,15 @@ public class OrderNotificationOccurrences {
 
     @Transactional(propagation=Propagation.REQUIRES_NEW)
     public void confirm(long orderId,String kind,String operationId) {
+        confirmCurrent(orderId, kind, operationId);
+    }
+
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void confirmInCurrentTransaction(long orderId,String kind,String operationId) {
+        confirmCurrent(orderId, kind, operationId);
+    }
+
+    private void confirmCurrent(long orderId,String kind,String operationId) {
         int changed=jdbc.update("UPDATE order_client_message_occurrences SET confirmed=TRUE WHERE order_id=? AND logical_kind=? AND operation_id=?",
                 orderId,kind,operationId);
         if(changed!=1)throw new IllegalStateException("Order notification receipt belongs to an obsolete occurrence");

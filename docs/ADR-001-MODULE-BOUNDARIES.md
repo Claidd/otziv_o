@@ -150,6 +150,11 @@ export OrderCommandHttpAdapter. Текущая база — 3013 внутрен�
 
 ## Пределы доказательства
 
+Дополнительная durable publication волна описана в [ADR-014](ADR-014-DURABLE-PUBLICATION-FOLLOW-UP.md):
+узкий billing owner API и ровно один reviewed retained settings-read dependency
+`OrderPublicationOutboxWorker → AppSettingService` на финальной границе отправки.
+Новых repository allowances или cycle baseline edges эта волна не добавляет.
+
 Baseline не доказывает отсутствие всех транзитивных циклов старого приложения,
 а выделение нескольких сценариев не означает завершения всей декомпозиции.
 Измеренные бизнес latency/SQL comparisons должны прикладываться к каждому

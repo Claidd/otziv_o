@@ -254,6 +254,53 @@ class CommonInvoiceAccountArchiveTransactionMySqlIntegrationTest {
         when(dependency(ManagerPermissionService.class).hasAnyRole(any(), eq("ADMIN"), eq("OWNER"))).thenReturn(true);
     }
 
+    @Test
+    void durablePublicationRecoveryUsesActualCanonicalTransactionAndCommittedCollectingTransitionIsIdempotent() {
+        // These are the durable ready flags left when the publishing process
+        // commits and stops before the old in-memory finalization callback.
+        jdbc.execute("ALTER TABLE tx_items ADD ready BOOLEAN NOT NULL DEFAULT TRUE");
+        jdbc.update("UPDATE tx_orders SET status='Ожидает общего счета'");
+        CommonInvoiceOrderRepository items = dependency(CommonInvoiceOrderRepository.class);
+        var binding = mock(CommonInvoiceOrderRepository.CurrentOrderInvoiceView.class);
+        when(binding.getInvoiceId()).thenReturn(10L);
+        when(items.findCurrentInvoiceBindingsByOrderIds(List.of(101L))).thenReturn(List.of(binding));
+        when(items.findByInvoiceIdWithOrders(10L)).thenAnswer(call -> {
+            List<CommonInvoiceOrder> loaded = loadItems();
+            for (var item : loaded) {
+                item.setActiveMembership(true);
+                item.setReady(jdbc.queryForObject("SELECT ready FROM tx_items WHERE order_id=?",Boolean.class,item.getOrder().getId()));
+            }
+            return loaded;
+        });
+        when(dependency(com.hunt.otziv.p_products.service.OrderStatusService.class).getOrderStatusByTitle(anyString()))
+                .thenAnswer(call -> {var status = new OrderStatus();status.setTitle(call.getArgument(0));return status;});
+        when(dependency(com.hunt.otziv.p_products.repository.OrderRepository.class).save(any(Order.class)))
+                .thenAnswer(call -> {Order order=call.getArgument(0);jdbc.update("UPDATE tx_orders SET status=? WHERE id=?",order.getStatus().getTitle(),order.getId());return order;});
+        when(dependency(com.hunt.otziv.config.settings.service.AppSettingService.class).getBoolean(anyString(),anyBoolean())).thenReturn(true);
+        var membership=dependency(CommonInvoiceMembershipWorkflow.class);
+        assertThatThrownBy(() -> callerTransaction.executeWithoutResult(status -> membership.finalizePublishedInvoiceForOrder(101L)))
+                .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
+        failInvoiceSave.set(true);
+        assertThatThrownBy(() -> membership.finalizePublishedInvoiceForOrder(101L)).isInstanceOf(LateFailure.class);
+        assertThat(jdbc.queryForObject("SELECT status FROM tx_invoices WHERE id=10",String.class)).isEqualTo("COLLECTING");
+        assertThat(jdbc.queryForList("SELECT status FROM tx_orders ORDER BY id",String.class)).containsExactly("Ожидает общего счета","Ожидает общего счета");
+        failInvoiceSave.set(false);archiveConnection.set(0);
+        clearInvocations(dependency(OrderAggregateMutationLockService.class),dependency(CommonBillingAccountRepository.class),dependency(CommonInvoiceRepository.class));
+        assertThat(membership.finalizePublishedInvoiceForOrder(101L)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT status FROM tx_invoices WHERE id=10",String.class)).isEqualTo("READY");
+        assertThat(jdbc.queryForList("SELECT status FROM tx_orders ORDER BY id",String.class)).containsExactly("Опубликовано","Опубликовано");
+        var locks=inOrder(dependency(OrderAggregateMutationLockService.class),dependency(CommonBillingAccountRepository.class),dependency(CommonInvoiceRepository.class));
+        locks.verify(dependency(OrderAggregateMutationLockService.class)).lock(101L);
+        locks.verify(dependency(OrderAggregateMutationLockService.class)).lock(102L);
+        locks.verify(dependency(CommonBillingAccountRepository.class)).findByIdWithRelationsForUpdate(2L);
+        locks.verify(dependency(CommonInvoiceRepository.class)).findByIdWithAccountForUpdate(10L);
+        // A worker lost its own acknowledgement after the owner commit.
+        // Re-read through a second actual transaction, without re-sending.
+        archiveConnection.set(0);
+        assertThat(membership.finalizePublishedInvoiceForOrder(101L)).isTrue();
+        verify(dependency(CommonInvoiceAfterCommitSender.class),times(1)).send(10L,false);
+    }
+
     private Object transitionOrder(Long id, String title) {
         assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
         assertThat(connectionId()).isEqualTo(archiveConnection.get());

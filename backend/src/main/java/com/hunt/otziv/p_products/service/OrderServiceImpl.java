@@ -27,6 +27,7 @@ import com.hunt.otziv.p_products.service.*;
 import com.hunt.otziv.p_products.statistics.service.OrderStatisticsService;
 import com.hunt.otziv.p_products.status.service.OrderBotLifecycleService;
 import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
+import com.hunt.otziv.p_products.status.service.OrderPublicationOutbox;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
@@ -50,12 +51,7 @@ import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import static com.hunt.otziv.client_messages.service.ScheduledClientMessageService.DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
@@ -92,7 +88,7 @@ public class OrderServiceImpl implements OrderService {
     private final ReviewBotCooldownService botCooldownService;
     private final ReviewBotAssignmentExclusionService botAssignmentExclusionService;
     private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
-    private final PlatformTransactionManager transactionManager;
+    private final OrderPublicationOutbox publicationOutbox;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
@@ -604,7 +600,7 @@ public class OrderServiceImpl implements OrderService {
 
             orderStatusCheckerService.validateCounterConsistency(order, actualPublished);
             log.info("Счётчик заказа после синхронизации: {}", order.getCounter());
-            schedulePublishedReviewClientUpdates(order, actualPublished,"review:"+reviewId+":"+review.getPublishedMarkedAt());
+            enqueuePublishedReviewClientUpdates(order, actualPublished,"review:"+reviewId+":"+review.getPublishedMarkedAt());
 
             botAssignmentExclusionService.clearForReview(reviewId);
 
@@ -639,96 +635,17 @@ public class OrderServiceImpl implements OrderService {
         return reviewArchiveService.existsByTextExcludingOwnSource(text, review.getId(), orderId);
     }
 
-    private void notifyClientAboutPublishedReviewProgress(Order order, int actualPublished,String occurrence) {
-        try {
-            if (!shouldSendPublishedReviewProgress(order, actualPublished)) {
-                return;
-            }
-
-            String clientId = order != null && order.getManager() != null ? order.getManager().getClientId() : null;
-            String groupId = order != null && order.getCompany() != null ? order.getCompany().getGroupId() : null;
-            String message = buildPublishedReviewProgressMessage(order, actualPublished);
-            boolean includePreferenceControls = actualPublished == 1;
-
-            boolean sent = orderStatusNotificationService.sendPublicationProgressForOccurrence(
-                    order,
-                    clientId,
-                    groupId,
-                    message,
-                    includePreferenceControls,
-                    occurrence
-            );
-            if (sent) {
-                log.info("Короткий отчёт о публикации отправлен клиенту: {}", message);
-            } else {
-                log.warn("Короткий отчёт о публикации не отправлен клиенту: {}", message);
-            }
-        } catch (Exception e) {
-            log.warn("Короткий отчёт о публикации не отправлен из-за ошибки. Заказ продолжит обработку", e);
+    private void enqueuePublishedReviewClientUpdates(Order order, int actualPublished, String occurrence) {
+        OrderStatusNotificationService.PreparedPublicationProgress progress = null;
+        if (shouldSendPublishedReviewProgress(order, actualPublished)) {
+            progress = orderStatusNotificationService.preparePublicationProgress(order,
+                    order.getManager() == null ? null : order.getManager().getClientId(),
+                    order.getCompany() == null ? null : order.getCompany().getGroupId(),
+                    buildPublishedReviewProgressMessage(order, actualPublished), actualPublished == 1, occurrence);
         }
-    }
-
-    private void schedulePublishedReviewClientUpdates(Order order, int actualPublished,String occurrence) {
-        Long orderId = order == null ? null : order.getId();
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            sendPublishedReviewClientUpdates(order, actualPublished,occurrence);
-            return;
-        }
-
-        runAfterCommit(() -> sendPublishedReviewClientUpdates(orderId, actualPublished,occurrence));
-    }
-
-    private void sendPublishedReviewClientUpdates(Long orderId, int actualPublished,String occurrence) {
-        try {
-            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-            transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-            transactionTemplate.executeWithoutResult(status -> sendPublishedReviewClientUpdatesInCurrentTransaction(
-                    orderId,
-                    actualPublished,
-                    occurrence
-            ));
-        } catch (Exception e) {
-            log.error("Клиентские действия после публикации не выполнены для заказа {}", orderId, e);
-        }
-    }
-
-    private void sendPublishedReviewClientUpdatesInCurrentTransaction(Long orderId, int actualPublished,String occurrence) {
-        Order order = orderRepository.findByIdForMutation(orderId).orElse(null);
-        if (order == null) {
-            log.warn("Клиентские действия после публикации пропущены: заказ {} не найден", orderId);
-            return;
-        }
-
-        notifyClientAboutPublishedReviewProgress(order, actualPublished,occurrence);
-        try {
-            orderStatusCheckerService.checkAndMarkOrderCompleted(order);
-        } catch (Exception e) {
-            throw new IllegalStateException("Не удалось завершить клиентские действия после публикации", e);
-        }
-    }
-
-    private void sendPublishedReviewClientUpdates(Order order, int actualPublished,String occurrence) {
-        try {
-            notifyClientAboutPublishedReviewProgress(order, actualPublished,occurrence);
-            orderStatusCheckerService.checkAndMarkOrderCompleted(order);
-        } catch (Exception e) {
-            log.error("Клиентские действия после публикации не выполнены для заказа {}",
-                    order == null ? null : order.getId(), e);
-        }
-    }
-
-    private void runAfterCommit(Runnable action) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            action.run();
-            return;
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                action.run();
-            }
-        });
+        // A failed intent write fails the publication transaction; neither the event
+        // nor completion is allowed to disappear into a best-effort afterCommit callback.
+        publicationOutbox.enqueue(order.getId(), occurrence, progress);
     }
 
     private String reviewCardLabel(Order order, Review target) {
@@ -761,7 +678,7 @@ public class OrderServiceImpl implements OrderService {
         if (order == null) {
             return false;
         }
-        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)) {
+        if (!appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)) {
             log.info("Короткий отчёт о публикации пропущен: моментальные клиентские сообщения выключены");
             return false;
         }
@@ -772,7 +689,7 @@ public class OrderServiceImpl implements OrderService {
             return false;
         }
 
-        if (!appSettingService.getBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true)) {
+        if (!appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true)) {
             log.info("Короткий отчёт о публикации пропущен: глобальная настройка выключена");
             return false;
         }

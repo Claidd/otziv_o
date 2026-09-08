@@ -28,6 +28,38 @@ public class OrderStatusNotificationService {
     private final OrderNotificationOccurrences occurrences;
     private final ClientMessageDelivery sender;
 
+    /** Scalar publication envelope captured inside the existing actor-checked business transaction. */
+    public PreparedPublicationProgress preparePublicationProgress(Order order,String clientId,String groupId,
+            String message,boolean controls,String occurrence) {
+        String kind = "progress:" + occurrence;
+        String operation = occurrences.reserveInCurrentTransaction(order.getId(), kind, 1);
+        var company = order.getCompany();
+        var target = company == null ? null : new ClientMessageDelivery.Target(company.getId(), company.getTitle(),
+                company.getUrlChat(), company.getTelegramGroupChatId(), company.getMaxGroupChatId());
+        return new PreparedPublicationProgress(order.getId(), kind, operation, target, clientId, groupId, message, controls,
+                WhatsAppAuthAlertService.captureRecipients(order.getManager() == null ? List.of() : List.of(order.getManager())));
+    }
+
+    public ClientMessageSendResult dispatchPublicationProgress(PreparedPublicationProgress prepared) {
+        return sender.deliverPublicationProgressWithOperationId(prepared.target(), prepared.clientId(), prepared.groupId(),
+                prepared.message(), prepared.includePreferenceControls(), prepared.operationId());
+    }
+
+    public void notifyPublicationProgressOutcome(PreparedPublicationProgress prepared, ClientMessageSendResult outcome) {
+        if (outcome.sent() && "WhatsApp".equals(outcome.channel())) {
+            whatsAppAuthAlertService.notifyRecoveredSnapshot(prepared.clientId(), "моментальная отправка клиенту",
+                    LocalDateTime.now().withNano(0), prepared.recipients());
+        } else if (!outcome.sent() && isWhatsAppAuthUnavailable(outcome.errorCode(), outcome.errorMessage())) {
+            whatsAppAuthAlertService.notifyAuthIssueSnapshot(prepared.clientId(), prepared.target() == null ? null : prepared.target().title(),
+                    "моментальная отправка клиенту", outcome.errorCode(), outcome.errorMessage(),
+                    LocalDateTime.now().withNano(0), null, prepared.recipients());
+        }
+    }
+
+    public record PreparedPublicationProgress(Long orderId, String kind, String operationId, ClientMessageDelivery.Target target,
+            String clientId, String groupId, String message, boolean includePreferenceControls,
+            List<WhatsAppAuthAlertService.Recipient> recipients) {}
+
     /** Called under the order's mutation lock; transport data is frozen before commit. */
     public PreparedAction prepareAction(String title, Order order, String clientId, String groupId,
             String message, String successStatus, String copy) {

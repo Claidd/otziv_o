@@ -22,6 +22,7 @@ import com.hunt.otziv.p_products.service.OrderStatusService;
 import com.hunt.otziv.p_products.statistics.service.OrderStatisticsService;
 import com.hunt.otziv.p_products.status.service.OrderBotLifecycleService;
 import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
+import com.hunt.otziv.p_products.status.service.OrderPublicationOutbox;
 import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
@@ -108,6 +109,9 @@ class OrderServiceImplTest {
     private OrderStatusNotificationService orderStatusNotificationService;
 
     @Mock
+    private OrderPublicationOutbox publicationOutbox;
+
+    @Mock
     private AppSettingService appSettingService;
 
     @Mock
@@ -141,9 +145,9 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(2);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+        when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
                 .thenReturn(true);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
+        when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
                 .thenReturn(true);
         doAnswer(invocation -> {
             Order synchronizedOrder = invocation.getArgument(0);
@@ -159,7 +163,7 @@ class OrderServiceImplTest {
         verify(reviewArchiveService).saveNewReviewArchive(2L, ReviewArchiveSourceReason.PUBLISHED);
         verify(reviewRepository).countPublishedByOrderId(10L);
         verify(orderStatusCheckerService).validateCounterConsistency(order, 2);
-        verify(orderStatusNotificationService).sendPublicationProgressForOccurrence(
+        verify(orderStatusNotificationService).preparePublicationProgress(
                 eq(order),
                 eq(null),
                 eq(null),
@@ -167,7 +171,8 @@ class OrderServiceImplTest {
                 eq(false),
                 org.mockito.ArgumentMatchers.startsWith("review:")
         );
-        verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
+        verify(publicationOutbox).enqueue(eq(10L), org.mockito.ArgumentMatchers.startsWith("review:2:"), eq(null));
+        verify(orderStatusCheckerService, never()).checkAndMarkOrderCompleted(order);
         verify(reviewService, never()).save(reviewToPublish);
     }
 
@@ -183,9 +188,9 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(1);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+        when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
                 .thenReturn(true);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
+        when(appSettingService.getBooleanFreshFailClosed(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
                 .thenReturn(true);
         doAnswer(invocation -> {
             Order synchronizedOrder = invocation.getArgument(0);
@@ -196,7 +201,7 @@ class OrderServiceImplTest {
 
         assertTrue(orderService.changeStatusAndOrderCounter(2L));
 
-        verify(orderStatusNotificationService).sendPublicationProgressForOccurrence(
+        verify(orderStatusNotificationService).preparePublicationProgress(
                 eq(order),
                 eq(null),
                 eq(null),
@@ -221,7 +226,7 @@ class OrderServiceImplTest {
 
         assertTrue(orderService.changeStatusAndOrderCounter(2L));
 
-        verify(orderStatusNotificationService, never()).sendPublicationProgressForOccurrence(
+        verify(orderStatusNotificationService, never()).preparePublicationProgress(
                 same(order),
                 eq(null),
                 eq(null),
@@ -229,7 +234,8 @@ class OrderServiceImplTest {
                 org.mockito.ArgumentMatchers.anyBoolean(),
                 org.mockito.ArgumentMatchers.anyString()
         );
-        verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
+        verify(publicationOutbox).enqueue(eq(10L), org.mockito.ArgumentMatchers.startsWith("review:2:"), eq(null));
+        verify(orderStatusCheckerService, never()).checkAndMarkOrderCompleted(order);
     }
 
     @Test
@@ -248,7 +254,7 @@ class OrderServiceImplTest {
 
         verify(orderRepository, never()).findByIdForCounterUpdate(10L);
         verify(reviewRepository, never()).save(publishedReview);
-        verifyNoInteractions(orderBotLifecycleService, reviewArchiveService, orderStatusCheckerService, orderStatusNotificationService);
+        verifyNoInteractions(orderBotLifecycleService, reviewArchiveService, orderStatusCheckerService, orderStatusNotificationService, publicationOutbox);
     }
 
     @Test
@@ -427,7 +433,8 @@ class OrderServiceImplTest {
         verify(reviewArchiveService, never()).existsByTextExcludingOwnSource(shortText, 2L, 12L);
         verify(reviewRepository).save(reviewToPublish);
         verify(reviewArchiveService).saveNewReviewArchive(2L, ReviewArchiveSourceReason.PUBLISHED);
-        verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
+        verify(publicationOutbox).enqueue(eq(12L), org.mockito.ArgumentMatchers.startsWith("review:2:"), eq(null));
+        verify(orderStatusCheckerService, never()).checkAndMarkOrderCompleted(order);
     }
 
     private Order order(Long id, int counter) {

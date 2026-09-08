@@ -2144,6 +2144,7 @@ com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder -> com.hunt.
 com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder -> com.hunt.otziv.c_companies.model.Filial
 com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder -> com.hunt.otziv.config.settings.service.AppSettingService
+com.hunt.otziv.p_products.status.service.OrderPublicationOutboxWorker -> com.hunt.otziv.config.settings.service.AppSettingService
 com.hunt.otziv.p_products.status.service.OrderStatusNotificationService -> com.hunt.otziv.c_companies.model.Company
 com.hunt.otziv.p_products.status.service.OrderStatusNotificationService -> com.hunt.otziv.t_telegrambot.service.TelegramService
 com.hunt.otziv.p_products.status.service.OrderStatusNotificationService -> com.hunt.otziv.u_users.model.Manager

@@ -25,17 +25,8 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
 
     // Only validation/admission failures prove that dispatch never started.
     // Unknown codes, timeouts, ledger conflicts and provider exceptions retain the operation.
-    private static final Set<String> KNOWN_UNSENT_CODES = Set.of(
-            "company_missing", "message_empty", "chat_platform_missing", "chat_platform_unknown",
-            "whatsapp_client_missing", "whatsapp_group_missing", "telegram_group_missing", "max_group_missing",
-            "gateway_not_ready", "not_ready", "whatsapp_not_ready", "gateway_busy", "operation_ledger_full",
-            "draining", "unauthorized", "invalid_request",
-            "payload_too_large", "invalid_json", "invalid_operation_id", "invalid_operation_envelope", "max_not_configured"
-    );
-
     public static boolean isKnownUnsent(ClientMessageSendResult result) {
-        return result != null && !result.sent() && result.errorCode() != null
-                && KNOWN_UNSENT_CODES.contains(result.errorCode().trim().toLowerCase(Locale.ROOT));
+        return com.hunt.otziv.client_messages.api.ClientMessageDelivery.isKnownUnsent(result);
     }
 
     private final WhatsAppService whatsAppService;
@@ -46,7 +37,7 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
     private final PublicationProgressPreferenceService progressPreferences;
 
     /** Receipt-only recovery. Neither absence nor UNKNOWN authorizes a provider call. */
-    public ClientMessageSendResult recordedOutcome(String operationId) {
+    @Override public ClientMessageSendResult recordedOutcome(String operationId) {
         try {
             var local = operationFence.lookup(operationId);
             if (local.isPresent()) return ClientMessageOperationFence.result(local.orElseThrow());
@@ -65,6 +56,10 @@ public class ClientChatMessageSender implements com.hunt.otziv.client_messages.a
             log.warn("Scheduled delivery receipt unavailable: operationId={}", operationId);
         }
         return ClientMessageOperationFence.unknown();
+    }
+
+    @Override public boolean publicationProgressEnabled(Long companyId) {
+        return progressPreferences.isCompanyEnabled(companyId);
     }
 
     @Override public ClientMessageSendResult deliverWithOperationId(com.hunt.otziv.client_messages.api.ClientMessageDelivery.Target target,
