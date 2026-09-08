@@ -121,6 +121,25 @@
       }
     },
     {
+      "component": "phpmyadmin",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835",
+      "commit": "0f715d08cf4b56ea7788594d5b9aa9295f9d1761",
+      "run": "34206243823",
+      "attempt": "1",
+      "manifest": {
+        "path": "infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json",
+        "sha256": "c649c20cef9417905bff3f3bc58f2163edf925a53971eb01ecb6d90d729034b4"
+      },
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/publication.json",
+        "sha256": "01ceaa8945af92c33db9710b4940ec82e4e9c97ef2c546c7813dd8d29e3c1945"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/anonymous-download.json",
+        "sha256": "3068d918ee89970c18a30c1ff0f89408d80d3e1434fe00f977400081825a28be"
+      }
+    },
+    {
       "component": "prometheus",
       "reference": "ghcr.io/claidd/otziv-security@sha256:431b45903443dcef3c973e16d4ad76670a5d0f6a61dd8a1cfe15b1fa6dd8334d",
       "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",

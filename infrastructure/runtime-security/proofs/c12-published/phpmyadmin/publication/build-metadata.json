@@ -1,0 +1,243 @@
+{
+  "buildx.build.provenance": {
+    "builder": {
+      "id": ""
+    },
+    "buildType": "https://mobyproject.org/buildkit@v1",
+    "materials": [
+      {
+        "uri": "pkg:docker/docker/buildkit-syft-scanner?digest=sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9"
+        }
+      },
+      {
+        "uri": "pkg:docker/alpine?digest=sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b"
+        }
+      },
+      {
+        "uri": "pkg:docker/ghcr.io/claidd/otziv-security?digest=sha256:ea9c7f5a1340e33094ce3576d67d220d1baa5b933e69d1b916b3f0bd43e712b7\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "ea9c7f5a1340e33094ce3576d67d220d1baa5b933e69d1b916b3f0bd43e712b7"
+        }
+      },
+      {
+        "uri": "https://www.php.net/distributions/php-8.3.33.tar.xz",
+        "digest": {
+          "sha256": "e293ed620cec74651bb4a071317892a478aa6840fab22db45c72d77cd42f9676"
+        }
+      }
+    ],
+    "invocation": {
+      "configSource": {
+        "entryPoint": "Dockerfile"
+      },
+      "parameters": {
+        "frontend": "dockerfile.v0",
+        "args": {
+          "label:com.otziv.publication.revision": "0f715d08cf4b56ea7788594d5b9aa9295f9d1761",
+          "label:com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+          "label:com.otziv.reviewed-component": "phpmyadmin"
+        },
+        "locals": [
+          {
+            "name": "context"
+          },
+          {
+            "name": "dockerfile"
+          }
+        ],
+        "root": {
+          "configSource": {
+            "path": "Dockerfile"
+          },
+          "request": {
+            "args": {
+              "label:com.otziv.publication.revision": "0f715d08cf4b56ea7788594d5b9aa9295f9d1761",
+              "label:com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+              "label:com.otziv.reviewed-component": "phpmyadmin",
+              "vcs:localdir:context": "infrastructure/runtime-security/builds/phpmyadmin-alpine",
+              "vcs:localdir:dockerfile": "infrastructure/runtime-security/builds/phpmyadmin-alpine",
+              "vcs:revision": "0f715d08cf4b56ea7788594d5b9aa9295f9d1761",
+              "vcs:source": "https://github.com/Claidd/otziv_o"
+            }
+          }
+        },
+        "compatibilityVersion": 30
+      },
+      "environment": {
+        "dockerfileVersion": "1.26.0",
+        "github_actor": "Claidd",
+        "github_actor_id": "121088694",
+        "github_event_name": "workflow_dispatch",
+        "github_event_payload": {
+          "inputs": {
+            "publish-reviewed-images": "true",
+            "reviewed-image-set": "c12-phpmyadmin"
+          },
+          "ref": "refs/heads/codex/architecture-remediation-20260907",
+          "repository": {
+            "allow_forking": true,
+            "archive_url": "https://api.github.com/repos/Claidd/otziv_o/{archive_format}{/ref}",
+            "archived": false,
+            "assignees_url": "https://api.github.com/repos/Claidd/otziv_o/assignees{/user}",
+            "blobs_url": "https://api.github.com/repos/Claidd/otziv_o/git/blobs{/sha}",
+            "branches_url": "https://api.github.com/repos/Claidd/otziv_o/branches{/branch}",
+            "clone_url": "https://github.com/Claidd/otziv_o.git",
+            "collaborators_url": "https://api.github.com/repos/Claidd/otziv_o/collaborators{/collaborator}",
+            "comments_url": "https://api.github.com/repos/Claidd/otziv_o/comments{/number}",
+            "commits_url": "https://api.github.com/repos/Claidd/otziv_o/commits{/sha}",
+            "compare_url": "https://api.github.com/repos/Claidd/otziv_o/compare/{base}...{head}",
+            "contents_url": "https://api.github.com/repos/Claidd/otziv_o/contents/{+path}",
+            "contributors_url": "https://api.github.com/repos/Claidd/otziv_o/contributors",
+            "created_at": "2023-06-07T18:29:16Z",
+            "default_branch": "main",
+            "deployments_url": "https://api.github.com/repos/Claidd/otziv_o/deployments",
+            "description": null,
+            "disabled": false,
+            "downloads_url": "https://api.github.com/repos/Claidd/otziv_o/downloads",
+            "events_url": "https://api.github.com/repos/Claidd/otziv_o/events",
+            "fork": false,
+            "forks": 0,
+            "forks_count": 0,
+            "forks_url": "https://api.github.com/repos/Claidd/otziv_o/forks",
+            "full_name": "Claidd/otziv_o",
+            "git_commits_url": "https://api.github.com/repos/Claidd/otziv_o/git/commits{/sha}",
+            "git_refs_url": "https://api.github.com/repos/Claidd/otziv_o/git/refs{/sha}",
+            "git_tags_url": "https://api.github.com/repos/Claidd/otziv_o/git/tags{/sha}",
+            "git_url": "git://github.com/Claidd/otziv_o.git",
+            "has_discussions": false,
+            "has_downloads": false,
+            "has_issues": true,
+            "has_pages": false,
+            "has_projects": true,
+            "has_pull_requests": true,
+            "has_wiki": true,
+            "homepage": null,
+            "hooks_url": "https://api.github.com/repos/Claidd/otziv_o/hooks",
+            "html_url": "https://github.com/Claidd/otziv_o",
+            "id": 650754525,
+            "is_template": false,
+            "issue_comment_url": "https://api.github.com/repos/Claidd/otziv_o/issues/comments{/number}",
+            "issue_events_url": "https://api.github.com/repos/Claidd/otziv_o/issues/events{/number}",
+            "issues_url": "https://api.github.com/repos/Claidd/otziv_o/issues{/number}",
+            "keys_url": "https://api.github.com/repos/Claidd/otziv_o/keys{/key_id}",
+            "labels_url": "https://api.github.com/repos/Claidd/otziv_o/labels{/name}",
+            "language": "Java",
+            "languages_url": "https://api.github.com/repos/Claidd/otziv_o/languages",
+            "license": null,
+            "merges_url": "https://api.github.com/repos/Claidd/otziv_o/merges",
+            "milestones_url": "https://api.github.com/repos/Claidd/otziv_o/milestones{/number}",
+            "mirror_url": null,
+            "name": "otziv_o",
+            "node_id": "R_kgDOJsm53Q",
+            "notifications_url": "https://api.github.com/repos/Claidd/otziv_o/notifications{?since,all,participating}",
+            "open_issues": 1,
+            "open_issues_count": 1,
+            "owner": {
+              "avatar_url": "https://avatars.githubusercontent.com/u/121088694?v=4",
+              "events_url": "https://api.github.com/users/Claidd/events{/privacy}",
+              "followers_url": "https://api.github.com/users/Claidd/followers",
+              "following_url": "https://api.github.com/users/Claidd/following{/other_user}",
+              "gists_url": "https://api.github.com/users/Claidd/gists{/gist_id}",
+              "gravatar_id": "",
+              "html_url": "https://github.com/Claidd",
+              "id": 121088694,
+              "login": "Claidd",
+              "node_id": "U_kgDOBzeqtg",
+              "organizations_url": "https://api.github.com/users/Claidd/orgs",
+              "received_events_url": "https://api.github.com/users/Claidd/received_events",
+              "repos_url": "https://api.github.com/users/Claidd/repos",
+              "site_admin": false,
+              "starred_url": "https://api.github.com/users/Claidd/starred{/owner}{/repo}",
+              "subscriptions_url": "https://api.github.com/users/Claidd/subscriptions",
+              "type": "User",
+              "url": "https://api.github.com/users/Claidd",
+              "user_view_type": "public"
+            },
+            "private": false,
+            "pull_request_creation_policy": "all",
+            "pulls_url": "https://api.github.com/repos/Claidd/otziv_o/pulls{/number}",
+            "pushed_at": "2026-09-08T08:44:35Z",
+            "releases_url": "https://api.github.com/repos/Claidd/otziv_o/releases{/id}",
+            "size": 597573,
+            "ssh_url": "git@github.com:Claidd/otziv_o.git",
+            "stargazers_count": 0,
+            "stargazers_url": "https://api.github.com/repos/Claidd/otziv_o/stargazers",
+            "statuses_url": "https://api.github.com/repos/Claidd/otziv_o/statuses/{sha}",
+            "subscribers_url": "https://api.github.com/repos/Claidd/otziv_o/subscribers",
+            "subscription_url": "https://api.github.com/repos/Claidd/otziv_o/subscription",
+            "svn_url": "https://github.com/Claidd/otziv_o",
+            "tags_url": "https://api.github.com/repos/Claidd/otziv_o/tags",
+            "teams_url": "https://api.github.com/repos/Claidd/otziv_o/teams",
+            "topics": [],
+            "trees_url": "https://api.github.com/repos/Claidd/otziv_o/git/trees{/sha}",
+            "updated_at": "2026-09-02T16:35:27Z",
+            "url": "https://api.github.com/repos/Claidd/otziv_o",
+            "visibility": "public",
+            "watchers": 0,
+            "watchers_count": 0,
+            "web_commit_signoff_required": false
+          },
+          "sender": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/121088694?v=4",
+            "events_url": "https://api.github.com/users/Claidd/events{/privacy}",
+            "followers_url": "https://api.github.com/users/Claidd/followers",
+            "following_url": "https://api.github.com/users/Claidd/following{/other_user}",
+            "gists_url": "https://api.github.com/users/Claidd/gists{/gist_id}",
+            "gravatar_id": "",
+            "html_url": "https://github.com/Claidd",
+            "id": 121088694,
+            "login": "Claidd",
+            "node_id": "U_kgDOBzeqtg",
+            "organizations_url": "https://api.github.com/users/Claidd/orgs",
+            "received_events_url": "https://api.github.com/users/Claidd/received_events",
+            "repos_url": "https://api.github.com/users/Claidd/repos",
+            "site_admin": false,
+            "starred_url": "https://api.github.com/users/Claidd/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/Claidd/subscriptions",
+            "type": "User",
+            "url": "https://api.github.com/users/Claidd",
+            "user_view_type": "public"
+          },
+          "workflow": ".github/workflows/quality-gates.yml"
+        },
+        "github_job": "reviewed-image-publication",
+        "github_ref": "refs/heads/codex/architecture-remediation-20260907",
+        "github_ref_name": "codex/architecture-remediation-20260907",
+        "github_ref_protected": "false",
+        "github_ref_type": "branch",
+        "github_repository": "Claidd/otziv_o",
+        "github_repository_id": "650754525",
+        "github_repository_owner": "Claidd",
+        "github_repository_owner_id": "121088694",
+        "github_run_attempt": "1",
+        "github_run_id": "34206243823",
+        "github_run_number": "86",
+        "github_runner_arch": "X64",
+        "github_runner_environment": "github-hosted",
+        "github_runner_image_os": "ubuntu24",
+        "github_runner_image_version": "20260831.293.1",
+        "github_runner_name": "GitHub Actions 1000001806",
+        "github_runner_os": "Linux",
+        "github_runner_tracking_id": "github_f67cfc07-a99e-4dc7-93d6-0c5d8d9ffe89",
+        "github_server_url": "https://github.com",
+        "github_triggering_actor": "Claidd",
+        "github_workflow": "Quality gates",
+        "github_workflow_ref": "Claidd/otziv_o/.github/workflows/quality-gates.yml@refs/heads/codex/architecture-remediation-20260907",
+        "github_workflow_sha": "0f715d08cf4b56ea7788594d5b9aa9295f9d1761",
+        "platform": "linux/amd64"
+      }
+    }
+  },
+  "buildx.build.ref": "otziv-review-phpmyadmin-34206243823-1/otziv-review-phpmyadmin-34206243823-10/krxb6kvp6clvu1njlpo0j3vlf",
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.oci.image.index.v1+json",
+    "digest": "sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835",
+    "size": 857
+  },
+  "containerimage.digest": "sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835",
+  "image.name": "ghcr.io/claidd/otziv-security:phpmyadmin-0f715d08cf4b56ea7788594d5b9aa9295f9d1761-34206243823-1"
+}

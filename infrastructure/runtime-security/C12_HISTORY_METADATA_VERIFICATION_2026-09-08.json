@@ -1,0 +1,65 @@
+{
+  "schema": "otziv-c12-history-public-metadata-verification-v1",
+  "result": "PASS",
+  "scanner": "ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+  "baselineConfigDigest": "b1acfe00726924befeb02c76dc832d47aa6149137cb8c8ca4a27149492ceef11",
+  "candidateConfigDigest": "9cbc81f58896e5839c87ed7b09649e18f0992dfe4cc2ce4aa4180ba1770488e1",
+  "actualReproduction": {
+    "hostedFindings": 55,
+    "retainedHostedLogDigest": "766bf354dbcd77b297a5d6725449d1d94fd4e534278ef6307f61af37d82b5b10",
+    "directoryBefore": 0,
+    "historyBefore": 55,
+    "directoryAfter": 0,
+    "historyAfter": 0,
+    "actualReproductionDigest": "6ad227558952fd894c205b0e2bacdb0dad2669aa549196087d3ed17511a6b151",
+    "correctedPositiveProofDigest": "df3fc070acb186741ff2330569df19bc88c5e5fe693ee529386a3e47b100d243"
+  },
+  "classification": {
+    "publishedOciRevisionFindings": 8,
+    "upstreamCommitReferenceFindings": 47,
+    "distinctPublicValues": 11,
+    "decodedFindings": 0,
+    "originBoundary": "OCI revision identifiers independently match preserved published configuration; other values occur in actual public upstream commit URLs in hash-bound scanner reference/description metadata. No new upstream Git object fetch or advisory adjudication performed."
+  },
+  "scope": {
+    "targetRule": "sourcegraph-access-token",
+    "condition": "AND",
+    "target": "complete line",
+    "exactPathsAndPatternCounts": {
+      "infrastructure/runtime-security/proofs/c12-alloy/sbom.cdx.json": 12,
+      "infrastructure/runtime-security/proofs/c12-alloy/vulnerabilities.json": 12,
+      "infrastructure/runtime-security/proofs/c7-published/alloy/publication/vulnerabilities.json": 13
+    },
+    "newBlocks": 3,
+    "literalPatterns": 37,
+    "existingConfigurationPreservedAsBytePrefix": true,
+    "otherDetectorsUnchanged": true,
+    "noWholeFileExemption": true
+  },
+  "causalControls": {
+    "acceptedCases": 36,
+    "modes": [
+      "directory",
+      "Git history"
+    ],
+    "perPath": [
+      "baseline detection",
+      "exact reviewed scalar accepted",
+      "changed value remains detected",
+      "same value in another field remains detected",
+      "different path remains detected",
+      "adjacent independent hardcoded credential remains detected"
+    ],
+    "recordDigest": "c91887154872cad87202a8f955ba42d8a2083d14dc963bb804462e7dcdf10a35",
+    "fixtureValues": "Deterministic publicly reproducible unusable fixture material"
+  },
+  "modeExplanation": "The pinned detector has a legacy bare 40-hex alternative and a fragment-wide keyword prefilter. A distant public package keyword in a whole added Git hunk enables that alternative for public revision/reference fields. Directory reading uses approximately 100 KB chunks, so the same fields had no trigger keyword in their chunks. No scanning mode, rule, threshold or history scope was changed.",
+  "retainedAttempts": "The initial mapper used the Windows default decoding for three non-ASCII description lines and left three history findings. That failed attempt is retained; explicit UTF-8 restores exact source-line comparison. A control-selection assertion stopped before executing later cases; earlier passing cases were retained and verified by digest.",
+  "independentSourceReviewDigest": "97ab2327ac7539140f2b6dcc581c098206780f869866a1a180e82eb23c8db5a3",
+  "operations": {
+    "sharedSourceWrites": 0,
+    "remoteCalls": 0,
+    "providerCalls": 0
+  },
+  "limits": "This corrects exact public metadata classifications only. It is not a vulnerability adjudication, risk acceptance, hosted result forecast or production approval."
+}

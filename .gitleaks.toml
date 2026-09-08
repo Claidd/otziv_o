@@ -551,3 +551,68 @@ paths = [
 regexes = [
   '''^\n?\ \ "sourceApiZipSha256":\ "00928c7015270caaaad0822dd70dba4071908569f23266d8b112512f521a7239",\r?$''',
 ]
+
+# Reviewed exact C12 Git-fragment public metadata; no detector or history bypass.
+[[allowlists]]
+description = "Exact public image revision and upstream commit metadata in sbom.cdx.json"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c12\-alloy/sbom\.cdx\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "url":\ "https://cgit\.git\.savannah\.gnu\.org/cgit/coreutils\.git/commit/\?id=8c9602e3a145e9596dc1a63c6ed67865814b6633"\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "url":\ "https://cgit\.git\.savannah\.gnu\.org/cgit/diffutils\.git/commit/\?id=73ed7ce85cc78effb94daf028c9af6b4e5252e50"\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "url":\ "https://cgit\.git\.savannah\.gnu\.org/cgit/diffutils\.git/commit/\?id=9ff04d5b84743e331e80b589335a52c5480d1815"\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "url":\ "https://cgit\.git\.savannah\.nongnu\.org/cgit/attr\.git/commit/\?id=49f79e947270f06940b9100fa638f85dddc4aa7f"\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "url":\ "https://cgit\.git\.savannah\.nongnu\.org/cgit/attr\.git/commit/\?id=c440855d6b33446edf4b5eb1a2d892281f15a99b"\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "url":\ "https://github\.com/moby/moby/commit/f4d6f25bf0c3fa12d4968320a45685947756a22a"\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "url":\ "https://github\.com/util\-linux/util\-linux/commit/5e390467b26a3cf3fecc04e1a0d482dff3162fc4"\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "url":\ "https://github\.com/util\-linux/util\-linux/commit/c0186f14fbdb02f64c8e0ba701ce727ea764ff4c"\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "url":\ "https://sourceware\.org/cgit/bzip2/commit/\?id=35d122a3df8b0cc4082a4d89fdc6ee99f375fe67"\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "value":\ "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f"\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "value":\ "becfd489a7bb459c0496893b555fb87a003296b1"\r?$''',
+  '''^\n?\ \ \ \ \ \ "description":\ "bzip2\ contains\ an\ off‑by‑one\ error\ in\ the\ bzip2recover\ utility\.\ When\ processing\ a\ specially\ crafted\ file,\ the\ application\ performs\ an\ out‑of‑bounds\ write\ to\ a\ global\ buffer,\ resulting\ in\ memory\ corruption\ and\ a\ crash\ \(denial\ of\ service\)\.\\n\\nThis\ issue\ was\ fixed\ in\ bzip2\ patch 35d122a3df8b0cc4082a4d89fdc6ee99f375fe67",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public image revision and upstream commit metadata in vulnerabilities.json"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c12\-alloy/vulnerabilities\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://cgit\.git\.savannah\.gnu\.org/cgit/coreutils\.git/commit/\?id=8c9602e3a145e9596dc1a63c6ed67865814b6633",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://cgit\.git\.savannah\.gnu\.org/cgit/diffutils\.git/commit/\?id=73ed7ce85cc78effb94daf028c9af6b4e5252e50",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://cgit\.git\.savannah\.gnu\.org/cgit/diffutils\.git/commit/\?id=9ff04d5b84743e331e80b589335a52c5480d1815",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://cgit\.git\.savannah\.nongnu\.org/cgit/attr\.git/commit/\?id=49f79e947270f06940b9100fa638f85dddc4aa7f",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://cgit\.git\.savannah\.nongnu\.org/cgit/attr\.git/commit/\?id=c440855d6b33446edf4b5eb1a2d892281f15a99b",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://github\.com/moby/moby/commit/f4d6f25bf0c3fa12d4968320a45685947756a22a",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://github\.com/util\-linux/util\-linux/commit/c0186f14fbdb02f64c8e0ba701ce727ea764ff4c",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://sourceware\.org/cgit/bzip2/commit/\?id=35d122a3df8b0cc4082a4d89fdc6ee99f375fe67",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "Description":\ "bzip2\ contains\ an\ off‑by‑one\ error\ in\ the\ bzip2recover\ utility\.\ When\ processing\ a\ specially\ crafted\ file,\ the\ application\ performs\ an\ out‑of‑bounds\ write\ to\ a\ global\ buffer,\ resulting\ in\ memory\ corruption\ and\ a\ crash\ \(denial\ of\ service\)\.\\n\\nThis\ issue\ was\ fixed\ in\ bzip2\ patch 35d122a3df8b0cc4082a4d89fdc6ee99f375fe67",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "com\.otziv\.publication\.revision":\ "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "created_by":\ "LABEL\ org\.opencontainers\.image\.source=https://github\.com/grafana/alloy\ org\.opencontainers\.image\.revision=becfd489a7bb459c0496893b555fb87a003296b1\ org\.opencontainers\.image\.version=1\.19\.2\-otziv\.1\ com\.otziv\.security\.patch=Go1\.27\.1;\ google\.golang\.org/grpc1\.83\.1;\ original\ UI\ lock\ and\ vendor\ build\ tags",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "org\.opencontainers\.image\.revision":\ "becfd489a7bb459c0496893b555fb87a003296b1",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public image revision and upstream commit metadata in vulnerabilities.json"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/proofs/c7\-published/alloy/publication/vulnerabilities\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://cgit\.git\.savannah\.gnu\.org/cgit/coreutils\.git/commit/\?id=8c9602e3a145e9596dc1a63c6ed67865814b6633",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://cgit\.git\.savannah\.gnu\.org/cgit/diffutils\.git/commit/\?id=73ed7ce85cc78effb94daf028c9af6b4e5252e50",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://cgit\.git\.savannah\.gnu\.org/cgit/diffutils\.git/commit/\?id=9ff04d5b84743e331e80b589335a52c5480d1815",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://cgit\.git\.savannah\.nongnu\.org/cgit/attr\.git/commit/\?id=49f79e947270f06940b9100fa638f85dddc4aa7f",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://cgit\.git\.savannah\.nongnu\.org/cgit/attr\.git/commit/\?id=c440855d6b33446edf4b5eb1a2d892281f15a99b",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://github\.com/moby/moby/commit/f4d6f25bf0c3fa12d4968320a45685947756a22a",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://github\.com/util\-linux/util\-linux/commit/5e390467b26a3cf3fecc04e1a0d482dff3162fc4",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://github\.com/util\-linux/util\-linux/commit/c0186f14fbdb02f64c8e0ba701ce727ea764ff4c",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://sourceware\.org/cgit/bzip2/commit/\?id=35d122a3df8b0cc4082a4d89fdc6ee99f375fe67",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "Description":\ "bzip2\ contains\ an\ off‑by‑one\ error\ in\ the\ bzip2recover\ utility\.\ When\ processing\ a\ specially\ crafted\ file,\ the\ application\ performs\ an\ out‑of‑bounds\ write\ to\ a\ global\ buffer,\ resulting\ in\ memory\ corruption\ and\ a\ crash\ \(denial\ of\ service\)\.\\n\\nThis\ issue\ was\ fixed\ in\ bzip2\ patch 35d122a3df8b0cc4082a4d89fdc6ee99f375fe67",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "com\.otziv\.publication\.revision":\ "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "created_by":\ "LABEL\ org\.opencontainers\.image\.source=https://github\.com/grafana/alloy\ org\.opencontainers\.image\.revision=becfd489a7bb459c0496893b555fb87a003296b1\ org\.opencontainers\.image\.version=1\.19\.2\-otziv\.1\ com\.otziv\.security\.patch=Go1\.27\.1;\ google\.golang\.org/grpc1\.83\.1;\ original\ UI\ lock\ and\ vendor\ build\ tags",\r?$''',
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "org\.opencontainers\.image\.revision":\ "becfd489a7bb459c0496893b555fb87a003296b1",\r?$''',
+]
