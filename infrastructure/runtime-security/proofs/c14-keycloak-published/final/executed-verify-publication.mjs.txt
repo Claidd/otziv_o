@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {readFile,writeFile,access} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {validatePublication} from '../../../../infrastructure/runtime-security/verify-anonymous-download.mjs';
+import {checkedJson,SOURCE_REPOSITORY,verifyRegistryEvidence} from '../../../../infrastructure/runtime-security/registry-evidence.mjs';
+import {verifyPublicationEvidencePair} from '../../../../infrastructure/runtime-security/proofs/c14-keycloak-published/final/verify-publication-pair.mjs';
+import {checkKeycloakRuntimeDependencies} from '../../../../infrastructure/runtime-security/keycloak-runtime-dependencies.mjs';
+import {summarizeReport,TRIVY_IMAGE} from '../../../../infrastructure/runtime-security/scan.mjs';
+import {combinedScanSummary} from '../../../../infrastructure/runtime-security/scan-verdict.mjs';
+const root=process.cwd(),dir='infrastructure/runtime-security/proofs/c14-keycloak-published/final/';
+const read=path=>readFile(resolve(root,dir,path)),json=async path=>JSON.parse(await read(path));
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+const save=async(path,value)=>{const bytes=Buffer.from(JSON.stringify(value,null,2)+'\n');try {assert.deepEqual(await read(path),bytes);}catch(e){if(e.code!=='ENOENT')throw e;await writeFile(resolve(root,dir,path),bytes,{flag:'wx'});}};
+const manifestPath='infrastructure/runtime-security/reviewed-images-c14-keycloak.json';
+const manifestBytes=await readFile(manifestPath),manifest=JSON.parse(manifestBytes),image=manifest.images[0];
+assert.equal(manifest.publicationSet,'c14-keycloak');assert.equal(manifest.images.length,1);
+const pubBytes=await read('publication/publication.json'),pub=JSON.parse(pubBytes);
+const target=JSON.parse(await readFile(new URL('./execution-target.json',import.meta.url)));
+const identity={commit:target.head,run:target.run,attempt:target.attempt};
+const digest=validatePublication(pub,identity,image,hash(manifestBytes),'c14-keycloak');
+const blobs=new Map();
+for(const artifact of pub.attestationEvidence.artifacts){const b=await read('publication/'+artifact.file);checkedJson(b,artifact);blobs.set(artifact.digest,b);}
+const evidence=await verifyRegistryEvidence({digest,expected:{source:SOURCE_REPOSITORY,commit:identity.commit,context:image.context,dockerfile:image.dockerfile,dockerfileSha256:image.dockerfileSha256},read:async(kind,d)=>{assert.ok(blobs.has(d));return blobs.get(d);},retain:async()=>{}});
+assert.deepEqual(evidence,pub.attestationEvidence);
+const configBytes=await read('publication/registry-amd64-config.json');assert.equal('sha256:'+hash(configBytes),pub.imageId);
+const raw=await read('publication/vulnerabilities.json'),report=JSON.parse(raw);
+assert.equal(report.Metadata.ImageID,pub.imageId);
+const known=checkKeycloakRuntimeDependencies(raw,pub.imageId);assert.deepEqual(known,pub.knownRuntimeDependencies);assert.deepEqual(known,await json('publication/known-runtime-dependencies.json'));
+const summary={...combinedScanSummary(summarizeReport(report,true),{}),scannerImage:TRIVY_IMAGE};assert.deepEqual(summary,pub.security);
+assert.equal(summary.high,0);assert.equal(summary.critical,0);assert.equal(summary.result,'PASS');
+assert.ok(report.Results.some(r=>r.Class==='os-pkgs'&&r.Packages.length));assert.ok(report.Results.some(r=>r.Type==='jar'&&r.Packages.length));
+const sbom=await json('publication/vulnerabilities.sbom.cdx.json');assert.equal(sbom.bomFormat,'CycloneDX');assert.ok(sbom.components.length);
+const receipt=await json('publication-artifact-verification.json');assert.equal(receipt.apiDigest,'sha256:'+hash(await read('reviewed-publication-keycloak-attempt-1.zip')));assert.equal(receipt.commit,identity.commit);assert.equal(receipt.run,identity.run);
+for(const [path,d]of Object.entries(receipt.files))assert.equal(hash(await read('publication/'+path)),d);
+const verification={schema:'otziv-published-keycloak-publication-verification-v1',result:'PASS',...identity,reference:pub.reference,config:pub.imageId,rawReportSha256:hash(raw),high:summary.high,critical:summary.critical,lowerFindings:report.Results.flatMap(r=>r.Vulnerabilities||[]).length,coverage:report.Results.map(r=>({type:r.Type,class:r.Class,packages:r.Packages.length})),sbomComponents:sbom.components.length,runtimeDependencyResult:known.result,runtimeDependencyRecords:known.packages.length,registryEvidenceVerified:true,artifactZipHashVerified:true,sourceManifestSha256:hash(manifestBytes),sourceDockerfileSha256:hash(await readFile(image.dockerfile))};
+await save('publication-verification.json',verification);
+let anonymous=false;
+try{await access(resolve(root,dir,'anonymous/anonymous-download.json'));anonymous=true;}catch(e){if(e.code!=='ENOENT')throw e;}
+if(anonymous){
+ const proof=async path=>({path,sha256:hash(await readFile(path))});
+ const entry={component:'keycloak',reference:pub.reference,...identity,manifest:await proof(manifestPath),publication:await proof(dir+'publication/publication.json'),anonymous:await proof(dir+'anonymous/anonymous-download.json')};
+ const baselineBytes=await readFile('infrastructure/runtime-security/reviewed-images.json');
+ assert.equal(await verifyPublicationEvidencePair({entry,root}),pub.reference);
+ const receipt=await json('anonymous-artifact-verification.json');assert.equal(receipt.apiDigest,'sha256:'+hash(await read('anonymous-download-keycloak-attempt-1.zip')));
+ for(const[path,d]of Object.entries(receipt.files))assert.equal(hash(await read('anonymous/'+path)),d);
+ await save('activation-candidate.json',entry);
+ await save('paired-publication-verification.json',{schema:'otziv-keycloak-paired-publication-verification-v1',result:'PASS',...identity,reference:pub.reference,config:pub.imageId,publicationSha256:hash(pubBytes),anonymousSha256:hash(await read('anonymous/anonymous-download.json')),defaultsChanged:false,activationApplied:false});
+}
+console.log(JSON.stringify({...verification,anonymousPairVerified:anonymous}));

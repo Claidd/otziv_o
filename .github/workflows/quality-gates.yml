@@ -224,6 +224,9 @@ jobs:
       - name: Test new-branch and pull-request Git range enforcement
         shell: pwsh
         run: ./infrastructure/scripts/security/test-ci-base-revision.ps1
+      - name: Test exact public SBOM blob limits and reject substitutions
+        shell: pwsh
+        run: ./infrastructure/scripts/security/test-large-git-files.ps1
       - name: Reject oversized Git blobs
         if: github.event_name != 'push' || github.event.deleted != true
         shell: pwsh

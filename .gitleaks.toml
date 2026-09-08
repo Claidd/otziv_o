@@ -616,3 +616,663 @@ regexes = [
   '''^\n?\ \ \ \ \ \ \ \ \ \ "created_by":\ "LABEL\ org\.opencontainers\.image\.source=https://github\.com/grafana/alloy\ org\.opencontainers\.image\.revision=becfd489a7bb459c0496893b555fb87a003296b1\ org\.opencontainers\.image\.version=1\.19\.2\-otziv\.1\ com\.otziv\.security\.patch=Go1\.27\.1;\ google\.golang\.org/grpc1\.83\.1;\ original\ UI\ lock\ and\ vendor\ build\ tags",\r?$''',
   '''^\n?\ \ \ \ \ \ \ \ \ \ "org\.opencontainers\.image\.revision":\ "becfd489a7bb459c0496893b555fb87a003296b1",\r?$''',
 ]
+
+# C14 reviewed public metadata only: detector AND exact artifact path AND complete line/match.
+# One-line provenance uses exact detector matches so adjacent unknown credentials remain scanned.
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in base-keycloak-jars.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/keycloak/security\-generation/c14\-migration\-fix/proofs/security\-v3/base\-keycloak\-jars\.json$''']
+regexes = [
+  '''^\n?\ \ "opt/keycloak/lib/app/keycloak\.jar":\ "7c65ed659cbc83e21ef976dd2f5be2dff0fbdcba9b6f51867f9194356beeb97e",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/boot/jakarta\.json\.jakarta\.json\-api\-2\.1\.3\.jar":\ "bc934142805ea1d794f1440563965a3861a2a9fb7414ecd3fe44f26500734414",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.quarkus\.quarkus\-smallrye\-openapi\-dev\-3\.33\.3\.1\.jar":\ "e76c6d49dcf72cc6b4b8aab27cc58eba3c896fe373659d662c6149bdf4384ae3",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.quarkus\.quarkus\-smallrye\-openapi\-spi\-3\.33\.3\.1\.jar":\ "ec0cc04c675048994160a64a26b6e60cc49f8f9a88da43277e73d4c0461496df",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-jaxrs\-4\.2\.4\.jar":\ "4b749e84754abd638245f89d561d597ffec91e73eefaccd9e8cec322d05a1eae",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-spring\-4\.2\.4\.jar":\ "d3a4bb698f1dcd6123fc9d0582dab1cca539c1baad71aae2a059ab1d1eddcacb",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-ui\-4\.2\.4\.jar":\ "f1412f61960576e70061902729bd15a6cc8b9ec68079190cea73495efbce2efd",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-vertx\-4\.2\.4\.jar":\ "b0eb3dee61f6e1a577f12f8e7573f0e91295a3e8631a2ca3c3d1951947c0ad90",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/jakarta\.servlet\.jakarta\.servlet\-api\-6\.0\.0\.jar":\ "c034eb1afb158987dbb53a5fea0cadf611c8dae8daadd59c44d9d5ab70129cef",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.agroal\.agroal\-api\-3\.0\.1\.jar":\ "39d2446e439963f2556add24891c2db9d1fcfbefb79d2c9b112e0d843a508603",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.grpc\.grpc\-api\-1\.81\.0\.jar":\ "3e6a659ba3edcdac730c857b27725e2e4d985c2241055e8326eb4fe0f9573d53",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.opentelemetry\.instrumentation\.opentelemetry\-instrumentation\-api\-2\.23\.0\.jar":\ "c6b86acc7ccb2a6a0979ae73ae686ea4ac8a24e656912bc169216bcfd87f44b1",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.opentelemetry\.opentelemetry\-api\-1\.57\.0\.jar":\ "88bbfc3fcc81af3299e7f69cddcc9672e410ffcf7435e8b50a474cf2e454b410",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.perfmark\.perfmark\-api\-0\.27\.0\.jar":\ "c7b478503ec524e55df19b424d46d27c8a68aeb801664fadd4f069b71f52d0f6",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.quarkus\.quarkus\-credentials\-3\.33\.3\.1\.jar":\ "00fd02afdf24b94a4d94296f28261c77f9de89f2007011401bb48fda07728646",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.quarkus\.quarkus\-smallrye\-openapi\-3\.33\.3\.1\.jar":\ "6e61b1ce00347a0b07015fec8f9c9fc9fb81cd3ac54efa403fa18bf1da8dcf31",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.config\.smallrye\-config\-source\-keystore\-3\.16\.0\.jar":\ "cf6fe2697bb11e894682d2ec28a94952b5ecde84d5841e567c8d647ae1ecc372",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.reactive\.smallrye\-mutiny\-vertx\-auth\-common\-3\.21\.6\.jar":\ "9c7a87f23536e6126bb11621f53f310cba35277e3ef11ce660efdeb5dd772d60",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.reactive\.smallrye\-reactive\-converter\-api\-3\.0\.3\.jar":\ "8f47b3cbdef72c5875836011beb02f485918febbb73c15d51738c566eb669253",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-context\-propagation\-api\-2\.3\.0\.jar":\ "da0bc273588cefb478e98c4e137f65cc394a54253e35684d5d917060fdc4147c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-health\-api\-4\.3\.0\.jar":\ "a91809158320220877f436a9365ad61f98e0cfe53fa62d95d3eb5a88535dbc67",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-open\-api\-core\-4\.2\.4\.jar":\ "a4265049543a12f73971c3b87cd370fda3522b32ef81ad418b0e281bed9ca2ad",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-open\-api\-model\-4\.2\.4\.jar":\ "52b10d7ce18f765a771211a4606d874692f4f9d90d18ef99e38c12f4bf6fa215",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.vertx\.vertx\-auth\-common\-4\.5\.31\.jar":\ "ca50cb70de4f27205dea350fd59c72fb8475b5fe786c19614cea71234d38c5d1",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.activation\.jakarta\.activation\-api\-2\.1\.4\.jar":\ "c9db52100ce6c8aac95cc39075f95720d2e561b11f8051b81c121ad4effd7004",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.annotation\.jakarta\.annotation\-api\-3\.0\.0\.jar":\ "b01f55552284cfb149411e64eabca75e942d26d2e1786b32914250e4330afaa2",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.el\.jakarta\.el\-api\-6\.0\.1\.jar":\ "7e84b5bed49de32b79cc5e85d90b6f5adb1a953ac67283adbb41c1e297f9c605",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.enterprise\.jakarta\.enterprise\.cdi\-api\-4\.1\.0\.jar":\ "c42c808f17925129a0800f618febe050d966e181a4c7384c8a5e7a0283d68699",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.inject\.jakarta\.inject\-api\-2\.0\.1\.jar":\ "f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.interceptor\.jakarta\.interceptor\-api\-2\.2\.0\.jar":\ "d240d72b4dd38a2e431c804079810010cb97903678fa5f987fb7434878b04398",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.mail\.jakarta\.mail\-api\-2\.1\.1\.jar":\ "1d69d8aaa6ab704d4ce3bd156cd5542060849a409b1e0463163d8508356857cc",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.persistence\.jakarta\.persistence\-api\-3\.2\.0\.jar":\ "be8a26b0e75c84c1b7600f759256fbc68d60333d89ec0ce3f784fc3ffa09aa8c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.resource\.jakarta\.resource\-api\-2\.1\.0\.jar":\ "4d26ad86a5f72cd2f9c4a31cc4524f7bf3ec0ff74416f081f8642b7ce8041067",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.transaction\.jakarta\.transaction\-api\-2\.0\.1\.jar":\ "50c0a7c760c13ae6c042acf182b28f0047413db95b4636fb8879bcffab5ba875",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.validation\.jakarta\.validation\-api\-3\.1\.1\.jar":\ "63ce00156388c365f3ac1be71fcfaf114682fc0c452020b5df6e7ec236e142ab",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.ws\.rs\.jakarta\.ws\.rs\-api\-3\.1\.0\.jar":\ "6b3b3628b8b4aedda0d24c3354335e985497d8ef3c510b8f3028e920d5b8663d",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.xml\.bind\.jakarta\.xml\.bind\-api\-4\.0\.5\.jar":\ "5e489b6c874c4119e003ff1403db523ee3a8959ec499f3de29e77245efccf216",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.xml\.soap\.jakarta\.xml\.soap\-api\-3\.0\.0\.jar":\ "33124e98d724b69e1673a61675c205b58c372605f4254d455b12b37398219a37",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.config\.microprofile\-config\-api\-3\.1\.1\.jar":\ "0d4eaa7e17730e153b1e0613104a989af7d7a0d4ba4d19c84c71862bff993773",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.context\-propagation\.microprofile\-context\-propagation\-api\-1\.3\.jar":\ "69ccc04487e87779d4970aa50c673cc34a9df080c1c0e8d8eab2e8b46f825cf4",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.health\.microprofile\-health\-api\-4\.0\.1\.jar":\ "b89ca4b6c4f7a044250d31c0673f6bc221e40fd669fc5871dbad5e5a0769ca47",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.openapi\.microprofile\-openapi\-api\-4\.1\.1\.jar":\ "1e333f5bd206245e7a4d0a3dd5f2bab1820fc3b950b77e96008fcdb7b77d9150",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.reactive\-streams\-operators\.microprofile\-reactive\-streams\-operators\-api\-3\.0\.1\.jar":\ "2eb30081f2674e674c6587592747a81a4d92d2da1a735be5f645901de60f9f8d",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.infinispan\.infinispan\-api\-16\.0\.14\.jar":\ "6a7e17bdccb7d9578fb268c894793ea6d0fd0d9c77aa5b4b6243263e6e019759",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.infinispan\.infinispan\-counter\-api\-16\.0\.14\.jar":\ "4bfda70b4e04fb1816112ebab01836eb72214f8369bc768058296d3494e6465b",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.keycloak\.keycloak\-admin\-v2\-api\-26\.7\.3\.jar":\ "20027710533f7ad3006ef3d0f6db03be0473bc0cf678935de6160af4b1ff5e2e",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.keycloak\.keycloak\-config\-api\-26\.7\.3\.jar":\ "59bd5b12e73fcbee7c42cd13b1a44ef58904de510e6dde4639d27e07d2194fa3",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.slf4j\.slf4j\-api\-2\.0\.17\.jar":\ "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.snakeyaml\.snakeyaml\-engine\-2\.6\.jar":\ "2652199af40c9aa2f1782400d2dfbbf4e5226208c4e05ddd4059c3d6d9cd1505",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-auth\-2\.8\.4\.Final\.jar":\ "99d4b3b160462b92bbf0145aba15aa73a5f55c67daf5fbdb102ef81de51c9ccf",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-credential\-2\.8\.4\.Final\.jar":\ "b13e94dd2319886ea2126692c44c4823531e9f36635467062b19c738be55de6b",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-mechanism\-gssapi\-2\.8\.4\.Final\.jar":\ "6b9cec364859d9816794ac11f9ddb3a08fb946625515b8cbfb2d88e867e50e71",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-mechanism\-oauth2\-2\.8\.4\.Final\.jar":\ "d3d151db3c57113149678e3cb1315e90fece2f5cd5b2e717716bee09b4420a60",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-sasl\-gssapi\-2\.8\.4\.Final\.jar":\ "d09e051bb13218e9ff81c4761c1b1c07f6f26ee2be1f4e79de54455e30f01318",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-sasl\-oauth2\-2\.8\.4\.Final\.jar":\ "d0bcb08b70f6b6548ca309e2897e5577bb05993c19fc496ffde02e7e7009ced9",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.yaml\.snakeyaml\-2\.0\.jar":\ "880c9d896e4b74a06c549c15ca496450165d6909fa15d7e662bee8f6a66d7afa",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in base-rootfs-inventory.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/keycloak/security\-generation/c14\-migration\-fix/proofs/security\-v3/base\-rootfs\-inventory\.json$''']
+regexes = [
+  '''^\n?\ \ "var/lib/dpkg/info/libgssapi\-krb5\-2:amd64\.triggers":\ \{\r?$''',
+  '''^\n?\ \ "var/lib/dpkg/info/libkeyutils1:amd64\.triggers":\ \{\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in otziv-realm-migration-provenance.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/keycloak/security\-generation/c14\-migration\-fix/proofs/security\-v3/otziv\-realm\-migration\-provenance\.json$''']
+regexes = [
+  '''^CachedUserVerifiableCredential\.class":"3980411cc35cd70fe2f21325fe98f85aad5ba6240f06595a70d04c2323f8d53c"$''',
+  '''^CachedUserVerifiableCredentials\.class":"ea6f31ffd559b257bdb83e716713f5774ce14a2bb14816d61ddd67d14755f9ca"$''',
+  '''^ClearExpiredClientInitialAccessTokens\.class":"7e1fd5540277e86c1383596ef38bad000ca28379e36f254bde001cf388ae0906"$''',
+  '''^ClearExpiredIssuedVerifiableCredentials\.class":"9f774856f3e7b0564cdf7a4fea80c3c1bd752cc56b8b68009f8ff527f5beb441"$''',
+  '''^ClearExpiredRevokedTokens\.class":"38749f04cc741724e11498205edccf52440b4217d812d741374f9bc1a53fc46e"$''',
+  '''^ClientSessionKey\.class":"90b094edd9029bbf7246aa0edf724ed0b30bec16f97eae38d16bbbddcedb294a"$''',
+  '''^ClientSessionKeyGrouper\.class":"307ee533b04ef918f346d2ee5c3f7da7b7ed1bd7afd071ef8628e93caa1dd891"$''',
+  '''^EmbeddedClientSessionKey\.class":"47bea985303a5a457f148b976119cd7f67b4f0f5b9cc4aed5a0e33f4a7f35f7c"$''',
+  '''^InfinispanKeyGenerator\.class":"e9813a2a857e0585218043e43037ccbd0e1efb4e9043f2da6ee360fecbc3b06e"$''',
+  '''^InfinispanRevokedTokenProvider\.class":"aa4d15e420511250cb5898bf79a5d4ba1bcdb458de462f364a1f9f5857a06ac3"$''',
+  '''^KeycloakModule\.class":"9297085ec1e5f073a9d84e775c3f92c9dcc223f843154e3d4649f8d365d28113"$''',
+  '''^LoginFailureKey\.class":"9a200dbe202212a0e4e23856ea2062d6b06be44c0e3edb2833c6bf1fac2f8e68"$''',
+  '''^MapEntryToKeyMapper\.class":"813e81f4237c6e50c390b118281323296e2cc61684d117babecfc9980172744a"$''',
+  '''^ReloadingX509ExtendedKeyManager\.class":"f88e11071d460b65066249d74e7f4db2415f9e0cbcdf71331cbbd14093011668"$''',
+  '''^RevokeTokenConsumer\.class":"d92e8c98f656074ed6f0e0d3ae447e639799174397768a4588583d6c12def852"$''',
+  '''^RevokedToken\.class":"858b100840df5a3d418cb7eddb6a57e162a2e318dcdf7e809b22cac72f107027"$''',
+  '''^RevokedTokenPersisterSpi\.class":"a11f65dcc0f8ab9f7256f285b4426485d087e22d9a9cea71f8d984a2d2a8e848"$''',
+  '''^SerializeExecutionsByKey\.class":"b14ce2dfe21e73ddeedb02424ae2bce2fc137ac769b68db6d0874f1ade14893e"$''',
+  '''^SessionAndKeyHolder\.class":"382d1cdf006431f72ed4c0813aa931614132f7944c4d14022917566bad70124f"$''',
+  '''^StringKeyGenerator\.class":"026b031214dec99d88a7212e2e026ca27dd02d91c87df79649c33f63fead9e50"$''',
+  '''^UUIDKeyGenerator\.class":"33075c5bc9b5cfcad8d0b33e9ae338fa9c34b2f0bdba04a0ba7e8be1522b458d"$''',
+  '''^UserVerifiableCredentialsUpdatedEvent\.class":"527e6ec752ea8b2d79cbc178ad72e1d4a9f3fb28c95406f6ead3c14d58ade4d2"$''',
+  '''^g\.eclipse\.microprofile\.config\.microprofile\-config\-api\-3\.1\.1\.jar":"0d4eaa7e17730e153b1e0613104a989af7d7a0d4ba4d19c84c71862bff993773"$''',
+  '''^g\.eclipse\.microprofile\.health\.microprofile\-health\-api\-4\.0\.1\.jar":"b89ca4b6c4f7a044250d31c0673f6bc221e40fd669fc5871dbad5e5a0769ca47"$''',
+  '''^io\.agroal\.agroal\-api\-3\.0\.1\.jar":"39d2446e439963f2556add24891c2db9d1fcfbefb79d2c9b112e0d843a508603"$''',
+  '''^io\.grpc\.grpc\-api\-1\.81\.0\.jar":"3e6a659ba3edcdac730c857b27725e2e4d985c2241055e8326eb4fe0f9573d53"$''',
+  '''^io\.opentelemetry\.opentelemetry\-api\-1\.57\.0\.jar":"88bbfc3fcc81af3299e7f69cddcc9672e410ffcf7435e8b50a474cf2e454b410"$''',
+  '''^io\.perfmark\.perfmark\-api\-0\.27\.0\.jar":"c7b478503ec524e55df19b424d46d27c8a68aeb801664fadd4f069b71f52d0f6"$''',
+  '''^io\.quarkus\.quarkus\-credentials\-3\.33\.3\.1\.jar":"00fd02afdf24b94a4d94296f28261c77f9de89f2007011401bb48fda07728646"$''',
+  '''^io\.quarkus\.quarkus\-smallrye\-openapi\-3\.33\.3\.1\.jar":"6e61b1ce00347a0b07015fec8f9c9fc9fb81cd3ac54efa403fa18bf1da8dcf31"$''',
+  '''^io\.quarkus\.quarkus\-smallrye\-openapi\-dev\-3\.33\.3\.1\.jar":"e76c6d49dcf72cc6b4b8aab27cc58eba3c896fe373659d662c6149bdf4384ae3"$''',
+  '''^io\.quarkus\.quarkus\-smallrye\-openapi\-spi\-3\.33\.3\.1\.jar":"ec0cc04c675048994160a64a26b6e60cc49f8f9a88da43277e73d4c0461496df"$''',
+  '''^io\.smallrye\.config\.smallrye\-config\-source\-keystore\-3\.16\.0\.jar":"cf6fe2697bb11e894682d2ec28a94952b5ecde84d5841e567c8d647ae1ecc372"$''',
+  '''^io\.smallrye\.reactive\.smallrye\-mutiny\-vertx\-auth\-common\-3\.21\.6\.jar":"9c7a87f23536e6126bb11621f53f310cba35277e3ef11ce660efdeb5dd772d60"$''',
+  '''^io\.smallrye\.reactive\.smallrye\-reactive\-converter\-api\-3\.0\.3\.jar":"8f47b3cbdef72c5875836011beb02f485918febbb73c15d51738c566eb669253"$''',
+  '''^io\.smallrye\.smallrye\-context\-propagation\-api\-2\.3\.0\.jar":"da0bc273588cefb478e98c4e137f65cc394a54253e35684d5d917060fdc4147c"$''',
+  '''^io\.smallrye\.smallrye\-health\-api\-4\.3\.0\.jar":"a91809158320220877f436a9365ad61f98e0cfe53fa62d95d3eb5a88535dbc67"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-core\-4\.2\.4\.jar":"a4265049543a12f73971c3b87cd370fda3522b32ef81ad418b0e281bed9ca2ad"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-jaxrs\-4\.2\.4\.jar":"4b749e84754abd638245f89d561d597ffec91e73eefaccd9e8cec322d05a1eae"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-model\-4\.2\.4\.jar":"52b10d7ce18f765a771211a4606d874692f4f9d90d18ef99e38c12f4bf6fa215"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-spring\-4\.2\.4\.jar":"d3a4bb698f1dcd6123fc9d0582dab1cca539c1baad71aae2a059ab1d1eddcacb"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-ui\-4\.2\.4\.jar":"f1412f61960576e70061902729bd15a6cc8b9ec68079190cea73495efbce2efd"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-vertx\-4\.2\.4\.jar":"b0eb3dee61f6e1a577f12f8e7573f0e91295a3e8631a2ca3c3d1951947c0ad90"$''',
+  '''^io\.vertx\.vertx\-auth\-common\-4\.5\.31\.jar":"ca50cb70de4f27205dea350fd59c72fb8475b5fe786c19614cea71234d38c5d1"$''',
+  '''^jakarta\.activation\.jakarta\.activation\-api\-2\.1\.4\.jar":"c9db52100ce6c8aac95cc39075f95720d2e561b11f8051b81c121ad4effd7004"$''',
+  '''^jakarta\.annotation\.jakarta\.annotation\-api\-3\.0\.0\.jar":"b01f55552284cfb149411e64eabca75e942d26d2e1786b32914250e4330afaa2"$''',
+  '''^jakarta\.el\.jakarta\.el\-api\-6\.0\.1\.jar":"7e84b5bed49de32b79cc5e85d90b6f5adb1a953ac67283adbb41c1e297f9c605"$''',
+  '''^jakarta\.enterprise\.jakarta\.enterprise\.cdi\-api\-4\.1\.0\.jar":"c42c808f17925129a0800f618febe050d966e181a4c7384c8a5e7a0283d68699"$''',
+  '''^jakarta\.inject\.jakarta\.inject\-api\-2\.0\.1\.jar":"f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c"$''',
+  '''^jakarta\.interceptor\.jakarta\.interceptor\-api\-2\.2\.0\.jar":"d240d72b4dd38a2e431c804079810010cb97903678fa5f987fb7434878b04398"$''',
+  '''^jakarta\.json\.jakarta\.json\-api\-2\.1\.3\.jar":"bc934142805ea1d794f1440563965a3861a2a9fb7414ecd3fe44f26500734414"$''',
+  '''^jakarta\.mail\.jakarta\.mail\-api\-2\.1\.1\.jar":"1d69d8aaa6ab704d4ce3bd156cd5542060849a409b1e0463163d8508356857cc"$''',
+  '''^jakarta\.persistence\.jakarta\.persistence\-api\-3\.2\.0\.jar":"be8a26b0e75c84c1b7600f759256fbc68d60333d89ec0ce3f784fc3ffa09aa8c"$''',
+  '''^jakarta\.resource\.jakarta\.resource\-api\-2\.1\.0\.jar":"4d26ad86a5f72cd2f9c4a31cc4524f7bf3ec0ff74416f081f8642b7ce8041067"$''',
+  '''^jakarta\.servlet\.jakarta\.servlet\-api\-6\.0\.0\.jar":"c034eb1afb158987dbb53a5fea0cadf611c8dae8daadd59c44d9d5ab70129cef"$''',
+  '''^jakarta\.transaction\.jakarta\.transaction\-api\-2\.0\.1\.jar":"50c0a7c760c13ae6c042acf182b28f0047413db95b4636fb8879bcffab5ba875"$''',
+  '''^jakarta\.validation\.jakarta\.validation\-api\-3\.1\.1\.jar":"63ce00156388c365f3ac1be71fcfaf114682fc0c452020b5df6e7ec236e142ab"$''',
+  '''^jakarta\.ws\.rs\.jakarta\.ws\.rs\-api\-3\.1\.0\.jar":"6b3b3628b8b4aedda0d24c3354335e985497d8ef3c510b8f3028e920d5b8663d"$''',
+  '''^jakarta\.xml\.bind\.jakarta\.xml\.bind\-api\-4\.0\.5\.jar":"5e489b6c874c4119e003ff1403db523ee3a8959ec499f3de29e77245efccf216"$''',
+  '''^jakarta\.xml\.soap\.jakarta\.xml\.soap\-api\-3\.0\.0\.jar":"33124e98d724b69e1673a61675c205b58c372605f4254d455b12b37398219a37"$''',
+  '''^operators\.microprofile\-reactive\-streams\-operators\-api\-3\.0\.1\.jar":"2eb30081f2674e674c6587592747a81a4d92d2da1a735be5f645901de60f9f8d"$''',
+  '''^org\.eclipse\.microprofile\.openapi\.microprofile\-openapi\-api\-4\.1\.1\.jar":"1e333f5bd206245e7a4d0a3dd5f2bab1820fc3b950b77e96008fcdb7b77d9150"$''',
+  '''^org\.infinispan\.infinispan\-api\-16\.0\.14\.jar":"6a7e17bdccb7d9578fb268c894793ea6d0fd0d9c77aa5b4b6243263e6e019759"$''',
+  '''^org\.infinispan\.infinispan\-counter\-api\-16\.0\.14\.jar":"4bfda70b4e04fb1816112ebab01836eb72214f8369bc768058296d3494e6465b"$''',
+  '''^org\.keycloak\.keycloak\-admin\-v2\-api\-26\.7\.3\.jar":"20027710533f7ad3006ef3d0f6db03be0473bc0cf678935de6160af4b1ff5e2e"$''',
+  '''^org\.keycloak\.keycloak\-config\-api\-26\.7\.3\.jar":"59bd5b12e73fcbee7c42cd13b1a44ef58904de510e6dde4639d27e07d2194fa3"$''',
+  '''^org\.keycloak\.models\.RevokedTokenProviderFactory":"de18aee3cbe1631d6abcfe2b49d0bb8ddcc23a0277a2cec29dfc296cd0a73e0e"$''',
+  '''^org\.keycloak\.provider\.Spi":"4dc8b1e713a1a733bdf853b74e05329f0872a9223ec9f6043eca331c9c8d7bb8"$''',
+  '''^org\.keycloak\.provider\.Spi":"565e6f23e5976ad6ad82f734ec86d6043660dd9819eb845a4f533ee9c1dadf5b"$''',
+  '''^org\.slf4j\.slf4j\-api\-2\.0\.17\.jar":"7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832"$''',
+  '''^org\.snakeyaml\.snakeyaml\-engine\-2\.6\.jar":"2652199af40c9aa2f1782400d2dfbbf4e5226208c4e05ddd4059c3d6d9cd1505"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-auth\-2\.8\.4\.Final\.jar":"99d4b3b160462b92bbf0145aba15aa73a5f55c67daf5fbdb102ef81de51c9ccf"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-credential\-2\.8\.4\.Final\.jar":"b13e94dd2319886ea2126692c44c4823531e9f36635467062b19c738be55de6b"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-mechanism\-gssapi\-2\.8\.4\.Final\.jar":"6b9cec364859d9816794ac11f9ddb3a08fb946625515b8cbfb2d88e867e50e71"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-mechanism\-oauth2\-2\.8\.4\.Final\.jar":"d3d151db3c57113149678e3cb1315e90fece2f5cd5b2e717716bee09b4420a60"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-sasl\-gssapi\-2\.8\.4\.Final\.jar":"d09e051bb13218e9ff81c4761c1b1c07f6f26ee2be1f4e79de54455e30f01318"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-sasl\-oauth2\-2\.8\.4\.Final\.jar":"d0bcb08b70f6b6548ca309e2897e5577bb05993c19fc496ffde02e7e7009ced9"$''',
+  '''^org\.yaml\.snakeyaml\-2\.0\.jar":"880c9d896e4b74a06c549c15ca496450165d6909fa15d7e662bee8f6a66d7afa"$''',
+  '''^text\-propagation\.microprofile\-context\-propagation\-api\-1\.3\.jar":"69ccc04487e87779d4970aa50c673cc34a9df080c1c0e8d8eab2e8b46f825cf4"$''',
+  '''^try\.instrumentation\.opentelemetry\-instrumentation\-api\-2\.23\.0\.jar":"c6b86acc7ccb2a6a0979ae73ae686ea4ac8a24e656912bc169216bcfd87f44b1"$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in otziv-realm-migration-provenance.json (sentry-access-token)"
+targetRules = ["sentry-access-token"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/keycloak/security\-generation/c14\-migration\-fix/proofs/security\-v3/otziv\-realm\-migration\-provenance\.json$''']
+regexes = [
+  '''^PublicKeysEntry\.class":"0e6bbca17773d428fd382767b78a208293f7c6244a43843dfa4c94bdd6803c9e"$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in review.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/keycloak/security\-generation/c14\-migration\-fix/proofs/security\-v3/review\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ "base\-keycloak\-jars\.json":\ "c4f698524113303988cd3712a214009203221c9bb38f25bfedde86fb43a4c8aa",\r?$''',
+  '''^\n?\ \ \ \ "target\-keycloak\-jars\.json":\ "2f31d5ac72558fc68349ae59249d766df18c6eccee6c4465ac28cb321b6b4ef9",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in target-keycloak-jars.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/keycloak/security\-generation/c14\-migration\-fix/proofs/security\-v3/target\-keycloak\-jars\.json$''']
+regexes = [
+  '''^\n?\ \ "opt/keycloak/lib/app/keycloak\.jar":\ "7c65ed659cbc83e21ef976dd2f5be2dff0fbdcba9b6f51867f9194356beeb97e",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/boot/jakarta\.json\.jakarta\.json\-api\-2\.1\.3\.jar":\ "bc934142805ea1d794f1440563965a3861a2a9fb7414ecd3fe44f26500734414",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.quarkus\.quarkus\-smallrye\-openapi\-dev\-3\.33\.3\.1\.jar":\ "e76c6d49dcf72cc6b4b8aab27cc58eba3c896fe373659d662c6149bdf4384ae3",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.quarkus\.quarkus\-smallrye\-openapi\-spi\-3\.33\.3\.1\.jar":\ "ec0cc04c675048994160a64a26b6e60cc49f8f9a88da43277e73d4c0461496df",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-jaxrs\-4\.2\.4\.jar":\ "4b749e84754abd638245f89d561d597ffec91e73eefaccd9e8cec322d05a1eae",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-spring\-4\.2\.4\.jar":\ "d3a4bb698f1dcd6123fc9d0582dab1cca539c1baad71aae2a059ab1d1eddcacb",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-ui\-4\.2\.4\.jar":\ "f1412f61960576e70061902729bd15a6cc8b9ec68079190cea73495efbce2efd",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-vertx\-4\.2\.4\.jar":\ "b0eb3dee61f6e1a577f12f8e7573f0e91295a3e8631a2ca3c3d1951947c0ad90",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/jakarta\.servlet\.jakarta\.servlet\-api\-6\.0\.0\.jar":\ "c034eb1afb158987dbb53a5fea0cadf611c8dae8daadd59c44d9d5ab70129cef",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.agroal\.agroal\-api\-3\.0\.1\.jar":\ "39d2446e439963f2556add24891c2db9d1fcfbefb79d2c9b112e0d843a508603",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.grpc\.grpc\-api\-1\.81\.0\.jar":\ "3e6a659ba3edcdac730c857b27725e2e4d985c2241055e8326eb4fe0f9573d53",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.opentelemetry\.instrumentation\.opentelemetry\-instrumentation\-api\-2\.23\.0\.jar":\ "c6b86acc7ccb2a6a0979ae73ae686ea4ac8a24e656912bc169216bcfd87f44b1",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.opentelemetry\.opentelemetry\-api\-1\.57\.0\.jar":\ "88bbfc3fcc81af3299e7f69cddcc9672e410ffcf7435e8b50a474cf2e454b410",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.perfmark\.perfmark\-api\-0\.27\.0\.jar":\ "c7b478503ec524e55df19b424d46d27c8a68aeb801664fadd4f069b71f52d0f6",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.quarkus\.quarkus\-credentials\-3\.33\.3\.1\.jar":\ "00fd02afdf24b94a4d94296f28261c77f9de89f2007011401bb48fda07728646",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.quarkus\.quarkus\-smallrye\-openapi\-3\.33\.3\.1\.jar":\ "6e61b1ce00347a0b07015fec8f9c9fc9fb81cd3ac54efa403fa18bf1da8dcf31",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.config\.smallrye\-config\-source\-keystore\-3\.16\.0\.jar":\ "cf6fe2697bb11e894682d2ec28a94952b5ecde84d5841e567c8d647ae1ecc372",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.reactive\.smallrye\-mutiny\-vertx\-auth\-common\-3\.21\.6\.jar":\ "9c7a87f23536e6126bb11621f53f310cba35277e3ef11ce660efdeb5dd772d60",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.reactive\.smallrye\-reactive\-converter\-api\-3\.0\.3\.jar":\ "8f47b3cbdef72c5875836011beb02f485918febbb73c15d51738c566eb669253",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-context\-propagation\-api\-2\.3\.0\.jar":\ "da0bc273588cefb478e98c4e137f65cc394a54253e35684d5d917060fdc4147c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-health\-api\-4\.3\.0\.jar":\ "a91809158320220877f436a9365ad61f98e0cfe53fa62d95d3eb5a88535dbc67",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-open\-api\-core\-4\.2\.4\.jar":\ "a4265049543a12f73971c3b87cd370fda3522b32ef81ad418b0e281bed9ca2ad",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-open\-api\-model\-4\.2\.4\.jar":\ "52b10d7ce18f765a771211a4606d874692f4f9d90d18ef99e38c12f4bf6fa215",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.vertx\.vertx\-auth\-common\-4\.5\.31\.jar":\ "ca50cb70de4f27205dea350fd59c72fb8475b5fe786c19614cea71234d38c5d1",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.activation\.jakarta\.activation\-api\-2\.1\.4\.jar":\ "c9db52100ce6c8aac95cc39075f95720d2e561b11f8051b81c121ad4effd7004",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.annotation\.jakarta\.annotation\-api\-3\.0\.0\.jar":\ "b01f55552284cfb149411e64eabca75e942d26d2e1786b32914250e4330afaa2",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.el\.jakarta\.el\-api\-6\.0\.1\.jar":\ "7e84b5bed49de32b79cc5e85d90b6f5adb1a953ac67283adbb41c1e297f9c605",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.enterprise\.jakarta\.enterprise\.cdi\-api\-4\.1\.0\.jar":\ "c42c808f17925129a0800f618febe050d966e181a4c7384c8a5e7a0283d68699",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.inject\.jakarta\.inject\-api\-2\.0\.1\.jar":\ "f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.interceptor\.jakarta\.interceptor\-api\-2\.2\.0\.jar":\ "d240d72b4dd38a2e431c804079810010cb97903678fa5f987fb7434878b04398",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.mail\.jakarta\.mail\-api\-2\.1\.1\.jar":\ "1d69d8aaa6ab704d4ce3bd156cd5542060849a409b1e0463163d8508356857cc",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.persistence\.jakarta\.persistence\-api\-3\.2\.0\.jar":\ "be8a26b0e75c84c1b7600f759256fbc68d60333d89ec0ce3f784fc3ffa09aa8c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.resource\.jakarta\.resource\-api\-2\.1\.0\.jar":\ "4d26ad86a5f72cd2f9c4a31cc4524f7bf3ec0ff74416f081f8642b7ce8041067",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.transaction\.jakarta\.transaction\-api\-2\.0\.1\.jar":\ "50c0a7c760c13ae6c042acf182b28f0047413db95b4636fb8879bcffab5ba875",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.validation\.jakarta\.validation\-api\-3\.1\.1\.jar":\ "63ce00156388c365f3ac1be71fcfaf114682fc0c452020b5df6e7ec236e142ab",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.ws\.rs\.jakarta\.ws\.rs\-api\-3\.1\.0\.jar":\ "6b3b3628b8b4aedda0d24c3354335e985497d8ef3c510b8f3028e920d5b8663d",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.xml\.bind\.jakarta\.xml\.bind\-api\-4\.0\.5\.jar":\ "5e489b6c874c4119e003ff1403db523ee3a8959ec499f3de29e77245efccf216",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.xml\.soap\.jakarta\.xml\.soap\-api\-3\.0\.0\.jar":\ "33124e98d724b69e1673a61675c205b58c372605f4254d455b12b37398219a37",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.config\.microprofile\-config\-api\-3\.1\.1\.jar":\ "0d4eaa7e17730e153b1e0613104a989af7d7a0d4ba4d19c84c71862bff993773",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.context\-propagation\.microprofile\-context\-propagation\-api\-1\.3\.jar":\ "69ccc04487e87779d4970aa50c673cc34a9df080c1c0e8d8eab2e8b46f825cf4",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.health\.microprofile\-health\-api\-4\.0\.1\.jar":\ "b89ca4b6c4f7a044250d31c0673f6bc221e40fd669fc5871dbad5e5a0769ca47",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.openapi\.microprofile\-openapi\-api\-4\.1\.1\.jar":\ "1e333f5bd206245e7a4d0a3dd5f2bab1820fc3b950b77e96008fcdb7b77d9150",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.reactive\-streams\-operators\.microprofile\-reactive\-streams\-operators\-api\-3\.0\.1\.jar":\ "2eb30081f2674e674c6587592747a81a4d92d2da1a735be5f645901de60f9f8d",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.infinispan\.infinispan\-api\-16\.0\.14\.jar":\ "6a7e17bdccb7d9578fb268c894793ea6d0fd0d9c77aa5b4b6243263e6e019759",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.infinispan\.infinispan\-counter\-api\-16\.0\.14\.jar":\ "4bfda70b4e04fb1816112ebab01836eb72214f8369bc768058296d3494e6465b",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.keycloak\.keycloak\-admin\-v2\-api\-26\.7\.3\.jar":\ "20027710533f7ad3006ef3d0f6db03be0473bc0cf678935de6160af4b1ff5e2e",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.keycloak\.keycloak\-config\-api\-26\.7\.3\.jar":\ "59bd5b12e73fcbee7c42cd13b1a44ef58904de510e6dde4639d27e07d2194fa3",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.slf4j\.slf4j\-api\-2\.0\.17\.jar":\ "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.snakeyaml\.snakeyaml\-engine\-2\.6\.jar":\ "2652199af40c9aa2f1782400d2dfbbf4e5226208c4e05ddd4059c3d6d9cd1505",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-auth\-2\.8\.4\.Final\.jar":\ "99d4b3b160462b92bbf0145aba15aa73a5f55c67daf5fbdb102ef81de51c9ccf",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-credential\-2\.8\.4\.Final\.jar":\ "b13e94dd2319886ea2126692c44c4823531e9f36635467062b19c738be55de6b",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-mechanism\-gssapi\-2\.8\.4\.Final\.jar":\ "6b9cec364859d9816794ac11f9ddb3a08fb946625515b8cbfb2d88e867e50e71",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-mechanism\-oauth2\-2\.8\.4\.Final\.jar":\ "d3d151db3c57113149678e3cb1315e90fece2f5cd5b2e717716bee09b4420a60",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-sasl\-gssapi\-2\.8\.4\.Final\.jar":\ "d09e051bb13218e9ff81c4761c1b1c07f6f26ee2be1f4e79de54455e30f01318",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-sasl\-oauth2\-2\.8\.4\.Final\.jar":\ "d0bcb08b70f6b6548ca309e2897e5577bb05993c19fc496ffde02e7e7009ced9",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.yaml\.snakeyaml\-2\.0\.jar":\ "880c9d896e4b74a06c549c15ca496450165d6909fa15d7e662bee8f6a66d7afa",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in target-rootfs-inventory.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/keycloak/security\-generation/c14\-migration\-fix/proofs/security\-v3/target\-rootfs\-inventory\.json$''']
+regexes = [
+  '''^\n?\ \ "var/lib/dpkg/info/libgssapi\-krb5\-2:amd64\.triggers":\ \{\r?$''',
+  '''^\n?\ \ "var/lib/dpkg/info/libkeyutils1:amd64\.triggers":\ \{\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in vulnerabilities.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/keycloak/security\-generation/c14\-migration\-fix/proofs/security\-v3/vulnerabilities\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "Name":\ "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''',
+]
+
+# C14 reviewed public metadata only: detector AND exact artifact path AND complete line/match.
+# One-line provenance uses exact detector matches so adjacent unknown credentials remain scanned.
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in vulnerabilities.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/final/publication/vulnerabilities\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "Name":\ "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in review.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/final/review\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ "anonymous\-download\-keycloak\-attempt\-1\.zip":\ "f30f18773ef8526718a90f22257e9a133e7f42198158b7ffaed2047215fc67b1",\r?$''',
+  '''^\n?\ \ \ \ "reviewed\-publication\-keycloak\-attempt\-1\.zip":\ "7b4cbf45c094e513c1c2e223e3e1456044513001b271e8cf9ece0a83df0fa9da",\r?$''',
+  '''^\n?\ \ \ \ "runtime/published\-keycloak\-jars\.json":\ "d10f88dbf2722100e8900f611ee2cd67434d4c8dac966df3d9413a36e44d2ca3",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in otziv-realm-migration-provenance.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/final/runtime/otziv\-realm\-migration\-provenance\.json$''']
+regexes = [
+  '''^CachedUserVerifiableCredential\.class":"3980411cc35cd70fe2f21325fe98f85aad5ba6240f06595a70d04c2323f8d53c"$''',
+  '''^CachedUserVerifiableCredentials\.class":"ea6f31ffd559b257bdb83e716713f5774ce14a2bb14816d61ddd67d14755f9ca"$''',
+  '''^ClearExpiredClientInitialAccessTokens\.class":"7e1fd5540277e86c1383596ef38bad000ca28379e36f254bde001cf388ae0906"$''',
+  '''^ClearExpiredIssuedVerifiableCredentials\.class":"9f774856f3e7b0564cdf7a4fea80c3c1bd752cc56b8b68009f8ff527f5beb441"$''',
+  '''^ClearExpiredRevokedTokens\.class":"38749f04cc741724e11498205edccf52440b4217d812d741374f9bc1a53fc46e"$''',
+  '''^ClientSessionKey\.class":"90b094edd9029bbf7246aa0edf724ed0b30bec16f97eae38d16bbbddcedb294a"$''',
+  '''^ClientSessionKeyGrouper\.class":"307ee533b04ef918f346d2ee5c3f7da7b7ed1bd7afd071ef8628e93caa1dd891"$''',
+  '''^EmbeddedClientSessionKey\.class":"47bea985303a5a457f148b976119cd7f67b4f0f5b9cc4aed5a0e33f4a7f35f7c"$''',
+  '''^InfinispanKeyGenerator\.class":"e9813a2a857e0585218043e43037ccbd0e1efb4e9043f2da6ee360fecbc3b06e"$''',
+  '''^InfinispanRevokedTokenProvider\.class":"aa4d15e420511250cb5898bf79a5d4ba1bcdb458de462f364a1f9f5857a06ac3"$''',
+  '''^KeycloakModule\.class":"9297085ec1e5f073a9d84e775c3f92c9dcc223f843154e3d4649f8d365d28113"$''',
+  '''^LoginFailureKey\.class":"9a200dbe202212a0e4e23856ea2062d6b06be44c0e3edb2833c6bf1fac2f8e68"$''',
+  '''^MapEntryToKeyMapper\.class":"813e81f4237c6e50c390b118281323296e2cc61684d117babecfc9980172744a"$''',
+  '''^ReloadingX509ExtendedKeyManager\.class":"f88e11071d460b65066249d74e7f4db2415f9e0cbcdf71331cbbd14093011668"$''',
+  '''^RevokeTokenConsumer\.class":"d92e8c98f656074ed6f0e0d3ae447e639799174397768a4588583d6c12def852"$''',
+  '''^RevokedToken\.class":"858b100840df5a3d418cb7eddb6a57e162a2e318dcdf7e809b22cac72f107027"$''',
+  '''^RevokedTokenPersisterSpi\.class":"a11f65dcc0f8ab9f7256f285b4426485d087e22d9a9cea71f8d984a2d2a8e848"$''',
+  '''^SerializeExecutionsByKey\.class":"b14ce2dfe21e73ddeedb02424ae2bce2fc137ac769b68db6d0874f1ade14893e"$''',
+  '''^SessionAndKeyHolder\.class":"382d1cdf006431f72ed4c0813aa931614132f7944c4d14022917566bad70124f"$''',
+  '''^StringKeyGenerator\.class":"026b031214dec99d88a7212e2e026ca27dd02d91c87df79649c33f63fead9e50"$''',
+  '''^UUIDKeyGenerator\.class":"33075c5bc9b5cfcad8d0b33e9ae338fa9c34b2f0bdba04a0ba7e8be1522b458d"$''',
+  '''^UserVerifiableCredentialsUpdatedEvent\.class":"527e6ec752ea8b2d79cbc178ad72e1d4a9f3fb28c95406f6ead3c14d58ade4d2"$''',
+  '''^g\.eclipse\.microprofile\.config\.microprofile\-config\-api\-3\.1\.1\.jar":"0d4eaa7e17730e153b1e0613104a989af7d7a0d4ba4d19c84c71862bff993773"$''',
+  '''^g\.eclipse\.microprofile\.health\.microprofile\-health\-api\-4\.0\.1\.jar":"b89ca4b6c4f7a044250d31c0673f6bc221e40fd669fc5871dbad5e5a0769ca47"$''',
+  '''^io\.agroal\.agroal\-api\-3\.0\.1\.jar":"39d2446e439963f2556add24891c2db9d1fcfbefb79d2c9b112e0d843a508603"$''',
+  '''^io\.grpc\.grpc\-api\-1\.81\.0\.jar":"3e6a659ba3edcdac730c857b27725e2e4d985c2241055e8326eb4fe0f9573d53"$''',
+  '''^io\.opentelemetry\.opentelemetry\-api\-1\.57\.0\.jar":"88bbfc3fcc81af3299e7f69cddcc9672e410ffcf7435e8b50a474cf2e454b410"$''',
+  '''^io\.perfmark\.perfmark\-api\-0\.27\.0\.jar":"c7b478503ec524e55df19b424d46d27c8a68aeb801664fadd4f069b71f52d0f6"$''',
+  '''^io\.quarkus\.quarkus\-credentials\-3\.33\.3\.1\.jar":"00fd02afdf24b94a4d94296f28261c77f9de89f2007011401bb48fda07728646"$''',
+  '''^io\.quarkus\.quarkus\-smallrye\-openapi\-3\.33\.3\.1\.jar":"6e61b1ce00347a0b07015fec8f9c9fc9fb81cd3ac54efa403fa18bf1da8dcf31"$''',
+  '''^io\.quarkus\.quarkus\-smallrye\-openapi\-dev\-3\.33\.3\.1\.jar":"e76c6d49dcf72cc6b4b8aab27cc58eba3c896fe373659d662c6149bdf4384ae3"$''',
+  '''^io\.quarkus\.quarkus\-smallrye\-openapi\-spi\-3\.33\.3\.1\.jar":"ec0cc04c675048994160a64a26b6e60cc49f8f9a88da43277e73d4c0461496df"$''',
+  '''^io\.smallrye\.config\.smallrye\-config\-source\-keystore\-3\.16\.0\.jar":"cf6fe2697bb11e894682d2ec28a94952b5ecde84d5841e567c8d647ae1ecc372"$''',
+  '''^io\.smallrye\.reactive\.smallrye\-mutiny\-vertx\-auth\-common\-3\.21\.6\.jar":"9c7a87f23536e6126bb11621f53f310cba35277e3ef11ce660efdeb5dd772d60"$''',
+  '''^io\.smallrye\.reactive\.smallrye\-reactive\-converter\-api\-3\.0\.3\.jar":"8f47b3cbdef72c5875836011beb02f485918febbb73c15d51738c566eb669253"$''',
+  '''^io\.smallrye\.smallrye\-context\-propagation\-api\-2\.3\.0\.jar":"da0bc273588cefb478e98c4e137f65cc394a54253e35684d5d917060fdc4147c"$''',
+  '''^io\.smallrye\.smallrye\-health\-api\-4\.3\.0\.jar":"a91809158320220877f436a9365ad61f98e0cfe53fa62d95d3eb5a88535dbc67"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-core\-4\.2\.4\.jar":"a4265049543a12f73971c3b87cd370fda3522b32ef81ad418b0e281bed9ca2ad"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-jaxrs\-4\.2\.4\.jar":"4b749e84754abd638245f89d561d597ffec91e73eefaccd9e8cec322d05a1eae"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-model\-4\.2\.4\.jar":"52b10d7ce18f765a771211a4606d874692f4f9d90d18ef99e38c12f4bf6fa215"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-spring\-4\.2\.4\.jar":"d3a4bb698f1dcd6123fc9d0582dab1cca539c1baad71aae2a059ab1d1eddcacb"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-ui\-4\.2\.4\.jar":"f1412f61960576e70061902729bd15a6cc8b9ec68079190cea73495efbce2efd"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-vertx\-4\.2\.4\.jar":"b0eb3dee61f6e1a577f12f8e7573f0e91295a3e8631a2ca3c3d1951947c0ad90"$''',
+  '''^io\.vertx\.vertx\-auth\-common\-4\.5\.31\.jar":"ca50cb70de4f27205dea350fd59c72fb8475b5fe786c19614cea71234d38c5d1"$''',
+  '''^jakarta\.activation\.jakarta\.activation\-api\-2\.1\.4\.jar":"c9db52100ce6c8aac95cc39075f95720d2e561b11f8051b81c121ad4effd7004"$''',
+  '''^jakarta\.annotation\.jakarta\.annotation\-api\-3\.0\.0\.jar":"b01f55552284cfb149411e64eabca75e942d26d2e1786b32914250e4330afaa2"$''',
+  '''^jakarta\.el\.jakarta\.el\-api\-6\.0\.1\.jar":"7e84b5bed49de32b79cc5e85d90b6f5adb1a953ac67283adbb41c1e297f9c605"$''',
+  '''^jakarta\.enterprise\.jakarta\.enterprise\.cdi\-api\-4\.1\.0\.jar":"c42c808f17925129a0800f618febe050d966e181a4c7384c8a5e7a0283d68699"$''',
+  '''^jakarta\.inject\.jakarta\.inject\-api\-2\.0\.1\.jar":"f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c"$''',
+  '''^jakarta\.interceptor\.jakarta\.interceptor\-api\-2\.2\.0\.jar":"d240d72b4dd38a2e431c804079810010cb97903678fa5f987fb7434878b04398"$''',
+  '''^jakarta\.json\.jakarta\.json\-api\-2\.1\.3\.jar":"bc934142805ea1d794f1440563965a3861a2a9fb7414ecd3fe44f26500734414"$''',
+  '''^jakarta\.mail\.jakarta\.mail\-api\-2\.1\.1\.jar":"1d69d8aaa6ab704d4ce3bd156cd5542060849a409b1e0463163d8508356857cc"$''',
+  '''^jakarta\.persistence\.jakarta\.persistence\-api\-3\.2\.0\.jar":"be8a26b0e75c84c1b7600f759256fbc68d60333d89ec0ce3f784fc3ffa09aa8c"$''',
+  '''^jakarta\.resource\.jakarta\.resource\-api\-2\.1\.0\.jar":"4d26ad86a5f72cd2f9c4a31cc4524f7bf3ec0ff74416f081f8642b7ce8041067"$''',
+  '''^jakarta\.servlet\.jakarta\.servlet\-api\-6\.0\.0\.jar":"c034eb1afb158987dbb53a5fea0cadf611c8dae8daadd59c44d9d5ab70129cef"$''',
+  '''^jakarta\.transaction\.jakarta\.transaction\-api\-2\.0\.1\.jar":"50c0a7c760c13ae6c042acf182b28f0047413db95b4636fb8879bcffab5ba875"$''',
+  '''^jakarta\.validation\.jakarta\.validation\-api\-3\.1\.1\.jar":"63ce00156388c365f3ac1be71fcfaf114682fc0c452020b5df6e7ec236e142ab"$''',
+  '''^jakarta\.ws\.rs\.jakarta\.ws\.rs\-api\-3\.1\.0\.jar":"6b3b3628b8b4aedda0d24c3354335e985497d8ef3c510b8f3028e920d5b8663d"$''',
+  '''^jakarta\.xml\.bind\.jakarta\.xml\.bind\-api\-4\.0\.5\.jar":"5e489b6c874c4119e003ff1403db523ee3a8959ec499f3de29e77245efccf216"$''',
+  '''^jakarta\.xml\.soap\.jakarta\.xml\.soap\-api\-3\.0\.0\.jar":"33124e98d724b69e1673a61675c205b58c372605f4254d455b12b37398219a37"$''',
+  '''^operators\.microprofile\-reactive\-streams\-operators\-api\-3\.0\.1\.jar":"2eb30081f2674e674c6587592747a81a4d92d2da1a735be5f645901de60f9f8d"$''',
+  '''^org\.eclipse\.microprofile\.openapi\.microprofile\-openapi\-api\-4\.1\.1\.jar":"1e333f5bd206245e7a4d0a3dd5f2bab1820fc3b950b77e96008fcdb7b77d9150"$''',
+  '''^org\.infinispan\.infinispan\-api\-16\.0\.14\.jar":"6a7e17bdccb7d9578fb268c894793ea6d0fd0d9c77aa5b4b6243263e6e019759"$''',
+  '''^org\.infinispan\.infinispan\-counter\-api\-16\.0\.14\.jar":"4bfda70b4e04fb1816112ebab01836eb72214f8369bc768058296d3494e6465b"$''',
+  '''^org\.keycloak\.keycloak\-admin\-v2\-api\-26\.7\.3\.jar":"20027710533f7ad3006ef3d0f6db03be0473bc0cf678935de6160af4b1ff5e2e"$''',
+  '''^org\.keycloak\.keycloak\-config\-api\-26\.7\.3\.jar":"59bd5b12e73fcbee7c42cd13b1a44ef58904de510e6dde4639d27e07d2194fa3"$''',
+  '''^org\.keycloak\.models\.RevokedTokenProviderFactory":"de18aee3cbe1631d6abcfe2b49d0bb8ddcc23a0277a2cec29dfc296cd0a73e0e"$''',
+  '''^org\.keycloak\.provider\.Spi":"4dc8b1e713a1a733bdf853b74e05329f0872a9223ec9f6043eca331c9c8d7bb8"$''',
+  '''^org\.keycloak\.provider\.Spi":"565e6f23e5976ad6ad82f734ec86d6043660dd9819eb845a4f533ee9c1dadf5b"$''',
+  '''^org\.slf4j\.slf4j\-api\-2\.0\.17\.jar":"7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832"$''',
+  '''^org\.snakeyaml\.snakeyaml\-engine\-2\.6\.jar":"2652199af40c9aa2f1782400d2dfbbf4e5226208c4e05ddd4059c3d6d9cd1505"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-auth\-2\.8\.4\.Final\.jar":"99d4b3b160462b92bbf0145aba15aa73a5f55c67daf5fbdb102ef81de51c9ccf"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-credential\-2\.8\.4\.Final\.jar":"b13e94dd2319886ea2126692c44c4823531e9f36635467062b19c738be55de6b"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-mechanism\-gssapi\-2\.8\.4\.Final\.jar":"6b9cec364859d9816794ac11f9ddb3a08fb946625515b8cbfb2d88e867e50e71"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-mechanism\-oauth2\-2\.8\.4\.Final\.jar":"d3d151db3c57113149678e3cb1315e90fece2f5cd5b2e717716bee09b4420a60"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-sasl\-gssapi\-2\.8\.4\.Final\.jar":"d09e051bb13218e9ff81c4761c1b1c07f6f26ee2be1f4e79de54455e30f01318"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-sasl\-oauth2\-2\.8\.4\.Final\.jar":"d0bcb08b70f6b6548ca309e2897e5577bb05993c19fc496ffde02e7e7009ced9"$''',
+  '''^org\.yaml\.snakeyaml\-2\.0\.jar":"880c9d896e4b74a06c549c15ca496450165d6909fa15d7e662bee8f6a66d7afa"$''',
+  '''^text\-propagation\.microprofile\-context\-propagation\-api\-1\.3\.jar":"69ccc04487e87779d4970aa50c673cc34a9df080c1c0e8d8eab2e8b46f825cf4"$''',
+  '''^try\.instrumentation\.opentelemetry\-instrumentation\-api\-2\.23\.0\.jar":"c6b86acc7ccb2a6a0979ae73ae686ea4ac8a24e656912bc169216bcfd87f44b1"$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in otziv-realm-migration-provenance.json (sentry-access-token)"
+targetRules = ["sentry-access-token"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/final/runtime/otziv\-realm\-migration\-provenance\.json$''']
+regexes = [
+  '''^PublicKeysEntry\.class":"0e6bbca17773d428fd382767b78a208293f7c6244a43843dfa4c94bdd6803c9e"$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in published-keycloak-jars.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/final/runtime/published\-keycloak\-jars\.json$''']
+regexes = [
+  '''^\n?\ \ "opt/keycloak/lib/app/keycloak\.jar":\ "7c65ed659cbc83e21ef976dd2f5be2dff0fbdcba9b6f51867f9194356beeb97e",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/boot/jakarta\.json\.jakarta\.json\-api\-2\.1\.3\.jar":\ "bc934142805ea1d794f1440563965a3861a2a9fb7414ecd3fe44f26500734414",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.quarkus\.quarkus\-smallrye\-openapi\-dev\-3\.33\.3\.1\.jar":\ "e76c6d49dcf72cc6b4b8aab27cc58eba3c896fe373659d662c6149bdf4384ae3",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.quarkus\.quarkus\-smallrye\-openapi\-spi\-3\.33\.3\.1\.jar":\ "ec0cc04c675048994160a64a26b6e60cc49f8f9a88da43277e73d4c0461496df",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-jaxrs\-4\.2\.4\.jar":\ "4b749e84754abd638245f89d561d597ffec91e73eefaccd9e8cec322d05a1eae",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-spring\-4\.2\.4\.jar":\ "d3a4bb698f1dcd6123fc9d0582dab1cca539c1baad71aae2a059ab1d1eddcacb",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-ui\-4\.2\.4\.jar":\ "f1412f61960576e70061902729bd15a6cc8b9ec68079190cea73495efbce2efd",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-vertx\-4\.2\.4\.jar":\ "b0eb3dee61f6e1a577f12f8e7573f0e91295a3e8631a2ca3c3d1951947c0ad90",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/jakarta\.servlet\.jakarta\.servlet\-api\-6\.0\.0\.jar":\ "c034eb1afb158987dbb53a5fea0cadf611c8dae8daadd59c44d9d5ab70129cef",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.agroal\.agroal\-api\-3\.0\.1\.jar":\ "39d2446e439963f2556add24891c2db9d1fcfbefb79d2c9b112e0d843a508603",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.grpc\.grpc\-api\-1\.81\.0\.jar":\ "3e6a659ba3edcdac730c857b27725e2e4d985c2241055e8326eb4fe0f9573d53",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.opentelemetry\.instrumentation\.opentelemetry\-instrumentation\-api\-2\.23\.0\.jar":\ "c6b86acc7ccb2a6a0979ae73ae686ea4ac8a24e656912bc169216bcfd87f44b1",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.opentelemetry\.opentelemetry\-api\-1\.57\.0\.jar":\ "88bbfc3fcc81af3299e7f69cddcc9672e410ffcf7435e8b50a474cf2e454b410",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.perfmark\.perfmark\-api\-0\.27\.0\.jar":\ "c7b478503ec524e55df19b424d46d27c8a68aeb801664fadd4f069b71f52d0f6",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.quarkus\.quarkus\-credentials\-3\.33\.3\.1\.jar":\ "00fd02afdf24b94a4d94296f28261c77f9de89f2007011401bb48fda07728646",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.quarkus\.quarkus\-smallrye\-openapi\-3\.33\.3\.1\.jar":\ "6e61b1ce00347a0b07015fec8f9c9fc9fb81cd3ac54efa403fa18bf1da8dcf31",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.config\.smallrye\-config\-source\-keystore\-3\.16\.0\.jar":\ "cf6fe2697bb11e894682d2ec28a94952b5ecde84d5841e567c8d647ae1ecc372",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.reactive\.smallrye\-mutiny\-vertx\-auth\-common\-3\.21\.6\.jar":\ "9c7a87f23536e6126bb11621f53f310cba35277e3ef11ce660efdeb5dd772d60",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.reactive\.smallrye\-reactive\-converter\-api\-3\.0\.3\.jar":\ "8f47b3cbdef72c5875836011beb02f485918febbb73c15d51738c566eb669253",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-context\-propagation\-api\-2\.3\.0\.jar":\ "da0bc273588cefb478e98c4e137f65cc394a54253e35684d5d917060fdc4147c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-health\-api\-4\.3\.0\.jar":\ "a91809158320220877f436a9365ad61f98e0cfe53fa62d95d3eb5a88535dbc67",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-open\-api\-core\-4\.2\.4\.jar":\ "a4265049543a12f73971c3b87cd370fda3522b32ef81ad418b0e281bed9ca2ad",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-open\-api\-model\-4\.2\.4\.jar":\ "52b10d7ce18f765a771211a4606d874692f4f9d90d18ef99e38c12f4bf6fa215",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.vertx\.vertx\-auth\-common\-4\.5\.31\.jar":\ "ca50cb70de4f27205dea350fd59c72fb8475b5fe786c19614cea71234d38c5d1",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.activation\.jakarta\.activation\-api\-2\.1\.4\.jar":\ "c9db52100ce6c8aac95cc39075f95720d2e561b11f8051b81c121ad4effd7004",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.annotation\.jakarta\.annotation\-api\-3\.0\.0\.jar":\ "b01f55552284cfb149411e64eabca75e942d26d2e1786b32914250e4330afaa2",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.el\.jakarta\.el\-api\-6\.0\.1\.jar":\ "7e84b5bed49de32b79cc5e85d90b6f5adb1a953ac67283adbb41c1e297f9c605",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.enterprise\.jakarta\.enterprise\.cdi\-api\-4\.1\.0\.jar":\ "c42c808f17925129a0800f618febe050d966e181a4c7384c8a5e7a0283d68699",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.inject\.jakarta\.inject\-api\-2\.0\.1\.jar":\ "f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.interceptor\.jakarta\.interceptor\-api\-2\.2\.0\.jar":\ "d240d72b4dd38a2e431c804079810010cb97903678fa5f987fb7434878b04398",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.mail\.jakarta\.mail\-api\-2\.1\.1\.jar":\ "1d69d8aaa6ab704d4ce3bd156cd5542060849a409b1e0463163d8508356857cc",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.persistence\.jakarta\.persistence\-api\-3\.2\.0\.jar":\ "be8a26b0e75c84c1b7600f759256fbc68d60333d89ec0ce3f784fc3ffa09aa8c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.resource\.jakarta\.resource\-api\-2\.1\.0\.jar":\ "4d26ad86a5f72cd2f9c4a31cc4524f7bf3ec0ff74416f081f8642b7ce8041067",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.transaction\.jakarta\.transaction\-api\-2\.0\.1\.jar":\ "50c0a7c760c13ae6c042acf182b28f0047413db95b4636fb8879bcffab5ba875",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.validation\.jakarta\.validation\-api\-3\.1\.1\.jar":\ "63ce00156388c365f3ac1be71fcfaf114682fc0c452020b5df6e7ec236e142ab",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.ws\.rs\.jakarta\.ws\.rs\-api\-3\.1\.0\.jar":\ "6b3b3628b8b4aedda0d24c3354335e985497d8ef3c510b8f3028e920d5b8663d",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.xml\.bind\.jakarta\.xml\.bind\-api\-4\.0\.5\.jar":\ "5e489b6c874c4119e003ff1403db523ee3a8959ec499f3de29e77245efccf216",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.xml\.soap\.jakarta\.xml\.soap\-api\-3\.0\.0\.jar":\ "33124e98d724b69e1673a61675c205b58c372605f4254d455b12b37398219a37",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.config\.microprofile\-config\-api\-3\.1\.1\.jar":\ "0d4eaa7e17730e153b1e0613104a989af7d7a0d4ba4d19c84c71862bff993773",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.context\-propagation\.microprofile\-context\-propagation\-api\-1\.3\.jar":\ "69ccc04487e87779d4970aa50c673cc34a9df080c1c0e8d8eab2e8b46f825cf4",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.health\.microprofile\-health\-api\-4\.0\.1\.jar":\ "b89ca4b6c4f7a044250d31c0673f6bc221e40fd669fc5871dbad5e5a0769ca47",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.openapi\.microprofile\-openapi\-api\-4\.1\.1\.jar":\ "1e333f5bd206245e7a4d0a3dd5f2bab1820fc3b950b77e96008fcdb7b77d9150",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.reactive\-streams\-operators\.microprofile\-reactive\-streams\-operators\-api\-3\.0\.1\.jar":\ "2eb30081f2674e674c6587592747a81a4d92d2da1a735be5f645901de60f9f8d",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.infinispan\.infinispan\-api\-16\.0\.14\.jar":\ "6a7e17bdccb7d9578fb268c894793ea6d0fd0d9c77aa5b4b6243263e6e019759",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.infinispan\.infinispan\-counter\-api\-16\.0\.14\.jar":\ "4bfda70b4e04fb1816112ebab01836eb72214f8369bc768058296d3494e6465b",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.keycloak\.keycloak\-admin\-v2\-api\-26\.7\.3\.jar":\ "20027710533f7ad3006ef3d0f6db03be0473bc0cf678935de6160af4b1ff5e2e",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.keycloak\.keycloak\-config\-api\-26\.7\.3\.jar":\ "59bd5b12e73fcbee7c42cd13b1a44ef58904de510e6dde4639d27e07d2194fa3",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.slf4j\.slf4j\-api\-2\.0\.17\.jar":\ "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.snakeyaml\.snakeyaml\-engine\-2\.6\.jar":\ "2652199af40c9aa2f1782400d2dfbbf4e5226208c4e05ddd4059c3d6d9cd1505",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-auth\-2\.8\.4\.Final\.jar":\ "99d4b3b160462b92bbf0145aba15aa73a5f55c67daf5fbdb102ef81de51c9ccf",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-credential\-2\.8\.4\.Final\.jar":\ "b13e94dd2319886ea2126692c44c4823531e9f36635467062b19c738be55de6b",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-mechanism\-gssapi\-2\.8\.4\.Final\.jar":\ "6b9cec364859d9816794ac11f9ddb3a08fb946625515b8cbfb2d88e867e50e71",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-mechanism\-oauth2\-2\.8\.4\.Final\.jar":\ "d3d151db3c57113149678e3cb1315e90fece2f5cd5b2e717716bee09b4420a60",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-sasl\-gssapi\-2\.8\.4\.Final\.jar":\ "d09e051bb13218e9ff81c4761c1b1c07f6f26ee2be1f4e79de54455e30f01318",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-sasl\-oauth2\-2\.8\.4\.Final\.jar":\ "d0bcb08b70f6b6548ca309e2897e5577bb05993c19fc496ffde02e7e7009ced9",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.yaml\.snakeyaml\-2\.0\.jar":\ "880c9d896e4b74a06c549c15ca496450165d6909fa15d7e662bee8f6a66d7afa",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in published-rootfs-inventory.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/final/runtime/published\-rootfs\-inventory\.json$''']
+regexes = [
+  '''^\n?\ \ "var/lib/dpkg/info/libgssapi\-krb5\-2:amd64\.triggers":\ \{\r?$''',
+  '''^\n?\ \ "var/lib/dpkg/info/libkeyutils1:amd64\.triggers":\ \{\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in vulnerabilities.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/publication/vulnerabilities\.json$''']
+regexes = [
+  '''^\n?\ \ \ \ \ \ \ \ \ \ "Name":\ "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in otziv-realm-migration-provenance.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/runtime/otziv\-realm\-migration\-provenance\.json$''']
+regexes = [
+  '''^CachedUserVerifiableCredential\.class":"3980411cc35cd70fe2f21325fe98f85aad5ba6240f06595a70d04c2323f8d53c"$''',
+  '''^CachedUserVerifiableCredentials\.class":"ea6f31ffd559b257bdb83e716713f5774ce14a2bb14816d61ddd67d14755f9ca"$''',
+  '''^ClearExpiredClientInitialAccessTokens\.class":"7e1fd5540277e86c1383596ef38bad000ca28379e36f254bde001cf388ae0906"$''',
+  '''^ClearExpiredIssuedVerifiableCredentials\.class":"9f774856f3e7b0564cdf7a4fea80c3c1bd752cc56b8b68009f8ff527f5beb441"$''',
+  '''^ClearExpiredRevokedTokens\.class":"38749f04cc741724e11498205edccf52440b4217d812d741374f9bc1a53fc46e"$''',
+  '''^ClientSessionKey\.class":"90b094edd9029bbf7246aa0edf724ed0b30bec16f97eae38d16bbbddcedb294a"$''',
+  '''^ClientSessionKeyGrouper\.class":"307ee533b04ef918f346d2ee5c3f7da7b7ed1bd7afd071ef8628e93caa1dd891"$''',
+  '''^EmbeddedClientSessionKey\.class":"47bea985303a5a457f148b976119cd7f67b4f0f5b9cc4aed5a0e33f4a7f35f7c"$''',
+  '''^InfinispanKeyGenerator\.class":"e9813a2a857e0585218043e43037ccbd0e1efb4e9043f2da6ee360fecbc3b06e"$''',
+  '''^InfinispanRevokedTokenProvider\.class":"aa4d15e420511250cb5898bf79a5d4ba1bcdb458de462f364a1f9f5857a06ac3"$''',
+  '''^KeycloakModule\.class":"9297085ec1e5f073a9d84e775c3f92c9dcc223f843154e3d4649f8d365d28113"$''',
+  '''^LoginFailureKey\.class":"9a200dbe202212a0e4e23856ea2062d6b06be44c0e3edb2833c6bf1fac2f8e68"$''',
+  '''^MapEntryToKeyMapper\.class":"813e81f4237c6e50c390b118281323296e2cc61684d117babecfc9980172744a"$''',
+  '''^ReloadingX509ExtendedKeyManager\.class":"f88e11071d460b65066249d74e7f4db2415f9e0cbcdf71331cbbd14093011668"$''',
+  '''^RevokeTokenConsumer\.class":"d92e8c98f656074ed6f0e0d3ae447e639799174397768a4588583d6c12def852"$''',
+  '''^RevokedToken\.class":"858b100840df5a3d418cb7eddb6a57e162a2e318dcdf7e809b22cac72f107027"$''',
+  '''^RevokedTokenPersisterSpi\.class":"a11f65dcc0f8ab9f7256f285b4426485d087e22d9a9cea71f8d984a2d2a8e848"$''',
+  '''^SerializeExecutionsByKey\.class":"b14ce2dfe21e73ddeedb02424ae2bce2fc137ac769b68db6d0874f1ade14893e"$''',
+  '''^SessionAndKeyHolder\.class":"382d1cdf006431f72ed4c0813aa931614132f7944c4d14022917566bad70124f"$''',
+  '''^StringKeyGenerator\.class":"026b031214dec99d88a7212e2e026ca27dd02d91c87df79649c33f63fead9e50"$''',
+  '''^UUIDKeyGenerator\.class":"33075c5bc9b5cfcad8d0b33e9ae338fa9c34b2f0bdba04a0ba7e8be1522b458d"$''',
+  '''^UserVerifiableCredentialsUpdatedEvent\.class":"527e6ec752ea8b2d79cbc178ad72e1d4a9f3fb28c95406f6ead3c14d58ade4d2"$''',
+  '''^g\.eclipse\.microprofile\.config\.microprofile\-config\-api\-3\.1\.1\.jar":"0d4eaa7e17730e153b1e0613104a989af7d7a0d4ba4d19c84c71862bff993773"$''',
+  '''^g\.eclipse\.microprofile\.health\.microprofile\-health\-api\-4\.0\.1\.jar":"b89ca4b6c4f7a044250d31c0673f6bc221e40fd669fc5871dbad5e5a0769ca47"$''',
+  '''^io\.agroal\.agroal\-api\-3\.0\.1\.jar":"39d2446e439963f2556add24891c2db9d1fcfbefb79d2c9b112e0d843a508603"$''',
+  '''^io\.grpc\.grpc\-api\-1\.81\.0\.jar":"3e6a659ba3edcdac730c857b27725e2e4d985c2241055e8326eb4fe0f9573d53"$''',
+  '''^io\.opentelemetry\.opentelemetry\-api\-1\.57\.0\.jar":"88bbfc3fcc81af3299e7f69cddcc9672e410ffcf7435e8b50a474cf2e454b410"$''',
+  '''^io\.perfmark\.perfmark\-api\-0\.27\.0\.jar":"c7b478503ec524e55df19b424d46d27c8a68aeb801664fadd4f069b71f52d0f6"$''',
+  '''^io\.quarkus\.quarkus\-credentials\-3\.33\.3\.1\.jar":"00fd02afdf24b94a4d94296f28261c77f9de89f2007011401bb48fda07728646"$''',
+  '''^io\.quarkus\.quarkus\-smallrye\-openapi\-3\.33\.3\.1\.jar":"6e61b1ce00347a0b07015fec8f9c9fc9fb81cd3ac54efa403fa18bf1da8dcf31"$''',
+  '''^io\.quarkus\.quarkus\-smallrye\-openapi\-dev\-3\.33\.3\.1\.jar":"e76c6d49dcf72cc6b4b8aab27cc58eba3c896fe373659d662c6149bdf4384ae3"$''',
+  '''^io\.quarkus\.quarkus\-smallrye\-openapi\-spi\-3\.33\.3\.1\.jar":"ec0cc04c675048994160a64a26b6e60cc49f8f9a88da43277e73d4c0461496df"$''',
+  '''^io\.smallrye\.config\.smallrye\-config\-source\-keystore\-3\.16\.0\.jar":"cf6fe2697bb11e894682d2ec28a94952b5ecde84d5841e567c8d647ae1ecc372"$''',
+  '''^io\.smallrye\.reactive\.smallrye\-mutiny\-vertx\-auth\-common\-3\.21\.6\.jar":"9c7a87f23536e6126bb11621f53f310cba35277e3ef11ce660efdeb5dd772d60"$''',
+  '''^io\.smallrye\.reactive\.smallrye\-reactive\-converter\-api\-3\.0\.3\.jar":"8f47b3cbdef72c5875836011beb02f485918febbb73c15d51738c566eb669253"$''',
+  '''^io\.smallrye\.smallrye\-context\-propagation\-api\-2\.3\.0\.jar":"da0bc273588cefb478e98c4e137f65cc394a54253e35684d5d917060fdc4147c"$''',
+  '''^io\.smallrye\.smallrye\-health\-api\-4\.3\.0\.jar":"a91809158320220877f436a9365ad61f98e0cfe53fa62d95d3eb5a88535dbc67"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-core\-4\.2\.4\.jar":"a4265049543a12f73971c3b87cd370fda3522b32ef81ad418b0e281bed9ca2ad"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-jaxrs\-4\.2\.4\.jar":"4b749e84754abd638245f89d561d597ffec91e73eefaccd9e8cec322d05a1eae"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-model\-4\.2\.4\.jar":"52b10d7ce18f765a771211a4606d874692f4f9d90d18ef99e38c12f4bf6fa215"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-spring\-4\.2\.4\.jar":"d3a4bb698f1dcd6123fc9d0582dab1cca539c1baad71aae2a059ab1d1eddcacb"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-ui\-4\.2\.4\.jar":"f1412f61960576e70061902729bd15a6cc8b9ec68079190cea73495efbce2efd"$''',
+  '''^io\.smallrye\.smallrye\-open\-api\-vertx\-4\.2\.4\.jar":"b0eb3dee61f6e1a577f12f8e7573f0e91295a3e8631a2ca3c3d1951947c0ad90"$''',
+  '''^io\.vertx\.vertx\-auth\-common\-4\.5\.31\.jar":"ca50cb70de4f27205dea350fd59c72fb8475b5fe786c19614cea71234d38c5d1"$''',
+  '''^jakarta\.activation\.jakarta\.activation\-api\-2\.1\.4\.jar":"c9db52100ce6c8aac95cc39075f95720d2e561b11f8051b81c121ad4effd7004"$''',
+  '''^jakarta\.annotation\.jakarta\.annotation\-api\-3\.0\.0\.jar":"b01f55552284cfb149411e64eabca75e942d26d2e1786b32914250e4330afaa2"$''',
+  '''^jakarta\.el\.jakarta\.el\-api\-6\.0\.1\.jar":"7e84b5bed49de32b79cc5e85d90b6f5adb1a953ac67283adbb41c1e297f9c605"$''',
+  '''^jakarta\.enterprise\.jakarta\.enterprise\.cdi\-api\-4\.1\.0\.jar":"c42c808f17925129a0800f618febe050d966e181a4c7384c8a5e7a0283d68699"$''',
+  '''^jakarta\.inject\.jakarta\.inject\-api\-2\.0\.1\.jar":"f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c"$''',
+  '''^jakarta\.interceptor\.jakarta\.interceptor\-api\-2\.2\.0\.jar":"d240d72b4dd38a2e431c804079810010cb97903678fa5f987fb7434878b04398"$''',
+  '''^jakarta\.json\.jakarta\.json\-api\-2\.1\.3\.jar":"bc934142805ea1d794f1440563965a3861a2a9fb7414ecd3fe44f26500734414"$''',
+  '''^jakarta\.mail\.jakarta\.mail\-api\-2\.1\.1\.jar":"1d69d8aaa6ab704d4ce3bd156cd5542060849a409b1e0463163d8508356857cc"$''',
+  '''^jakarta\.persistence\.jakarta\.persistence\-api\-3\.2\.0\.jar":"be8a26b0e75c84c1b7600f759256fbc68d60333d89ec0ce3f784fc3ffa09aa8c"$''',
+  '''^jakarta\.resource\.jakarta\.resource\-api\-2\.1\.0\.jar":"4d26ad86a5f72cd2f9c4a31cc4524f7bf3ec0ff74416f081f8642b7ce8041067"$''',
+  '''^jakarta\.servlet\.jakarta\.servlet\-api\-6\.0\.0\.jar":"c034eb1afb158987dbb53a5fea0cadf611c8dae8daadd59c44d9d5ab70129cef"$''',
+  '''^jakarta\.transaction\.jakarta\.transaction\-api\-2\.0\.1\.jar":"50c0a7c760c13ae6c042acf182b28f0047413db95b4636fb8879bcffab5ba875"$''',
+  '''^jakarta\.validation\.jakarta\.validation\-api\-3\.1\.1\.jar":"63ce00156388c365f3ac1be71fcfaf114682fc0c452020b5df6e7ec236e142ab"$''',
+  '''^jakarta\.ws\.rs\.jakarta\.ws\.rs\-api\-3\.1\.0\.jar":"6b3b3628b8b4aedda0d24c3354335e985497d8ef3c510b8f3028e920d5b8663d"$''',
+  '''^jakarta\.xml\.bind\.jakarta\.xml\.bind\-api\-4\.0\.5\.jar":"5e489b6c874c4119e003ff1403db523ee3a8959ec499f3de29e77245efccf216"$''',
+  '''^jakarta\.xml\.soap\.jakarta\.xml\.soap\-api\-3\.0\.0\.jar":"33124e98d724b69e1673a61675c205b58c372605f4254d455b12b37398219a37"$''',
+  '''^operators\.microprofile\-reactive\-streams\-operators\-api\-3\.0\.1\.jar":"2eb30081f2674e674c6587592747a81a4d92d2da1a735be5f645901de60f9f8d"$''',
+  '''^org\.eclipse\.microprofile\.openapi\.microprofile\-openapi\-api\-4\.1\.1\.jar":"1e333f5bd206245e7a4d0a3dd5f2bab1820fc3b950b77e96008fcdb7b77d9150"$''',
+  '''^org\.infinispan\.infinispan\-api\-16\.0\.14\.jar":"6a7e17bdccb7d9578fb268c894793ea6d0fd0d9c77aa5b4b6243263e6e019759"$''',
+  '''^org\.infinispan\.infinispan\-counter\-api\-16\.0\.14\.jar":"4bfda70b4e04fb1816112ebab01836eb72214f8369bc768058296d3494e6465b"$''',
+  '''^org\.keycloak\.keycloak\-admin\-v2\-api\-26\.7\.3\.jar":"20027710533f7ad3006ef3d0f6db03be0473bc0cf678935de6160af4b1ff5e2e"$''',
+  '''^org\.keycloak\.keycloak\-config\-api\-26\.7\.3\.jar":"59bd5b12e73fcbee7c42cd13b1a44ef58904de510e6dde4639d27e07d2194fa3"$''',
+  '''^org\.keycloak\.models\.RevokedTokenProviderFactory":"de18aee3cbe1631d6abcfe2b49d0bb8ddcc23a0277a2cec29dfc296cd0a73e0e"$''',
+  '''^org\.keycloak\.provider\.Spi":"4dc8b1e713a1a733bdf853b74e05329f0872a9223ec9f6043eca331c9c8d7bb8"$''',
+  '''^org\.keycloak\.provider\.Spi":"565e6f23e5976ad6ad82f734ec86d6043660dd9819eb845a4f533ee9c1dadf5b"$''',
+  '''^org\.slf4j\.slf4j\-api\-2\.0\.17\.jar":"7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832"$''',
+  '''^org\.snakeyaml\.snakeyaml\-engine\-2\.6\.jar":"2652199af40c9aa2f1782400d2dfbbf4e5226208c4e05ddd4059c3d6d9cd1505"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-auth\-2\.8\.4\.Final\.jar":"99d4b3b160462b92bbf0145aba15aa73a5f55c67daf5fbdb102ef81de51c9ccf"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-credential\-2\.8\.4\.Final\.jar":"b13e94dd2319886ea2126692c44c4823531e9f36635467062b19c738be55de6b"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-mechanism\-gssapi\-2\.8\.4\.Final\.jar":"6b9cec364859d9816794ac11f9ddb3a08fb946625515b8cbfb2d88e867e50e71"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-mechanism\-oauth2\-2\.8\.4\.Final\.jar":"d3d151db3c57113149678e3cb1315e90fece2f5cd5b2e717716bee09b4420a60"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-sasl\-gssapi\-2\.8\.4\.Final\.jar":"d09e051bb13218e9ff81c4761c1b1c07f6f26ee2be1f4e79de54455e30f01318"$''',
+  '''^org\.wildfly\.security\.wildfly\-elytron\-sasl\-oauth2\-2\.8\.4\.Final\.jar":"d0bcb08b70f6b6548ca309e2897e5577bb05993c19fc496ffde02e7e7009ced9"$''',
+  '''^org\.yaml\.snakeyaml\-2\.0\.jar":"880c9d896e4b74a06c549c15ca496450165d6909fa15d7e662bee8f6a66d7afa"$''',
+  '''^text\-propagation\.microprofile\-context\-propagation\-api\-1\.3\.jar":"69ccc04487e87779d4970aa50c673cc34a9df080c1c0e8d8eab2e8b46f825cf4"$''',
+  '''^try\.instrumentation\.opentelemetry\-instrumentation\-api\-2\.23\.0\.jar":"c6b86acc7ccb2a6a0979ae73ae686ea4ac8a24e656912bc169216bcfd87f44b1"$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in otziv-realm-migration-provenance.json (sentry-access-token)"
+targetRules = ["sentry-access-token"]
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/runtime/otziv\-realm\-migration\-provenance\.json$''']
+regexes = [
+  '''^PublicKeysEntry\.class":"0e6bbca17773d428fd382767b78a208293f7c6244a43843dfa4c94bdd6803c9e"$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in published-keycloak-jars.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/runtime/published\-keycloak\-jars\.json$''']
+regexes = [
+  '''^\n?\ \ "opt/keycloak/lib/app/keycloak\.jar":\ "7c65ed659cbc83e21ef976dd2f5be2dff0fbdcba9b6f51867f9194356beeb97e",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/boot/jakarta\.json\.jakarta\.json\-api\-2\.1\.3\.jar":\ "bc934142805ea1d794f1440563965a3861a2a9fb7414ecd3fe44f26500734414",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.quarkus\.quarkus\-smallrye\-openapi\-dev\-3\.33\.3\.1\.jar":\ "e76c6d49dcf72cc6b4b8aab27cc58eba3c896fe373659d662c6149bdf4384ae3",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.quarkus\.quarkus\-smallrye\-openapi\-spi\-3\.33\.3\.1\.jar":\ "ec0cc04c675048994160a64a26b6e60cc49f8f9a88da43277e73d4c0461496df",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-jaxrs\-4\.2\.4\.jar":\ "4b749e84754abd638245f89d561d597ffec91e73eefaccd9e8cec322d05a1eae",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-spring\-4\.2\.4\.jar":\ "d3a4bb698f1dcd6123fc9d0582dab1cca539c1baad71aae2a059ab1d1eddcacb",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-ui\-4\.2\.4\.jar":\ "f1412f61960576e70061902729bd15a6cc8b9ec68079190cea73495efbce2efd",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/io\.smallrye\.smallrye\-open\-api\-vertx\-4\.2\.4\.jar":\ "b0eb3dee61f6e1a577f12f8e7573f0e91295a3e8631a2ca3c3d1951947c0ad90",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/deployment/jakarta\.servlet\.jakarta\.servlet\-api\-6\.0\.0\.jar":\ "c034eb1afb158987dbb53a5fea0cadf611c8dae8daadd59c44d9d5ab70129cef",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.agroal\.agroal\-api\-3\.0\.1\.jar":\ "39d2446e439963f2556add24891c2db9d1fcfbefb79d2c9b112e0d843a508603",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.grpc\.grpc\-api\-1\.81\.0\.jar":\ "3e6a659ba3edcdac730c857b27725e2e4d985c2241055e8326eb4fe0f9573d53",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.opentelemetry\.instrumentation\.opentelemetry\-instrumentation\-api\-2\.23\.0\.jar":\ "c6b86acc7ccb2a6a0979ae73ae686ea4ac8a24e656912bc169216bcfd87f44b1",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.opentelemetry\.opentelemetry\-api\-1\.57\.0\.jar":\ "88bbfc3fcc81af3299e7f69cddcc9672e410ffcf7435e8b50a474cf2e454b410",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.perfmark\.perfmark\-api\-0\.27\.0\.jar":\ "c7b478503ec524e55df19b424d46d27c8a68aeb801664fadd4f069b71f52d0f6",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.quarkus\.quarkus\-credentials\-3\.33\.3\.1\.jar":\ "00fd02afdf24b94a4d94296f28261c77f9de89f2007011401bb48fda07728646",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.quarkus\.quarkus\-smallrye\-openapi\-3\.33\.3\.1\.jar":\ "6e61b1ce00347a0b07015fec8f9c9fc9fb81cd3ac54efa403fa18bf1da8dcf31",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.config\.smallrye\-config\-source\-keystore\-3\.16\.0\.jar":\ "cf6fe2697bb11e894682d2ec28a94952b5ecde84d5841e567c8d647ae1ecc372",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.reactive\.smallrye\-mutiny\-vertx\-auth\-common\-3\.21\.6\.jar":\ "9c7a87f23536e6126bb11621f53f310cba35277e3ef11ce660efdeb5dd772d60",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.reactive\.smallrye\-reactive\-converter\-api\-3\.0\.3\.jar":\ "8f47b3cbdef72c5875836011beb02f485918febbb73c15d51738c566eb669253",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-context\-propagation\-api\-2\.3\.0\.jar":\ "da0bc273588cefb478e98c4e137f65cc394a54253e35684d5d917060fdc4147c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-health\-api\-4\.3\.0\.jar":\ "a91809158320220877f436a9365ad61f98e0cfe53fa62d95d3eb5a88535dbc67",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-open\-api\-core\-4\.2\.4\.jar":\ "a4265049543a12f73971c3b87cd370fda3522b32ef81ad418b0e281bed9ca2ad",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.smallrye\.smallrye\-open\-api\-model\-4\.2\.4\.jar":\ "52b10d7ce18f765a771211a4606d874692f4f9d90d18ef99e38c12f4bf6fa215",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/io\.vertx\.vertx\-auth\-common\-4\.5\.31\.jar":\ "ca50cb70de4f27205dea350fd59c72fb8475b5fe786c19614cea71234d38c5d1",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.activation\.jakarta\.activation\-api\-2\.1\.4\.jar":\ "c9db52100ce6c8aac95cc39075f95720d2e561b11f8051b81c121ad4effd7004",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.annotation\.jakarta\.annotation\-api\-3\.0\.0\.jar":\ "b01f55552284cfb149411e64eabca75e942d26d2e1786b32914250e4330afaa2",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.el\.jakarta\.el\-api\-6\.0\.1\.jar":\ "7e84b5bed49de32b79cc5e85d90b6f5adb1a953ac67283adbb41c1e297f9c605",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.enterprise\.jakarta\.enterprise\.cdi\-api\-4\.1\.0\.jar":\ "c42c808f17925129a0800f618febe050d966e181a4c7384c8a5e7a0283d68699",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.inject\.jakarta\.inject\-api\-2\.0\.1\.jar":\ "f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.interceptor\.jakarta\.interceptor\-api\-2\.2\.0\.jar":\ "d240d72b4dd38a2e431c804079810010cb97903678fa5f987fb7434878b04398",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.mail\.jakarta\.mail\-api\-2\.1\.1\.jar":\ "1d69d8aaa6ab704d4ce3bd156cd5542060849a409b1e0463163d8508356857cc",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.persistence\.jakarta\.persistence\-api\-3\.2\.0\.jar":\ "be8a26b0e75c84c1b7600f759256fbc68d60333d89ec0ce3f784fc3ffa09aa8c",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.resource\.jakarta\.resource\-api\-2\.1\.0\.jar":\ "4d26ad86a5f72cd2f9c4a31cc4524f7bf3ec0ff74416f081f8642b7ce8041067",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.transaction\.jakarta\.transaction\-api\-2\.0\.1\.jar":\ "50c0a7c760c13ae6c042acf182b28f0047413db95b4636fb8879bcffab5ba875",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.validation\.jakarta\.validation\-api\-3\.1\.1\.jar":\ "63ce00156388c365f3ac1be71fcfaf114682fc0c452020b5df6e7ec236e142ab",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.ws\.rs\.jakarta\.ws\.rs\-api\-3\.1\.0\.jar":\ "6b3b3628b8b4aedda0d24c3354335e985497d8ef3c510b8f3028e920d5b8663d",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.xml\.bind\.jakarta\.xml\.bind\-api\-4\.0\.5\.jar":\ "5e489b6c874c4119e003ff1403db523ee3a8959ec499f3de29e77245efccf216",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/jakarta\.xml\.soap\.jakarta\.xml\.soap\-api\-3\.0\.0\.jar":\ "33124e98d724b69e1673a61675c205b58c372605f4254d455b12b37398219a37",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.config\.microprofile\-config\-api\-3\.1\.1\.jar":\ "0d4eaa7e17730e153b1e0613104a989af7d7a0d4ba4d19c84c71862bff993773",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.context\-propagation\.microprofile\-context\-propagation\-api\-1\.3\.jar":\ "69ccc04487e87779d4970aa50c673cc34a9df080c1c0e8d8eab2e8b46f825cf4",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.health\.microprofile\-health\-api\-4\.0\.1\.jar":\ "b89ca4b6c4f7a044250d31c0673f6bc221e40fd669fc5871dbad5e5a0769ca47",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.openapi\.microprofile\-openapi\-api\-4\.1\.1\.jar":\ "1e333f5bd206245e7a4d0a3dd5f2bab1820fc3b950b77e96008fcdb7b77d9150",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.eclipse\.microprofile\.reactive\-streams\-operators\.microprofile\-reactive\-streams\-operators\-api\-3\.0\.1\.jar":\ "2eb30081f2674e674c6587592747a81a4d92d2da1a735be5f645901de60f9f8d",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.infinispan\.infinispan\-api\-16\.0\.14\.jar":\ "6a7e17bdccb7d9578fb268c894793ea6d0fd0d9c77aa5b4b6243263e6e019759",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.infinispan\.infinispan\-counter\-api\-16\.0\.14\.jar":\ "4bfda70b4e04fb1816112ebab01836eb72214f8369bc768058296d3494e6465b",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.keycloak\.keycloak\-admin\-v2\-api\-26\.7\.3\.jar":\ "20027710533f7ad3006ef3d0f6db03be0473bc0cf678935de6160af4b1ff5e2e",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.keycloak\.keycloak\-config\-api\-26\.7\.3\.jar":\ "59bd5b12e73fcbee7c42cd13b1a44ef58904de510e6dde4639d27e07d2194fa3",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.slf4j\.slf4j\-api\-2\.0\.17\.jar":\ "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.snakeyaml\.snakeyaml\-engine\-2\.6\.jar":\ "2652199af40c9aa2f1782400d2dfbbf4e5226208c4e05ddd4059c3d6d9cd1505",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-auth\-2\.8\.4\.Final\.jar":\ "99d4b3b160462b92bbf0145aba15aa73a5f55c67daf5fbdb102ef81de51c9ccf",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-credential\-2\.8\.4\.Final\.jar":\ "b13e94dd2319886ea2126692c44c4823531e9f36635467062b19c738be55de6b",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-mechanism\-gssapi\-2\.8\.4\.Final\.jar":\ "6b9cec364859d9816794ac11f9ddb3a08fb946625515b8cbfb2d88e867e50e71",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-mechanism\-oauth2\-2\.8\.4\.Final\.jar":\ "d3d151db3c57113149678e3cb1315e90fece2f5cd5b2e717716bee09b4420a60",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-sasl\-gssapi\-2\.8\.4\.Final\.jar":\ "d09e051bb13218e9ff81c4761c1b1c07f6f26ee2be1f4e79de54455e30f01318",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.wildfly\.security\.wildfly\-elytron\-sasl\-oauth2\-2\.8\.4\.Final\.jar":\ "d0bcb08b70f6b6548ca309e2897e5577bb05993c19fc496ffde02e7e7009ced9",\r?$''',
+  '''^\n?\ \ "opt/keycloak/lib/lib/main/org\.yaml\.snakeyaml\-2\.0\.jar":\ "880c9d896e4b74a06c549c15ca496450165d6909fa15d7e662bee8f6a66d7afa",\r?$''',
+]
+
+[[allowlists]]
+description = "Exact public C14 migration metadata in published-rootfs-inventory.json (generic-api-key)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^(?:/repo/)?(?:\.gitleaks-staged-index-[0-9a-fA-F-]{36}/)?infrastructure/runtime\-security/proofs/c14\-keycloak\-published/runtime/published\-rootfs\-inventory\.json$''']
+regexes = [
+  '''^\n?\ \ "var/lib/dpkg/info/libgssapi\-krb5\-2:amd64\.triggers":\ \{\r?$''',
+  '''^\n?\ \ "var/lib/dpkg/info/libkeyutils1:amd64\.triggers":\ \{\r?$''',
+]

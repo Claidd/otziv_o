@@ -1,0 +1,94 @@
+{
+  "schema": "otziv-issuer-generation-proof-v1",
+  "startedAt": "2026-09-08T15:39:19.147Z",
+  "image": "otziv-kc-c14-migration:prototype-v3",
+  "production": false,
+  "realProviderLogin": true,
+  "checks": [
+    {
+      "name": "provision_plan_is_read_only",
+      "passed": true
+    },
+    {
+      "name": "production_provisioner_preserves_nested_otp_flow_and_realm_policy",
+      "passed": true
+    },
+    {
+      "name": "provision_reentry_does_not_clone_another_authenticator",
+      "passed": true
+    },
+    {
+      "name": "actual_password_login_captures_current_generation",
+      "passed": true
+    },
+    {
+      "name": "browser_password_pkce_login_captures_immutable_generation",
+      "passed": true
+    },
+    {
+      "name": "ordinary_user_cannot_read_generation_authority",
+      "passed": true
+    },
+    {
+      "name": "remove_then_restore_role_does_not_revive_old_generation",
+      "passed": true
+    },
+    {
+      "name": "refresh_preserves_original_generation",
+      "passed": true
+    },
+    {
+      "name": "new_login_after_role_change_is_usable",
+      "passed": true
+    },
+    {
+      "name": "disable_then_enable_does_not_revive_old_generation",
+      "passed": true
+    },
+    {
+      "name": "offline_login_has_immutable_generation",
+      "passed": true
+    },
+    {
+      "name": "offline_refresh_cannot_acquire_current_generation",
+      "passed": true
+    },
+    {
+      "name": "late_exact_session_delete_does_not_revoke_fresh_login",
+      "passed": true
+    },
+    {
+      "name": "issuer_restart_preserves_generation_tombstone",
+      "passed": true
+    },
+    {
+      "name": "fresh_login_after_restart_works",
+      "passed": true
+    },
+    {
+      "name": "listener_disable_and_reenable_cannot_erase_security_history",
+      "passed": true
+    },
+    {
+      "name": "disabled_authority_fails_closed_and_reactivation_fences_existing_sessions",
+      "passed": true
+    },
+    {
+      "name": "failed_journal_rejects_admin_security_mutation",
+      "passed": true
+    },
+    {
+      "name": "failed_journal_rolls_back_actual_user_state",
+      "passed": true
+    },
+    {
+      "name": "failed_mutation_does_not_advance_generation",
+      "passed": true
+    }
+  ],
+  "postgresImageId": "sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+  "imageId": "sha256:367c57af165ab4e46a36eaaea592a81575e782ce4d0a1a6695b13cdc99d4be2b",
+  "postgresImage": "ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+  "result": "PASS",
+  "finishedAt": "2026-09-08T15:44:08.761Z"
+}

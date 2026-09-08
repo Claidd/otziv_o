@@ -1,0 +1,62 @@
+{
+  "schema": "otziv-c14-public-metadata-context-scan-v1",
+  "result": "PASS",
+  "engine": "ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+  "contexts": [
+    {
+      "context": "frozen-local-proof",
+      "path": "infrastructure/keycloak/security-generation/c14-migration-fix",
+      "baseline": {
+        "path": "local-baseline.redacted.json",
+        "sha256": "27b6d2eba447b2d285bf1462223504940e5a225a770d9a2e7e35c9f69ffbbc8b",
+        "configSha256": "9cbc81f58896e5839c87ed7b09649e18f0992dfe4cc2ce4aa4180ba1770488e1",
+        "findings": 201
+      },
+      "candidate": {
+        "path": "local-candidate.redacted.json",
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "configSha256": "110e581e3db20595b19ce4649daaa180d1829992c493706e9db6e1ec6e17ee42",
+        "findings": 0
+      }
+    },
+    {
+      "context": "retained-and-final-publication",
+      "path": "infrastructure/runtime-security/proofs/c14-keycloak-published",
+      "baseline": {
+        "path": "published-baseline.redacted.json",
+        "sha256": "bfd05c61b065f0a45f373977aa77d4d1636ce8d70a9e6d131b71c9ac6ee4ddb9",
+        "configSha256": "110e581e3db20595b19ce4649daaa180d1829992c493706e9db6e1ec6e17ee42",
+        "findings": 285
+      },
+      "candidate": {
+        "path": "published-candidate.redacted.json",
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "configSha256": "482ee9a0c69bb70aae239615f4c45a15b30c0631d4259817b5dbab089e26b77c",
+        "findings": 0
+      }
+    }
+  ],
+  "unchangedProofs": [
+    {
+      "path": "infrastructure/keycloak/security-generation/c14-migration-fix/proofs/review.json",
+      "sha256": "494f8290dbd87f96f6dcf09480ad82c2fcc250e953d4bce0582efa5835c53faa"
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/c14-migration-fix/proofs/security-v3/review.json",
+      "sha256": "624be5eac9a020c4d609e29ed15baae3e41e2d71b9c5d6ed4375c62973b67285"
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c14-keycloak-published/final/review.json",
+      "sha256": "fcdbb8fef95c9b0dcc507fc7a419366dded040116670c39191d310116f42554b"
+    }
+  ],
+  "publishedScalarBinding": {
+    "sha256_matches_actual_public_proof_file": 3,
+    "same_public_scalar_as_independently_reviewed_local_proof": 282
+  },
+  "limits": [
+    "The local context scan used the earlier local-only configuration; the added final-publication paths are disjoint.",
+    "The normal final staged-index scan remains mandatory for the complete proposed commit, including later acceptance and this reproducer.",
+    "Raw scanner/runtime/security proofs were not rewritten. The retained baseline secret-scan reports are redacted."
+  ]
+}

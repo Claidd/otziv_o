@@ -119,7 +119,7 @@ services:
       start_period: 20s
 
   keycloak-postgres:
-    image: postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    image: ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf
     container_name: keycloak-postgres
     restart: unless-stopped
     logging: *default-logging
@@ -142,7 +142,7 @@ services:
       - internal_net
 
   keycloak:
-    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:93dd42a5379a80fc0673bc1d0c5601d3b35009c8250394b1e2b45082388c82cc}
+    image: ${OTZIV_KEYCLOAK_IMAGE:-ghcr.io/claidd/otziv-security@sha256:c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973}
     restart: unless-stopped
     logging: *default-logging
     mem_limit: ${KEYCLOAK_MEMORY_LIMIT:-2g}

@@ -1,0 +1,28 @@
+{
+  "schema": "otziv-github-artifact-hash-verification-v1",
+  "artifactId": 10065404002,
+  "name": "reviewed-publication-keycloak-attempt-1",
+  "apiDigest": "sha256:7b4cbf45c094e513c1c2e223e3e1456044513001b271e8cf9ece0a83df0fa9da",
+  "actualDigest": "sha256:7b4cbf45c094e513c1c2e223e3e1456044513001b271e8cf9ece0a83df0fa9da",
+  "verified": true,
+  "run": "34249337258",
+  "attempt": "1",
+  "commit": "ca1dcaa0b0f8c063f8e541c1623a3f61d68e749e",
+  "jobId": 102139529463,
+  "files": {
+    "build-metadata.json": "02dccc03441ff140b0c3bbf0b2479e3ad7f762434116f73855570df3317f8cff",
+    "known-runtime-dependencies.json": "efddb9412a8629fa08c0a73fc332ab6608ed70347359d71081f86cd7c10c0694",
+    "publication.json": "de4f82da4252bbbb845afa6a5c6ca22403ba7ccb6736b4fe5a4e0fab2bec4912",
+    "registry-amd64-config.json": "89f560e111619be776f984e2f317a775cb37ce20660271dbb25f638b454ffeab",
+    "registry-amd64-manifest.json": "63305543aec054fde42615d7cb06aebb48291b2ed93945dc23a6873beccc385b",
+    "registry-attestation-0-payload-0.json": "fc5b457ff5060c8c1ad29ad16da704f95e03bbb56626b64a9ed262f52f85e605",
+    "registry-attestation-0-payload-1.json": "8da7622fc420a760ded1bb71bd6bde21fec03c9760b1e3e1748d36bb41b7312a",
+    "registry-attestation-0.json": "80bf36ebcd01b15274ff279ebbb9f2569fef1a1a177474179ca117e097a4f9ae",
+    "registry-index.json": "c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973",
+    "vulnerabilities.adjudications.json": "5993dfd1497a0f061a57401ef3141e87de6ae6cf3670ca42e160431967e546a8",
+    "vulnerabilities.json": "731bc286c53dd265d34b8f7d09056f03759c47a095b04a0a5f2566be9d6baad4",
+    "vulnerabilities.sbom.cdx.json": "27c6a17cc3a91bcad24df8be727f83921cb23ffdbc5a831c2e59a44f0e53ef71",
+    "vulnerabilities.scanner.log": "0aada556b84908631bbc9df4b4fab202afd921ad8123afdbd396a9886fcecd3d",
+    "vulnerabilities.triage.json": "561454099f1d8ce3da0a72e55e1ada13d39d8fde67842565fc92bac791d76e55"
+  }
+}

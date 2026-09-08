@@ -1,0 +1,84 @@
+{
+  "schema": "otziv-keycloak-v3-scanner-execution-v1",
+  "startedAt": "2026-09-08T15:35:24.144170+00:00",
+  "image": "sha256:367c57af165ab4e46a36eaaea592a81575e782ce4d0a1a6695b13cdc99d4be2b",
+  "expectedConfig": "sha256:b1b695fb74f983c010819b25ef5f402622f20cf865fbbb31133d9a7c69b2538b",
+  "scanner": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+  "attempts": [
+    {
+      "memory": "512m",
+      "exitCode": 0,
+      "oomKilled": false,
+      "stateExitCode": 0,
+      "scannerId": "sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+      "command": [
+        "create",
+        "--name",
+        "otziv-kc-v3-scan-adf787a0bd88-512m",
+        "--label",
+        "com.otziv.kc-v3-scan-owner=adf787a0bd884545aec2cc948ec3308d",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges:true",
+        "--tmpfs",
+        "/tmp:rw,nosuid,size=128m",
+        "--memory",
+        "512m",
+        "--pids-limit",
+        "128",
+        "--mount",
+        "type=bind,source=E:\\Works\\Projects\\otziv\\.codex-tmp\\release-readiness-20260908\\keycloak-security-v3\\input,target=/input,readonly",
+        "--mount",
+        "type=bind,source=E:\\Works\\Projects\\otziv\\.codex-tmp\\release-readiness-20260908\\keycloak-security-v3\\cache,target=/cache",
+        "--mount",
+        "type=bind,source=E:\\Works\\Projects\\otziv\\.codex-tmp\\release-readiness-20260908\\keycloak-security-v3\\scratch,target=/scratch",
+        "--env",
+        "TMPDIR=/scratch",
+        "--mount",
+        "type=bind,source=E:\\Works\\Projects\\otziv\\.codex-tmp\\release-readiness-20260908\\keycloak-security-v3\\results,target=/results",
+        "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+        "image",
+        "--cache-dir",
+        "/cache",
+        "--timeout",
+        "20m",
+        "--scanners",
+        "vuln",
+        "--ignorefile",
+        "/dev/null",
+        "--list-all-pkgs",
+        "--format",
+        "json",
+        "--output",
+        "/results/report.json",
+        "--input",
+        "/input/image.tar"
+      ]
+    }
+  ],
+  "seededPublicDatabaseFiles": {
+    "db/metadata.json": {
+      "sha256": "2cf1b165b92624a5c7c5ae99b1552a68bde764e7a19dff525c3784cbca9e2c51",
+      "size": 153
+    },
+    "db/trivy.db": {
+      "sha256": "66c0963f3fc47ebed35ce0fd34ce16bfea06c56ad6345e422124ed030792bd5d",
+      "size": 1351962624
+    },
+    "java-db/metadata.json": {
+      "sha256": "fbc64d1a547b3be2805db7b828d256c75d6e615af3d61a7efd82e52a78aa0559",
+      "size": 152
+    },
+    "java-db/trivy-java.db": {
+      "sha256": "23c56d3570de75009eddacbf32d7ee375f2d9ec9d312b5b9d95d508cf2331f72",
+      "size": 1520336896
+    }
+  },
+  "inputArchiveSha256": "5aa9447eefa48faae39bd21644dfcca708c6d460b6743be472edfddb89e4ab38",
+  "rawReportSha256": "861f80b145ea076ea5377b5bbee1c7729f84e689dd419adbed98b79e4ec05bb6",
+  "high": 0,
+  "critical": 0,
+  "rawResult": "PASS",
+  "completedAt": "2026-09-08T15:39:11.353597+00:00",
+  "scriptSha256": "90dbba12c8125d2c7e963d872eb4acbce134843aabd7248040a61b5e507903ca"
+}

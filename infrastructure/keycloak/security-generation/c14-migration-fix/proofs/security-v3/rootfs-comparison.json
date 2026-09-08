@@ -1,0 +1,274 @@
+{
+  "schema": "otziv-keycloak-v3-independent-rootfs-comparison-v1",
+  "result": "PASS",
+  "completedAt": "2026-09-08T15:37:07.072028+00:00",
+  "images": {
+    "base": {
+      "id": "sha256:93dd42a5379a80fc0673bc1d0c5601d3b35009c8250394b1e2b45082388c82cc",
+      "architecture": "amd64",
+      "os": "linux",
+      "rootfsLayers": [
+        "sha256:c0359c5b6ede84d4a083d06d35ee77f0b338dfb17423771854d007d89953fb3e",
+        "sha256:87c9dd9a3da32f6aaf9a15b3c4344d3341bd3d94bdb6b1e471419bc092ccb690",
+        "sha256:f4c8fa7e3b3757d1fc02585f44b6c1fbfa9cd743cbbf7bdf4b26e368aeb5a85a",
+        "sha256:f5360af548c1d7b55e9b707c58b77b3a83a7f3943c1f664afcf3e00ca0496bb3",
+        "sha256:d924981500f48c06bb09e2d7bbe06a161b681f04b1bb29d955123823594454aa",
+        "sha256:eddcd61f755b4fa0d0c8ce7c1350128c055eb295b1838698efb85a201a45f5da",
+        "sha256:89f8908d706a30101ed494fcfb26931364201cda3ab4344502235690e8e4d67a",
+        "sha256:a74f4541b020dd0937af2c824a9f8d32b0b80d7c9e43e9c48c917702a7cf082b",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+        "sha256:8917a41f6fe39f4cb1b5fd23e22ce955dba5f3275d7fa659cee74c39d9f51cea",
+        "sha256:9307a1c351f6366eeec3d46060ce51f49a6e6175758b3e3678ef519be7dbd57d",
+        "sha256:77c1186ea33a4268479194776bb43aac84aaa1880795593e31aa3f17d7d38a7d",
+        "sha256:235e190ee293c5a0e76ae7a91c4b2225c3eed28e4e38498694731963a3439f91",
+        "sha256:36c69c2137b6c086c0ee6e52d5b6dddece718c9e4fa26b597d5144eab24ec648",
+        "sha256:3802b13b94b5bd7f62478bce8bbe841ec0bb9e945a2edc6a8f239e56526b08dc",
+        "sha256:ae364031aaa2d7412a8e239a94b63e4a70b946f8bf737665b374f0e389c993a7",
+        "sha256:38d05f7a2be2db649c5927f006e3d457d5d1ee6100ca64a40423a9e54f95a061",
+        "sha256:ac18ab84769389ec7df4d3284bff852526cde34bd6dc2a0600abb670e40281ca",
+        "sha256:60d46c2464b1f1557033c2017c2d96348312d010de41cc829a05e50b6893116c",
+        "sha256:a51696adda5cb8f4a35b943ef1338b5ad92ce28f27826e4d8ac9cb317796d155",
+        "sha256:f3a5b50784a11c21ee7b13fec9553202d6d511d24944c729f07f8c3a7e003ea2",
+        "sha256:cad102620db63ce820cf120c1e1dad51519cfc61d74d38162c47046a8f8d5dde",
+        "sha256:81eb6093520c39cb810e57d61a87aab2e89d0f8e45bd04f858717c2d7036572d",
+        "sha256:28e9a4f57136c1b213e58b5cea043cea5a2b7e03cb905841b029f91c8ac75ef5",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+        "sha256:25a424c59f7fb98da5f9cebb3a5fa352bda31fd8699fc2d5723cd8084e02edac"
+      ]
+    },
+    "target": {
+      "id": "sha256:367c57af165ab4e46a36eaaea592a81575e782ce4d0a1a6695b13cdc99d4be2b",
+      "architecture": "amd64",
+      "os": "linux",
+      "rootfsLayers": [
+        "sha256:c0359c5b6ede84d4a083d06d35ee77f0b338dfb17423771854d007d89953fb3e",
+        "sha256:87c9dd9a3da32f6aaf9a15b3c4344d3341bd3d94bdb6b1e471419bc092ccb690",
+        "sha256:f4c8fa7e3b3757d1fc02585f44b6c1fbfa9cd743cbbf7bdf4b26e368aeb5a85a",
+        "sha256:f5360af548c1d7b55e9b707c58b77b3a83a7f3943c1f664afcf3e00ca0496bb3",
+        "sha256:d924981500f48c06bb09e2d7bbe06a161b681f04b1bb29d955123823594454aa",
+        "sha256:eddcd61f755b4fa0d0c8ce7c1350128c055eb295b1838698efb85a201a45f5da",
+        "sha256:89f8908d706a30101ed494fcfb26931364201cda3ab4344502235690e8e4d67a",
+        "sha256:a74f4541b020dd0937af2c824a9f8d32b0b80d7c9e43e9c48c917702a7cf082b",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+        "sha256:8917a41f6fe39f4cb1b5fd23e22ce955dba5f3275d7fa659cee74c39d9f51cea",
+        "sha256:9307a1c351f6366eeec3d46060ce51f49a6e6175758b3e3678ef519be7dbd57d",
+        "sha256:77c1186ea33a4268479194776bb43aac84aaa1880795593e31aa3f17d7d38a7d",
+        "sha256:235e190ee293c5a0e76ae7a91c4b2225c3eed28e4e38498694731963a3439f91",
+        "sha256:36c69c2137b6c086c0ee6e52d5b6dddece718c9e4fa26b597d5144eab24ec648",
+        "sha256:3802b13b94b5bd7f62478bce8bbe841ec0bb9e945a2edc6a8f239e56526b08dc",
+        "sha256:ae364031aaa2d7412a8e239a94b63e4a70b946f8bf737665b374f0e389c993a7",
+        "sha256:38d05f7a2be2db649c5927f006e3d457d5d1ee6100ca64a40423a9e54f95a061",
+        "sha256:ac18ab84769389ec7df4d3284bff852526cde34bd6dc2a0600abb670e40281ca",
+        "sha256:60d46c2464b1f1557033c2017c2d96348312d010de41cc829a05e50b6893116c",
+        "sha256:a51696adda5cb8f4a35b943ef1338b5ad92ce28f27826e4d8ac9cb317796d155",
+        "sha256:f3a5b50784a11c21ee7b13fec9553202d6d511d24944c729f07f8c3a7e003ea2",
+        "sha256:cad102620db63ce820cf120c1e1dad51519cfc61d74d38162c47046a8f8d5dde",
+        "sha256:81eb6093520c39cb810e57d61a87aab2e89d0f8e45bd04f858717c2d7036572d",
+        "sha256:28e9a4f57136c1b213e58b5cea043cea5a2b7e03cb905841b029f91c8ac75ef5",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+        "sha256:25a424c59f7fb98da5f9cebb3a5fa352bda31fd8699fc2d5723cd8084e02edac",
+        "sha256:415b4830a010fca7154c1492fef40b20f3f1e06b6135302f10c3ce8341bdfca8",
+        "sha256:2dcb3942bc460d4a5f351fdd9bbaeeaa33031274a894c99803013f711f8bca35",
+        "sha256:1feca1d6a8397c206e96d7edaf4c578766024c5b6617efc9750ace72edccecf1",
+        "sha256:14df0b7540e62d34e1849e2bffd2fd6dce3c904a31011839da71b7eca469354d",
+        "sha256:f965ec6349188bb2b77f31e9c260dda601f7eb552cfb1b2fd3d42b2f4b4c95b4"
+      ]
+    }
+  },
+  "dockerGeneratedFilesExcluded": [
+    "etc/hosts",
+    "etc/hostname",
+    "etc/resolv.conf"
+  ],
+  "mtimeExcluded": true,
+  "changedFiles": [
+    {
+      "path": "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-infinispan-26.7.3.jar",
+      "base": {
+        "type": "0",
+        "mode": 436,
+        "uid": 1000,
+        "gid": 0,
+        "size": 1249517,
+        "sha256": "a4a0e2148c9795bf12f365932a0e6e2f4fb25c1339d8cc2b08bf5e66b8541652"
+      },
+      "target": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 1253104,
+        "sha256": "7acd37d1650757304bf85e16094eb704ec81b8eb616804942dc2550662906d12"
+      }
+    },
+    {
+      "path": "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-private-26.7.3.jar",
+      "base": {
+        "type": "0",
+        "mode": 436,
+        "uid": 1000,
+        "gid": 0,
+        "size": 268748,
+        "sha256": "bc50fbd743d2c5dc5f7c68c0fccbdece69e3d26639e81ff6c180fe3734f22859"
+      },
+      "target": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 269723,
+        "sha256": "b0b192e7e8f4d94a60e4fd20f23dfa62fbda6905757fe55e451994c3633a09ce"
+      }
+    },
+    {
+      "path": "opt/keycloak/lib/quarkus/generated-bytecode.jar",
+      "base": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 2350080,
+        "sha256": "36134a445f78a67bde01e1155fce28568112e18b64695f4f8e9c8ca141518efe"
+      },
+      "target": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 2349906,
+        "sha256": "be82c5bb178c6834168d5747514b491b916c7b0acb4ed668f04384b8b68860a2"
+      }
+    },
+    {
+      "path": "opt/keycloak/lib/quarkus/quarkus-application.dat",
+      "base": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 447617,
+        "sha256": "63eb79d4ce3d6604714b88f111b635790ea9f9d5896408c07ca66c04a5715758"
+      },
+      "target": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 447617,
+        "sha256": "264fd7459e539e28cb5483f67edab0f7f3abd08170d3e472b8d465e434594aa6"
+      }
+    },
+    {
+      "path": "opt/keycloak/lib/quarkus/transformed-bytecode.jar",
+      "base": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 722671,
+        "sha256": "b14af57bbf803e9f974be9be8ed021b8b41bcc6143d30e69a360558e252c5106"
+      },
+      "target": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 722671,
+        "sha256": "ce33e61c4025bd044ebd3707e00a977f351a033ece0329019168295dbd31f669"
+      }
+    },
+    {
+      "path": "opt/keycloak/otziv-realm-migration-proof",
+      "base": null,
+      "target": {
+        "type": "5",
+        "mode": 493,
+        "uid": 1000,
+        "gid": 0
+      }
+    },
+    {
+      "path": "opt/keycloak/otziv-realm-migration-proof/causal-baseline.txt",
+      "base": null,
+      "target": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 207,
+        "sha256": "33797dd737b8f20ef042f805f168e9d3f2eb6f669e4d4a0538b9fa598b37fe7f"
+      }
+    },
+    {
+      "path": "opt/keycloak/otziv-realm-migration-proof/causal-patched.txt",
+      "base": null,
+      "target": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 367,
+        "sha256": "79c6bcbd1dd7b03b8f605b246ff2c64536bfd4960d7071c7ad9d1f785104e502"
+      }
+    },
+    {
+      "path": "opt/keycloak/otziv-realm-migration-provenance.json",
+      "base": null,
+      "target": {
+        "type": "0",
+        "mode": 420,
+        "uid": 1000,
+        "gid": 0,
+        "size": 180540,
+        "sha256": "4f92a2fffad2fc1f6a18d1e7ba84e72ad2e119604c65835ac8cb5ea242c67de7"
+      }
+    }
+  ],
+  "unexpectedPaths": [],
+  "patchedJarEntryDifferences": {
+    "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-private-26.7.3.jar": {
+      "baseCount": 143,
+      "targetCount": 143,
+      "differences": [
+        {
+          "entry": "org/keycloak/migration/migrators/RealmMigration.class",
+          "base": "2f6f1d3eb4802e41948c3b150ce2c75fcf253d586bcc92e1ca1f32eca0e9093f",
+          "target": "93a7f6509b11172874d03a407e583dea754ff94c4d0f5137dec1f7a5cc4de11b"
+        },
+        {
+          "entry": "org/keycloak/models/cache/CacheRealmProvider.class",
+          "base": "340a12e8f180da3deeebcc5757de2707800f787e1d34aa042b131dd96bd1a119",
+          "target": "0881b675619cc2fa8a98c16fe99de21c51c336cc6676846da3e6f8a21ced7357"
+        }
+      ]
+    },
+    "opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-infinispan-26.7.3.jar": {
+      "baseCount": 648,
+      "targetCount": 648,
+      "differences": [
+        {
+          "entry": "org/keycloak/models/cache/infinispan/RealmCacheSession$1.class",
+          "base": "b736d757614c8e7d8e9036d645fc428f096bb43839c19de8fa33bdd7c3580c3b",
+          "target": "97ffdb8210dd1e00f880ac0b66a2199863cb7f0b8e466d1e8ad78b00547f42c3"
+        },
+        {
+          "entry": "org/keycloak/models/cache/infinispan/RealmCacheSession$2.class",
+          "base": "e061eaaccb901c337b34b045bca0fb1dbc25a6560ef42808b13c8012fe0c4552",
+          "target": "e2ebcee4e62cfbdc4da2e8a71198dc231689f92931b64aa1960db6998f7f9066"
+        },
+        {
+          "entry": "org/keycloak/models/cache/infinispan/RealmCacheSession$3.class",
+          "base": "11869c086f24482456b39e99cbe028beb74945656a8e22768d1a224f3f64a02b",
+          "target": "62c5cbe7847ce305f0eec5fcde358eb84ff345ec436aa5c66ba53bedd9117326"
+        },
+        {
+          "entry": "org/keycloak/models/cache/infinispan/RealmCacheSession.class",
+          "base": "8195bbb1cd9b0eb7c653dc02ea7a7d3d0d6f2d993159f11a5c1326fec4230962",
+          "target": "7b1766b1dac21459f4549995b5857728391b971d6c29a910f2eacb6853b766bd"
+        }
+      ]
+    }
+  },
+  "baseRootfsLayerPrefixPreserved": true,
+  "scriptSha256": "bd445a7f9c8dd5b46dbd297db27d8955b0f9ff05d03762c52651487141f93fdc"
+}

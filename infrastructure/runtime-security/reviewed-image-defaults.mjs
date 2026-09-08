@@ -16,6 +16,8 @@ import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
 import { validateDatabaseTransitionReadiness } from './database-transition-readiness.mjs';
 import { validatePostgresActivationScan } from './postgres-activation-proof.mjs';
+import { validatePostgresTransitionReadiness, validatePublishedKeycloakMigrationAcceptance,
+  assertPostgresKeycloakCoupling } from './postgres-transition-readiness.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -146,6 +148,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
       await read(dirname(entry.publication.path).replaceAll('\\', '/') + '/vulnerabilities.json'), publication.value.imageId);
     assert.deepEqual(checked, publication.value.knownRuntimeDependencies, 'activation_known_dependencies_changed');
   }
+  if (selected.manifestSet === 'c14-keycloak') {
+    await validatePublishedKeycloakMigrationAcceptance(publication.value, entry, read);
+  }
   assert.equal(entry.reference, publication.value.reference, 'activation_registered_reference_mismatch');
   assert.equal(publication.value.security.effectiveBlockingFixedHighOrCritical, 0, 'activation_security_severity_mismatch');
   if (publication.value.security.unresolvedRiskReview === 'NONE') {
@@ -205,11 +210,17 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
   for (const entry of entries) {
     assert.ok(images.some(image => image.component === entry.component) && !registered.has(entry.component), 'activation_unknown_or_duplicate_component');
     if (DATABASE_HOLD.has(entry.component)) {
-      assert.ok(entry.databaseTransition && entry.component === 'mysql', 'activation_database_coordinated_transition_required');
+      assert.ok(entry.databaseTransition, 'activation_database_coordinated_transition_required');
       const image = images.find(image => image.component === entry.component);
-      databasePreparations.set(entry.component, await validateDatabaseTransitionReadiness(entry, image, read));
+      databasePreparations.set(entry.component, await (entry.component === 'mysql'
+        ? validateDatabaseTransitionReadiness(entry, image, read)
+        : validatePostgresTransitionReadiness(entry, image, read)));
     }
     registered.set(entry.component, entry);
+  }
+  if (databasePreparations.has('postgres')) {
+    assertPostgresKeycloakCoupling(databasePreparations.get('postgres'), registered.get('keycloak'), rows,
+      images.find(image => image.component === 'keycloak'));
   }
   const checks = [];
   for (const image of images) {
@@ -247,19 +258,28 @@ const SPLIT_EVIDENCE_FILE = /^registry-attestation-[0-9]+-payload-[0-9]+\.json$/
 
 export async function createEvidenceReader(root) {
   root = await realpath(root);
+  const allowedRoots = ['infrastructure/runtime-security',
+    'infrastructure/keycloak/security-generation/c14-migration-fix'];
   const evidenceRoot = await realpath(resolve(root, 'infrastructure/runtime-security'));
   const evidenceRelative = relative(root, evidenceRoot);
   assert.ok(evidenceRelative && !isAbsolute(evidenceRelative) && evidenceRelative !== '..'
-    && !evidenceRelative.startsWith('..' + sep), 'activation_evidence_root_symlink_escape');
+    && !evidenceRelative.startsWith('..' + sep)
+    && relative(resolve(root, allowedRoots[0]), evidenceRoot) === '', 'activation_evidence_root_symlink_escape');
   function pathInScope(path) {
-    assert.ok(typeof path === 'string' && path.startsWith('infrastructure/runtime-security/') && !isAbsolute(path)
+    assert.ok(typeof path === 'string' && allowedRoots.some(prefix => path.startsWith(prefix + '/')) && !isAbsolute(path)
       && !path.includes('\\') && !path.includes(':')
       && path.split('/').every(part => part && part !== '.' && part !== '..'), 'activation_path_outside_evidence_scope');
     return resolve(root, path);
   }
   async function physicalPath(path) {
     const actual = await realpath(pathInScope(path));
-    const inside = relative(evidenceRoot, actual);
+    const prefix = allowedRoots.find(prefix => path.startsWith(prefix + '/'));
+    const selectedRoot = prefix === allowedRoots[0] ? evidenceRoot : await realpath(resolve(root, prefix));
+    const rootInside = relative(root, selectedRoot);
+    assert.ok(rootInside && !isAbsolute(rootInside) && rootInside !== '..'
+      && !rootInside.startsWith('..' + sep)
+      && relative(resolve(root, prefix), selectedRoot) === '', 'activation_evidence_root_symlink_escape');
+    const inside = relative(selectedRoot, actual);
     assert.ok(inside && !isAbsolute(inside) && inside !== '..' && !inside.startsWith('..' + sep), 'activation_evidence_symlink_escape');
     return actual;
   }

@@ -7,6 +7,7 @@ import { repositoryInventory } from './upstream-images.mjs';
 
 const manifest = await readFile(new URL('./reviewed-images.json', import.meta.url));
 const original = JSON.parse(manifest).images.find(image => image.component === 'mysql');
+const originalPostgres = JSON.parse(manifest).images.find(image => image.component === 'postgres');
 const activations = JSON.parse(await readFile(new URL('./reviewed-image-activations.json', import.meta.url)));
 const base = 'infrastructure/runtime-security/proofs/c7-published/mysql';
 const underlyingRead = await createEvidenceReader(process.cwd()), cache = new Map();
@@ -22,8 +23,13 @@ const entry = { component: 'mysql', reference: publication.reference, commit: pu
   publication: await proof(base + '/publication/publication.json'),
   anonymous: await proof(base + '/anonymous/anonymous-download.json'),
   databaseTransition: await proof('infrastructure/runtime-security/proofs/c14-mysql-vps/actual-result.json') };
-const rows = (await repositoryInventory()).map(row => row.image === original.sourceBeforeRef ? { ...row, image: entry.reference } : row);
-const index = candidate => ({ ...activations, images: [...activations.images.filter(image => image.component !== 'mysql'), candidate] });
+// This scenario grants only the MySQL transition. Keep PostgreSQL at its source
+// even when the repository independently has a reviewed PostgreSQL transition.
+const rows = (await repositoryInventory()).map(row => row.references.some(reference =>
+  originalPostgres.defaultReferencesBefore.some(source => source.path === reference.path && source.service === reference.service))
+  ? { ...row, image: originalPostgres.sourceBeforeRef }
+  : row.image === original.sourceBeforeRef ? { ...row, image: entry.reference } : row);
+const index = candidate => ({ ...activations, images: [...activations.images.filter(image => !['mysql', 'postgres'].includes(image.component)), candidate] });
 
 test('actual VPS replay plus full C7 OCI/anonymous pair admits only coordinated MySQL candidate preparation', async () => {
   const checks = await validateReviewedDefaults(rows, manifest, index(entry), read, true);
@@ -32,6 +38,12 @@ test('actual VPS replay plus full C7 OCI/anonymous pair admits only coordinated 
   assert.ok(databases.every(check => check.reference === entry.reference &&
     check.databaseTransition === 'COORDINATED_CANDIDATE_PREPARATION' && check.ordinaryDeploymentUpgradeAuthorized === false));
   assert.ok(checks.filter(check => check.component === 'postgres').every(check => check.mode === 'EXACT_ORIGINAL_SOURCE'));
+});
+test('accepted MySQL replay cannot authorize changing the PostgreSQL source image', async () => {
+  const changed = rows.map(row => row.image === originalPostgres.sourceBeforeRef
+    ? { ...row, image: 'ghcr.io/claidd/otziv-security@sha256:' + 'e'.repeat(64) } : row);
+  await assert.rejects(validateReviewedDefaults(changed, manifest, index(entry), read, true),
+    /activation_database_coordinated_transition_required/);
 });
 test('publication alone, a typed approval or a transition for another image cannot release the database hold', async () => {
   const missing = { ...entry }; delete missing.databaseTransition;

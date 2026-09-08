@@ -1,0 +1,53 @@
+{
+  "schema": "otziv-postgres-keycloak-published-acceptance-v1",
+  "result": "PASS",
+  "role": "COORDINATED_CANDIDATE_PREPARATION",
+  "sourceWrites": false,
+  "production": false,
+  "vpsCutoverExecuted": false,
+  "completedAt": "2026-09-08T16:25:26.487974+00:00",
+  "localReview": {
+    "path": "infrastructure/keycloak/security-generation/c14-migration-fix/proofs/review.json",
+    "sha256": "494f8290dbd87f96f6dcf09480ad82c2fcc250e953d4bce0582efa5835c53faa"
+  },
+  "published": {
+    "postgresReference": "ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+    "postgresConfigId": "sha256:d257683e1d6febdfb869b77c60683bc598b272788d60e65893a109adaf0a2db4",
+    "keycloakReference": "ghcr.io/claidd/otziv-security@sha256:c6ee6afd6750ae0886a608c5837085cb20417a6746ca2ed47b59b1a0fdec1973",
+    "keycloakConfigId": "sha256:89f560e111619be776f984e2f317a775cb37ce20660271dbb25f638b454ffeab"
+  },
+  "evidence": {
+    "keycloakPublication": {
+      "path": "infrastructure/runtime-security/proofs/c14-keycloak-published/final/publication/publication.json",
+      "sha256": "de4f82da4252bbbb845afa6a5c6ca22403ba7ccb6736b4fe5a4e0fab2bec4912"
+    },
+    "keycloakAnonymous": {
+      "path": "infrastructure/runtime-security/proofs/c14-keycloak-published/final/anonymous/anonymous-download.json",
+      "sha256": "8137c9a085f58d57227399a294d215108c2818c7a4013ab50b7c65b6986de53d"
+    },
+    "actualMigration": {
+      "path": "infrastructure/keycloak/security-generation/c14-migration-fix/proofs/actual-source-sha256-c6ee6afd6750ae088.json",
+      "sha256": "ab8218ae303e2c39fc1c3891629d4724733235c62b292030c9a14274a4eaa49d"
+    },
+    "issuerProtocol": {
+      "path": "infrastructure/keycloak/security-generation/c14-migration-fix/proofs/issuer-protocol-sha256-c6ee6afd6750ae088.json",
+      "sha256": "cda5c07c64cf7ad7b7c5aedc454351927f3099b6a2fa2c6976ed844350b8d57c"
+    },
+    "securityReview": {
+      "path": "infrastructure/runtime-security/proofs/c14-keycloak-published/final/review.json",
+      "sha256": "fcdbb8fef95c9b0dcc507fc7a419366dded040116670c39191d310116f42554b"
+    },
+    "runtimeInventory": {
+      "path": "infrastructure/runtime-security/proofs/c14-keycloak-published/final/runtime/published-rootfs-inventory.json",
+      "sha256": "a38dd8ebb6c93f677fb8efdfc99fff1f67d5a6032fce616d629af4c2155394ca"
+    },
+    "sourceInventoryAfter": {
+      "path": "infrastructure/keycloak/security-generation/c14-migration-fix/proofs/source-after-published-rehearsal.json",
+      "sha256": "26cb669e77c4df89b4e536131c65332abc36afdbd4610de82e9ea32e9926f280"
+    },
+    "sourceContinuityCleanup": {
+      "path": "infrastructure/keycloak/security-generation/c14-migration-fix/proofs/source-continuity-published-cleanup.json",
+      "sha256": "aab2c5e14a035b3a3e7730bf933bba0961cc870a9e78bef836e756c4a4c491a9"
+    }
+  }
+}

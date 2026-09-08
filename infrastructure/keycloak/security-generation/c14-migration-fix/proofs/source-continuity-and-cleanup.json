@@ -1,0 +1,27 @@
+{
+  "schema": "otziv-keycloak-migration-source-continuity-v1",
+  "result": "PASS",
+  "observedAt": "2026-09-08T15:37:58.468967+00:00",
+  "sourceContainerImageConfigVolumeAndCatalogFootprintUnchanged": true,
+  "comparedPostgresFields": [
+    "configSha256",
+    "hbaSha256",
+    "identSha256",
+    "clusterIdentifier",
+    "roleCounts",
+    "schemaCounts",
+    "applicationObjects",
+    "encoding",
+    "locale",
+    "extensions"
+  ],
+  "sourceBeforeSha256": "47101539be2d48a354904509f5fd88f29a43583ebf4686c1169df852bf1b4fe0",
+  "sourceAfterSha256": "f992d26a31a8535a90fb4a725e1192496f4f2b6c54b00b4b3e87c783a5718732",
+  "ownedRehearsalResourcesRemaining": {
+    "containers": 0,
+    "volumes": 0,
+    "networks": 0
+  },
+  "productionWrites": false,
+  "sourceRowSnapshotEqualityAfterRehearsalClaimed": false
+}

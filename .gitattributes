@@ -6,6 +6,7 @@ contracts/generated/*.json text eol=lf
 shared/client-common/src/*.generated.ts text eol=lf
 
 # Publication evidence is verified against the exact retained bytes.
+.gitleaks.toml text eol=lf
 infrastructure/runtime-security/reviewed-images.json text eol=lf
 infrastructure/runtime-security/history/** -text
 infrastructure/runtime-security/proofs/** -text

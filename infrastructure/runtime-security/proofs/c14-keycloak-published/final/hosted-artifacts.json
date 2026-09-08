@@ -1,0 +1,42 @@
+[
+  {
+    "id": 10065516474,
+    "node_id": "MDg6QXJ0aWZhY3QxMDA2NTUxNjQ3NA==",
+    "name": "anonymous-download-keycloak-attempt-1",
+    "size_in_bytes": 609519,
+    "url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/10065516474",
+    "archive_download_url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/10065516474/zip",
+    "expired": false,
+    "digest": "sha256:f30f18773ef8526718a90f22257e9a133e7f42198158b7ffaed2047215fc67b1",
+    "created_at": "2026-09-08T16:14:35Z",
+    "updated_at": "2026-09-08T16:14:35Z",
+    "expires_at": "2026-09-22T16:14:34Z",
+    "workflow_run": {
+      "id": 34249337258,
+      "repository_id": 650754525,
+      "head_repository_id": 650754525,
+      "head_branch": "codex/architecture-correction-20260908",
+      "head_sha": "ca1dcaa0b0f8c063f8e541c1623a3f61d68e749e"
+    }
+  },
+  {
+    "id": 10065404002,
+    "node_id": "MDg6QXJ0aWZhY3QxMDA2NTQwNDAwMg==",
+    "name": "reviewed-publication-keycloak-attempt-1",
+    "size_in_bytes": 758993,
+    "url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/10065404002",
+    "archive_download_url": "https://api.github.com/repos/Claidd/otziv_o/actions/artifacts/10065404002/zip",
+    "expired": false,
+    "digest": "sha256:7b4cbf45c094e513c1c2e223e3e1456044513001b271e8cf9ece0a83df0fa9da",
+    "created_at": "2026-09-08T16:11:49Z",
+    "updated_at": "2026-09-08T16:11:49Z",
+    "expires_at": "2026-09-22T16:11:48Z",
+    "workflow_run": {
+      "id": 34249337258,
+      "repository_id": 650754525,
+      "head_repository_id": 650754525,
+      "head_branch": "codex/architecture-correction-20260908",
+      "head_sha": "ca1dcaa0b0f8c063f8e541c1623a3f61d68e749e"
+    }
+  }
+]
