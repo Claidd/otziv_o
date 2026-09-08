@@ -80,6 +80,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "26"
+          show-download-progress: true
           cache: maven
           cache-jdk: false
           server-id: otziv-sonatype
@@ -145,6 +146,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          show-download-progress: true
           server-id: otziv-sonatype
           server-username-env-var: SONATYPE_GUIDE_USERNAME
           server-password-env-var: SONATYPE_GUIDE_TOKEN

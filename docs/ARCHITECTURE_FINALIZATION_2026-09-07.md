@@ -1,5 +1,9 @@
 # Доработка архитектурного плана: реализация и доказательства
 
+Текущее продолжение: [C11 — подготовка Maven-аудита и обязательные проверки ветки](C11_CI_PREFLIGHT_AND_BRANCH_POLICY_2026-09-08.md). Исправлено добавление неявных аргументов Maven в Actions; 11 проверок подготовки и 51 проверка политики и связанных инструментов прошли. Защита `main` с 20 обязательными проверками фактически включена и независимо подтверждена. Приёмка коммита остаётся заблокированной двумя аудитами; полный план открыт.
+
+Ниже сохранены исторические срезы C10 и предыдущих этапов; их статусы относятся к указанным коммитам и времени.
+
 Текущее продолжение: [C10 — обновление GitHub Actions до Node 24](C10_ACTION_RUNTIME_2026-09-08.md). Проверены четыре workflow и 40 тестов. Gitleaks на C9 прошёл для PR и push; полный план остаётся открытым из-за ошибок аудитов и условий выпуска. Результаты C9 не заменяют проверку нового коммита.
 
 Текущее уточнение: [C9 — публичные контрольные суммы в проверке истории
@@ -23,7 +27,7 @@ Git](C9_SECRET_SCAN_METADATA_2026-09-08.md). Локально подтвержд
 
 Изменения внесены в существующее рабочее дерево с сохранением изменений
 пользователя. Производственное развёртывание, включение внешних отправок,
-публикация APK и изменение GitHub branch protection не выполнялись.
+публикация APK не выполнялись. GitHub branch protection включён и подтверждён на этапе C11.
 
 Проверенный снимок опубликован коммитом `25579270c5494eedb6f3badc0ad3737b041ba9d6`
 в ветке `codex/architecture-remediation-20260907` и [draft PR №2](https://github.com/Claidd/otziv_o/pull/2).
@@ -56,7 +60,7 @@ WorkerRisk-изменения и посторонняя диагностика �
 | P18 | Финансовые/manager hotspots разделены по сценариям; сохранены public API, денежные транзакции и порядок locks. Before/after SQL, latency, throughput и EXPLAIN сопоставляются одним harness. | Согласованные продуктовые пороги производительности и наблюдение production. |
 | P19 | 84 метода в 14 feature APIs; order-details использует PageWriteTracker для всех выбранных записей, включая payment/notes. Поздняя запись вызывает сверку того же ресурса, скрытый экран не читает его преждевременно. | Native приёмка. |
 | P20 | Общий SDK 1.1.0: 187 операций, 172 пути, 204 input/output/error схемы из скомпилированных Spring/Jackson mappings. Сохранены auth/permission metadata, writes, pagination и compatibility fixtures. | Официальная нижняя поддерживаемая версия, подписанное обновление, опубликованный recovery target. |
-| P21 | Реальные runtime/MySQL/architecture/browser/recovery/image проверки и release-lineage gate в CI; F01–F20 имеют отдельные записи с migrations/evidence/remaining acceptance. Закрытие без PR, владельца и выпуска запрещено verifier. Проверенный снимок опубликован в [draft PR №2](https://github.com/Claidd/otziv_o/pull/2); F01–F20 связаны с реальным PR. Штатные pre-commit и pre-push hooks прошли. | Успешные checks на актуальном commit и фактическое включение branch protection; native/DR/alert/production acceptance. Создание PR не подтверждает успешный CI. |
+| P21 | Реальные runtime/MySQL/architecture/browser/recovery/image проверки и release-lineage gate в CI; F01–F20 имеют отдельные записи с migrations/evidence/remaining acceptance. Закрытие без PR, владельца и выпуска запрещено verifier. Проверенный снимок опубликован в [draft PR №2](https://github.com/Claidd/otziv_o/pull/2); F01–F20 связаны с реальным PR. Штатные pre-commit и pre-push hooks прошли. | Branch protection включён и подтверждён в C11. Остаются успешные checks на актуальном commit; native/DR/alert/production acceptance. Создание PR не подтверждает успешный CI. |
 
 ## Доказательства завершённых проверок
 

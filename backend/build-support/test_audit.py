@@ -3,6 +3,7 @@ import copy
 import importlib.util
 import io
 import json
+import re
 from pathlib import Path
 import shutil
 import tempfile
@@ -169,6 +170,21 @@ class AuditPolicyTest(unittest.TestCase):
         self.settings.write_text(content.replace('<settings>', '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">'), encoding="utf-8")
         self.assertEqual(audit.configuration(self.args, self.env)["settings"], self.settings)
 
+    def test_setup_java_default_arguments_fail_before_any_auditor_invocation(self):
+        argv = ["--root", str(self.root), "--settings", str(self.settings),
+                "--suppression-file", str(self.suppression), "--data-directory", self.args.data_directory]
+        with patch.dict(audit.os.environ, {**self.env, "MAVEN_ARGS": "-ntp"}, clear=True), \
+                patch.object(audit.subprocess, "run") as run, patch("sys.stderr", new_callable=io.StringIO) as errors:
+            self.assertEqual(audit.main(argv), 2)
+            self.assertIn("MAVEN_ARGS must be empty", errors.getvalue())
+            run.assert_not_called()
+
+    def test_explicit_progress_option_does_not_require_implicit_maven_arguments(self):
+        config = audit.configuration(self.args, self.env)
+        for module in config["projects"]:
+            with self.subTest(module=module):
+                self.assertIn("-ntp", audit.command(self.args, config, module))
+
     def test_hidden_maven_arguments_cannot_limit_selected_projects_or_skip_scopes(self):
         with self.assertRaises(audit.PolicyError):
             audit.configuration(self.args, {**self.env, "MAVEN_ARGS": "-pl test-transport -DskipTestScope=true"})
@@ -332,6 +348,23 @@ class AuditPolicyTest(unittest.TestCase):
         with patch.dict(audit.os.environ, self.env, clear=True), patch.object(audit.subprocess, "run", return_value=argparse.Namespace(returncode=0)):
             self.assertEqual(audit.main(argv), 2)
         self.assertFalse(audit.report_coverage(root, "keycloak")["complete"])
+
+
+class AuditWorkflowCompatibilityTest(unittest.TestCase):
+    def test_java_setup_does_not_inject_implicit_maven_arguments(self):
+        # setup-java v6 defaults to exporting MAVEN_ARGS=-ntp. The audit must
+        # retain its rejection of implicit arguments; Maven commands already
+        # pass -ntp explicitly, so opt out at the action rather than clear env.
+        workflows = Path(__file__).resolve().parents[2] / ".github" / "workflows"
+        invocations = 0
+        for workflow in workflows.glob("*.yml"):
+            for block in re.split(r"(?=^      - )", workflow.read_text(encoding="utf-8"), flags=re.M):
+                if "uses: actions/setup-java@" not in block:
+                    continue
+                invocations += 1
+                with self.subTest(workflow=workflow.name, invocation=invocations):
+                    self.assertRegex(block, r"(?m)^          show-download-progress: true\s*$")
+        self.assertGreaterEqual(invocations, 2, "Both audit JDK selections must be checked")
 
 
 if __name__ == "__main__":

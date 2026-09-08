@@ -1,26 +1,66 @@
 {
-  "schema": "otziv-required-check-policy-v1",
+  "schema": "otziv-required-check-policy-v2",
   "repository": "Claidd/otziv_o",
   "branch": "main",
-  "state": "DRAFT_REQUIRES_PUBLISHED_SUCCESSFUL_CHECKS_AND_REVIEW",
+  "state": "DRAFT_REQUIRES_VERIFIED_CHECK_IDENTITIES_AND_POLICY_REVIEW",
   "expectedCheckNames": [
-    "Repository contracts", "Backend (full Testcontainers suite)",
+    "Repository contracts",
+    "Backend (full Testcontainers suite)",
     "Issuer security generation (real Keycloak and PostgreSQL)",
-    "Frontend (unit and production build)", "Mobile web (unit and production build)",
-    "WhatsApp gateway (unit)", "External review worker (syntax and health)",
-    "Built web and mobile browser scenarios", "Android native tests, lint and debug assembly",
+    "Frontend (unit and production build)",
+    "Mobile web (unit and production build)",
+    "WhatsApp gateway (unit)",
+    "External review worker (syntax and health)",
+    "Built web and mobile browser scenarios",
+    "Android native tests, lint and debug assembly",
     "Shared client package and compatibility fixtures",
-    "Built integration image (backend)", "Built integration image (web)",
-    "Built integration image (worker)", "Built integration image (whatsapp)",
-    "Built integration image (observer)", "Built integration image (publisher)",
-    "Dependency audit gate", "Upstream image security gate", "gitleaks", "SQL injection guard"
+    "Built integration image (backend)",
+    "Built integration image (web)",
+    "Built integration image (worker)",
+    "Built integration image (whatsapp)",
+    "Built integration image (observer)",
+    "Built integration image (publisher)",
+    "Dependency audit gate",
+    "Upstream image security gate",
+    "gitleaks",
+    "SQL injection guard"
   ],
   "proposedPolicy": {
-    "required_status_checks": {"strict": true, "checks": []},
+    "required_status_checks": {
+      "strict": true,
+      "checks": []
+    },
     "enforce_admins": true,
     "required_pull_request_reviews": null,
     "restrictions": null,
     "allow_force_pushes": false,
     "allow_deletions": false
+  },
+  "bindingSource": {
+    "pullRequest": 2,
+    "branch": "codex/architecture-remediation-20260907",
+    "head": "7141d947ef6b6172c76fdbb9f297895fda107e60"
+  },
+  "checkWorkflows": {
+    "Repository contracts": ".github/workflows/quality-gates.yml",
+    "Backend (full Testcontainers suite)": ".github/workflows/quality-gates.yml",
+    "Issuer security generation (real Keycloak and PostgreSQL)": ".github/workflows/quality-gates.yml",
+    "Frontend (unit and production build)": ".github/workflows/quality-gates.yml",
+    "Mobile web (unit and production build)": ".github/workflows/quality-gates.yml",
+    "WhatsApp gateway (unit)": ".github/workflows/quality-gates.yml",
+    "External review worker (syntax and health)": ".github/workflows/quality-gates.yml",
+    "Built web and mobile browser scenarios": ".github/workflows/quality-gates.yml",
+    "Android native tests, lint and debug assembly": ".github/workflows/quality-gates.yml",
+    "Shared client package and compatibility fixtures": ".github/workflows/quality-gates.yml",
+    "Built integration image (backend)": ".github/workflows/quality-gates.yml",
+    "Built integration image (web)": ".github/workflows/quality-gates.yml",
+    "Built integration image (worker)": ".github/workflows/quality-gates.yml",
+    "Built integration image (whatsapp)": ".github/workflows/quality-gates.yml",
+    "Built integration image (observer)": ".github/workflows/quality-gates.yml",
+    "Built integration image (publisher)": ".github/workflows/quality-gates.yml",
+    "Dependency audit gate": ".github/workflows/dependency-audit.yml",
+    "Upstream image security gate": ".github/workflows/quality-gates.yml",
+    "gitleaks": ".github/workflows/secret-scan.yml",
+    "SQL injection guard": ".github/workflows/sql-injection-guard.yml"
   }
 }
