@@ -1,0 +1,20 @@
+✔ review validates immutable primary evidence, patch control, full upstream tests and expiry (29.8925ms)
+✔ actual final report retains 27 raw HIGH/CRITICAL rows and exact reviewed classifications account for each (45.5232ms)
+✔ actual prior PostgreSQL17.10 scan detects the old binary and is never eligible for this runtime identity (31.0371ms)
+✔ actual v5 archive with unpatched gzip fails identity despite identical upstream release version and product label (15.5402ms)
+✔ modified PostgreSQL or XML library bytes, extra executable and absent affected CLI all reject (119.7563ms)
+✔ changed source archive hash or missing GNU security revision rejects without subtracting findings (64.3464ms)
+✔ rebuild config identity may change only when rootfs/config behavior and all actual runtime bytes remain bound (29.2505ms)
+✔ unknown CVE, altered package version/PURL/source, absent package, or scanner datasource never inherits an exemption (38.3587ms)
+✔ duplicate rows cannot produce duplicate subtraction and arbitrary forged decisions reject (29.1229ms)
+✔ streaming stopped-export reader rejects malformed checksum and truncated archives before identity matching (1.9661ms)
+✔ scanner must detect all four actual custom packages, including the component with no HIGH findings (53.0634ms)
+✔ source context bytes equal the frozen physical LF build inputs (10.5457ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 564.6043

@@ -3,7 +3,29 @@ import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,readdir,rm,realpath} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {requireUpgradeCheck,requireGracefulAppStop,requirePublishedIdentity,requireAccountPolicy,publishedImage,publishedConfig,requireModeOptions,requireCaptureMode,parseRehearsalCli,capture,rehearse} from './mysql-upgrade-rehearsal.mjs';
+import {requireUpgradeCheck,requireGracefulAppStop,requirePublishedIdentity,requireAccountPolicy,publishedImage,publishedConfig,requireModeOptions,requireCaptureMode,parseRehearsalCli,capture,rehearse,requireSourceSemanticConfiguration,expectedApplicationSchema,nativeOptionFileCommand} from './mysql-upgrade-rehearsal.mjs';
+
+test('Windows-mounted option file becomes a native read-only file before the exact original entrypoint executes',()=>{
+  const command=nativeOptionFileCommand(['/entrypoint.sh'],['mysqld','--defaults-file=/fixture/my.cnf']);
+  assert.equal(command[0],'-c');assert.ok(command[1].includes('chmod 0644'));assert.ok(command[1].endsWith('exec "$@"'));
+  assert.deepEqual(command.slice(3),['/entrypoint.sh','mysqld','--defaults-file=/tmp/otziv-my.cnf']);
+  assert.throws(()=>nativeOptionFileCommand([],['mysqld','--defaults-file=/fixture/my.cnf']));
+  assert.throws(()=>nativeOptionFileCommand(['/entrypoint.sh'],['mysqld','--upgrade=FORCE']));
+});
+
+const sourceSemantic=()=>({character_set_server:'utf8mb4',collation_server:'utf8mb4_unicode_ci',lower_case_table_names:'0',restrict_fk_on_non_standard_key:'OFF',sql_mode:'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION',time_zone:'+08:00'});
+test('published capture preserves reviewed timezone/collation/SQL semantics without widening grants or relaxing checks',()=>{
+  assert.deepEqual(requireSourceSemanticConfiguration(sourceSemantic()),sourceSemantic());
+  for(const delta of [{time_zone:'SYSTEM'},{time_zone:'+08:00\nevent_scheduler=ON'},{collation_server:'latin1_swedish_ci'},{sql_mode:''},{lower_case_table_names:'1'},{restrict_fk_on_non_standard_key:'ON'},{unknown:'setting'}])
+    assert.throws(()=>requireSourceSemanticConfiguration({...sourceSemantic(),...delta}));
+  const incomplete=sourceSemantic();delete incomplete.sql_mode;assert.throws(()=>requireSourceSemanticConfiguration(incomplete));
+});
+test('current published rehearsal binds its captured schema and retains the legacy migration target',()=>{
+  assert.equal(expectedApplicationSchema('1.10.310',true),'1.10.310');
+  assert.equal(expectedApplicationSchema('1.10.306',true),'1.10.306');
+  assert.equal(expectedApplicationSchema('1.10.300',false),'1.10.306');
+  for(const version of [undefined,'1.10.300','1.10.309','1.10.999'])assert.throws(()=>expectedApplicationSchema(version,true));
+});
 
 const complete=()=>({serverVersion:'9.0.0',targetVersion:'9.7.3',errorCount:0,warningCount:2,noticeCount:1,
   checksPerformed:[{id:'syntax',status:'OK'},{id:'reservedKeywords',status:'OK'}],manualChecks:[{title:'Review configuration'}]});

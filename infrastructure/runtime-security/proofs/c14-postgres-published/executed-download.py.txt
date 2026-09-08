@@ -1,0 +1,48 @@
+import hashlib, io, json, os, pathlib, zipfile
+os.environ['OTZIV_RELEASE_HEAD']='e3d798c423eaa7ee1afab9f77c041286e408fefa'
+scratch=pathlib.Path(__file__).resolve().parent
+prefix=(scratch/'ci/read-ci.py').read_text().split('parser = argparse.ArgumentParser()')[0]
+exec(compile(prefix,str(scratch/'ci/read-ci.py'),'exec'))
+OUT=scratch/'postgres-publication-api'
+OUT.mkdir(exist_ok=True)
+run=get('/actions/runs/34239698507','postgres-run.json')
+assert run['head_sha']==HEAD and run['event']=='workflow_dispatch' and run['run_attempt']==1
+jobs=paged('/actions/runs/34239698507/jobs','jobs','postgres-jobs')
+for name in ['Publish reviewed candidate (postgres)','Prove anonymous candidate download (postgres)']:
+    selected=[j for j in jobs if j['name']==name]
+    assert len(selected)==1 and selected[0]['conclusion']=='success' and selected[0]['id'] in [102106707216,102112100425]
+rows=paged('/actions/runs/34239698507/artifacts','artifacts','postgres-artifacts')
+expected={}
+for name in ['reviewed-publication-postgres','anonymous-download-postgres']:
+    selected=[a for a in rows if a['name']==name and not a['expired']]
+    assert len(selected)==1,'Ambiguous/missing exact publication artifact'
+    artifact=selected[0]
+    assert artifact['workflow_run']['id']==run['id'] and artifact['workflow_run']['head_sha']==HEAD
+    expected[name]=artifact['id']
+out=scratch/'postgres-published'
+out.mkdir(exist_ok=True)
+receipts=[]
+for name,aid in expected.items():
+    artifact=next(a for a in rows if a['id']==aid)
+    assert artifact['name']==name and not artifact['expired']
+    raw=fetch('/actions/artifacts/'+str(aid)+'/zip')
+    digest='sha256:'+hashlib.sha256(raw).hexdigest()
+    assert digest==artifact['digest']
+    dest=out/name
+    assert not dest.exists(),'Do not overwrite evidence'
+    dest.mkdir()
+    (out/(name+'.zip')).write_bytes(raw)
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        assert len(archive.infolist())<1000 and sum(z.file_size for z in archive.infolist())<100*1024*1024
+        for member in archive.infolist():
+            assert member.filename and not any(c in member.filename for c in ['\\',':'])
+            assert not member.filename.startswith('/') and all(c not in ['.','..'] for c in member.filename.split('/'))
+            assert (dest/member.filename).resolve().is_relative_to(dest.resolve())
+            assert not ((member.external_attr >> 16) & 0o170000)==0o120000
+        archive.extractall(dest)
+    receipts.append({'artifactId':aid,'name':name,'apiDigest':artifact['digest'],'actualDigest':digest,'verified':True,
+        'run':str(run['id']),'attempt':str(run['run_attempt']),'commit':HEAD,
+        'files':sorted(str(p.relative_to(dest)).replace('\\','/') for p in dest.rglob('*') if p.is_file())})
+(out/'artifact-verification.json').write_text(json.dumps(receipts,indent=2))
+print(json.dumps(receipts))
+

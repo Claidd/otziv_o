@@ -1,0 +1,24 @@
+{
+  "schema": "otziv-mysql-source-continuity-v1",
+  "result": "PASS",
+  "checkedAt": "2026-09-08T13:24:18.844Z",
+  "sourceWrites": false,
+  "applicationImage": "sha256:f6123a92f20df6125647bdbe181afb50c6bbc14c595e547f1ce3649db5ccd213",
+  "applicationHealth": "healthy",
+  "sourceImage": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+  "sourceVersion": "9.0.0",
+  "sourceSchema": "1.10.310",
+  "sourceStartedAt": "2026-09-08T12:11:37.322595274Z",
+  "sourceContainerUnrestarted": true,
+  "sourceVolume": "otziv-prod-local_mysql_data",
+  "flywayHistorySha256": "dcb7d077b997b142589a153d8e341ce2b8457eee2c6ccb020361c2a0fc23a158",
+  "sourceCommandUnchanged": true,
+  "sourcePolicy": {
+    "binlog_format": "ROW",
+    "enforce_gtid_consistency": "OFF",
+    "event_scheduler": "ON",
+    "gtid_mode": "OFF",
+    "log_bin": "ON"
+  },
+  "scope": "Runtime identity, source volume/command/start time and complete Flyway history unchanged. Ordinary source DML was not stopped and byte-identical live database state is not claimed."
+}

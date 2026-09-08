@@ -16,6 +16,9 @@ const RELEASE_SETS = Object.freeze({
     context: 'infrastructure/runtime-security/builds/versity-c14', dockerfile: 'infrastructure/runtime-security/builds/versity-c14/Dockerfile' },
   'c14-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c14-postgres.json',
     context: 'infrastructure/runtime-security/builds/postgres-c14', dockerfile: 'infrastructure/runtime-security/builds/postgres-c14/Dockerfile' },
+  'c14-keycloak': { component: 'keycloak', path: 'infrastructure/runtime-security/reviewed-images-c14-keycloak.json',
+    context: 'infrastructure/keycloak/security-generation/c14-migration-fix',
+    dockerfile: 'infrastructure/keycloak/security-generation/c14-migration-fix/Dockerfile' },
 });
 // These two local-stack dependencies were absent from the immutable C7 manifest.
 // Keep their original pins and service coverage explicit when adding publication.

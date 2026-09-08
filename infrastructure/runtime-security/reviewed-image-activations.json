@@ -187,6 +187,44 @@
         "path": "infrastructure/runtime-security/proofs/c14-mc-published/anonymous/anonymous-download.json",
         "sha256": "0b41d4db4417405644bbdaa1d9b295c9e90752395a3bb67bc4cc934af5b87fd4"
       }
+    },
+    {
+      "component": "minio",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:3bd06e6605d318c852fc56f42d14316b5cd74ed233119d586b078bd4a5e4be21",
+      "commit": "135747397491454711da71155d50a440fb4d7c97",
+      "run": "34238888111",
+      "attempt": "1",
+      "manifest": {
+        "path": "infrastructure/runtime-security/reviewed-images-c14-local-s3.json",
+        "sha256": "d20d0b489a1de23b461ef242f2fd3be38251927b19b8eddf34cc66d8ef6cf8a2"
+      },
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c14-versity-published/publication/publication.json",
+        "sha256": "878284d57b7582b6f23fc891c54b72559330e3e25e1c21642a36a034d926dbc5"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c14-versity-published/anonymous/anonymous-download.json",
+        "sha256": "c8a2adeafa44dc104c5c9040a50bb29d59d17d0ec871e0074d63d1002e06daac"
+      }
+    },
+    {
+      "component": "mysql",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/mysql/publication/publication.json",
+        "sha256": "c9f812b3754346b75e3d64ac824bdcef20ab798d95a91632981bd042c871d6e4"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/mysql/anonymous/anonymous-download.json",
+        "sha256": "a1e93c19307ee4c65452ba4a18f997e61e19f1506e591d73721ac1d64533360a"
+      },
+      "databaseTransition": {
+        "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/actual-result.json",
+        "sha256": "0404aa7bb1fc5e1b254873701b8f19b155d9f41f054fa92008455ff208db2b6a"
+      }
     }
   ]
 }

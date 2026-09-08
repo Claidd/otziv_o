@@ -1,0 +1,16 @@
+{
+  "schema": "otziv-exact-running-vps-app-copy-v1",
+  "completedAt": "2026-09-08T13:50:34.474096+00:00",
+  "imageConfigurationDigest": "sha256:dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+  "localImageId": "sha256:bcd87bdb514c6477b95b4f2f04abe84e9d207339aa5ca608f35628e739c5c7e3",
+  "localDescriptorMediaType": "application/vnd.oci.image.manifest.v1+json",
+  "configurationReexportHashMatches": true,
+  "rootFilesystemMatches": true,
+  "platformMatches": true,
+  "sourceContainerUnchanged": true,
+  "sourceWrites": false,
+  "sourceTemporaryFiles": false,
+  "archiveBytes": 361354429,
+  "archiveSha256": "b6d06387890dea6b4f42b7318a2be30d8995cd3dd7a7c6e1e6f648127b3b063d",
+  "identityNote": "Classic Docker config ID is represented by an OCI manifest ID in the local containerd image store; exact re-exported configuration bytes and every RootFS diffID match."
+}

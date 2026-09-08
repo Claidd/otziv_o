@@ -1,0 +1,90 @@
+{
+  "schema": "otziv-actual-vps-readonly-capture-v1",
+  "sourceWrites": false,
+  "sourceDatabaseVersion": "9.0.0",
+  "database": "otziv",
+  "sourceSchemaVersion": "1.10.287",
+  "startedAt": "2026-09-08T21:36:41.688249+08:00",
+  "completedAt": "2026-09-08T21:37:43.036493+08:00",
+  "sourceProject": "otziv-prod",
+  "sourceContainer": {
+    "id": "6d12a4ebc5e8d2dfc7a8cc724b7b4207d68261f506c0f5a70c2a08307ccfe759",
+    "name": "my-mysql",
+    "imageId": "sha256:31ebb0b19998d2c1b8bcbb8fc0f0e676dcc9a758b2fea940f8e6aa27b4c916cf",
+    "imageReference": "mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "imageConfigurationDigest": "sha256:31ebb0b19998d2c1b8bcbb8fc0f0e676dcc9a758b2fea940f8e6aa27b4c916cf",
+    "repoDigests": [
+      "mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383"
+    ],
+    "mount": {
+      "Type": "volume",
+      "Name": "docker_mysql_data",
+      "Source": "/var/lib/docker/volumes/docker_mysql_data/_data",
+      "Destination": "/var/lib/mysql",
+      "Driver": "local",
+      "Mode": "rw",
+      "RW": true,
+      "Propagation": ""
+    }
+  },
+  "sourceApplication": {
+    "id": "77ea215adc2e6d3f6c6245aa5af61dc3c70cd9c155414bf277578166c3ee3669",
+    "name": "otziv-prod-app-1",
+    "imageId": "sha256:dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+    "imageReference": "claid38/otziv-app:6.21-account-cooldown-20260907-fc191ac23cfe",
+    "repoDigests": [],
+    "imageMetadata": {
+      "Id": "sha256:dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+      "Os": "linux",
+      "Architecture": "amd64",
+      "RootFS": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:10f9108f6cebf96e05cadfab3c188071f3c6d084abe680fd0bc9f61c268e854d",
+          "sha256:35ed47bd89f52e7e15fcf254ab15fe9879cee39338329620026c5c51777b5144",
+          "sha256:0c509d1dfa597e9a9e19c6edc1f70dba7168139762b7d96eb0f249c5bd8c95cb",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+          "sha256:220c586ad5d06c6cf12db30a3db950c9ab1a5ebdd322ea4c6519579a99c98f06",
+          "sha256:254e50d0012eb59e1d50f842f85523870d1c0ff71bc48c5969b41196708f218f",
+          "sha256:2ca4a81ee4b26adb7fadf7e28502c6a09a025f7b0ad477cf36ef6a92f5af1d4e",
+          "sha256:c6982a2d7ec5e7549350e27a175949ceb03b97207ca94589fd7303e22bedbab1",
+          "sha256:da114acc0cda42e7d59099b40d0c44b746a92db5b2496d6fccda30e6c56818d2",
+          "sha256:80ac458a05e8eee6f8f6ea3b17c9681c4356d859ce77dc34f1fdd1d7547a5797",
+          "sha256:9fd80e2d9fa0ede5f55099c4be6518d7dc33947c9d08f5e6eb6e1e5d2667748d",
+          "sha256:a236e9634a97c5cb64bbbd6215c1e5f9debb45667f0eba0d90402f6573919713",
+          "sha256:8e609b523f59c96f1d546b3eed64fd0821341f586a68bd1c877e499da9ef2ebb",
+          "sha256:f713555afabc618aedd9687976af13308a5031354eaf5d46f1fa3f944c031cf2"
+        ]
+      }
+    }
+  },
+  "dump": {
+    "remotePath": "/tmp/otziv-release-vps-287-r9kb5g3k.sql.gz",
+    "bytes": 109498783,
+    "sha256": "63b194c64178d1565a823b56f7ebbad570330831308a23947efbead8be9e1b42"
+  },
+  "flywayHistorySha256": "3d091b4714c15b2c520efec0b14c489c7e8e96d056d863c54e101b84b42ec9b0",
+  "flywayHistoryBeforeEqualsAfter": true,
+  "sourceSemanticConfiguration": {
+    "character_set_server": "utf8mb4",
+    "collation_server": "utf8mb4_unicode_ci",
+    "lower_case_table_names": "0",
+    "restrict_fk_on_non_standard_key": "0",
+    "sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+    "time_zone": "+08:00"
+  },
+  "sourceAccount": {
+    "user": "hunt",
+    "host": "%",
+    "grants": [
+      "GRANT USAGE ON *.* TO `hunt`@`%`",
+      "GRANT ALL PRIVILEGES ON `otziv`.* TO `hunt`@`%`",
+      "GRANT ALL PRIVILEGES ON `otziv_archive_check_20260714`.* TO `hunt`@`%`",
+      "GRANT ALL PRIVILEGES ON `otziv_migration_check_20260714`.* TO `hunt`@`%`"
+    ]
+  },
+  "sourceDataAccess": "single transaction read-only dump; before/after Flyway and container identities checked",
+  "productionQuiesced": false,
+  "localDownloadVerified": true,
+  "temporaryRemoteDumpRemoved": true
+}

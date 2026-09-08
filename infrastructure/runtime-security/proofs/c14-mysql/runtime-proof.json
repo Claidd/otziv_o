@@ -1,0 +1,541 @@
+{
+  "schema": "otziv-mysql-upgrade-rehearsal-v1",
+  "mode": "published-rollback",
+  "captureSchema": "otziv-mysql-published-rollback-capture-v1",
+  "owner": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2",
+  "startedAt": "2026-09-08T13:08:06.896Z",
+  "production": false,
+  "sourceContainer": "otziv-prod-local-mysql-1",
+  "sourceWrites": false,
+  "sourceCaptureSha256": "364568b0db60b3b61718e6eda364110dfb6a2130a31d23b41815aef44e6bedd7",
+  "sourceSchemaAtCapture": "1.10.310",
+  "database": "otziv",
+  "images": {
+    "source": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "targetReference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "targetConfigurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+    "upgradeCheckerReference": "container-registry.oracle.com/mysql/community-server@sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340",
+    "app": "sha256:f6123a92f20df6125647bdbe181afb50c6bbc14c595e547f1ce3649db5ccd213",
+    "published": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+      "configurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+      "localId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa"
+    },
+    "targetLocalId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "upgradeCheckerLocalId": "sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340"
+  },
+  "checks": [
+    {
+      "name": "clone_9_0_authenticated",
+      "passed": true,
+      "at": "2026-09-08T13:08:29.100Z"
+    },
+    {
+      "name": "source_semantic_configuration_reproduced_9_0",
+      "passed": true,
+      "at": "2026-09-08T13:08:29.389Z"
+    },
+    {
+      "name": "captured_flyway_history_restored",
+      "passed": true,
+      "at": "2026-09-08T13:10:19.401Z"
+    },
+    {
+      "name": "configured_local_account_grants_and_login_preserved",
+      "passed": true,
+      "at": "2026-09-08T13:10:20.470Z"
+    },
+    {
+      "name": "app90_health_up",
+      "passed": true,
+      "at": "2026-09-08T13:11:06.025Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_app90",
+      "passed": true,
+      "at": "2026-09-08T13:11:14.441Z"
+    },
+    {
+      "name": "completed_spring_jpa_hikari_shutdown_app90",
+      "passed": true,
+      "at": "2026-09-08T13:11:14.901Z"
+    },
+    {
+      "name": "actual_app_validates_expected_schema",
+      "passed": true,
+      "at": "2026-09-08T13:11:15.550Z"
+    },
+    {
+      "name": "preupgrade_backup_created_with_application_stopped",
+      "passed": true,
+      "at": "2026-09-08T13:11:32.826Z"
+    },
+    {
+      "name": "mandatory_upgrade_checker_passed",
+      "passed": true,
+      "at": "2026-09-08T13:11:38.166Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_mysql90",
+      "passed": true,
+      "at": "2026-09-08T13:11:40.677Z"
+    },
+    {
+      "name": "same_named_data_volume_upgraded",
+      "passed": true,
+      "at": "2026-09-08T13:11:51.552Z"
+    },
+    {
+      "name": "target_9_7_3_authenticated",
+      "passed": true,
+      "at": "2026-09-08T13:11:51.825Z"
+    },
+    {
+      "name": "source_semantic_configuration_reproduced_9_7_3",
+      "passed": true,
+      "at": "2026-09-08T13:11:52.070Z"
+    },
+    {
+      "name": "unchanged_tableCount",
+      "passed": true,
+      "at": "2026-09-08T13:11:55.767Z"
+    },
+    {
+      "name": "unchanged_rows",
+      "passed": true,
+      "at": "2026-09-08T13:11:55.767Z"
+    },
+    {
+      "name": "unchanged_countsSha256",
+      "passed": true,
+      "at": "2026-09-08T13:11:55.767Z"
+    },
+    {
+      "name": "unchanged_historySha256",
+      "passed": true,
+      "at": "2026-09-08T13:11:55.767Z"
+    },
+    {
+      "name": "unchanged_checksumsSha256",
+      "passed": true,
+      "at": "2026-09-08T13:11:55.767Z"
+    },
+    {
+      "name": "unchanged_jsonSha256",
+      "passed": true,
+      "at": "2026-09-08T13:11:55.767Z"
+    },
+    {
+      "name": "unchanged_jsonDataSha256",
+      "passed": true,
+      "at": "2026-09-08T13:11:55.767Z"
+    },
+    {
+      "name": "app973_health_up",
+      "passed": true,
+      "at": "2026-09-08T13:12:36.320Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_app973",
+      "passed": true,
+      "at": "2026-09-08T13:12:41.472Z"
+    },
+    {
+      "name": "completed_spring_jpa_hikari_shutdown_app973",
+      "passed": true,
+      "at": "2026-09-08T13:12:41.860Z"
+    },
+    {
+      "name": "flyway_still_expected_schema",
+      "passed": true,
+      "at": "2026-09-08T13:12:42.466Z"
+    },
+    {
+      "name": "published_candidate_accepts_new_canary_write",
+      "passed": true,
+      "at": "2026-09-08T13:12:43.551Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_mysql973",
+      "passed": true,
+      "at": "2026-09-08T13:12:48.665Z"
+    },
+    {
+      "name": "published_restart_unchanged_tableCount",
+      "passed": true,
+      "at": "2026-09-08T13:12:54.345Z"
+    },
+    {
+      "name": "published_restart_unchanged_rows",
+      "passed": true,
+      "at": "2026-09-08T13:12:54.345Z"
+    },
+    {
+      "name": "published_restart_unchanged_countsSha256",
+      "passed": true,
+      "at": "2026-09-08T13:12:54.345Z"
+    },
+    {
+      "name": "published_restart_unchanged_historySha256",
+      "passed": true,
+      "at": "2026-09-08T13:12:54.345Z"
+    },
+    {
+      "name": "published_restart_unchanged_checksumsSha256",
+      "passed": true,
+      "at": "2026-09-08T13:12:54.345Z"
+    },
+    {
+      "name": "published_restart_unchanged_jsonSha256",
+      "passed": true,
+      "at": "2026-09-08T13:12:54.345Z"
+    },
+    {
+      "name": "published_restart_unchanged_jsonDataSha256",
+      "passed": true,
+      "at": "2026-09-08T13:12:54.345Z"
+    },
+    {
+      "name": "published_restart_keeps_postupgrade_canary",
+      "passed": true,
+      "at": "2026-09-08T13:12:54.576Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_mysql973",
+      "passed": true,
+      "at": "2026-09-08T13:12:58.058Z"
+    },
+    {
+      "name": "source_semantic_configuration_reproduced_rollback",
+      "passed": true,
+      "at": "2026-09-08T13:13:11.142Z"
+    },
+    {
+      "name": "rollback_uses_separate_fresh_old_version_volume",
+      "passed": true,
+      "at": "2026-09-08T13:13:11.382Z"
+    },
+    {
+      "name": "rollback_database_was_initially_empty",
+      "passed": true,
+      "at": "2026-09-08T13:13:11.640Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_tableCount",
+      "passed": true,
+      "at": "2026-09-08T13:14:37.153Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_rows",
+      "passed": true,
+      "at": "2026-09-08T13:14:37.153Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_countsSha256",
+      "passed": true,
+      "at": "2026-09-08T13:14:37.153Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_historySha256",
+      "passed": true,
+      "at": "2026-09-08T13:14:37.153Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_checksumsSha256",
+      "passed": true,
+      "at": "2026-09-08T13:14:37.153Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_jsonSha256",
+      "passed": true,
+      "at": "2026-09-08T13:14:37.153Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_jsonDataSha256",
+      "passed": true,
+      "at": "2026-09-08T13:14:37.153Z"
+    },
+    {
+      "name": "postupgrade_canary_absent_after_backup_restore",
+      "passed": true,
+      "at": "2026-09-08T13:14:37.420Z"
+    },
+    {
+      "name": "app90-rollback_health_up",
+      "passed": true,
+      "at": "2026-09-08T13:15:19.692Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_rollback",
+      "passed": true,
+      "at": "2026-09-08T13:15:25.666Z"
+    },
+    {
+      "name": "completed_spring_jpa_hikari_shutdown_rollback",
+      "passed": true,
+      "at": "2026-09-08T13:15:26.012Z"
+    },
+    {
+      "name": "rollback_application_keeps_flyway_history",
+      "passed": true,
+      "at": "2026-09-08T13:15:26.658Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_rollback",
+      "passed": true,
+      "at": "2026-09-08T13:15:28.960Z"
+    }
+  ],
+  "resourceLimits": {
+    "mysqlMemoryBytes": 1610612736,
+    "appMemoryBytes": 2147483648,
+    "mysqlCpus": 2,
+    "appCpus": 2
+  },
+  "rollback": "NO_BINARY_DOWNGRADE: restore the pre-upgrade database with its paired application/configuration release",
+  "limitations": [
+    "local sanitized clone; not a production rollout",
+    "no performance SLO or fleet compatibility implied",
+    "application health/Flyway/Hibernate only; Keycloak login and external delivery are not tested",
+    "the configured source account identity and grants are reproduced with a newly generated clone-only password; other source users are not copied"
+  ],
+  "semanticConfiguration": {
+    "source": {
+      "character_set_server": "utf8mb4",
+      "collation_server": "utf8mb4_unicode_ci",
+      "lower_case_table_names": "0",
+      "restrict_fk_on_non_standard_key": "OFF",
+      "sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+      "time_zone": "+08:00"
+    },
+    "sourceSha256": "575e657ac9afa7cc8894813242484951e9cd072c2c5ab362eba89e46ac875305",
+    "fixtureEventScheduler": "OFF",
+    "resourceOptions": "bounded clone only"
+  },
+  "configurationSha256": "bf53712fb29c2c0f78544c79e826c1264726aaae3cd2da424d224701c7ddaf5e",
+  "configuredAccount": {
+    "policy": {
+      "grantCount": 2,
+      "scope": "EXACT_DATABASE_ALL_PRIVILEGES_WITH_GLOBAL_USAGE_ONLY"
+    },
+    "sourcePolicySha256": "cdfba2e4d8bba6dcaae49d09706774177b58bd1578a6c84cf8dd5aac4d2cb8d2",
+    "clonedGrantsEqual": true,
+    "originalPasswordCopied": false
+  },
+  "stops": [
+    {
+      "container": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-app90",
+      "elapsedMs": 8225,
+      "exitCode": 143,
+      "oomKilled": false,
+      "pid1": "java",
+      "graceful": {
+        "springComplete": true,
+        "entityManagerClosed": true,
+        "poolsClosed": 2
+      }
+    },
+    {
+      "container": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-mysql90",
+      "elapsedMs": 2067,
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    {
+      "container": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-app973",
+      "elapsedMs": 4967,
+      "exitCode": 143,
+      "oomKilled": false,
+      "pid1": "java",
+      "graceful": {
+        "springComplete": true,
+        "entityManagerClosed": true,
+        "poolsClosed": 2
+      }
+    },
+    {
+      "container": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-mysql973",
+      "elapsedMs": 2280,
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    {
+      "container": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-mysql973",
+      "elapsedMs": 3047,
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    {
+      "container": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-app90-rollback",
+      "elapsedMs": 5793,
+      "exitCode": 143,
+      "oomKilled": false,
+      "pid1": "java",
+      "graceful": {
+        "springComplete": true,
+        "entityManagerClosed": true,
+        "poolsClosed": 2
+      }
+    },
+    {
+      "container": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-mysql90-rollback",
+      "elapsedMs": 1864,
+      "exitCode": 0,
+      "oomKilled": false
+    }
+  ],
+  "expectedApplicationSchema": "1.10.310",
+  "before": {
+    "tableCount": 327,
+    "rows": 1055459,
+    "countsSha256": "40bf0d12aff6a0ecc6d10772c9d6c19a33f2370cec053504dfa36c261bf22b70",
+    "historySha256": "dcb7d077b997b142589a153d8e341ce2b8457eee2c6ccb020361c2a0fc23a158",
+    "checksumsSha256": "d18e95db80610c2a44a27f37e5d262ffdebb30a6c184e3583ca2109fa95144e0",
+    "jsonSha256": "cb15da7f4a8b086c27a437c7a6c49c34dbaf195ff9a7212a056c686200044cb7",
+    "jsonDataSha256": "d13e98d73b3ce976a7c2502707c1be547f620b3c3f29d72c28f9c28b51c1a35b",
+    "jsonColumns": 4,
+    "checksumTables": [
+      "orders",
+      "reviews",
+      "leads",
+      "common_invoices",
+      "payment_links",
+      "lead_command_queue",
+      "performer_notification_intents",
+      "order_publication_client_updates",
+      "order_client_message_occurrences",
+      "client_message_operations",
+      "scheduled_client_message_state"
+    ],
+    "queries": {
+      "json": "SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('array',JSON_ARRAY(1,true,NULL,'Юникод'),'nested',JSON_OBJECT('amount',12.34)),'$.array[3]')),JSON_CONTAINS(JSON_ARRAY(1,2,3),'2'),JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('status','UNKNOWN'),'$.status'));",
+      "jsonData": [
+        "SELECT 'command_idempotency.response_body',COUNT(`response_body`),COALESCE(SUM(JSON_VALID(`response_body`)),0),BIT_XOR(CRC32(CAST(`response_body` AS CHAR))) FROM `command_idempotency`;",
+        "SELECT 'integration_outbox.payload',COUNT(`payload`),COALESCE(SUM(JSON_VALID(`payload`)),0),BIT_XOR(CRC32(CAST(`payload` AS CHAR))) FROM `integration_outbox`;",
+        "SELECT 'manager_client_reply_operations.delivery_snapshot',COUNT(`delivery_snapshot`),COALESCE(SUM(JSON_VALID(`delivery_snapshot`)),0),BIT_XOR(CRC32(CAST(`delivery_snapshot` AS CHAR))) FROM `manager_client_reply_operations`;",
+        "SELECT 'specialist_transfer_audit.company_ids_json',COUNT(`company_ids_json`),COALESCE(SUM(JSON_VALID(`company_ids_json`)),0),BIT_XOR(CRC32(CAST(`company_ids_json` AS CHAR))) FROM `specialist_transfer_audit`;"
+      ],
+      "queueSelection": "START TRANSACTION; SELECT q.id FROM lead_command_queue q WHERE q.delivery_state='READY' AND q.retry_count<8 AND q.next_attempt_at<=UTC_TIMESTAMP(6) AND NOT EXISTS (SELECT 1 FROM lead_command_queue earlier WHERE earlier.blocking_lead_id=q.lead_id AND earlier.id<q.id) ORDER BY q.next_attempt_at,q.id LIMIT 1 FOR UPDATE SKIP LOCKED; SELECT notification_id FROM performer_notification_intents WHERE status='PENDING' AND due_at<=CURRENT_TIMESTAMP(6) ORDER BY due_at,notification_id LIMIT 1 FOR UPDATE SKIP LOCKED; ROLLBACK;"
+    },
+    "queryHashes": {
+      "json": "bd2456b6f16e984f7df6e17e119cec86860e1afbc67efd343892a1fa63405b3e",
+      "queueSelection": "a31049dae1c286e9a4e268b09f79b7d51ef42ba55da729c81a6e59ab3b6035b3"
+    },
+    "queueProof": "native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion"
+  },
+  "preupgradeBackup": {
+    "file": "preupgrade.sql.gz",
+    "sha256": "b84feaab9f3f6d358602b9e9a338879f721db1609c632833fff7683b0ea1ac51",
+    "bytes": 101427195
+  },
+  "upgradeCheckerObserved": {
+    "errors": 0,
+    "warnings": 24,
+    "notices": 0,
+    "completedChecks": 7,
+    "manualChecks": []
+  },
+  "upgradeChecker": {
+    "errors": 0,
+    "warnings": 24,
+    "notices": 0,
+    "completedChecks": 7,
+    "manualChecks": []
+  },
+  "runtimeVersion": "9.7.3",
+  "after": {
+    "tableCount": 327,
+    "rows": 1055459,
+    "countsSha256": "40bf0d12aff6a0ecc6d10772c9d6c19a33f2370cec053504dfa36c261bf22b70",
+    "historySha256": "dcb7d077b997b142589a153d8e341ce2b8457eee2c6ccb020361c2a0fc23a158",
+    "checksumsSha256": "d18e95db80610c2a44a27f37e5d262ffdebb30a6c184e3583ca2109fa95144e0",
+    "jsonSha256": "cb15da7f4a8b086c27a437c7a6c49c34dbaf195ff9a7212a056c686200044cb7",
+    "jsonDataSha256": "d13e98d73b3ce976a7c2502707c1be547f620b3c3f29d72c28f9c28b51c1a35b",
+    "jsonColumns": 4,
+    "checksumTables": [
+      "orders",
+      "reviews",
+      "leads",
+      "common_invoices",
+      "payment_links",
+      "lead_command_queue",
+      "performer_notification_intents",
+      "order_publication_client_updates",
+      "order_client_message_occurrences",
+      "client_message_operations",
+      "scheduled_client_message_state"
+    ],
+    "queries": {
+      "json": "SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('array',JSON_ARRAY(1,true,NULL,'Юникод'),'nested',JSON_OBJECT('amount',12.34)),'$.array[3]')),JSON_CONTAINS(JSON_ARRAY(1,2,3),'2'),JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('status','UNKNOWN'),'$.status'));",
+      "jsonData": [
+        "SELECT 'command_idempotency.response_body',COUNT(`response_body`),COALESCE(SUM(JSON_VALID(`response_body`)),0),BIT_XOR(CRC32(CAST(`response_body` AS CHAR))) FROM `command_idempotency`;",
+        "SELECT 'integration_outbox.payload',COUNT(`payload`),COALESCE(SUM(JSON_VALID(`payload`)),0),BIT_XOR(CRC32(CAST(`payload` AS CHAR))) FROM `integration_outbox`;",
+        "SELECT 'manager_client_reply_operations.delivery_snapshot',COUNT(`delivery_snapshot`),COALESCE(SUM(JSON_VALID(`delivery_snapshot`)),0),BIT_XOR(CRC32(CAST(`delivery_snapshot` AS CHAR))) FROM `manager_client_reply_operations`;",
+        "SELECT 'specialist_transfer_audit.company_ids_json',COUNT(`company_ids_json`),COALESCE(SUM(JSON_VALID(`company_ids_json`)),0),BIT_XOR(CRC32(CAST(`company_ids_json` AS CHAR))) FROM `specialist_transfer_audit`;"
+      ],
+      "queueSelection": "START TRANSACTION; SELECT q.id FROM lead_command_queue q WHERE q.delivery_state='READY' AND q.retry_count<8 AND q.next_attempt_at<=UTC_TIMESTAMP(6) AND NOT EXISTS (SELECT 1 FROM lead_command_queue earlier WHERE earlier.blocking_lead_id=q.lead_id AND earlier.id<q.id) ORDER BY q.next_attempt_at,q.id LIMIT 1 FOR UPDATE SKIP LOCKED; SELECT notification_id FROM performer_notification_intents WHERE status='PENDING' AND due_at<=CURRENT_TIMESTAMP(6) ORDER BY due_at,notification_id LIMIT 1 FOR UPDATE SKIP LOCKED; ROLLBACK;"
+    },
+    "queryHashes": {
+      "json": "bd2456b6f16e984f7df6e17e119cec86860e1afbc67efd343892a1fa63405b3e",
+      "queueSelection": "a31049dae1c286e9a4e268b09f79b7d51ef42ba55da729c81a6e59ab3b6035b3"
+    },
+    "queueProof": "native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion"
+  },
+  "rollbackProof": {
+    "result": "PASS",
+    "sourceImage": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "restoredVersion": "9.0.0",
+    "backup": {
+      "file": "preupgrade.sql.gz",
+      "sha256": "b84feaab9f3f6d358602b9e9a338879f721db1609c632833fff7683b0ea1ac51",
+      "bytes": 101427195
+    },
+    "originalVolume": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-data",
+    "restoredVolume": "otziv-mysql-c7-rollback-64b8defc-3d46-4ea2-b8ca-41dfebda33b2-rollback-data",
+    "postUpgradeWriteAbsent": true,
+    "configuredAccountGrantsPreserved": true,
+    "applicationImage": "sha256:f6123a92f20df6125647bdbe181afb50c6bbc14c595e547f1ce3649db5ccd213",
+    "snapshot": {
+      "tableCount": 327,
+      "rows": 1055459,
+      "countsSha256": "40bf0d12aff6a0ecc6d10772c9d6c19a33f2370cec053504dfa36c261bf22b70",
+      "historySha256": "dcb7d077b997b142589a153d8e341ce2b8457eee2c6ccb020361c2a0fc23a158",
+      "checksumsSha256": "d18e95db80610c2a44a27f37e5d262ffdebb30a6c184e3583ca2109fa95144e0",
+      "jsonSha256": "cb15da7f4a8b086c27a437c7a6c49c34dbaf195ff9a7212a056c686200044cb7",
+      "jsonDataSha256": "d13e98d73b3ce976a7c2502707c1be547f620b3c3f29d72c28f9c28b51c1a35b",
+      "jsonColumns": 4,
+      "checksumTables": [
+        "orders",
+        "reviews",
+        "leads",
+        "common_invoices",
+        "payment_links",
+        "lead_command_queue",
+        "performer_notification_intents",
+        "order_publication_client_updates",
+        "order_client_message_occurrences",
+        "client_message_operations",
+        "scheduled_client_message_state"
+      ],
+      "queries": {
+        "json": "SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('array',JSON_ARRAY(1,true,NULL,'Юникод'),'nested',JSON_OBJECT('amount',12.34)),'$.array[3]')),JSON_CONTAINS(JSON_ARRAY(1,2,3),'2'),JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('status','UNKNOWN'),'$.status'));",
+        "jsonData": [
+          "SELECT 'command_idempotency.response_body',COUNT(`response_body`),COALESCE(SUM(JSON_VALID(`response_body`)),0),BIT_XOR(CRC32(CAST(`response_body` AS CHAR))) FROM `command_idempotency`;",
+          "SELECT 'integration_outbox.payload',COUNT(`payload`),COALESCE(SUM(JSON_VALID(`payload`)),0),BIT_XOR(CRC32(CAST(`payload` AS CHAR))) FROM `integration_outbox`;",
+          "SELECT 'manager_client_reply_operations.delivery_snapshot',COUNT(`delivery_snapshot`),COALESCE(SUM(JSON_VALID(`delivery_snapshot`)),0),BIT_XOR(CRC32(CAST(`delivery_snapshot` AS CHAR))) FROM `manager_client_reply_operations`;",
+          "SELECT 'specialist_transfer_audit.company_ids_json',COUNT(`company_ids_json`),COALESCE(SUM(JSON_VALID(`company_ids_json`)),0),BIT_XOR(CRC32(CAST(`company_ids_json` AS CHAR))) FROM `specialist_transfer_audit`;"
+        ],
+        "queueSelection": "START TRANSACTION; SELECT q.id FROM lead_command_queue q WHERE q.delivery_state='READY' AND q.retry_count<8 AND q.next_attempt_at<=UTC_TIMESTAMP(6) AND NOT EXISTS (SELECT 1 FROM lead_command_queue earlier WHERE earlier.blocking_lead_id=q.lead_id AND earlier.id<q.id) ORDER BY q.next_attempt_at,q.id LIMIT 1 FOR UPDATE SKIP LOCKED; SELECT notification_id FROM performer_notification_intents WHERE status='PENDING' AND due_at<=CURRENT_TIMESTAMP(6) ORDER BY due_at,notification_id LIMIT 1 FOR UPDATE SKIP LOCKED; ROLLBACK;"
+      },
+      "queryHashes": {
+        "json": "bd2456b6f16e984f7df6e17e119cec86860e1afbc67efd343892a1fa63405b3e",
+        "queueSelection": "a31049dae1c286e9a4e268b09f79b7d51ef42ba55da729c81a6e59ab3b6035b3"
+      },
+      "queueProof": "native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion"
+    },
+    "binaryDowngradeAttempted": false
+  },
+  "result": "PASS",
+  "cleanup": "OWNED_CONTAINERS_NETWORK_VOLUME_AND_PROTECTED_DUMP_REMOVED",
+  "completedAt": "2026-09-08T13:15:36.885Z"
+}

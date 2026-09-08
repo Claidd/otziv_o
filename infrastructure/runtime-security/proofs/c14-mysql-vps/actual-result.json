@@ -1,0 +1,163 @@
+{
+  "schema": "otziv-mysql-actual-vps-release-readiness-v1",
+  "result": "PASS",
+  "role": "COORDINATED_CANDIDATE_PREPARATION",
+  "production": false,
+  "vpsCutoverExecuted": false,
+  "sourceWrites": false,
+  "sourceSchema": "1.10.287",
+  "targetSchema": "1.10.310",
+  "startedAt": "2026-09-08T14:29:11.011Z",
+  "completedAt": "2026-09-08T14:38:12.110Z",
+  "runtimeChecks": 76,
+  "unitTests": 60,
+  "images": {
+    "source": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "targetReference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "targetConfigurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+    "upgradeCheckerReference": "container-registry.oracle.com/mysql/community-server@sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340",
+    "app": "sha256:f6123a92f20df6125647bdbe181afb50c6bbc14c595e547f1ce3649db5ccd213",
+    "baselineApp": "sha256:bcd87bdb514c6477b95b4f2f04abe84e9d207339aa5ca608f35628e739c5c7e3",
+    "baselineAppConfigurationDigest": "sha256:dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+    "published": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+      "configurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+      "localId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa"
+    },
+    "targetLocalId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "upgradeCheckerLocalId": "sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340"
+  },
+  "existingUnknown": {
+    "sha256": "62dcc98bd74a1644151092209ef0969504c1f1cb5d5c1453bcb9c2daee40feba",
+    "rows": 2,
+    "queryCount": 69,
+    "queriesSha256": "4d96a8bc6dc697ce2a0c783a69f655fd85de14c28112b870e78de0ebef6e0e08"
+  },
+  "migration": {
+    "sourceSchema": "1.10.287",
+    "targetSchema": "1.10.310",
+    "baselineImage": "sha256:bcd87bdb514c6477b95b4f2f04abe84e9d207339aa5ca608f35628e739c5c7e3",
+    "candidateImage": "sha256:f6123a92f20df6125647bdbe181afb50c6bbc14c595e547f1ce3649db5ccd213",
+    "history": {
+      "sourceRows": 374,
+      "targetRows": 391,
+      "appendedRows": 17,
+      "existingHistorySha256": "3d091b4714c15b2c520efec0b14c489c7e8e96d056d863c54e101b84b42ec9b0",
+      "completeHistorySha256": "dcb7d077b997b142589a153d8e341ce2b8457eee2c6ccb020361c2a0fc23a158"
+    },
+    "existingUnknownUnchanged": true,
+    "unknownSha256": "62dcc98bd74a1644151092209ef0969504c1f1cb5d5c1453bcb9c2daee40feba"
+  },
+  "rollback": {
+    "result": "PASS",
+    "sourceImage": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "restoredVersion": "9.0.0",
+    "backup": {
+      "file": "preupgrade.sql.gz",
+      "sha256": "7e026760bfe28c8fab2fb5b42f0165ff0d83cc304b4c0d3a2c03ee6058bf807b",
+      "bytes": 101441370
+    },
+    "originalVolume": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-data",
+    "restoredVolume": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-rollback-data",
+    "postUpgradeWriteAbsent": true,
+    "configuredAccountGrantsPreserved": true,
+    "applicationImage": "sha256:bcd87bdb514c6477b95b4f2f04abe84e9d207339aa5ca608f35628e739c5c7e3",
+    "snapshot": {
+      "tableCount": 301,
+      "rows": 1055965,
+      "countsSha256": "ad938a02852ac97ed5713a10030b5b81f0572de85dd80f0474f699c8e9b38a57",
+      "historySha256": "3d091b4714c15b2c520efec0b14c489c7e8e96d056d863c54e101b84b42ec9b0",
+      "checksumsSha256": "542bfa14df531b52628aa86cb77cb06d9f033804f307b5119719c4d9a55a6760",
+      "jsonSha256": "cb15da7f4a8b086c27a437c7a6c49c34dbaf195ff9a7212a056c686200044cb7",
+      "jsonDataSha256": "a4f57baad56fe10538b7e1f7c74aaf6b1d26d926f12b26ee40f85b5238c49536",
+      "jsonColumns": 3,
+      "checksumTables": [
+        "orders",
+        "reviews",
+        "leads",
+        "common_invoices",
+        "payment_links",
+        "review_performer_assignments",
+        "review_performer_offers",
+        "lead_sync_queue",
+        "scheduled_client_message_state"
+      ],
+      "queries": {
+        "json": "SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('array',JSON_ARRAY(1,true,NULL,'Юникод'),'nested',JSON_OBJECT('amount',12.34)),'$.array[3]')),JSON_CONTAINS(JSON_ARRAY(1,2,3),'2'),JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('status','UNKNOWN'),'$.status'));",
+        "jsonData": [
+          "SELECT 'command_idempotency.response_body',COUNT(`response_body`),COALESCE(SUM(JSON_VALID(`response_body`)),0),BIT_XOR(CRC32(CAST(`response_body` AS CHAR))) FROM `command_idempotency`;",
+          "SELECT 'integration_outbox.payload',COUNT(`payload`),COALESCE(SUM(JSON_VALID(`payload`)),0),BIT_XOR(CRC32(CAST(`payload` AS CHAR))) FROM `integration_outbox`;",
+          "SELECT 'specialist_transfer_audit.company_ids_json',COUNT(`company_ids_json`),COALESCE(SUM(JSON_VALID(`company_ids_json`)),0),BIT_XOR(CRC32(CAST(`company_ids_json` AS CHAR))) FROM `specialist_transfer_audit`;"
+        ],
+        "queueSelection": "START TRANSACTION; SELECT id FROM lead_sync_queue ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED; SELECT assignment_id FROM review_performer_assignments ORDER BY assignment_id LIMIT 1 FOR UPDATE SKIP LOCKED; ROLLBACK;"
+      },
+      "queryHashes": {
+        "json": "bd2456b6f16e984f7df6e17e119cec86860e1afbc67efd343892a1fa63405b3e",
+        "queueSelection": "69d803219d8bbf40b688a45ca616b692cabbf2a6c6e171bebf57bc8dbdcba3c7"
+      },
+      "queueProof": "native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion"
+    },
+    "binaryDowngradeAttempted": false
+  },
+  "evidence": {
+    "runtime": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/runtime-proof.json",
+      "sha256": "df9253ceb9981c5aa4c1aacb5fdc67d685c09ef2dcc99d79cd7c96983e18c418"
+    },
+    "sourceCapture": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/source-capture.json",
+      "sha256": "94eb0f3e2422e87ad87c0e20479275984ae8de9cbe6b65c548489520b463377f"
+    },
+    "oldAppCopy": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/old-app-copy.json",
+      "sha256": "d0d47761908d368f81003ad68709594c1673bd62be129a70315c0d58248f1144"
+    },
+    "sourceContinuity": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/source-continuity.json",
+      "sha256": "986e0bbba912258f7d3fdbe49ecd60d94e7d315eeb874d347bd65ecc6245c593"
+    },
+    "upgradeChecker": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/upgrade-checker.json",
+      "sha256": "97cb6571115bcd203be66a69b38def3f9099ae3f41fa2aae735a553006a31612"
+    },
+    "targetContainerPolicy": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/target-container-policy.json",
+      "sha256": "5980faf358f336c38bb5fc63a25ede57fcefa782cdd962c2d9877a32dcd46d9e"
+    },
+    "security": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/security-result.json",
+      "sha256": "afd70ec62853699acf978d299f5efcc3228473a0f6f21e12a13810687f210cce"
+    },
+    "rawSecurity": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql/vulnerabilities.json",
+      "sha256": "b2ec3f567cf76fd0adcc85b447104449e250f221ea8a9074e18d641137b8f795"
+    },
+    "unitTests": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/unit-tests.txt",
+      "sha256": "8fd3ea93942a93ffc2c897463089c0806dea95163e835fe9ed8257092ed72999"
+    },
+    "executionLog": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/execution-log.txt",
+      "sha256": "ff14bd7e5801d0367b0cb9aa76bfbc1a0b252fbbe6f59aab250246960ab8c187"
+    },
+    "sourceBinding": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/source-binding.json",
+      "sha256": "9704d891a88ef34ecacb33fddb2117e1619ee363b8acc97ae1d43241b0a54b63"
+    },
+    "fixtureFailures": {
+      "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/fixture-failures.json",
+      "sha256": "54239eaffecb6041d3c7f5367703af541e8e9519fc4cf683b7d5babc268ff20b"
+    }
+  },
+  "limitations": [
+    "Actual VPS source was captured with a single-transaction read-only dump and DDL/history/container consistency checks; production DML was not stopped.",
+    "Local isolated owned clone only; no VPS upgrade/cutover, live authentication, external delivery, production SLO or automatic rollback authorization.",
+    "The same-day fresh scan covers the exact published MySQL image; earlier local310 and historical C12 runs remain separate evidence.",
+    "Configured hunt grants are reproduced exactly with a clone-only password; other VPS accounts and QA schema contents are not copied.",
+    "Original old application bytes retained with shell PID1. Controlled TERM to its verified sole JVM child proves bounded shutdown; this is not stock docker stop behavior.",
+    "Old app baseline/rollback health and Hibernate/Flyway validation use actual read_only+super_read_only fences to suppress its immediate shadow-backfill writes. The fence is released after graceful stop; old-app business API writes are not exercised.",
+    "All old/candidate apps use internal-only networking and fixture overrides, including all backup dispatch flags OFF and writable /tmp backup directory.",
+    "UNKNOWN preservation reports actual captured row count and complete original columns. Zero rows do not establish populated ambiguity recovery behavior.",
+    "Success removes disposable clone dump/backup and volumes. Fresh encrypted authenticated production backup, independent copy and verified empty-volume restore are still mandatory immediately before coordinated activation."
+  ]
+}

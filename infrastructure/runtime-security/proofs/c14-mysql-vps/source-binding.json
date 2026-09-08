@@ -1,0 +1,22 @@
+{
+  "schema": "otziv-mysql-vps-executed-source-binding-v1",
+  "createdAt": "2026-09-08T14:39:24.467Z",
+  "files": [
+    {
+      "path": "infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs",
+      "sha256": "f77f49948f7cdb482c14911060d6e9fd9da55dfbf7761e9d1baadbe02a02bbca"
+    },
+    {
+      "path": "infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs",
+      "sha256": "26b9bcb8109f769505d106a73435c1c9f3423db4d77458289bf435978ebb9d14"
+    },
+    {
+      "path": "infrastructure/runtime-security/mysql-vps-release-rehearsal.test.mjs",
+      "sha256": "b5e841d853682e6a08c36c1289e780fd3d70ee17a5aa5d35bcd590ba2071f119"
+    }
+  ],
+  "targetPolicyObserver": {
+    "path": "infrastructure/runtime-security/proofs/c14-mysql-vps/target-policy-observer-source.txt",
+    "sha256": "257c620cde1a2b47d63160c0f62f5d88d4f74de6ab3d3159dc3e201f6bbea332"
+  }
+}

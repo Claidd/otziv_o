@@ -1,0 +1,19 @@
+{
+  "component": "postgres",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:07834abbfd80ed7183afa9096db99afc4d93b99fd51aae726e550d07ade65dbf",
+  "commit": "e3d798c423eaa7ee1afab9f77c041286e408fefa",
+  "run": "34239698507",
+  "attempt": "1",
+  "manifest": {
+    "path": "infrastructure/runtime-security/reviewed-images-c14-postgres.json",
+    "sha256": "192027ac9371afbc0ad3fc6363cab7ea03fab8633e706e56552e77a349aee0b7"
+  },
+  "publication": {
+    "path": "infrastructure/runtime-security/proofs/c14-postgres-published/publication/publication.json",
+    "sha256": "0a9dcb062b3bb354559878cf84458bc4cc233b7b38e71826a11ec6f98baf74a1"
+  },
+  "anonymous": {
+    "path": "infrastructure/runtime-security/proofs/c14-postgres-published/anonymous/anonymous-download.json",
+    "sha256": "df32819cc16aa4bc706d308e3cbe4351763ec2c9ea7a9be2081a72abd8ed4c5f"
+  }
+}

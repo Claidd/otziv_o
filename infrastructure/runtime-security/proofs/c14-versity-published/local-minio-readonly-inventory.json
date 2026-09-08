@@ -1,0 +1,28 @@
+{
+  "schema": "otziv-local-minio-readonly-inventory-v1",
+  "timestamp": "2026-09-08T14:36:30.261Z",
+  "sourceProject": "otziv-prod-local",
+  "sourceService": "minio",
+  "sourceContainerUnchanged": true,
+  "sourceImage": "minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e",
+  "sourceVolume": "otziv-prod-local_minio_data",
+  "requests": [
+    "ListBuckets",
+    "ListObjects",
+    "ListObjectVersions"
+  ],
+  "objectNamesRetained": false,
+  "credentialsRetained": false,
+  "buckets": [
+    {
+      "bucket": "local",
+      "currentObjects": 0,
+      "currentBytes": 0,
+      "versionRows": 0,
+      "deleteMarkerRows": 0
+    }
+  ],
+  "totalCurrentObjects": 0,
+  "totalVersionRows": 0,
+  "sourceWrites": false
+}

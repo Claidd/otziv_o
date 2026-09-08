@@ -1,0 +1,23 @@
+{
+  "sourceCommit": "6d238b6558037085cc25c915893c3d301a80243e",
+  "archiveSha256": "74675b6df593843c5f9384c145c04515c293db228ce76afa9d70c61040f69602",
+  "proposalHead": "85a8379427a1d031afdd24f8c688bbcd2917fcca",
+  "proposalState": "open",
+  "files": [
+    {
+      "path": "model/storage-private/src/main/java/org/keycloak/models/cache/CacheRealmProvider.java",
+      "originalSha256": "b7d5943c84ce90591aaaef23b17adefc30a70e44b4ceb27add18fe03601a7aaa",
+      "patchedSha256": "fa7c51512637b6f29900ba8fdd2196efc7113a4852367133d110a1740569a658"
+    },
+    {
+      "path": "model/storage-private/src/main/java/org/keycloak/migration/migrators/RealmMigration.java",
+      "originalSha256": "a1ff7c36d3693c3c2749d1cd659d38a74492d606bc4d2e30cbfc69801ce4c21a",
+      "patchedSha256": "0fc763984016338619b008e92b8794e94a5889aeeccb9f6489d0478c1b2b949b"
+    },
+    {
+      "path": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/RealmCacheSession.java",
+      "originalSha256": "3f9be7ef7204d183135d3e07b3fa5308c422447f045affc45d3663bb718e1989",
+      "patchedSha256": "b2ca602c64c0db1c77fc662278e9503a3c229e9506058e2f05e492711b288fbc"
+    }
+  ]
+}

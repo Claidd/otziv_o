@@ -1,0 +1,17 @@
+{
+  "schema": "otziv-vps-postgres-roles-preservation-v1",
+  "result": "PASS",
+  "roleAttributesPreserved": true,
+  "phases": [
+    "fresh_17_10_restore",
+    "same_volume_17_11"
+  ],
+  "authoritativeEvidence": "rollback-and-diagnostic.json",
+  "namedRolesPublished": false,
+  "productionAccess": false,
+  "priorHarnessAttempt": {
+    "validObservation": false,
+    "error": "ad_hoc_query_exit_127",
+    "privateFailureRetained": true
+  }
+}

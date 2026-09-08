@@ -170,7 +170,7 @@ async function publish(component, outputArgument) {
     assert.equal(actual.Config.Labels?.['com.otziv.publication.revision'], identity.commit, 'registry_source_revision_changed');
     assert.equal(actual.Config.Labels?.['com.otziv.reviewed-component'], component, 'registry_component_changed');
     record.imageId = actual.Id;
-    if (image.prepare) record.providerJarSha256 = await providerJarDigest(record.reference);
+    if (component === 'keycloak') record.providerJarSha256 = await providerJarDigest(record.reference);
     record.security = await scan('image', record.reference, resolve(output, 'vulnerabilities.json'));
     if (component === 'keycloak') {
       record.knownRuntimeDependencies = checkKeycloakRuntimeDependencies(

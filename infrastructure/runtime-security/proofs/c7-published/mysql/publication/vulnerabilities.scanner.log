@@ -1,0 +1,26 @@
+Unable to find image 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969' locally
+docker.io/aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969: Pulling from aquasec/trivy
+55afa1ecc21d: Already exists
+0c664a59f299: Pulling fs layer
+9b17763e725d: Pulling fs layer
+99f1ca71a2b5: Pulling fs layer
+99f1ca71a2b5: Verifying Checksum
+99f1ca71a2b5: Download complete
+0c664a59f299: Verifying Checksum
+0c664a59f299: Download complete
+9b17763e725d: Verifying Checksum
+9b17763e725d: Download complete
+0c664a59f299: Pull complete
+9b17763e725d: Pull complete
+99f1ca71a2b5: Pull complete
+Digest: sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+Status: Downloaded newer image for aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+2026-09-08T02:31:12Z	INFO	[vulndb] Need to update DB
+2026-09-08T02:31:12Z	INFO	[vulndb] Downloading vulnerability DB...
+2026-09-08T02:31:12Z	INFO	[vulndb] Downloading artifact...	repo="mirror.gcr.io/aquasec/trivy-db:2"
+1.64 MiB / 112.17 MiB [>_____________________________________________________________] 1.46% ? p/s ?20.19 MiB / 112.17 MiB [---------->_________________________________________________] 18.00% ? p/s ?49.97 MiB / 112.17 MiB [-------------------------->_________________________________] 44.55% ? p/s ?79.75 MiB / 112.17 MiB [-------------------------------->_____________] 71.09% 130.19 MiB p/s ETA 0s110.19 MiB / 112.17 MiB [-------------------------------------------->] 98.23% 130.19 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 130.19 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 125.28 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 125.28 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 125.28 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 117.19 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 117.19 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 117.19 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 109.63 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 109.63 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 109.63 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 102.56 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 102.56 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [------------------------------------------->] 100.00% 102.56 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 95.94 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 95.94 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 95.94 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 89.75 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 89.75 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 89.75 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 83.96 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 83.96 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 83.96 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 78.55 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 78.55 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 78.55 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 73.48 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-------------------------------------------->] 100.00% 73.48 MiB p/s ETA 0s112.17 MiB / 112.17 MiB [-----------------------------------------------] 100.00% 18.01 MiB p/s 6.4s2026-09-08T02:31:20Z	INFO	[vulndb] Artifact successfully downloaded	repo="mirror.gcr.io/aquasec/trivy-db:2"
+2026-09-08T02:31:20Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-09-08T02:31:23Z	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-09-08T02:31:23Z	INFO	Detected OS	family="oracle" version="9.8"
+2026-09-08T02:31:23Z	INFO	[oracle] Detecting vulnerabilities...	os_version="9" pkg_num=108
+2026-09-08T02:31:23Z	INFO	Number of language-specific files	num=0

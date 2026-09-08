@@ -44,9 +44,10 @@ services:
       - docker_observer_net
 
   mysql:
-    # Production-verified MySQL 9.0.0; pin the registry digest to prevent an
-    # unattended major upgrade when somebody refreshes the former latest tag.
-    image: mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
+    # A different running DB image is blocked by the ordinary deployment guard.
+    # Upgrade the retained volume only through the reviewed coordinated cutover.
+    image: ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa
+    user: "999:999"
     container_name: my-mysql
     restart: unless-stopped
     logging: *default-logging
@@ -54,11 +55,18 @@ services:
     mem_limit: ${MYSQL_MEMORY_LIMIT:-4g}
     cpus: ${MYSQL_CPU_LIMIT:-4.0}
     command:
+      - mysqld
+      - --user=999
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+08:00
       - --restrict-fk-on-non-standard-key=OFF
       - --binlog-expire-logs-seconds=${MYSQL_BINLOG_EXPIRE_LOGS_SECONDS:-604800}
+      - --gtid-mode=OFF
+      - --enforce-gtid-consistency=OFF
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --event-scheduler=ON
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -66,9 +74,15 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       TZ: ${TZ:-Asia/Irkutsk}
     volumes:
-      - mysql_data:/var/lib/mysql
+      - type: volume
+        source: mysql_data
+        target: /var/lib/mysql
+        volume:
+          nocopy: true
       - ./data/mysql_backup:/backup
       - ./data/bots:/var/lib/mysql-files
+    tmpfs:
+      - /var/run/mysqld:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755
     healthcheck:
       test: ["CMD-SHELL", "mysql --protocol=TCP -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} $${MYSQL_DATABASE} -e 'SELECT 1' >/dev/null 2>&1"]
       interval: 10s

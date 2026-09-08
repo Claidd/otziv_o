@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import {randomUUID,randomBytes,createHash} from 'node:crypto';
+import {readFile,writeFile,realpath,mkdir} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {Readable} from 'node:stream';
+import {run,startProcess} from '../../../infrastructure/recovery/process.mjs';
+import {dockerEnvironment} from '../../../infrastructure/recovery/docker-environment.mjs';
+import {nativeOptionFileCommand,publishedImage,publishedConfig,requirePublishedIdentity} from '../../../infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs';
+
+const out=await realpath(resolve('.codex-tmp/release-readiness-20260908/mysql'));
+const owner='otziv-mysql-c14-standalone-'+randomUUID(), label='com.otziv.mysql-upgrade.owner';
+const name=owner+'-mysql',volume=owner+'-data',password=randomBytes(32).toString('hex');
+const oldImage='sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383';
+const result={schema:'otziv-mysql-standalone-configuration-probe-v1',owner,startedAt:new Date().toISOString(),production:false,sourceContacted:false,target:publishedImage,targetConfigurationDigest:publishedConfig,checks:[],limitations:['Fresh isolated target volume; this additional probe does not replay the data-directory upgrade or application suite.','C14 main rehearsal separately proves the upgrade/rollback with its recorded six-option compatibility subset; this probe proves explicit standalone GTID/binlog policy is accepted and survives restart.']};
+const docker=(args,options={})=>{const d=dockerEnvironment(args,{...process.env,...options.env});return run('docker',d.args,{...options,env:d.env});};
+const check=(name,ok)=>{assert.ok(ok,name);result.checks.push({name,passed:true});console.log('PASS '+name);};
+const sql=text=>docker(['exec','-i','-e','MYSQL_PWD='+password,name,'mysql','--protocol=TCP','--host=127.0.0.1','--user=root','--batch','--skip-column-names'],{input:Readable.from([text]),maxOutput:1024*1024});
+const vars="SHOW GLOBAL VARIABLES WHERE Variable_name IN ('gtid_mode','enforce_gtid_consistency','log_bin','binlog_format','event_scheduler','character_set_server','collation_server','time_zone','restrict_fk_on_non_standard_key');";
+const expected={binlog_format:'ROW',character_set_server:'utf8mb4',collation_server:'utf8mb4_unicode_ci',enforce_gtid_consistency:'OFF',event_scheduler:'OFF',gtid_mode:'OFF',log_bin:'ON',restrict_fk_on_non_standard_key:'OFF',time_zone:'+08:00'};
+const readSettings=async()=>Object.fromEntries((await sql(vars)).trim().split('\n').map(line=>line.split('\t')));
+async function owned(){const m=JSON.parse(await docker(['inspect','--format','{{json .}}',name]));assert.equal(m.Config.Labels[label],owner);assert.equal(m.Mounts.find(m=>m.Destination==='/var/lib/mysql')?.Name,volume);return m;}
+async function ready(){const deadline=Date.now()+240000;while(Date.now()<deadline){if(!(await owned()).State.Running)throw Error('target_exited');try{assert.equal((await sql('SELECT VERSION();')).trim(),'9.7.3');return;}catch{}await new Promise(r=>setTimeout(r,1000));}throw Error('readiness_timeout');}
+async function stop(){await sql('SET GLOBAL innodb_fast_shutdown=0;');await docker(['stop','--time','120',name],{timeoutMs:140000});const m=await owned();check('clean_stop_'+result.checks.filter(c=>c.name.startsWith('clean_stop_')).length,!m.State.Running&&m.State.ExitCode===0&&!m.State.OOMKilled);}
+let volumeCreated=false,containerCreated=false;
+try{
+  const image=JSON.parse(await docker(['image','inspect','--format','{{json .}}',publishedImage]));requirePublishedIdentity(image);
+  const config=(await readFile(join(out,'run2/my.cnf'),'utf8')).replace('user=mysql','user=999');
+  const configDirectory=join(out,owner+'-config');await mkdir(configDirectory);await writeFile(join(configDirectory,'my.cnf'),config,{mode:0o600});
+  result.optionFileSha256=createHash('sha256').update(config).digest('hex');result.freshInitializationIdentity='user=999 (existing-volume C14 upgrade retains original configuration)';
+  await docker(['volume','create','--label',label+'='+owner,volume]);volumeCreated=true;
+  // The exact newly created, empty owned volume receives UID999; no other data directory is visited.
+  await docker(['run','--rm','--network','none','--label',label+'='+owner,'--mount','type=volume,source='+volume+',target=/data','--entrypoint','sh',oldImage,'-c','test -z "$(ls -A /data)" && chown 999:999 /data']);
+  const flags=['--gtid-mode=OFF','--enforce-gtid-consistency=OFF','--log-bin=mysql-bin','--binlog-format=ROW','--event-scheduler=OFF'];result.explicitFlags=flags;result.expectedSettings=expected;
+  const command=[...nativeOptionFileCommand(image.Config.Entrypoint,['mysqld','--defaults-file=/fixture/my.cnf']),...flags];
+  await docker(['create','--pull=never','--name',name,'--label',label+'='+owner,'--network','none','--memory','1536m','--cpus','2','--pids-limit','384','--security-opt','no-new-privileges:true','--user','999:999','--mount','type=volume,source='+volume+',target=/var/lib/mysql,volume-nocopy','--mount','type=bind,source='+configDirectory+',target=/fixture,readonly','--tmpfs','/var/run/mysqld:uid=999,gid=999,mode=0755','--tmpfs','/var/lib/mysql-files:uid=999,gid=999,mode=0755','-e','MYSQL_ROOT_PASSWORD='+password,'-e','MYSQL_ROOT_HOST=%','--entrypoint','sh',publishedImage,...command]);containerCreated=true;
+  await docker(['start',name]);await ready();check('target_9_7_3_authenticated',true);
+  result.before=await readSettings();check('explicit_standalone_policy_applied',JSON.stringify(result.before)===JSON.stringify(expected));
+  await sql("CREATE DATABASE c14_canary; CREATE TABLE c14_canary.probe(id INT PRIMARY KEY, payload JSON NOT NULL); INSERT INTO c14_canary.probe VALUES(1,JSON_OBJECT('state','UNKNOWN','operation','frozen-c14-identity')); ");
+  check('write_under_gtid_off_binlog_row', (await sql("SELECT JSON_UNQUOTE(JSON_EXTRACT(payload,'$.operation')) FROM c14_canary.probe WHERE id=1;")).trim()==='frozen-c14-identity');
+  await stop();await docker(['start',name]);await ready();result.after=await readSettings();check('explicit_policy_survives_restart',JSON.stringify(result.after)===JSON.stringify(expected));
+  check('durable_canary_survives_restart',(await sql("SELECT JSON_UNQUOTE(JSON_EXTRACT(payload,'$.state')),JSON_UNQUOTE(JSON_EXTRACT(payload,'$.operation')) FROM c14_canary.probe WHERE id=1;")).trim()==='UNKNOWN\tfrozen-c14-identity');
+  await stop();result.result='PASS';
+}catch(error){result.result='FAIL';result.errorCode=error.code||error.message?.replace(/[^a-zA-Z0-9_]/g,'_').slice(0,100);}
+finally{
+  if(containerCreated){const m=await owned();if(m.State.Running){await docker(['stop','--time','120',name],{timeoutMs:140000});}const logs=startProcess('docker',['logs',name],{maxOutput:4*1024*1024});logs.collect();let stderr='';logs.child.stderr.on('data',part=>{stderr+=part;});logs.child.stdin.end();const stdout=await logs.completed;await writeFile(join(out,'standalone-mysql.log'),stdout+stderr,{mode:0o600});await docker(['rm',name]);}
+  if(volumeCreated){const m=JSON.parse(await docker(['volume','inspect','--format','{{json .}}',volume]));assert.equal(m.Labels[label],owner);assert.equal(m.Name,volume);await docker(['volume','rm',volume]);}
+  result.cleanup='OWNED_CONTAINER_AND_FRESH_VOLUME_REMOVED';result.completedAt=new Date().toISOString();await writeFile(join(out,'standalone-configuration-proof.json'),JSON.stringify(result,null,2)+'\n');
+}
+console.log(JSON.stringify({result:result.result,checks:result.checks.length,output:join(out,'standalone-configuration-proof.json')}));
+if(result.result!=='PASS')process.exitCode=1;

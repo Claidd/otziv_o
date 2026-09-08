@@ -1,0 +1,54 @@
+--- a/model/storage-private/src/main/java/org/keycloak/models/cache/CacheRealmProvider.java
++++ b/model/storage-private/src/main/java/org/keycloak/models/cache/CacheRealmProvider.java
+@@ -30,6 +30,9 @@
+  */
+ public interface CacheRealmProvider extends RealmProvider, ClientProvider, ClientScopeProvider, GroupProvider, RoleProvider {
+     void clear();
++
++    void clearManagedModels();
++
+     RealmProvider getRealmDelegate();
+ 
+     void registerRealmInvalidation(String id, String name);
+--- a/model/storage-private/src/main/java/org/keycloak/migration/migrators/RealmMigration.java
++++ b/model/storage-private/src/main/java/org/keycloak/migration/migrators/RealmMigration.java
+@@ -23,6 +23,7 @@
+ import org.keycloak.models.KeycloakContext;
+ import org.keycloak.models.KeycloakSession;
+ import org.keycloak.models.RealmModel;
++import org.keycloak.models.cache.CacheRealmProvider;
+ import org.keycloak.representations.idm.RealmRepresentation;
+ 
+ import org.jboss.logging.Logger;
+@@ -33,9 +34,13 @@
+ 
+     @Override
+     public void migrate(KeycloakSession session) {
++        CacheRealmProvider realmCache = session.getProvider(CacheRealmProvider.class);
+         session.realms().getRealmsStream().forEach(realm -> {
+             // empty out the persistence context for each realm
+             EntityManagers.flush(session, true);
++            if (realmCache != null) {
++                realmCache.clearManagedModels();
++            }
+             // alternatively could be EntityManagers.runInBatch - but that also changes the
+             // query modes, which I'm not sure is applicable here
+             KeycloakContext context = session.getContext();
+--- a/model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/RealmCacheSession.java
++++ b/model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/RealmCacheSession.java
+@@ -190,6 +190,15 @@
+     }
+ 
+     @Override
++    public void clearManagedModels() {
++        managedRealms.clear();
++        managedApplications.clear();
++        managedClientScopes.clear();
++        managedRoles.clear();
++        managedGroups.clear();
++    }
++
++    @Override
+     public RealmProvider getRealmDelegate() {
+         if (!transactionActive) throw new IllegalStateException("Cannot access delegate without a transaction");
+         if (realmDelegate != null) return realmDelegate;

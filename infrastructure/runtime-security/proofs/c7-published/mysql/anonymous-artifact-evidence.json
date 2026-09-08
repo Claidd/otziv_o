@@ -1,0 +1,15 @@
+{
+  "id": 10038945269,
+  "name": "anonymous-download-mysql",
+  "bytes": 322147,
+  "sha256": "165811b81efe8f1b447bc66691e241071870d3987c2c4c1dfeb780e387b3d9ee",
+  "apiDigestPresent": true,
+  "apiDigestVerified": true,
+  "artifactRunAttemptVerified": false,
+  "path": "run-34178760576/20260908T024803Z-1de85801e5/artifact-10038945269.zip",
+  "extraction": {
+    "entries": 13,
+    "extractedBytes": 2746172,
+    "path": "run-34178760576/20260908T024803Z-1de85801e5/artifact-10038945269"
+  }
+}

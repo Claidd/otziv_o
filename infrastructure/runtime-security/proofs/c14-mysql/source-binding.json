@@ -1,0 +1,39 @@
+{
+  "schema": "otziv-c14-mysql-source-binding-v1",
+  "createdAt": "2026-09-08T13:24:20.443Z",
+  "files": [
+    {
+      "path": "infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs",
+      "sha256": "a58834dcbab86fa5d3cf009d3fd3a547ce435a1c69c7d8422e36bf4fbf6ad311"
+    },
+    {
+      "path": "infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs",
+      "sha256": "26b9bcb8109f769505d106a73435c1c9f3423db4d77458289bf435978ebb9d14"
+    },
+    {
+      "path": "infrastructure/runtime-security/MYSQL_UPGRADE_REHEARSAL.md",
+      "sha256": "b24e6dafd5a4558877c561a616711bff69241e3d23a4adfaeeb402f5048266d3"
+    },
+    {
+      "path": "infrastructure/runtime-security/scan.mjs",
+      "sha256": "b797fa39600820e968b895533333176f37c5694ee869c8621043bf8d553b086f"
+    },
+    {
+      "path": "infrastructure/recovery/process.mjs",
+      "sha256": "3cd5893b07aaeab259c1e8a825e4272490204690030b9f5a1d6ef4cec187afdc"
+    },
+    {
+      "path": "infrastructure/recovery/docker-environment.mjs",
+      "sha256": "b38181bbfb69b406f33ac8c20964c4d66d56f2219331b569a7c819293a3a4e93"
+    },
+    {
+      "path": "infrastructure/mysql/Dockerfile",
+      "sha256": "61237de048ea2dd5354648777e802f23cf0c03f43d4211be5d77831deda61468"
+    }
+  ],
+  "standaloneProbeSource": {
+    "path": "infrastructure/runtime-security/proofs/c14-mysql/standalone-probe-source.txt",
+    "sha256": "54caab902744d8a715bddf7618a656a4fa09cbb9318cb88d22b9a034cb5d5cef",
+    "note": "Exact source bytes executed from the private scratch mysql directory; relative imports/output refer to that original location. Contains no fixture password."
+  }
+}

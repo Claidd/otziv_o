@@ -1,0 +1,807 @@
+{
+  "schema": "otziv-mysql-upgrade-rehearsal-v1",
+  "mode": "vps-release-upgrade",
+  "captureSchema": "otziv-mysql-vps-release-capture-v1",
+  "owner": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351",
+  "startedAt": "2026-09-08T14:29:11.011Z",
+  "production": false,
+  "sourceContainer": "my-mysql",
+  "sourceWrites": false,
+  "sourceCaptureSha256": "63b194c64178d1565a823b56f7ebbad570330831308a23947efbead8be9e1b42",
+  "sourceSchemaAtCapture": "1.10.287",
+  "database": "otziv",
+  "images": {
+    "source": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "targetReference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "targetConfigurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+    "upgradeCheckerReference": "container-registry.oracle.com/mysql/community-server@sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340",
+    "app": "sha256:f6123a92f20df6125647bdbe181afb50c6bbc14c595e547f1ce3649db5ccd213",
+    "baselineApp": "sha256:bcd87bdb514c6477b95b4f2f04abe84e9d207339aa5ca608f35628e739c5c7e3",
+    "baselineAppConfigurationDigest": "sha256:dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+    "published": {
+      "reference": "ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+      "configurationDigest": "sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070",
+      "localId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa"
+    },
+    "targetLocalId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+    "upgradeCheckerLocalId": "sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340"
+  },
+  "checks": [
+    {
+      "name": "clone_9_0_authenticated",
+      "passed": true,
+      "at": "2026-09-08T14:29:29.519Z"
+    },
+    {
+      "name": "source_semantic_configuration_reproduced_9_0",
+      "passed": true,
+      "at": "2026-09-08T14:29:29.835Z"
+    },
+    {
+      "name": "explicit_standalone_policy_9_0",
+      "passed": true,
+      "at": "2026-09-08T14:29:30.135Z"
+    },
+    {
+      "name": "captured_flyway_history_restored",
+      "passed": true,
+      "at": "2026-09-08T14:31:07.710Z"
+    },
+    {
+      "name": "configured_local_account_grants_and_login_preserved",
+      "passed": true,
+      "at": "2026-09-08T14:31:08.900Z"
+    },
+    {
+      "name": "baseline_old_app_database_read_only_enforced",
+      "passed": true,
+      "at": "2026-09-08T14:31:13.796Z"
+    },
+    {
+      "name": "app90_health_up",
+      "passed": true,
+      "at": "2026-09-08T14:32:03.192Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_app90",
+      "passed": true,
+      "at": "2026-09-08T14:32:14.898Z"
+    },
+    {
+      "name": "completed_spring_jpa_hikari_shutdown_app90",
+      "passed": true,
+      "at": "2026-09-08T14:32:15.270Z"
+    },
+    {
+      "name": "baseline_old_app_database_write_fence_released",
+      "passed": true,
+      "at": "2026-09-08T14:32:16.230Z"
+    },
+    {
+      "name": "actual_app_validates_expected_schema",
+      "passed": true,
+      "at": "2026-09-08T14:32:16.505Z"
+    },
+    {
+      "name": "baseline_app_preserves_capture_tableCount",
+      "passed": true,
+      "at": "2026-09-08T14:32:20.186Z"
+    },
+    {
+      "name": "baseline_app_preserves_capture_rows",
+      "passed": true,
+      "at": "2026-09-08T14:32:20.186Z"
+    },
+    {
+      "name": "baseline_app_preserves_capture_countsSha256",
+      "passed": true,
+      "at": "2026-09-08T14:32:20.186Z"
+    },
+    {
+      "name": "baseline_app_preserves_capture_historySha256",
+      "passed": true,
+      "at": "2026-09-08T14:32:20.187Z"
+    },
+    {
+      "name": "baseline_app_preserves_capture_checksumsSha256",
+      "passed": true,
+      "at": "2026-09-08T14:32:20.187Z"
+    },
+    {
+      "name": "baseline_app_preserves_capture_jsonSha256",
+      "passed": true,
+      "at": "2026-09-08T14:32:20.187Z"
+    },
+    {
+      "name": "baseline_app_preserves_capture_jsonDataSha256",
+      "passed": true,
+      "at": "2026-09-08T14:32:20.187Z"
+    },
+    {
+      "name": "preupgrade_backup_created_with_application_stopped",
+      "passed": true,
+      "at": "2026-09-08T14:32:38.996Z"
+    },
+    {
+      "name": "mandatory_upgrade_checker_passed",
+      "passed": true,
+      "at": "2026-09-08T14:32:46.262Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_mysql90",
+      "passed": true,
+      "at": "2026-09-08T14:32:48.764Z"
+    },
+    {
+      "name": "same_named_data_volume_upgraded",
+      "passed": true,
+      "at": "2026-09-08T14:33:02.195Z"
+    },
+    {
+      "name": "target_9_7_3_authenticated",
+      "passed": true,
+      "at": "2026-09-08T14:33:02.496Z"
+    },
+    {
+      "name": "source_semantic_configuration_reproduced_9_7_3",
+      "passed": true,
+      "at": "2026-09-08T14:33:02.799Z"
+    },
+    {
+      "name": "explicit_standalone_policy_9_7_3",
+      "passed": true,
+      "at": "2026-09-08T14:33:03.103Z"
+    },
+    {
+      "name": "unchanged_tableCount",
+      "passed": true,
+      "at": "2026-09-08T14:33:09.250Z"
+    },
+    {
+      "name": "unchanged_rows",
+      "passed": true,
+      "at": "2026-09-08T14:33:09.250Z"
+    },
+    {
+      "name": "unchanged_countsSha256",
+      "passed": true,
+      "at": "2026-09-08T14:33:09.250Z"
+    },
+    {
+      "name": "unchanged_historySha256",
+      "passed": true,
+      "at": "2026-09-08T14:33:09.250Z"
+    },
+    {
+      "name": "unchanged_checksumsSha256",
+      "passed": true,
+      "at": "2026-09-08T14:33:09.250Z"
+    },
+    {
+      "name": "unchanged_jsonSha256",
+      "passed": true,
+      "at": "2026-09-08T14:33:09.250Z"
+    },
+    {
+      "name": "unchanged_jsonDataSha256",
+      "passed": true,
+      "at": "2026-09-08T14:33:09.250Z"
+    },
+    {
+      "name": "app973_health_up",
+      "passed": true,
+      "at": "2026-09-08T14:34:05.124Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_app973",
+      "passed": true,
+      "at": "2026-09-08T14:34:32.165Z"
+    },
+    {
+      "name": "completed_spring_jpa_hikari_shutdown_app973",
+      "passed": true,
+      "at": "2026-09-08T14:34:32.718Z"
+    },
+    {
+      "name": "flyway_still_expected_schema",
+      "passed": true,
+      "at": "2026-09-08T14:34:33.658Z"
+    },
+    {
+      "name": "candidate_app_append_only_287_to_310",
+      "passed": true,
+      "at": "2026-09-08T14:34:34.067Z"
+    },
+    {
+      "name": "preexisting_unknown_rows_and_envelopes_unchanged",
+      "passed": true,
+      "at": "2026-09-08T14:34:35.485Z"
+    },
+    {
+      "name": "published_candidate_accepts_new_canary_write",
+      "passed": true,
+      "at": "2026-09-08T14:34:41.712Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_mysql973",
+      "passed": true,
+      "at": "2026-09-08T14:34:48.159Z"
+    },
+    {
+      "name": "published_restart_unchanged_tableCount",
+      "passed": true,
+      "at": "2026-09-08T14:34:56.063Z"
+    },
+    {
+      "name": "published_restart_unchanged_rows",
+      "passed": true,
+      "at": "2026-09-08T14:34:56.063Z"
+    },
+    {
+      "name": "published_restart_unchanged_countsSha256",
+      "passed": true,
+      "at": "2026-09-08T14:34:56.063Z"
+    },
+    {
+      "name": "published_restart_unchanged_historySha256",
+      "passed": true,
+      "at": "2026-09-08T14:34:56.063Z"
+    },
+    {
+      "name": "published_restart_unchanged_checksumsSha256",
+      "passed": true,
+      "at": "2026-09-08T14:34:56.063Z"
+    },
+    {
+      "name": "published_restart_unchanged_jsonSha256",
+      "passed": true,
+      "at": "2026-09-08T14:34:56.063Z"
+    },
+    {
+      "name": "published_restart_unchanged_jsonDataSha256",
+      "passed": true,
+      "at": "2026-09-08T14:34:56.063Z"
+    },
+    {
+      "name": "published_restart_keeps_postupgrade_canary",
+      "passed": true,
+      "at": "2026-09-08T14:34:56.354Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_mysql973",
+      "passed": true,
+      "at": "2026-09-08T14:34:59.423Z"
+    },
+    {
+      "name": "source_semantic_configuration_reproduced_rollback",
+      "passed": true,
+      "at": "2026-09-08T14:35:15.712Z"
+    },
+    {
+      "name": "explicit_standalone_policy_rollback",
+      "passed": true,
+      "at": "2026-09-08T14:35:16.036Z"
+    },
+    {
+      "name": "rollback_uses_separate_fresh_old_version_volume",
+      "passed": true,
+      "at": "2026-09-08T14:35:16.263Z"
+    },
+    {
+      "name": "rollback_database_was_initially_empty",
+      "passed": true,
+      "at": "2026-09-08T14:35:16.581Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_tableCount",
+      "passed": true,
+      "at": "2026-09-08T14:36:56.531Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_rows",
+      "passed": true,
+      "at": "2026-09-08T14:36:56.531Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_countsSha256",
+      "passed": true,
+      "at": "2026-09-08T14:36:56.531Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_historySha256",
+      "passed": true,
+      "at": "2026-09-08T14:36:56.531Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_checksumsSha256",
+      "passed": true,
+      "at": "2026-09-08T14:36:56.531Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_jsonSha256",
+      "passed": true,
+      "at": "2026-09-08T14:36:56.531Z"
+    },
+    {
+      "name": "rollback_restores_preupgrade_jsonDataSha256",
+      "passed": true,
+      "at": "2026-09-08T14:36:56.531Z"
+    },
+    {
+      "name": "postupgrade_canary_absent_after_backup_restore",
+      "passed": true,
+      "at": "2026-09-08T14:36:56.886Z"
+    },
+    {
+      "name": "rollback_old_app_database_read_only_enforced",
+      "passed": true,
+      "at": "2026-09-08T14:36:57.613Z"
+    },
+    {
+      "name": "app90-rollback_health_up",
+      "passed": true,
+      "at": "2026-09-08T14:37:48.939Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_rollback",
+      "passed": true,
+      "at": "2026-09-08T14:37:52.457Z"
+    },
+    {
+      "name": "completed_spring_jpa_hikari_shutdown_rollback",
+      "passed": true,
+      "at": "2026-09-08T14:37:52.903Z"
+    },
+    {
+      "name": "rollback_old_app_database_write_fence_released",
+      "passed": true,
+      "at": "2026-09-08T14:37:54.061Z"
+    },
+    {
+      "name": "rollback_application_keeps_flyway_history",
+      "passed": true,
+      "at": "2026-09-08T14:37:54.391Z"
+    },
+    {
+      "name": "rollback_app_preserves_restored_tableCount",
+      "passed": true,
+      "at": "2026-09-08T14:37:57.996Z"
+    },
+    {
+      "name": "rollback_app_preserves_restored_rows",
+      "passed": true,
+      "at": "2026-09-08T14:37:57.997Z"
+    },
+    {
+      "name": "rollback_app_preserves_restored_countsSha256",
+      "passed": true,
+      "at": "2026-09-08T14:37:57.997Z"
+    },
+    {
+      "name": "rollback_app_preserves_restored_historySha256",
+      "passed": true,
+      "at": "2026-09-08T14:37:57.997Z"
+    },
+    {
+      "name": "rollback_app_preserves_restored_checksumsSha256",
+      "passed": true,
+      "at": "2026-09-08T14:37:57.997Z"
+    },
+    {
+      "name": "rollback_app_preserves_restored_jsonSha256",
+      "passed": true,
+      "at": "2026-09-08T14:37:57.997Z"
+    },
+    {
+      "name": "rollback_app_preserves_restored_jsonDataSha256",
+      "passed": true,
+      "at": "2026-09-08T14:37:57.997Z"
+    },
+    {
+      "name": "rollback_preserves_existing_unknown",
+      "passed": true,
+      "at": "2026-09-08T14:37:59.100Z"
+    },
+    {
+      "name": "stopped_without_oom_or_forced_kill_rollback",
+      "passed": true,
+      "at": "2026-09-08T14:38:01.340Z"
+    }
+  ],
+  "resourceLimits": {
+    "mysqlMemoryBytes": 1610612736,
+    "appMemoryBytes": 2147483648,
+    "mysqlCpus": 2,
+    "appCpus": 2
+  },
+  "rollback": "NO_BINARY_DOWNGRADE: restore the pre-upgrade database with its paired application/configuration release",
+  "limitations": [
+    "private actual-VPS capture on an isolated local clone; source VPS is never contacted by rehearsal, not a production rollout",
+    "no performance SLO or fleet compatibility implied",
+    "application health/Flyway/Hibernate only; Keycloak login and external delivery are not tested",
+    "the configured source account identity and grants are reproduced with a newly generated clone-only password; other source users are not copied"
+  ],
+  "baselineAppCopy": {
+    "imageConfigurationDigest": "sha256:dd0585b6b55e4159a927683386b557fa38c3bd590c1c262694a52d94818a00ba",
+    "localImageId": "sha256:bcd87bdb514c6477b95b4f2f04abe84e9d207339aa5ca608f35628e739c5c7e3",
+    "configurationReexportHashMatches": true,
+    "rootFilesystemMatches": true,
+    "platformMatches": true,
+    "receiptSha256": "d0d47761908d368f81003ad68709594c1673bd62be129a70315c0d58248f1144"
+  },
+  "originalVpsCaptureSha256": "94eb0f3e2422e87ad87c0e20479275984ae8de9cbe6b65c548489520b463377f",
+  "applicationMigration": {
+    "sourceSchema": "1.10.287",
+    "targetSchema": "1.10.310",
+    "baselineImage": "sha256:bcd87bdb514c6477b95b4f2f04abe84e9d207339aa5ca608f35628e739c5c7e3",
+    "candidateImage": "sha256:f6123a92f20df6125647bdbe181afb50c6bbc14c595e547f1ce3649db5ccd213",
+    "history": {
+      "sourceRows": 374,
+      "targetRows": 391,
+      "appendedRows": 17,
+      "existingHistorySha256": "3d091b4714c15b2c520efec0b14c489c7e8e96d056d863c54e101b84b42ec9b0",
+      "completeHistorySha256": "dcb7d077b997b142589a153d8e341ce2b8457eee2c6ccb020361c2a0fc23a158"
+    },
+    "existingUnknownUnchanged": true,
+    "unknownSha256": "62dcc98bd74a1644151092209ef0969504c1f1cb5d5c1453bcb9c2daee40feba"
+  },
+  "semanticConfiguration": {
+    "source": {
+      "character_set_server": "utf8mb4",
+      "collation_server": "utf8mb4_unicode_ci",
+      "lower_case_table_names": "0",
+      "restrict_fk_on_non_standard_key": "OFF",
+      "sql_mode": "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+      "time_zone": "+08:00"
+    },
+    "sourceSha256": "575e657ac9afa7cc8894813242484951e9cd072c2c5ab362eba89e46ac875305",
+    "fixtureEventScheduler": "OFF",
+    "resourceOptions": "bounded clone only"
+  },
+  "standalonePolicy": {
+    "gtid_mode": "OFF",
+    "enforce_gtid_consistency": "OFF",
+    "log_bin": "ON",
+    "binlog_format": "ROW",
+    "event_scheduler": "OFF"
+  },
+  "configurationSha256": "dec96a7af581b977d35a9af75e05d5ba099647cd7caf2a830269196c3ce39659",
+  "configuredAccount": {
+    "policy": {
+      "grantCount": 4,
+      "scope": "EXACT_CAPTURED_VPS_APPLICATION_AND_TWO_NAMED_QA_SCHEMA_GRANTS",
+      "otherSchemaDataCopied": false
+    },
+    "sourcePolicySha256": "e67022bcf75651004065073d7f63e49badf7139a0cac766fe1d93cf8d76c5bc1",
+    "clonedGrantsEqual": true,
+    "originalPasswordCopied": false
+  },
+  "capturedBeforeBaselineApp": {
+    "tableCount": 300,
+    "rows": 1055964,
+    "countsSha256": "b3316893775e4ae9acb5ff595e51a2347c1130b380e863e2ef5439552b6fc0bc",
+    "historySha256": "3d091b4714c15b2c520efec0b14c489c7e8e96d056d863c54e101b84b42ec9b0",
+    "checksumsSha256": "542bfa14df531b52628aa86cb77cb06d9f033804f307b5119719c4d9a55a6760",
+    "jsonSha256": "cb15da7f4a8b086c27a437c7a6c49c34dbaf195ff9a7212a056c686200044cb7",
+    "jsonDataSha256": "a4f57baad56fe10538b7e1f7c74aaf6b1d26d926f12b26ee40f85b5238c49536",
+    "jsonColumns": 3,
+    "checksumTables": [
+      "orders",
+      "reviews",
+      "leads",
+      "common_invoices",
+      "payment_links",
+      "review_performer_assignments",
+      "review_performer_offers",
+      "lead_sync_queue",
+      "scheduled_client_message_state"
+    ],
+    "queries": {
+      "json": "SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('array',JSON_ARRAY(1,true,NULL,'Юникод'),'nested',JSON_OBJECT('amount',12.34)),'$.array[3]')),JSON_CONTAINS(JSON_ARRAY(1,2,3),'2'),JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('status','UNKNOWN'),'$.status'));",
+      "jsonData": [
+        "SELECT 'command_idempotency.response_body',COUNT(`response_body`),COALESCE(SUM(JSON_VALID(`response_body`)),0),BIT_XOR(CRC32(CAST(`response_body` AS CHAR))) FROM `command_idempotency`;",
+        "SELECT 'integration_outbox.payload',COUNT(`payload`),COALESCE(SUM(JSON_VALID(`payload`)),0),BIT_XOR(CRC32(CAST(`payload` AS CHAR))) FROM `integration_outbox`;",
+        "SELECT 'specialist_transfer_audit.company_ids_json',COUNT(`company_ids_json`),COALESCE(SUM(JSON_VALID(`company_ids_json`)),0),BIT_XOR(CRC32(CAST(`company_ids_json` AS CHAR))) FROM `specialist_transfer_audit`;"
+      ],
+      "queueSelection": "START TRANSACTION; SELECT id FROM lead_sync_queue ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED; SELECT assignment_id FROM review_performer_assignments ORDER BY assignment_id LIMIT 1 FOR UPDATE SKIP LOCKED; ROLLBACK;"
+    },
+    "queryHashes": {
+      "json": "bd2456b6f16e984f7df6e17e119cec86860e1afbc67efd343892a1fa63405b3e",
+      "queueSelection": "69d803219d8bbf40b688a45ca616b692cabbf2a6c6e171bebf57bc8dbdcba3c7"
+    },
+    "queueProof": "native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion"
+  },
+  "oldApplicationReadOnly": {
+    "baseline": {
+      "duringValidation": {
+        "readOnly": true,
+        "superReadOnly": true
+      },
+      "releasedAfterGracefulStop": {
+        "readOnly": false,
+        "superReadOnly": false
+      }
+    },
+    "rollback": {
+      "duringValidation": {
+        "readOnly": true,
+        "superReadOnly": true
+      },
+      "releasedAfterGracefulStop": {
+        "readOnly": false,
+        "superReadOnly": false
+      }
+    }
+  },
+  "stops": [
+    {
+      "container": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-app90",
+      "elapsedMs": 11479,
+      "exitCode": 143,
+      "oomKilled": false,
+      "pid1": "sh",
+      "controlledLegacyStop": {
+        "method": "EXACT_OLD_APP_SINGLE_JVM_CHILD_TERM",
+        "childPid": 7,
+        "parentPid": 1,
+        "image": "sha256:bcd87bdb514c6477b95b4f2f04abe84e9d207339aa5ca608f35628e739c5c7e3",
+        "pid1": "sh",
+        "childComm": "java",
+        "childExecutable": "/opt/java/openjdk/bin/java"
+      },
+      "graceful": {
+        "springComplete": true,
+        "entityManagerClosed": true,
+        "poolsClosed": 2
+      }
+    },
+    {
+      "container": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-mysql90",
+      "elapsedMs": 1833,
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    {
+      "container": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-app973",
+      "elapsedMs": 26790,
+      "exitCode": 143,
+      "oomKilled": false,
+      "pid1": "java",
+      "graceful": {
+        "springComplete": true,
+        "entityManagerClosed": true,
+        "poolsClosed": 2
+      }
+    },
+    {
+      "container": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-mysql973",
+      "elapsedMs": 2406,
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    {
+      "container": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-mysql973",
+      "elapsedMs": 2568,
+      "exitCode": 0,
+      "oomKilled": false
+    },
+    {
+      "container": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-app90-rollback",
+      "elapsedMs": 3308,
+      "exitCode": 143,
+      "oomKilled": false,
+      "pid1": "sh",
+      "controlledLegacyStop": {
+        "method": "EXACT_OLD_APP_SINGLE_JVM_CHILD_TERM",
+        "childPid": 7,
+        "parentPid": 1,
+        "image": "sha256:bcd87bdb514c6477b95b4f2f04abe84e9d207339aa5ca608f35628e739c5c7e3",
+        "pid1": "sh",
+        "childComm": "java",
+        "childExecutable": "/opt/java/openjdk/bin/java"
+      },
+      "graceful": {
+        "springComplete": true,
+        "entityManagerClosed": true,
+        "poolsClosed": 2
+      }
+    },
+    {
+      "container": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-mysql90-rollback",
+      "elapsedMs": 1721,
+      "exitCode": 0,
+      "oomKilled": false
+    }
+  ],
+  "expectedApplicationSchema": "1.10.310",
+  "before": {
+    "tableCount": 301,
+    "rows": 1055965,
+    "countsSha256": "ad938a02852ac97ed5713a10030b5b81f0572de85dd80f0474f699c8e9b38a57",
+    "historySha256": "3d091b4714c15b2c520efec0b14c489c7e8e96d056d863c54e101b84b42ec9b0",
+    "checksumsSha256": "542bfa14df531b52628aa86cb77cb06d9f033804f307b5119719c4d9a55a6760",
+    "jsonSha256": "cb15da7f4a8b086c27a437c7a6c49c34dbaf195ff9a7212a056c686200044cb7",
+    "jsonDataSha256": "a4f57baad56fe10538b7e1f7c74aaf6b1d26d926f12b26ee40f85b5238c49536",
+    "jsonColumns": 3,
+    "checksumTables": [
+      "orders",
+      "reviews",
+      "leads",
+      "common_invoices",
+      "payment_links",
+      "review_performer_assignments",
+      "review_performer_offers",
+      "lead_sync_queue",
+      "scheduled_client_message_state"
+    ],
+    "queries": {
+      "json": "SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('array',JSON_ARRAY(1,true,NULL,'Юникод'),'nested',JSON_OBJECT('amount',12.34)),'$.array[3]')),JSON_CONTAINS(JSON_ARRAY(1,2,3),'2'),JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('status','UNKNOWN'),'$.status'));",
+      "jsonData": [
+        "SELECT 'command_idempotency.response_body',COUNT(`response_body`),COALESCE(SUM(JSON_VALID(`response_body`)),0),BIT_XOR(CRC32(CAST(`response_body` AS CHAR))) FROM `command_idempotency`;",
+        "SELECT 'integration_outbox.payload',COUNT(`payload`),COALESCE(SUM(JSON_VALID(`payload`)),0),BIT_XOR(CRC32(CAST(`payload` AS CHAR))) FROM `integration_outbox`;",
+        "SELECT 'specialist_transfer_audit.company_ids_json',COUNT(`company_ids_json`),COALESCE(SUM(JSON_VALID(`company_ids_json`)),0),BIT_XOR(CRC32(CAST(`company_ids_json` AS CHAR))) FROM `specialist_transfer_audit`;"
+      ],
+      "queueSelection": "START TRANSACTION; SELECT id FROM lead_sync_queue ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED; SELECT assignment_id FROM review_performer_assignments ORDER BY assignment_id LIMIT 1 FOR UPDATE SKIP LOCKED; ROLLBACK;"
+    },
+    "queryHashes": {
+      "json": "bd2456b6f16e984f7df6e17e119cec86860e1afbc67efd343892a1fa63405b3e",
+      "queueSelection": "69d803219d8bbf40b688a45ca616b692cabbf2a6c6e171bebf57bc8dbdcba3c7"
+    },
+    "queueProof": "native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion"
+  },
+  "legacyUnknown": {
+    "sha256": "62dcc98bd74a1644151092209ef0969504c1f1cb5d5c1453bcb9c2daee40feba",
+    "rows": 2,
+    "queryCount": 69,
+    "queriesSha256": "4d96a8bc6dc697ce2a0c783a69f655fd85de14c28112b870e78de0ebef6e0e08"
+  },
+  "preupgradeBackup": {
+    "file": "preupgrade.sql.gz",
+    "sha256": "7e026760bfe28c8fab2fb5b42f0165ff0d83cc304b4c0d3a2c03ee6058bf807b",
+    "bytes": 101441370
+  },
+  "upgradeCheckerObserved": {
+    "errors": 0,
+    "warnings": 23,
+    "notices": 0,
+    "completedChecks": 7,
+    "manualChecks": []
+  },
+  "upgradeChecker": {
+    "errors": 0,
+    "warnings": 23,
+    "notices": 0,
+    "completedChecks": 7,
+    "manualChecks": []
+  },
+  "runtimeVersion": "9.7.3",
+  "after": {
+    "tableCount": 301,
+    "rows": 1055965,
+    "countsSha256": "ad938a02852ac97ed5713a10030b5b81f0572de85dd80f0474f699c8e9b38a57",
+    "historySha256": "3d091b4714c15b2c520efec0b14c489c7e8e96d056d863c54e101b84b42ec9b0",
+    "checksumsSha256": "542bfa14df531b52628aa86cb77cb06d9f033804f307b5119719c4d9a55a6760",
+    "jsonSha256": "cb15da7f4a8b086c27a437c7a6c49c34dbaf195ff9a7212a056c686200044cb7",
+    "jsonDataSha256": "a4f57baad56fe10538b7e1f7c74aaf6b1d26d926f12b26ee40f85b5238c49536",
+    "jsonColumns": 3,
+    "checksumTables": [
+      "orders",
+      "reviews",
+      "leads",
+      "common_invoices",
+      "payment_links",
+      "review_performer_assignments",
+      "review_performer_offers",
+      "lead_sync_queue",
+      "scheduled_client_message_state"
+    ],
+    "queries": {
+      "json": "SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('array',JSON_ARRAY(1,true,NULL,'Юникод'),'nested',JSON_OBJECT('amount',12.34)),'$.array[3]')),JSON_CONTAINS(JSON_ARRAY(1,2,3),'2'),JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('status','UNKNOWN'),'$.status'));",
+      "jsonData": [
+        "SELECT 'command_idempotency.response_body',COUNT(`response_body`),COALESCE(SUM(JSON_VALID(`response_body`)),0),BIT_XOR(CRC32(CAST(`response_body` AS CHAR))) FROM `command_idempotency`;",
+        "SELECT 'integration_outbox.payload',COUNT(`payload`),COALESCE(SUM(JSON_VALID(`payload`)),0),BIT_XOR(CRC32(CAST(`payload` AS CHAR))) FROM `integration_outbox`;",
+        "SELECT 'specialist_transfer_audit.company_ids_json',COUNT(`company_ids_json`),COALESCE(SUM(JSON_VALID(`company_ids_json`)),0),BIT_XOR(CRC32(CAST(`company_ids_json` AS CHAR))) FROM `specialist_transfer_audit`;"
+      ],
+      "queueSelection": "START TRANSACTION; SELECT id FROM lead_sync_queue ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED; SELECT assignment_id FROM review_performer_assignments ORDER BY assignment_id LIMIT 1 FOR UPDATE SKIP LOCKED; ROLLBACK;"
+    },
+    "queryHashes": {
+      "json": "bd2456b6f16e984f7df6e17e119cec86860e1afbc67efd343892a1fa63405b3e",
+      "queueSelection": "69d803219d8bbf40b688a45ca616b692cabbf2a6c6e171bebf57bc8dbdcba3c7"
+    },
+    "queueProof": "native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion"
+  },
+  "afterApplicationMigration": {
+    "tableCount": 327,
+    "rows": 1056006,
+    "countsSha256": "5252e11889db37969886e48fc31725429f5a2bca1d2d5346fb15eaca183358df",
+    "historySha256": "dcb7d077b997b142589a153d8e341ce2b8457eee2c6ccb020361c2a0fc23a158",
+    "checksumsSha256": "1a7a21ff532153137a4fb3c3e0ee2b75e173f934807f4c18ad07309b63d75b57",
+    "jsonSha256": "cb15da7f4a8b086c27a437c7a6c49c34dbaf195ff9a7212a056c686200044cb7",
+    "jsonDataSha256": "d13e98d73b3ce976a7c2502707c1be547f620b3c3f29d72c28f9c28b51c1a35b",
+    "jsonColumns": 4,
+    "checksumTables": [
+      "orders",
+      "reviews",
+      "leads",
+      "common_invoices",
+      "payment_links",
+      "review_performer_assignments",
+      "review_performer_offers",
+      "lead_command_queue",
+      "performer_notification_intents",
+      "order_publication_client_updates",
+      "order_client_message_occurrences",
+      "client_message_operations",
+      "scheduled_client_message_state"
+    ],
+    "queries": {
+      "json": "SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('array',JSON_ARRAY(1,true,NULL,'Юникод'),'nested',JSON_OBJECT('amount',12.34)),'$.array[3]')),JSON_CONTAINS(JSON_ARRAY(1,2,3),'2'),JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('status','UNKNOWN'),'$.status'));",
+      "jsonData": [
+        "SELECT 'command_idempotency.response_body',COUNT(`response_body`),COALESCE(SUM(JSON_VALID(`response_body`)),0),BIT_XOR(CRC32(CAST(`response_body` AS CHAR))) FROM `command_idempotency`;",
+        "SELECT 'integration_outbox.payload',COUNT(`payload`),COALESCE(SUM(JSON_VALID(`payload`)),0),BIT_XOR(CRC32(CAST(`payload` AS CHAR))) FROM `integration_outbox`;",
+        "SELECT 'manager_client_reply_operations.delivery_snapshot',COUNT(`delivery_snapshot`),COALESCE(SUM(JSON_VALID(`delivery_snapshot`)),0),BIT_XOR(CRC32(CAST(`delivery_snapshot` AS CHAR))) FROM `manager_client_reply_operations`;",
+        "SELECT 'specialist_transfer_audit.company_ids_json',COUNT(`company_ids_json`),COALESCE(SUM(JSON_VALID(`company_ids_json`)),0),BIT_XOR(CRC32(CAST(`company_ids_json` AS CHAR))) FROM `specialist_transfer_audit`;"
+      ],
+      "queueSelection": "START TRANSACTION; SELECT q.id FROM lead_command_queue q WHERE q.delivery_state='READY' AND q.retry_count<8 AND q.next_attempt_at<=UTC_TIMESTAMP(6) AND NOT EXISTS (SELECT 1 FROM lead_command_queue earlier WHERE earlier.blocking_lead_id=q.lead_id AND earlier.id<q.id) ORDER BY q.next_attempt_at,q.id LIMIT 1 FOR UPDATE SKIP LOCKED; SELECT notification_id FROM performer_notification_intents WHERE status='PENDING' AND due_at<=CURRENT_TIMESTAMP(6) ORDER BY due_at,notification_id LIMIT 1 FOR UPDATE SKIP LOCKED; ROLLBACK;"
+    },
+    "queryHashes": {
+      "json": "bd2456b6f16e984f7df6e17e119cec86860e1afbc67efd343892a1fa63405b3e",
+      "queueSelection": "a31049dae1c286e9a4e268b09f79b7d51ef42ba55da729c81a6e59ab3b6035b3"
+    },
+    "queueProof": "native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion"
+  },
+  "rollbackProof": {
+    "result": "PASS",
+    "sourceImage": "sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+    "restoredVersion": "9.0.0",
+    "backup": {
+      "file": "preupgrade.sql.gz",
+      "sha256": "7e026760bfe28c8fab2fb5b42f0165ff0d83cc304b4c0d3a2c03ee6058bf807b",
+      "bytes": 101441370
+    },
+    "originalVolume": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-data",
+    "restoredVolume": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-rollback-data",
+    "postUpgradeWriteAbsent": true,
+    "configuredAccountGrantsPreserved": true,
+    "applicationImage": "sha256:bcd87bdb514c6477b95b4f2f04abe84e9d207339aa5ca608f35628e739c5c7e3",
+    "snapshot": {
+      "tableCount": 301,
+      "rows": 1055965,
+      "countsSha256": "ad938a02852ac97ed5713a10030b5b81f0572de85dd80f0474f699c8e9b38a57",
+      "historySha256": "3d091b4714c15b2c520efec0b14c489c7e8e96d056d863c54e101b84b42ec9b0",
+      "checksumsSha256": "542bfa14df531b52628aa86cb77cb06d9f033804f307b5119719c4d9a55a6760",
+      "jsonSha256": "cb15da7f4a8b086c27a437c7a6c49c34dbaf195ff9a7212a056c686200044cb7",
+      "jsonDataSha256": "a4f57baad56fe10538b7e1f7c74aaf6b1d26d926f12b26ee40f85b5238c49536",
+      "jsonColumns": 3,
+      "checksumTables": [
+        "orders",
+        "reviews",
+        "leads",
+        "common_invoices",
+        "payment_links",
+        "review_performer_assignments",
+        "review_performer_offers",
+        "lead_sync_queue",
+        "scheduled_client_message_state"
+      ],
+      "queries": {
+        "json": "SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('array',JSON_ARRAY(1,true,NULL,'Юникод'),'nested',JSON_OBJECT('amount',12.34)),'$.array[3]')),JSON_CONTAINS(JSON_ARRAY(1,2,3),'2'),JSON_UNQUOTE(JSON_EXTRACT(JSON_OBJECT('status','UNKNOWN'),'$.status'));",
+        "jsonData": [
+          "SELECT 'command_idempotency.response_body',COUNT(`response_body`),COALESCE(SUM(JSON_VALID(`response_body`)),0),BIT_XOR(CRC32(CAST(`response_body` AS CHAR))) FROM `command_idempotency`;",
+          "SELECT 'integration_outbox.payload',COUNT(`payload`),COALESCE(SUM(JSON_VALID(`payload`)),0),BIT_XOR(CRC32(CAST(`payload` AS CHAR))) FROM `integration_outbox`;",
+          "SELECT 'specialist_transfer_audit.company_ids_json',COUNT(`company_ids_json`),COALESCE(SUM(JSON_VALID(`company_ids_json`)),0),BIT_XOR(CRC32(CAST(`company_ids_json` AS CHAR))) FROM `specialist_transfer_audit`;"
+        ],
+        "queueSelection": "START TRANSACTION; SELECT id FROM lead_sync_queue ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED; SELECT assignment_id FROM review_performer_assignments ORDER BY assignment_id LIMIT 1 FOR UPDATE SKIP LOCKED; ROLLBACK;"
+      },
+      "queryHashes": {
+        "json": "bd2456b6f16e984f7df6e17e119cec86860e1afbc67efd343892a1fa63405b3e",
+        "queueSelection": "69d803219d8bbf40b688a45ca616b692cabbf2a6c6e171bebf57bc8dbdcba3c7"
+      },
+      "queueProof": "native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion"
+    },
+    "binaryDowngradeAttempted": false
+  },
+  "result": "PASS",
+  "cleanup": "OWNED_CONTAINERS_NETWORK_VOLUME_AND_PROTECTED_DUMP_REMOVED",
+  "completedAt": "2026-09-08T14:38:12.110Z"
+}

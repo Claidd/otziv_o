@@ -14,6 +14,8 @@ import { effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
 import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
 import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
 import { assertPublicationSet, reviewedImageSetForComponent, supplementalReviewedSources, validateReviewedImageSet } from './reviewed-image-sets.mjs';
+import { validateDatabaseTransitionReadiness } from './database-transition-readiness.mjs';
+import { validatePostgresActivationScan } from './postgres-activation-proof.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -133,6 +135,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   const anonymous = await proof(entry.anonymous);
   const identity = { commit: entry.commit, run: entry.run, attempt: entry.attempt };
   const digest = validatePublication(publication.value, identity, publicationImage, sha256(selected.manifestBytes), selected.manifestSet);
+  if (publicationImage.component === 'postgres') {
+    await validatePostgresActivationScan(publication.value, entry.publication.path, read);
+  }
   if (['mc', 'minio'].includes(publicationImage.component)) {
     await validateUnadjudicatedActivationScan(publication.value, entry.publication.path, read);
   }
@@ -196,9 +201,14 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
   const entries = activations?.images || [];
   assert.ok(Array.isArray(entries), 'activation_index_images');
   const registered = new Map();
+  const databasePreparations = new Map();
   for (const entry of entries) {
     assert.ok(images.some(image => image.component === entry.component) && !registered.has(entry.component), 'activation_unknown_or_duplicate_component');
-    assert.ok(!DATABASE_HOLD.has(entry.component), 'activation_database_coordinated_transition_required');
+    if (DATABASE_HOLD.has(entry.component)) {
+      assert.ok(entry.databaseTransition && entry.component === 'mysql', 'activation_database_coordinated_transition_required');
+      const image = images.find(image => image.component === entry.component);
+      databasePreparations.set(entry.component, await validateDatabaseTransitionReadiness(entry, image, read));
+    }
     registered.set(entry.component, entry);
   }
   const checks = [];
@@ -211,14 +221,18 @@ export async function validateReviewedDefaults(rows, manifestBytes, activations,
       assert.equal(matches.length, 1, 'reviewed_default_service_missing_or_duplicate');
       const actual = matches[0].image;
       if (actual !== source) {
-        assert.ok(!DATABASE_HOLD.has(image.component), 'activation_database_coordinated_transition_required');
+        assert.ok(!DATABASE_HOLD.has(image.component) || databasePreparations.has(image.component), 'activation_database_coordinated_transition_required');
         const entry = registered.get(image.component);
         assert.ok(entry, 'reviewed_default_unregistered_reference');
         published ||= await validateActivation(image, entry, manifestBytes, read);
         assert.equal(actual, published, 'reviewed_default_wrong_component_reference');
       }
       checks.push({ component: image.component, path: reference.path, service: reference.service,
-        reference: actual, mode: actual === source ? 'EXACT_ORIGINAL_SOURCE' : 'PAIRED_PUBLICATION_AND_ANONYMOUS_EVIDENCE' });
+        reference: actual, mode: actual === source ? 'EXACT_ORIGINAL_SOURCE' : 'PAIRED_PUBLICATION_AND_ANONYMOUS_EVIDENCE',
+        ...(actual !== source && databasePreparations.has(image.component) ? {
+          databaseTransition: databasePreparations.get(image.component).mode,
+          ordinaryDeploymentUpgradeAuthorized: false,
+        } : {}) });
     }
   }
   return checks;
@@ -328,5 +342,6 @@ export async function validateRepositoryDefaults(root = process.cwd(), rows) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const checks = await validateRepositoryDefaults(process.argv[2] || process.cwd());
-  console.log(JSON.stringify({ result: 'PASS', reviewedReferences: checks.length, databaseDefaults: 'ORIGINAL_SOURCE_HOLD', networkCalls: 0 }));
+  console.log(JSON.stringify({ result: 'PASS', reviewedReferences: checks.length,
+    databaseDefaults: checks.some(check => check.databaseTransition) ? 'COORDINATED_CANDIDATE_REQUIRES_EXPLICIT_CUTOVER' : 'ORIGINAL_SOURCE_HOLD', networkCalls: 0 }));
 }

@@ -18,7 +18,7 @@ networks:
 
 volumes:
   mysql_data:
-    name: ${LOCAL_MYSQL_VOLUME:-otziv-prod-local_mysql_data}
+    name: ${LOCAL_MYSQL_VOLUME:-otziv-prod-local_mysql_973_data}
   keycloak_pg_data:
   loki_data:
   tempo_data:
@@ -26,6 +26,7 @@ volumes:
   grafana_data:
   prometheus_data:
   minio_data:
+  versity_data:
 
 services:
   docker-observer:
@@ -44,15 +45,25 @@ services:
       - docker_observer_net
 
   mysql:
-    # Keep prod-like checks on the exact MySQL 9.0.0 image used in production.
-    image: mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
+    # The local restore script initializes a separate empty, versioned volume.
+    image: ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa
+    user: "999:999"
     restart: unless-stopped
     logging: *default-logging
+    mem_limit: 1536m
+    cpus: 2
     command:
+      - mysqld
+      - --user=999
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+08:00
       - --restrict-fk-on-non-standard-key=OFF
+      - --gtid-mode=OFF
+      - --enforce-gtid-consistency=OFF
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --event-scheduler=OFF
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -62,9 +73,15 @@ services:
     ports:
       - "127.0.0.1:${LOCAL_MYSQL_PORT:-3307}:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - type: volume
+        source: mysql_data
+        target: /var/lib/mysql
+        volume:
+          nocopy: true
       - ./data/mysql_backup:/backup
       - ./data/bots:/var/lib/mysql-files
+    tmpfs:
+      - /var/run/mysqld:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755
     healthcheck:
       test: ["CMD-SHELL", "mysql --protocol=TCP -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} $${MYSQL_DATABASE} -e 'SELECT 1' >/dev/null 2>&1"]
       interval: 10s
@@ -161,20 +178,28 @@ services:
       - internal_net
 
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
+    # Retain the service alias used by local S3 clients; keep old MinIO data separately.
+    image: ghcr.io/claidd/otziv-security@sha256:3bd06e6605d318c852fc56f42d14316b5cd74ed233119d586b078bd4a5e4be21
     restart: unless-stopped
     logging: *default-logging
-    command: server /data --console-address ":9001"
+    mem_limit: 768m
+    cpus: 2
+    pids_limit: 128
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /var/lib/versity/data /var/lib/versity/versions /var/lib/versity/iam
+        exec /usr/local/bin/versitygw --port :9000 --health /health --iam-dir /var/lib/versity/iam posix --versioning-dir /var/lib/versity/versions /var/lib/versity/data
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-local}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-local-minio-secret}
+      ROOT_ACCESS_KEY: ${S3_ACCESS_KEY:-local}
+      ROOT_SECRET_KEY: ${S3_SECRET_KEY:-local-minio-secret}
     ports:
       - "127.0.0.1:9001:9000"
-      - "127.0.0.1:9002:9001"
     volumes:
-      - minio_data:/data
+      - versity_data:/var/lib/versity
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/ready || exit 1"]
+      test: ["CMD", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:9000/health"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -186,6 +211,7 @@ services:
     image: ghcr.io/claidd/otziv-security@sha256:d163502c0d23dd3d76ec9fab63d9697317c9a2aaa39d1a3d783a70044bb803c0
     restart: "no"
     logging: *default-logging
+    mem_limit: 384m
     entrypoint:
       - /bin/sh
       - -c
@@ -195,6 +221,7 @@ services:
         mc mb --ignore-existing "local/$$S3_BUCKET"
         mc anonymous set download "local/$$S3_BUCKET"
     environment:
+      GOMEMLIMIT: 256MiB
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-local}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-local-minio-secret}
       S3_BUCKET: ${S3_BUCKET:-local}

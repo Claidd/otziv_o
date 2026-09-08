@@ -1,9 +1,11 @@
 import copy
+import hashlib
 import importlib.util
 import io
 import json
 import os
 from pathlib import Path
+import secrets
 import shutil
 import subprocess
 import sys
@@ -24,17 +26,46 @@ def fixture():
     for index, (service, (name, source, destination)) in enumerate(guard.DATABASES.items()):
         volume = "docker_mysql_data" if service == "mysql" else "otziv-prod_keycloak_pg_data"
         image, image_id, container_id = service + ":reviewed", [MYSQL_ID, PG_ID][index], str(index + 1) * 64
+        credential_variable = "MYSQL_PASSWORD" if service == "mysql" else "POSTGRES_PASSWORD"
         result["config"]["services"][service] = {"image": image, "container_name": name,
-            "environment": {"DATABASE_PASSWORD": "fixture-not-a-secret"},
+            "environment": {credential_variable: secrets.token_urlsafe()},
             "volumes": [{"type": "volume", "source": source, "target": destination}]}
         result["config"]["volumes"][source] = {"name": volume, "external": service == "mysql"}
-        result["images"][image] = {"Id": image_id}
+        image_config = {"Entrypoint": ["docker-entrypoint.sh"], "Cmd": ["mysqld" if service == "mysql" else "postgres"],
+                        "Env": ["PATH=/usr/local/bin:/usr/bin:/bin"], "WorkingDir": "", "User": ""}
+        if service == "keycloak-postgres":
+            image_config["Env"].append("PGDATA=" + destination)
+        result["images"][image] = {"Id": image_id, "Config": image_config}
         result["volumes"][volume] = {"com.docker.compose.project": "otziv-prod", "com.docker.compose.volume": source}
         result["containers"][container_id] = {"Id": container_id, "Name": "/" + name,
-            "Image": image_id, "State": {"Status": "running"}, "Config": {"Labels": {
-                "com.docker.compose.project": "otziv-prod", "com.docker.compose.service": service}},
+            "Image": image_id, "State": {"Status": "running"}, "Config": dict(copy.deepcopy(image_config), Labels={
+                "com.docker.compose.project": "otziv-prod", "com.docker.compose.service": service}), "HostConfig": {},
             "Mounts": [{"Type": "volume", "Name": volume, "Destination": destination, "RW": True}]}
     return result
+
+
+def native_mysql_fixture(image_id=guard.REVIEWED_MYSQL_CONFIG):
+    state = fixture()
+    image_config = {"Entrypoint": ["/entrypoint.sh"], "Cmd": ["mysqld"],
+                    "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                            "MYSQL_UNIX_PORT=/var/lib/mysql/mysql.sock"]}
+    command = ["mysqld", "--user=999", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci",
+               "--default-time-zone=+08:00", "--restrict-fk-on-non-standard-key=OFF", "--gtid-mode=OFF",
+               "--enforce-gtid-consistency=OFF", "--log-bin=mysql-bin", "--binlog-format=ROW", "--event-scheduler=OFF"]
+    runtime = "/var/run/mysqld:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755"
+    service = state["config"]["services"]["mysql"]
+    service.update(image=guard.REVIEWED_MYSQL_REFERENCE, user="999:999", command=command, tmpfs=[runtime])
+    service["volumes"][0]["volume"] = {"nocopy": True}
+    state["images"][guard.REVIEWED_MYSQL_REFERENCE] = {"Id": image_id, "RepoDigests": [guard.REVIEWED_MYSQL_REFERENCE],
+                                                    "Os": "linux", "Architecture": "amd64", "Config": image_config}
+    container = state["containers"]["1" * 64]
+    container["Image"] = image_id
+    container["Config"] = dict(copy.deepcopy(image_config), Labels=container["Config"]["Labels"], User="999:999", Cmd=command.copy())
+    container["HostConfig"] = {"Tmpfs": {runtime.split(":", 1)[0]: runtime.split(":", 1)[1]},
+                               "Mounts": [{"Type": "volume", "Source": "docker_mysql_data", "Target": "/var/lib/mysql",
+                                           "VolumeOptions": {"NoCopy": True}}]}
+    container["Mounts"].append({"Type": "tmpfs", "Destination": "/var/run/mysqld", "RW": True})
+    return state
 
 
 class FixtureDocker:
@@ -89,7 +120,7 @@ class ContinuityTests(unittest.TestCase):
             "keycloak-postgres": {"pull_policy": "never"}}})
 
     def test_tag_alias_same_real_image_is_allowed_and_always_policy_is_replaced(self):
-        self.state["images"]["mysql:latest"] = {"Id": MYSQL_ID}
+        self.state["images"]["mysql:latest"] = copy.deepcopy(self.state["images"]["mysql:reviewed"])
         self.state["config"]["services"]["mysql"].update(image="mysql:latest", pull_policy="always")
         self.assertEqual(self.evaluate()["services"]["mysql"], {"pull_policy": "never"})
 
@@ -176,6 +207,229 @@ class ContinuityTests(unittest.TestCase):
     def test_overlapping_data_bind_mount_cannot_hide_old_storage(self):
         self.state["config"]["services"]["mysql"]["volumes"].append({"type": "bind", "source": "/existing", "target": "/var/lib/mysql/data"})
         self.reject("storage mapping")
+
+    def test_same_named_volume_with_subpath_cannot_select_another_database(self):
+        for service in guard.DATABASES:
+            with self.subTest(service=service):
+                self.state = fixture()
+                self.state["config"]["services"][service]["volumes"][0]["volume"] = {"subpath": "empty-directory"}
+                self.reject("volume subpath")
+
+    def test_existing_subpath_is_not_silently_switched_back_to_volume_root(self):
+        for service, cid in [("mysql", "1" * 64), ("keycloak-postgres", "2" * 64)]:
+            with self.subTest(service=service):
+                self.state = fixture()
+                self.state["containers"][cid]["HostConfig"]["Mounts"] = [{
+                    "Type": "volume", "Target": guard.DATABASES[service][2], "VolumeOptions": {"Subpath": "old-database"}}]
+                self.reject("Existing database volume subpath")
+
+    def test_pgdata_override_and_existing_alternate_pgdata_fail_closed(self):
+        for path in ["/var/lib/postgresql/data/new", "/different-volume", "relative", ""]:
+            with self.subTest(path=path):
+                self.state = fixture()
+                self.state["config"]["services"]["keycloak-postgres"]["environment"]["PGDATA"] = path
+                self.reject("effective data directory")
+                self.state = fixture()
+                self.state["containers"]["2" * 64]["Config"]["Env"][1] = "PGDATA=" + path
+                self.reject("effective data directory")
+
+    def test_exact_standard_pgdata_and_current_mysql_flags_preserve_normal_deploy(self):
+        self.state["config"]["services"]["keycloak-postgres"]["environment"]["PGDATA"] = "/var/lib/postgresql/data"
+        flags = ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-time-zone=+08:00",
+                 "--restrict-fk-on-non-standard-key=OFF", "--binlog-expire-logs-seconds=604800"]
+        self.state["config"]["services"]["mysql"]["command"] = flags
+        self.state["containers"]["1" * 64]["Config"]["Cmd"] = flags[:-1]
+        self.state["config"]["services"]["mysql"]["environment"]["TZ"] = "Asia/Irkutsk"
+        self.assertEqual(self.evaluate()["services"]["mysql"], {"pull_policy": "never"})
+        self.state["config"]["services"]["mysql"]["command"] = ["mysqld", *flags]
+        self.assertEqual(len(self.evaluate()["services"]), 2)
+
+    def test_data_directory_options_defaults_files_and_unknown_commands_are_not_parsed_permissively(self):
+        examples = {
+            "mysql": [["--datadir=/var/lib/mysql/new"], ["mysqld", "--datadir", "/new"], ["mysqld", "-h/new"],
+                      ["--data=/new"], ["--loose-datadir=/new"], ["--defaults-file=/backup/my.cnf"],
+                      ["--defaults-extra-file=/backup/my.cnf"], ["--no-defaults"], ["mysqld", "--initialize"],
+                      ["sh", "-c", "exec mysqld"], ["--binlog-expire-logs-seconds=1 --datadir=/new"],
+                      ["--binlog-expire-logs-seconds=1", "--binlog-expire-logs-seconds=2"], []],
+            "keycloak-postgres": [["postgres", "-D", "/var/lib/postgresql/data/new"], ["postgres", "-D/new"],
+                                  ["postgres", "--pgdata=/new"], ["postgres", "-c", "data_directory=/new"],
+                                  ["postgres", "-c", "config_file=/backup/postgresql.conf"], []],
+        }
+        for service, commands in examples.items():
+            for command in commands:
+                for existing in [False, True]:
+                    with self.subTest(service=service, command=command, existing=existing):
+                        self.state = fixture()
+                        if existing:
+                            cid = ("1" if service == "mysql" else "2") * 64
+                            self.state["containers"][cid]["Config"]["Cmd"] = command
+                        else:
+                            self.state["config"]["services"][service]["command"] = command
+                        self.reject("Database command")
+
+    def test_shell_or_empty_entrypoint_override_and_preexisting_override_fail_closed(self):
+        for entrypoint in [["/bin/sh", "-c", "exec mysqld --datadir=/new"], [], "", ["docker-entrypoint.sh"]]:
+            with self.subTest(entrypoint=entrypoint):
+                self.state = fixture()
+                self.state["config"]["services"]["mysql"]["entrypoint"] = entrypoint
+                self.reject("entrypoint override")
+        self.state = fixture()
+        self.state["containers"]["1" * 64]["Config"]["Entrypoint"] = ["/custom-entrypoint.sh"]
+        self.reject("Existing database entrypoint")
+
+    def test_environment_default_file_hooks_and_extra_config_mounts_need_coordination(self):
+        for service, key in [("mysql", "MYSQL_HOME"), ("mysql", "HOME"), ("mysql", "PATH"),
+                             ("mysql", "BASH_ENV"), ("keycloak-postgres", "PGDATA_FILE")]:
+            with self.subTest(service=service, key=key):
+                self.state = fixture()
+                self.state["config"]["services"][service]["environment"][key] = "/alternate"
+                self.reject("environment override")
+        for target in ["/etc/my.cnf", "/etc/mysql/conf.d", "/usr/local/bin/docker-entrypoint.sh", "/docker-entrypoint-initdb.d"]:
+            with self.subTest(target=target):
+                self.state = fixture()
+                self.state["config"]["services"]["mysql"]["volumes"].append({"type": "bind", "source": "/new", "target": target})
+                self.reject("extra mount")
+        for field in ["configs", "secrets", "tmpfs", "volumes_from", "pre_start", "post_start"]:
+            with self.subTest(field=field):
+                self.state = fixture()
+                self.state["config"]["services"]["mysql"][field] = ["unreviewed"]
+                self.reject("extra storage/launch")
+
+    def test_missing_or_ambiguous_launch_metadata_does_not_assume_a_safe_default(self):
+        for field in ["Entrypoint", "Cmd", "Env"]:
+            with self.subTest(field=field):
+                self.state = fixture()
+                del self.state["images"]["mysql:reviewed"]["Config"][field]
+                self.reject("metadata|command")
+        self.state = fixture()
+        self.state["containers"]["2" * 64]["Config"]["Env"] = ["PATH=/usr/local/bin:/usr/bin:/bin"]
+        self.reject("missing image defaults")
+        self.state = fixture()
+        self.state["containers"]["2" * 64]["Config"]["Env"].append("PGDATA=/new")
+        self.reject("Ambiguous database environment")
+
+    def test_current_backup_and_csv_mounts_remain_compatible(self):
+        for target in ["/backup", "/var/lib/mysql-files"]:
+            self.state["config"]["services"]["mysql"]["volumes"].append({"type": "bind", "source": "/data" + target, "target": target})
+            self.state["containers"]["1" * 64]["Mounts"].append({"Type": "bind", "Source": "/data" + target, "Destination": target, "RW": True})
+        self.assertEqual(len(self.evaluate()["services"]), 2)
+
+    def test_already_activated_reviewed_mysql_native_contract_preserves_ordinary_self_heal(self):
+        for image_id in [guard.REVIEWED_MYSQL_CONFIG, guard.REVIEWED_MYSQL_INDEX]:
+            for status in ["running", "exited"]:
+                for events in ["OFF", "ON"]:
+                    with self.subTest(image_id=image_id, status=status, events=events):
+                        self.state = native_mysql_fixture(image_id)
+                        container = self.state["containers"]["1" * 64]
+                        container["State"]["Status"] = status
+                        self.state["config"]["services"]["mysql"]["command"][-1] = "--event-scheduler=" + events
+                        container["Config"]["Cmd"][-1] = "--event-scheduler=" + events
+                        self.assertEqual(self.evaluate(), {"services": {"mysql": {"pull_policy": "never"},
+                                                                      "keycloak-postgres": {"pull_policy": "never"}}})
+
+    def test_native_mysql_identity_constants_bind_the_retained_published_oci_index_and_configuration(self):
+        publication = HERE.parents[1] / "runtime-security/proofs/c7-published/mysql/publication"
+        index = (publication / "registry-index.json").read_bytes()
+        config = (publication / "registry-amd64-config.json").read_bytes()
+        self.assertEqual("sha256:" + hashlib.sha256(index).hexdigest(), guard.REVIEWED_MYSQL_INDEX)
+        self.assertEqual("sha256:" + hashlib.sha256(config).hexdigest(), guard.REVIEWED_MYSQL_CONFIG)
+        self.assertEqual(json.loads((publication / "publication.json").read_bytes())["reference"], guard.REVIEWED_MYSQL_REFERENCE)
+        self.assertEqual(json.loads(config)["config"]["Entrypoint"], ["/entrypoint.sh"])
+
+    def test_candidate_native_contract_never_authorizes_opening_the_old_running_database(self):
+        self.state = native_mysql_fixture()
+        self.state["containers"]["1" * 64]["Image"] = MYSQL_ID
+        self.reject("Database image change refused")
+
+    def test_native_contract_is_bound_to_actual_immutable_image_and_platform_not_a_tag_or_label(self):
+        self.state = native_mysql_fixture()
+        image = self.state["images"][guard.REVIEWED_MYSQL_REFERENCE]
+        image["Id"] = OTHER_ID
+        self.state["containers"]["1" * 64]["Image"] = OTHER_ID
+        self.reject("launch override|Database command")
+        self.state = native_mysql_fixture(guard.REVIEWED_MYSQL_INDEX)
+        self.state["images"][guard.REVIEWED_MYSQL_REFERENCE]["RepoDigests"] = []
+        self.reject("immutable index binding")
+        self.state = native_mysql_fixture()
+        self.state["images"][guard.REVIEWED_MYSQL_REFERENCE]["Architecture"] = "arm64"
+        self.reject("platform changed")
+
+    def test_native_activation_missing_container_never_becomes_ordinary_fresh_provisioning(self):
+        self.state = native_mysql_fixture()
+        del self.state["containers"]["1" * 64]
+        self.reject("existing data volume remains")
+        del self.state["volumes"]["docker_mysql_data"]
+        self.state["config"]["volumes"]["mysql_data"]["external"] = False
+        self.reject("requires an existing coordinated activation")
+
+    def test_native_wrong_uid_entrypoint_or_socket_defaults_fail_closed(self):
+        for user in ["0", "0:0", "999", "999:1000", "mysql", None]:
+            with self.subTest(user=user):
+                self.state = native_mysql_fixture()
+                self.state["config"]["services"]["mysql"]["user"] = user
+                self.reject("native UID/GID")
+                self.state = native_mysql_fixture()
+                self.state["containers"]["1" * 64]["Config"]["User"] = user
+                self.reject("native UID/GID")
+        self.state = native_mysql_fixture()
+        self.state["config"]["services"]["mysql"]["entrypoint"] = ["/entrypoint.sh"]
+        self.reject("entrypoint override")
+        self.state = native_mysql_fixture()
+        self.state["config"]["services"]["mysql"]["environment"]["MYSQL_UNIX_PORT"] = "/tmp/mysql.sock"
+        self.reject("environment override")
+        self.state = native_mysql_fixture()
+        self.state["images"][guard.REVIEWED_MYSQL_REFERENCE]["Config"]["Env"][1] = "MYSQL_UNIX_PORT=/tmp/mysql.sock"
+        self.reject("native image launch metadata")
+
+    def test_native_mysql_standalone_settings_and_storage_options_cannot_be_changed_or_omitted(self):
+        changes = [lambda c: c.remove("--gtid-mode=OFF"), lambda c: c.append("--socket=/tmp/mysql.sock"),
+                   lambda c: c.append("--datadir=/var/lib/mysql/new"), lambda c: c.append("--defaults-file=/backup/my.cnf"),
+                   lambda c: c.append("--enforce-gtid-consistency=ON"), lambda c: c.append("--log-bin=/backup/log"),
+                   lambda c: c.remove("--user=999"), lambda c: c.append("--event-scheduler=DISABLED")]
+        for change in changes:
+            for existing in [False, True]:
+                with self.subTest(change=change, existing=existing):
+                    self.state = native_mysql_fixture()
+                    command = self.state["containers"]["1" * 64]["Config"]["Cmd"] if existing else self.state["config"]["services"]["mysql"]["command"]
+                    change(command)
+                    self.reject("native command")
+
+    def test_native_event_scheduler_accepts_no_implicit_or_unreviewed_policy(self):
+        for value in ["DISABLED", "1", "on", "", "ON --datadir=/new"]:
+            for existing in [False, True]:
+                with self.subTest(value=value, existing=existing):
+                    self.state = native_mysql_fixture()
+                    command = self.state["containers"]["1" * 64]["Config"]["Cmd"] if existing else self.state["config"]["services"]["mysql"]["command"]
+                    command[-1] = "--event-scheduler=" + value
+                    self.reject("native event scheduler")
+
+    def test_native_tmpfs_must_be_the_precise_reviewed_runtime_mount_and_never_hide_data_or_config(self):
+        alternatives = ["/var/lib/mysql:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755",
+                        "/etc:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0755",
+                        "/var/run/mysqld:rw,noexec,nosuid,size=16m,uid=0,gid=0,mode=0755",
+                        "/var/run/mysqld:rw,size=16m,uid=999,gid=999,mode=0777"]
+        for alternative in alternatives:
+            with self.subTest(alternative=alternative):
+                self.state = native_mysql_fixture()
+                self.state["config"]["services"]["mysql"]["tmpfs"] = [alternative]
+                self.reject("runtime tmpfs")
+                self.state = native_mysql_fixture()
+                target, options = alternative.split(":", 1)
+                self.state["containers"]["1" * 64]["HostConfig"]["Tmpfs"] = {target: options}
+                self.reject("runtime tmpfs")
+        self.state = native_mysql_fixture()
+        self.state["containers"]["1" * 64]["Mounts"][-1]["Type"] = "bind"
+        self.reject("extra mount")
+
+    def test_native_config_mount_subpath_and_copyup_changes_require_coordination(self):
+        for change, expected in [
+            (lambda s: s["config"]["services"]["mysql"]["volumes"].append({"type": "bind", "source": "/changed", "target": "/etc/my.cnf"}), "extra mount"),
+            (lambda s: s["config"]["services"]["mysql"]["volumes"][0]["volume"].update(subpath="old"), "volume subpath"),
+            (lambda s: s["config"]["services"]["mysql"]["volumes"][0]["volume"].update(nocopy=False), "requires nocopy"),
+            (lambda s: s["containers"]["1" * 64]["HostConfig"]["Mounts"][0]["VolumeOptions"].update(NoCopy=False), "requires nocopy"),
+        ]:
+            with self.subTest(change=change):
+                self.state = native_mysql_fixture(); change(self.state); self.reject(expected)
 
     def test_actual_parent_or_child_data_mount_is_rejected(self):
         for target in ["/var/lib", "/var/lib/mysql/data"]:
@@ -344,6 +598,29 @@ class ShellWiringTests(unittest.TestCase):
                     result, events = self.execute(mode, change)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(events, [])
+
+    def test_storage_redirection_prevents_any_rollout_or_self_heal_startup(self):
+        for mode in ["rollout", "self-heal"]:
+            for change in [lambda s: s["config"]["services"]["mysql"]["volumes"][0].update(volume={"subpath": "empty"}),
+                           lambda s: s["config"]["services"]["keycloak-postgres"]["environment"].update(PGDATA="/new"),
+                           lambda s: s["config"]["services"]["mysql"].update(command=["--defaults-file=/backup/my.cnf"])]:
+                with self.subTest(mode=mode, change=change):
+                    result, events = self.execute(mode, change)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(events, [])
+
+    def test_already_activated_native_mysql_can_restart_but_candidate_over_old_image_never_starts(self):
+        for mode in ["rollout", "self-heal"]:
+            with self.subTest(mode=mode):
+                result, events = self.execute(mode, lambda state: state.update(native_mysql_fixture()))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(any(event["operation"] == "up" for event in events))
+                def candidate_over_old(state):
+                    state.update(native_mysql_fixture())
+                    state["containers"]["1" * 64]["Image"] = MYSQL_ID
+                result, events = self.execute(mode, candidate_over_old)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(events, [])
 
     def test_self_heal_up_failure_keeps_failure_and_removes_owned_override(self):
         result, events = self.execute("self-heal", lambda state: state.update(upAlwaysFails=True))

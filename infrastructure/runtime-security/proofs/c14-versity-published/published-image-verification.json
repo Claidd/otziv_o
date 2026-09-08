@@ -1,0 +1,14 @@
+{
+  "schema": "otziv-published-versity-image-verification-v1",
+  "result": "PASS",
+  "timestamp": "2026-09-08T14:47:56.898Z",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:3bd06e6605d318c852fc56f42d14316b5cd74ed233119d586b078bd4a5e4be21",
+  "imageConfigDigest": "sha256:006968652ba2c15c8b23bb53b575f93cf1282e60c9d8d0c85faad29c999f6302",
+  "actualLocalId": "sha256:3bd06e6605d318c852fc56f42d14316b5cd74ed233119d586b078bd4a5e4be21",
+  "rootfsMatchesRegistryConfig": true,
+  "imageLaunchConfigurationMatchesRegistry": true,
+  "binarySha256": "a44bb13582e9f62da5cf6f0c24285b7f575c68cab2959e12e547d3841c172bc5",
+  "binaryEqualsOfficialRelease": true,
+  "platform": "linux/amd64",
+  "productionChanged": false
+}

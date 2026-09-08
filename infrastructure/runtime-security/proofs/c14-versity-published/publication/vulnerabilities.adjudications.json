@@ -1,0 +1,18 @@
+{
+  "schema": "otziv-image-adjudication-v1",
+  "rawReportSha256": "623a591b05f0e802674057664e3f5ee4e635e6bb877293568ecf354e46e5cbc9",
+  "imageConfigId": "sha256:006968652ba2c15c8b23bb53b575f93cf1282e60c9d8d0c85faad29c999f6302",
+  "immutableImageId": "sha256:006968652ba2c15c8b23bb53b575f93cf1282e60c9d8d0c85faad29c999f6302",
+  "rawReportModified": false,
+  "decisions": [],
+  "status": "NOT_APPLICABLE",
+  "alloy": {
+    "schema": "otziv-alloy-adjudication-v1",
+    "rawReportSha256": "623a591b05f0e802674057664e3f5ee4e635e6bb877293568ecf354e46e5cbc9",
+    "imageConfigId": "sha256:006968652ba2c15c8b23bb53b575f93cf1282e60c9d8d0c85faad29c999f6302",
+    "immutableImageId": "sha256:006968652ba2c15c8b23bb53b575f93cf1282e60c9d8d0c85faad29c999f6302",
+    "rawReportModified": false,
+    "decisions": [],
+    "status": "NOT_APPLICABLE"
+  }
+}

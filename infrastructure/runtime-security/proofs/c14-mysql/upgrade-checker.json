@@ -1,0 +1,211 @@
+{
+    "serverAddress": "mysql:3306",
+    "serverVersion": "9.0.0 - MySQL Community Server - GPL",
+    "targetVersion": "9.7.3",
+    "errorCount": 0,
+    "warningCount": 24,
+    "noticeCount": 0,
+    "summary": "No fatal errors were found that would prevent an upgrade, but some potential issues were detected. Please ensure that the reported issues are not significant before upgrading.",
+    "checksPerformed": [
+        {
+            "id": "sysVars",
+            "title": "System variable check for deprecation, removal, changes in defaults values or invalid values.",
+            "status": "OK",
+            "description": "Following system variables that were detected as being used ware changed, deprecated or removed. Please update  your system accordingly before the upgrade.",
+            "detectedProblems": [
+                {
+                    "level": "Warning",
+                    "dbObject": "authentication_ldap_sasl_auth_method_name",
+                    "description": "default value changed from SCRAM-SHA-1 to SCRAM-SHA-256..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "back_log",
+                    "description": "default value changed from -1 to 10000..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "binlog_transaction_dependency_history_size",
+                    "description": "default value changed from 25000 to 10000000..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "caching_sha2_password_digest_rounds",
+                    "description": "default value changed from 5000 to 10000..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "enforce_gtid_consistency",
+                    "description": "default value changed from OFF to ON..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "explain_format",
+                    "description": "default value changed from TRADITIONAL to TREE..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "explain_json_format_version",
+                    "description": "default value changed from 1 to 2..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "group_replication_recovery_use_ssl",
+                    "description": "default value changed from OFF to ON..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "group_replication_ssl_mode",
+                    "description": "default value changed from DISABLED to REQUIRED..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "gtid_mode",
+                    "description": "default value changed from OFF to ON..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "innodb_change_buffer_max_size",
+                    "description": "default value changed from 25 to 5..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "innodb_change_buffering",
+                    "description": "default value changed from none to all..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "innodb_log_writer_threads",
+                    "description": "default value changed from ON to If binary logging is enabled and available logical processors > 32: ON; if binary logging is not enabled and available logical processors > 4: ON; in all other cases: OFF..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "log_bin_trust_function_creators",
+                    "description": "variable deprecated at version 8.0.34 is set to ON (DYNAMIC)..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "mle.memory_max",
+                    "description": "default value changed from 1300M (Bytes) to (0.05) * (total physical memory in GB) (Bytes)..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "restrict_fk_on_non_standard_key",
+                    "description": "variable deprecated at version 8.4.0 is set to OFF (EXPLICIT)..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "telemetry.metrics_enabled",
+                    "description": "default value changed from ON to OFF..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "telemetry.otel_exporter_otlp_metrics_endpoint",
+                    "description": "default value changed from http://localhost:4318/v1/metrics to empty..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "telemetry.otel_exporter_otlp_traces_endpoint",
+                    "description": "default value changed from http://localhost:4318/v1/traces to ..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "telemetry.trace_enabled",
+                    "description": "default value changed from ON to OFF..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "thread_pool_algorithm",
+                    "description": "default value changed from 0 to 1..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "thread_pool_max_transactions_limit",
+                    "description": "default value changed from 0 to MIN( 32 * (thread_pool_size), 512)..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "thread_pool_max_unused_threads",
+                    "description": "default value changed from 0 to 2..",
+                    "dbObjectType": "SystemVariable"
+                },
+                {
+                    "level": "Warning",
+                    "dbObject": "thread_pool_query_threads_per_group",
+                    "description": "default value changed from 1 to 2..",
+                    "dbObjectType": "SystemVariable"
+                }
+            ],
+            "solutions": []
+        },
+        {
+            "id": "checkTableCommand",
+            "title": "Issues reported by 'check table x for upgrade' command",
+            "status": "OK",
+            "detectedProblems": [],
+            "solutions": []
+        },
+        {
+            "id": "syntax",
+            "title": "MySQL syntax check for routine-like objects",
+            "status": "OK",
+            "detectedProblems": [],
+            "solutions": []
+        },
+        {
+            "id": "foreignKeyReferences",
+            "title": "Checks for foreign keys not referencing a full unique index",
+            "status": "OK",
+            "detectedProblems": [],
+            "solutions": [
+                "Convert non unique key to unique key if values do not have any duplicates. In case of foreign keys involving partial columns of key, create composite  unique key containing all the referencing columns if values do not have any  duplicates.",
+                "Remove foreign keys referring to non unique key/partial columns of key.",
+                "In case of multi level references which involves more than two tables change foreign key reference."
+            ]
+        },
+        {
+            "id": "authMethodUsage",
+            "title": "Check for deprecated or invalid user authentication methods.",
+            "status": "OK",
+            "detectedProblems": [],
+            "solutions": []
+        },
+        {
+            "id": "pluginUsage",
+            "title": "Check for deprecated or removed plugin usage.",
+            "status": "OK",
+            "detectedProblems": [],
+            "solutions": []
+        },
+        {
+            "id": "spatialIndex",
+            "title": "Checks for Spatial Indexes",
+            "status": "OK",
+            "detectedProblems": [],
+            "solutions": []
+        }
+    ],
+    "manualChecks": []
+}

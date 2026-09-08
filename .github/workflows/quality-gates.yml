@@ -19,6 +19,7 @@ on:
           - c14-mc
           - c14-local-s3
           - c14-postgres
+          - c14-keycloak
   pull_request:
   push:
 
@@ -141,6 +142,7 @@ jobs:
           retention-days: 14
 
   repository-contracts:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Repository contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -175,6 +177,9 @@ jobs:
         run: ./infrastructure/scripts/security/check-deploy-release-contract.ps1
       - name: Exercise database image continuity and startup guards
         run: python3 -m unittest discover -s infrastructure/scripts/prod -p "test_database_image_guard.py" -v
+      - name: Reject unsafe local restore targets before any Docker mutation
+        shell: pwsh
+        run: ./infrastructure/scripts/local/test-restore-contract.ps1
       - name: Verify build-support audit policy guards
         run: python3 -m unittest discover -s backend/build-support -p "test_*.py" -v
       - name: Verify conditional dependency aggregate contract
@@ -250,6 +255,7 @@ jobs:
           done
 
   backend:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Backend (full Testcontainers suite)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -303,6 +309,7 @@ jobs:
           retention-days: 7
 
   issuer-security:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Issuer security generation (real Keycloak and PostgreSQL)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -323,7 +330,7 @@ jobs:
         working-directory: backend
         run: bash ./mvnw -f ../infrastructure/keycloak/security-generation/pom.xml -B -ntp verify
       - name: Build the real issuer release image
-        run: docker build -t otziv-issuer-ci infrastructure/keycloak/security-generation
+        run: docker build -t otziv-issuer-ci infrastructure/keycloak/security-generation/c14-migration-fix
       - name: Build and scan reviewed database candidates
         run: |
           docker build -t otziv-mysql-ci infrastructure/mysql
@@ -383,6 +390,7 @@ jobs:
           retention-days: 14
 
   frontend:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Frontend (unit and production build)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -403,6 +411,7 @@ jobs:
       - run: npm run build -- --configuration production
 
   mobile:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Mobile web (unit and production build)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -424,6 +433,7 @@ jobs:
       - run: npm run build:prod
 
   browser-smoke:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Built web and mobile browser scenarios
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -481,6 +491,7 @@ jobs:
           retention-days: 14
 
   android-compile:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Android native tests, lint and debug assembly
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -530,6 +541,7 @@ jobs:
           retention-days: 14
 
   whatsapp:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: WhatsApp gateway (unit)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -549,6 +561,7 @@ jobs:
       - run: npm test
 
   external-review-worker:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: External review worker (syntax and health)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -573,6 +586,7 @@ jobs:
       # Readiness is checked in the actual image below; liveness alone is insufficient.
 
   client-parity:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Shared client package and compatibility fixtures
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -595,6 +609,7 @@ jobs:
         run: node contracts/verify-release-compatibility.mjs
 
   upstream-inventory:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Inventory pinned upstream images
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -610,6 +625,7 @@ jobs:
         run: node infrastructure/runtime-security/upstream-images.mjs matrix
 
   upstream-images:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Pinned upstream image (${{ matrix.id }})
     needs: upstream-inventory
     runs-on: ubuntu-24.04
@@ -642,7 +658,7 @@ jobs:
 
   upstream-image-gate:
     name: Upstream image security gate
-    if: always()
+    if: always() && (github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true)
     needs: [upstream-inventory, upstream-images, monitoring-candidates]
     runs-on: ubuntu-24.04
     steps:
@@ -654,6 +670,7 @@ jobs:
         run: test "$INVENTORY_RESULT" = success && test "$SCAN_RESULT" = success && test "$CANDIDATE_RESULT" = success
 
   integration-images:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Built integration image (${{ matrix.component }})
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -733,6 +750,7 @@ jobs:
           retention-days: 14
 
   monitoring-candidates:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish-reviewed-images != true
     name: Monitoring candidate (${{ matrix.component }})
     runs-on: ubuntu-24.04
     timeout-minutes: 90

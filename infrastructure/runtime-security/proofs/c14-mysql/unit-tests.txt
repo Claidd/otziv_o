@@ -1,0 +1,44 @@
+✔ Windows-mounted option file becomes a native read-only file before the exact original entrypoint executes (3.2762ms)
+✔ published capture preserves reviewed timezone/collation/SQL semantics without widening grants or relaxing checks (0.9643ms)
+✔ current published rehearsal binds its captured schema and retains the legacy migration target (0.3061ms)
+✔ completed checker output retains warnings and manual work without inventing zero risk (0.1966ms)
+✔ wrong source prevents the in-place upgrade gate from passing (0.5605ms)
+✔ wrong target prevents the in-place upgrade gate from passing (0.138ms)
+✔ reported compatibility errors prevents the in-place upgrade gate from passing (0.101ms)
+✔ missing error count prevents the in-place upgrade gate from passing (0.3504ms)
+✔ empty checks prevents the in-place upgrade gate from passing (0.2177ms)
+✔ failed check despite zero aggregate errors prevents the in-place upgrade gate from passing (0.7445ms)
+✔ incomplete check prevents the in-place upgrade gate from passing (0.2328ms)
+✔ SIGTERM exit143 requires actual completed Spring, JPA and pool shutdown (0.3305ms)
+✔ forced kill, shell PID1, OOM and expired deadline each fail closed (0.2311ms)
+✔ missing shutdown evidence or a second unfinished pool cannot pass (0.2089ms)
+✔ published C7 identity accepts the pinned manifest and its exact configuration only (0.3161ms)
+✔ source application grant capture permits only the reviewed exact database account policy (0.513ms)
+✔ legacy V1 capture and old resume/hardened options retain their default route (0.3527ms)
+✔ published capture and rehearsal require explicit mode and matching immutable records (0.2502ms)
+✔ explicit flag cannot promote a legacy or historical unbound C7 capture (0.3868ms)
+✔ omitted flag cannot silently run a published capture through the generic upgrade (0.2546ms)
+✔ changed published capture schema rejects before execution (0.1754ms)
+✔ changed published capture mode rejects before execution (0.1129ms)
+✔ changed published capture owner rejects before execution (0.1ms)
+✔ changed published capture publishedTarget rejects before execution (0.2043ms)
+✔ changed published capture sourceContainer rejects before execution (0.0982ms)
+✔ changed owner mode rejects before execution (0.1414ms)
+✔ changed owner owner rejects before execution (0.0888ms)
+✔ changed owner publishedTarget rejects before execution (0.119ms)
+✔ published mode refuses resumePreparation mixed branch (0.1077ms)
+✔ published mode refuses resumeViewDefiner mixed branch (0.0788ms)
+✔ published mode refuses prepareViewDefiner mixed branch (0.0676ms)
+✔ published mode refuses hardenedImage mixed branch (0.0709ms)
+✔ published mode refuses retainAfterPass mixed branch (0.0579ms)
+✔ published CLI rejects unsupported, duplicate, missing-value and mixed flags (1.2321ms)
+✔ capture still requires explicit source-ready before contacting Docker (0.4408ms)
+✔ actual rehearsal rejects mode mismatch before dump read, claim write or Docker operation (40.8634ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 144.384

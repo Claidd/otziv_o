@@ -109,6 +109,27 @@ test('a successful publication cannot omit the new Keycloak dependency evidence'
   assert.throws(() => validatePublication(value.publication, value.identity, value.image, hash(value.manifestBytes)), /receipt_missing/);
 });
 
+test('inheriting the provider does not bypass dependency validation', () => {
+  const value = publicationFixture();
+  delete value.image.prepare;
+  validatePublication(value.publication, value.identity, value.image, hash(value.manifestBytes));
+  delete value.publication.knownRuntimeDependencies;
+  assert.throws(() => validatePublication(value.publication, value.identity, value.image, hash(value.manifestBytes)), /receipt_missing/);
+});
+
+test('anonymous derivative verification rejects old shaded dependencies before transport', async () => {
+  const value = publicationFixture();
+  delete value.image.prepare;
+  let contacted = false;
+  await assert.rejects(verifyAnonymousDownload({ publicationBytes: bytes(value.publication), identity: value.identity,
+    image: value.image, manifestSha256: hash(value.manifestBytes), expected: {},
+    readPublicationArtifact: async name => { assert.equal(name, 'vulnerabilities.json'); return bytes(addOldCli(scan())); },
+    readAnonymous: async () => { contacted = true; throw new Error('unexpected_registry'); },
+    docker: async () => { contacted = true; throw new Error('unexpected_docker'); }, retain: async () => {} }),
+  /unreviewed_runtime_dependency_version/);
+  assert.equal(contacted, false);
+});
+
 test('anonymous verification checks the actual retained scan before Docker or registry calls', async () => {
   const value = publicationFixture();
   for (const report of [addOldCli(scan()), { ...scan(), ExtraField: 'raw bytes changed' }]) {

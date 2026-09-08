@@ -18,3 +18,12 @@ infrastructure/runtime-security/builds/phpmyadmin-alpine/** text eol=lf
 infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json text eol=lf
 infrastructure/runtime-security/reviewed-images-c14-*.json text eol=lf
 infrastructure/runtime-security/builds/minio/** text eol=lf
+infrastructure/runtime-security/builds/postgres-c14/** text eol=lf
+infrastructure/runtime-security/builds/versity-c14/** text eol=lf
+infrastructure/keycloak/security-generation/c14-migration-fix/** text eol=lf
+infrastructure/keycloak/security-generation/c14-migration-fix/proofs/** -text
+infrastructure/runtime-security/postgres-c14-adjudication.mjs text eol=lf
+# Executed MySQL rehearsal sources are included in the hashed evidence graph.
+infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs text eol=lf
+infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs text eol=lf
+infrastructure/runtime-security/mysql-vps-release-rehearsal.test.mjs text eol=lf

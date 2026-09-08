@@ -7,8 +7,9 @@ const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const jackson = name => /^com\.fasterxml\.jackson[^:]*:/.test(name);
 const known = name => jackson(name) || name === 'org.eclipse.parsson:parsson';
 
-export const requiresKeycloakDependencyProof = image => image.component === 'keycloak'
-  && image.prepare?.kind === 'keycloak-provider-docker-stage';
+// A derivative may inherit the provider instead of rebuilding it. Its complete
+// runtime still has to satisfy the same dependency policy.
+export const requiresKeycloakDependencyProof = image => image.component === 'keycloak';
 
 function validatePackages(packages) {
   assert.ok(Array.isArray(packages) && packages.length, 'keycloak_known_dependencies_missing');

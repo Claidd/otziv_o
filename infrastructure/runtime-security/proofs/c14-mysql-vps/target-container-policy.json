@@ -1,0 +1,16 @@
+{
+  "schema": "otziv-mysql-vps-target-container-policy-v1",
+  "result": "PASS",
+  "checkedAt": "2026-09-08T14:32:51.875Z",
+  "owner": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351",
+  "containerId": "af1435d8f401f0708c16ffa0ca1d55ed4c5985245a7bbaf6467e53950a3731cf",
+  "imageId": "sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa",
+  "configuredUser": "999:999",
+  "actualUid": 999,
+  "networkInternal": true,
+  "network": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-net",
+  "sourceVolume": "otziv-mysql-vps-release-cb3090ca-df41-40de-815f-e67a12503351-data",
+  "publishedPorts": 0,
+  "restartPolicy": "no",
+  "sourceContacted": false
+}
