@@ -1,0 +1,2 @@
+# Frozen fixture-only proof output is reviewed input for the integrity gate.
+!runtime-logs/*.log
