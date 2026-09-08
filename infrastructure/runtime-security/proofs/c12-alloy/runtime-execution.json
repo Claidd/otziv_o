@@ -1,0 +1,19 @@
+{
+  "schema": "otziv-c12-alloy-runtime-execution-v1",
+  "startedAt": "2026-09-08T07:34:37.504676+00:00",
+  "completedAt": "2026-09-08T07:35:34.292038+00:00",
+  "exitCode": 0,
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+  "harnessSha256": {
+    "monitoring-upgrade.mjs": "d48eb0b97c1e85ca4d3ac65bc29c9a48f2d6fd0367c5dde8b4649b82cd5f385b",
+    "monitoring-source.mjs": "cad5ed316c6199301ec19c554b769bbdaa0dffeb9d67eb96e2df9f9cfc4a33f0",
+    "monitoring-scenarios.mjs": "a7f08ac97e7a38dcce9ae0d6c94b4edac05054d4eb4f2859d8f2638c8d012e85",
+    "monitoring-fixture-http.cjs": "c0192e2395f33f02165603e4ccc7f515fc965483b0c8a5feeae1a4fd0275ea7d",
+    "../docker-observer/consumer-fixture.cjs": "563356dfe7e8d7c683849354a2d91d3fdeefa0cb6cda2f8d034ee07976608ed4"
+  },
+  "helperImage": "sha256:9e9bc5c2dd3e98ff5cc61c4a2e9961400100f1a6ffd01863a9fd15639d595150",
+  "result": "PASS",
+  "checks": 13,
+  "cleanup": "PASS",
+  "proofSha256": "d8aa542aa85187768713a266920047dda6a933819f5ee03a9858fed87267e686"
+}

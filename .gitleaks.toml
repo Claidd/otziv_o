@@ -300,3 +300,254 @@ regexes = [
   '''^f0fcfdc2f4da058af6473bc45c4eab62916225b2$''',
   '''^f509c801d070f8ea9f7400d5093c888ff1fee02e$''',
 ]
+
+# Reviewed C12 public metadata: detector AND complete artifact path AND exact public line/value.
+[[allowlists]]
+description = "Reviewed C12 public Go checksums in collector.go.sum.after.txt"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon/collector\.go\.sum\.after\.txt$''',
+]
+regexes = [
+  '''^\n?cloud\.google\.com/go/auth\ v0\.20\.0\ h1:kXTssoVb4azsVDoUiF8KvxAqrsQcQtB53DcSgta74CA=\r?$''',
+  '''^\n?cloud\.google\.com/go/auth/oauth2adapt\ v0\.2\.8\ h1:keo8NaayQZ6wimpNSmW5OPc283g65QNIiLpZnkHRbnc=\r?$''',
+  '''^\n?cloud\.google\.com/go/secretmanager\ v1\.20\.0\ h1:GjE3NoyFXo7ipRPy26PMmg4oRX1Ra8fswH45r16rWV0=\r?$''',
+  '''^\n?github\.com/Azure/azure\-sdk\-for\-go/sdk/security/keyvault/azkeys\ v1\.4\.0\ h1:E4MgwLBGeVB5f2MdcIVD3ELVAWpr\+WD6MUe1i\+tM/PA=\r?$''',
+  '''^\n?github\.com/Azure/go\-autorest/autorest/azure/auth\ v0\.5\.13\ h1:Ov8avRZi2vmrE2JcXw\+tu5K/yB41r7xK9GZDiBF7NdM=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/comp/core/delegatedauth\ v0\.81\.0\ h1:dZpZxTeU0eT0LX7kn2vumY1zleV7yuUFKX/612yk2Us=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/aggregator/ckey\ v0\.80\.2\ h1:C/A\+qke1LaPvDvuSVcEqGPJGvJZwj6lLEqqPTw0Dw\+w=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/api\ v0\.81\.0\ h1:vXvIB1UEN4Ae2kKTjSD0ELn2SZq1y92dYfxzRScEVFo=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/process/util/api\ v0\.80\.2\ h1:q4F9lOmRkJgQP03p5\+gkT1Ya8PPwb72sPqrKC1ARkIQ=\r?$''',
+  '''^\n?github\.com/GoogleCloudPlatform/opentelemetry\-operations\-go/extension/googleclientauthextension\ v0\.59\.0\ h1:QK/0gKQNd/14aoXfX7ewjL1ybrTetjEIUx8Qyh\+yP2I=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/apigateway\ v1\.38\.4\ h1:V8gcFwJPP3eXZXpeui\+p97JmO7WtCkQlEAHrE6Kyt0k=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/apigatewayv2\ v1\.33\.5\ h1:VUf8W\+s2EQwajy6n\+xCN9ctkhJsCJbpwPmzf49NtJM8=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/resourcegroupstaggingapi\ v1\.31\.6\ h1:gd7YMnFZQGdy4lERF9ffz9kbc6K/IPhCu5CrJDJr8XY=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/secretsmanager\ v1\.41\.2\ h1:hezAo5AQM0moD4qitsn8bZuc2WE/MmP\+cySGfJWEi1A=\r?$''',
+  '''^\n?github\.com/containerd/containerd/api\ v1\.9\.0\ h1:HZ/licowTRazus\+wt9fM6r/9BQO7S0vD5lMcWspGIg0=\r?$''',
+  '''^\n?github\.com/gogo/googleapis\ v1\.4\.1\ h1:1Yx4Myt7BxzvUr5ldGSbwYiZG6t9wGBZ\+8/fX3Wvtq0=\r?$''',
+  '''^\n?github\.com/grafana/pyroscope/api\ v1\.5\.0\ h1:5vBeCOJ6uAKPN1k/M51/zLvrXYVxP0WJJT7MGbq68wA=\r?$''',
+  '''^\n?github\.com/hashicorp/consul/api\ v1\.34\.3\ h1:OiZaQnwkS6uvutie3CF6NFXj8uScNezDlsU9MEqKT0s=\r?$''',
+  '''^\n?github\.com/hashicorp/vault/api\ v1\.23\.0\ h1:gXgluBsSECfRWTSW9niY2jwg2e9mMJc4WoHNv4g3h6A=\r?$''',
+  '''^\n?github\.com/keybase/go\-keychain\ v0\.0\.1\ h1:way\+bWYa6lDppZoZcgMbYsvC7GxljxrskdNInRtuthU=\r?$''',
+  '''^\n?github\.com/moby/moby/api\ v1\.55\.0\ h1:2/sexvQyqIWS8pRSCFddBfpW2qE7vR7FCL\+vN8pxwMc=\r?$''',
+  '''^\n?github\.com/open\-telemetry/opentelemetry\-collector\-contrib/extension/internal/basicauth\ v0\.158\.0\ h1:8DYhZASw3\+VC00NEt7cmtbTdKOzCqGY7wubNh6NWMC8=\r?$''',
+  '''^\n?github\.com/pb33f/libopenapi\ v0\.37\.2\ h1:4Kb4w/h2BVKb099oYIZqeDxEBhUioWA\+z6WJhBOk2r8=\r?$''',
+  '''^\n?github\.com/tg123/go\-htpasswd\ v1\.2\.5\ h1:h\+QdWCAp/FebK6fqjsqg9RGYcgEMcaiKNDV\+Mg6uk3E=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/config/configauth\ v1\.64\.0\ h1:adw2D8nfpaELHMf3N8RYhXPJOXFJZ59ohDQOkmLpU1s=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/extension/extensionauth\ v1\.64\.0\ h1:5MLP9UxgOTCvpfpY\+IMlWbQDc2IuSvChYZQYT7on3rM=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/extension/extensionauth/extensionauthtest\ v0\.158\.0\ h1:eL7dc\+eTK9GT2A/EihZCG3MzzpNK4o9ghT0pabEMBso=\r?$''',
+  '''^\n?golang\.org/x/oauth2\ v0\.36\.0\ h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\r?$''',
+  '''^\n?google\.golang\.org/api\ v0\.287\.1\ h1:LiyJx32VU3cwQfLchn/513qKhc25hq0pEANYJoWNnnI=\r?$''',
+  '''^\n?k8s\.io/api\ v0\.35\.4\ h1:P7nFYKl5vo9AGUp1Z\+Pmd3p2tA7bX2wbFWCvDeRv988=\r?$''',
+  '''^\n?k8s\.io/apiextensions\-apiserver\ v0\.35\.4\ h1:HeP\+Upp7ItdvnyGmub0yoix\+2z5\+ev4M5cE5TCgtOUU=\r?$''',
+  '''^\n?k8s\.io/apimachinery\ v0\.35\.6\ h1:ASSpfmmsOArKb2Hsu8gGlIcbIcEMVTboI3FfsfYuQ8k=\r?$''',
+]
+
+[[allowlists]]
+description = "Reviewed C12 public Go checksums in collector.go.sum.before.txt"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon/collector\.go\.sum\.before\.txt$''',
+]
+regexes = [
+  '''^\n?cloud\.google\.com/go/auth\ v0\.20\.0\ h1:kXTssoVb4azsVDoUiF8KvxAqrsQcQtB53DcSgta74CA=\r?$''',
+  '''^\n?cloud\.google\.com/go/auth/oauth2adapt\ v0\.2\.8\ h1:keo8NaayQZ6wimpNSmW5OPc283g65QNIiLpZnkHRbnc=\r?$''',
+  '''^\n?cloud\.google\.com/go/secretmanager\ v1\.20\.0\ h1:GjE3NoyFXo7ipRPy26PMmg4oRX1Ra8fswH45r16rWV0=\r?$''',
+  '''^\n?github\.com/Azure/azure\-sdk\-for\-go/sdk/security/keyvault/azkeys\ v1\.4\.0\ h1:E4MgwLBGeVB5f2MdcIVD3ELVAWpr\+WD6MUe1i\+tM/PA=\r?$''',
+  '''^\n?github\.com/Azure/go\-autorest/autorest/azure/auth\ v0\.5\.13\ h1:Ov8avRZi2vmrE2JcXw\+tu5K/yB41r7xK9GZDiBF7NdM=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/comp/core/delegatedauth\ v0\.81\.0\ h1:dZpZxTeU0eT0LX7kn2vumY1zleV7yuUFKX/612yk2Us=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/aggregator/ckey\ v0\.80\.2\ h1:C/A\+qke1LaPvDvuSVcEqGPJGvJZwj6lLEqqPTw0Dw\+w=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/api\ v0\.81\.0\ h1:vXvIB1UEN4Ae2kKTjSD0ELn2SZq1y92dYfxzRScEVFo=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/process/util/api\ v0\.80\.2\ h1:q4F9lOmRkJgQP03p5\+gkT1Ya8PPwb72sPqrKC1ARkIQ=\r?$''',
+  '''^\n?github\.com/GoogleCloudPlatform/opentelemetry\-operations\-go/extension/googleclientauthextension\ v0\.59\.0\ h1:QK/0gKQNd/14aoXfX7ewjL1ybrTetjEIUx8Qyh\+yP2I=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/apigateway\ v1\.38\.4\ h1:V8gcFwJPP3eXZXpeui\+p97JmO7WtCkQlEAHrE6Kyt0k=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/apigatewayv2\ v1\.33\.5\ h1:VUf8W\+s2EQwajy6n\+xCN9ctkhJsCJbpwPmzf49NtJM8=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/resourcegroupstaggingapi\ v1\.31\.6\ h1:gd7YMnFZQGdy4lERF9ffz9kbc6K/IPhCu5CrJDJr8XY=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/secretsmanager\ v1\.41\.2\ h1:hezAo5AQM0moD4qitsn8bZuc2WE/MmP\+cySGfJWEi1A=\r?$''',
+  '''^\n?github\.com/containerd/containerd/api\ v1\.9\.0\ h1:HZ/licowTRazus\+wt9fM6r/9BQO7S0vD5lMcWspGIg0=\r?$''',
+  '''^\n?github\.com/gogo/googleapis\ v1\.4\.1\ h1:1Yx4Myt7BxzvUr5ldGSbwYiZG6t9wGBZ\+8/fX3Wvtq0=\r?$''',
+  '''^\n?github\.com/grafana/pyroscope/api\ v1\.5\.0\ h1:5vBeCOJ6uAKPN1k/M51/zLvrXYVxP0WJJT7MGbq68wA=\r?$''',
+  '''^\n?github\.com/hashicorp/consul/api\ v1\.34\.3\ h1:OiZaQnwkS6uvutie3CF6NFXj8uScNezDlsU9MEqKT0s=\r?$''',
+  '''^\n?github\.com/hashicorp/vault/api\ v1\.23\.0\ h1:gXgluBsSECfRWTSW9niY2jwg2e9mMJc4WoHNv4g3h6A=\r?$''',
+  '''^\n?github\.com/keybase/go\-keychain\ v0\.0\.1\ h1:way\+bWYa6lDppZoZcgMbYsvC7GxljxrskdNInRtuthU=\r?$''',
+  '''^\n?github\.com/moby/moby/api\ v1\.55\.0\ h1:2/sexvQyqIWS8pRSCFddBfpW2qE7vR7FCL\+vN8pxwMc=\r?$''',
+  '''^\n?github\.com/open\-telemetry/opentelemetry\-collector\-contrib/extension/internal/basicauth\ v0\.158\.0\ h1:8DYhZASw3\+VC00NEt7cmtbTdKOzCqGY7wubNh6NWMC8=\r?$''',
+  '''^\n?github\.com/pb33f/libopenapi\ v0\.37\.2\ h1:4Kb4w/h2BVKb099oYIZqeDxEBhUioWA\+z6WJhBOk2r8=\r?$''',
+  '''^\n?github\.com/tg123/go\-htpasswd\ v1\.2\.5\ h1:h\+QdWCAp/FebK6fqjsqg9RGYcgEMcaiKNDV\+Mg6uk3E=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/config/configauth\ v1\.64\.0\ h1:adw2D8nfpaELHMf3N8RYhXPJOXFJZ59ohDQOkmLpU1s=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/extension/extensionauth\ v1\.64\.0\ h1:5MLP9UxgOTCvpfpY\+IMlWbQDc2IuSvChYZQYT7on3rM=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/extension/extensionauth/extensionauthtest\ v0\.158\.0\ h1:eL7dc\+eTK9GT2A/EihZCG3MzzpNK4o9ghT0pabEMBso=\r?$''',
+  '''^\n?golang\.org/x/oauth2\ v0\.36\.0\ h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\r?$''',
+  '''^\n?google\.golang\.org/api\ v0\.287\.1\ h1:LiyJx32VU3cwQfLchn/513qKhc25hq0pEANYJoWNnnI=\r?$''',
+  '''^\n?k8s\.io/api\ v0\.35\.4\ h1:P7nFYKl5vo9AGUp1Z\+Pmd3p2tA7bX2wbFWCvDeRv988=\r?$''',
+  '''^\n?k8s\.io/apiextensions\-apiserver\ v0\.35\.4\ h1:HeP\+Upp7ItdvnyGmub0yoix\+2z5\+ev4M5cE5TCgtOUU=\r?$''',
+  '''^\n?k8s\.io/apimachinery\ v0\.35\.6\ h1:ASSpfmmsOArKb2Hsu8gGlIcbIcEMVTboI3FfsfYuQ8k=\r?$''',
+]
+
+[[allowlists]]
+description = "Reviewed C12 public Go checksums in reviewed-buildinfo.txt"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon/reviewed\-buildinfo\.txt$''',
+]
+regexes = [
+  '''^\n?\	dep\	cloud\.google\.com/go/auth\	v0\.20\.0\	h1:kXTssoVb4azsVDoUiF8KvxAqrsQcQtB53DcSgta74CA=\r?$''',
+  '''^\n?\	dep\	cloud\.google\.com/go/auth/oauth2adapt\	v0\.2\.8\	h1:keo8NaayQZ6wimpNSmW5OPc283g65QNIiLpZnkHRbnc=\r?$''',
+  '''^\n?\	dep\	cloud\.google\.com/go/secretmanager\	v1\.20\.0\	h1:GjE3NoyFXo7ipRPy26PMmg4oRX1Ra8fswH45r16rWV0=\r?$''',
+  '''^\n?\	dep\	github\.com/Azure/go\-autorest/autorest/azure/auth\	v0\.5\.13\	h1:Ov8avRZi2vmrE2JcXw\+tu5K/yB41r7xK9GZDiBF7NdM=\r?$''',
+  '''^\n?\	dep\	github\.com/DataDog/datadog\-agent/comp/core/delegatedauth\	v0\.81\.0\	h1:dZpZxTeU0eT0LX7kn2vumY1zleV7yuUFKX/612yk2Us=\r?$''',
+  '''^\n?\	dep\	github\.com/DataDog/datadog\-agent/pkg/aggregator/ckey\	v0\.80\.2\	h1:C/A\+qke1LaPvDvuSVcEqGPJGvJZwj6lLEqqPTw0Dw\+w=\r?$''',
+  '''^\n?\	dep\	github\.com/DataDog/datadog\-agent/pkg/api\	v0\.81\.0\	h1:vXvIB1UEN4Ae2kKTjSD0ELn2SZq1y92dYfxzRScEVFo=\r?$''',
+  '''^\n?\	dep\	github\.com/DataDog/datadog\-agent/pkg/process/util/api\	v0\.80\.2\	h1:q4F9lOmRkJgQP03p5\+gkT1Ya8PPwb72sPqrKC1ARkIQ=\r?$''',
+  '''^\n?\	dep\	github\.com/GoogleCloudPlatform/opentelemetry\-operations\-go/extension/googleclientauthextension\	v0\.59\.0\	h1:QK/0gKQNd/14aoXfX7ewjL1ybrTetjEIUx8Qyh\+yP2I=\r?$''',
+  '''^\n?\	dep\	github\.com/aws/aws\-sdk\-go\-v2/service/apigateway\	v1\.38\.4\	h1:V8gcFwJPP3eXZXpeui\+p97JmO7WtCkQlEAHrE6Kyt0k=\r?$''',
+  '''^\n?\	dep\	github\.com/aws/aws\-sdk\-go\-v2/service/apigatewayv2\	v1\.33\.5\	h1:VUf8W\+s2EQwajy6n\+xCN9ctkhJsCJbpwPmzf49NtJM8=\r?$''',
+  '''^\n?\	dep\	github\.com/aws/aws\-sdk\-go\-v2/service/resourcegroupstaggingapi\	v1\.31\.6\	h1:gd7YMnFZQGdy4lERF9ffz9kbc6K/IPhCu5CrJDJr8XY=\r?$''',
+  '''^\n?\	dep\	github\.com/aws/aws\-sdk\-go\-v2/service/secretsmanager\	v1\.41\.2\	h1:hezAo5AQM0moD4qitsn8bZuc2WE/MmP\+cySGfJWEi1A=\r?$''',
+  '''^\n?\	dep\	github\.com/containerd/containerd/api\	v1\.9\.0\	h1:HZ/licowTRazus\+wt9fM6r/9BQO7S0vD5lMcWspGIg0=\r?$''',
+  '''^\n?\	dep\	github\.com/gogo/googleapis\	v1\.4\.1\	h1:1Yx4Myt7BxzvUr5ldGSbwYiZG6t9wGBZ\+8/fX3Wvtq0=\r?$''',
+  '''^\n?\	dep\	github\.com/grafana/pyroscope/api\	v1\.5\.0\	h1:5vBeCOJ6uAKPN1k/M51/zLvrXYVxP0WJJT7MGbq68wA=\r?$''',
+  '''^\n?\	dep\	github\.com/hashicorp/consul/api\	v1\.34\.3\	h1:OiZaQnwkS6uvutie3CF6NFXj8uScNezDlsU9MEqKT0s=\r?$''',
+  '''^\n?\	dep\	github\.com/hashicorp/vault/api\	v1\.23\.0\	h1:gXgluBsSECfRWTSW9niY2jwg2e9mMJc4WoHNv4g3h6A=\r?$''',
+  '''^\n?\	dep\	github\.com/moby/moby/api\	v1\.55\.0\	h1:2/sexvQyqIWS8pRSCFddBfpW2qE7vR7FCL\+vN8pxwMc=\r?$''',
+  '''^\n?\	dep\	github\.com/open\-telemetry/opentelemetry\-collector\-contrib/extension/internal/basicauth\	v0\.158\.0\	h1:8DYhZASw3\+VC00NEt7cmtbTdKOzCqGY7wubNh6NWMC8=\r?$''',
+  '''^\n?\	dep\	github\.com/pb33f/libopenapi\	v0\.37\.2\	h1:4Kb4w/h2BVKb099oYIZqeDxEBhUioWA\+z6WJhBOk2r8=\r?$''',
+  '''^\n?\	dep\	github\.com/tg123/go\-htpasswd\	v1\.2\.5\	h1:h\+QdWCAp/FebK6fqjsqg9RGYcgEMcaiKNDV\+Mg6uk3E=\r?$''',
+  '''^\n?\	dep\	go\.opentelemetry\.io/collector/config/configauth\	v1\.64\.0\	h1:adw2D8nfpaELHMf3N8RYhXPJOXFJZ59ohDQOkmLpU1s=\r?$''',
+  '''^\n?\	dep\	go\.opentelemetry\.io/collector/extension/extensionauth\	v1\.64\.0\	h1:5MLP9UxgOTCvpfpY\+IMlWbQDc2IuSvChYZQYT7on3rM=\r?$''',
+  '''^\n?\	dep\	golang\.org/x/oauth2\	v0\.36\.0\	h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\r?$''',
+  '''^\n?\	dep\	google\.golang\.org/api\	v0\.287\.1\	h1:LiyJx32VU3cwQfLchn/513qKhc25hq0pEANYJoWNnnI=\r?$''',
+  '''^\n?\	dep\	k8s\.io/api\	v0\.35\.4\	h1:P7nFYKl5vo9AGUp1Z\+Pmd3p2tA7bX2wbFWCvDeRv988=\r?$''',
+  '''^\n?\	dep\	k8s\.io/apiextensions\-apiserver\	v0\.35\.4\	h1:HeP\+Upp7ItdvnyGmub0yoix\+2z5\+ev4M5cE5TCgtOUU=\r?$''',
+  '''^\n?\	dep\	k8s\.io/apimachinery\	v0\.35\.6\	h1:ASSpfmmsOArKb2Hsu8gGlIcbIcEMVTboI3FfsfYuQ8k=\r?$''',
+]
+
+[[allowlists]]
+description = "Reviewed C12 public Go checksums in root.go.sum.after.txt"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon/root\.go\.sum\.after\.txt$''',
+]
+regexes = [
+  '''^\n?cloud\.google\.com/go/auth\ v0\.20\.0\ h1:kXTssoVb4azsVDoUiF8KvxAqrsQcQtB53DcSgta74CA=\r?$''',
+  '''^\n?cloud\.google\.com/go/auth/oauth2adapt\ v0\.2\.8\ h1:keo8NaayQZ6wimpNSmW5OPc283g65QNIiLpZnkHRbnc=\r?$''',
+  '''^\n?cloud\.google\.com/go/secretmanager\ v1\.20\.0\ h1:GjE3NoyFXo7ipRPy26PMmg4oRX1Ra8fswH45r16rWV0=\r?$''',
+  '''^\n?github\.com/Azure/azure\-sdk\-for\-go/sdk/security/keyvault/azkeys\ v1\.4\.0\ h1:E4MgwLBGeVB5f2MdcIVD3ELVAWpr\+WD6MUe1i\+tM/PA=\r?$''',
+  '''^\n?github\.com/Azure/go\-autorest/autorest/azure/auth\ v0\.5\.13\ h1:Ov8avRZi2vmrE2JcXw\+tu5K/yB41r7xK9GZDiBF7NdM=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/comp/core/delegatedauth\ v0\.81\.0\ h1:dZpZxTeU0eT0LX7kn2vumY1zleV7yuUFKX/612yk2Us=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/aggregator/ckey\ v0\.80\.2\ h1:C/A\+qke1LaPvDvuSVcEqGPJGvJZwj6lLEqqPTw0Dw\+w=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/api\ v0\.81\.0\ h1:vXvIB1UEN4Ae2kKTjSD0ELn2SZq1y92dYfxzRScEVFo=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/process/util/api\ v0\.80\.2\ h1:q4F9lOmRkJgQP03p5\+gkT1Ya8PPwb72sPqrKC1ARkIQ=\r?$''',
+  '''^\n?github\.com/GoogleCloudPlatform/opentelemetry\-operations\-go/extension/googleclientauthextension\ v0\.59\.0\ h1:QK/0gKQNd/14aoXfX7ewjL1ybrTetjEIUx8Qyh\+yP2I=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/apigateway\ v1\.38\.4\ h1:V8gcFwJPP3eXZXpeui\+p97JmO7WtCkQlEAHrE6Kyt0k=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/apigatewayv2\ v1\.33\.5\ h1:VUf8W\+s2EQwajy6n\+xCN9ctkhJsCJbpwPmzf49NtJM8=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/resourcegroupstaggingapi\ v1\.31\.6\ h1:gd7YMnFZQGdy4lERF9ffz9kbc6K/IPhCu5CrJDJr8XY=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/secretsmanager\ v1\.41\.2\ h1:hezAo5AQM0moD4qitsn8bZuc2WE/MmP\+cySGfJWEi1A=\r?$''',
+  '''^\n?github\.com/containerd/containerd/api\ v1\.9\.0\ h1:HZ/licowTRazus\+wt9fM6r/9BQO7S0vD5lMcWspGIg0=\r?$''',
+  '''^\n?github\.com/gogo/googleapis\ v1\.4\.1\ h1:1Yx4Myt7BxzvUr5ldGSbwYiZG6t9wGBZ\+8/fX3Wvtq0=\r?$''',
+  '''^\n?github\.com/grafana/pyroscope/api\ v1\.5\.0\ h1:5vBeCOJ6uAKPN1k/M51/zLvrXYVxP0WJJT7MGbq68wA=\r?$''',
+  '''^\n?github\.com/hashicorp/consul/api\ v1\.34\.3\ h1:OiZaQnwkS6uvutie3CF6NFXj8uScNezDlsU9MEqKT0s=\r?$''',
+  '''^\n?github\.com/hashicorp/vault/api\ v1\.23\.0\ h1:gXgluBsSECfRWTSW9niY2jwg2e9mMJc4WoHNv4g3h6A=\r?$''',
+  '''^\n?github\.com/keybase/go\-keychain\ v0\.0\.1\ h1:way\+bWYa6lDppZoZcgMbYsvC7GxljxrskdNInRtuthU=\r?$''',
+  '''^\n?github\.com/moby/moby/api\ v1\.55\.0\ h1:2/sexvQyqIWS8pRSCFddBfpW2qE7vR7FCL\+vN8pxwMc=\r?$''',
+  '''^\n?github\.com/open\-telemetry/opentelemetry\-collector\-contrib/extension/internal/basicauth\ v0\.158\.0\ h1:8DYhZASw3\+VC00NEt7cmtbTdKOzCqGY7wubNh6NWMC8=\r?$''',
+  '''^\n?github\.com/pb33f/libopenapi\ v0\.37\.2\ h1:4Kb4w/h2BVKb099oYIZqeDxEBhUioWA\+z6WJhBOk2r8=\r?$''',
+  '''^\n?github\.com/tg123/go\-htpasswd\ v1\.2\.5\ h1:h\+QdWCAp/FebK6fqjsqg9RGYcgEMcaiKNDV\+Mg6uk3E=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/config/configauth\ v1\.64\.0\ h1:adw2D8nfpaELHMf3N8RYhXPJOXFJZ59ohDQOkmLpU1s=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/extension/extensionauth\ v1\.64\.0\ h1:5MLP9UxgOTCvpfpY\+IMlWbQDc2IuSvChYZQYT7on3rM=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/extension/extensionauth/extensionauthtest\ v0\.158\.0\ h1:eL7dc\+eTK9GT2A/EihZCG3MzzpNK4o9ghT0pabEMBso=\r?$''',
+  '''^\n?golang\.org/x/oauth2\ v0\.36\.0\ h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\r?$''',
+  '''^\n?google\.golang\.org/api\ v0\.287\.1\ h1:LiyJx32VU3cwQfLchn/513qKhc25hq0pEANYJoWNnnI=\r?$''',
+  '''^\n?k8s\.io/api\ v0\.35\.4\ h1:P7nFYKl5vo9AGUp1Z\+Pmd3p2tA7bX2wbFWCvDeRv988=\r?$''',
+  '''^\n?k8s\.io/apiextensions\-apiserver\ v0\.35\.4\ h1:HeP\+Upp7ItdvnyGmub0yoix\+2z5\+ev4M5cE5TCgtOUU=\r?$''',
+  '''^\n?k8s\.io/apimachinery\ v0\.35\.6\ h1:ASSpfmmsOArKb2Hsu8gGlIcbIcEMVTboI3FfsfYuQ8k=\r?$''',
+]
+
+[[allowlists]]
+description = "Reviewed C12 public Go checksums in root.go.sum.before.txt"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''(^|/)infrastructure/runtime\-security/adjudications/alloy\-daemon/root\.go\.sum\.before\.txt$''',
+]
+regexes = [
+  '''^\n?cloud\.google\.com/go/auth\ v0\.20\.0\ h1:kXTssoVb4azsVDoUiF8KvxAqrsQcQtB53DcSgta74CA=\r?$''',
+  '''^\n?cloud\.google\.com/go/auth/oauth2adapt\ v0\.2\.8\ h1:keo8NaayQZ6wimpNSmW5OPc283g65QNIiLpZnkHRbnc=\r?$''',
+  '''^\n?cloud\.google\.com/go/secretmanager\ v1\.20\.0\ h1:GjE3NoyFXo7ipRPy26PMmg4oRX1Ra8fswH45r16rWV0=\r?$''',
+  '''^\n?github\.com/Azure/azure\-sdk\-for\-go/sdk/security/keyvault/azkeys\ v1\.4\.0\ h1:E4MgwLBGeVB5f2MdcIVD3ELVAWpr\+WD6MUe1i\+tM/PA=\r?$''',
+  '''^\n?github\.com/Azure/go\-autorest/autorest/azure/auth\ v0\.5\.13\ h1:Ov8avRZi2vmrE2JcXw\+tu5K/yB41r7xK9GZDiBF7NdM=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/comp/core/delegatedauth\ v0\.81\.0\ h1:dZpZxTeU0eT0LX7kn2vumY1zleV7yuUFKX/612yk2Us=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/aggregator/ckey\ v0\.80\.2\ h1:C/A\+qke1LaPvDvuSVcEqGPJGvJZwj6lLEqqPTw0Dw\+w=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/api\ v0\.81\.0\ h1:vXvIB1UEN4Ae2kKTjSD0ELn2SZq1y92dYfxzRScEVFo=\r?$''',
+  '''^\n?github\.com/DataDog/datadog\-agent/pkg/process/util/api\ v0\.80\.2\ h1:q4F9lOmRkJgQP03p5\+gkT1Ya8PPwb72sPqrKC1ARkIQ=\r?$''',
+  '''^\n?github\.com/GoogleCloudPlatform/opentelemetry\-operations\-go/extension/googleclientauthextension\ v0\.59\.0\ h1:QK/0gKQNd/14aoXfX7ewjL1ybrTetjEIUx8Qyh\+yP2I=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/apigateway\ v1\.38\.4\ h1:V8gcFwJPP3eXZXpeui\+p97JmO7WtCkQlEAHrE6Kyt0k=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/apigatewayv2\ v1\.33\.5\ h1:VUf8W\+s2EQwajy6n\+xCN9ctkhJsCJbpwPmzf49NtJM8=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/resourcegroupstaggingapi\ v1\.31\.6\ h1:gd7YMnFZQGdy4lERF9ffz9kbc6K/IPhCu5CrJDJr8XY=\r?$''',
+  '''^\n?github\.com/aws/aws\-sdk\-go\-v2/service/secretsmanager\ v1\.41\.2\ h1:hezAo5AQM0moD4qitsn8bZuc2WE/MmP\+cySGfJWEi1A=\r?$''',
+  '''^\n?github\.com/containerd/containerd/api\ v1\.9\.0\ h1:HZ/licowTRazus\+wt9fM6r/9BQO7S0vD5lMcWspGIg0=\r?$''',
+  '''^\n?github\.com/gogo/googleapis\ v1\.4\.1\ h1:1Yx4Myt7BxzvUr5ldGSbwYiZG6t9wGBZ\+8/fX3Wvtq0=\r?$''',
+  '''^\n?github\.com/grafana/pyroscope/api\ v1\.5\.0\ h1:5vBeCOJ6uAKPN1k/M51/zLvrXYVxP0WJJT7MGbq68wA=\r?$''',
+  '''^\n?github\.com/hashicorp/consul/api\ v1\.34\.3\ h1:OiZaQnwkS6uvutie3CF6NFXj8uScNezDlsU9MEqKT0s=\r?$''',
+  '''^\n?github\.com/hashicorp/vault/api\ v1\.23\.0\ h1:gXgluBsSECfRWTSW9niY2jwg2e9mMJc4WoHNv4g3h6A=\r?$''',
+  '''^\n?github\.com/keybase/go\-keychain\ v0\.0\.1\ h1:way\+bWYa6lDppZoZcgMbYsvC7GxljxrskdNInRtuthU=\r?$''',
+  '''^\n?github\.com/moby/moby/api\ v1\.55\.0\ h1:2/sexvQyqIWS8pRSCFddBfpW2qE7vR7FCL\+vN8pxwMc=\r?$''',
+  '''^\n?github\.com/open\-telemetry/opentelemetry\-collector\-contrib/extension/internal/basicauth\ v0\.158\.0\ h1:8DYhZASw3\+VC00NEt7cmtbTdKOzCqGY7wubNh6NWMC8=\r?$''',
+  '''^\n?github\.com/pb33f/libopenapi\ v0\.37\.2\ h1:4Kb4w/h2BVKb099oYIZqeDxEBhUioWA\+z6WJhBOk2r8=\r?$''',
+  '''^\n?github\.com/tg123/go\-htpasswd\ v1\.2\.5\ h1:h\+QdWCAp/FebK6fqjsqg9RGYcgEMcaiKNDV\+Mg6uk3E=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/config/configauth\ v1\.64\.0\ h1:adw2D8nfpaELHMf3N8RYhXPJOXFJZ59ohDQOkmLpU1s=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/extension/extensionauth\ v1\.64\.0\ h1:5MLP9UxgOTCvpfpY\+IMlWbQDc2IuSvChYZQYT7on3rM=\r?$''',
+  '''^\n?go\.opentelemetry\.io/collector/extension/extensionauth/extensionauthtest\ v0\.158\.0\ h1:eL7dc\+eTK9GT2A/EihZCG3MzzpNK4o9ghT0pabEMBso=\r?$''',
+  '''^\n?golang\.org/x/oauth2\ v0\.36\.0\ h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\r?$''',
+  '''^\n?google\.golang\.org/api\ v0\.287\.1\ h1:LiyJx32VU3cwQfLchn/513qKhc25hq0pEANYJoWNnnI=\r?$''',
+  '''^\n?k8s\.io/api\ v0\.35\.4\ h1:P7nFYKl5vo9AGUp1Z\+Pmd3p2tA7bX2wbFWCvDeRv988=\r?$''',
+  '''^\n?k8s\.io/apiextensions\-apiserver\ v0\.35\.4\ h1:HeP\+Upp7ItdvnyGmub0yoix\+2z5\+ev4M5cE5TCgtOUU=\r?$''',
+  '''^\n?k8s\.io/apimachinery\ v0\.35\.6\ h1:ASSpfmmsOArKb2Hsu8gGlIcbIcEMVTboI3FfsfYuQ8k=\r?$''',
+]
+
+[[allowlists]]
+description = "Public empty-content package verification value in the two exact C7 Alloy SPDX proofs"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''(^|/)infrastructure/runtime\-security/proofs/c7\-published/alloy/anonymous/registry\-attestation\-0\-payload\-0\.json$''',
+  '''(^|/)infrastructure/runtime\-security/proofs/c7\-published/alloy/publication/registry\-attestation\-0\-payload\-0\.json$''',
+]
+regexes = [
+  '''^da39a3ee5e6b4b0d3255bfef95601890afd80709$''',
+]
+
+[[allowlists]]
+description = "Public util-linux commit URL in the exact C12 Alloy scanner report"
+targetRules = ["sourcegraph-access-token"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''(^|/)infrastructure/runtime\-security/proofs/c12\-alloy/vulnerabilities\.json$''',
+]
+regexes = [
+  '''^\n?\ \ \ \ \ \ \ \ \ \ \ \ "https://github\.com/util\-linux/util\-linux/commit/5e390467b26a3cf3fecc04e1a0d482dff3162fc4",\r?$''',
+]
+
+
+[[allowlists]]
+description = "Public C7 phpMyAdmin artifact archive digest in the exact reviewed comparison line"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''(^|/)infrastructure/runtime\-security/builds/phpmyadmin\-alpine/COMPONENT_COMPARISON_2026\-09\-08\.json$''',
+]
+regexes = [
+  '''^\n?\ \ "sourceApiZipSha256":\ "00928c7015270caaaad0822dd70dba4071908569f23266d8b112512f521a7239",\r?$''',
+]

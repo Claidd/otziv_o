@@ -1,0 +1,13 @@
+{
+  "schema": "otziv-alloy-exact-target-v1",
+  "createdAt": "2026-09-08T07:19:25.796787+00:00",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+  "imageId": "sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+  "target": "usr/bin/alloy",
+  "binarySha256": "2c21e2c85e1e88c88b3335d39c84ae5414232514aeaaea02457fef54f4c5e3dc",
+  "previousPath": "bin/alloy",
+  "bytesIdentical": true,
+  "rootfsAndLabelsUnchanged": true,
+  "inspectedBinaryExecuted": false,
+  "ownedStoppedContainerRemoved": true
+}

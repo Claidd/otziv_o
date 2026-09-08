@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run } from '../recovery/process.mjs';
+import { assertPublicationSet, publicationSetFields, readReviewedImageSet, selectedReviewedImageSet } from './reviewed-image-sets.mjs';
 import { BUILDKIT, REPOSITORY, SBOM_GENERATOR, validateManifest } from './publish-reviewed-images.mjs';
 import { checkedJson, createRegistryReader, SOURCE_REPOSITORY, verifyRegistryEvidence } from './registry-evidence.mjs';
 import { checkKeycloakRuntimeDependencies, requiresKeycloakDependencyProof, validateKeycloakDependencyReceipt } from './keycloak-runtime-dependencies.mjs';
@@ -30,7 +31,8 @@ export function anonymousIdentity(environment) {
   return { commit: environment.GITHUB_SHA, run: environment.GITHUB_RUN_ID, attempt: environment.GITHUB_RUN_ATTEMPT };
 }
 
-export function validatePublication(publication, identity, image, manifestSha256) {
+export function validatePublication(publication, identity, image, manifestSha256, manifestSet = 'baseline') {
+  assertPublicationSet(publication, manifestSet);
   assert.equal(publication.schema, 'otziv-reviewed-image-publication-v1', 'anonymous_publication_schema');
   assert.equal(publication.result, 'PASS', 'anonymous_publication_not_passed');
   assert.equal(publication.security?.result, 'PASS', 'anonymous_publication_security_not_passed');
@@ -72,14 +74,14 @@ export function anonymousDockerEnvironment(config, emptyPath) {
   return { HOME: config, DOCKER_CONFIG: config, PATH: emptyPath, LANG: 'C.UTF-8' };
 }
 
-export async function verifyAnonymousDownload({ publicationBytes, identity, image, manifestSha256, expected,
+export async function verifyAnonymousDownload({ publicationBytes, identity, image, manifestSha256, manifestSet = 'baseline', expected,
   readPublicationArtifact, readAnonymous, docker, retain, now = () => new Date().toISOString(), runner = 'github-hosted' }) {
-  const proof = { schema: 'otziv-anonymous-download-v1', component: image.component, ...identity,
+  const proof = { schema: 'otziv-anonymous-download-v1', component: image.component, ...identity, ...publicationSetFields(manifestSet),
     runner, startedAt: now(), sourcePublicationSha256: sha256(publicationBytes), result: 'IN_PROGRESS',
     accountCredentialsUsed: false, dockerCredentialHelpersAvailable: false, dockerTransport: 'unix:///var/run/docker.sock' };
   try {
     const publication = JSON.parse(Buffer.from(publicationBytes).toString('utf8'));
-    const digest = validatePublication(publication, identity, image, manifestSha256);
+    const digest = validatePublication(publication, identity, image, manifestSha256, manifestSet);
     if (requiresKeycloakDependencyProof(image)) {
       const checked = checkKeycloakRuntimeDependencies(await readPublicationArtifact('vulnerabilities.json'), publication.imageId);
       assert.deepEqual(checked, publication.knownRuntimeDependencies, 'anonymous_known_dependencies_changed');
@@ -178,12 +180,14 @@ export async function runAnonymousCommand(component, inputArgument, outputArgume
   try {
     assert.equal(resolve(outputArgument), output, 'anonymous_fixed_output_directory_required');
     identity = anonymousIdentity(environment);
+    const selected = selectedReviewedImageSet(environment);
     assert.equal(platform, 'linux', 'anonymous_requires_actual_linux_runner');
     const input = await realpath(resolve(inputArgument));
     assert.ok(inside(temporary, input) && !inside(input, output) && !inside(output, input) && input !== output, 'anonymous_artifact_directories_invalid');
     assert.equal((await execute('git', ['rev-parse', 'HEAD'])).trim(), identity.commit, 'anonymous_checkout_revision_changed');
-    const manifestBytes = await readFile(resolve(sourceRoot, 'infrastructure/runtime-security/reviewed-images.json'));
-    const image = validateManifest(JSON.parse(manifestBytes)).find(item => item.component === component);
+    const manifest = await readReviewedImageSet(sourceRoot, selected.name);
+    const manifestBytes = manifest.bytes;
+    const image = validateManifest(manifest.manifest).find(item => item.component === component);
     assert.ok(image, 'anonymous_unreviewed_component');
     const dockerfileSha256 = sha256((await readFile(resolve(sourceRoot, image.dockerfile), 'utf8')).replaceAll('\r\n', '\n'));
     assert.equal(dockerfileSha256, image.dockerfileSha256, 'anonymous_reviewed_dockerfile_changed');
@@ -201,7 +205,7 @@ export async function runAnonymousCommand(component, inputArgument, outputArgume
       return readFile(file);
     };
     await verify({ publicationBytes: await readInput('publication.json'), identity, image,
-      manifestSha256: sha256(manifestBytes),
+      manifestSha256: sha256(manifestBytes), manifestSet: selected.name,
       expected: { source: SOURCE_REPOSITORY, commit: identity.commit, context: image.context, dockerfile: image.dockerfile, dockerfileSha256 },
       readPublicationArtifact: readInput,
       readAnonymous: createRegistryReader(),

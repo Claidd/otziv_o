@@ -1,0 +1,4 @@
+{"images":{"dozzle":"amir20/dozzle@sha256:27128281cc1f93b0f849f2a5fb4ef9c12a0cce1135ab3b6fede27f9867c8a1c2","alloy":"ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852","loki":"ghcr.io/claidd/otziv-security@sha256:afb2d631c2d294ca23fb0ed3f98c9d601a0e72b5d702f5cde2b9522bf8a1ded0"},"productionAlloyConfigSHA256":"5f42d8586da504955bf5f04a7f1fbbcc87924f7571064fb1607efec5942cf7cf","fixtureAlloyConfigSHA256":"20cff9b23b7f9a4b864380401ba0e61b077932d04e0d848c7707b9ccc1f58fe7","processHelperSHA256":"f3910105086cb2e75dc731f527d5de0338ae987b4bb238bc7d87a867a05b64fc"}
+Real Dozzle log stream and Alloy Loki push verified; mutation/secret-field guards passed
+All four production Alloy file sources reached real Loki
+Actual production deployment probes verified against real Dozzle SSE and Alloy/Loki query results

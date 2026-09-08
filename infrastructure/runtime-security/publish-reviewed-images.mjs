@@ -5,6 +5,7 @@ import { appendFile, mkdir, readFile, realpath, writeFile } from 'node:fs/promis
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run } from '../recovery/process.mjs';
+import { readReviewedImageSet, selectedReviewedImageSet, publicationSetFields } from './reviewed-image-sets.mjs';
 import { scan } from './scan.mjs';
 import { checkKeycloakRuntimeDependencies } from './keycloak-runtime-dependencies.mjs';
 import { gitSource, SOURCE_REPOSITORY, takePublicationRegistryReader, verifyRegistryEvidence } from './registry-evidence.mjs';
@@ -117,12 +118,13 @@ async function publicBuild(executable, args, env = process.env) {
 
 async function publish(component, outputArgument) {
   const identity = publicationIdentity(process.env);
+  const selected = selectedReviewedImageSet(process.env);
   const registryRead = takePublicationRegistryReader(process.env);
   assert.equal((await run('git', ['rev-parse', 'HEAD'])).trim(), identity.commit, 'checkout_revision_changed');
   assert.equal(gitSource((await run('git', ['remote', 'get-url', 'origin'])).trim()), gitSource(SOURCE_REPOSITORY), 'checkout_source_repository_changed');
-  const manifestPath = resolve(ROOT, 'infrastructure/runtime-security/reviewed-images.json');
-  const manifestBytes = await readFile(manifestPath);
-  const image = validateManifest(JSON.parse(manifestBytes)).find(item => item.component === component);
+  const manifest = await readReviewedImageSet(ROOT, selected.name);
+  const manifestBytes = manifest.bytes;
+  const image = validateManifest(manifest.manifest).find(item => item.component === component);
   assert.ok(image, 'unreviewed_component');
   const context = await workspacePath(image.context), dockerfile = await workspacePath(image.dockerfile);
   const dockerfileSha256 = createHash('sha256').update((await readFile(dockerfile, 'utf8')).replaceAll('\r\n', '\n')).digest('hex');
@@ -131,7 +133,7 @@ async function publish(component, outputArgument) {
   await mkdir(output, { recursive: true });
   const tag = `${REPOSITORY}:${component}-${identity.commit}-${identity.run}-${identity.attempt}`;
   const builder = `otziv-review-${component}-${identity.run}-${identity.attempt}`;
-  const record = { schema: 'otziv-reviewed-image-publication-v1', component, ...identity, tag,
+  const record = { schema: 'otziv-reviewed-image-publication-v1', component, ...identity, tag, ...publicationSetFields(selected.name),
     sourceBeforeRef: image.sourceBeforeRef, platform: 'linux/amd64', productionActivated: false,
     publicDownloadReadiness: 'NOT_VERIFIED_REQUIRES_ANONYMOUS_PULL_AFTER_VISIBILITY_CONFIGURATION',
     manifestSha256: createHash('sha256').update(manifestBytes).digest('hex'),
@@ -140,7 +142,7 @@ async function publish(component, outputArgument) {
   let created = false;
   try {
     assertPublicationPreparation(image);
-    await assertCleanSource([image.context, image.dockerfile, 'infrastructure/runtime-security/reviewed-images.json']);
+    await assertCleanSource([image.context, image.dockerfile, selected.path, 'infrastructure/runtime-security/reviewed-images.json']);
     await assertCleanRepository();
     await run('docker', ['buildx', 'create', '--name', builder, '--driver', 'docker-container', '--driver-opt', 'image=' + BUILDKIT]);
     created = true;
@@ -189,7 +191,8 @@ async function publish(component, outputArgument) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv[2] === 'matrix') {
-    const images = validateManifest(JSON.parse(await readFile(resolve(ROOT, 'infrastructure/runtime-security/reviewed-images.json'), 'utf8')));
+    const manifest = await readReviewedImageSet(ROOT, selectedReviewedImageSet(process.env).name);
+    const images = validateManifest(manifest.manifest);
     const matrix = JSON.stringify({ include: images.map(({ component }) => ({ component })) });
     if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `matrix=${matrix}\n`);
     else console.log(matrix);

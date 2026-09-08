@@ -1,0 +1,15 @@
+{
+  "result": "PASS",
+  "observedAt": "2026-09-08T07:20:04.598471+00:00",
+  "owner": "otziv-mysql-c7-rollback-3ae7c028-0653-4831-85c9-9da6d9498a45",
+  "remainingOwnedResources": {
+    "container": 0,
+    "network": 0,
+    "volume": 0
+  },
+  "protectedFilesRemoved": [
+    "source.sql.gz",
+    "preupgrade.sql.gz",
+    "clone-secret.json"
+  ]
+}

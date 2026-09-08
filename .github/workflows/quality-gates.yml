@@ -8,6 +8,14 @@ on:
         type: boolean
         required: false
         default: false
+      reviewed-image-set:
+        description: Reviewed publication set; the C12 set publishes only phpMyAdmin
+        type: choice
+        required: false
+        default: baseline
+        options:
+          - baseline
+          - c12-phpmyadmin
   pull_request:
   push:
 
@@ -21,6 +29,8 @@ concurrency:
 jobs:
   reviewed-image-inventory:
     name: Inventory reviewed publication candidates
+    env:
+      OTZIV_REVIEWED_IMAGE_SET: ${{ inputs.reviewed-image-set || 'baseline' }}
     if: github.event_name == 'workflow_dispatch' && inputs.publish-reviewed-images == true
     runs-on: ubuntu-24.04
     outputs:
@@ -36,6 +46,8 @@ jobs:
 
   reviewed-image-publication:
     name: Publish reviewed candidate (${{ matrix.component }})
+    env:
+      OTZIV_REVIEWED_IMAGE_SET: ${{ inputs.reviewed-image-set || 'baseline' }}
     needs: reviewed-image-inventory
     if: github.event_name == 'workflow_dispatch' && inputs.publish-reviewed-images == true
     runs-on: ubuntu-24.04
@@ -84,6 +96,8 @@ jobs:
 
   reviewed-image-anonymous-download:
     name: Prove anonymous candidate download (${{ matrix.component }})
+    env:
+      OTZIV_REVIEWED_IMAGE_SET: ${{ inputs.reviewed-image-set || 'baseline' }}
     needs: [reviewed-image-inventory, reviewed-image-publication]
     # Retain independent component proofs when another publication fails. Each
     # verifier still rejects a missing or failed same-run publication artifact.

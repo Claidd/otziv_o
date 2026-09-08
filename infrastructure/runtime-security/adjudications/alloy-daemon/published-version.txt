@@ -1,0 +1,6 @@
+alloy, version v1.19.2-otziv.1 (branch: release-1.19, revision: becfd489a7bb459c0496893b555fb87a003296b1)
+  build user:       otziv-security@build
+  build date:       2026-09-08T02:12:47Z
+  go version:       go1.27.1
+  platform:         linux/amd64
+  tags:             gore2regex,netgo,embedalloyui,promtail_journal_enabled

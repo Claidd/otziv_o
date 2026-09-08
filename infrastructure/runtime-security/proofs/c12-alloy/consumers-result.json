@@ -1,0 +1,20 @@
+{
+  "schema": "otziv-c12-alloy-consumers-v1",
+  "startedAt": "2026-09-08T07:47:55.922201+00:00",
+  "completedAt": "2026-09-08T07:48:41.848583+00:00",
+  "exitCode": 0,
+  "result": "PASS",
+  "candidate": "ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+  "observerImage": "sha256:9e9bc5c2dd3e98ff5cc61c4a2e9961400100f1a6ffd01863a9fd15639d595150",
+  "harnessSha256": {
+    "infrastructure/docker-observer/consumer-smoke.mjs": "7f97bd75060f99daf375b355f19b16a5d1d8e38fc90e14e6a7322cac0407568c",
+    "infrastructure/docker-observer/consumer-fixture.cjs": "563356dfe7e8d7c683849354a2d91d3fdeefa0cb6cda2f8d034ee07976608ed4",
+    "infrastructure/alloy/config.alloy": "5f42d8586da504955bf5f04a7f1fbbcc87924f7571064fb1607efec5942cf7cf",
+    "infrastructure/recovery/process.mjs": "f3910105086cb2e75dc731f527d5de0338ae987b4bb238bc7d87a867a05b64fc",
+    "docker-compose.yaml": "fbc5eac19f7cfe06e3879747072fb296783825e06ab0ac647b0a886e5fa7ca40"
+  },
+  "requiredMarkersPresent": true,
+  "scope": "Full configured Docker and four file sources with owned synthetic markers; no production log reads",
+  "stdoutSha256": "9955e3458a920fb85123247deaf206075a223b25371cc01b23302c479bffb60c",
+  "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

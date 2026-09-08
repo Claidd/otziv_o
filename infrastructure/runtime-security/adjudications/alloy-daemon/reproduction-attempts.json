@@ -1,0 +1,21 @@
+{
+  "schema": "otziv-alloy-reproduction-attempts-v1",
+  "originalAttempt": {
+    "result": "BINARY_EQUALITY_FAILED",
+    "dockerfileSha256": "fa9d8e3b2a2e37ef538737f56aab952f0ae6e4a9d8e0642244ebb83db9f9445b",
+    "publishedBinarySha256": "2c21e2c85e1e88c88b3335d39c84ae5414232514aeaaea02457fef54f4c5e3dc",
+    "rebuiltBinarySha256": "cd54bba2de3038df6e68a6d572cd666ab0e7edd50f84b31b0fdcc7135d86443c",
+    "gateChanged": false
+  },
+  "nextAttempt": {
+    "reason": "Vendor Makefile injects wall-clock BuildDate and supports SOURCE_DATE_EPOCH",
+    "observedPublishedBuildDate": "2026-09-08T02:12:47Z",
+    "sourceDateEpoch": 1788833567,
+    "versionMetadataCommand": "Read-only/network-none/cap-drop Alloy --version; no data mounts",
+    "versionCommandExecuted": true,
+    "parserInspectionExecutedBinary": false,
+    "expectedFullBinarySha256": "2c21e2c85e1e88c88b3335d39c84ae5414232514aeaaea02457fef54f4c5e3dc",
+    "dockerfileSha256": "4ea73efb766742c784d4cbb3edd01e57a38ce9750f01aeeec87253cce0ebea95",
+    "equalityRequirementPreserved": true
+  }
+}

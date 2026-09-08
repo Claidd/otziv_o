@@ -952,7 +952,7 @@ services:
       - internal_net
 
   alloy:
-    image: grafana/alloy@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8
+    image: ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852
     container_name: alloy
     restart: unless-stopped
     logging: *default-logging

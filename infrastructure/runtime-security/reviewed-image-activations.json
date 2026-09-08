@@ -2,6 +2,35 @@
   "schema": "otziv-reviewed-image-activations-v1",
   "images": [
     {
+      "component": "alloy",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/alloy/publication/publication.json",
+        "sha256": "330e7275330b622d2a7c07459a4c5a06c0e82b01bd6ad7e4d749e6dceb9c7e29"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/alloy/anonymous/anonymous-download.json",
+        "sha256": "36bdc1107cd37e64b5e877f68ab02e642b353f81d36539871af7d34a82635a41"
+      },
+      "securityReassessment": {
+        "report": {
+          "path": "infrastructure/runtime-security/proofs/c12-alloy/vulnerabilities.json",
+          "sha256": "f68a6b04986287053ac2dd8f9d4248120f5e3c07b01eeefc725392e70fe0108a"
+        },
+        "adjudication": {
+          "path": "infrastructure/runtime-security/proofs/c12-alloy/adjudications.json",
+          "sha256": "49f63d2b4e99c3dea5989abbce966ddb9ace2bcff7e44d11028d9f40e9b39172"
+        },
+        "summary": {
+          "path": "infrastructure/runtime-security/proofs/c12-alloy/summary.json",
+          "sha256": "638b3afbb727238da69dea652612e9bc7be39b86432c327b43e9262f72fbf3e2"
+        }
+      }
+    },
+    {
       "component": "certbot",
       "reference": "ghcr.io/claidd/otziv-security@sha256:74afe2ca053c338fe4d14ed36397b4ccea286efc52a3db4fc5a5c07289a9c360",
       "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",

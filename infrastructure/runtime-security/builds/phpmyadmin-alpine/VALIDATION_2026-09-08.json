@@ -1,0 +1,385 @@
+{
+  "schema": "otziv-c12-phpmyadmin-alpine-validation-v1",
+  "recordedAt": "2026-09-08T08:11:47.318505+00:00",
+  "result": "LOCAL_CANDIDATE_VALIDATED_WITH_DOCUMENTED_COMPATIBILITY_LIMITS",
+  "platform": "linux/amd64",
+  "sourceBeforeRef": "ghcr.io/claidd/otziv-security@sha256:ea9c7f5a1340e33094ce3576d67d220d1baa5b933e69d1b916b3f0bd43e712b7",
+  "candidateLocalIndex": "sha256:2d8b0ba2ef2ead6d3e2e564c76ce20284ca5333610e5a217a6e250c0bc52898a",
+  "candidateOciConfig": "sha256:bf8db4ecfa93d77104a4a8b99de30b6b942c9ec28214fa2d07f303021e405a03",
+  "applicationVersion": "5.2.3",
+  "phpVersion": "8.3.33",
+  "distribution": "Alpine3.24.1",
+  "installedApks": 98,
+  "builderApks": 69,
+  "composerPackages": 58,
+  "scanner": {
+    "image": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+    "rawHigh": 0,
+    "rawCritical": 0,
+    "unfixedHighOrCritical": 0,
+    "fixedHighOrCritical": 0,
+    "adjudications": 0,
+    "rawSha256": "3dd9e9cb1e920577b5a70ca1fc990642e54cc5e8774e88c74c636f82ecefc498",
+    "sbomSha256": "852e4ee92b0e6fb292f2fcadd9c75a9498719bae1868eb0524c57f2769e29ce3"
+  },
+  "sourceBinding": {
+    "context": "infrastructure/runtime-security/builds/phpmyadmin-alpine",
+    "dockerfile": "infrastructure/runtime-security/builds/phpmyadmin-alpine/Dockerfile",
+    "scope": "All 11 candidate files present at the successful build retain their exact hashes. README and validation metadata added after the build are non-consumed documentation, not a claim of whole-context byte identity.",
+    "buildContextFiles": {
+      "apachectl": "de65830a3a79fddff738fe5adf434b585127ccd6c18953c5da347feb5c0a3f7a",
+      "build-iconv.sh": "9602fe44d2caf810c025d78c247e3ef6f73e5b2e2b54be5c8adf74633e8ba844",
+      "Dockerfile": "514bd99b51fd6003a5026b1f417a94ee0032c75e568cc38efdbcaa199f57df09",
+      "envvars": "2699001b412b0c9db3bf71915833632e4e66cfaddccb25044b200d9398c0f6df",
+      "httpd.conf": "1c88271361b605df1d5af7fb8b553fa731ce3dbd48ee9778b37e50b490dab6d9",
+      "iconv-build-packages.lock": "ab0b6b9b5969d4c088df0c4412de1350b9825f64fc8c114d748362dcfc4d21bc",
+      "iconv-proof.php": "4bac2dd83a298f7cde3a43edd786d72ca8a232900671a724e912ac68799a4ab0",
+      "packages.lock": "c519cc06e9b0171c323dcfd03d7b5dcd7b0f5707718889287033a1212a80a722",
+      "packages.requested": "0875a9d209475540f7e94ba3e68898d4f50c6b8af7f8ed839c34f23e912f13fb",
+      "ports.conf": "c6f0738612c0670bb77f54ed630b6f1f6c97ef2b627ad70bf4bcf858d056c26f",
+      "site.conf": "7c8b6967253e3a67f283336cd11db3c1d468da78887d99d0aaa06c11934c500c"
+    },
+    "consumedFiles": {
+      "apachectl": "de65830a3a79fddff738fe5adf434b585127ccd6c18953c5da347feb5c0a3f7a",
+      "build-iconv.sh": "9602fe44d2caf810c025d78c247e3ef6f73e5b2e2b54be5c8adf74633e8ba844",
+      "Dockerfile": "514bd99b51fd6003a5026b1f417a94ee0032c75e568cc38efdbcaa199f57df09",
+      "envvars": "2699001b412b0c9db3bf71915833632e4e66cfaddccb25044b200d9398c0f6df",
+      "httpd.conf": "1c88271361b605df1d5af7fb8b553fa731ce3dbd48ee9778b37e50b490dab6d9",
+      "iconv-build-packages.lock": "ab0b6b9b5969d4c088df0c4412de1350b9825f64fc8c114d748362dcfc4d21bc",
+      "iconv-proof.php": "4bac2dd83a298f7cde3a43edd786d72ca8a232900671a724e912ac68799a4ab0",
+      "packages.lock": "c519cc06e9b0171c323dcfd03d7b5dcd7b0f5707718889287033a1212a80a722",
+      "ports.conf": "c6f0738612c0670bb77f54ed630b6f1f6c97ef2b627ad70bf4bcf858d056c26f",
+      "site.conf": "7c8b6967253e3a67f283336cd11db3c1d468da78887d99d0aaa06c11934c500c"
+    },
+    "nonConsumedBuildContextFiles": [
+      "packages.requested"
+    ]
+  },
+  "iconvBuild": {
+    "sourceUrl": "https://www.php.net/distributions/php-8.3.33.tar.xz",
+    "officialReleaseMetadata": "https://www.php.net/releases/index.php?json&version=8.3.33",
+    "sourceSha256": "e293ed620cec74651bb4a071317892a478aa6840fab22db45c72d77cd42f9676",
+    "sourceFilesUnchanged": 82,
+    "moduleSha256": "e99c0d80445e7f3cc9820e957ecc783864b3b6a51c78e1c62da7cdbdd5f627e7",
+    "phpApi": 20230831,
+    "zendModuleApi": 20230831,
+    "zendExtensionApi": 420230831,
+    "zts": false,
+    "debug": false,
+    "compiler": "GCC15.2.0 signed Alpine package",
+    "cflags": "-O2 -fstack-protector-strong -fPIC",
+    "ldflags": "-Wl,-z,relro,-z,now",
+    "libs": "-liconv",
+    "configure": "--with-php-config=/usr/bin/php-config83 --with-iconv=/usr",
+    "gnuLibiconv": "1.18-r0 signed Alpine APK",
+    "sourcePatch": false,
+    "wholePhpRebuild": false,
+    "buildDependenciesInRuntime": false
+  },
+  "checks": {
+    "http": {
+      "passed": 75,
+      "failed": 0,
+      "phases": [
+        "C7 original",
+        "Alpine candidate",
+        "candidate custom8080",
+        "C7 fallback"
+      ],
+      "cleanup": "PASS"
+    },
+    "configurationSession": {
+      "passed": 24,
+      "failed": 0,
+      "includes": [
+        "FILE precedence",
+        "custom BASE64 config",
+        "PHP limits",
+        "secret persistence",
+        "cookie session restart and candidate-to-C7 fallback"
+      ],
+      "cleanup": "PASS"
+    },
+    "iconvCompatibility": {
+      "passed": 9,
+      "failed": 0
+    },
+    "upstreamIconv": {
+      "total": 71,
+      "passed": 68,
+      "failed": 0,
+      "skipped": 3,
+      "skipReasons": [
+        "CGI SAPI not included in the module builder",
+        "Windows-only test",
+        "upstream musl setlocale skip"
+      ]
+    },
+    "applicationInventory": [
+      {
+        "path": "/var/www/html",
+        "filesOrSymlinks": 4275,
+        "result": "BYTE_IDENTICAL_WITH_SAME_FILE_MODES_AND_OWNERS"
+      },
+      {
+        "path": "/etc/phpmyadmin",
+        "filesOrSymlinks": 4,
+        "result": "BYTE_IDENTICAL_WITH_SAME_FILE_MODES_AND_OWNERS"
+      },
+      {
+        "path": "/docker-entrypoint.sh",
+        "filesOrSymlinks": 1,
+        "result": "BYTE_IDENTICAL_WITH_SAME_FILE_MODES_AND_OWNERS"
+      },
+      {
+        "path": "/usr/local/bin/apache2-foreground",
+        "filesOrSymlinks": 1,
+        "result": "BYTE_IDENTICAL_WITH_SAME_FILE_MODES_AND_OWNERS"
+      }
+    ],
+    "phpModules": 41,
+    "apkClosureLock": "98 exact installed versions match packages.lock; normal signature enforcement; no allow-untrusted",
+    "encodingComparison": "PASS_WITH_DOCUMENTED_VENDOR_DIFFERENCE"
+  },
+  "limits": [
+    "GNU libiconv and glibc have different lossy ASCII transliteration tables: café becomes caf'e versus cafe. No claim of complete encoding or libc/locale parity. Actual PMA Windows-1251 to UTF-8 import and shared EURss transliteration passed.",
+    "PMA5.2.3 supports gzip and ZIP export; it has no bzip2 export option in the source baseline. Actual bzip2 SQL import is verified; no bzip2 export feature was added.",
+    "Alpine community PHP support follows the active stable branch, shorter than the main repository support window; maintain a timely signed PHP83 package/branch refresh.",
+    "Operating-system/advisory coverage changed from Debian to Alpine. Zero raw HC in this scan does not establish that every former Debian advisory was individually fixed. Two unchanged lower-severity Composer matches remain in the raw report.",
+    "Only synthetic local MySQL fixtures were used. No production data, main local database, deployment, registry publication or risk acceptance is included.",
+    "Historical failed fixtures/builds and the earlier0HC musl image are retained; only the final GNU iconv image has the complete runtime acceptance reported here."
+  ],
+  "productionActivated": false,
+  "registryPublished": false,
+  "riskAcceptanceGranted": false,
+  "evidence": [
+    {
+      "path": "build-v11-result.json",
+      "bytes": 1313,
+      "sha256": "3c62d6573bb801b1ea5acec24cc68e0e989f78338990cc887aa996c2042f7b1c",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "build-v11-source.json",
+      "bytes": 1069,
+      "sha256": "288e34920d7d3ce0b6939b8f403442fe98ea4de7edff5480ce7269adb663363a",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "build-v11.log",
+      "bytes": 9527,
+      "sha256": "eadb51ee3dfff589c4fc7b77bc2daf84e56a501f778f99497725808e7fe3c8f4",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "final-scan-execution.json",
+      "bytes": 358,
+      "sha256": "edfe1ba44255977eb08fb27975fa990f214fe907b23530b0253f6488f253c94d",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "candidate-final-vulnerabilities.json",
+      "bytes": 219043,
+      "sha256": "3dd9e9cb1e920577b5a70ca1fc990642e54cc5e8774e88c74c636f82ecefc498",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "candidate-final-vulnerabilities.sbom.cdx.json",
+      "bytes": 252865,
+      "sha256": "852e4ee92b0e6fb292f2fcadd9c75a9498719bae1868eb0524c57f2769e29ce3",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "candidate-final-vulnerabilities.triage.json",
+      "bytes": 363,
+      "sha256": "0120812653056d9a1c56b8b8ac34627a512eb90ab211cebfdc83abab7d352b97",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "candidate-final-vulnerabilities.adjudications.json",
+      "bytes": 838,
+      "sha256": "67b8d9dc2f43325fdd1a4877805b468f4e5fce2563808c0b2115dd60cdfeee30",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "candidate-final-vulnerabilities.scanner.log",
+      "bytes": 18844,
+      "sha256": "038c38c49a5d8b2d79da5cbf52f5d0c87377c633d6bddab403b2b147653335f2",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "runtime-final-v11/proof.json",
+      "bytes": 23348,
+      "sha256": "05adafd4bc3e8c253c0ad2e28ebeff75a6e9cb61f81e70e6259dc0a90c688e36",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "runtime-contracts-v1/proof.json",
+      "bytes": 7272,
+      "sha256": "eed3987128fa7a276d5716ee72e7e861497567325282cf86bb9e14bb9f604d5e",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/result.json",
+      "bytes": 2047,
+      "sha256": "46565bfbc0c443ba1a9ff176e526681375d0004319b2defad9882a1c776a34d2",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/application-inventory.json",
+      "bytes": 2475156,
+      "sha256": "c0974408dc8c9bf734c92f46b1e5c4ba9bd754f52d4a34daafdec89555cef607",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "encoding-comparison.json",
+      "bytes": 1218,
+      "sha256": "73703ca408cddcb6f035455d5af9059aab0dd98c7f4d3acf89f269014bab2b1a",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "iconv-source/php-release.json",
+      "bytes": 618,
+      "sha256": "820afa34f21a437628561bbc4881d710d7cbe519ba5b35f13937b06ae4225aff",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "iconv-source/php-8.3.33.tar.xz",
+      "bytes": 12613000,
+      "sha256": "e293ed620cec74651bb4a071317892a478aa6840fab22db45c72d77cd42f9676",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "iconv-source/php83-APKBUILD",
+      "bytes": 19433,
+      "sha256": "e7fbe9f9546dba3165ec232988325cbd5ad77ac28a6e740262a9f35261d549fb",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "iconv-source/gnu-libiconv-APKBUILD",
+      "bytes": 1585,
+      "sha256": "f1de5e4cf6633f1e255f31cc9fa13974985fcf274d5a85757bf1b7c7d441c4fb",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "iconv-source/builder-packages.json",
+      "bytes": 13861,
+      "sha256": "3dc63e2dead1322c455e9b60cf64b2173174bd375ee099b3011da05f1b59b2ef",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/apk-installed-database",
+      "bytes": 93227,
+      "sha256": "73808986d2672acca5d084bea0c8fc2f67d48b330fff15c562e3a0a0f09d27b3",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/apk-payload-sha256.txt",
+      "bytes": 8878,
+      "sha256": "aab24b58d09d8b30bed6da7a2d4ad54584573587436523197958538907893d7a",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "final-iconv.so",
+      "bytes": 64296,
+      "sha256": "e99c0d80445e7f3cc9820e957ecc783864b3b6a51c78e1c62da7cdbdd5f627e7",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/build-apk-database",
+      "bytes": 275031,
+      "sha256": "42f1ae466aaab72edd347351d8c327734cd04522945905a9963d68d32ce86cf5",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/build-apk-payload-sha256.txt",
+      "bytes": 6226,
+      "sha256": "55f32a892357332f9f2824321a2e509580fc39ab75dd5452ed06fe26bac8ba57",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/build-identity.txt",
+      "bytes": 293,
+      "sha256": "69c43852cb8a3c1b6b3d9aaf045dac95b196b26143bcb241450913ba81d36b58",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/compatibility.json",
+      "bytes": 307,
+      "sha256": "6a320cd1b0624069bf375d93814c9a0e1e121b369af754c7fef6709f63d1db60",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/compiler.txt",
+      "bytes": 228,
+      "sha256": "26a61ac72afc022fca79cd7cca401f0fdd36399aa7fb0e5be04184baa42b6c7b",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/configure.log",
+      "bytes": 3823,
+      "sha256": "9c14db6faeb522af6ccc1f624a331b9e4bd2545a8fe269b169c311760633e303",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/elf-dynamic.txt",
+      "bytes": 1412,
+      "sha256": "f699cb8aab2c9a7e78d2850f3ecce6c38814b54fd90f32d5eab0422146bb40ad",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/loaded-libraries.txt",
+      "bytes": 6138,
+      "sha256": "c77360f8ab71f46f5e901c6627c064f9e3c2bc96d74f358270752d603a78cc06",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/make.log",
+      "bytes": 3097,
+      "sha256": "14d056569935f2a0d5ce8e1d5761ee12c15ff2bf54e5fa2d6f5244c709455464",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/module.sha256",
+      "bytes": 80,
+      "sha256": "a37799d76a6858b8cab60067031fef0accb342d585e2a987fef6ba3b9f840dea",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/official-extension-files.sha256",
+      "bytes": 7814,
+      "sha256": "37ae15f159b442803f7919a4df3e9bcc5fbe2db579ce047239f55ce0dd099466",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/php-abi-configure-options.txt",
+      "bytes": 2124,
+      "sha256": "333ade43fa00516f266da2718b90fe977edfa1646f0e1117537a090dfce9acb2",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/PHP-LICENSE",
+      "bytes": 3204,
+      "sha256": "b42e4df5e50e6ecda1047d503d6d91d71032d09ed1027ba1ef29eed26f890c5a",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/phpize.log",
+      "bytes": 120,
+      "sha256": "f47db068b9f77106125a634dd833d12dbe8e580883db0df6888badb92a0b0cf3",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/unchanged-source.log",
+      "bytes": 2730,
+      "sha256": "7f31c001d8cd6d9a3e5d0caff2b2dde41efb56cb13f9b0c839d0d306031964a8",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    },
+    {
+      "path": "inventory-final/apk-evidence/iconv-build/upstream-tests.log",
+      "bytes": 12383,
+      "sha256": "28362399234018a292ef01a531fd8716f9624dac798e1d1a34a73e7c25a7c0db",
+      "availability": "Private retained evidence; not claimed to be publicly downloadable"
+    }
+  ]
+}

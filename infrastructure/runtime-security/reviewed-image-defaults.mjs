@@ -3,11 +3,17 @@ import { createHash } from 'node:crypto';
 import { lstat, open, readFile, readdir, realpath } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 import { inventory, repositoryInventory } from './upstream-images.mjs';
 import { validateManifest } from './publish-reviewed-images.mjs';
 import { assertPulledImage, validatePublication } from './verify-anonymous-download.mjs';
 import { checkedJson, SOURCE_REPOSITORY, verifyRegistryEvidence } from './registry-evidence.mjs';
 import { checkKeycloakRuntimeDependencies, requiresKeycloakDependencyProof } from './keycloak-runtime-dependencies.mjs';
+import { loadAlloyProof, matchingAlloyFindings, effectiveAlloySummary } from './alloy-daemon-adjudication.mjs';
+import { effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
+import { summarizeReport, TRIVY_IMAGE } from './scan.mjs';
+import { BUILD_INFO_READER } from './go-binary-inspection.mjs';
+import { assertPublicationSet, reviewedImageSet, validateReviewedImageSet } from './reviewed-image-sets.mjs';
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const DATABASE_HOLD = new Set(['mysql', 'postgres']);
@@ -16,6 +22,60 @@ const MANIFEST = 'infrastructure/runtime-security/reviewed-images.json';
 const MANIFEST_SHA256 = 'd48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2';
 const ACTIVATIONS = 'infrastructure/runtime-security/reviewed-image-activations.json';
 const EVIDENCE_FILE = /^registry-(?:index|amd64-(?:manifest|config)|attestation-[0-9]+(?:-payload-[0-9]+)?)\.json$/;
+
+export async function validateAlloyReassessment(image, entry, publication, proof) {
+  // The original C7 publication remains immutable. This later finding review is
+  // allowed only for the single reproduced Alloy executable, never other images.
+  assert.equal(image.component, 'alloy', 'activation_unresolved_security_review');
+  const { review, reviewSha256, files, closure } = await loadAlloyProof();
+  assert.equal(publication.reference, review.reference, 'activation_reassessment_reference');
+  assert.equal(publication.imageId, review.imageConfigId, 'activation_reassessment_image');
+  const reassessment = entry.securityReassessment;
+  assert.ok(reassessment, 'activation_unresolved_security_review');
+  assert.deepEqual(Object.keys(reassessment).sort(), ['adjudication', 'report', 'summary'], 'activation_reassessment_fields');
+  const raw = await proof(reassessment.report), receipt = await proof(reassessment.adjudication), summary = await proof(reassessment.summary);
+  assert.equal(raw.value.Metadata?.ImageID, publication.imageId, 'activation_reassessment_report_image');
+  const reviewedReport = JSON.parse(gunzipSync(files.get('reviewed-scan.json.gz')));
+  assert.deepEqual(raw.value.Metadata?.ImageConfig?.rootfs, reviewedReport.Metadata.ImageConfig.rootfs, 'activation_reassessment_report_rootfs');
+  assert.deepEqual(raw.value.Metadata?.ImageConfig?.config?.Labels, reviewedReport.Metadata.ImageConfig.config.Labels, 'activation_reassessment_report_labels');
+  const actual = receipt.value.alloy;
+  assert.equal(actual?.schema, 'otziv-alloy-adjudication-v1', 'activation_reassessment_schema');
+  assert.equal(actual.status, 'EXACT_BINARY_AFFECTED_CODE_ABSENT', 'activation_reassessment_not_proven');
+  assert.equal(actual.reviewSha256, reviewSha256, 'activation_reassessment_review_changed');
+  assert.equal(actual.rawReportSha256, sha256(raw.bytes), 'activation_reassessment_raw_report_changed');
+  assert.equal(actual.imageConfigId, publication.imageId, 'activation_reassessment_receipt_image');
+  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(actual.immutableImageId), 'activation_reassessment_inspected_image');
+  assert.equal(actual.binarySha256, review.binary.sha256, 'activation_reassessment_binary');
+  assert.equal(actual.canonicalBuildInfoSha256, review.binary.canonicalBuildInfoSha256, 'activation_reassessment_build_info');
+  assert.equal(actual.buildInfoReader, BUILD_INFO_READER, 'activation_reassessment_parser');
+  assert.deepEqual(actual.closure, closure, 'activation_reassessment_closure');
+  assert.deepEqual(actual.module, review.module, 'activation_reassessment_module');
+  assert.equal(actual.rawReportModified, false, 'activation_reassessment_raw_modified');
+  assert.equal(actual.inspectedBinaryExecuted, false, 'activation_reassessment_inspection_mode');
+  assert.equal(actual.validUntil, review.validUntil, 'activation_reassessment_expiry');
+  assert.deepEqual(actual.decisions, matchingAlloyFindings(raw.value, review), 'activation_reassessment_decisions');
+  assert.equal(actual.decisions.length, 2, 'activation_reassessment_scope_incomplete');
+  const expected = { ...effectiveAlloySummary(effectiveScanSummary(summarizeReport(raw.value), null), actual), scannerImage: TRIVY_IMAGE };
+  assert.deepEqual(summary.value, expected, 'activation_reassessment_summary_changed');
+  assert.equal(expected.result, 'PASS', 'activation_reassessment_security_failed');
+  assert.equal(expected.unresolvedRiskReview, 'NONE', 'activation_unresolved_security_review');
+  assert.equal(expected.effectiveBlockingFixedHighOrCritical, 0, 'activation_reassessment_fixed_findings');
+}
+
+export async function resolveActivationManifest(image, entry, manifestBytes, proof) {
+  if (entry.manifest === undefined) return { image, manifestBytes, manifestSet: 'baseline' };
+  assert.equal(image.component, 'phpmyadmin', 'activation_versioned_manifest_component');
+  assert.ok(entry.manifest && typeof entry.manifest === 'object', 'activation_versioned_manifest_missing');
+  assert.deepEqual(Object.keys(entry.manifest).sort(), ['path', 'sha256'], 'activation_versioned_manifest_fields');
+  const selected = reviewedImageSet('c12-phpmyadmin');
+  assert.equal(entry.manifest.path, selected.path, 'activation_versioned_manifest_path');
+  const loaded = await proof(entry.manifest);
+  const manifest = validateReviewedImageSet(selected.name, loaded.bytes, manifestBytes);
+  const [publicationImage] = validateManifest(manifest);
+  assert.equal(publicationImage.sourceBeforeRef, image.sourceBeforeRef, 'activation_versioned_source_mismatch');
+  assert.deepEqual(publicationImage.defaultReferencesBefore, image.defaultReferencesBefore, 'activation_versioned_coverage_mismatch');
+  return { image: publicationImage, manifestBytes: loaded.bytes, manifestSet: selected.name };
+}
 
 export async function validateActivation(image, entry, manifestBytes, read) {
   assert.equal(entry.component, image.component, 'activation_component_mismatch');
@@ -28,19 +88,27 @@ export async function validateActivation(image, entry, manifestBytes, read) {
     assert.equal(sha256(bytes), input.sha256, 'activation_proof_hash_mismatch');
     return { bytes, value: JSON.parse(bytes) };
   }
+  const selected = await resolveActivationManifest(image, entry, manifestBytes, proof);
+  const publicationImage = selected.image;
   const publication = await proof(entry.publication);
   const anonymous = await proof(entry.anonymous);
   const identity = { commit: entry.commit, run: entry.run, attempt: entry.attempt };
-  const digest = validatePublication(publication.value, identity, image, sha256(manifestBytes));
-  if (requiresKeycloakDependencyProof(image)) {
+  const digest = validatePublication(publication.value, identity, publicationImage, sha256(selected.manifestBytes), selected.manifestSet);
+  if (requiresKeycloakDependencyProof(publicationImage)) {
     const checked = checkKeycloakRuntimeDependencies(
       await read(dirname(entry.publication.path).replaceAll('\\', '/') + '/vulnerabilities.json'), publication.value.imageId);
     assert.deepEqual(checked, publication.value.knownRuntimeDependencies, 'activation_known_dependencies_changed');
   }
   assert.equal(entry.reference, publication.value.reference, 'activation_registered_reference_mismatch');
   assert.equal(publication.value.security.effectiveBlockingFixedHighOrCritical, 0, 'activation_security_severity_mismatch');
-  assert.equal(publication.value.security.unresolvedRiskReview, 'NONE', 'activation_unresolved_security_review');
+  if (publication.value.security.unresolvedRiskReview === 'NONE') {
+    assert.equal(entry.securityReassessment, undefined, 'activation_unnecessary_reassessment');
+  } else {
+    assert.equal(publication.value.security.unresolvedRiskReview, 'REQUIRED', 'activation_unresolved_security_review');
+    await validateAlloyReassessment(image, entry, publication.value, proof);
+  }
   const downloaded = anonymous.value;
+  assertPublicationSet(downloaded, selected.manifestSet);
   assert.equal(downloaded.schema, 'otziv-anonymous-download-v1', 'activation_anonymous_schema');
   assert.equal(downloaded.result, 'PASS', 'activation_anonymous_not_passed');
   for (const key of ['commit', 'run', 'attempt']) assert.equal(downloaded[key], identity[key], 'activation_anonymous_identity_mismatch');
@@ -55,8 +123,8 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   assert.equal(downloaded.dockerCredentialHelpersAvailable, false, 'activation_anonymous_helpers');
   assert.equal(downloaded.dockerTransport, 'unix:///var/run/docker.sock', 'activation_anonymous_transport');
   assert.equal(downloaded.pullExitCode, 0, 'activation_anonymous_pull_failed');
-  const expected = { source: SOURCE_REPOSITORY, commit: identity.commit, context: image.context,
-    dockerfile: image.dockerfile, dockerfileSha256: image.dockerfileSha256 };
+  const expected = { source: SOURCE_REPOSITORY, commit: identity.commit, context: publicationImage.context,
+    dockerfile: publicationImage.dockerfile, dockerfileSha256: publicationImage.dockerfileSha256 };
   for (const [document, path] of [[publication.value, entry.publication.path], [downloaded, entry.anonymous.path]]) {
     const blobs = new Map(), names = new Set();
     assert.ok(document.attestationEvidence?.artifacts?.length, 'activation_registry_evidence_missing');

@@ -187,12 +187,12 @@ test('CLI wires the absolute Docker executable, blank config, empty PATH and loc
   try {
     const input = join(root, 'input'), source = join(root, 'source'), executable = join(root, 'never-executed-docker-fixture');
     await mkdir(input); await mkdir(join(source, 'infrastructure/runtime-security/builds'), { recursive: true });
-    const dockerfile = 'FROM scratch\n';
-    const reviewedImage = { component: 'nginx', context: 'infrastructure/runtime-security',
-      dockerfile: 'infrastructure/runtime-security/builds/Fixture.Dockerfile', dockerfileSha256: hash(dockerfile),
-      sourceBeforeRef: image.sourceBeforeRef, candidateBaseRef: 'example.invalid/base@sha256:' + 'b'.repeat(64), buildArgs: {} };
+    const baselineBytes = await readFile(new URL('./reviewed-images.json', import.meta.url));
+    const reviewedImage = JSON.parse(baselineBytes).images.find(item => item.component === 'nginx');
+    const dockerfile = await readFile(new URL('../../' + reviewedImage.dockerfile, import.meta.url));
+    await mkdir(join(source, reviewedImage.context), { recursive: true });
     await writeFile(join(source, reviewedImage.dockerfile), dockerfile);
-    await writeFile(join(source, 'infrastructure/runtime-security/reviewed-images.json'), JSON.stringify({ schema: 'otziv-reviewed-images-v1', repository: REPOSITORY, images: [reviewedImage] }));
+    await writeFile(join(source, 'infrastructure/runtime-security/reviewed-images.json'), baselineBytes);
     await writeFile(join(input, 'publication.json'), '{}');
     await writeFile(executable, 'Benign file; injected test executor never runs this.');
     let ownedConfig, called = false;

@@ -1,0 +1,698 @@
+{
+  "schema": "otziv-alloy-activation-independent-review-v1",
+  "result": "PASS",
+  "createdAt": "2026-09-08T07:47:11.067152+00:00",
+  "checks": [
+    "immutable candidate manifest",
+    "immutable publication manifest",
+    "30 original mappings retained",
+    "index schema unchanged",
+    "exactly eight previous entries plus Alloy",
+    "all eight entries field-identical",
+    "database activation entries absent",
+    "one historical Alloy pin compose.yaml",
+    "only Alloy pin changed compose.yaml",
+    "one historical Alloy pin compose.prod-local.yaml",
+    "only Alloy pin changed compose.prod-local.yaml",
+    "one historical Alloy pin docker-compose.yaml",
+    "only Alloy pin changed docker-compose.yaml",
+    "database hold unchanged in code",
+    "frozen manifest constant unchanged",
+    "downstream default/reader code unchanged export async function validateReviewedDefaults",
+    "downstream default/reader code unchanged // Only oversized OCI statement blobs",
+    "frozen C7 pairs receipt",
+    "old C7 risk remains REQUIRED",
+    "exact C7 identity entry",
+    "publication receipt hash",
+    "publication retained zip API digest",
+    "publication retained capture digest",
+    "publication C7 file byte-identical publication.json",
+    "publication C7 file byte-identical registry-index.json",
+    "publication C7 file byte-identical registry-amd64-manifest.json",
+    "publication C7 file byte-identical registry-amd64-config.json",
+    "publication C7 file byte-identical registry-attestation-0.json",
+    "publication C7 file byte-identical registry-attestation-0-payload-0.json",
+    "publication C7 file byte-identical registry-attestation-0-payload-1.json",
+    "publication C7 file byte-identical vulnerabilities.json",
+    "publication registry digest registry-index.json",
+    "publication registry digest registry-amd64-manifest.json",
+    "publication registry digest registry-amd64-config.json",
+    "publication registry digest registry-attestation-0.json",
+    "publication registry digest registry-attestation-0-payload-0.json",
+    "publication registry digest registry-attestation-0-payload-1.json",
+    "anonymous receipt hash",
+    "anonymous retained zip API digest",
+    "anonymous retained capture digest",
+    "anonymous C7 file byte-identical anonymous-download.json",
+    "anonymous C7 file byte-identical registry-index.json",
+    "anonymous C7 file byte-identical registry-amd64-manifest.json",
+    "anonymous C7 file byte-identical registry-amd64-config.json",
+    "anonymous C7 file byte-identical registry-attestation-0.json",
+    "anonymous C7 file byte-identical registry-attestation-0-payload-0.json",
+    "anonymous C7 file byte-identical registry-attestation-0-payload-1.json",
+    "anonymous C7 file byte-identical anonymous-image-inspect.json",
+    "anonymous registry digest registry-index.json",
+    "anonymous registry digest registry-amd64-manifest.json",
+    "anonymous registry digest registry-amd64-config.json",
+    "anonymous registry digest registry-attestation-0.json",
+    "anonymous registry digest registry-attestation-0-payload-0.json",
+    "anonymous registry digest registry-attestation-0-payload-1.json",
+    "original publication risk retained",
+    "original C7 pair relation",
+    "C7 image and reference",
+    "review bound proof analyze-closure.py",
+    "review bound proof closure-analysis.json",
+    "review bound proof collector.go.mod.after.txt",
+    "review bound proof collector.go.mod.before.txt",
+    "review bound proof collector.go.sum.after.txt",
+    "review bound proof collector.go.sum.before.txt",
+    "review bound proof exact-target.json",
+    "review bound proof GHSA-rg2x-37c3-w2rh.json",
+    "review bound proof GO-2026-5746.json",
+    "review bound proof go-env.json",
+    "review bound proof import-closure.json.gz",
+    "review bound proof linked-functions.go",
+    "review bound proof linked-functions.raw.json.gz",
+    "review bound proof packages.raw.jsons.gz",
+    "review bound proof primary-index.json",
+    "review bound proof published-binary.json",
+    "review bound proof published-version.txt",
+    "review bound proof reproduce.Dockerfile",
+    "review bound proof reproduced-sha256.txt",
+    "review bound proof reproduction-attempts.json",
+    "review bound proof reproduction-build.log.gz",
+    "review bound proof reviewed-buildinfo.txt",
+    "review bound proof reviewed-scan.json.gz",
+    "review bound proof root.go.mod.after.txt",
+    "review bound proof root.go.mod.before.txt",
+    "review bound proof root.go.sum.after.txt",
+    "review bound proof root.go.sum.before.txt",
+    "review bound proof upstream-govulncheck.yaml",
+    "review bound proof upstream-Makefile",
+    "review bound proof independent-review.json",
+    "review bound proof independent-review.md",
+    "actual scan successful exact reference",
+    "scan source remained frozen scan.mjs",
+    "scan source remained frozen grafana-tempo-adjudication.mjs",
+    "scan source remained frozen go-binary-inspection.mjs",
+    "scan source remained frozen alloy-daemon-adjudication.mjs",
+    "scan source remained frozen adjudications/alloy-daemon/review.json",
+    "actual scan output execution.stderr",
+    "actual scan output execution.stdout",
+    "actual scan output vulnerabilities.adjudications.json",
+    "actual scan output vulnerabilities.json",
+    "actual scan output vulnerabilities.sbom.cdx.json",
+    "actual scan output vulnerabilities.scanner.log",
+    "actual scan output vulnerabilities.triage.json",
+    "activation exact fresh output vulnerabilities.json",
+    "activation exact fresh output adjudications.json",
+    "activation exact fresh output summary.json",
+    "activation exact fresh output sbom.cdx.json",
+    "activation exact fresh output scan-execution.json",
+    "fresh entry hash report",
+    "fresh entry hash adjudication",
+    "fresh entry hash summary",
+    "raw config exact C7",
+    "raw rootfs matches C7 reviewed report",
+    "raw labels match C7 reviewed report",
+    "raw rootfs matches actual registry config",
+    "raw labels match actual registry config",
+    "raw exactly two unfixed HIGH",
+    "exact finding selectors",
+    "receipt pairs current raw and proof",
+    "two exact recomputed decisions",
+    "independently recomputed complete effective summary",
+    "review currently within approved validity",
+    "runtime receipt source binding",
+    "actual runtime exact candidate and historical source",
+    "13 actual runtime checks and cleanup",
+    "runtime explicitly scoped synthetic not production",
+    "runtime clean process exits",
+    "actual pre-upgrade file restore",
+    "actual runtime harness unchanged monitoring-upgrade.mjs",
+    "actual runtime harness unchanged monitoring-source.mjs",
+    "actual runtime harness unchanged monitoring-scenarios.mjs",
+    "actual runtime harness unchanged monitoring-fixture-http.cjs",
+    "actual runtime harness unchanged ../docker-observer/consumer-fixture.cjs",
+    "actual runtime retained configuration alloy/config.alloy",
+    "actual runtime retained configuration grafana/dashboards/otziv-backend-performance.json",
+    "actual runtime retained configuration grafana/dashboards/postgres-overview.json",
+    "actual runtime retained configuration grafana/provisioning/dashboards/dashboards.yml",
+    "actual runtime retained configuration grafana/provisioning/datasources/datasources.yaml",
+    "actual runtime retained configuration loki/loki-config.yaml",
+    "actual runtime retained configuration prometheus/prometheus-local.yml",
+    "actual runtime retained configuration prometheus/prometheus.yml",
+    "actual runtime retained configuration tempo/tempo.yaml",
+    "cursor fixture retained exact bytes",
+    "retained passing test result activation-tests-final.log",
+    "retained passing test result default-tests-v2.log",
+    "retained passing test result unit-tests.log",
+    "all review inputs remained byte-stable"
+  ],
+  "checkCount": 145,
+  "sourceInputs": {
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/reviewed-images.json": {
+      "sha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+      "bytes": 40047
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/infrastructure/runtime-security/reviewed-images.json": {
+      "sha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+      "bytes": 40047
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/infrastructure/runtime-security/reviewed-image-activations.json": {
+      "sha256": "20ffff3f07af7d128d089490863b87d0418769ab5e268f2990ae54c704fc0366",
+      "bytes": 5886
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/reviewed-image-activations.json": {
+      "sha256": "fa75da1816e9b6bcbd01a99cec4f561d872ebb3dcb1a39cb443d5a5c66a34786",
+      "bytes": 7427
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/compose.yaml": {
+      "sha256": "44c6d9e225f027549f526a7b426eb426888aff62110022774a7c3d2ec09e98a4",
+      "bytes": 18072
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/compose.yaml": {
+      "sha256": "e01198281b4a28370eb7720ed2a79a737973d1afa1d9e5ba2dbbf3f2848a8246",
+      "bytes": 17688
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/compose.prod-local.yaml": {
+      "sha256": "6ac77714ec265f478443661c9da8412a6c628e0da1d90abc722c8d44d66f4f82",
+      "bytes": 46682
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/compose.prod-local.yaml": {
+      "sha256": "bba85f4505674c1ff3efa4ade287c97e8f4932b08c95e8da108e385d18da719a",
+      "bytes": 45844
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/docker-compose.yaml": {
+      "sha256": "fbc5eac19f7cfe06e3879747072fb296783825e06ab0ac647b0a886e5fa7ca40",
+      "bytes": 55935
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/docker-compose.yaml": {
+      "sha256": "9d0ffd4d856203ceeefcf2fb74f5fccc7bb18e0b4541c4acd38d68055c49f8e2",
+      "bytes": 54928
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/reviewed-image-defaults.mjs": {
+      "sha256": "3cbc559384badc01856171c43741649c934487fc59646d8e1d4ec2c50f2e2aff",
+      "bytes": 18632
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/infrastructure/runtime-security/reviewed-image-defaults.mjs": {
+      "sha256": "f5c35ea62e98e4ec40ef45dc50d003a3618b9f9b29d34995045ecc0b8757cf46",
+      "bytes": 14379
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/publication-pairs-final.json": {
+      "sha256": "51abc75a1ee1cfa26cecb48d7966c8b9e52ec15d8a3e6faa1939d152f8da27e7",
+      "bytes": 46389
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/publication/publication.json": {
+      "sha256": "330e7275330b622d2a7c07459a4c5a06c0e82b01bd6ad7e4d749e6dceb9c7e29",
+      "bytes": 3131
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916.zip": {
+      "sha256": "da64541a3728b0814c760b4ec6812c415460c09c6fc35870031ca04cc1ad4691",
+      "bytes": 656323
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T022942Z-16caf88f20/run-evidence.json": {
+      "sha256": "c8bc82442766686f5ac19aabc35f739f4284607fa0015739e7242393b654ead4",
+      "bytes": 178599
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916/publication.json": {
+      "sha256": "330e7275330b622d2a7c07459a4c5a06c0e82b01bd6ad7e4d749e6dceb9c7e29",
+      "bytes": 3131
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/publication/registry-index.json": {
+      "sha256": "a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+      "bytes": 857
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916/registry-index.json": {
+      "sha256": "a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+      "bytes": 857
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/publication/registry-amd64-manifest.json": {
+      "sha256": "f135ea9665be539ead8c6b1d9d2e5f7879986a99c31e1dff25a191c800e50fb9",
+      "bytes": 2007
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916/registry-amd64-manifest.json": {
+      "sha256": "f135ea9665be539ead8c6b1d9d2e5f7879986a99c31e1dff25a191c800e50fb9",
+      "bytes": 2007
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/publication/registry-amd64-config.json": {
+      "sha256": "7f5b0079e8c6b13cd2a767cdeb001430bdcf0db400afbaf925285d1ae29dd084",
+      "bytes": 5561
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916/registry-amd64-config.json": {
+      "sha256": "7f5b0079e8c6b13cd2a767cdeb001430bdcf0db400afbaf925285d1ae29dd084",
+      "bytes": 5561
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/publication/registry-attestation-0.json": {
+      "sha256": "134eb0b77a4a4d2cfc312ccb7f8decd9090e3d70ac1a77fca18a0a9debd21b02",
+      "bytes": 1112
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916/registry-attestation-0.json": {
+      "sha256": "134eb0b77a4a4d2cfc312ccb7f8decd9090e3d70ac1a77fca18a0a9debd21b02",
+      "bytes": 1112
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/publication/registry-attestation-0-payload-0.json": {
+      "sha256": "c132db80152533ff7cfa540c93f8fd2db1fc7456d773f1d9b7b4ad2a937dfcd6",
+      "bytes": 3965055
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916/registry-attestation-0-payload-0.json": {
+      "sha256": "c132db80152533ff7cfa540c93f8fd2db1fc7456d773f1d9b7b4ad2a937dfcd6",
+      "bytes": 3965055
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/publication/registry-attestation-0-payload-1.json": {
+      "sha256": "2cdd7e0ed084b2bd10c976cc2170bb50db6f20a4e6fb226218b1c0e7cbec4486",
+      "bytes": 34802
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916/registry-attestation-0-payload-1.json": {
+      "sha256": "2cdd7e0ed084b2bd10c976cc2170bb50db6f20a4e6fb226218b1c0e7cbec4486",
+      "bytes": 34802
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/publication/vulnerabilities.json": {
+      "sha256": "0ed6934afd2fce73be9eff9ecbfd2ee69c92ab4f210b06e88ca71315dbc8beec",
+      "bytes": 1184845
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T022942Z-16caf88f20/artifact-10038604916/vulnerabilities.json": {
+      "sha256": "0ed6934afd2fce73be9eff9ecbfd2ee69c92ab4f210b06e88ca71315dbc8beec",
+      "bytes": 1184845
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/anonymous/anonymous-download.json": {
+      "sha256": "36bdc1107cd37e64b5e877f68ab02e642b353f81d36539871af7d34a82635a41",
+      "bytes": 2980
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313.zip": {
+      "sha256": "24675245e7af3be6aadbcc5fa1beefaed17cc28f7e1fea535cd5fd8a69f2c7cd",
+      "bytes": 450191
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T024430Z-7d5d1d5668/run-evidence.json": {
+      "sha256": "11f7c03b5503955a2ad3eefb62d47ea2912339ec98c39c35a333e30d223eef8e",
+      "bytes": 222849
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313/anonymous-download.json": {
+      "sha256": "36bdc1107cd37e64b5e877f68ab02e642b353f81d36539871af7d34a82635a41",
+      "bytes": 2980
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/anonymous/registry-index.json": {
+      "sha256": "a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+      "bytes": 857
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313/registry-index.json": {
+      "sha256": "a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+      "bytes": 857
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/anonymous/registry-amd64-manifest.json": {
+      "sha256": "f135ea9665be539ead8c6b1d9d2e5f7879986a99c31e1dff25a191c800e50fb9",
+      "bytes": 2007
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313/registry-amd64-manifest.json": {
+      "sha256": "f135ea9665be539ead8c6b1d9d2e5f7879986a99c31e1dff25a191c800e50fb9",
+      "bytes": 2007
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/anonymous/registry-amd64-config.json": {
+      "sha256": "7f5b0079e8c6b13cd2a767cdeb001430bdcf0db400afbaf925285d1ae29dd084",
+      "bytes": 5561
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313/registry-amd64-config.json": {
+      "sha256": "7f5b0079e8c6b13cd2a767cdeb001430bdcf0db400afbaf925285d1ae29dd084",
+      "bytes": 5561
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/anonymous/registry-attestation-0.json": {
+      "sha256": "134eb0b77a4a4d2cfc312ccb7f8decd9090e3d70ac1a77fca18a0a9debd21b02",
+      "bytes": 1112
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313/registry-attestation-0.json": {
+      "sha256": "134eb0b77a4a4d2cfc312ccb7f8decd9090e3d70ac1a77fca18a0a9debd21b02",
+      "bytes": 1112
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/anonymous/registry-attestation-0-payload-0.json": {
+      "sha256": "c132db80152533ff7cfa540c93f8fd2db1fc7456d773f1d9b7b4ad2a937dfcd6",
+      "bytes": 3965055
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313/registry-attestation-0-payload-0.json": {
+      "sha256": "c132db80152533ff7cfa540c93f8fd2db1fc7456d773f1d9b7b4ad2a937dfcd6",
+      "bytes": 3965055
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/anonymous/registry-attestation-0-payload-1.json": {
+      "sha256": "2cdd7e0ed084b2bd10c976cc2170bb50db6f20a4e6fb226218b1c0e7cbec4486",
+      "bytes": 34802
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313/registry-attestation-0-payload-1.json": {
+      "sha256": "2cdd7e0ed084b2bd10c976cc2170bb50db6f20a4e6fb226218b1c0e7cbec4486",
+      "bytes": 34802
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c7-published/alloy/anonymous/anonymous-image-inspect.json": {
+      "sha256": "d21cbcb462f84d8d54d55a2207a4c9e9c9461b549c92f2ef8606a7a86343caab",
+      "bytes": 4306
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c7-hosted-helper/records/run-34178760576/20260908T024430Z-7d5d1d5668/artifact-10038920313/anonymous-image-inspect.json": {
+      "sha256": "d21cbcb462f84d8d54d55a2207a4c9e9c9461b549c92f2ef8606a7a86343caab",
+      "bytes": 4306
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/review.json": {
+      "sha256": "cdda7bfda718a0abb91a556a39b700b5bf4c93d8ef4439eca6cd088ff7670b07",
+      "bytes": 6451
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/analyze-closure.py": {
+      "sha256": "eb5685d4835fd23537bde829eca4ff5942302d9481698bfd67e4c441a515ee9c",
+      "bytes": 6612
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/closure-analysis.json": {
+      "sha256": "cfe868a394aea2d70d65dab0b02eff8496e092608a3a282968c340b91fa79678",
+      "bytes": 1435
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/collector.go.mod.after.txt": {
+      "sha256": "de38f56fa6d3894f1cae1d6b783f96e7db56a04192487b990dbcd7e2775528e8",
+      "bytes": 73326
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/collector.go.mod.before.txt": {
+      "sha256": "e8668ec77ceed40ba241e710ffbbc3b014d5aa3fb85cd9900a0bd3f0988476e2",
+      "bytes": 73326
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/collector.go.sum.after.txt": {
+      "sha256": "09d595177bf801a6839e1b2607bbc003f1e257cccc4fcaef149a27b22e50e5c4",
+      "bytes": 349086
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/collector.go.sum.before.txt": {
+      "sha256": "b20fafa996273e1844ca55342fb2c21182e66ca10f3c658f17d0a508a958f696",
+      "bytes": 348921
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/exact-target.json": {
+      "sha256": "eb97609783090aca4d33d5bec82e0c27a2dd4a523f49b46da79e489831da0375",
+      "bytes": 602
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/GHSA-rg2x-37c3-w2rh.json": {
+      "sha256": "549718d505c9a5749d6640e62c45bd64d0b14f0defd35c9944f2c60d27f302e6",
+      "bytes": 5925
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/GO-2026-5746.json": {
+      "sha256": "d11da88232883a96ac3b74f848f172ce86c3783b7818d7da4b925335621d5273",
+      "bytes": 1850
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/go-env.json": {
+      "sha256": "bda8db5575b46bea4c6361aac9f034b508a5c5c7dfcf19aa233ac4ca93f9cedc",
+      "bytes": 109
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/import-closure.json.gz": {
+      "sha256": "7dc809e1d2a68995a997ad722ac1f9c4dd4a2a693aca87c753737d6a9ac76cdd",
+      "bytes": 332712
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/linked-functions.go": {
+      "sha256": "3b45fe63c35a768005f083e086754e2f3bcc9e7714da3f845595931b698d0299",
+      "bytes": 1724
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/linked-functions.raw.json.gz": {
+      "sha256": "46cbc607c7c54b2b61c6599834e12910b34f82866dbe5f7a3f6d8942ca87e3ad",
+      "bytes": 2216553
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/packages.raw.jsons.gz": {
+      "sha256": "a15385303235914f7dda6305047f6b94d5e2c753adf1f9ec4ccce611fc3f700e",
+      "bytes": 4711921
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/primary-index.json": {
+      "sha256": "e3f4a18bdb4bb60bdea30c5ea8353f41d9e75a574f32616ccb6399b9b3dad73f",
+      "bytes": 1029
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/published-binary.json": {
+      "sha256": "354923b3eeed6718a8491f3510bebcf2aef1324960c5e602b153cb8444a933d8",
+      "bytes": 1115
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/published-version.txt": {
+      "sha256": "137371c9d3870c9cf772fc6721bbf8863f54cf7a024e15ca91e6205fbac98318",
+      "bytes": 330
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/reproduce.Dockerfile": {
+      "sha256": "4ea73efb766742c784d4cbb3edd01e57a38ce9750f01aeeec87253cce0ebea95",
+      "bytes": 5235
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/reproduced-sha256.txt": {
+      "sha256": "cab8733a99b33a074c6469c2aebf2364c103fbc3fec50a2a14b2659d87f0a29e",
+      "bytes": 549
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/reproduction-attempts.json": {
+      "sha256": "819f0ee9bb83deebe6e4ace90cf927358fd98c03391430e2390f521b3daa2ba6",
+      "bytes": 1074
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/reproduction-build.log.gz": {
+      "sha256": "bbe18a95244c103f5fed91ad55b7740391588f1324df773bf24df69580a4f0b5",
+      "bytes": 23787
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/reviewed-buildinfo.txt": {
+      "sha256": "55691e5409e905eae7a3cf3ffa90754c4649124eb4170f4b1cd75427078d411f",
+      "bytes": 112001
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/reviewed-scan.json.gz": {
+      "sha256": "5bd16356cd89d60c8d4dd1e973cf94e7d20fd71618a95fb75c541f39bf69819d",
+      "bytes": 115428
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/root.go.mod.after.txt": {
+      "sha256": "83b8feada5d425154429ae17a9239fc3a75ce32a845cdc3ec5c22954d2ee6aa9",
+      "bytes": 74257
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/root.go.mod.before.txt": {
+      "sha256": "ed321aa8a43f595baf993923014ad38d4b0f8ae16b8b35950c5eef2a550e431b",
+      "bytes": 74257
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/root.go.sum.after.txt": {
+      "sha256": "5889d530a7bd08dacfe87b963043737cea4c2029330fd1fefb3777275b0f5eb0",
+      "bytes": 349166
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/root.go.sum.before.txt": {
+      "sha256": "dd1cf41ff1fcc69e2d5d76de18c716600a285e0e2fea86b2dd2b31a6457d878d",
+      "bytes": 349001
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/upstream-govulncheck.yaml": {
+      "sha256": "559294c1964d4813b1ec863d0c3f80eb1d0390201c369b604828b09744c560cd",
+      "bytes": 3858
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/upstream-Makefile": {
+      "sha256": "8fa8cbd50eff7b8116e41ee0117801a5f7711be37747410264f328870e834745",
+      "bytes": 21162
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/independent-review.json": {
+      "sha256": "6c940fb7ed1613c4e0f58dec4e9d7cdf092461dc77352804f2d82e600e771aff",
+      "bytes": 16685
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/adjudications/alloy-daemon/independent-review.md": {
+      "sha256": "a80405a060650dce486028be00044b5ac1a5a304e463e4111320c63ce7030fea",
+      "bytes": 4584
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-scan/execution-result.json": {
+      "sha256": "ba6ed8fd51f238d37d91daaf2430dbaba46d36200750481f3199148d396d1eaa",
+      "bytes": 2513
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/scan.mjs": {
+      "sha256": "b797fa39600820e968b895533333176f37c5694ee869c8621043bf8d553b086f",
+      "bytes": 7694
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/grafana-tempo-adjudication.mjs": {
+      "sha256": "1cc234bd44c3280043dcef3be29e372095691a0f7a91e524dfd67fbb3555dc05",
+      "bytes": 4754
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/go-binary-inspection.mjs": {
+      "sha256": "c67072bad8c104d2e222170b7e33d5e2cd0b9a1ae13ca079959f8c9dd753d3e1",
+      "bytes": 4063
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/alloy-daemon-adjudication.mjs": {
+      "sha256": "7824c3dfc255c288522d7f7af0a00452ceb9a4c47a84f0ee5ed150db1909ef98",
+      "bytes": 11689
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-scan/execution.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-scan/execution.stdout": {
+      "sha256": "638b3afbb727238da69dea652612e9bc7be39b86432c327b43e9262f72fbf3e2",
+      "bytes": 483
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-scan/vulnerabilities.adjudications.json": {
+      "sha256": "49f63d2b4e99c3dea5989abbce966ddb9ace2bcff7e44d11028d9f40e9b39172",
+      "bytes": 2554
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-scan/vulnerabilities.json": {
+      "sha256": "f68a6b04986287053ac2dd8f9d4248120f5e3c07b01eeefc725392e70fe0108a",
+      "bytes": 1303052
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-scan/vulnerabilities.sbom.cdx.json": {
+      "sha256": "2bb4a28321346e7649ca1f15f6b21b3c9e28e4dd0db36781f5d802fecf00c909",
+      "bytes": 1464094
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-scan/vulnerabilities.scanner.log": {
+      "sha256": "2a240a618a57e3e222b6af90ef5c140f8b88d65d9f71b8cbdfe1cf2d34aa6dd0",
+      "bytes": 18872
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-scan/vulnerabilities.triage.json": {
+      "sha256": "593ced63a9d41e174c4e68729ec8af514a210eb71091f5b8cdbbf7611473282e",
+      "bytes": 1806
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c12-alloy/vulnerabilities.json": {
+      "sha256": "f68a6b04986287053ac2dd8f9d4248120f5e3c07b01eeefc725392e70fe0108a",
+      "bytes": 1303052
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c12-alloy/adjudications.json": {
+      "sha256": "49f63d2b4e99c3dea5989abbce966ddb9ace2bcff7e44d11028d9f40e9b39172",
+      "bytes": 2554
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c12-alloy/summary.json": {
+      "sha256": "638b3afbb727238da69dea652612e9bc7be39b86432c327b43e9262f72fbf3e2",
+      "bytes": 483
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c12-alloy/sbom.cdx.json": {
+      "sha256": "2bb4a28321346e7649ca1f15f6b21b3c9e28e4dd0db36781f5d802fecf00c909",
+      "bytes": 1464094
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/proofs/c12-alloy/scan-execution.json": {
+      "sha256": "ba6ed8fd51f238d37d91daaf2430dbaba46d36200750481f3199148d396d1eaa",
+      "bytes": 2513
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/proof.json": {
+      "sha256": "d8aa542aa85187768713a266920047dda6a933819f5ee03a9858fed87267e686",
+      "bytes": 5868
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/runtime-execution.json": {
+      "sha256": "0ec64c9dea489767bfad085a3e7732192346f3dd6481bc8436b47309b5fe9423",
+      "bytes": 1087
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/infrastructure/runtime-security/monitoring-upgrade.mjs": {
+      "sha256": "d48eb0b97c1e85ca4d3ac65bc29c9a48f2d6fd0367c5dde8b4649b82cd5f385b",
+      "bytes": 15028
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/infrastructure/runtime-security/monitoring-source.mjs": {
+      "sha256": "cad5ed316c6199301ec19c554b769bbdaa0dffeb9d67eb96e2df9f9cfc4a33f0",
+      "bytes": 1776
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/infrastructure/runtime-security/monitoring-scenarios.mjs": {
+      "sha256": "a7f08ac97e7a38dcce9ae0d6c94b4edac05054d4eb4f2859d8f2638c8d012e85",
+      "bytes": 11264
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/infrastructure/runtime-security/monitoring-fixture-http.cjs": {
+      "sha256": "c0192e2395f33f02165603e4ccc7f515fc965483b0c8a5feeae1a4fd0275ea7d",
+      "bytes": 2160
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/finalization-20260907/publication/worktree/infrastructure/runtime-security/../docker-observer/consumer-fixture.cjs": {
+      "sha256": "563356dfe7e8d7c683849354a2d91d3fdeefa0cb6cda2f8d034ee07976608ed4",
+      "bytes": 6136
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/configuration/alloy/config.alloy": {
+      "sha256": "5f42d8586da504955bf5f04a7f1fbbcc87924f7571064fb1607efec5942cf7cf",
+      "bytes": 2327
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/configuration/grafana/dashboards/otziv-backend-performance.json": {
+      "sha256": "c421c0888b5f016726a1081435d75bb3878ad66cff4967863d31b67a2b2610b3",
+      "bytes": 82190
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/configuration/grafana/dashboards/postgres-overview.json": {
+      "sha256": "d371c2f0fdd8238720ea95ff0814bc7e71d51c9da0261390532cdf415e3d4d14",
+      "bytes": 1641
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/configuration/grafana/provisioning/dashboards/dashboards.yml": {
+      "sha256": "951bdf8ca1b6ef6610159e0b84b19f2a251eaf525fbb0c7e33b67ee84575cc75",
+      "bytes": 235
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/configuration/grafana/provisioning/datasources/datasources.yaml": {
+      "sha256": "cfcec04f72e8e5ad5a0fc9580a6446afdc6d8ebe13be6b1ac3969ce88259b200",
+      "bytes": 565
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/configuration/loki/loki-config.yaml": {
+      "sha256": "39012aa876b2632827ffb02281e1a14081a8c7712b799e2ddf20e5d421c5fa58",
+      "bytes": 886
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/configuration/prometheus/prometheus-local.yml": {
+      "sha256": "e03a9680473037bf903502759bc9d0d2deba358a02afe8fe4ee7eedb452d6e90",
+      "bytes": 1152
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/configuration/prometheus/prometheus.yml": {
+      "sha256": "9117bac93de893a3cb08a6b24265ed441e6f0eaeda8a8f71458b8d30a6fed64d",
+      "bytes": 1111
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/configuration/tempo/tempo.yaml": {
+      "sha256": "3b1b35ccfe52ab2824bea077e9b9f4cdc4ca32dea75f246984cb2588c822012f",
+      "bytes": 787
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/actual-runtime/cursor-fixture.alloy": {
+      "sha256": "c428243b167c5bdd19438ad6e1e1d5c7500b69f710b0f49b0adfb3246289afb8",
+      "bytes": 1116
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/activation-tests-final.log": {
+      "sha256": "094abb051b4bca10d544163d4dc3209c33128c9b1d6b4b5c747cdde95fc41f2d",
+      "bytes": 1871
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/default-tests-v2.log": {
+      "sha256": "f69129ef128f22d38f602971ee76e756113686bc412874281f288b69bb64cf5a",
+      "bytes": 3418
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/unit-tests.log": {
+      "sha256": "5b0c9c131a60371fdbc81d5d808be3c0873f9986fd29bab13911777f1bb46129",
+      "bytes": 3742
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/alloy-activation.test.mjs": {
+      "sha256": "246bc8baf48b058b4cb34a547958f8a83e5f20eae39ef9e35ffc7b1f02f08d67",
+      "bytes": 5857
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/reviewed-image-defaults.test.mjs": {
+      "sha256": "3ab66331e5c1840babf19d320b3dd92780d64121bec7f06b295198e1fe2877cb",
+      "bytes": 28168
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/publish-reviewed-images.mjs": {
+      "sha256": "07387bb5f92d7a8e22af9a189970807f758c5c4c3c9480e368723644c242160d",
+      "bytes": 13160
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/verify-anonymous-download.mjs": {
+      "sha256": "193645b099971df9832f75bb5f34ac086be1c93b67a1b7fd28d0bb7b0d294685",
+      "bytes": 15708
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/candidate/infrastructure/runtime-security/registry-evidence.mjs": {
+      "sha256": "92e561f6ea9b288ae055cb77507752809508b256bac58a5c829771788c0f94b6",
+      "bytes": 12386
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/run-runtime.py": {
+      "sha256": "ce9c4b8204934a0df8c310d5302b69a29eb3dc4e89155b88dd9115f3a750800a",
+      "bytes": 2285
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/run-scan.py": {
+      "sha256": "4827453cb32395b3a71c708c3efe712833baf6b688765232b593f83325027b6d",
+      "bytes": 2048
+    },
+    "E:/Works/Projects/otziv/.codex-tmp/security-closure-20260908/c12-alloy-integration/prepare-activation.py": {
+      "sha256": "5ff61c863f80781af31527a4691f4f1472a5cd72c302a45fcaa7d47f6d133622",
+      "bytes": 4528
+    }
+  },
+  "retainedTestCounts": {
+    "activation-tests-final.log": {
+      "tests": 17,
+      "pass": 17,
+      "fail": 0
+    },
+    "default-tests-v2.log": {
+      "tests": 47,
+      "pass": 47,
+      "fail": 0
+    },
+    "unit-tests.log": {
+      "tests": 50,
+      "pass": 50,
+      "fail": 0
+    }
+  },
+  "freshScan": {
+    "schema": "otziv-vulnerability-scan-v1",
+    "artifactCount": 2,
+    "high": 2,
+    "critical": 0,
+    "unfixedHighOrCritical": 2,
+    "blockingFixedHighOrCritical": 0,
+    "adjudicatedFixedHighOrCritical": 0,
+    "effectiveBlockingFixedHighOrCritical": 0,
+    "result": "PASS",
+    "adjudicatedAbsentFixedHighOrCritical": 0,
+    "adjudicatedAbsentUnfixedHighOrCritical": 2,
+    "effectiveUnfixedHighOrCritical": 0,
+    "unresolvedRiskReview": "NONE",
+    "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+  },
+  "runtimeChecks": 13,
+  "scope": "OFFLINE_SOURCE_AND_RETAINED_EVIDENCE_ONLY",
+  "networkCalls": 0,
+  "dockerCalls": 0,
+  "sharedMutations": 0,
+  "operationalLimit": "Synthetic local persistence compatibility; no production historical data or deployment approval."
+}

@@ -18,6 +18,62 @@ const digest=value=>createHash('sha256').update(value).digest('hex');
 export const targetImage='container-registry.oracle.com/mysql/community-server@sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340';
 const targetConfig='sha256:3fa754b144aeb7be887e6c614522aa06a2bbcd8ac2f3b67414884fa79000cdab';
 const label='com.otziv.mysql-upgrade.owner';
+const ownerPrefix='otziv-mysql-c7-rollback-';
+export const publishedImage='ghcr.io/claidd/otziv-security@sha256:3a3caaab4e71b3bfdec9da21c17c00ed10ca237151919aeddac8e5ce4b8b7baa';
+export const publishedConfig='sha256:80ee3b50147a329addbaf754abc4dce86dc06636624680d780351e2320a11070';
+export function requirePublishedIdentity(metadata) {
+  assert.ok(metadata.RepoDigests?.includes(publishedImage),'published_repository_digest_mismatch');
+  assert.equal(metadata.Os,'linux','published_os_mismatch');
+  assert.equal(metadata.Architecture,'amd64','published_architecture_mismatch');
+  assert.ok([publishedConfig,publishedImage.split('@')[1]].includes(metadata.Id),'published_local_identity_mismatch');
+  return metadata.Id;
+}
+export function requireAccountPolicy(account,database) {
+  assert.match(database,/^[a-zA-Z0-9_]+$/,'source_schema_invalid');
+  assert.match(account.user,/^[a-zA-Z0-9_]+$/,'source_account_invalid');
+  assert.ok(!['root','fixture'].includes(account.user),'source_account_not_application_user');
+  assert.equal(account.host,'%','source_account_host_requires_review');
+  const target='`'+account.user+'`@`%`';
+  assert.deepEqual([...account.grants].sort(),[
+    'GRANT USAGE ON *.* TO '+target,
+    'GRANT ALL PRIVILEGES ON `'+database+'`.* TO '+target,
+  ].sort(),'source_account_grants_require_review');
+  return {grantCount:2,scope:'EXACT_DATABASE_ALL_PRIVILEGES_WITH_GLOBAL_USAGE_ONLY'};
+}
+const publishedMode='published-rollback';
+const publishedCaptureSchema='otziv-mysql-published-rollback-capture-v1';
+const publishedTarget=()=>({reference:publishedImage,configurationDigest:publishedConfig});
+
+export function requireModeOptions({publishedRollback=false,resumePreparation=false,resumeViewDefiner=false,prepareViewDefiner=false,hardenedImage,retainAfterPass=false}={}) {
+  assert.equal(typeof publishedRollback,'boolean','published_mode_must_be_boolean');
+  if(publishedRollback)assert.ok(!resumePreparation&&!resumeViewDefiner&&!prepareViewDefiner&&!hardenedImage&&!retainAfterPass,'published_rollback_requires_new_complete_run');
+  return publishedRollback;
+}
+
+// Explicit CLI intent and both capture records must agree before opening a dump,
+// claiming a run, or contacting Docker. Historical generic captures remain V1.
+export function requireCaptureMode(captureInfo,claim,options={}) {
+  const publishedRollback=requireModeOptions(options);
+  assert.equal(claim.owner,captureInfo.owner,'capture_owner_mismatch');
+  if(publishedRollback) {
+    assert.equal(captureInfo.schema,publishedCaptureSchema,'published_capture_schema_required');
+    assert.equal(captureInfo.mode,publishedMode,'capture_mode_mismatch');
+    assert.equal(claim.mode,publishedMode,'owner_mode_mismatch');
+    assert.deepEqual(captureInfo.publishedTarget,publishedTarget(),'captured_published_identity_mismatch');
+    assert.deepEqual(claim.publishedTarget,publishedTarget(),'owner_published_identity_mismatch');
+    assert.equal(captureInfo.sourceContainer,sourceContainer,'capture_source_container_mismatch');
+    assert.match(claim.owner,/^otziv-mysql-c7-rollback-[a-f0-9-]{36}$/,'capture_owner_invalid');
+  } else {
+    assert.equal(captureInfo.schema,'otziv-mysql-upgrade-capture-v1','legacy_capture_schema_required');
+    for(const record of [captureInfo,claim]) {
+      assert.equal(record.mode,undefined,'explicit_published_mode_required');
+      assert.equal(record.publishedTarget,undefined,'explicit_published_identity_required');
+    }
+    assert.match(claim.owner,/^otziv-mysql-upgrade-[a-f0-9-]{36}$/,'capture_owner_invalid');
+  }
+  return publishedRollback;
+}
+
 const pause=ms=>new Promise(done=>setTimeout(done,ms));
 async function fileDigest(path) {const hash=createHash('sha256');for await(const part of createReadStream(path))hash.update(part);return hash.digest('hex');}
 async function privateDirectory(path) {
@@ -28,24 +84,42 @@ async function privateDirectory(path) {
     await run('icacls',[path,'/inheritance:r','/grant:r','*'+sid+':(OI)(CI)F','*S-1-5-18:(OI)(CI)F']);
   }
 }
-export async function capture(output,{sourceReady=false}={}) {
+export async function capture(output,{sourceReady=false,publishedRollback=false}={}) {
+  requireModeOptions({publishedRollback});
   assert.ok(sourceReady,'source_ready_write_fence_confirmation_required');
   const context=(await run('docker',['context','inspect','--format','{{.Endpoints.docker.Host}}'])).trim();
   assert.match(context,/^(npipe|unix):\/\//,'local_docker_required');
-  const out=resolve(output),owner='otziv-mysql-upgrade-'+randomUUID();
-  await privateDirectory(out);await writeFile(join(out,'owner.json'),JSON.stringify({owner,output:out}),{flag:'wx',mode:0o600});
+  const out=resolve(output),owner=(publishedRollback?ownerPrefix:'otziv-mysql-upgrade-')+randomUUID();
+  const modeMetadata=publishedRollback?{mode:publishedMode,publishedTarget:publishedTarget()}:{};
+  await privateDirectory(out);await writeFile(join(out,'owner.json'),JSON.stringify({owner,output:out,...modeMetadata}),{flag:'wx',mode:0o600});
   const sourceSql=sql=>run('docker',['exec','-i',sourceContainer,'sh','-c',sourceClient],{input:input(sql),maxOutput:8*1024*1024});
   const sourceImage=(await run('docker',['inspect','--format','{{.Image}}',sourceContainer])).trim();
+  if(publishedRollback) {
+    const sourceMeta=JSON.parse(await run('docker',['container','inspect','--format','{{json .}}',sourceContainer],{maxOutput:1024*1024}));
+    assert.equal(sourceMeta.Config.Labels['com.docker.compose.project'],'otziv-prod-local','source_project_mismatch');
+    assert.equal(sourceMeta.Config.Labels['com.docker.compose.service'],'mysql','source_service_mismatch');
+    assert.equal(sourceMeta.Mounts.find(m=>m.Destination==='/var/lib/mysql')?.Name,'otziv-prod-local_mysql_data','source_volume_mismatch');
+  }
   const startedAt=new Date().toISOString();
   const identity=(await sourceSql('SELECT VERSION(),DATABASE();')).trim().split('\t');assert.match(identity[0],/^9\.0\./);
+  let accountMetadata={};
+  if(publishedRollback) {
+    const accountRows=(await sourceSql('SELECT CURRENT_USER(); SHOW GRANTS FOR CURRENT_USER();')).trim().split('\n');
+    const [user,host]=accountRows.shift().split('@'),account={user,host,grants:accountRows};
+    accountMetadata={accountPolicy:requireAccountPolicy(account,identity[1]),accountPolicySha256:digest(JSON.stringify(account))};
+    await writeFile(join(out,'source-account-grants.json'),JSON.stringify(account,null,2)+'\n',{mode:0o600});
+  }
   const history=await sourceSql('SELECT installed_rank,version,description,type,script,COALESCE(checksum,0),success FROM flyway_schema_history ORDER BY installed_rank;');
   const dump=join(out,'source.sql.gz');
   const child=startProcess('docker',['exec',sourceContainer,'sh','-c',sourceDump],{timeoutMs:600000});
   child.child.stdin.end();
   const results=await Promise.allSettled([pipeline(child.child.stdout,createGzip({level:1}),createWriteStream(dump,{flags:'wx',mode:0o600})),child.completed]);
   assert.ok(results.every(result=>result.status==='fulfilled'),'source_dump_failed');
+  if(publishedRollback) {
+    assert.equal(await sourceSql('SELECT installed_rank,version,description,type,script,COALESCE(checksum,0),success FROM flyway_schema_history ORDER BY installed_rank;'),history,'source_flyway_changed_during_capture');
+  }
   const bytes=(await stat(dump)).size;assert.ok(bytes>100,'source_dump_empty');
-  const evidence={schema:'otziv-mysql-upgrade-capture-v1',owner,startedAt,completedAt:new Date().toISOString(),sourceContainer,sourceImage,
+  const evidence={schema:publishedRollback?publishedCaptureSchema:'otziv-mysql-upgrade-capture-v1',...modeMetadata,...accountMetadata,owner,startedAt,completedAt:new Date().toISOString(),sourceContainer,sourceImage,
     sourceVersion:identity[0],sourceSchemaVersion:history.trim().split('\n').at(-1).split('\t')[1],database:identity[1],dump:{file:'source.sql.gz',bytes,sha256:await fileDigest(dump)},
     flywayHistorySha256:digest(history),flywayRows:history.trim().split('\n').length,
     sourceWrites:false,sourceCaptureMode:'mysqldump single-transaction quick routines triggers events hex-blob, binary gzip pipe',
@@ -77,18 +151,25 @@ export function requireGracefulAppStop({pid1,exitCode,oomKilled,elapsedMs},log,d
 
 /** Private local data only. No source connection is opened during this phase. */
 export async function rehearse(output,{appEnvFile,appImage='otziv-app:finalization-shutdown-proof',resumePreparation=false,resumeViewDefiner=false,
-  prepareViewDefiner=false,hardenedImage,retainAfterPass=false}={}) {
+  prepareViewDefiner=false,hardenedImage,retainAfterPass=false,publishedRollback=false}={}) {
+  requireModeOptions({publishedRollback,resumePreparation,resumeViewDefiner,prepareViewDefiner,hardenedImage,retainAfterPass});
   assert.ok(appEnvFile,'app_env_file_required');
   resumePreparation=resumePreparation||resumeViewDefiner;
   const out=await realpath(resolve(output)),captureInfo=JSON.parse(await readFile(join(out,'capture.json'),'utf8'));
   const claim=JSON.parse(await readFile(join(out,'owner.json'),'utf8')),owner=claim.owner;
   assert.equal(await realpath(claim.output),out,'capture_owner_path_mismatch');
   assert.equal(owner,captureInfo.owner,'capture_owner_mismatch');
-  assert.match(owner,/^otziv-mysql-upgrade-[a-f0-9-]{36}$/,'capture_owner_invalid');
+  requireCaptureMode(captureInfo,claim,{publishedRollback,resumePreparation,resumeViewDefiner,prepareViewDefiner,hardenedImage,retainAfterPass});
   assert.equal(captureInfo.sourceVersion,'9.0.0','source_version_mismatch');
   assert.match(captureInfo.database,/^[a-zA-Z0-9_]+$/,'schema_name_invalid');
   assert.equal(captureInfo.dump.file,'source.sql.gz','capture_dump_path_invalid');
   assert.equal(await fileDigest(join(out,captureInfo.dump.file)),captureInfo.dump.sha256,'captured_dump_checksum_mismatch');
+  let sourceAccount;
+  if(publishedRollback) {
+    sourceAccount=JSON.parse(await readFile(join(out,'source-account-grants.json'),'utf8'));
+    assert.deepEqual(requireAccountPolicy(sourceAccount,captureInfo.database),captureInfo.accountPolicy,'captured_account_policy_mismatch');
+    assert.equal(digest(JSON.stringify(sourceAccount)),captureInfo.accountPolicySha256,'captured_account_policy_changed');
+  }
   let previous,previousBytes,resumeNumber=0;
   if(resumePreparation) {
     previousBytes=await readFile(join(out,'rehearsal.json'),'utf8');previous=JSON.parse(previousBytes);
@@ -109,18 +190,18 @@ export async function rehearse(output,{appEnvFile,appImage='otziv-app:finalizati
     await writeFile(join(out,'preparation-failed-v'+resumeNumber+'.json'),previousBytes,{flag:'wx',mode:0o600});
   }
   await writeFile(join(out,resumePreparation?'resume-preparation-v'+resumeNumber+'.claim':'rehearsal.claim'),new Date().toISOString(),{flag:'wx',mode:0o600});
-  const network=owner+'-net',volume=owner+'-data',database=captureInfo.database;
+  const network=owner+'-net',volume=owner+'-data',rollbackVolume=owner+'-rollback-data',database=captureInfo.database;
   const allocated=new Set(),password=resumePreparation?JSON.parse(await readFile(join(out,'clone-secret.json'),'utf8')).password:randomBytes(32).toString('hex');
-  let networkCreated=false,volumeCreated=false,phase='preflight';
+  let networkCreated=false,volumeCreated=false,rollbackVolumeCreated=false,phase='preflight';
   let oldMysql,newMysql,currentMysql,activeApp;
-  const evidence={schema:'otziv-mysql-upgrade-rehearsal-v1',owner,startedAt:new Date().toISOString(),production:false,
+  const evidence={schema:'otziv-mysql-upgrade-rehearsal-v1',...(publishedRollback?{mode:publishedMode,captureSchema:publishedCaptureSchema}:{}),owner,startedAt:new Date().toISOString(),production:false,
     sourceContainer:captureInfo.sourceContainer,sourceWrites:false,sourceCaptureSha256:captureInfo.dump.sha256,
-    sourceSchemaAtCapture:captureInfo.sourceSchemaVersion||'1.10.300',database,images:{source:captureInfo.sourceImage,targetReference:targetImage,targetConfigurationDigest:targetConfig},checks:previous?.checks||[],
+    sourceSchemaAtCapture:captureInfo.sourceSchemaVersion||'1.10.300',database,images:{source:captureInfo.sourceImage,targetReference:publishedRollback?publishedImage:targetImage,targetConfigurationDigest:publishedRollback?publishedConfig:targetConfig,...(publishedRollback?{upgradeCheckerReference:targetImage}:{})},checks:previous?.checks||[],
     ...(previous?{preparationFailurePreserved:{file:'preparation-failed-v'+resumeNumber+'.json',sha256:digest(previousBytes),resumeNumber,resume:'SAME_9_0_VOLUME_ONLY_BEFORE_CHECKER'}}:{}),
     resourceLimits:{mysqlMemoryBytes:1610612736,appMemoryBytes:2147483648,mysqlCpus:2,appCpus:2},
     rollback:'NO_BINARY_DOWNGRADE: restore the pre-upgrade database with its paired application/configuration release',
     limitations:['local sanitized clone; not a production rollout','no performance SLO or fleet compatibility implied',
-      'application health/Flyway/Hibernate only; Keycloak login and external delivery are not tested','source users/grants are not exported; isolated fixture accounts are used']};
+      'application health/Flyway/Hibernate only; Keycloak login and external delivery are not tested',publishedRollback?'the configured source account identity and grants are reproduced with a newly generated clone-only password; other source users are not copied':'source users/grants are not exported; isolated fixture accounts are used']};
   const save=()=>writeFile(join(out,'rehearsal.json'),JSON.stringify(evidence,null,2)+'\n',{mode:0o600});
   const docker=(args,options={})=>{const prepared=dockerEnvironment(args,{...process.env,...options.env});return run('docker',prepared.args,{...options,env:prepared.env});};
   const check=(name,condition)=>{assert.ok(condition,name);evidence.checks.push({name,passed:true,at:new Date().toISOString()});console.log('PASS '+name);};
@@ -170,7 +251,7 @@ export async function rehearse(output,{appEnvFile,appImage='otziv-app:finalizati
     // encryption keys stay in Docker's env-file transport; never print the env.
     const env={SPRING_PROFILES_ACTIVE:'prod',JAVA_OPTS:'-Xms128m -Xmx1000m -XX:MaxMetaspaceSize=384m -Djava.awt.headless=true',
       DATABASE_URL:'jdbc:mysql://mysql:3306/'+database+'?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC',
-      MYSQL_DATABASE:database,MYSQL_USER:'fixture',MYSQL_PASSWORD:password,
+      MYSQL_DATABASE:database,MYSQL_USER:publishedRollback?sourceAccount.user:'fixture',MYSQL_PASSWORD:password,
       KEYCLOAK_ISSUER_URI:'http://unavailable.invalid/realms/fixture',KEYCLOAK_JWK_SET_URI:'http://unavailable.invalid/realms/fixture/protocol/openid-connect/certs',
       KEYCLOAK_ADMIN_SERVER_URL:'http://unavailable.invalid',OTZIV_SECURITY_SESSION_REVOCATION_MODE:'off',
       KEYCLOAK_ADMIN_CLIENT_SECRET:randomBytes(24).toString('hex'),
@@ -231,16 +312,39 @@ export async function rehearse(output,{appEnvFile,appImage='otziv-app:finalizati
       checksumTables,queries:{json:jsonSql,jsonData:jsonChecks,queueSelection:queueSql},queryHashes:{json:digest(jsonSql),queueSelection:digest(queueSql)},
       queueProof:'native SELECT FOR UPDATE SKIP LOCKED with ROLLBACK; no claims, sends or saturation assertion'};
   }
+  async function prepareConfiguredAccount() {
+    await sql("CREATE USER '"+sourceAccount.user+"'@'%' IDENTIFIED BY '"+password+"';");
+    await sql(sourceAccount.grants.join(';\n')+';');
+    const actual=(await sql("SHOW GRANTS FOR '"+sourceAccount.user+"'@'%';")).trim().split('\n');
+    assert.deepEqual(actual.sort(),[...sourceAccount.grants].sort(),'cloned_application_grants_changed');
+    const accountProof=await docker(['exec','-i','-e','MYSQL_PWD='+password,currentMysql,'mysql','--protocol=TCP','--host=127.0.0.1','--user='+sourceAccount.user,'--database='+database,'--batch','--skip-column-names'],
+      {input:input('SELECT CURRENT_USER(),DATABASE(); SELECT COUNT(*) FROM flyway_schema_history;')});
+    assert.ok(accountProof.startsWith(sourceAccount.user+'@%\t'+database+'\n'),'configured_application_account_login_failed');
+    evidence.configuredAccount={policy:captureInfo.accountPolicy,sourcePolicySha256:captureInfo.accountPolicySha256,clonedGrantsEqual:true,originalPasswordCopied:false};
+  }
+  async function dumpOwnedBackup(filename) {
+    await owned(currentMysql);
+    const args=dockerEnvironment(['exec','-e','MYSQL_PWD='+password,currentMysql,'mysqldump','--protocol=TCP','--host=127.0.0.1','--user=root','--single-transaction','--quick','--routines','--triggers','--events','--no-tablespaces','--hex-blob','--set-gtid-purged=OFF',database]);
+    const child=startProcess('docker',args.args,{env:args.env,timeoutMs:600000});child.child.stdin.end();
+    const results=await Promise.allSettled([pipeline(child.child.stdout,createGzip({level:1}),createWriteStream(join(out,filename),{flags:'wx',mode:0o600})),child.completed]);
+    assert.ok(results.every(result=>result.status==='fulfilled'),'preupgrade_backup_failed');
+    return {file:filename,sha256:await fileDigest(join(out,filename)),bytes:(await stat(join(out,filename))).size};
+  }
   try {
     assert.match((await docker(['context','inspect','--format','{{.Endpoints.docker.Host}}'])).trim(),/^(npipe|unix):\/\//);
     evidence.images.app=(await docker(['image','inspect','--format','{{.Id}}',appImage])).trim();
+    if(publishedRollback) {
+      const publishedMetadata=JSON.parse(await docker(['image','inspect','--format','{{json .}}',publishedImage]));
+      evidence.images.published={reference:publishedImage,configurationDigest:publishedConfig,localId:requirePublishedIdentity(publishedMetadata)};
+    }
     if(hardenedImage){evidence.images.hardenedReference=hardenedImage;evidence.images.hardened=(await docker(['image','inspect','--format','{{.Id}}',hardenedImage])).trim();}
     const imageMetadata=JSON.parse(await docker(['image','inspect','--format','{{json .}}',targetImage]));
     assert.ok(imageMetadata.RepoDigests.includes(targetImage)&&imageMetadata.Architecture==='amd64'&&imageMetadata.Os==='linux','target_image_mismatch');
     // containerd image-store IDs identify the manifest; classic Docker IDs identify
     // its config blob. Always execute the verified repository manifest digest.
     assert.ok([targetConfig,targetImage.split('@')[1]].includes(imageMetadata.Id),'target_local_identity_mismatch');
-    evidence.images.targetLocalId=imageMetadata.Id;
+    evidence.images.targetLocalId=publishedRollback?evidence.images.published.localId:imageMetadata.Id;
+    if(publishedRollback)evidence.images.upgradeCheckerLocalId=imageMetadata.Id;
     await writeFile(join(out,'runtime-stats-before.txt'),await docker(['stats','--no-stream','--format','{{.Name}} {{.MemUsage}} {{.CPUPerc}}']),{mode:0o600});
     if(resumePreparation) {
       if(evidence.images.app!==previous.images.app) {
@@ -287,6 +391,7 @@ export async function rehearse(output,{appEnvFile,appImage='otziv-app:finalizati
     const originalHistory=await sql('SELECT installed_rank,version,description,type,script,COALESCE(checksum,0),success FROM flyway_schema_history ORDER BY installed_rank;');
     check('captured_flyway_history_restored',digest(originalHistory)===captureInfo.flywayHistorySha256);
     }
+    if(publishedRollback) {await prepareConfiguredAccount();check('configured_local_account_grants_and_login_preserved',true);}
     if(resumeViewDefiner||prepareViewDefiner) {
       phase='reviewed_clone_definer_preparation';
       const viewSql="SELECT TABLE_NAME,DEFINER,SECURITY_TYPE,SHA2(VIEW_DEFINITION,256) FROM information_schema.VIEWS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('analytics_payment_source','analytics_salary_source') ORDER BY TABLE_NAME;";
@@ -307,7 +412,14 @@ export async function rehearse(output,{appEnvFile,appImage='otziv-app:finalizati
     phase='app_migration_9_0';await startApp(resumePreparation?'app90-retry'+resumeNumber:'app90');await stop(activeApp);await logs(activeApp,'app90.log');activeApp=undefined;
     const latest=(await sql('SELECT version FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1;')).trim();
     check('actual_app_migrated_to_1_10_306',latest==='1.10.306');
+    if(publishedRollback) {
+      await sql('CREATE TABLE otziv_c7_rollback_probe (id INT PRIMARY KEY, note VARCHAR(64) NOT NULL); INSERT INTO otziv_c7_rollback_probe VALUES (1,\'before-upgrade\');');
+    }
     phase='snapshot_9_0';evidence.before=await snapshot('before');await save();
+    if(publishedRollback) {
+      phase='preupgrade_backup';evidence.preupgradeBackup=await dumpOwnedBackup('preupgrade.sql.gz');
+      check('preupgrade_backup_created_with_application_stopped',!activeApp&&evidence.preupgradeBackup.bytes>100);
+    }
     phase='mandatory_upgrade_checker';
     const checkerScript="util.checkForServerUpgrade({user:'root',host:'mysql',port:3306,password:os.getenv('MYSQL_PWD')},{targetVersion:'9.7.3',outputFormat:'JSON',configPath:'/fixture/my.cnf'});\n";
     await writeFile(join(out,'checker.js'),checkerScript,{mode:0o600});
@@ -328,7 +440,7 @@ export async function rehearse(output,{appEnvFile,appImage='otziv-app:finalizati
     phase='in_place_9_7_3';
     // Preserve UID999 ownership from the source image. Oracle's entrypoint explicitly
     // supports a numeric non-root caller; writable runtime files have a dedicated tmpfs.
-    newMysql=await create('mysql973',targetImage,[...mysqlArgs,'--user','999:999','--tmpfs','/var/lib/mysql-files:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0700'],['mysqld','--defaults-file=/fixture/my.cnf']);
+    newMysql=await create('mysql973',publishedRollback?publishedImage:targetImage,[...mysqlArgs,'--user','999:999','--tmpfs','/var/lib/mysql-files:rw,noexec,nosuid,size=16m,uid=999,gid=999,mode=0700'],['mysqld','--defaults-file=/fixture/my.cnf']);
     currentMysql=newMysql;await waitDb(newMysql,'9.7.3');
     const newMounts=JSON.parse(await docker(['inspect','--format','{{json .Mounts}}',newMysql]));
     check('same_named_data_volume_upgraded',newMounts.find(mount=>mount.Destination==='/var/lib/mysql')?.Name===volume);
@@ -359,6 +471,49 @@ export async function rehearse(output,{appEnvFile,appImage='otziv-app:finalizati
       await logs(newMysql,'mysql973-hardened.log');
       evidence.hardenedRuntimeVersion=(await sql('SELECT VERSION();')).trim();
     }
+    if(publishedRollback) {
+      phase='published_candidate_account_and_mutation';
+      const upgradedGrants=(await sql("SHOW GRANTS FOR '"+sourceAccount.user+"'@'%';")).trim().split('\n');
+      assert.deepEqual(upgradedGrants.sort(),[...sourceAccount.grants].sort(),'upgraded_application_grants_changed');
+      await sql("INSERT INTO otziv_c7_rollback_probe VALUES (2,'after-upgrade');");
+      check('published_candidate_accepts_new_canary_write',(await sql('SELECT COUNT(*) FROM otziv_c7_rollback_probe;')).trim()==='2');
+      const restartBefore=await snapshot('published-restart-before');
+      await sql('SET GLOBAL innodb_fast_shutdown=0;');await stop(newMysql,180);
+      phase='published_candidate_restart';await docker(['start',newMysql]);await waitDb(newMysql,'9.7.3');
+      const restartAfter=await snapshot('published-restart-after');
+      for(const key of ['tableCount','rows','countsSha256','historySha256','checksumsSha256','jsonSha256','jsonDataSha256'])check('published_restart_unchanged_'+key,restartBefore[key]===restartAfter[key]);
+      check('published_restart_keeps_postupgrade_canary',(await sql('SELECT COUNT(*) FROM otziv_c7_rollback_probe;')).trim()==='2');
+      await sql('SET GLOBAL innodb_fast_shutdown=0;');await stop(newMysql,180);
+      phase='rollback_fresh_volume';
+      assert.equal(await fileDigest(join(out,evidence.preupgradeBackup.file)),evidence.preupgradeBackup.sha256,'rollback_backup_changed');
+      await docker(['volume','create','--label',label+'='+owner,rollbackVolume]);rollbackVolumeCreated=true;
+      assert.equal((await docker(['volume','inspect','--format',`{{index .Labels "${label}"}}`,rollbackVolume])).trim(),owner,'rollback_volume_owner_mismatch');
+      const rollbackArgs=[...mysqlArgs];
+      const oldMount='type=volume,source='+volume+',target=/var/lib/mysql';
+      assert.equal(rollbackArgs.filter(arg=>arg===oldMount).length,1,'rollback_source_mount_ambiguous');
+      rollbackArgs[rollbackArgs.indexOf(oldMount)]='type=volume,source='+rollbackVolume+',target=/var/lib/mysql';
+      const restoredMysql=await create('mysql90-rollback',captureInfo.sourceImage,[...rollbackArgs,
+        ...Object.entries({MYSQL_ROOT_PASSWORD:password,MYSQL_ROOT_HOST:'%',MYSQL_DATABASE:database,MYSQL_USER:'fixture',MYSQL_PASSWORD:password}).flatMap(([key,value])=>['-e',key+'='+value])],['mysqld','--defaults-file=/fixture/my.cnf']);
+      currentMysql=restoredMysql;await waitDb(restoredMysql,'9.0.0');
+      const restoredMounts=JSON.parse(await docker(['inspect','--format','{{json .Mounts}}',restoredMysql]));
+      check('rollback_uses_separate_fresh_old_version_volume',rollbackVolume!==volume&&restoredMounts.find(m=>m.Destination==='/var/lib/mysql')?.Name===rollbackVolume);
+      check('rollback_database_was_initially_empty',(await sql("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE();")).trim()==='0');
+      await sql('SET GLOBAL log_bin_trust_function_creators=ON;');
+      const restoreArgs=dockerEnvironment(['exec','-i','-e','MYSQL_PWD='+password,restoredMysql,'mysql','--protocol=TCP','--host=127.0.0.1','--user=root','--database='+database]);
+      const restore=startProcess('docker',restoreArgs.args,{env:restoreArgs.env,timeoutMs:600000});restore.collect();
+      const restored=await Promise.allSettled([pipeline(createReadStream(join(out,evidence.preupgradeBackup.file)),createGunzip(),restore.child.stdin),restore.completed]);
+      assert.ok(restored.every(result=>result.status==='fulfilled'),'rollback_import_failed');
+      await prepareConfiguredAccount();
+      const rollbackSnapshot=await snapshot('rollback');
+      for(const key of ['tableCount','rows','countsSha256','historySha256','checksumsSha256','jsonSha256','jsonDataSha256'])check('rollback_restores_preupgrade_'+key,evidence.before[key]===rollbackSnapshot[key]);
+      check('postupgrade_canary_absent_after_backup_restore',(await sql("SELECT GROUP_CONCAT(CONCAT(id,':',note) ORDER BY id) FROM otziv_c7_rollback_probe;")).trim()==='1:before-upgrade');
+      phase='rollback_application';await startApp('app90-rollback');await stop(activeApp);await logs(activeApp,'app90-rollback.log');activeApp=undefined;
+      check('rollback_application_keeps_flyway_history',(await sql('SELECT version FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1;')).trim()==='1.10.306');
+      await sql('SET GLOBAL innodb_fast_shutdown=0;');await stop(restoredMysql,180);
+      evidence.rollbackProof={result:'PASS',sourceImage:captureInfo.sourceImage,restoredVersion:'9.0.0',backup:evidence.preupgradeBackup,
+        originalVolume:volume,restoredVolume:rollbackVolume,postUpgradeWriteAbsent:true,configuredAccountGrantsPreserved:true,
+        applicationImage:evidence.images.app,snapshot:rollbackSnapshot,binaryDowngradeAttempted:false};
+    }
     evidence.result='PASS';phase='cleanup';
   }catch(error) {
     evidence.result='FAIL';evidence.failurePhase=phase;evidence.failureCode=/^[a-z_]+$/.test(error.message||'')?error.message:'mysql_upgrade_rehearsal_failed';
@@ -373,15 +528,16 @@ export async function rehearse(output,{appEnvFile,appImage='otziv-app:finalizati
     if(evidence.result==='PASS'&&!retainAfterPass) {
       for(const name of allocated){await owned(name);await docker(['rm','-v',name]);}
       if(volumeCreated){assert.equal((await docker(['volume','inspect','--format',`{{index .Labels "${label}"}}`,volume])).trim(),owner);await docker(['volume','rm',volume]);}
+      if(rollbackVolumeCreated){assert.equal((await docker(['volume','inspect','--format',`{{index .Labels "${label}"}}`,rollbackVolume])).trim(),owner);await docker(['volume','rm',rollbackVolume]);}
       if(networkCreated){assert.equal((await docker(['network','inspect','--format',`{{index .Labels "${label}"}}`,network])).trim(),owner);await docker(['network','rm',network]);}
-      // Delete only two exact files inside this run's verified, non-symlink owner path.
-      for(const file of [captureInfo.dump.file,'clone-secret.json']) {
+      // Delete only the exact mode-specific files inside this run's verified, non-symlink owner path.
+      for(const file of [captureInfo.dump.file,'clone-secret.json',...(publishedRollback?['preupgrade.sql.gz']:[])]) {
         const path=await realpath(join(out,file));assert.ok(path.startsWith(out+'\\')||path.startsWith(out+'/'),'cleanup_path_outside_owned_output');
         assert.equal(path,join(out,file),'cleanup_symlink_refused');await unlink(path);
       }
       evidence.cleanup='OWNED_CONTAINERS_NETWORK_VOLUME_AND_PROTECTED_DUMP_REMOVED';
     } else {
-      evidence.retainedResources={containers:[...allocated],network:networkCreated?network:null,volume:volumeCreated?volume:null,stopped:true};
+      evidence.retainedResources={containers:[...allocated],network:networkCreated?network:null,volume:volumeCreated?volume:null,...(publishedRollback?{rollbackVolume:rollbackVolumeCreated?rollbackVolume:null}:{}),stopped:true};
       if(evidence.result==='PASS')evidence.cleanup='EXPLICIT_RETAIN_AFTER_PASS_STOPPED_OWNED_RESOURCES';
     }
     evidence.completedAt=new Date().toISOString();await save();
@@ -390,13 +546,30 @@ export async function rehearse(output,{appEnvFile,appImage='otziv-app:finalizati
   console.log(JSON.stringify({result:'PASS',output:out,version:evidence.runtimeVersion,checks:evidence.checks.length}));return evidence;
 }
 
+export function parseRehearsalCli(args) {
+  const [command,output,...flags]=args;assert.ok(output,'output_required');
+  assert.ok(['capture','rehearse'].includes(command),'expected_capture_or_rehearse_command');
+  const publishedRollback=flags.includes('--published-rollback');
+  if(publishedRollback) {
+    const booleanFlags=new Set(command==='capture'?['--published-rollback','--source-ready']:['--published-rollback']);
+    const valueFlags=new Set(command==='rehearse'?['--app-env-file','--app-image']:[]),seen=new Set();
+    for(let i=0;i<flags.length;i++) {
+      const flag=flags[i];
+      assert.ok(booleanFlags.has(flag)||valueFlags.has(flag),'published_rollback_unreviewed_flag');
+      assert.ok(!seen.has(flag),'published_rollback_duplicate_flag');seen.add(flag);
+      if(valueFlags.has(flag))assert.ok(flags[++i]&&!flags[i].startsWith('--'),'published_rollback_flag_value_required');
+    }
+  }
+  if(command==='capture')return {command,output,options:{sourceReady:flags.includes('--source-ready'),publishedRollback}};
+  return {command,output,options:{appEnvFile:flags.includes('--app-env-file')?flags[flags.indexOf('--app-env-file')+1]:undefined,
+    appImage:flags.includes('--app-image')?flags[flags.indexOf('--app-image')+1]:undefined,resumePreparation:flags.includes('--resume-app-preparation'),resumeViewDefiner:flags.includes('--resume-view-definer-preparation'),
+    prepareViewDefiner:flags.includes('--prepare-reviewed-view-definer'),hardenedImage:flags.includes('--hardened-image')?flags[flags.indexOf('--hardened-image')+1]:undefined,retainAfterPass:flags.includes('--retain-after-pass'),publishedRollback}};
+}
+
 if(process.argv[1]===fileURLToPath(import.meta.url)) {
   try {
-    const [command,output,...flags]=process.argv.slice(2);assert.ok(output,'output_required');
-    if(command==='capture')await capture(output,{sourceReady:flags.includes('--source-ready')});
-    else if(command==='rehearse')await rehearse(output,{appEnvFile:flags.includes('--app-env-file')?flags[flags.indexOf('--app-env-file')+1]:undefined,
-      appImage:flags.includes('--app-image')?flags[flags.indexOf('--app-image')+1]:undefined,resumePreparation:flags.includes('--resume-app-preparation'),resumeViewDefiner:flags.includes('--resume-view-definer-preparation'),
-      prepareViewDefiner:flags.includes('--prepare-reviewed-view-definer'),hardenedImage:flags.includes('--hardened-image')?flags[flags.indexOf('--hardened-image')+1]:undefined,retainAfterPass:flags.includes('--retain-after-pass')});
-    else throw Error('expected_capture_or_rehearse_command');
+    const {command,output,options}=parseRehearsalCli(process.argv.slice(2));
+    if(command==='capture')await capture(output,options);
+    else await rehearse(output,options);
   }catch(error) {console.error(JSON.stringify({result:'FAIL',code:/^[a-z_]+$/.test(error.message||'')?error.message:'mysql_upgrade_rehearsal_failed'}));process.exitCode=1;}
 }

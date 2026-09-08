@@ -11,3 +11,8 @@ infrastructure/runtime-security/history/** -text
 infrastructure/runtime-security/proofs/** -text
 infrastructure/keycloak/security-generation/proofs/** -text
 infrastructure/runtime-security/KEYCLOAK_ADVISORY_VALIDATION_2026-09-08.json -text
+
+infrastructure/runtime-security/adjudications/alloy-daemon/** -text
+
+infrastructure/runtime-security/builds/phpmyadmin-alpine/** text eol=lf
+infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json text eol=lf
