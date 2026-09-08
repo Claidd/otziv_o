@@ -1,0 +1,469 @@
+{
+  "schema": "otziv-ordinary-upstream-validation-v1",
+  "at": "2026-09-07T22:46:45.490471+00:00",
+  "scope": "Actual isolated local runtime and rollback fixtures; no production activation, no registry publication.",
+  "productionChanged": false,
+  "published": false,
+  "riskAcceptance": null,
+  "historicalCandidateProof": {
+    "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/FINAL_CANDIDATES.json",
+    "sha256": "302860a63809967c98c28a4f664e0aa95d887262db026b366eeaafc79a50d778"
+  },
+  "candidates": [
+    {
+      "component": "nginx",
+      "imageId": "sha256:c837e4c3cbc7e62dbddb9311f788b8be0a6c9745fea6504b376b8a1c3017561f",
+      "configId": "sha256:160e5a24a9169842a4f92ba2d30eecd56a743024674f94ad57c915cd37646475",
+      "result": "PASS_FIXED_GATE",
+      "rawHigh": 0,
+      "rawCritical": 0,
+      "fixedHighCritical": 0,
+      "unfixedReviewRequired": false,
+      "proof": {
+        "result": "PASS",
+        "at": "2026-09-07T22:09:26.057232+00:00",
+        "source": "nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+        "candidate": "sha256:c837e4c3cbc7e62dbddb9311f788b8be0a6c9745fea6504b376b8a1c3017561f",
+        "config": "data/nginx/nginx.conf",
+        "configSha256": "e6d99cd720a3134fe98cda8a369a4195323d80e392d3e48da2e23231d051f5e1",
+        "checks": [
+          "before: app proxy",
+          "before: forwarding headers",
+          "before: Keycloak canonical redirect",
+          "before: Keycloak relative path",
+          "before: request body",
+          "before: gzip response",
+          "before: actual config validation",
+          "before: restart",
+          "candidate: app proxy",
+          "candidate: forwarding headers",
+          "candidate: Keycloak canonical redirect",
+          "candidate: Keycloak relative path",
+          "candidate: request body",
+          "candidate: gzip response",
+          "candidate: actual config validation",
+          "candidate: restart",
+          "rollback: app proxy",
+          "rollback: forwarding headers",
+          "rollback: Keycloak canonical redirect",
+          "rollback: Keycloak relative path",
+          "rollback: request body",
+          "rollback: gzip response",
+          "rollback: actual config validation",
+          "rollback: restart"
+        ],
+        "limits": [
+          "fixture proves repository dev HTTP config; production TLS uses separately built web image",
+          "legacy hard-coded phpMyAdmin upstream address is not reconfigured or exercised"
+        ],
+        "productionTouched": false
+      },
+      "files": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/nginx-hardened-vulnerabilities-v1.json",
+          "sha256": "6fea68819f1092a83e94b8d7492101587f39954ed90489ffbcbfe5f26196ee35"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/nginx-hardened-vulnerabilities-v1.sbom.cdx.json",
+          "sha256": "a65426badf8bd9317918addef660791d9764a1c09ca464c7f017fff025f81aa5"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/nginx-hardened-vulnerabilities-v1.triage.json",
+          "sha256": "7b1a63677b714af5aab5fca92a36325abeb9ec8426a3855cc1631b884764efe0"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/nginx-fixture/proof.json",
+          "sha256": "30ded71c4f48c55e1c77d8ccd5e98b8391bb9700927a23d91b5b4ec754b25ea8"
+        }
+      ]
+    },
+    {
+      "component": "node",
+      "imageId": "sha256:04465a519aacdbb7f7167d79f60458e0696fde2043e671a79fbdd6383422e98c",
+      "configId": "sha256:780ecc7b8c2db0ef69d5fcafda98d7a580b48ffecfc4af4eb7fcb190e1422cbd",
+      "result": "PASS_FIXED_GATE",
+      "rawHigh": 0,
+      "rawCritical": 0,
+      "fixedHighCritical": 0,
+      "unfixedReviewRequired": false,
+      "proof": {
+        "result": "PASS",
+        "at": "2026-09-07T22:14:22.837344+00:00",
+        "officialBefore": "FAIL same unresolved shared TS relative imports",
+        "hardenedBefore": "FAIL same unresolved shared TS relative imports",
+        "hardenedAfter": "PASS actual npm ci + ng serve + HTTP200 app-root",
+        "fix": "serve.options.prebundle.exclude @otziv/client-common",
+        "originalRootMatchedPublication": true,
+        "productionBuildTargetObjectUnchanged": true,
+        "beforeConfigSha256": "d0e6a079906a9396f28d29a3d07fdf08c1f8236199fc174aad22cdb670837749",
+        "afterConfigSha256": "20f217db918a201f31c9722fc486aba192d703409f7fd327fb3e3e58556d265c",
+        "sourceChanged": [
+          "frontend/angular.json"
+        ]
+      },
+      "files": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-hardened-vulnerabilities-v1.json",
+          "sha256": "f6b75ae50515ee7fd11eafd47eea08343f328bae48674f9aacaa7b4265e49769"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-hardened-vulnerabilities-v1.sbom.cdx.json",
+          "sha256": "e3a6749cc8e13bff32b2d794d77de1ec2955f0a49c45679b3b09228c5546810b"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-hardened-vulnerabilities-v1.triage.json",
+          "sha256": "007c1214532534cf99efd468865e85b32865c73c2833a4dd8488f975acee87be"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/serve-proof.json",
+          "sha256": "f044681f95b8d0f5db5fa7e3750357b2843100c2a876f2e9fb1e96db6636dc16"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/production-build.log",
+          "sha256": "abae84a909a93f33e8f0f87072de2fd2a125045e1ce666bcb207e5da1fac9867"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/official-serve-red.log",
+          "sha256": "90603ccb2258e7a17cebeba597ae0ddfb44029b5fabf825dd18f158155f6d1ba"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/hardened-serve-red.log",
+          "sha256": "15db5d36af99f91406c345505098cf5adb3489664899b598923c8fc6fa92a8ad"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/hardened-serve-green.log",
+          "sha256": "338a6ab61a951f5831cd660e6ead80be817b116de56b85e4b082c3a0cbb82245"
+        }
+      ]
+    },
+    {
+      "component": "certbot",
+      "imageId": "sha256:f62d40f21fce46f21da20b97575c7093dd9e8268bb65f1e087e4ad5341f0c4c5",
+      "configId": "sha256:80f7949a5e72727578ab43f3b844fcd22745b93e6a9e2b20a4caad63d0aa5039",
+      "result": "PASS_FIXED_GATE",
+      "rawHigh": 0,
+      "rawCritical": 0,
+      "fixedHighCritical": 0,
+      "unfixedReviewRequired": false,
+      "proof": {
+        "result": "PASS",
+        "at": "2026-09-07T22:15:41.473486+00:00",
+        "source": "certbot/certbot@sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4",
+        "candidate": "sha256:f62d40f21fce46f21da20b97575c7093dd9e8268bb65f1e087e4ad5341f0c4c5",
+        "testCA": "ghcr.io/letsencrypt/pebble@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199",
+        "checks": [
+          "actual old default ACME HTTP01 issuance with verified TLS",
+          "paired certificate/account backup before candidate mutation",
+          "candidate actual forced renewal changes certificate serial",
+          "candidate persisted certificate inventory",
+          "restored backup certificate byte identity",
+          "old default actual renewal after backup rollback",
+          "issuer failure keeps last confirmed certificate unchanged"
+        ],
+        "before": {
+          "sha256": "0c5e616af47fe14265ffc65337f2838ab090175b627cc53ca5e1a4696b14b0d6",
+          "serial": "8652667072524483474"
+        },
+        "after": {
+          "sha256": "5db9f3716dfbb801e2834aa17382ffe778ad126d5af34f28fb505981d6fefb0f",
+          "serial": "3568245930167768646"
+        },
+        "realExternalACMEContact": false,
+        "productionTouched": false
+      },
+      "files": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/certbot-hardened-vulnerabilities-v1.json",
+          "sha256": "bc807d52125e60acaf53646d27578af7a26781f96910e80fd8ff0c889a433ab4"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/certbot-hardened-vulnerabilities-v1.sbom.cdx.json",
+          "sha256": "2725ffb787c15edbf818d753aeb5d7b7b8f88bdf2a561707e515aa046a6fbb00"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/certbot-hardened-vulnerabilities-v1.triage.json",
+          "sha256": "6c3be7eb71c226a5814c6ac316e0ed9e9a28754ab9800626cb734d80a9e5bb37"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/certbot-fixture/proof.json",
+          "sha256": "bdaae77d39354f63ca524f7463ae90a7f00a042b21a43a37362a62cb8103c0e4"
+        }
+      ]
+    },
+    {
+      "component": "phpmyadmin",
+      "imageId": "sha256:2e312bf5fd3e1c93b1a1384fc8bc9feb56498ee8b585d48c2d5522fe80ff3159",
+      "configId": "sha256:e199b4894d32eb66f0c5c48f772a6525d639d04e31bd64862aa849d24bdd2001",
+      "result": "PASS_FIXED_GATE",
+      "rawHigh": 135,
+      "rawCritical": 14,
+      "fixedHighCritical": 0,
+      "unfixedReviewRequired": true,
+      "proof": {
+        "result": "PASS",
+        "at": "2026-09-07T22:13:35.383677+00:00",
+        "source": "phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b",
+        "candidate": "sha256:2e312bf5fd3e1c93b1a1384fc8bc9feb56498ee8b585d48c2d5522fe80ff3159",
+        "mysqlFixture": "sha256:69eb992969cb5fd2e0ad55d75e113d9b98e98428a0355cfa14b1d587bcf51063",
+        "checks": [
+          "before: authenticated actual MySQL database/table rendering",
+          "before: actual stored Unicode data browse",
+          "before: stored markup remains escaped",
+          "candidate: authenticated actual MySQL database/table rendering",
+          "candidate: actual stored Unicode data browse",
+          "candidate: stored markup remains escaped",
+          "rollback: authenticated actual MySQL database/table rendering",
+          "rollback: actual stored Unicode data browse",
+          "rollback: stored markup remains escaped"
+        ],
+        "productionTouched": false
+      },
+      "files": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-hardened-vulnerabilities-v3.json",
+          "sha256": "81d8fba846a8a24207ee985b50ca53a19c01823cbba9a3a8b9bdbc318f01abe1"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-hardened-vulnerabilities-v3.sbom.cdx.json",
+          "sha256": "5270c75501bae73c1e37bee5ef641714b6bf06d124404691679e6b6579a0e1aa"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-hardened-vulnerabilities-v3.triage.json",
+          "sha256": "ffc44543fa7122bd7f47532b5b84481d9df12d16b6d71f3bd7ab2b3d15b2453d"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-fixture/proof.json",
+          "sha256": "68538ad596a897439dc731c6f8504747a638f7d69001fc9e732c2476a50b8ae5"
+        }
+      ]
+    }
+  ],
+  "portableRuntimeParity": {
+    "at": "2026-09-07T22:36:15.680956+00:00",
+    "result": "PASS",
+    "rows": [
+      {
+        "component": "node",
+        "historicalProvenImageId": "sha256:04465a519aacdbb7f7167d79f60458e0696fde2043e671a79fbdd6383422e98c",
+        "portableImageId": "sha256:4b5448032fcedc62a5a6548541f82ccedfddffcbdcb154af92ab21764e416c98",
+        "runtimePath": "/usr/local",
+        "actualRegularFiles": 2656,
+        "manifestSha256": "c0f2dadd4d7d3d28e86d61e8c203faab5f51ff70e8b7234091c94891075703ea",
+        "runtimeFileBytesExact": true,
+        "network": "none"
+      },
+      {
+        "component": "phpmyadmin",
+        "historicalProvenImageId": "sha256:2e312bf5fd3e1c93b1a1384fc8bc9feb56498ee8b585d48c2d5522fe80ff3159",
+        "portableImageId": "sha256:5ad1f011c3545b5ce3f5569fbd32efe6995b59da0b1485496c80e5edb9742e90",
+        "runtimePath": "/var/www/html",
+        "actualRegularFiles": 4275,
+        "manifestSha256": "78eeed9e4255839fb317b840b88c858c5508ee28b6db6cc77016187625d33fdd",
+        "runtimeFileBytesExact": true,
+        "network": "none"
+      }
+    ],
+    "limits": [
+      "Image layer/config/build-context metadata differ. This evidence checks actual regular runtime files, not mutable registry tags.",
+      "New portable images still require their own full raw scan before publication."
+    ]
+  },
+  "portableBuilds": [
+    {
+      "component": "node",
+      "imageId": "sha256:4b5448032fcedc62a5a6548541f82ccedfddffcbdcb154af92ab21764e416c98",
+      "configId": "sha256:79796174d240852ac621e56078990979711147228e9cb24703194604fcf87d85",
+      "scanCreatedAt": "2026-09-07T22:41:31.08313851Z",
+      "result": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 2,
+        "high": 0,
+        "critical": 0,
+        "unfixedHighOrCritical": 0,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS",
+        "unresolvedRiskReview": "NONE",
+        "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+      },
+      "runtimeFileParity": {
+        "component": "node",
+        "historicalProvenImageId": "sha256:04465a519aacdbb7f7167d79f60458e0696fde2043e671a79fbdd6383422e98c",
+        "portableImageId": "sha256:4b5448032fcedc62a5a6548541f82ccedfddffcbdcb154af92ab21764e416c98",
+        "runtimePath": "/usr/local",
+        "actualRegularFiles": 2656,
+        "manifestSha256": "c0f2dadd4d7d3d28e86d61e8c203faab5f51ff70e8b7234091c94891075703ea",
+        "runtimeFileBytesExact": true,
+        "network": "none"
+      },
+      "evidence": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.json",
+          "sha256": "f602a68fdbd433f314db0cee5b6dcc686ed02042d2b5f9f3bede56cad258ba34"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.sbom.cdx.json",
+          "sha256": "470543f61afbcb9f26ae7aa6fad257241a2ba79a943aef1148a758fea0cb0626"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.triage.json",
+          "sha256": "a2335683a278f4a2f338dae14473a46e56e06cd7e1ecf0921de7a8584ef497fc"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.adjudications.json",
+          "sha256": "658d05641d2316e9b15d039ed53d00fe21c6f737f96d76a43d5f3d3f6875d144"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.result.json",
+          "sha256": "b9d6dd354bcce54b575f8cc6186ba032d7de7c281838434fc14c0a3b9da8a245"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.scanner.log",
+          "sha256": "0679cf3a761ebfc4d7bc3036dd76bd2b13ca19ecd40fc6daf77877fc318f972e"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-build-v1.log",
+          "sha256": "5343dbd23ef6257056ed8f1ac562c55d354756e35585f11211c5b3a6473b4c98"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/portable-runtime-parity.json",
+          "sha256": "293bf2656cd9598cecd25bd3fc70e2e6b37401cfaf797aee0f5bf30f77b8b302"
+        }
+      ]
+    },
+    {
+      "component": "phpmyadmin",
+      "imageId": "sha256:5ad1f011c3545b5ce3f5569fbd32efe6995b59da0b1485496c80e5edb9742e90",
+      "configId": "sha256:e199b4894d32eb66f0c5c48f772a6525d639d04e31bd64862aa849d24bdd2001",
+      "scanCreatedAt": "2026-09-07T22:45:45.512732486Z",
+      "result": {
+        "schema": "otziv-vulnerability-scan-v1",
+        "artifactCount": 3,
+        "high": 135,
+        "critical": 14,
+        "unfixedHighOrCritical": 149,
+        "blockingFixedHighOrCritical": 0,
+        "adjudicatedFixedHighOrCritical": 0,
+        "effectiveBlockingFixedHighOrCritical": 0,
+        "result": "PASS",
+        "unresolvedRiskReview": "REQUIRED",
+        "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+      },
+      "runtimeFileParity": {
+        "component": "phpmyadmin",
+        "historicalProvenImageId": "sha256:2e312bf5fd3e1c93b1a1384fc8bc9feb56498ee8b585d48c2d5522fe80ff3159",
+        "portableImageId": "sha256:5ad1f011c3545b5ce3f5569fbd32efe6995b59da0b1485496c80e5edb9742e90",
+        "runtimePath": "/var/www/html",
+        "actualRegularFiles": 4275,
+        "manifestSha256": "78eeed9e4255839fb317b840b88c858c5508ee28b6db6cc77016187625d33fdd",
+        "runtimeFileBytesExact": true,
+        "network": "none"
+      },
+      "evidence": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.json",
+          "sha256": "a57f7a2574e8932cd19fb62bd886df084b49f3d68b78ba25d4f69e89a5b5950e"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.sbom.cdx.json",
+          "sha256": "1d6e2346bf2b044b7b0e70fca9d0f8bae9c8f733edfd3611daddb964db1198db"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.triage.json",
+          "sha256": "118ad9ee79a477deac956310a526e8c3d256fe41165fe377b1423e03ebd721ab"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.adjudications.json",
+          "sha256": "7882aabb4ace30022fe02800e7955a3bb80fe6224c8704d0cf2615dde0baf2ac"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.result.json",
+          "sha256": "46772c4ea3ad06b2d752e891d58daa5422e1c97366012743cb06ea19dea59a7a"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.scanner.log",
+          "sha256": "8fa68c27a281ba613ee73cf3012cebd4c5d9b5003a8f3a2d9ecb2a724bb6b8c3"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-build-v1.log",
+          "sha256": "69cd0abbfd0dcb49596918828451e25b04ee419cabc80b2cf656cac286b7f4e2"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/portable-runtime-parity.json",
+          "sha256": "293bf2656cd9598cecd25bd3fc70e2e6b37401cfaf797aee0f5bf30f77b8b302"
+        }
+      ]
+    }
+  ],
+  "publicSources": [
+    {
+      "path": "infrastructure/runtime-security/builds/ordinary/.dockerignore",
+      "sha256": "5dabb32fef6124fad7edf8ee2caa162a78b39c079774286a1856cf8aeb4e1103"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/ordinary/Certbot.Dockerfile",
+      "sha256": "61b617278e11d90695bac5994a0005db611b85d9d2cc1da6db32652e58549be3"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/ordinary/Nginx.Dockerfile",
+      "sha256": "908e45ed842855621c550b8a324ffd2ef3368c31bb8df576491a1e06ce8c8c65"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/ordinary/Node.Dockerfile",
+      "sha256": "da95b5d6daac9a72193574fe1ecd50b411a7370a1244827b9dd75d8bad3d349f"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/ordinary/npm-patches.json",
+      "sha256": "3f071be88400fc9a0dbd0489d5e7b5e767d799386982a07cf055347ea14e7363"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/ordinary/patch-npm.mjs",
+      "sha256": "a00bced8e3fcaf9e08d1fb7d7efaab9559f48422273d31dacaa758868eb7be91"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/ordinary/PhpMyAdmin.Dockerfile",
+      "sha256": "8559b21394d0c22da2750083a88d27fb13ca6f8f4c656e7e774af0e73b3b06e5"
+    },
+    {
+      "path": "infrastructure/runtime-security/builds/ordinary/preserve-pma-runtime.php",
+      "sha256": "c43163ef31d93321b7b306f5f26219641d40ea6be86a024a1f475d9f5e8155ff"
+    },
+    {
+      "path": "frontend/angular.json",
+      "sha256": "3c87d607478cde329f96488bbb6d53b7d0366e0681e9019793930da2b93174a3"
+    }
+  ],
+  "angularServeCorrection": {
+    "result": "PASS",
+    "at": "2026-09-07T22:14:22.837344+00:00",
+    "officialBefore": "FAIL same unresolved shared TS relative imports",
+    "hardenedBefore": "FAIL same unresolved shared TS relative imports",
+    "hardenedAfter": "PASS actual npm ci + ng serve + HTTP200 app-root",
+    "fix": "serve.options.prebundle.exclude @otziv/client-common",
+    "originalRootMatchedPublication": true,
+    "productionBuildTargetObjectUnchanged": true,
+    "beforeConfigSha256": "d0e6a079906a9396f28d29a3d07fdf08c1f8236199fc174aad22cdb670837749",
+    "afterConfigSha256": "20f217db918a201f31c9722fc486aba192d703409f7fd327fb3e3e58556d265c",
+    "sourceChanged": [
+      "frontend/angular.json"
+    ]
+  },
+  "productionBuild": {
+    "result": "PASS",
+    "architectBuildObjectUnchanged": true,
+    "evidence": {
+      "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/production-build.log",
+      "sha256": "abae84a909a93f33e8f0f87072de2fd2a125045e1ce666bcb207e5da1fac9867"
+    }
+  },
+  "evidenceAvailability": "Private full raw scan/SBOM/log/fixture artifacts are retained at the listed paths and hashes; this summary does not claim to embed those complete reports.",
+  "limits": [
+    "phpMyAdmin retains 149 vendor-unfixed HIGH/CRITICAL rows: 135 HIGH and 14 CRITICAL; none is accepted here.",
+    "phpMyAdmin all 58 actual runtime packages remain; only Twig and Symfony Cache changed. Optional PDF/WebAuthn/2FA end-user flows were not individually exercised.",
+    "Nginx proof uses the existing dev HTTP proxy config; it does not revalidate separately built web TLS termination or the legacy static phpMyAdmin upstream address.",
+    "Certbot uses a real isolated Pebble ACME CA, actual HTTP01 and verified fixture TLS; no production ACME account or external CA was contacted.",
+    "Portable build-layer/config changes are separate identities. Node/Pma runtime regular-file bytes match their tested predecessors; fresh full image scans are also retained.",
+    "Publishing images or passing a fixed-CVE gate does not authorize database volume upgrades or approve unresolved risks."
+  ]
+}

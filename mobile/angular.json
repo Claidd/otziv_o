@@ -119,6 +119,12 @@
           },
           "defaultConfiguration": "production"
         },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "runnerConfig": "vitest.config.mts"
+          }
+        },
         "serve": {
           "builder": "@angular/build:dev-server",
           "configurations": {

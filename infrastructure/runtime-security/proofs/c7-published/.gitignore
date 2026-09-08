@@ -1,0 +1,25 @@
+# Retain these exact public CI evidence members in the reviewed proof bundle.
+!/certbot/anonymous/anonymous-pull.stderr.log
+!/certbot/anonymous/anonymous-pull.stdout.log
+!/certbot/publication/vulnerabilities.scanner.log
+!/grafana/anonymous/anonymous-pull.stderr.log
+!/grafana/anonymous/anonymous-pull.stdout.log
+!/grafana/publication/vulnerabilities.scanner.log
+!/keycloak/anonymous/anonymous-pull.stderr.log
+!/keycloak/anonymous/anonymous-pull.stdout.log
+!/keycloak/publication/vulnerabilities.scanner.log
+!/loki/anonymous/anonymous-pull.stderr.log
+!/loki/anonymous/anonymous-pull.stdout.log
+!/loki/publication/vulnerabilities.scanner.log
+!/nginx/anonymous/anonymous-pull.stderr.log
+!/nginx/anonymous/anonymous-pull.stdout.log
+!/nginx/publication/vulnerabilities.scanner.log
+!/node/anonymous/anonymous-pull.stderr.log
+!/node/anonymous/anonymous-pull.stdout.log
+!/node/publication/vulnerabilities.scanner.log
+!/prometheus/anonymous/anonymous-pull.stderr.log
+!/prometheus/anonymous/anonymous-pull.stdout.log
+!/prometheus/publication/vulnerabilities.scanner.log
+!/tempo/anonymous/anonymous-pull.stderr.log
+!/tempo/anonymous/anonymous-pull.stdout.log
+!/tempo/publication/vulnerabilities.scanner.log

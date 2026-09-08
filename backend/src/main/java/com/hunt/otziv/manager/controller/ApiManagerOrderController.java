@@ -49,6 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ApiManagerOrderController {
 
     private final OrderService orderService;
+    private final com.hunt.otziv.p_products.api.OrderStatusCommands statusCommands;
     private final OrderDetailsService orderDetailsService;
     private final ReviewService reviewService;
     private final ManagerBoardEditAssembler managerBoardEditAssembler;
@@ -63,33 +64,16 @@ public class ApiManagerOrderController {
     @PostMapping("/orders/{orderId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    @Transactional
     public void updateOrderStatus(
             @PathVariable Long orderId,
             @RequestBody StatusChangeRequest request,
             HttpServletRequest servletRequest,
             Authentication authentication
     ) throws Exception {
-        managerAccessService.requireOrderAccess(orderId, authentication);
-        orderAggregateMutationLockService.lock(orderId);
-        managerAccessService.requireOrderAccess(orderId, authentication);
         String status = requireStatus(request);
         servletRequest.setAttribute("status", status);
-        if (managerPermissionService.hasOnlyWorkerRole(authentication) && !"В проверку".equals(status)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Специалист может отправить заказ только на проверку");
-        }
-
-        boolean updated = "Бан".equals(status) && managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER")
-                ? orderService.changeStatusForPrivilegedOrder(orderId, status)
-                : orderService.changeStatusForOrder(orderId, status);
-
-        if (!updated) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Статус заказа не изменен");
-        }
-
-        if ("Публикация".equals(status)) {
-            updateReviewPublishDates(orderId);
-        }
+        com.hunt.otziv.p_products.controller.OrderCommandHttpAdapter.invoke(() -> statusCommands.changeStatus(
+                orderId,null,status,authentication,com.hunt.otziv.p_products.api.OrderStatusCommands.EntryPoint.MANAGER_BOARD));
     }
 
     @GetMapping("/orders/{orderId}/edit")
@@ -326,13 +310,4 @@ public class ApiManagerOrderController {
         }
     }
 
-    private void updateReviewPublishDates(Long orderId) {
-        Order order = orderService.getOrder(orderId);
-        if (order.getDetails() == null || order.getDetails().isEmpty()) {
-            return;
-        }
-
-        OrderDetailsDTO orderDetails = orderDetailsService.getOrderDetailDTOById(order.getDetails().getFirst().getId());
-        reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetails);
-    }
 }

@@ -49,7 +49,11 @@ public class PaymentSuccessClientNotifier {
         }
         String clientId = clientId(order, company);
         String groupId = company == null ? "" : normalize(company.getGroupId());
-        return messageSender.send(company, clientId, groupId, buildMessage(link, order, company));
+        if (link.getId() == null) {
+            return ClientMessageSendResult.failed("payment_link_missing", "Платёжная операция ещё не сохранена");
+        }
+        return messageSender.sendWithOperationId(company, clientId, groupId,
+                buildMessage(link, order, company), null, "payment-success:" + link.getId());
     }
 
     private String buildMessage(PaymentLink link, Order order, Company company) {

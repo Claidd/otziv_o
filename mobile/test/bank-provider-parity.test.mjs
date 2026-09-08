@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
-const apiSource = source('src/app/core/api.service.ts');
+const apiSource = source('src/app/core/api.service.ts') + source('src/app/core/order-payment.api.ts');
 const publicPaySource = source('src/app/features/public-pay.page.ts');
 const publicGroupSource = source('src/app/features/public-pay-group.page.ts');
-const orderDetailsSource = source('src/app/features/order-details.page.ts');
+const orderDetailsSource = source('src/app/features/order-details/order-payment.facade.ts') + source('src/app/features/order-details.page.ts');
 const commonBillingSource = source('src/app/features/common-billing.page.ts');
 const bankPageSource = source('src/app/features/tbank.page.ts');
 const bankRouteSource = source('src/app/shared/bank-payment-source.ts');
@@ -20,7 +20,7 @@ test('public bank routes and instruction sources accept canonical and provider a
 });
 
 test('public payment UI consumes provider capabilities and locks a started Tochka method', () => {
-  const interfaceBlock = block(apiSource, 'export interface PublicPaymentLink {', '\n}');
+  const interfaceBlock = block(source('../shared/client-common/src/billing-payments.generated.ts'), 'export interface PublicPaymentLinkResponse {', '\n}');
   assert.match(interfaceBlock, /provider\?/);
   assert.match(interfaceBlock, /sbpBankSelectionSupported\?/);
   assert.match(publicPaySource, /showSbpPayment\(\) && sbpBankSelectionSupported\(\)/);

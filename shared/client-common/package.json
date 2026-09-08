@@ -1,0 +1,16 @@
+{
+  "name": "@otziv/client-common",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./order-editor": "./src/order-editor.ts",
+    "./manual-payment-recipient-summary": "./src/manual-payment-recipient-summary.ts",
+    "./manual-payment-task-visibility": "./src/manual-payment-task-visibility.ts",
+    "./billing-payments": "./src/billing-payments.ts",
+    "./client-api": "./src/client-api.ts"
+  },
+  "files": [
+    "src"
+  ]
+}

@@ -76,7 +76,7 @@ public interface WorkerAssignmentMutationGuardRepository
             WHERE orders.order_id = :orderId
               AND user.username = :username
               AND COALESCE(orders.order_complete, 0) = 0
-            FOR UPDATE
+            FOR UPDATE OF orders
             """, nativeQuery = true)
     Optional<Long> lockOwnedOrder(
             @Param("orderId") long orderId,
@@ -119,7 +119,7 @@ public interface WorkerAssignmentMutationGuardRepository
               AND user.username = :username
               AND COALESCE(review.review_publish, 0) = 0
               AND COALESCE(orders.order_complete, 0) = 0
-            FOR UPDATE
+            FOR UPDATE OF orders, review, detail
             """, nativeQuery = true)
     Optional<Long> lockOwnedReview(
             @Param("reviewId") long reviewId,
@@ -158,7 +158,7 @@ public interface WorkerAssignmentMutationGuardRepository
             WHERE task.bad_review_task_id = :taskId
               AND user.username = :username
               AND task.bad_review_task_status = 'NEW'
-            FOR UPDATE
+            FOR UPDATE OF orders, task
             """, nativeQuery = true)
     Optional<Long> lockOwnedBadTask(
             @Param("taskId") long taskId,
@@ -217,10 +217,53 @@ public interface WorkerAssignmentMutationGuardRepository
                             task.review_recovery_task_worker
                     )
               )
-            FOR UPDATE
+            FOR UPDATE OF orders, task, batch
             """, nativeQuery = true)
     Optional<Long> lockOwnedRecoveryTask(
             @Param("taskId") long taskId,
             @Param("username") String username
     );
+    /** Current binding read; caller must already hold the previously resolved canonical Order lock. */
+    @Query(value = """
+            SELECT detail.order_detail_order
+            FROM reviews review
+            JOIN order_details detail ON detail.order_detail_id = review.review_order_details
+            WHERE review.review_id = :reviewId
+            FOR UPDATE OF review, detail
+            """, nativeQuery = true)
+    Optional<Long> findCurrentOrderIdByReviewId(@Param("reviewId") long reviewId);
+
+    /** Current binding read; caller must already hold the previously resolved canonical Order lock. */
+    @Query(value = """
+            SELECT task.bad_review_task_order
+            FROM bad_review_tasks task
+            WHERE task.bad_review_task_id = :taskId
+            FOR UPDATE OF task
+            """, nativeQuery = true)
+    Optional<Long> findCurrentOrderIdByBadTaskId(@Param("taskId") long taskId);
+
+    /** Current binding read; caller must already hold the previously resolved canonical Order lock. */
+    @Query(value = """
+            SELECT task.review_recovery_task_order
+            FROM review_recovery_tasks task
+            WHERE task.review_recovery_task_id = :taskId
+            FOR UPDATE OF task
+            """, nativeQuery = true)
+    Optional<Long> findCurrentOrderIdByRecoveryTaskId(@Param("taskId") long taskId);
+
+    /** Current manager of an Order already locked by the caller; nullable manager retains owner ALL_MANAGERS semantics. */
+    @Query(value = """
+            SELECT orders.order_manager FROM orders orders
+            WHERE orders.order_id = :orderId
+            FOR UPDATE OF orders
+            """, nativeQuery = true)
+    Optional<Long> findCurrentManagerIdByOrderId(@Param("orderId") long orderId);
+
+    @Query(value = """
+            SELECT task.review_recovery_task_manager FROM review_recovery_tasks task
+            WHERE task.review_recovery_task_id = :taskId
+            FOR UPDATE OF task
+            """, nativeQuery = true)
+    Optional<Long> findCurrentManagerIdByRecoveryTaskId(@Param("taskId") long taskId);
+
 }

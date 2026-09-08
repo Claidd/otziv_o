@@ -40,6 +40,7 @@ public class LocalJwtSecurityStateFilter extends OncePerRequestFilter {
 
     private final UserRepository userRepository;
     private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+    private final com.hunt.otziv.u_users.service.UserSessionSecurityService sessionSecurity;
 
     @Value("${otziv.security.auth-epoch-claim-required:false}")
     private boolean authEpochClaimRequired;
@@ -80,6 +81,11 @@ public class LocalJwtSecurityStateFilter extends OncePerRequestFilter {
         }
 
         Long tokenEpoch = authEpoch(token);
+        if (tokenEpoch == null && (token.getToken().getClaims().containsKey(AUTH_EPOCH_CLAIM)
+                || token.getToken().getClaims().containsKey("authEpoch"))) {
+            rejectOrContinueAnonymously(request, response, filterChain, "auth_epoch_malformed");
+            return;
+        }
         if (tokenEpoch == null && authEpochClaimRequired) {
             rejectOrContinueAnonymously(request, response, filterChain, "auth_epoch_missing");
             return;
@@ -90,6 +96,21 @@ public class LocalJwtSecurityStateFilter extends OncePerRequestFilter {
         }
         if (tokenEpoch == null) {
             increment("otziv.security.jwt.auth_epoch_missing", "accepted");
+        }
+
+        var sessionDecision = sessionSecurity.verify(user, token.getToken());
+        increment("otziv.security.jwt.session_authority", sessionDecision.reason());
+        if (!sessionDecision.allowed()) {
+            if (sessionDecision.unavailable() && !isPublicCapabilityPath(applicationPath(request))) {
+                SecurityContextHolder.clearContext();
+                response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                response.setHeader("Retry-After", "5");
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"message\":\"Проверка сессии временно недоступна. Повторите запрос.\"}");
+            } else {
+                rejectOrContinueAnonymously(request, response, filterChain, sessionDecision.reason());
+            }
+            return;
         }
 
         Set<GrantedAuthority> canonicalAuthorities = new LinkedHashSet<>();
@@ -147,7 +168,11 @@ public class LocalJwtSecurityStateFilter extends OncePerRequestFilter {
             value = token.getToken().getClaims().get("authEpoch");
         }
         if (value instanceof Number number) {
-            return number.longValue();
+            try {
+                return new java.math.BigDecimal(number.toString()).longValueExact();
+            } catch (NumberFormatException | ArithmeticException invalid) {
+                return null;
+            }
         }
         if (value instanceof String text) {
             try {

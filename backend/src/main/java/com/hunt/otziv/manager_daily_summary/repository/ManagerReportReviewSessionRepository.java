@@ -24,11 +24,16 @@ public interface ManagerReportReviewSessionRepository extends JpaRepository<Mana
             Long managerId
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<ManagerReportReviewSession> findFirstByManagerUserIdAndRecipientChatIdAndStatusInOrderByCreatedAtDesc(
             Long managerUserId,
             Long recipientChatId,
             Collection<ManagerReportReviewStatus> statuses
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<ManagerReportReviewSession> findFirstByManagerUserIdAndRecipientChatIdAndReplyPromptMessageId(
+            Long managerUserId, Long recipientChatId, Integer replyPromptMessageId);
 
     List<ManagerReportReviewSession> findBySummaryDateOrderByManagerNameAsc(LocalDate date);
 

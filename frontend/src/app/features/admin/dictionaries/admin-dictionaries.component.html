@@ -28,11 +28,11 @@
             >
           </label>
 
-          <button type="button" class="dictionary-icon-action" (click)="searchActive()" [disabled]="loading()" title="Искать">
+          <button type="button" class="dictionary-icon-action" (click)="searchActive()" [disabled]="activeLoading()" title="Искать">
             <span class="material-icons-sharp">manage_search</span>
           </button>
 
-          <button type="button" class="dictionary-icon-action reset" (click)="clearSearch()" [disabled]="loading()" title="Сбросить поиск">
+          <button type="button" class="dictionary-icon-action reset" (click)="clearSearch()" [disabled]="activeLoading()" title="Сбросить поиск">
             <span class="material-icons-sharp">filter_alt_off</span>
           </button>
         }
@@ -44,16 +44,16 @@
           </button>
         }
         @if (activeTab() !== 'audit') {
-          <button type="button" class="dictionary-action" (click)="loadAll()" [disabled]="loading()">
+          <button type="button" class="dictionary-action" (click)="loadAll()" [disabled]="activeLoading()">
             <span class="material-icons-sharp">refresh</span>
-            {{ loading() ? 'Загрузка' : 'Обновить' }}
+            {{ activeLoading() ? 'Загрузка' : 'Обновить' }}
           </button>
         }
       </div>
     </header>
 
-    @if (error()) {
-      <app-load-error-card title="Справочники не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadAll()" />
+    @if (activeError()) {
+      <app-load-error-card title="Справочники не загрузились" [message]="activeError()!" actionLabel="Повторить" [loading]="activeLoading()" (retry)="loadAll()" />
     }
 
     @if (activeTab() === 'categories') {
@@ -903,7 +903,7 @@
               }
             </div>
           }
-        } @else if (loading()) {
+        } @else if (activeLoading()) {
           <p class="ai-provider-loading">Загружаю настройки AI-провайдера...</p>
         }
       </article>
@@ -1167,7 +1167,7 @@
 
                 <label>
                   <span>На странице</span>
-                  <select [value]="botPageSize()" (change)="changeBotPageSize($event)" [disabled]="loading()">
+                  <select [value]="botPageSize()" (change)="changeBotPageSize($event)" [disabled]="activeLoading()">
                     @for (size of botPageSizeOptions; track size) {
                       <option [value]="size">{{ size }}</option>
                     }
@@ -1175,17 +1175,17 @@
                 </label>
 
                 <div class="pagination-actions">
-                  <button type="button" class="row-icon-button" (click)="goToBotPage(0)" [disabled]="loading() || botPage() === 0" title="Первая страница">
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(0)" [disabled]="activeLoading() || botPage() === 0" title="Первая страница">
                     <span class="material-icons-sharp">first_page</span>
                   </button>
-                  <button type="button" class="row-icon-button" (click)="goToBotPage(botPage() - 1)" [disabled]="loading() || botPage() === 0" title="Предыдущая страница">
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(botPage() - 1)" [disabled]="activeLoading() || botPage() === 0" title="Предыдущая страница">
                     <span class="material-icons-sharp">chevron_left</span>
                   </button>
                   <span class="pagination-page">{{ botPage() + 1 }} / {{ botTotalPages() }}</span>
-                  <button type="button" class="row-icon-button" (click)="goToBotPage(botPage() + 1)" [disabled]="loading() || botPage() + 1 >= botTotalPages()" title="Следующая страница">
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(botPage() + 1)" [disabled]="activeLoading() || botPage() + 1 >= botTotalPages()" title="Следующая страница">
                     <span class="material-icons-sharp">chevron_right</span>
                   </button>
-                  <button type="button" class="row-icon-button" (click)="goToBotPage(botTotalPages() - 1)" [disabled]="loading() || botPage() + 1 >= botTotalPages()" title="Последняя страница">
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(botTotalPages() - 1)" [disabled]="activeLoading() || botPage() + 1 >= botTotalPages()" title="Последняя страница">
                     <span class="material-icons-sharp">last_page</span>
                   </button>
                 </div>
@@ -1468,6 +1468,16 @@
                   </tr>
                   <tr>
                     <td>
+                      <strong>Пауза между сменой и блокировкой аккаунтов</strong>
+                      <span>Общая для всех карточек специалиста, включая детали заказа</span>
+                    </td>
+                    <td>
+                      <strong>{{ workerAccountActionSettings()?.cooldownSeconds ?? 60 }} сек.</strong>
+                      <span>{{ workerAccountActionSettings()?.enabled === false || workerAccountActionSettings()?.cooldownSeconds === 0 ? 'таймер выключен' : 'таймер включён · только для специалистов' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
                       <strong>Горизонт выдачи выгула</strong>
                       <span>На сколько дней вперёд показывать отзывы в разделе «Выгул»</span>
                     </td>
@@ -1719,9 +1729,9 @@
               }
               <div class="actions">
                 @if (selectedId() !== null) {
-                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
                 }
-                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -1747,9 +1757,9 @@
               }
               <div class="actions">
                 @if (selectedId() !== null) {
-                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
                 }
-                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -1773,10 +1783,10 @@
               }
               <div class="actions">
                 @if (selectedId() !== null) {
-                  <button type="button" class="secondary" (click)="rebuildSelectedCityDistances()" [disabled]="rebuildingCityDistances() || saving()">Пересчитать город</button>
-                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                  <button type="button" class="secondary" (click)="rebuildSelectedCityDistances()" [disabled]="rebuildingCityDistances() || activeSaving()">Пересчитать город</button>
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
                 }
-                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -1847,9 +1857,9 @@
               }
               <div class="actions">
                 @if (selectedId() !== null) {
-                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
                 }
-                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -1969,10 +1979,10 @@
 
               <div class="actions">
                 @if (selectedPhone()) {
-                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
                 }
-                <button type="button" class="secondary" (click)="startNewPhone()" [disabled]="saving() || deleting()">Новый</button>
-                <button type="submit" [disabled]="saving() || deleting()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="button" class="secondary" (click)="startNewPhone()" [disabled]="activeSaving() || activeDeleting()">Новый</button>
+                <button type="submit" [disabled]="activeSaving() || activeDeleting()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
 
@@ -1998,7 +2008,7 @@
                         type="button"
                         class="row-icon-button danger-icon"
                         (click)="deleteDeviceToken(phone, deviceToken)"
-                        [disabled]="deleting() || saving()"
+                        [disabled]="activeDeleting() || activeSaving()"
                         title="Удалить токен"
                       >
                         <span class="material-icons-sharp">delete</span>
@@ -2091,9 +2101,9 @@
               }
               <div class="actions">
                 @if (selectedId() !== null) {
-                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
+                  <button type="button" class="danger" (click)="deleteSelected()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
                 }
-                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -2110,9 +2120,9 @@
               }
               <div class="actions">
                 @if (selectedId() !== null) {
-                  <button type="button" class="secondary" (click)="clearSelection()" [disabled]="saving()">Новая</button>
+                  <button type="button" class="secondary" (click)="clearSelection()" [disabled]="activeSaving()">Новая</button>
                 }
-                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
 
@@ -2144,7 +2154,7 @@
                     <select
                       [value]="promoAssignmentValue(button)"
                       (change)="savePromoAssignment(button, $any($event.target).value)"
-                      [disabled]="saving() || selectedPromoManagerId() === null"
+                      [disabled]="activeSaving() || selectedPromoManagerId() === null"
                     >
                       <option value="">По умолчанию: {{ promoDefaultTextLabel(button) }}</option>
                       @for (promoText of promoTexts(); track trackPromoText($index, promoText)) {
@@ -2188,7 +2198,7 @@
                 </label>
 
                 <div class="actions">
-                  <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                  <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
                 </div>
               </form>
             } @else {
@@ -2321,8 +2331,8 @@
               }
 
               <div class="actions">
-                <button type="button" class="secondary" (click)="resetAutoresponderForm()" [disabled]="saving()">Сбросить</button>
-                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="button" class="secondary" (click)="resetAutoresponderForm()" [disabled]="activeSaving()">Сбросить</button>
+                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -2517,8 +2527,8 @@
                 </div>
 
                 <div class="actions">
-                  <button type="button" class="secondary" (click)="resetGamificationForm()" [disabled]="saving()">Сбросить</button>
-                  <button type="button" (click)="saveGamificationRules()" [disabled]="saving()">Сохранить правила</button>
+                  <button type="button" class="secondary" (click)="resetGamificationForm()" [disabled]="activeSaving()">Сбросить</button>
+                  <button type="button" (click)="saveGamificationRules()" [disabled]="activeSaving()">Сохранить правила</button>
                 </div>
               </section>
 
@@ -2647,7 +2657,7 @@
                         type="button"
                         class="compact-action"
                         (click)="backfillGamificationEvents()"
-                        [disabled]="saving()"
+                        [disabled]="activeSaving()"
                         appTooltip="Собирает исторические события за выбранный период из уже существующих отзывов, заказов и задач, затем пересобирает ledger."
                       >
                         <span class="material-icons-sharp">history</span>
@@ -2657,7 +2667,7 @@
                         type="button"
                         class="compact-action"
                         (click)="rebuildGamificationLedger()"
-                        [disabled]="saving() || !gamificationForm.controls.shadowScoringEnabled.value"
+                        [disabled]="activeSaving() || !gamificationForm.controls.shadowScoringEnabled.value"
                         appTooltip="Пересобирает shadow-ledger за выбранный период по текущим правилам."
                       >
                         <span class="material-icons-sharp">refresh</span>
@@ -2890,8 +2900,8 @@
               }
 
               <div class="actions">
-                <button type="button" class="secondary" (click)="resetGamificationForm()" [disabled]="saving()">Сбросить</button>
-                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="button" class="secondary" (click)="resetGamificationForm()" [disabled]="activeSaving()">Сбросить</button>
+                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -3188,6 +3198,49 @@
 
             <form class="settings-form" [formGroup]="settingsForm" (ngSubmit)="saveActive()">
               <div class="settings-section">
+                <h3>Смена и блокировка аккаунтов</h3>
+                <label class="checkbox">
+                  <input
+                    class="switch"
+                    type="checkbox"
+                    role="switch"
+                    formControlName="workerAccountActionCooldownEnabled"
+                    aria-describedby="worker-account-action-cooldown-toggle-hint"
+                  >
+                  <span>Таймер включён</span>
+                </label>
+                <p class="settings-hint" id="worker-account-action-cooldown-toggle-hint">
+                  Выключите, чтобы полностью снять ограничение, сохранив выбранную длительность.
+                  Изменение применяется после сохранения настроек.
+                </p>
+                <label>
+                  <span>Пауза между сменой и блокировкой аккаунтов, секунд</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="3600"
+                    step="1"
+                    formControlName="workerAccountActionCooldownSeconds"
+                    aria-describedby="worker-account-action-cooldown-hint"
+                    [attr.aria-invalid]="settingsForm.controls.workerAccountActionCooldownSeconds.touched && settingsForm.controls.workerAccountActionCooldownSeconds.invalid"
+                  >
+                </label>
+                @if (settingsForm.controls.workerAccountActionCooldownSeconds.touched && settingsForm.controls.workerAccountActionCooldownSeconds.invalid) {
+                  <p class="settings-hint" role="alert">Введите целое число от 0 до 3600 секунд.</p>
+                }
+                <p class="settings-hint" id="worker-account-action-cooldown-hint">
+                  После «Смена» или подтверждённого «Блок» обе кнопки временно недоступны во всех
+                  разделах специалиста и в деталях заказа. Можно переходить на другие страницы.
+                  Ограничение действует только для специалистов. При значении 0 паузы нет,
+                  даже если переключатель включён.
+                </p>
+                <p class="settings-hint">
+                  По умолчанию — 60 секунд. Новая длительность применяется к следующему действию;
+                  уже начавшаяся пауза сохраняет свой срок. Отключение снимает ограничение.
+                </p>
+              </div>
+
+              <div class="settings-section">
                 <h3>Выгул</h3>
                 <label appTooltip="Минимальная пауза для специалиста после действия «ВЫГУЛЯЛ». 0 минут отключает паузу.">
                   <span>Время между выгулами, минут</span>
@@ -3362,7 +3415,7 @@
                 </p>
 
                 <div class="actions">
-                  <button type="button" class="secondary" (click)="runWhatsAppGroupSync()" [disabled]="syncingWhatsAppGroups() || saving()">
+                  <button type="button" class="secondary" (click)="runWhatsAppGroupSync()" [disabled]="syncingWhatsAppGroups() || activeSaving()">
                     <span class="material-icons-sharp">sync</span>
                     {{ syncingWhatsAppGroups() ? 'Синхронизирую' : 'Синхронизировать сейчас' }}
                   </button>
@@ -3385,7 +3438,7 @@
                     type="button"
                     class="secondary"
                     (click)="runSharedChatLinkSync()"
-                    [disabled]="syncingSharedChatLinks() || saving()"
+                    [disabled]="syncingSharedChatLinks() || activeSaving()"
                   >
                     <span class="material-icons-sharp">hub</span>
                     {{ syncingSharedChatLinks() ? 'Синхронизирую' : 'Скопировать id общих чатов' }}
@@ -3417,7 +3470,7 @@
               }
 
               <div class="actions">
-                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -3882,8 +3935,8 @@
               }
 
               <div class="actions">
-                <button type="button" class="secondary" (click)="resetAutoresponderForm()" [disabled]="saving()">Сбросить</button>
-                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+                <button type="button" class="secondary" (click)="resetAutoresponderForm()" [disabled]="activeSaving()">Сбросить</button>
+                <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
               </div>
             </form>
           }
@@ -4179,7 +4232,7 @@
             <p class="eyebrow">{{ editingCategoryId() === null ? 'Создание' : 'Редактирование' }}</p>
             <h2>{{ categoryEditorTitle() }}</h2>
           </div>
-          <button type="button" class="row-icon-button" (click)="closeCategoryEditor()" [disabled]="saving() || deleting()" title="Закрыть">
+          <button type="button" class="row-icon-button" (click)="closeCategoryEditor()" [disabled]="activeSaving() || activeDeleting()" title="Закрыть">
             <span class="material-icons-sharp">close</span>
           </button>
         </header>
@@ -4194,10 +4247,10 @@
           }
           <div class="actions">
             @if (editingCategoryId() !== null) {
-              <button type="button" class="danger" (click)="deleteEditingCategory()" [disabled]="deleting() || saving()">Удалить</button>
+              <button type="button" class="danger" (click)="deleteEditingCategory()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
             }
-            <button type="button" class="secondary" (click)="closeCategoryEditor()" [disabled]="saving() || deleting()">Закрыть</button>
-            <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+            <button type="button" class="secondary" (click)="closeCategoryEditor()" [disabled]="activeSaving() || activeDeleting()">Закрыть</button>
+            <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
           </div>
         </form>
       </article>
@@ -4212,7 +4265,7 @@
             <p class="eyebrow">{{ editingSubCategoryId() === null ? 'Создание' : 'Редактирование' }}</p>
             <h2>{{ subCategoryEditorTitle() }}</h2>
           </div>
-          <button type="button" class="row-icon-button" (click)="closeSubCategoryEditor()" [disabled]="saving() || deleting()" title="Закрыть">
+          <button type="button" class="row-icon-button" (click)="closeSubCategoryEditor()" [disabled]="activeSaving() || activeDeleting()" title="Закрыть">
             <span class="material-icons-sharp">close</span>
           </button>
         </header>
@@ -4233,10 +4286,10 @@
           }
           <div class="actions">
             @if (editingSubCategoryId() !== null) {
-              <button type="button" class="danger" (click)="deleteEditingSubCategory()" [disabled]="deleting() || saving()">Удалить</button>
+              <button type="button" class="danger" (click)="deleteEditingSubCategory()" [disabled]="activeDeleting() || activeSaving()">Удалить</button>
             }
-            <button type="button" class="secondary" (click)="closeSubCategoryEditor()" [disabled]="saving() || deleting()">Закрыть</button>
-            <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+            <button type="button" class="secondary" (click)="closeSubCategoryEditor()" [disabled]="activeSaving() || activeDeleting()">Закрыть</button>
+            <button type="submit" [disabled]="activeSaving()">{{ activeSaving() ? 'Сохраняю' : 'Сохранить' }}</button>
           </div>
         </form>
       </article>

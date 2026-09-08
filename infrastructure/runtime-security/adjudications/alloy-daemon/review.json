@@ -1,0 +1,194 @@
+{
+  "schema": "otziv-alloy-daemon-review-v1",
+  "status": "REVIEWED_NOT_AFFECTED",
+  "reviewedAt": "2026-09-08",
+  "validUntil": "2027-01-01T00:00:00Z",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+  "imageConfigId": "sha256:7f5b0079e8c6b13cd2a767cdeb001430bdcf0db400afbaf925285d1ae29dd084",
+  "product": {
+    "source": "https://github.com/grafana/alloy",
+    "revision": "becfd489a7bb459c0496893b555fb87a003296b1",
+    "version": "1.19.2-otziv.1"
+  },
+  "binary": {
+    "path": "usr/bin/alloy",
+    "sha256": "2c21e2c85e1e88c88b3335d39c84ae5414232514aeaaea02457fef54f4c5e3dc",
+    "canonicalBuildInfoSha256": "eac2750f65e5c3b104d7f928c3a657150489b8e22fecaef14b7fc7ddd2c28702"
+  },
+  "module": {
+    "name": "github.com/docker/docker",
+    "version": "v28.5.2+incompatible",
+    "sum": "h1:DBX0Y0zAjZbSrm1uzOkdr1onVghKaftjlSWt4AFexzM=",
+    "purl": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible"
+  },
+  "decisions": [
+    {
+      "cve": "CVE-2026-41567",
+      "affectedPackage": "github.com/docker/docker/daemon",
+      "affectedSymbol": "Daemon.containerExtractToDir",
+      "source": "GO-2026-5746.json"
+    },
+    {
+      "cve": "CVE-2026-42306",
+      "affectedPackage": "github.com/docker/docker/daemon",
+      "source": "GHSA-rg2x-37c3-w2rh.json"
+    }
+  ],
+  "proofFiles": [
+    {
+      "path": "analyze-closure.py",
+      "sha256": "eb5685d4835fd23537bde829eca4ff5942302d9481698bfd67e4c441a515ee9c",
+      "bytes": 6612
+    },
+    {
+      "path": "closure-analysis.json",
+      "sha256": "cfe868a394aea2d70d65dab0b02eff8496e092608a3a282968c340b91fa79678",
+      "bytes": 1435
+    },
+    {
+      "path": "collector.go.mod.after.txt",
+      "sha256": "de38f56fa6d3894f1cae1d6b783f96e7db56a04192487b990dbcd7e2775528e8",
+      "bytes": 73326
+    },
+    {
+      "path": "collector.go.mod.before.txt",
+      "sha256": "e8668ec77ceed40ba241e710ffbbc3b014d5aa3fb85cd9900a0bd3f0988476e2",
+      "bytes": 73326
+    },
+    {
+      "path": "collector.go.sum.after.txt",
+      "sha256": "09d595177bf801a6839e1b2607bbc003f1e257cccc4fcaef149a27b22e50e5c4",
+      "bytes": 349086
+    },
+    {
+      "path": "collector.go.sum.before.txt",
+      "sha256": "b20fafa996273e1844ca55342fb2c21182e66ca10f3c658f17d0a508a958f696",
+      "bytes": 348921
+    },
+    {
+      "path": "exact-target.json",
+      "sha256": "eb97609783090aca4d33d5bec82e0c27a2dd4a523f49b46da79e489831da0375",
+      "bytes": 602
+    },
+    {
+      "path": "GHSA-rg2x-37c3-w2rh.json",
+      "sha256": "549718d505c9a5749d6640e62c45bd64d0b14f0defd35c9944f2c60d27f302e6",
+      "bytes": 5925
+    },
+    {
+      "path": "GO-2026-5746.json",
+      "sha256": "d11da88232883a96ac3b74f848f172ce86c3783b7818d7da4b925335621d5273",
+      "bytes": 1850
+    },
+    {
+      "path": "go-env.json",
+      "sha256": "bda8db5575b46bea4c6361aac9f034b508a5c5c7dfcf19aa233ac4ca93f9cedc",
+      "bytes": 109
+    },
+    {
+      "path": "import-closure.json.gz",
+      "sha256": "7dc809e1d2a68995a997ad722ac1f9c4dd4a2a693aca87c753737d6a9ac76cdd",
+      "bytes": 332712
+    },
+    {
+      "path": "linked-functions.go",
+      "sha256": "3b45fe63c35a768005f083e086754e2f3bcc9e7714da3f845595931b698d0299",
+      "bytes": 1724
+    },
+    {
+      "path": "linked-functions.raw.json.gz",
+      "sha256": "46cbc607c7c54b2b61c6599834e12910b34f82866dbe5f7a3f6d8942ca87e3ad",
+      "bytes": 2216553
+    },
+    {
+      "path": "packages.raw.jsons.gz",
+      "sha256": "a15385303235914f7dda6305047f6b94d5e2c753adf1f9ec4ccce611fc3f700e",
+      "bytes": 4711921
+    },
+    {
+      "path": "primary-index.json",
+      "sha256": "e3f4a18bdb4bb60bdea30c5ea8353f41d9e75a574f32616ccb6399b9b3dad73f",
+      "bytes": 1029
+    },
+    {
+      "path": "published-binary.json",
+      "sha256": "354923b3eeed6718a8491f3510bebcf2aef1324960c5e602b153cb8444a933d8",
+      "bytes": 1115
+    },
+    {
+      "path": "published-version.txt",
+      "sha256": "137371c9d3870c9cf772fc6721bbf8863f54cf7a024e15ca91e6205fbac98318",
+      "bytes": 330
+    },
+    {
+      "path": "reproduce.Dockerfile",
+      "sha256": "4ea73efb766742c784d4cbb3edd01e57a38ce9750f01aeeec87253cce0ebea95",
+      "bytes": 5235
+    },
+    {
+      "path": "reproduced-sha256.txt",
+      "sha256": "cab8733a99b33a074c6469c2aebf2364c103fbc3fec50a2a14b2659d87f0a29e",
+      "bytes": 549
+    },
+    {
+      "path": "reproduction-attempts.json",
+      "sha256": "819f0ee9bb83deebe6e4ace90cf927358fd98c03391430e2390f521b3daa2ba6",
+      "bytes": 1074
+    },
+    {
+      "path": "reproduction-build.log.gz",
+      "sha256": "bbe18a95244c103f5fed91ad55b7740391588f1324df773bf24df69580a4f0b5",
+      "bytes": 23787
+    },
+    {
+      "path": "reviewed-buildinfo.txt",
+      "sha256": "55691e5409e905eae7a3cf3ffa90754c4649124eb4170f4b1cd75427078d411f",
+      "bytes": 112001
+    },
+    {
+      "path": "reviewed-scan.json.gz",
+      "sha256": "5bd16356cd89d60c8d4dd1e973cf94e7d20fd71618a95fb75c541f39bf69819d",
+      "bytes": 115428
+    },
+    {
+      "path": "root.go.mod.after.txt",
+      "sha256": "83b8feada5d425154429ae17a9239fc3a75ce32a845cdc3ec5c22954d2ee6aa9",
+      "bytes": 74257
+    },
+    {
+      "path": "root.go.mod.before.txt",
+      "sha256": "ed321aa8a43f595baf993923014ad38d4b0f8ae16b8b35950c5eef2a550e431b",
+      "bytes": 74257
+    },
+    {
+      "path": "root.go.sum.after.txt",
+      "sha256": "5889d530a7bd08dacfe87b963043737cea4c2029330fd1fefb3777275b0f5eb0",
+      "bytes": 349166
+    },
+    {
+      "path": "root.go.sum.before.txt",
+      "sha256": "dd1cf41ff1fcc69e2d5d76de18c716600a285e0e2fea86b2dd2b31a6457d878d",
+      "bytes": 349001
+    },
+    {
+      "path": "upstream-govulncheck.yaml",
+      "sha256": "559294c1964d4813b1ec863d0c3f80eb1d0390201c369b604828b09744c560cd",
+      "bytes": 3858
+    },
+    {
+      "path": "upstream-Makefile",
+      "sha256": "8fa8cbd50eff7b8116e41ee0117801a5f7711be37747410264f328870e834745",
+      "bytes": 21162
+    },
+    {
+      "path": "independent-review.json",
+      "sha256": "6c940fb7ed1613c4e0f58dec4e9d7cdf092461dc77352804f2d82e600e771aff",
+      "bytes": 16685
+    },
+    {
+      "path": "independent-review.md",
+      "sha256": "a80405a060650dce486028be00044b5ac1a5a304e463e4111320c63ce7030fea",
+      "bytes": 4584
+    }
+  ]
+}

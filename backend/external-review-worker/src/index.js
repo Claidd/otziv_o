@@ -1,14 +1,12 @@
 import "dotenv/config";
 import express from "express";
 import { chromium } from "playwright";
-import { createWorker } from "tesseract.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
   boundedBodyBytes,
-  createConcurrencyMiddleware,
   createInternalAuthMiddleware,
   parseBoolean,
 } from "./internal-auth.js";
@@ -20,7 +18,14 @@ import {
 import { chromiumLaunchArgs } from "./chromium-security.js";
 import { startDnsPinningProxy } from "./dns-pinning-proxy.js";
 
+import { TaskLimiter } from "./task-limiter.js";
+import { OcrRuntime, prepareOcrModels } from "./ocr-runtime.js";
+import { RuntimeReadiness, checkRuntime } from "./runtime-readiness.js";
+import { TaskCancellation } from "./task-cancellation.js";
+
 const app = express();
+const taskLimiter = new TaskLimiter(process.env.MAX_CONCURRENT_CHECKS || 1, { maximum: 8, busyCode: "worker_busy" });
+const readiness = new RuntimeReadiness();
 
 const port = Number(process.env.PORT || 3097);
 const checkTimeoutMs = boundedInteger(process.env.CHECK_TIMEOUT_MS, 60_000, 5_000, 120_000);
@@ -43,12 +48,15 @@ for (const writablePath of [
   fs.mkdirSync(writablePath, { recursive: true });
 }
 
+const modelDirectory = prepareOcrModels(tesseractCachePath);
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
 app.get("/ready", (_req, res) => {
-  res.json({ ok: true });
+  const available = readiness.ready && taskLimiter.accepting && taskLimiter.active < taskLimiter.limit;
+  res.status(available ? 200 : 503).json({ ok: available, state: available ? "ready" : readiness.ready ? "busy" : readiness.state });
 });
 
 app.use("/api", createInternalAuthMiddleware({
@@ -56,14 +64,23 @@ app.use("/api", createInternalAuthMiddleware({
   required: parseBoolean(process.env.EXTERNAL_REVIEW_WORKER_AUTH_REQUIRED),
 }));
 app.use("/api", express.json({ limit: requestBodyLimit, strict: true }));
+// Authenticated, bounded scalar snapshot; usable even during failed readiness/drain.
+app.get("/api/internal/task-metrics", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!String(process.env.EXTERNAL_REVIEW_WORKER_SHARED_SECRET || "").trim()) return res.sendStatus(503);
+  res.json(taskLimiter.snapshot());
+});
+app.use("/api", (_req, res, next) => {
+  if (!readiness.ready) {
+    taskLimiter.reject("not_ready"); res.set("X-Otziv-Admission", "rejected-v1");
+    return res.status(503).json({ status: "ERROR", code: "worker_not_ready" });
+  }
+  next();
+});
 
 app.post(
   "/api/external-review-checks/verify",
-  createConcurrencyMiddleware(
-    process.env.MAX_CONCURRENT_CHECKS || 1,
-    maxCheckDurationMs + ocrTimeoutMs + 10_000,
-  ),
-  async (req, res) => {
+  taskLimiter.wrap(async (req, res) => {
   const traceId = crypto.randomUUID();
   const started = Date.now();
   const payload = req.body || {};
@@ -95,24 +112,28 @@ app.post(
   let browser;
   let outboundProxy;
   let ocrWorker;
+  const cancellation = new TaskCancellation(req, res, taskLimiter);
   let deadlineExceeded = false;
+  // A wedged native cleanup must fail the process, never release admission
+  // while Chromium/OCR can still consume resources.
+  const cleanupWatchdog = setTimeout(() => process.exit(1), maxCheckDurationMs + ocrTimeoutMs + 10_000);
   const deadlineTimer = setTimeout(() => {
     deadlineExceeded = true;
-    if (browser) {
-      void browser.close().catch(() => {});
-    }
+    cancellation.cancel("deadline");
   }, maxCheckDurationMs);
   deadlineTimer.unref();
   try {
+    cancellation.assertActive();
     const executablePath = process.env.CHROMIUM_EXECUTABLE_PATH || undefined;
-    outboundProxy = await startDnsPinningProxy({ upstreamProxy: configuredUpstreamProxy() });
-    browser = await chromium.launch({
+    outboundProxy = await cancellation.own(await startDnsPinningProxy({ upstreamProxy: configuredUpstreamProxy() }));
+    browser = await cancellation.own(await chromium.launch({
+      chromiumSandbox: true,
       headless: true,
       executablePath,
       timeout: Math.min(checkTimeoutMs, 30_000),
       args: chromiumLaunchArgs(),
       proxy: { server: outboundProxy.server }
-    });
+    }));
 
     const context = await browser.newContext({
       viewport: { width: 1440, height: 1200 },
@@ -169,7 +190,7 @@ app.post(
         return res.json(response(payload.checkId, "BLOCKED", 0, "", screenshot, "Captcha or block page detected", traceId));
       }
       if (!ocrWorker) {
-        ocrWorker = await createOcrWorker();
+        ocrWorker = await cancellation.own(await createOcrWorker());
       }
       const text = await recognizeScreenshot(ocrWorker, screenshot);
       assertWithinDeadline(deadlineExceeded);
@@ -202,6 +223,8 @@ app.post(
       traceId
     ));
   } catch (error) {
+    if (/timeout|timed out/iu.test(String(error?.message || ""))) taskLimiter.control().timeout();
+    if (res.destroyed || cancellation.reason === "disconnect") return;
     console.warn(JSON.stringify({
       level: "warn",
       message: "external review check failed",
@@ -221,17 +244,16 @@ app.post(
     });
   } finally {
     clearTimeout(deadlineTimer);
-    if (browser) {
-      await browser.close().catch(() => {});
-    }
-    if (ocrWorker) {
-      await ocrWorker.terminate().catch(() => {});
-    }
-    if (outboundProxy) {
-      await outboundProxy.close().catch(() => {});
+    const cleanup = await Promise.allSettled([cancellation.close()]);
+    if (cleanup.some((result) => result.status === "rejected")) {
+      readiness.stop();
+      taskLimiter.stop();
+      // The watchdog remains armed; an uncertain cleanup never admits new work.
+    } else {
+      clearTimeout(cleanupWatchdog);
     }
   }
-});
+}, "ERROR"));
 
 app.use((error, _req, res, _next) => {
   if (error?.type === "entity.too.large") {
@@ -245,9 +267,36 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ status: "ERROR", code: "internal_error" });
 });
 
-app.listen(port, () => {
+const httpServer = app.listen(port, () => {
   console.log(`external-review-worker listening on ${port}`);
 });
+const startupWatchdog = setTimeout(() => process.exit(1), 90_000);
+void taskLimiter.run(() => readiness.check(() => checkRuntime({
+  launchBrowser: () => chromium.launch({
+      chromiumSandbox: true,
+    headless: true, executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || undefined,
+    args: chromiumLaunchArgs(), timeout: 30_000,
+  }),
+  createOcr: createOcrWorker,
+}))).then((ok) => {
+  clearTimeout(startupWatchdog);
+  console.log(JSON.stringify({ message: "runtime readiness", state: ok ? "ready" : "failed" }));
+}).catch(() => { clearTimeout(startupWatchdog); readiness.stop(); });
+
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  readiness.stop();
+  taskLimiter.stop();
+  httpServer.close();
+  httpServer.closeIdleConnections();
+  const timeout = boundedInteger(process.env.DRAIN_TIMEOUT_MS, 160_000, 1000, 370_000);
+  const drained = await taskLimiter.drain(timeout);
+  process.exit(drained ? 0 : 1);
+}
+process.on("SIGTERM", () => { void shutdown(); });
+process.on("SIGINT", () => { void shutdown(); });
 
 function configuredUpstreamProxy() {
   if (String(process.env.EXTERNAL_REVIEW_PROXY_ENABLED || "false").toLowerCase() !== "true") {
@@ -307,23 +356,15 @@ async function looksBlocked(page) {
 }
 
 async function createOcrWorker() {
-  const workerPromise = createWorker("rus+eng", undefined, { cachePath: tesseractCachePath });
-  return withTimeout(
-    workerPromise,
-    ocrTimeoutMs,
-    () => {
-      void workerPromise.then((lateWorker) => lateWorker.terminate().catch(() => {})).catch(() => {});
-    },
-  );
+  const worker = new OcrRuntime({
+    cacheDirectory: tesseractCachePath, modelDirectory, timeoutMs: ocrTimeoutMs,
+  });
+  await worker.ready;
+  return worker;
 }
 
 async function recognizeScreenshot(worker, buffer) {
-  const result = await withTimeout(
-    worker.recognize(buffer),
-    ocrTimeoutMs,
-    () => { void worker.terminate().catch(() => {}); },
-  );
-  return result?.data?.text || "";
+  return worker.recognize(buffer);
 }
 
 function validatePayload(payload) {
@@ -373,24 +414,6 @@ function safeWorkerError(error, deadlineExceeded = false) {
     return "External review check timed out";
   }
   return "External review check failed";
-}
-
-async function withTimeout(promise, timeoutMs, onTimeout = () => {}) {
-  let timer;
-  try {
-    const timeout = new Promise((_, reject) => {
-      timer = setTimeout(() => {
-        onTimeout();
-        reject(new Error("Operation timed out"));
-      }, timeoutMs);
-      timer.unref();
-    });
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timer) {
-      clearTimeout(timer);
-    }
-  }
 }
 
 function boundedInteger(raw, fallback, minimum, maximum) {

@@ -48,7 +48,7 @@ class UserAuthEpochServiceTest {
                 .authEpoch(4L)
                 .build();
 
-        new UserAuthEpochService(userRepository, pushTokenRepository).deactivated(user);
+        new UserAuthEpochService(userRepository, pushTokenRepository, org.mockito.Mockito.mock(com.hunt.otziv.u_users.repository.AuthSessionStateRepository.class)).deactivated(user);
 
         assertFalse(user.isActive());
         assertEquals(5L, user.getAuthEpoch());
@@ -75,7 +75,7 @@ class UserAuthEpochServiceTest {
                 .deactivationReason("stale")
                 .build();
 
-        new UserAuthEpochService(userRepository, pushTokenRepository).passwordChanged(user);
+        new UserAuthEpochService(userRepository, pushTokenRepository, org.mockito.Mockito.mock(com.hunt.otziv.u_users.repository.AuthSessionStateRepository.class)).passwordChanged(user);
 
         assertEquals(12L, user.getAuthEpoch());
         assertNull(user.getDeactivatedAt());

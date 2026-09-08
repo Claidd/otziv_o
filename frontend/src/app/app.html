@@ -1,2 +1,3 @@
-<app-toast-container />
+<app-toast-container [style.--toast-stack-top]="accountActionCooldown.locked() ? '9rem' : null" />
+<app-worker-account-action-cooldown-toast />
 <router-outlet />

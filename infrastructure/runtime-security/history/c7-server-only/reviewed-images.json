@@ -1,0 +1,833 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "tagPattern": "${component}-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
+  "platform": "linux/amd64",
+  "scope": "Reviewed candidate publication only; default activation and production rollout are separate decisions.",
+  "sourceBeforePolicy": "Immutable historical pins must remain explicit old-source upgrade proof inputs after any default update.",
+  "scanPolicy": "Scan actual published manifest digest; retain unchanged raw report/SBOM, separate exact-binary adjudications, and all vendor-unfixed risks.",
+  "images": [
+    {
+      "component": "alloy",
+      "dockerfile": "infrastructure/runtime-security/builds/Alloy.Dockerfile",
+      "context": "infrastructure/runtime-security",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "grafana/alloy@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8",
+      "candidateBaseRef": "grafana/alloy@sha256:1eeba15ef3193438c72f66efd3d76f769c523a4c661db0fae6eddde906004bc8",
+      "buildImageRefs": [
+        "golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b",
+        "grafana/alloy-build-image:v0.1.35@sha256:9fa2a341b53503ce42cf9900c401d689a68ea67cdec6a20f53d72e3665fb8dc6",
+        "grafana/alloy@sha256:1eeba15ef3193438c72f66efd3d76f769c523a4c661db0fae6eddde906004bc8"
+      ],
+      "version": "1.19.2-otziv.1",
+      "dockerfileSha256": "5752b6aaef743aa559f19192683f3e2685174bce162ce134cf65d85c50b8623f",
+      "historicalLocalImageId": "sha256:e35f97a3f60588794d24d7530f95554c87fd505722081f699977221ae578d0db",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/alloy-rebuilt-vulnerabilities.json",
+          "sha256": "61a1a9f29731e95d6384331211b370d3f6ffc69b8424fd0c5612ac760889ee7e"
+        },
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/alloy-rebuilt-vulnerabilities.sbom.cdx.json",
+          "sha256": "c53f062d8e6f710a7f0a157cf543720be9fbb6395a855b4ccb2d269b31f6cddd"
+        },
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/alloy-rebuilt-upgrade-v1/proof.json",
+          "sha256": "16f653e46dc79c2b67635343ca36aec883f5365b37b6a82ac84b84202e4a0130"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-grafana-alloy-55e0abbcef/grafana-alloy-55e0abbcef-vulnerabilities.json",
+        "sha256": "94302e1081b6aec6900ee9e12562d7705a10c48fca6139e4dc5ffb2fb0106fce"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 347,
+          "service": "alloy"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 792,
+          "service": "alloy"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 954,
+          "service": "alloy"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "REQUIRED",
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    },
+    {
+      "component": "certbot",
+      "dockerfile": "infrastructure/runtime-security/builds/ordinary/Certbot.Dockerfile",
+      "context": "infrastructure/runtime-security/builds/ordinary",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "certbot/certbot@sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4",
+      "candidateBaseRef": "certbot/certbot@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20",
+      "buildImageRefs": [
+        "certbot/certbot@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20"
+      ],
+      "version": "5.8.0",
+      "dockerfileSha256": "61b617278e11d90695bac5994a0005db611b85d9d2cc1da6db32652e58549be3",
+      "historicalLocalImageId": "sha256:f62d40f21fce46f21da20b97575c7093dd9e8268bb65f1e087e4ad5341f0c4c5",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/certbot-hardened-vulnerabilities-v1.json",
+          "sha256": "bc807d52125e60acaf53646d27578af7a26781f96910e80fd8ff0c889a433ab4"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/certbot-hardened-vulnerabilities-v1.sbom.cdx.json",
+          "sha256": "2725ffb787c15edbf818d753aeb5d7b7b8f88bdf2a561707e515aa046a6fbb00"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/certbot-hardened-vulnerabilities-v1.triage.json",
+          "sha256": "6c3be7eb71c226a5814c6ac316e0ed9e9a28754ab9800626cb734d80a9e5bb37"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/certbot-fixture/proof.json",
+          "sha256": "bdaae77d39354f63ca524f7463ae90a7f00a042b21a43a37362a62cb8103c0e4"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-certbot-certbot-ca5671f150/certbot-certbot-ca5671f150-vulnerabilities.json",
+        "sha256": "82a320025101425ea7518d50fddbdc424821196e5c6eef1c83d74237bac29140"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "docker-compose.yaml",
+          "line": 844,
+          "service": "certbot"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "NONE",
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    },
+    {
+      "component": "grafana",
+      "dockerfile": "infrastructure/runtime-security/builds/Grafana.Dockerfile",
+      "context": "infrastructure/runtime-security",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "grafana/grafana@sha256:7567a7c70a3c1d75aeeedc968d1304174a16651e55a60d1fb132a05e1e63a054",
+      "candidateBaseRef": "grafana/grafana@sha256:27e80e0f4fa3d423bcbbbb3418f2a6475833f94a2a88b6f2547c74830ce4286e",
+      "buildImageRefs": [
+        "grafana/grafana@sha256:27e80e0f4fa3d423bcbbbb3418f2a6475833f94a2a88b6f2547c74830ce4286e",
+        "golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b"
+      ],
+      "version": "12.4.10+otziv.1",
+      "dockerfileSha256": "01a13f2c0685041bfc6843cf7d079476f3c21cf3aad2bfc29a987d54379a1b6d",
+      "historicalLocalImageId": "sha256:3a438cefccf81756412057b54c62ed6b5552fd01fc941c3246baf05122ef8ca6",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/vulnerabilities-v2.json",
+          "sha256": "da9eb877fdb2e8e1a9361dfcd47042eb97bfc25d2f2b156c057984973c77f90a"
+        },
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/vulnerabilities-v2.sbom.cdx.json",
+          "sha256": "7e8cbff9fb371fb06059a16ae6ec4f150a6ffe3d9b682c05f4b9d6ead5985e46"
+        },
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/grafana-derivative/upgrade-v2/proof.json",
+          "sha256": "e629e10dc047e34842dc13bcfacaab63b9308a8404f6ab5757db8cd15d43ea8a"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-grafana-grafana-2d8f28439f/grafana-grafana-2d8f28439f-vulnerabilities.json",
+        "sha256": "e12e3eb86c2abb2236a39bc67eb68d8ce254e987c7315233666b47ec7fdce878"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 370,
+          "service": "grafana"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 819,
+          "service": "grafana"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 986,
+          "service": "grafana"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "NONE",
+      "binaryAdjudication": "infrastructure/runtime-security/adjudications/grafana-tempo/review.json",
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF",
+      "latestExactBinaryAdjudication": {
+        "path": "infrastructure/runtime-security/GRAFANA_TEMPO_ADJUDICATION_2026-09-08.json",
+        "sha256": "969f8f79450a3a0408504d3b5280160e3b4586255ff0f22a8ee963c6b6f03223"
+      }
+    },
+    {
+      "component": "keycloak",
+      "dockerfile": "infrastructure/keycloak/security-generation/Dockerfile",
+      "context": "infrastructure/keycloak/security-generation",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
+      "candidateBaseRef": "quay.io/keycloak/keycloak@sha256:ff4257d0d64efbe99ed1ddfaf07765cc3c36dc7518bf8324d41961327f441c54",
+      "buildImageRefs": [
+        "maven@sha256:d6e32a254897415a445654a3c43c30fbc731a4d946cf5c66d1cb9184141c20c1",
+        "quay.io/keycloak/keycloak@sha256:ff4257d0d64efbe99ed1ddfaf07765cc3c36dc7518bf8324d41961327f441c54",
+        "maven@sha256:9b0bc1420b93f3eafb7401dc3030eac01e773d8d709686d3c4ac351fcf6f9f42",
+        "eclipse-temurin:21-jre-jammy@sha256:eebd356ad7358b7094758e5787a6726f332917cfd56feab6457c56dab895cdbf"
+      ],
+      "version": "26.7.3-otziv.2",
+      "dockerfileSha256": "d2d8f1fd714070bccb311cf321fb22d3d27379b1483b2eee91355e2bdeb1b973",
+      "historicalLocalImageId": "sha256:537b96f86faa1afdd7502ec6dc38da258cf479568488053581c561bad960cd5e",
+      "historicalLocalEvidence": [
+        {
+          "path": "infrastructure/runtime-security/ISSUER_ORDERING_VALIDATION_2026-09-08.json",
+          "sha256": "dad1ae36640354bda31860c8d58c5612edccf53531711e5bd58a2c5cdf745e78"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-quay-io-keycloak-keycloak-61bd1127b1/quay-io-keycloak-keycloak-61bd1127b1-vulnerabilities.json",
+        "sha256": "e28c49f339ed747f30d248ce2bd4beb71de33f8c650c58c68c2637a8aac97306"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 275,
+          "service": "keycloak"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 120,
+          "service": "keycloak"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 131,
+          "service": "keycloak"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "prepare": {
+        "kind": "keycloak-provider-docker-stage"
+      },
+      "unfixedRiskReview": "NONE",
+      "activationPreconditions": [
+        "paired issuer DB backup",
+        "generation provider/provisioning gate and client mappings",
+        "actual login/refresh/revocation proof"
+      ],
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    },
+    {
+      "component": "loki",
+      "dockerfile": "infrastructure/runtime-security/builds/Loki.Dockerfile",
+      "context": "infrastructure/runtime-security",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "grafana/loki@sha256:8b5bd7748d0e4da66cd741ac276e485517514af0bea32167e27c0e1a95bcf8aa",
+      "candidateBaseRef": "grafana/loki@sha256:550d599ec4efacd8ebc0a5871766855057cba2bd0c669c0711d898c00d6d901f",
+      "buildImageRefs": [
+        "golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b",
+        "grafana/loki@sha256:550d599ec4efacd8ebc0a5871766855057cba2bd0c669c0711d898c00d6d901f"
+      ],
+      "version": "3.7.7-otziv.1",
+      "dockerfileSha256": "4575c3892e85926794ba48f9104072fa9514dfb48edef09fc9ae611d7256ee38",
+      "historicalLocalImageId": "sha256:12af3627697b240427c2d5211fe6c8a070e860ba845ee0a4fcfc5ada06a5b62c",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/loki-rebuilt-vulnerabilities.json",
+          "sha256": "e02cabaedf9b9c710914b6666bd03f17525ae07451345f5ba413a070e4e76f04"
+        },
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/loki-rebuilt-vulnerabilities.sbom.cdx.json",
+          "sha256": "0f4021a6887a750db480ea82f35fefcb13137d71961c0bfcb8ec8ee88f9c4257"
+        },
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/loki-rebuilt-final-v2/proof.json",
+          "sha256": "b24f334428cf6222f247947c7b762a4afbd7fea279f5da42cdfcf6e7d50e29cd"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-grafana-loki-29ec725d37/grafana-loki-29ec725d37-vulnerabilities.json",
+        "sha256": "585e07a9c068d36d480fc88590e7e7ba732a5a503805e4c1e99657e5838699cf"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 317,
+          "service": "loki"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 756,
+          "service": "loki"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 912,
+          "service": "loki"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "NONE",
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    },
+    {
+      "component": "mysql",
+      "dockerfile": "infrastructure/mysql/Dockerfile",
+      "context": "infrastructure/mysql",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383",
+      "candidateBaseRef": "container-registry.oracle.com/mysql/community-server@sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340",
+      "buildImageRefs": [
+        "container-registry.oracle.com/mysql/community-server@sha256:bf955135c21e2c1c153417407fbbbb8efa786f487781b1fb6baaf7aba17d4340"
+      ],
+      "version": "9.7.3 hardened",
+      "dockerfileSha256": "61237de048ea2dd5354648777e802f23cf0c03f43d4211be5d77831deda61468",
+      "historicalLocalImageId": "sha256:69eb992969cb5fd2e0ad55d75e113d9b98e98428a0355cfa14b1d587bcf51063",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/finalization-20260907/mysql-9.7.3-hardened-vulnerabilities.json",
+          "sha256": "46128501d5281446f22085615836d10d7bd844f4b000406f227ceb7adb17a017"
+        },
+        {
+          "path": ".codex-tmp/finalization-20260907/mysql-9.7.3-hardened-vulnerabilities.sbom.cdx.json",
+          "sha256": "e68acbc795be6837f026370833dfe8d6d4453a188c472f2f2afcf60149bc621c"
+        },
+        {
+          "path": ".codex-tmp/finalization-20260907/mysql-upgrade-hardened-v1/rehearsal.json",
+          "sha256": "3d87a54d899ed7711ffff30fe952d339f5cc9655906b688a0cf34d7f53293c1b"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-mysql-d494426c1f/mysql-d494426c1f-vulnerabilities.json",
+        "sha256": "5a1f5946542fdd8b99360d10e624941df76f5a5c0f73aea73b1a81dcf8e493c1"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 32,
+          "service": "mysql"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 48,
+          "service": "mysql"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 49,
+          "service": "mysql"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "NONE",
+      "activationPreconditions": [
+        "single writer/drain fence",
+        "official full Upgrade Checker PASS",
+        "explicit UID ownership migration",
+        "rollback from pre-upgrade backup only; never old mysqld against upgraded volume"
+      ],
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    },
+    {
+      "component": "nginx",
+      "dockerfile": "infrastructure/runtime-security/builds/ordinary/Nginx.Dockerfile",
+      "context": "infrastructure/runtime-security/builds/ordinary",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "nginx@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+      "candidateBaseRef": "nginx@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c",
+      "buildImageRefs": [
+        "nginx@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c"
+      ],
+      "version": "1.30.4",
+      "dockerfileSha256": "908e45ed842855621c550b8a324ffd2ef3368c31bb8df576491a1e06ce8c8c65",
+      "historicalLocalImageId": "sha256:c837e4c3cbc7e62dbddb9311f788b8be0a6c9745fea6504b376b8a1c3017561f",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/nginx-hardened-vulnerabilities-v1.json",
+          "sha256": "6fea68819f1092a83e94b8d7492101587f39954ed90489ffbcbfe5f26196ee35"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/nginx-hardened-vulnerabilities-v1.sbom.cdx.json",
+          "sha256": "a65426badf8bd9317918addef660791d9764a1c09ca464c7f017fff025f81aa5"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/nginx-hardened-vulnerabilities-v1.triage.json",
+          "sha256": "7b1a63677b714af5aab5fca92a36325abeb9ec8426a3855cc1631b884764efe0"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/nginx-fixture/proof.json",
+          "sha256": "30ded71c4f48c55e1c77d8ccd5e98b8391bb9700927a23d91b5b4ec754b25ea8"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-nginx-e1e08def68/nginx-e1e08def68-vulnerabilities.json",
+        "sha256": "d2a46ce53cbf915b1235285d4741a281de3ce781a99382b9ee99607a49b32f23"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 48,
+          "service": "nginx"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "NONE",
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    },
+    {
+      "component": "node",
+      "dockerfile": "infrastructure/runtime-security/builds/ordinary/Node.Dockerfile",
+      "context": "infrastructure/runtime-security/builds/ordinary",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "node@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3",
+      "candidateBaseRef": "node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf",
+      "buildImageRefs": [
+        "node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf"
+      ],
+      "version": "24.20.0/npm11.19.0",
+      "dockerfileSha256": "da95b5d6daac9a72193574fe1ecd50b411a7370a1244827b9dd75d8bad3d349f",
+      "historicalLocalImageId": "sha256:04465a519aacdbb7f7167d79f60458e0696fde2043e671a79fbdd6383422e98c",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-hardened-vulnerabilities-v1.json",
+          "sha256": "f6b75ae50515ee7fd11eafd47eea08343f328bae48674f9aacaa7b4265e49769"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-hardened-vulnerabilities-v1.sbom.cdx.json",
+          "sha256": "e3a6749cc8e13bff32b2d794d77de1ec2955f0a49c45679b3b09228c5546810b"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-hardened-vulnerabilities-v1.triage.json",
+          "sha256": "007c1214532534cf99efd468865e85b32865c73c2833a4dd8488f975acee87be"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/serve-proof.json",
+          "sha256": "f044681f95b8d0f5db5fa7e3750357b2843100c2a876f2e9fb1e96db6636dc16"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/production-build.log",
+          "sha256": "abae84a909a93f33e8f0f87072de2fd2a125045e1ce666bcb207e5da1fac9867"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/official-serve-red.log",
+          "sha256": "90603ccb2258e7a17cebeba597ae0ddfb44029b5fabf825dd18f158155f6d1ba"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/hardened-serve-red.log",
+          "sha256": "15db5d36af99f91406c345505098cf5adb3489664899b598923c8fc6fa92a8ad"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-fixture/hardened-serve-green.log",
+          "sha256": "338a6ab61a951f5831cd660e6ead80be817b116de56b85e4b082c3a0cbb82245"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-node-dc8b119ea9/node-dc8b119ea9-vulnerabilities.json",
+        "sha256": "61c7e5b606bcdeb5a11a0d93967f05d1bc263faeb52c556e0852ca04c739e621"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 207,
+          "service": "frontend"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "NONE",
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF",
+      "latestPortableLocalBuild": {
+        "component": "node",
+        "imageId": "sha256:4b5448032fcedc62a5a6548541f82ccedfddffcbdcb154af92ab21764e416c98",
+        "configId": "sha256:79796174d240852ac621e56078990979711147228e9cb24703194604fcf87d85",
+        "scanCreatedAt": "2026-09-07T22:41:31.08313851Z",
+        "result": {
+          "schema": "otziv-vulnerability-scan-v1",
+          "artifactCount": 2,
+          "high": 0,
+          "critical": 0,
+          "unfixedHighOrCritical": 0,
+          "blockingFixedHighOrCritical": 0,
+          "adjudicatedFixedHighOrCritical": 0,
+          "effectiveBlockingFixedHighOrCritical": 0,
+          "result": "PASS",
+          "unresolvedRiskReview": "NONE",
+          "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+        },
+        "runtimeFileParity": {
+          "component": "node",
+          "historicalProvenImageId": "sha256:04465a519aacdbb7f7167d79f60458e0696fde2043e671a79fbdd6383422e98c",
+          "portableImageId": "sha256:4b5448032fcedc62a5a6548541f82ccedfddffcbdcb154af92ab21764e416c98",
+          "runtimePath": "/usr/local",
+          "actualRegularFiles": 2656,
+          "manifestSha256": "c0f2dadd4d7d3d28e86d61e8c203faab5f51ff70e8b7234091c94891075703ea",
+          "runtimeFileBytesExact": true,
+          "network": "none"
+        },
+        "evidence": [
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.json",
+            "sha256": "f602a68fdbd433f314db0cee5b6dcc686ed02042d2b5f9f3bede56cad258ba34"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.sbom.cdx.json",
+            "sha256": "470543f61afbcb9f26ae7aa6fad257241a2ba79a943aef1148a758fea0cb0626"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.triage.json",
+            "sha256": "a2335683a278f4a2f338dae14473a46e56e06cd7e1ecf0921de7a8584ef497fc"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.adjudications.json",
+            "sha256": "658d05641d2316e9b15d039ed53d00fe21c6f737f96d76a43d5f3d3f6875d144"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.result.json",
+            "sha256": "b9d6dd354bcce54b575f8cc6186ba032d7de7c281838434fc14c0a3b9da8a245"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-vulnerabilities-v1.scanner.log",
+            "sha256": "0679cf3a761ebfc4d7bc3036dd76bd2b13ca19ecd40fc6daf77877fc318f972e"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/node-portable-build-v1.log",
+            "sha256": "5343dbd23ef6257056ed8f1ac562c55d354756e35585f11211c5b3a6473b4c98"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/portable-runtime-parity.json",
+            "sha256": "293bf2656cd9598cecd25bd3fc70e2e6b37401cfaf797aee0f5bf30f77b8b302"
+          }
+        ]
+      }
+    },
+    {
+      "component": "phpmyadmin",
+      "dockerfile": "infrastructure/runtime-security/builds/ordinary/PhpMyAdmin.Dockerfile",
+      "context": "infrastructure/runtime-security/builds/ordinary",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b",
+      "candidateBaseRef": "phpmyadmin@sha256:3a8a8d6b5289091f959ba0293f21163b3a2fc5741991a53de70b3497fe8d31db",
+      "buildImageRefs": [
+        "phpmyadmin@sha256:3a8a8d6b5289091f959ba0293f21163b3a2fc5741991a53de70b3497fe8d31db",
+        "phpmyadmin@sha256:3a8a8d6b5289091f959ba0293f21163b3a2fc5741991a53de70b3497fe8d31db"
+      ],
+      "version": "5.2.3",
+      "dockerfileSha256": "8559b21394d0c22da2750083a88d27fb13ca6f8f4c656e7e774af0e73b3b06e5",
+      "historicalLocalImageId": "sha256:2e312bf5fd3e1c93b1a1384fc8bc9feb56498ee8b585d48c2d5522fe80ff3159",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-hardened-vulnerabilities-v3.json",
+          "sha256": "81d8fba846a8a24207ee985b50ca53a19c01823cbba9a3a8b9bdbc318f01abe1"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-hardened-vulnerabilities-v3.sbom.cdx.json",
+          "sha256": "5270c75501bae73c1e37bee5ef641714b6bf06d124404691679e6b6579a0e1aa"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-hardened-vulnerabilities-v3.triage.json",
+          "sha256": "ffc44543fa7122bd7f47532b5b84481d9df12d16b6d71f3bd7ab2b3d15b2453d"
+        },
+        {
+          "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-fixture/proof.json",
+          "sha256": "68538ad596a897439dc731c6f8504747a638f7d69001fc9e732c2476a50b8ae5"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-phpmyadmin-c9cdf5d6aa/phpmyadmin-c9cdf5d6aa-vulnerabilities.json",
+        "sha256": "abd2231c8e5734a35d4b80344e778046012267b0896a0265f40c7b980f2ec11e"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 224,
+          "service": "phpmyadmin"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 78,
+          "service": "phpmyadmin"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 82,
+          "service": "phpmyadmin"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "REQUIRED",
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF",
+      "latestPortableLocalBuild": {
+        "component": "phpmyadmin",
+        "imageId": "sha256:5ad1f011c3545b5ce3f5569fbd32efe6995b59da0b1485496c80e5edb9742e90",
+        "configId": "sha256:e199b4894d32eb66f0c5c48f772a6525d639d04e31bd64862aa849d24bdd2001",
+        "scanCreatedAt": "2026-09-07T22:45:45.512732486Z",
+        "result": {
+          "schema": "otziv-vulnerability-scan-v1",
+          "artifactCount": 3,
+          "high": 135,
+          "critical": 14,
+          "unfixedHighOrCritical": 149,
+          "blockingFixedHighOrCritical": 0,
+          "adjudicatedFixedHighOrCritical": 0,
+          "effectiveBlockingFixedHighOrCritical": 0,
+          "result": "PASS",
+          "unresolvedRiskReview": "REQUIRED",
+          "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+        },
+        "runtimeFileParity": {
+          "component": "phpmyadmin",
+          "historicalProvenImageId": "sha256:2e312bf5fd3e1c93b1a1384fc8bc9feb56498ee8b585d48c2d5522fe80ff3159",
+          "portableImageId": "sha256:5ad1f011c3545b5ce3f5569fbd32efe6995b59da0b1485496c80e5edb9742e90",
+          "runtimePath": "/var/www/html",
+          "actualRegularFiles": 4275,
+          "manifestSha256": "78eeed9e4255839fb317b840b88c858c5508ee28b6db6cc77016187625d33fdd",
+          "runtimeFileBytesExact": true,
+          "network": "none"
+        },
+        "evidence": [
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.json",
+            "sha256": "a57f7a2574e8932cd19fb62bd886df084b49f3d68b78ba25d4f69e89a5b5950e"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.sbom.cdx.json",
+            "sha256": "1d6e2346bf2b044b7b0e70fca9d0f8bae9c8f733edfd3611daddb964db1198db"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.triage.json",
+            "sha256": "118ad9ee79a477deac956310a526e8c3d256fe41165fe377b1423e03ebd721ab"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.adjudications.json",
+            "sha256": "7882aabb4ace30022fe02800e7955a3bb80fe6224c8704d0cf2615dde0baf2ac"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.result.json",
+            "sha256": "46772c4ea3ad06b2d752e891d58daa5422e1c97366012743cb06ea19dea59a7a"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-vulnerabilities-v1.scanner.log",
+            "sha256": "8fa68c27a281ba613ee73cf3012cebd4c5d9b5003a8f3a2d9ecb2a724bb6b8c3"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/phpmyadmin-portable-build-v1.log",
+            "sha256": "69cd0abbfd0dcb49596918828451e25b04ee419cabc80b2cf656cac286b7f4e2"
+          },
+          {
+            "path": ".codex-tmp/security-closure-20260908/upstream/ordinary-candidates/portable-runtime-parity.json",
+            "sha256": "293bf2656cd9598cecd25bd3fc70e2e6b37401cfaf797aee0f5bf30f77b8b302"
+          }
+        ]
+      }
+    },
+    {
+      "component": "postgres",
+      "dockerfile": "infrastructure/postgres/Dockerfile",
+      "context": "infrastructure/postgres",
+      "buildArgs": {
+        "TARGETARCH": "amd64"
+      },
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "candidateBaseRef": "postgres:17.11@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675",
+      "buildImageRefs": [
+        "golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b",
+        "postgres:17.11@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675"
+      ],
+      "version": "17.11 hardened",
+      "dockerfileSha256": "f3bcc08c43527631e33940f576f16a320bee697b8e19157b028c9f2e426243e0",
+      "historicalLocalImageId": "sha256:84631285605c9dea134ddb89a1986ba30bcdfef1f16a5c1664b06bb6f9303097",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/finalization-20260907/postgres-17.11-hardened-vulnerabilities.json",
+          "sha256": "9cc94c03823dd98b448c4d274b3bdb0b525bd1d8e3593b1db5a80068f9d11b23"
+        },
+        {
+          "path": ".codex-tmp/finalization-20260907/postgres-17.11-hardened-vulnerabilities.sbom.cdx.json",
+          "sha256": "7e4984b86f7dc0f3b3b20f8d5d406c7ffc9814e9ea79be80062202da782f84b2"
+        },
+        {
+          "path": ".codex-tmp/finalization-20260907/postgres-upgrade-v6/proof.json",
+          "sha256": "4fc94abc87fcc90c691e8fbd66c49d88b52cf5a9d019f292efa176578fe1b76a"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-postgres-aca3723006/postgres-aca3723006-vulnerabilities.json",
+        "sha256": "3f8d278a6d32cc09e6dfbda86e4b38bee6c63f8c414d665f00cb4ac4a258e3c4"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 258,
+          "service": "keycloak-postgres"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 101,
+          "service": "keycloak-postgres"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 108,
+          "service": "keycloak-postgres"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "REQUIRED",
+      "activationPreconditions": [
+        "single writer/drain fence",
+        "paired backup and verified restore",
+        "retain PostgreSQL17 and Debian trixie collation family"
+      ],
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    },
+    {
+      "component": "prometheus",
+      "dockerfile": "infrastructure/runtime-security/builds/Prometheus.Dockerfile",
+      "context": "infrastructure/runtime-security",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "prom/prometheus@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3",
+      "candidateBaseRef": "prom/prometheus@sha256:595c907995955f2d5fda19fae66392680921d9501cad0be5270b3fee959780b1",
+      "buildImageRefs": [
+        "golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b",
+        "prom/prometheus@sha256:595c907995955f2d5fda19fae66392680921d9501cad0be5270b3fee959780b1"
+      ],
+      "version": "3.13.3-otziv.1",
+      "dockerfileSha256": "fb2a723e8de9f32237dcebca94a558d33c575b07ba6b450cc4f3d97adf895cd8",
+      "historicalLocalImageId": "sha256:e38b95e5cb5fa4f5108cffcf14d93ef6ce9a910f9134025171472d06243405a7",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/prometheus-rebuilt-vulnerabilities.json",
+          "sha256": "e276b9ebbc0a49e62875e60011d25a120b530be0deb3234ce52c041ec350a0b3"
+        },
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/prometheus-rebuilt-vulnerabilities.sbom.cdx.json",
+          "sha256": "404238dea60522c992b02306e93d2b36c0bbdad0db8a37e74204338dd7042c5a"
+        },
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/prometheus-rebuilt-final-v2/proof.json",
+          "sha256": "2324a726a23d46e00c2ef44a1cd2fa37a1661c70f6ad021a686c6d599fa94a8b"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-prom-prometheus-a8482dc26f/prom-prometheus-a8482dc26f-vulnerabilities.json",
+        "sha256": "32d8b0e0918fa842106ecf562443edde0ee095262d16c2879f7b1671e3eaf6fd"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 306,
+          "service": "prometheus"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 730,
+          "service": "prometheus"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 882,
+          "service": "prometheus"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "NONE",
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    },
+    {
+      "component": "tempo",
+      "dockerfile": "infrastructure/runtime-security/builds/Tempo.Dockerfile",
+      "context": "infrastructure/runtime-security",
+      "buildArgs": {},
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "grafana/tempo@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50",
+      "candidateBaseRef": "grafana/tempo@sha256:b18e2bf60dd852ae891d721f906c15eb6af558c0e785fe82c019da4f2006f071",
+      "buildImageRefs": [
+        "golang:1.27.1-bookworm@sha256:648f440f42a0958804efb24df176f806f9d353b41f1c0627f666428e40310f6b",
+        "grafana/tempo@sha256:b18e2bf60dd852ae891d721f906c15eb6af558c0e785fe82c019da4f2006f071"
+      ],
+      "version": "2.10.8-otziv.2",
+      "dockerfileSha256": "979f67e2281bb0d8171bc7c1ad297e487e8cdbc50e869d208c0dcc77aaa8a178",
+      "historicalLocalImageId": "sha256:dee455ed0c802c8e2e42ff7ee843effd457cf8ac312893c210800ade8e201102",
+      "historicalLocalEvidence": [
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/vulnerabilities-v2.json",
+          "sha256": "347c7c5fdd82733e73ad51f0b57ddbaf7bf28a690c000fe2ed5599df62195ddb"
+        },
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/vulnerabilities-v2.sbom.cdx.json",
+          "sha256": "066841bdd5249a90f980c74e91538ede5e7fa38af9d5e49a2bb87a420a2aa174"
+        },
+        {
+          "path": ".codex-tmp/remediation-final-gaps-20260907/monitoring/tempo-derivative/trace-upgrade-v2/proof.json",
+          "sha256": "3a3ea5c1e733d314f0554ab8c3444a88597ca8c06aa8a79ffa360073145cc76d"
+        }
+      ],
+      "sourceBeforeScan": {
+        "path": ".codex-tmp/security-closure-20260908/upstream/c5-artifacts/upstream-security-grafana-tempo-eacdf7cd3e/grafana-tempo-eacdf7cd3e-vulnerabilities.json",
+        "sha256": "119c551d21579eb36c23af0059fd6e396fd19f18674d4db30e2dc3fb1dbe4fa6"
+      },
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 331,
+          "service": "tempo"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 774,
+          "service": "tempo"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 933,
+          "service": "tempo"
+        }
+      ],
+      "publishedDigest": null,
+      "publicationStatus": "NOT_PUBLISHED",
+      "deploymentStatus": "NOT_ACTIVATED",
+      "unfixedRiskReview": "NONE",
+      "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
+    }
+  ],
+  "publicationWave": "C7",
+  "previousManifest": {
+    "path": "infrastructure/runtime-security/history/c6/reviewed-images.json",
+    "sha256": "d2703f82c09690f1b1815471f5a8e24e1960bd90217df733498c0c7ed07b03f3"
+  }
+}

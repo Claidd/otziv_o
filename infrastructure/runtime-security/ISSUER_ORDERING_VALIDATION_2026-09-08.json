@@ -1,0 +1,476 @@
+{
+  "schema": "otziv-issuer-ordering-validation-v1",
+  "documentDate": "2026-09-08",
+  "observedFinishedAtUtc": "2026-09-07T20:12:05.551Z",
+  "recordedAtUtc": "2026-09-07T20:16:19.108385+00:00",
+  "status": "LOCAL_BUILD_PROTOCOL_STARTUP_SCAN_AND_PAIRED_RECOVERY_PASS",
+  "scope": "Keycloak 26.7.3 / Quarkus 3.33.3.1 downstream descriptor ordering correction; isolated synthetic verification only.",
+  "hostedC3": {
+    "head": "0b03150369037ab087bc627534e8c945102ccb27",
+    "runId": 34156192193,
+    "jobId": 101848466978,
+    "url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466978",
+    "result": "FAIL",
+    "failedStep": "Build the real issuer release image",
+    "exception": "java.util.ConcurrentModificationException",
+    "site": "JpaModelPersistenceUnitContributionBuildItem.java:25, HibernateOrmProcessor.contributePersistenceXmlToJpaModel:463",
+    "cause": "Keycloak mutates a published persistence descriptor managed-class list while Quarkus snapshots the same list; the two consumers had no ordering dependency.",
+    "fullOriginalLogSha256": "cde2e06c4c981ed7491e2c7cc27bd75d121b1788f6e0c901e8ff16e81522d37b",
+    "safeExcerpt": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c3-job-101848466978-safe-excerpt.json",
+      "sha256": "c25c0920ce307e41bbe997904c68823b5615513bea447006506e439f0c30c7c4",
+      "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+    }
+  },
+  "hostedC4": {
+    "status": "PENDING_AT_RECORDING",
+    "result": "NOT_ASSERTED",
+    "requirement": "Rebuild and execute the issuer job with this correction on the hosted runner. Local PASS does not replace that required check."
+  },
+  "image": {
+    "tagAtVerification": "otziv-keycloak-security:26.7.3-ordering-proof",
+    "indexDigest": "sha256:537b96f86faa1afdd7502ec6dc38da258cf479568488053581c561bad960cd5e",
+    "manifestDigest": "sha256:a7bbf7a1cd3a03a467ebf4ccde985edad00a32827a3ccebd95311640f9a428ea",
+    "configDigest": "sha256:047c52d65918213826627df2f481ca68122390e9cc289eccf58472219b91b567",
+    "platform": "linux/amd64",
+    "keycloakVersion": "26.7.3",
+    "quarkusVersion": "3.33.3.1",
+    "vendorDistribution": "quay.io/keycloak/keycloak@sha256:ff4257d0d64efbe99ed1ddfaf07765cc3c36dc7518bf8324d41961327f441c54",
+    "runtimeBase": "eclipse-temurin:21-jre-jammy@sha256:eebd356ad7358b7094758e5787a6726f332917cfd56feab6457c56dab895cdbf",
+    "derivativeLabel": {
+      "key": "otziv.quarkus-descriptor-ordering",
+      "value": "3.33.3.1-otziv.1"
+    }
+  },
+  "correction": {
+    "annotation": "@Consume(AdditionalJpaModelBuildItem.class)",
+    "method": "io.quarkus.hibernate.orm.deployment.HibernateOrmProcessor.contributePersistenceXmlToJpaModel",
+    "ordering": "The snapshot step waits for AdditionalJpaModelBuildItem producers, including Keycloak configurePersistenceUnits; default build concurrency remains enabled.",
+    "runtimeBytecodeDelta": {
+      "schema": "otziv-quarkus-ordering-patch-v1",
+      "vendorJarSha256": "d2efdcb37188c16d2e8916516553c2cce4b98c7abeec23f2532dd065b896e39f",
+      "derivativeJarSha256": "1de7ffe93ce7afb15815b89fec596e96be77ed4b6d72541867ca8a1079885020",
+      "changedEntry": "io/quarkus/hibernate/orm/deployment/HibernateOrmProcessor.class",
+      "unchangedEntries": 132,
+      "methodCodeAttributesUnchanged": 73,
+      "vendorSignaturesPresent": false,
+      "derivativeIsVendorSigned": false
+    },
+    "embeddedProvenancePath": "/opt/keycloak/otziv-descriptor-ordering-provenance.json",
+    "signing": "Exact input JAR is unsigned. Signed inputs are rejected. This derivative is not represented as a vendor-signed binary.",
+    "sourceEquivalentPatch": "infrastructure/keycloak/security-generation/build-patches/descriptor-ordering.patch",
+    "sourceEquivalentPatchVerified": "Exact context matches retained official Quarkus 3.33.3.1 source; only the Consume annotation is added.",
+    "primarySources": [
+      {
+        "url": "https://github.com/keycloak/keycloak/blob/26.7.3/quarkus/deployment/src/main/java/org/keycloak/quarkus/deployment/KeycloakProcessor.java",
+        "sha256": "10fca5987ce2ed64dd2749c3cb132a618c3697ac44086b6d7ec1c566585ff1a0"
+      },
+      {
+        "url": "https://github.com/quarkusio/quarkus/blob/3.33.3.1/extensions/hibernate-orm/deployment/src/main/java/io/quarkus/hibernate/orm/deployment/HibernateOrmProcessor.java",
+        "sha256": "b252f429bcf3e8e3f203b17e252ac0d76c426871ebf6fc7d14c7398d382e796a"
+      },
+      {
+        "url": "https://github.com/quarkusio/quarkus/blob/3.33.3.1/core/deployment/src/main/java/io/quarkus/deployment/ExtensionLoader.java",
+        "role": "Runtime Consume annotations become afterProduce graph dependencies."
+      }
+    ]
+  },
+  "causalGraphProof": {
+    "result": "PASS",
+    "implementation": "Real Quarkus BuildChain scheduler and actual vendor Keycloak entity-registration / Quarkus snapshot methods, with a bounded causal barrier and two worker threads.",
+    "vendor": "EXPECTED_RED: actual ConcurrentModificationException",
+    "derivative": "Complete four-class model (two existing plus two added), excluding the entity assigned to another persistence unit.",
+    "noBuildRetryOrConcurrencyWorkaround": true,
+    "evidence": [
+      {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/baseline-causal-v2.log",
+        "sha256": "4fb09c50927fa4304dc415de29883d0ddd50b74ffca8e9987133675fd96cff91",
+        "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+      },
+      {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/patched-causal-v2.log",
+        "sha256": "f3cbd50ea63eb9c3e764edb7719d91b5b575cc64dedccf5576ed84f9688b7028",
+        "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+      },
+      {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/actual-image-ordering-provenance.json",
+        "sha256": "3586ecda9b38f9ff56dc9c58ef680fac8b4eb7d17e46bc7b822d76a9db530077",
+        "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+      }
+    ]
+  },
+  "actualImageBuild": {
+    "result": "PASS",
+    "command": "kc.sh build --db=postgres --health-enabled=true --metrics-enabled=true",
+    "augmentationMilliseconds": 12460,
+    "vendorAndPatchedGraphProofExecutedDuringBuild": true,
+    "evidence": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/image-build-v2.log",
+      "sha256": "f153e8ae389b0541bb770e488f7ad829bad9c5ab1bfaab1d966ea3af369b8b15",
+      "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+    }
+  },
+  "issuerProtocol": {
+    "result": "PASS",
+    "checksPassed": 20,
+    "checks": [
+      {
+        "name": "provision_plan_is_read_only",
+        "passed": true
+      },
+      {
+        "name": "production_provisioner_preserves_nested_otp_flow_and_realm_policy",
+        "passed": true
+      },
+      {
+        "name": "provision_reentry_does_not_clone_another_authenticator",
+        "passed": true
+      },
+      {
+        "name": "actual_password_login_captures_current_generation",
+        "passed": true
+      },
+      {
+        "name": "browser_password_pkce_login_captures_immutable_generation",
+        "passed": true
+      },
+      {
+        "name": "ordinary_user_cannot_read_generation_authority",
+        "passed": true
+      },
+      {
+        "name": "remove_then_restore_role_does_not_revive_old_generation",
+        "passed": true
+      },
+      {
+        "name": "refresh_preserves_original_generation",
+        "passed": true
+      },
+      {
+        "name": "new_login_after_role_change_is_usable",
+        "passed": true
+      },
+      {
+        "name": "disable_then_enable_does_not_revive_old_generation",
+        "passed": true
+      },
+      {
+        "name": "offline_login_has_immutable_generation",
+        "passed": true
+      },
+      {
+        "name": "offline_refresh_cannot_acquire_current_generation",
+        "passed": true
+      },
+      {
+        "name": "late_exact_session_delete_does_not_revoke_fresh_login",
+        "passed": true
+      },
+      {
+        "name": "issuer_restart_preserves_generation_tombstone",
+        "passed": true
+      },
+      {
+        "name": "fresh_login_after_restart_works",
+        "passed": true
+      },
+      {
+        "name": "listener_disable_and_reenable_cannot_erase_security_history",
+        "passed": true
+      },
+      {
+        "name": "disabled_authority_fails_closed_and_reactivation_fences_existing_sessions",
+        "passed": true
+      },
+      {
+        "name": "failed_journal_rejects_admin_security_mutation",
+        "passed": true
+      },
+      {
+        "name": "failed_journal_rolls_back_actual_user_state",
+        "passed": true
+      },
+      {
+        "name": "failed_mutation_does_not_advance_generation",
+        "passed": true
+      }
+    ],
+    "finishedAtUtc": "2026-09-07T20:01:11.210Z",
+    "postgresImageId": "sha256:84631285605c9dea134ddb89a1986ba30bcdfef1f16a5c1664b06bb6f9303097",
+    "evidence": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/issuer-protocol-proof.json",
+      "sha256": "246876216c95109dfa8b6f45a239eeb5b5f838db767ab2457b4d6e19e441d26e",
+      "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+    }
+  },
+  "ordinaryStartup": {
+    "result": "PASS",
+    "checksPassed": 4,
+    "checks": [
+      {
+        "name": "start_imports_and_serves_real_postgres_realm",
+        "passed": true
+      },
+      {
+        "name": "start_has_no_missing_classpath_error",
+        "passed": true
+      },
+      {
+        "name": "start-dev_imports_and_serves_real_postgres_realm",
+        "passed": true
+      },
+      {
+        "name": "start-dev_has_no_missing_classpath_error",
+        "passed": true
+      }
+    ],
+    "cleanup": "PASS",
+    "finishedAtUtc": "2026-09-07T20:04:03.947Z",
+    "evidence": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/ordinary-startup-proof.json",
+      "sha256": "62d488f37870afbc9986b496662b5d97f47bb6ee507d2940acfd317328bc9a8c",
+      "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+    }
+  },
+  "fullImageScan": {
+    "result": "PASS",
+    "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+    "createdAt": "2026-09-07T20:08:32.803372954Z",
+    "high": 0,
+    "critical": 0,
+    "blockingFixedHighOrCritical": 0,
+    "coverage": [
+      {
+        "type": "ubuntu",
+        "packageCount": 143,
+        "retainedLowerSeverityFindingCount": 47
+      },
+      {
+        "type": "jar",
+        "packageCount": 512,
+        "retainedLowerSeverityFindingCount": 2
+      }
+    ],
+    "exclusionsAdded": false,
+    "evidence": [
+      {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/image-vulnerabilities.json",
+        "sha256": "01b19a6bf36e83831cf539f10e89f151c46d13356d8bd4b1295ceb3f58f5fbfe",
+        "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+      },
+      {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/image-vulnerabilities.sbom.cdx.json",
+        "sha256": "fe30560d0d8baf6041b6d9a8473d07e7eae0eea776b5d4b9cce747d22f9652b9",
+        "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+      },
+      {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/image-vulnerabilities.scanner.log",
+        "sha256": "970b7b42b1fb7300c1898154733bcba6c2701252738b8a8b8119e07abb6389a6",
+        "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+      },
+      {
+        "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/image-vulnerabilities.triage.json",
+        "sha256": "e8d236fd104fa043f0ae174fa101b67ab58d6e8613b57aebc8ca7bb1829b4363",
+        "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+      }
+    ]
+  },
+  "pairedRecovery": {
+    "result": "PASS",
+    "checksPassed": 21,
+    "checks": [
+      {
+        "name": "source_actual_login_and_local_subject_binding",
+        "passed": true
+      },
+      {
+        "name": "source_actual_refresh",
+        "passed": true
+      },
+      {
+        "name": "source_application_decrypts_encrypted_credential",
+        "passed": true
+      },
+      {
+        "name": "mysql_contains_ciphertext_not_plaintext",
+        "passed": true
+      },
+      {
+        "name": "source_application_uploads_real_object",
+        "passed": true
+      },
+      {
+        "name": "source_object_has_exact_version_and_bytes",
+        "passed": true
+      },
+      {
+        "name": "application_sigterm_drains_without_forced_kill",
+        "passed": true
+      },
+      {
+        "name": "actual_writer_stop_and_database_capture_fences",
+        "passed": true
+      },
+      {
+        "name": "four_actual_components_sealed_in_one_authenticated_manifest",
+        "passed": true
+      },
+      {
+        "name": "actual_mysql_postgres_and_versioned_object_volume_restored",
+        "passed": true
+      },
+      {
+        "name": "paired_subject_identity_survives_both_database_restores",
+        "passed": true
+      },
+      {
+        "name": "old_key_removed_before_application_starts",
+        "passed": true
+      },
+      {
+        "name": "restored_online_refresh_session_invalidated_before_application",
+        "passed": true
+      },
+      {
+        "name": "restored_offline_refresh_session_invalidated_before_application",
+        "passed": true
+      },
+      {
+        "name": "old_access_token_is_still_unexpired_when_revocation_is_tested",
+        "passed": true
+      },
+      {
+        "name": "restored_old_access_token_denied_by_real_application",
+        "passed": true
+      },
+      {
+        "name": "restored_actual_login_with_recovered_issuer_and_backend",
+        "passed": true
+      },
+      {
+        "name": "restored_actual_refresh_is_accepted_by_backend",
+        "passed": true
+      },
+      {
+        "name": "restored_application_decrypts_with_recovered_key",
+        "passed": true
+      },
+      {
+        "name": "restored_database_reference_resolves_exact_original_object_version",
+        "passed": true
+      },
+      {
+        "name": "strict_credential_audit_is_written_after_restore",
+        "passed": true
+      }
+    ],
+    "coreRuntimeImageIds": {
+      "app": "sha256:fb5835ef464657179e81b5d7847fe3124c7e8ca238f868c9dd26c91c5f91b90e",
+      "keycloak": "sha256:537b96f86faa1afdd7502ec6dc38da258cf479568488053581c561bad960cd5e",
+      "mysql": "sha256:69eb992969cb5fd2e0ad55d75e113d9b98e98428a0355cfa14b1d587bcf51063",
+      "postgres": "sha256:84631285605c9dea134ddb89a1986ba30bcdfef1f16a5c1664b06bb6f9303097"
+    },
+    "supportingImageIds": {
+      "objects": "sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e",
+      "runner": "sha256:9e9bc5c2dd3e98ff5cc61c4a2e9961400100f1a6ffd01863a9fd15639d595150"
+    },
+    "capturedComponents": [
+      "MySQL database",
+      "Keycloak PostgreSQL database",
+      "versioned object storage",
+      "required secret configuration and cryptographic key material"
+    ],
+    "authenticatedManifestSha256": "574c5cc32feb8b789966e88398efbc586ddf46ac59fcb6d19293ec6c92804305",
+    "sourceApplicationShutdown": {
+      "pid1": "java",
+      "elapsedMs": 1426,
+      "exitCode": 143,
+      "oomKilled": false,
+      "running": false,
+      "logsSha256": "3761806724c951676d5f2d0a1a98879731622423b7d7cf007bf0a74346d9d985",
+      "gracefulComplete": true,
+      "entityManagerClosed": true,
+      "poolsStarted": [
+        "HikariPool-1",
+        "worker-account-action-cooldown"
+      ],
+      "poolsClosed": [
+        "HikariPool-1",
+        "worker-account-action-cooldown"
+      ]
+    },
+    "cleanup": "PASS",
+    "observedRestoreSeconds": 109,
+    "observedRecoveryPointAgeSeconds": 113,
+    "elapsedSeconds": 320,
+    "finishedAtUtc": "2026-09-07T20:12:05.551Z",
+    "recoveryKeyCustody": "EPHEMERAL_DESTROYED_AFTER_PROOF",
+    "evidence": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/keycloak-build-race/full-system-v5-ordering/proof.json",
+      "sha256": "8e6b2558e642fe2702ff63d5ff7c9d9ab46f788e72f4958859ce89995e69288d",
+      "availability": "RETAINED_PRIVATE_LOCAL_ARTIFACT"
+    },
+    "proofToolFingerprints": [
+      {
+        "path": "infrastructure/recovery/full-system-fixture.mjs",
+        "sha256": "c58a56345cb5025dbd99b1456f7db7d95cec36a9d8d7272fedb116708755ee37"
+      },
+      {
+        "path": "infrastructure/recovery/system-http-bridge.mjs",
+        "sha256": "7b3c217b124d6f9a045313dbfeec7eb9acc0fab59d030a0d99b077cb5f55a8bc"
+      },
+      {
+        "path": "infrastructure/recovery/system-bundle.mjs",
+        "sha256": "b8ac0c3a0bddc7d735b0e0afff108e1c6ff8f5e14d4be62adecc7d08e94bed3f"
+      },
+      {
+        "path": "infrastructure/recovery/docker-environment.mjs",
+        "sha256": "b38181bbfb69b406f33ac8c20964c4d66d56f2219331b569a7c819293a3a4e93"
+      },
+      {
+        "path": "infrastructure/recovery/process.mjs",
+        "sha256": "3cd5893b07aaeab259c1e8a825e4272490204690030b9f5a1d6ef4cec187afdc"
+      },
+      {
+        "path": "infrastructure/recovery/application-shutdown.mjs",
+        "sha256": "a5b2c7692804953ad15559182b91e0809f64897966ff8c49053a06f79e12a844"
+      }
+    ]
+  },
+  "sourceFiles": [
+    {
+      "path": "infrastructure/keycloak/security-generation/Dockerfile",
+      "sha256": "11ba9c67b709968e990f840ccc1787cef5aa410f1c7d4ae383ca7c9d1d391952"
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/.dockerignore",
+      "sha256": "cd770a8a2286d13dfe3157c6428b57bfd898c6636d28afb4f60698020b663928"
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/QuarkusDescriptorOrderingPatch.java",
+      "sha256": "e7e50e598933bbddf0eaa6ca192ead57a086a2042b3eb362347b74a592582331"
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/DescriptorOrderingProof.java",
+      "sha256": "3b264342c60a8771a199e3cd4173feb2df34e8db793e79a22bd9c9811151797b"
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/descriptor-ordering.patch",
+      "sha256": "a256ace04f1400138a27a5ac0eb63b990e1553a1a2cdbf0b22b52b1c8d3e9377"
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/README.md",
+      "sha256": "7d4935b53157dc3b8488f29f8eec3318df6592c9479018b6a9d0007c69b4813e"
+    }
+  ],
+  "preservation": "This new record supplements prior immutable vendor/derivative images, failures and proof artifacts; none is replaced or rewritten.",
+  "limitations": [
+    "Hosted C4 remains pending; no hosted PASS or release approval is inferred.",
+    "The recovery run used newly allocated synthetic databases and an internal Docker network with disabled external delivery; it did not alter production.",
+    "Production independence and operator recovery-key custody are not proven; the fixture key was ephemeral and destroyed.",
+    "Observed timings are measurements for this fixture, not agreed production RPO/RTO.",
+    "Zero HIGH/CRITICAL applies to the exact corrected issuer image and scan database timestamp; lower findings are retained.",
+    "The old object-storage upstream image has separately recorded security findings; paired recovery PASS does not assert that all supporting images are vulnerability-free.",
+    "Private proof artifacts are referenced by path and SHA-256; their customer-free validation summary is public here, while raw local artifacts are not bundled by this JSON."
+  ]
+}

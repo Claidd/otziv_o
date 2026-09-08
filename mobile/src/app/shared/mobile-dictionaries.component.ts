@@ -1,4 +1,5 @@
-import { Component, Input, OnDestroy, OnInit, signal } from '@angular/core';
+import { DictionariesApi } from '../core/dictionaries.api';
+import { inject, Component, Input, OnDestroy, OnInit, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -1113,6 +1114,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
   `]
 })
 export class MobileDictionariesComponent implements OnInit, OnDestroy {
+  private readonly dictionariesApi = inject(DictionariesApi);
   @Input() adminMode = false;
 
   readonly activeTab = signal<DictionaryTabKey>('categories');
@@ -1273,8 +1275,8 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       switch (tab) {
         case 'categories': {
           const [categories, subCategories] = await firstValueFrom(forkJoin([
-            this.api.getAdminCategories(keyword),
-            this.api.getAdminSubCategories(keyword)
+            this.dictionariesApi.getAdminCategories(keyword),
+            this.dictionariesApi.getAdminSubCategories(keyword)
           ]));
           if (requestId !== this.loadEpoch) return;
           this.categories.set(categories);
@@ -1282,27 +1284,27 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
           break;
         }
         case 'cities': {
-          const cities = await firstValueFrom(this.api.getAdminCities(keyword));
+          const cities = await firstValueFrom(this.dictionariesApi.getAdminCities(keyword));
           if (requestId !== this.loadEpoch) return;
           this.cities.set(cities);
           break;
         }
         case 'products': {
-          const response = await firstValueFrom(this.api.getAdminProducts(keyword));
+          const response = await firstValueFrom(this.dictionariesApi.getAdminProducts(keyword));
           if (requestId !== this.loadEpoch) return;
           this.products.set(response.products);
           this.productCategories.set(response.categories);
           break;
         }
         case 'phones': {
-          const response = await firstValueFrom(this.api.getOperatorPhones(keyword));
+          const response = await firstValueFrom(this.dictionariesApi.getOperatorPhones(keyword));
           if (requestId !== this.loadEpoch) return;
           this.phones.set(response.phones);
           this.phoneOperators.set(response.operators);
           break;
         }
         case 'accounts': {
-          const response = await firstValueFrom(this.api.getAdminBots(keyword, this.botPage(), this.botPageSize()));
+          const response = await firstValueFrom(this.dictionariesApi.getAdminBots(keyword, this.botPage(), this.botPageSize()));
           if (requestId !== this.loadEpoch) return;
           const totalPages = Math.max(1, response.totalPages ?? Math.ceil((response.total ?? response.bots.length) / this.botPageSize()));
           if ((response.total ?? 0) > 0 && this.botPage() >= totalPages) {
@@ -1323,7 +1325,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
           break;
         }
         case 'promo': {
-          const response = await firstValueFrom(this.api.getAdminPromoTextManagement(keyword));
+          const response = await firstValueFrom(this.dictionariesApi.getAdminPromoTextManagement(keyword));
           if (requestId !== this.loadEpoch) return;
           this.promoTexts.set(response.texts);
           this.promoManagers.set(response.managers);
@@ -1335,7 +1337,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
           break;
         }
         case 'managerTexts': {
-          const managerTexts = await firstValueFrom(this.api.getAdminManagerTexts(keyword));
+          const managerTexts = await firstValueFrom(this.dictionariesApi.getAdminManagerTexts(keyword));
           if (requestId !== this.loadEpoch) return;
           this.managerTexts.set(managerTexts);
           break;
@@ -1404,7 +1406,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     this.botDetailLoadingId.set(bot.id);
     this.error.set(null);
     try {
-      const details = await firstValueFrom(this.api.getAdminBot(bot.id));
+      const details = await firstValueFrom(this.dictionariesApi.getAdminBot(bot.id));
       if (requestId !== this.botDetailEpoch) {
         return;
       }
@@ -1458,28 +1460,28 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       switch (kind) {
         case 'categories':
           await firstValueFrom(id == null
-            ? this.api.createAdminCategory({ title: this.text(draft['title']) })
-            : this.api.updateAdminCategory(id, { title: this.text(draft['title']) }));
+            ? this.dictionariesApi.createAdminCategory({ title: this.text(draft['title']) })
+            : this.dictionariesApi.updateAdminCategory(id, { title: this.text(draft['title']) }));
           break;
         case 'subcategory':
           await firstValueFrom(id == null
-            ? this.api.createAdminSubCategory({ title: this.text(draft['title']), categoryId: this.numberOrNull(draft['categoryId']) })
-            : this.api.updateAdminSubCategory(id, { title: this.text(draft['title']), categoryId: this.numberOrNull(draft['categoryId']) }));
+            ? this.dictionariesApi.createAdminSubCategory({ title: this.text(draft['title']), categoryId: this.numberOrNull(draft['categoryId']) })
+            : this.dictionariesApi.updateAdminSubCategory(id, { title: this.text(draft['title']), categoryId: this.numberOrNull(draft['categoryId']) }));
           break;
         case 'cities':
           await firstValueFrom(id == null
-            ? this.api.createAdminCity({ title: this.text(draft['title']) })
-            : this.api.updateAdminCity(id, { title: this.text(draft['title']) }));
+            ? this.dictionariesApi.createAdminCity({ title: this.text(draft['title']) })
+            : this.dictionariesApi.updateAdminCity(id, { title: this.text(draft['title']) }));
           break;
         case 'products':
           await firstValueFrom(id == null
-            ? this.api.createAdminProduct({
+            ? this.dictionariesApi.createAdminProduct({
               title: this.text(draft['title']),
               price: this.number(draft['price']),
               categoryId: this.numberOrNull(draft['categoryId']),
               photo: Boolean(draft['photo'])
             })
-            : this.api.updateAdminProduct(id, {
+            : this.dictionariesApi.updateAdminProduct(id, {
               title: this.text(draft['title']),
               price: this.number(draft['price']),
               categoryId: this.numberOrNull(draft['categoryId']),
@@ -1488,12 +1490,12 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
           break;
         case 'phones': {
           const request = this.phoneRequest(draft);
-          await firstValueFrom(id == null ? this.api.createOperatorPhone(request) : this.api.updateOperatorPhone(id, request));
+          await firstValueFrom(id == null ? this.dictionariesApi.createOperatorPhone(request) : this.dictionariesApi.updateOperatorPhone(id, request));
           break;
         }
         case 'accounts':
           await firstValueFrom(id == null
-            ? this.api.createAdminBot({
+            ? this.dictionariesApi.createAdminBot({
               login: this.text(draft['login']),
               password: this.text(draft['password']),
               fio: this.text(draft['fio']),
@@ -1503,7 +1505,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
               active: Boolean(draft['active']),
               counter: this.number(draft['counter'])
             })
-            : this.api.updateAdminBot(id, {
+            : this.dictionariesApi.updateAdminBot(id, {
               login: this.text(draft['login']),
               password: this.text(draft['password']),
               fio: this.text(draft['fio']),
@@ -1516,14 +1518,14 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
           break;
         case 'promo':
           await firstValueFrom(id == null
-            ? this.api.createAdminPromoText({ text: this.text(draft['text']) })
-            : this.api.updateAdminPromoText(id, { text: this.text(draft['text']) }));
+            ? this.dictionariesApi.createAdminPromoText({ text: this.text(draft['text']) })
+            : this.dictionariesApi.updateAdminPromoText(id, { text: this.text(draft['text']) }));
           break;
         case 'managerTexts':
           if (id == null) {
             throw new Error('Менеджер не выбран');
           }
-          await firstValueFrom(this.api.updateAdminManagerText(id, {
+          await firstValueFrom(this.dictionariesApi.updateAdminManagerText(id, {
             payText: this.text(draft['payText']),
             beginText: this.text(draft['beginText']),
             offerText: this.text(draft['offerText']),
@@ -1580,22 +1582,22 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       this.saving.set(true);
       switch (kind) {
         case 'categories':
-          await firstValueFrom(this.api.deleteAdminCategory(id));
+          await firstValueFrom(this.dictionariesApi.deleteAdminCategory(id));
           break;
         case 'subcategory':
-          await firstValueFrom(this.api.deleteAdminSubCategory(id));
+          await firstValueFrom(this.dictionariesApi.deleteAdminSubCategory(id));
           break;
         case 'cities':
-          await firstValueFrom(this.api.deleteAdminCity(id));
+          await firstValueFrom(this.dictionariesApi.deleteAdminCity(id));
           break;
         case 'products':
-          await firstValueFrom(this.api.deleteAdminProduct(id));
+          await firstValueFrom(this.dictionariesApi.deleteAdminProduct(id));
           break;
         case 'phones':
-          await firstValueFrom(this.api.deleteOperatorPhone(id));
+          await firstValueFrom(this.dictionariesApi.deleteOperatorPhone(id));
           break;
         case 'accounts':
-          await firstValueFrom(this.api.deleteAdminBot(id));
+          await firstValueFrom(this.dictionariesApi.deleteAdminBot(id));
           break;
         default:
           return;
@@ -1640,7 +1642,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
 
     this.importing.set(true);
     try {
-      const result = await firstValueFrom(this.api.importAdminBots(file));
+      const result = await firstValueFrom(this.dictionariesApi.importAdminBots(file));
       this.importResult.set(result);
       this.notice.set(this.importResultMessage(result));
       await this.loadActive(true);
@@ -1702,7 +1704,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       }
 
       this.saving.set(true);
-      await firstValueFrom(this.api.deleteOperatorPhoneDeviceToken(phone.id, token));
+      await firstValueFrom(this.dictionariesApi.deleteOperatorPhoneDeviceToken(phone.id, token));
       this.notice.set('Устройство удалено.');
       await this.loadActive(true);
     } catch (error) {
@@ -1729,9 +1731,9 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     try {
       const promoTextId = Number(value);
       if (!promoTextId) {
-        await firstValueFrom(this.api.resetAdminPromoTextAssignment(managerId, button.section, button.buttonKey));
+        await firstValueFrom(this.dictionariesApi.resetAdminPromoTextAssignment(managerId, button.section, button.buttonKey));
       } else {
-        await firstValueFrom(this.api.saveAdminPromoTextAssignment({
+        await firstValueFrom(this.dictionariesApi.saveAdminPromoTextAssignment({
           managerId,
           section: button.section,
           buttonKey: button.buttonKey,

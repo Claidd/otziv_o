@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom, Observable } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
+import { WorkerAccountActionCooldownService } from '../../core/worker-account-action-cooldown.service';
 import { LatestRouteRequest } from '../../core/latest-route-request';
 import { ReputationDeepReportMonitorService } from '../../core/reputation-deep-report-monitor.service';
 import type { DeepCompanyResearchJob, ReputationSingleReviewDraftResult } from '../../core/reputation-ai.api';
@@ -117,6 +118,7 @@ function formatDateInputValue(date: Date): string {
   styleUrl: './order-details.component.scss'
 })
 export class OrderDetailsComponent {
+  readonly accountActionCooldown = inject(WorkerAccountActionCooldownService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -422,6 +424,7 @@ export class OrderDetailsComponent {
   }
 
   reviewAccountActionTitle(review: OrderReviewItem): string {
+    if (this.accountActionCooldown.locked()) return this.accountActionCooldown.title();
     return this.reviewAccountActionLocked(review)
       ? 'В деталях заказа смена доступна только когда аккаунт нужно назначить или заменить'
       : 'Действие с аккаунтом';
@@ -1633,6 +1636,7 @@ export class OrderDetailsComponent {
   }
 
   changeBot(review: OrderReviewItem): void {
+    if (this.accountActionCooldown.locked()) return;
     if (this.reviewAccountActionLocked(review)) {
       this.toastService.info('Сначала данные аккаунта', 'Скопируйте логин и пароль перед сменой аккаунта');
       return;
@@ -1675,6 +1679,7 @@ export class OrderDetailsComponent {
   }
 
   assignReviewNewAccount(): void {
+    if (this.accountActionCooldown.locked()) return;
     const review = this.editReview();
 
     if (!review || this.reviewEditNewAccountSaving()) {
@@ -1732,6 +1737,7 @@ export class OrderDetailsComponent {
   }
 
   deactivateBot(review: OrderReviewItem): void {
+    if (this.accountActionCooldown.locked()) return;
     if (this.reviewAccountActionLocked(review)) {
       this.toastService.info('Сначала данные аккаунта', 'Скопируйте логин и пароль перед блокировкой аккаунта');
       return;
@@ -2079,6 +2085,7 @@ export class OrderDetailsComponent {
   }
 
   changeBadReviewTaskBot(task: BadReviewTaskItem): void {
+    if (this.accountActionCooldown.locked()) return;
     const orderId = this.orderId();
     if (!orderId || !this.canEditBadReviewTask(task)) {
       return;

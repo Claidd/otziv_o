@@ -28,15 +28,17 @@ export class MobileExternalLinkService {
 
   async openPayment(
     url: unknown,
-    purpose: PaymentNavigationPurpose
+    purpose: PaymentNavigationPurpose,
+    canOpen: () => boolean = () => true
   ): Promise<boolean> {
     const target = safePaymentNavigationTarget(url, purpose);
-    if (!target) {
+    if (!target || !canOpen()) {
       return false;
     }
 
     if (this.isNative && /^https?:\/\//i.test(target)) {
       await this.diagnostics.checkpoint(`external.payment:${purpose}`);
+      if (!canOpen()) return false;
       await Browser.open({ url: target, presentationStyle: 'popover' });
       return true;
     }

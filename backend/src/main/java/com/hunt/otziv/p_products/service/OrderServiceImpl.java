@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.service;
 
+import org.springframework.security.core.Authentication;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.model.Company;
@@ -436,6 +437,16 @@ public class OrderServiceImpl implements OrderService {
     // ======================================== СМЕНА СТАТУСА ЗАКАЗА ============================================
     // =========================================================================================================
 
+    @Override @Transactional
+    public boolean changeStatusForOrder(Long id,String title,Authentication actor) throws Exception {
+        return orderStatusTransitionService.changeStatusForOrder(id,title,actor);
+    }
+
+    @Override @Transactional
+    public boolean changeStatusForPrivilegedOrder(Long id,String title,Authentication actor) throws Exception {
+        return orderStatusTransitionService.changeStatusForPrivilegedOrder(id,title,actor);
+    }
+
     @Override
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
@@ -489,8 +500,22 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public boolean changeStatusAndOrderCounter(Long reviewId) throws Exception {
+        return changeStatusAndOrderCounterInternal(reviewId, null, false);
+    }
+
+    @Override
+    @Transactional
+    public boolean changeStatusAndOrderCounter(Long reviewId, Authentication authentication) throws Exception {
+        return changeStatusAndOrderCounterInternal(reviewId, authentication, true);
+    }
+
+    private boolean changeStatusAndOrderCounterInternal(Long reviewId, Authentication authentication, boolean explicitActor) throws Exception {
         try {
-            assignmentMutationGuardService.assertReview(reviewId);
+            if (explicitActor) {
+                assignmentMutationGuardService.assertReview(reviewId, authentication);
+            } else {
+                assignmentMutationGuardService.assertReview(reviewId);
+            }
             ReviewPublicationTarget target = validateAndRetrievePublicationTarget(reviewId);
             Review review = target.review();
             Order order = target.order();
@@ -546,16 +571,30 @@ public class OrderServiceImpl implements OrderService {
             review.setExternalConfirmScreenshotUrl(null);
             reviewRepository.save(review);
             gamificationEventService.recordReviewPublished(review);
-            businessAuditService.recordSafely(
-                    "review_published",
-                    "review",
-                    review.getId(),
-                    order.getId(),
-                    review.getId(),
-                    false,
-                    true,
-                    "manual publish button"
-            );
+            if (explicitActor) {
+                businessAuditService.recordSafely(
+                        authentication,
+                        "review_published",
+                        "review",
+                        review.getId(),
+                        order.getId(),
+                        review.getId(),
+                        false,
+                        true,
+                        "manual publish button"
+                );
+            } else {
+                businessAuditService.recordSafely(
+                        "review_published",
+                        "review",
+                        review.getId(),
+                        order.getId(),
+                        review.getId(),
+                        false,
+                        true,
+                        "manual publish button"
+                );
+            }
             log.info("Сохранили отзыв, публикация установлена в true");
             reviewArchiveService.saveNewReviewArchive(review.getId(), ReviewArchiveSourceReason.PUBLISHED);
             log.info("Сохранили опубликованный отзыв в архив текстов");
@@ -565,7 +604,7 @@ public class OrderServiceImpl implements OrderService {
 
             orderStatusCheckerService.validateCounterConsistency(order, actualPublished);
             log.info("Счётчик заказа после синхронизации: {}", order.getCounter());
-            schedulePublishedReviewClientUpdates(order, actualPublished);
+            schedulePublishedReviewClientUpdates(order, actualPublished,"review:"+reviewId+":"+review.getPublishedMarkedAt());
 
             botAssignmentExclusionService.clearForReview(reviewId);
 
@@ -600,7 +639,7 @@ public class OrderServiceImpl implements OrderService {
         return reviewArchiveService.existsByTextExcludingOwnSource(text, review.getId(), orderId);
     }
 
-    private void notifyClientAboutPublishedReviewProgress(Order order, int actualPublished) {
+    private void notifyClientAboutPublishedReviewProgress(Order order, int actualPublished,String occurrence) {
         try {
             if (!shouldSendPublishedReviewProgress(order, actualPublished)) {
                 return;
@@ -611,12 +650,13 @@ public class OrderServiceImpl implements OrderService {
             String message = buildPublishedReviewProgressMessage(order, actualPublished);
             boolean includePreferenceControls = actualPublished == 1;
 
-            boolean sent = orderStatusNotificationService.sendProgressMessageToClientChat(
+            boolean sent = orderStatusNotificationService.sendPublicationProgressForOccurrence(
                     order,
                     clientId,
                     groupId,
                     message,
-                    includePreferenceControls
+                    includePreferenceControls,
+                    occurrence
             );
             if (sent) {
                 log.info("Короткий отчёт о публикации отправлен клиенту: {}", message);
@@ -628,37 +668,38 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private void schedulePublishedReviewClientUpdates(Order order, int actualPublished) {
+    private void schedulePublishedReviewClientUpdates(Order order, int actualPublished,String occurrence) {
         Long orderId = order == null ? null : order.getId();
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            sendPublishedReviewClientUpdates(order, actualPublished);
+            sendPublishedReviewClientUpdates(order, actualPublished,occurrence);
             return;
         }
 
-        runAfterCommit(() -> sendPublishedReviewClientUpdates(orderId, actualPublished));
+        runAfterCommit(() -> sendPublishedReviewClientUpdates(orderId, actualPublished,occurrence));
     }
 
-    private void sendPublishedReviewClientUpdates(Long orderId, int actualPublished) {
+    private void sendPublishedReviewClientUpdates(Long orderId, int actualPublished,String occurrence) {
         try {
             TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
             transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             transactionTemplate.executeWithoutResult(status -> sendPublishedReviewClientUpdatesInCurrentTransaction(
                     orderId,
-                    actualPublished
+                    actualPublished,
+                    occurrence
             ));
         } catch (Exception e) {
             log.error("Клиентские действия после публикации не выполнены для заказа {}", orderId, e);
         }
     }
 
-    private void sendPublishedReviewClientUpdatesInCurrentTransaction(Long orderId, int actualPublished) {
+    private void sendPublishedReviewClientUpdatesInCurrentTransaction(Long orderId, int actualPublished,String occurrence) {
         Order order = orderRepository.findByIdForMutation(orderId).orElse(null);
         if (order == null) {
             log.warn("Клиентские действия после публикации пропущены: заказ {} не найден", orderId);
             return;
         }
 
-        notifyClientAboutPublishedReviewProgress(order, actualPublished);
+        notifyClientAboutPublishedReviewProgress(order, actualPublished,occurrence);
         try {
             orderStatusCheckerService.checkAndMarkOrderCompleted(order);
         } catch (Exception e) {
@@ -666,9 +707,9 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private void sendPublishedReviewClientUpdates(Order order, int actualPublished) {
+    private void sendPublishedReviewClientUpdates(Order order, int actualPublished,String occurrence) {
         try {
-            notifyClientAboutPublishedReviewProgress(order, actualPublished);
+            notifyClientAboutPublishedReviewProgress(order, actualPublished,occurrence);
             orderStatusCheckerService.checkAndMarkOrderCompleted(order);
         } catch (Exception e) {
             log.error("Клиентские действия после публикации не выполнены для заказа {}",

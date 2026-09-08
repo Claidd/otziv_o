@@ -1,0 +1,36 @@
+{
+  "schema": "otziv-recovery-config-v1",
+  "owner": "REQUIRED",
+  "keyId": "REQUIRED",
+  "releaseCommit": "REQUIRED",
+  "keycloakVersion": "REQUIRED",
+  "postgresImage": "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+  "workDirectory": "/var/lib/otziv-recovery",
+  "rpoSeconds": null,
+  "rtoSeconds": null,
+  "maxDumpBytes": 1073741824,
+  "dumpTimeoutSeconds": 3600,
+  "primaryStorageBucket": "REQUIRED",
+  "postgres": {
+    "host": "REQUIRED",
+    "port": 5432,
+    "user": "REQUIRED",
+    "database": "keycloak",
+    "major": 17,
+    "transport": "tls-verify-full",
+    "sslRootCert": "REQUIRED",
+    "dumpExecutable": "pg_dump"
+  },
+  "storage": {
+    "awsExecutable": "aws",
+    "endpoint": "https://REQUIRED.invalid",
+    "region": "REQUIRED",
+    "bucket": "REQUIRED",
+    "prefix": "keycloak",
+    "independentConfirmed": false,
+    "privateConfirmed": false,
+    "versioningConfirmed": false,
+    "requireServerSideEncryption": true,
+    "retention": { "enabled": false, "mode": null, "days": null }
+  }
+}

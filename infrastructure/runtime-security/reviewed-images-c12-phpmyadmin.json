@@ -1,0 +1,35 @@
+{
+  "schema": "otziv-reviewed-images-v1",
+  "repository": "ghcr.io/claidd/otziv-security",
+  "publicationSet": "c12-phpmyadmin",
+  "baselineManifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "images": [
+    {
+      "component": "phpmyadmin",
+      "context": "infrastructure/runtime-security/builds/phpmyadmin-alpine",
+      "dockerfile": "infrastructure/runtime-security/builds/phpmyadmin-alpine/Dockerfile",
+      "dockerfileSha256": "514bd99b51fd6003a5026b1f417a94ee0032c75e568cc38efdbcaa199f57df09",
+      "platform": "linux/amd64",
+      "sourceBeforeRef": "phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b",
+      "defaultReferencesBefore": [
+        {
+          "path": "compose.yaml",
+          "line": 224,
+          "service": "phpmyadmin"
+        },
+        {
+          "path": "compose.prod-local.yaml",
+          "line": 78,
+          "service": "phpmyadmin"
+        },
+        {
+          "path": "docker-compose.yaml",
+          "line": 82,
+          "service": "phpmyadmin"
+        }
+      ],
+      "candidateBaseRef": "alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+      "buildArgs": {}
+    }
+  ]
+}

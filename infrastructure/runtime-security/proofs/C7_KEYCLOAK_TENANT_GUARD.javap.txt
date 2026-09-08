@@ -1,0 +1,278 @@
+Compiled from "MicrosoftIdentityProvider.java"
+public class org.keycloak.social.microsoft.MicrosoftIdentityProvider extends org.keycloak.broker.oidc.AbstractOAuth2IdentityProvider implements org.keycloak.broker.social.SocialIdentityProvider {
+  private static final org.jboss.logging.Logger log;
+
+  private static final java.lang.String AUTH_URL_TEMPLATE;
+
+  private static final java.lang.String TOKEN_URL_TEMPLATE;
+
+  private static final java.lang.String PROFILE_URL;
+
+  private static final java.lang.String DEFAULT_SCOPE;
+
+  public org.keycloak.social.microsoft.MicrosoftIdentityProvider(org.keycloak.models.KeycloakSession, org.keycloak.social.microsoft.MicrosoftIdentityProviderConfig);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: invokespecial #1                  // Method org/keycloak/broker/oidc/AbstractOAuth2IdentityProvider."<init>":(Lorg/keycloak/models/KeycloakSession;Lorg/keycloak/broker/oidc/OAuth2IdentityProviderConfig;)V
+         6: aload_2
+         7: invokevirtual #7                  // Method org/keycloak/social/microsoft/MicrosoftIdentityProviderConfig.getTenantId:()Ljava/lang/String;
+        10: invokestatic  #13                 // Method java/util/Optional.ofNullable:(Ljava/lang/Object;)Ljava/util/Optional;
+        13: invokedynamic #19,  0             // InvokeDynamic #0:apply:()Ljava/util/function/Function;
+        18: invokevirtual #23                 // Method java/util/Optional.map:(Ljava/util/function/Function;)Ljava/util/Optional;
+        21: ldc           #27                 // String common
+        23: invokevirtual #29                 // Method java/util/Optional.orElse:(Ljava/lang/Object;)Ljava/lang/Object;
+        26: checkcast     #33                 // class java/lang/String
+        29: astore_3
+        30: aload_2
+        31: ldc           #37                 // String https://login.microsoftonline.com/%s/oauth2/v2.0/authorize
+        33: iconst_1
+        34: anewarray     #39                 // class java/lang/Object
+        37: dup
+        38: iconst_0
+        39: aload_3
+        40: aastore
+        41: invokestatic  #41                 // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+        44: invokevirtual #45                 // Method org/keycloak/social/microsoft/MicrosoftIdentityProviderConfig.setAuthorizationUrl:(Ljava/lang/String;)V
+        47: aload_2
+        48: ldc           #49                 // String https://login.microsoftonline.com/%s/oauth2/v2.0/token
+        50: iconst_1
+        51: anewarray     #39                 // class java/lang/Object
+        54: dup
+        55: iconst_0
+        56: aload_3
+        57: aastore
+        58: invokestatic  #41                 // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+        61: invokevirtual #51                 // Method org/keycloak/social/microsoft/MicrosoftIdentityProviderConfig.setTokenUrl:(Ljava/lang/String;)V
+        64: aload_2
+        65: ldc           #54                 // String https://graph.microsoft.com/v1.0/me/
+        67: invokevirtual #56                 // Method org/keycloak/social/microsoft/MicrosoftIdentityProviderConfig.setUserInfoUrl:(Ljava/lang/String;)V
+        70: return
+
+  protected boolean supportsExternalExchange();
+    Code:
+         0: iconst_1
+         1: ireturn
+
+  protected java.lang.String getProfileEndpointForValidation(org.keycloak.events.EventBuilder);
+    Code:
+         0: ldc           #54                 // String https://graph.microsoft.com/v1.0/me/
+         2: areturn
+
+  protected org.keycloak.broker.provider.BrokeredIdentityContext validateExternalTokenThroughUserInfo(org.keycloak.events.EventBuilder, java.lang.String, java.lang.String);
+    Code:
+         0: aload_0
+         1: invokevirtual #59                 // Method getConfig:()Lorg/keycloak/broker/oidc/OAuth2IdentityProviderConfig;
+         4: checkcast     #8                  // class org/keycloak/social/microsoft/MicrosoftIdentityProviderConfig
+         7: invokevirtual #7                  // Method org/keycloak/social/microsoft/MicrosoftIdentityProviderConfig.getTenantId:()Ljava/lang/String;
+        10: astore        4
+        12: aload         4
+        14: invokestatic  #63                 // Method isTenantRestricted:(Ljava/lang/String;)Z
+        17: ifeq          63
+        20: aload         4
+        22: aload_0
+        23: aload_2
+        24: invokevirtual #67                 // Method tokenTenantId:(Ljava/lang/String;)Ljava/lang/String;
+        27: invokevirtual #71                 // Method java/lang/String.equalsIgnoreCase:(Ljava/lang/String;)Z
+        30: ifne          63
+        33: aload_1
+        34: ldc           #76                 // String reason
+        36: ldc           #78                 // String token tenant does not match configured tenant
+        38: invokevirtual #80                 // Method org/keycloak/events/EventBuilder.detail:(Ljava/lang/String;Ljava/lang/String;)Lorg/keycloak/events/EventBuilder;
+        41: pop
+        42: aload_1
+        43: ldc           #88                 // String invalid_token
+        45: invokevirtual #90                 // Method org/keycloak/events/EventBuilder.error:(Ljava/lang/String;)V
+        48: new           #93                 // class org/keycloak/services/ErrorResponseException
+        51: dup
+        52: ldc           #88                 // String invalid_token
+        54: ldc           #97                 // String invalid token
+        56: getstatic     #99                 // Field jakarta/ws/rs/core/Response$Status.BAD_REQUEST:Ljakarta/ws/rs/core/Response$Status;
+        59: invokespecial #105                // Method org/keycloak/services/ErrorResponseException."<init>":(Ljava/lang/String;Ljava/lang/String;Ljakarta/ws/rs/core/Response$Status;)V
+        62: athrow
+        63: aload_0
+        64: aload_1
+        65: aload_2
+        66: aload_3
+        67: invokespecial #108                // Method org/keycloak/broker/oidc/AbstractOAuth2IdentityProvider.validateExternalTokenThroughUserInfo:(Lorg/keycloak/events/EventBuilder;Ljava/lang/String;Ljava/lang/String;)Lorg/keycloak/broker/provider/BrokeredIdentityContext;
+        70: areturn
+
+  private static boolean isTenantRestricted(java.lang.String);
+    Code:
+         0: aload_0
+         1: ifnull        35
+         4: ldc           #27                 // String common
+         6: aload_0
+         7: invokevirtual #71                 // Method java/lang/String.equalsIgnoreCase:(Ljava/lang/String;)Z
+        10: ifne          35
+        13: ldc           #112                // String organizations
+        15: aload_0
+        16: invokevirtual #71                 // Method java/lang/String.equalsIgnoreCase:(Ljava/lang/String;)Z
+        19: ifne          35
+        22: ldc           #114                // String consumers
+        24: aload_0
+        25: invokevirtual #71                 // Method java/lang/String.equalsIgnoreCase:(Ljava/lang/String;)Z
+        28: ifne          35
+        31: iconst_1
+        32: goto          36
+        35: iconst_0
+        36: ireturn
+
+  private java.lang.String tokenTenantId(java.lang.String);
+    Code:
+         0: new           #116                // class org/keycloak/jose/jws/JWSInput
+         3: dup
+         4: aload_1
+         5: invokespecial #118                // Method org/keycloak/jose/jws/JWSInput."<init>":(Ljava/lang/String;)V
+         8: invokevirtual #120                // Method org/keycloak/jose/jws/JWSInput.getContent:()[B
+        11: ldc           #124                // class com/fasterxml/jackson/databind/JsonNode
+        13: invokestatic  #126                // Method org/keycloak/util/JsonSerialization.readValue:([BLjava/lang/Class;)Ljava/lang/Object;
+        16: checkcast     #124                // class com/fasterxml/jackson/databind/JsonNode
+        19: ldc           #132                // String tid
+        21: invokevirtual #134                // Method com/fasterxml/jackson/databind/JsonNode.get:(Ljava/lang/String;)Lcom/fasterxml/jackson/databind/JsonNode;
+        24: astore_2
+        25: aload_2
+        26: ifnonnull     33
+        29: aconst_null
+        30: goto          37
+        33: aload_2
+        34: invokevirtual #138                // Method com/fasterxml/jackson/databind/JsonNode.asText:()Ljava/lang/String;
+        37: areturn
+        38: astore_2
+        39: getstatic     #143                // Field log:Lorg/jboss/logging/Logger;
+        42: ldc           #147                // String Unable to extract tenant id (tid) from Microsoft access token
+        44: aload_2
+        45: invokevirtual #149                // Method org/jboss/logging/Logger.debug:(Ljava/lang/Object;Ljava/lang/Throwable;)V
+        48: aconst_null
+        49: areturn
+      Exception table:
+         from    to  target type
+             0    37    38   Class java/lang/Exception
+
+  protected org.keycloak.broker.provider.BrokeredIdentityContext doGetFederatedIdentity(java.lang.String);
+    Code:
+         0: aload_0
+         1: getfield      #155                // Field session:Lorg/keycloak/models/KeycloakSession;
+         4: invokestatic  #159                // Method org/keycloak/http/simple/SimpleHttp.create:(Lorg/keycloak/models/KeycloakSession;)Lorg/keycloak/http/simple/SimpleHttp;
+         7: ldc           #54                 // String https://graph.microsoft.com/v1.0/me/
+         9: invokevirtual #165                // Method org/keycloak/http/simple/SimpleHttp.doGet:(Ljava/lang/String;)Lorg/keycloak/http/simple/SimpleHttpRequest;
+        12: aload_1
+        13: invokevirtual #169                // Method org/keycloak/http/simple/SimpleHttpRequest.auth:(Ljava/lang/String;)Lorg/keycloak/http/simple/SimpleHttpRequest;
+        16: invokevirtual #174                // Method org/keycloak/http/simple/SimpleHttpRequest.asJson:()Lcom/fasterxml/jackson/databind/JsonNode;
+        19: astore_2
+        20: aload_2
+        21: ldc           #178                // String error
+        23: invokevirtual #179                // Method com/fasterxml/jackson/databind/JsonNode.has:(Ljava/lang/String;)Z
+        26: ifeq          58
+        29: aload_2
+        30: ldc           #178                // String error
+        32: invokevirtual #134                // Method com/fasterxml/jackson/databind/JsonNode.get:(Ljava/lang/String;)Lcom/fasterxml/jackson/databind/JsonNode;
+        35: invokevirtual #182                // Method com/fasterxml/jackson/databind/JsonNode.isNull:()Z
+        38: ifne          58
+        41: new           #186                // class org/keycloak/broker/provider/IdentityBrokerException
+        44: dup
+        45: aload_2
+        46: invokevirtual #188                // Method com/fasterxml/jackson/databind/JsonNode.toString:()Ljava/lang/String;
+        49: invokedynamic #191,  0            // InvokeDynamic #1:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+        54: invokespecial #194                // Method org/keycloak/broker/provider/IdentityBrokerException."<init>":(Ljava/lang/String;)V
+        57: athrow
+        58: aload_0
+        59: aconst_null
+        60: aload_2
+        61: invokevirtual #195                // Method extractIdentityFromProfile:(Lorg/keycloak/events/EventBuilder;Lcom/fasterxml/jackson/databind/JsonNode;)Lorg/keycloak/broker/provider/BrokeredIdentityContext;
+        64: areturn
+        65: astore_2
+        66: new           #186                // class org/keycloak/broker/provider/IdentityBrokerException
+        69: dup
+        70: ldc           #199                // String Could not obtain user profile from Microsoft Graph
+        72: aload_2
+        73: invokespecial #201                // Method org/keycloak/broker/provider/IdentityBrokerException."<init>":(Ljava/lang/String;Ljava/lang/Throwable;)V
+        76: athrow
+      Exception table:
+         from    to  target type
+             0    64    65   Class java/lang/Exception
+
+  protected org.keycloak.broker.provider.BrokeredIdentityContext extractIdentityFromProfile(org.keycloak.events.EventBuilder, com.fasterxml.jackson.databind.JsonNode);
+    Code:
+         0: aload_0
+         1: aload_2
+         2: ldc           #204                // String id
+         4: invokevirtual #206                // Method getJsonProperty:(Lcom/fasterxml/jackson/databind/JsonNode;Ljava/lang/String;)Ljava/lang/String;
+         7: astore_3
+         8: new           #210                // class org/keycloak/broker/provider/BrokeredIdentityContext
+        11: dup
+        12: aload_3
+        13: aload_0
+        14: invokevirtual #59                 // Method getConfig:()Lorg/keycloak/broker/oidc/OAuth2IdentityProviderConfig;
+        17: invokespecial #212                // Method org/keycloak/broker/provider/BrokeredIdentityContext."<init>":(Ljava/lang/String;Lorg/keycloak/models/IdentityProviderModel;)V
+        20: astore        4
+        22: aload_0
+        23: aload_2
+        24: ldc           #215                // String mail
+        26: invokevirtual #206                // Method getJsonProperty:(Lcom/fasterxml/jackson/databind/JsonNode;Ljava/lang/String;)Ljava/lang/String;
+        29: astore        5
+        31: aload         5
+        33: ifnonnull     66
+        36: aload_2
+        37: ldc           #217                // String userPrincipalName
+        39: invokevirtual #179                // Method com/fasterxml/jackson/databind/JsonNode.has:(Ljava/lang/String;)Z
+        42: ifeq          66
+        45: aload_0
+        46: aload_2
+        47: ldc           #217                // String userPrincipalName
+        49: invokevirtual #206                // Method getJsonProperty:(Lcom/fasterxml/jackson/databind/JsonNode;Ljava/lang/String;)Ljava/lang/String;
+        52: astore        6
+        54: aload         6
+        56: invokestatic  #219                // Method org/keycloak/services/validation/Validation.isEmailValid:(Ljava/lang/String;)Z
+        59: ifeq          66
+        62: aload         6
+        64: astore        5
+        66: aload         4
+        68: aload         5
+        70: ifnull        78
+        73: aload         5
+        75: goto          79
+        78: aload_3
+        79: invokevirtual #224                // Method org/keycloak/broker/provider/BrokeredIdentityContext.setUsername:(Ljava/lang/String;)V
+        82: aload         4
+        84: aload_0
+        85: aload_2
+        86: ldc           #227                // String givenName
+        88: invokevirtual #206                // Method getJsonProperty:(Lcom/fasterxml/jackson/databind/JsonNode;Ljava/lang/String;)Ljava/lang/String;
+        91: invokevirtual #229                // Method org/keycloak/broker/provider/BrokeredIdentityContext.setFirstName:(Ljava/lang/String;)V
+        94: aload         4
+        96: aload_0
+        97: aload_2
+        98: ldc           #232                // String surname
+       100: invokevirtual #206                // Method getJsonProperty:(Lcom/fasterxml/jackson/databind/JsonNode;Ljava/lang/String;)Ljava/lang/String;
+       103: invokevirtual #234                // Method org/keycloak/broker/provider/BrokeredIdentityContext.setLastName:(Ljava/lang/String;)V
+       106: aload         5
+       108: ifnull        118
+       111: aload         4
+       113: aload         5
+       115: invokevirtual #237                // Method org/keycloak/broker/provider/BrokeredIdentityContext.setEmail:(Ljava/lang/String;)V
+       118: aload         4
+       120: aload_0
+       121: invokevirtual #240                // Method org/keycloak/broker/provider/BrokeredIdentityContext.setIdp:(Lorg/keycloak/broker/provider/UserAuthenticationIdentityProvider;)V
+       124: aload         4
+       126: aload_2
+       127: aload_0
+       128: invokevirtual #59                 // Method getConfig:()Lorg/keycloak/broker/oidc/OAuth2IdentityProviderConfig;
+       131: invokevirtual #244                // Method org/keycloak/broker/oidc/OAuth2IdentityProviderConfig.getAlias:()Ljava/lang/String;
+       134: invokestatic  #249                // Method org/keycloak/broker/oidc/mappers/AbstractJsonUserAttributeMapper.storeUserProfileForMapper:(Lorg/keycloak/broker/provider/BrokeredIdentityContext;Lcom/fasterxml/jackson/databind/JsonNode;Ljava/lang/String;)V
+       137: aload         4
+       139: areturn
+
+  protected java.lang.String getDefaultScopes();
+    Code:
+         0: ldc           #255                // String User.read
+         2: areturn
+
+  static {};
+    Code:
+         0: ldc           #35                 // class org/keycloak/social/microsoft/MicrosoftIdentityProvider
+         2: invokestatic  #257                // Method org/jboss/logging/Logger.getLogger:(Ljava/lang/Class;)Lorg/jboss/logging/Logger;
+         5: putstatic     #143                // Field log:Lorg/jboss/logging/Logger;
+         8: return
+}

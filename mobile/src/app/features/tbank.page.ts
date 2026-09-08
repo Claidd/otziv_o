@@ -1,3 +1,8 @@
+import { inject } from '@angular/core';
+import { OrderPaymentApi } from '../core/order-payment.api';
+import { PaymentAdministrationApi } from '../core/payment-administration.api';
+import { PaymentConfigurationApi } from '../core/payment-configuration.api';
+import { ManualPaymentTasksApi } from '../core/manual-payment-tasks.api';
 import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -12,7 +17,7 @@ import {
   AdminPaymentLinkResponse,
   AdminPaymentLinkSummaryResponse,
   AdminPaymentLinksPageResponse,
-  ApiService,
+  type ApiService,
   ManualPaymentRecipientMonthlySummaryItem,
   ManualPaymentRecipientMonthlySummaryResponse,
   ManualPaymentTaskAccountingTargetOption,
@@ -2167,6 +2172,10 @@ function currentMonthInput(): string {
   `]
 })
 export class TbankPage implements OnInit {
+  private readonly orderPaymentApi = inject(OrderPaymentApi);
+  private readonly paymentAdministrationApi = inject(PaymentAdministrationApi);
+  private readonly paymentConfigurationApi = inject(PaymentConfigurationApi);
+  private readonly manualPaymentTasksApi = inject(ManualPaymentTasksApi);
   readonly statusOptions: StatusOption[] = [
     { key: 'all', label: 'Все', icon: 'apps', tone: 'blue' },
     { key: 'active', label: 'Активные', icon: 'bolt', tone: 'yellow' },
@@ -2463,9 +2472,7 @@ export class TbankPage implements OnInit {
     return 'не выбран';
   });
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly confirm: MobileConfirmService,
+  constructor(private readonly confirm: MobileConfirmService,
     private readonly externalLink: MobileExternalLinkService,
     private readonly manualCardPaymentFlow: MobileManualCardPaymentFlowService
   ) {}
@@ -2493,11 +2500,11 @@ export class TbankPage implements OnInit {
     void this.loadRecipientMonthlySummary();
     try {
       const [status, linksPage, profiles, manualTasks, runtimeSettings] = await Promise.all([
-        firstValueFrom(this.api.getTbankStatus()),
-        firstValueFrom(this.api.getAdminTbankPaymentLinks(this.paymentLinkQuery())),
-        firstValueFrom(this.api.getAdminTbankPaymentProfiles()),
-        firstValueFrom(this.api.getAdminManualPaymentTasks()),
-        firstValueFrom(this.api.getAdminTbankRuntimeSettings())
+        firstValueFrom(this.orderPaymentApi.getTbankStatus()),
+        firstValueFrom(this.paymentAdministrationApi.getAdminTbankPaymentLinks(this.paymentLinkQuery())),
+        firstValueFrom(this.paymentConfigurationApi.getAdminTbankPaymentProfiles()),
+        firstValueFrom(this.manualPaymentTasksApi.getAdminManualPaymentTasks()),
+        firstValueFrom(this.paymentConfigurationApi.getAdminTbankRuntimeSettings())
       ]);
       this.status.set(status);
       this.applyPaymentLinksPage(linksPage);
@@ -2877,7 +2884,7 @@ export class TbankPage implements OnInit {
     this.savingManualTask.set(true);
     this.error.set(null);
     try {
-      const task = await firstValueFrom(this.api.createAdminManualPaymentTask({
+      const task = await firstValueFrom(this.manualPaymentTasksApi.createAdminManualPaymentTask({
         operationKey: this.adminTaskOperationKey.current(),
         managerId: this.adminTaskManagerId(),
         manualPaymentType: this.adminTaskPaymentType(),
@@ -2919,7 +2926,7 @@ export class TbankPage implements OnInit {
     this.savingProfiles.set(true);
     this.error.set(null);
     try {
-      const state = await firstValueFrom(this.api.updateAdminTbankPaymentProfileAssignments(assignments));
+      const state = await firstValueFrom(this.paymentConfigurationApi.updateAdminTbankPaymentProfileAssignments(assignments));
       this.applyProfilesState(state.profiles, state.managers);
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось сохранить платежные профили.'));
@@ -2935,7 +2942,7 @@ export class TbankPage implements OnInit {
     this.savingProfilePolicies.set(true);
     this.error.set(null);
     try {
-      const state = await firstValueFrom(this.api.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
+      const state = await firstValueFrom(this.paymentConfigurationApi.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
       this.applyProfilesState(state.profiles, state.managers);
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось сохранить политики оплаты.'));
@@ -2957,9 +2964,9 @@ export class TbankPage implements OnInit {
     this.error.set(null);
     let policiesCommitted = false;
     try {
-      await firstValueFrom(this.api.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
+      await firstValueFrom(this.paymentConfigurationApi.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
       policiesCommitted = true;
-      const state = await firstValueFrom(this.api.updateAdminTbankPaymentProfileAssignments(assignments));
+      const state = await firstValueFrom(this.paymentConfigurationApi.updateAdminTbankPaymentProfileAssignments(assignments));
       this.applyProfilesState(state.profiles, state.managers);
     } catch (error) {
       if (policiesCommitted) {
@@ -2996,7 +3003,7 @@ export class TbankPage implements OnInit {
     this.mutatingId.set(link.id);
     this.error.set(null);
     try {
-      const updated = await firstValueFrom(this.api.cancelAdminTbankPaymentLink(link.id));
+      const updated = await firstValueFrom(this.paymentAdministrationApi.cancelAdminTbankPaymentLink(link.id));
       this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось выполнить возврат.'));
@@ -3021,7 +3028,7 @@ export class TbankPage implements OnInit {
     this.mutatingId.set(link.id);
     this.error.set(null);
     try {
-      const updated = await firstValueFrom(this.api.confirmAdminManualPaymentLink(link.id));
+      const updated = await firstValueFrom(this.paymentAdministrationApi.confirmAdminManualPaymentLink(link.id));
       this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
       await this.loadProfilesOnly();
       await this.loadRecipientMonthlySummary();
@@ -3062,7 +3069,7 @@ export class TbankPage implements OnInit {
     this.mutatingId.set(link.id);
     this.error.set(null);
     try {
-      const updated = await firstValueFrom(this.api.markAdminManualPaymentReceipt(link.id));
+      const updated = await firstValueFrom(this.paymentAdministrationApi.markAdminManualPaymentReceipt(link.id));
       this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
       await this.loadProfilesOnly();
     } catch (error) {
@@ -3080,7 +3087,7 @@ export class TbankPage implements OnInit {
     this.mutatingTaskId.set(task.id);
     this.error.set(null);
     try {
-      const updated = await firstValueFrom(this.api.updateAdminManualPaymentTaskStatus(task.id, status));
+      const updated = await firstValueFrom(this.manualPaymentTasksApi.updateAdminManualPaymentTaskStatus(task.id, status));
       this.manualTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось обновить ручное задание.'));
@@ -3146,7 +3153,7 @@ export class TbankPage implements OnInit {
     if (!this.canSaveManualTaskEdit(task) || !accountingTarget) return;
     this.mutatingTaskId.set(task.id);
     try {
-      const updated = await firstValueFrom(this.api.updateAdminManualPaymentTask(task.id, {
+      const updated = await firstValueFrom(this.manualPaymentTasksApi.updateAdminManualPaymentTask(task.id, {
         manualPaymentType: this.editTaskPaymentType(), manualPhone: this.editTaskPhone().trim(),
         manualRecipientName: this.editTaskRecipient().trim(), manualPaymentUrl: this.editTaskPaymentUrl().trim(),
         manualPaymentButtonLabel: this.editTaskPaymentButtonLabel().trim(), targetAmountKopecks: this.editTaskTargetKopecks(),
@@ -3443,7 +3450,7 @@ export class TbankPage implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const page = await firstValueFrom(this.api.getAdminTbankPaymentLinks(this.paymentLinkQuery()));
+      const page = await firstValueFrom(this.paymentAdministrationApi.getAdminTbankPaymentLinks(this.paymentLinkQuery()));
       this.applyPaymentLinksPage(page);
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось обновить журнал платежей.'));
@@ -3457,7 +3464,7 @@ export class TbankPage implements OnInit {
     this.loadingRecipientSummary.set(true);
     this.recipientSummaryError.set(null);
     try {
-      const summary = await firstValueFrom(this.api.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()));
+      const summary = await firstValueFrom(this.manualPaymentTasksApi.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()));
       if (loadEpoch !== this.recipientSummaryLoadEpoch) {
         return;
       }
@@ -3588,7 +3595,7 @@ export class TbankPage implements OnInit {
     this.savingRuntimeSettings.set(true);
     this.error.set(null);
     try {
-      const settings = await firstValueFrom(this.api.updateAdminTbankRuntimeSettings(request));
+      const settings = await firstValueFrom(this.paymentConfigurationApi.updateAdminTbankRuntimeSettings(request));
       this.runtimeSettings.set(settings);
       this.status.update((status) => status ? {
         ...status,
@@ -3609,7 +3616,7 @@ export class TbankPage implements OnInit {
 
   private async loadProfilesOnly(): Promise<boolean> {
     try {
-      const profiles = await firstValueFrom(this.api.getAdminTbankPaymentProfiles());
+      const profiles = await firstValueFrom(this.paymentConfigurationApi.getAdminTbankPaymentProfiles());
       this.applyProfilesState(profiles.profiles, profiles.managers);
       return true;
     } catch {
@@ -3701,7 +3708,7 @@ export class TbankPage implements OnInit {
     }
     this.adminTaskAccountingTargetsLoading.set(true);
     try {
-      const options = await firstValueFrom(this.api.getAdminManualPaymentTaskAccountingTargets(managerId, amount));
+      const options = await firstValueFrom(this.manualPaymentTasksApi.getAdminManualPaymentTaskAccountingTargets(managerId, amount));
       if (epoch !== this.adminTaskAccountingPreviewEpoch) return;
       const normalized = options ?? [];
       this.adminTaskAccountingTargets.set(normalized);
@@ -3732,7 +3739,7 @@ export class TbankPage implements OnInit {
     }
     this.editTaskAccountingTargetsLoading.set(true);
     try {
-      const options = await firstValueFrom(this.api.getAdminManualPaymentTaskAccountingTargets(task.managerId, amount, task.id));
+      const options = await firstValueFrom(this.manualPaymentTasksApi.getAdminManualPaymentTaskAccountingTargets(task.managerId, amount, task.id));
       if (epoch !== this.editTaskAccountingPreviewEpoch) return;
       const normalized = options ?? [];
       const restored = normalized.find(option => option.key === previousKey)

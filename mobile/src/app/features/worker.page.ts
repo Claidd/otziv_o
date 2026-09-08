@@ -1,5 +1,7 @@
+import { OrderReviewsApi } from '../core/order-reviews.api';
+import { WorkerApi } from '../core/worker.api';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, HostListener, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { inject, Component, HostListener, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import {
@@ -10,7 +12,7 @@ import {
 } from '@ionic/angular/standalone';
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
-  ApiService,
+  type ApiService,
   DailyWorkProgress,
   ManagerOverdueOrders,
   ManagerOverdueStatus,
@@ -1592,6 +1594,8 @@ type CredentialWaitSection = 'publish' | 'nagul';
   `]
 })
 export class WorkerPage implements OnInit, OnDestroy {
+  private readonly orderReviewsApi = inject(OrderReviewsApi);
+  private readonly workerApi = inject(WorkerApi);
   private routeSubscription?: Subscription;
   private lastMobileNavKey = '';
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1686,9 +1690,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     })
   );
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly auth: AuthService,
+  constructor(private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly confirm: MobileConfirmService,
@@ -1868,7 +1870,7 @@ export class WorkerPage implements OnInit, OnDestroy {
       await this.updatePaidOrderStatus(order, key);
       return;
     }
-    await this.runMutation(key, () => this.api.updateWorkerOrderStatus(order.id, targetStatus), 'Не удалось изменить статус заказа.');
+    await this.runMutation(key, () => this.workerApi.updateWorkerOrderStatus(order.id, targetStatus), 'Не удалось изменить статус заказа.');
   }
 
   private async updatePaidOrderStatus(order: OrderItem, key: string): Promise<void> {
@@ -1876,7 +1878,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.error.set(null);
     try {
       try {
-        await firstValueFrom(this.api.updateWorkerOrderStatus(order.id, 'Оплачено'));
+        await firstValueFrom(this.workerApi.updateWorkerOrderStatus(order.id, 'Оплачено'));
       } catch (genericError) {
         const fallbackAccess = manualCardPaymentFallbackAccessDecision(
           genericError,
@@ -1908,7 +1910,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     const waitingForClient = !order.waitingForClient;
     await this.runMutation(
       this.clientWaitingMutationKey(order),
-      () => this.api.updateWorkerOrderClientWaiting(order.id, waitingForClient),
+      () => this.workerApi.updateWorkerOrderClientWaiting(order.id, waitingForClient),
       'Не удалось изменить ожидание клиента.'
     );
   }
@@ -1945,7 +1947,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     const key = this.orderNoteMutationKey(order);
     this.mutationKey.set(key);
     try {
-      await firstValueFrom(this.api.updateWorkerOrderNote(order.id, value));
+      await firstValueFrom(this.workerApi.updateWorkerOrderNote(order.id, value));
       this.patchOrder(order.id, { orderComments: value || 'нет заметок' });
       this.editingOrderNoteId.set(null);
       this.savedOrderNoteId.set(order.id);
@@ -1982,7 +1984,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     const key = this.companyNoteMutationKey(order);
     this.mutationKey.set(key);
     try {
-      await firstValueFrom(this.api.updateWorkerOrderCompanyNote(order.id, value));
+      await firstValueFrom(this.workerApi.updateWorkerOrderCompanyNote(order.id, value));
       this.patchCompanyNote(order.companyId, value);
       this.openedOrderCompanyNoteId.set(null);
     } catch (error) {
@@ -2031,20 +2033,20 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.mutationKey.set(key);
     try {
       if (field === 'text' && this.isBadTask(review) && review.badTaskId) {
-        await firstValueFrom(this.api.updateWorkerBadReviewTask(review.badTaskId, value, review.badTaskScheduledDate || review.publishedDate || null));
+        await firstValueFrom(this.workerApi.updateWorkerBadReviewTask(review.badTaskId, value, review.badTaskScheduledDate || review.publishedDate || null));
       } else if (this.isRecoveryTask(review) && review.recoveryTaskId) {
         const recoveryText = field === 'text' ? value : (review.text ?? '');
         const recoveryAnswer = field === 'answer' ? value : (review.answer ?? '');
-        await firstValueFrom(this.api.updateWorkerRecoveryTask(
+        await firstValueFrom(this.workerApi.updateWorkerRecoveryTask(
           review.recoveryTaskId,
           recoveryText,
           review.recoveryTaskScheduledDate || null,
           recoveryAnswer
         ));
       } else if (field === 'text') {
-        await firstValueFrom(this.api.updateWorkerReviewText(review.id, review.orderId, value, this.workerActivitySource()));
+        await firstValueFrom(this.workerApi.updateWorkerReviewText(review.id, review.orderId, value, this.workerActivitySource()));
       } else {
-        await firstValueFrom(this.api.updateWorkerReviewAnswer(review.id, review.orderId, value, this.workerActivitySource()));
+        await firstValueFrom(this.workerApi.updateWorkerReviewAnswer(review.id, review.orderId, value, this.workerActivitySource()));
       }
       this.patchReview(review.id, { [field]: value } as Partial<WorkerReviewItem>);
       this.savedReviewFieldKey.set(this.reviewFieldKey(review, field));
@@ -2088,7 +2090,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     const key = this.reviewNoteMutationKey(review);
     this.mutationKey.set(key);
     try {
-      await firstValueFrom(this.api.updateWorkerReviewNote(review.id, review.orderId, value, this.workerActivitySource()));
+      await firstValueFrom(this.workerApi.updateWorkerReviewNote(review.id, review.orderId, value, this.workerActivitySource()));
       this.patchReview(review.id, { comment: value });
     } catch (error) {
       this.error.set(this.apiErrorMessage(error, 'Заметка отзыва не сохранилась.'));
@@ -2107,10 +2109,10 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.mutationKey.set(key);
     try {
       if (field === 'order') {
-        await firstValueFrom(this.api.updateWorkerOrderNote(review.orderId, value));
+        await firstValueFrom(this.workerApi.updateWorkerOrderNote(review.orderId, value));
         this.patchReviewsByOrder(review.orderId, { orderComments: value });
       } else {
-        await firstValueFrom(this.api.updateWorkerOrderCompanyNote(review.orderId, value));
+        await firstValueFrom(this.workerApi.updateWorkerOrderCompanyNote(review.orderId, value));
         this.patchCompanyNote(review.companyId, value);
       }
     } catch (error) {
@@ -2147,7 +2149,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.uploadingPhotoReviewId.set(review.id);
     try {
       const preparedFile = await this.media.prepareImageFile(file, `review-${review.id}`);
-      const updatedReview = await firstValueFrom(this.api.uploadManagerOrderReviewPhoto(review.orderId, review.id, preparedFile));
+      const updatedReview = await firstValueFrom(this.orderReviewsApi.uploadManagerOrderReviewPhoto(review.orderId, review.id, preparedFile));
       this.patchReview(review.id, {
         productPhoto: updatedReview.productPhoto,
         url: updatedReview.url,
@@ -2198,10 +2200,10 @@ export class WorkerPage implements OnInit, OnDestroy {
       try {
         const source = this.workerActivitySource();
         const response = this.isRecoveryTask(review) && review.recoveryTaskId
-          ? await firstValueFrom(this.api.revealWorkerRecoveryTaskCredential(review.recoveryTaskId, kind, source))
+          ? await firstValueFrom(this.workerApi.revealWorkerRecoveryTaskCredential(review.recoveryTaskId, kind, source))
           : this.isBadTask(review) && review.badTaskId
-            ? await firstValueFrom(this.api.revealWorkerBadReviewTaskCredential(review.badTaskId, kind, source))
-            : await firstValueFrom(this.api.revealWorkerReviewCredential(review.id, kind, source));
+            ? await firstValueFrom(this.workerApi.revealWorkerBadReviewTaskCredential(review.badTaskId, kind, source))
+            : await firstValueFrom(this.workerApi.revealWorkerReviewCredential(review.id, kind, source));
         value = response.value ?? '';
         if (response.credentialPreparation) {
           this.applyServerCredentialPreparation(response.credentialPreparation);
@@ -2372,7 +2374,7 @@ export class WorkerPage implements OnInit, OnDestroy {
 
     await this.runMutation(
       `bot-${bot.id}-delete`,
-      () => this.api.deleteWorkerBot(bot.id),
+      () => this.workerApi.deleteWorkerBot(bot.id),
       'Не удалось удалить аккаунт.'
     );
   }
@@ -2380,10 +2382,10 @@ export class WorkerPage implements OnInit, OnDestroy {
   async changeReviewBot(review: WorkerReviewItem): Promise<void> {
     const key = this.reviewBotMutationKey(review, 'change');
     const request = this.isRecoveryTask(review) && review.recoveryTaskId
-      ? () => this.api.changeWorkerRecoveryTaskBot(review.recoveryTaskId!)
+      ? () => this.workerApi.changeWorkerRecoveryTaskBot(review.recoveryTaskId!)
       : this.isBadTask(review) && review.badTaskId
-        ? () => this.api.changeWorkerBadReviewTaskBot(review.badTaskId!)
-        : () => this.api.changeWorkerReviewBot(review.id, this.workerActivitySource());
+        ? () => this.workerApi.changeWorkerBadReviewTaskBot(review.badTaskId!)
+        : () => this.workerApi.changeWorkerReviewBot(review.id, this.workerActivitySource());
     await this.runMutation(key, request, 'Не удалось заменить аккаунт.');
   }
 
@@ -2424,7 +2426,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     const botName = this.botNameDraft().trim();
     await this.runMutation(
       this.reviewBotNameMutationKey(review),
-      () => this.api.updateWorkerReviewBotName(review.id, botName),
+      () => this.workerApi.updateWorkerReviewBotName(review.id, botName),
       'Не удалось изменить имя аккаунта.',
       () => this.cancelBotNameEdit()
     );
@@ -2445,21 +2447,21 @@ export class WorkerPage implements OnInit, OnDestroy {
     }
     const key = this.reviewBotMutationKey(review, 'block');
     const request = this.isRecoveryTask(review) && review.recoveryTaskId
-      ? () => this.api.deactivateWorkerRecoveryTaskBot(review.recoveryTaskId!, review.botId!)
+      ? () => this.workerApi.deactivateWorkerRecoveryTaskBot(review.recoveryTaskId!, review.botId!)
       : this.isBadTask(review) && review.badTaskId
-        ? () => this.api.deactivateWorkerBadReviewTaskBot(review.badTaskId!, review.botId!)
-        : () => this.api.deactivateWorkerReviewBot(review.id, review.botId!, this.workerActivitySource());
+        ? () => this.workerApi.deactivateWorkerBadReviewTaskBot(review.badTaskId!, review.botId!)
+        : () => this.workerApi.deactivateWorkerReviewBot(review.id, review.botId!, this.workerActivitySource());
     await this.runMutation(key, request, 'Не удалось заблокировать аккаунт.');
   }
 
   async markReviewDone(review: WorkerReviewItem): Promise<void> {
     const key = this.reviewDoneMutationKey(review);
     if (this.isRecoveryTask(review) && review.recoveryTaskId) {
-      await this.runMutation(key, () => this.api.completeWorkerRecoveryTask(review.recoveryTaskId!), 'Не удалось отметить восстановление.');
+      await this.runMutation(key, () => this.workerApi.completeWorkerRecoveryTask(review.recoveryTaskId!), 'Не удалось отметить восстановление.');
       return;
     }
     if (this.isBadTask(review) && review.badTaskId) {
-      await this.runMutation(key, () => this.api.completeWorkerBadReviewTask(review.badTaskId!), 'Не удалось выполнить плохую задачу.');
+      await this.runMutation(key, () => this.workerApi.completeWorkerBadReviewTask(review.badTaskId!), 'Не удалось выполнить плохую задачу.');
       return;
     }
     if (this.cannotCompleteBecauseBotUnavailable(review)) {
@@ -2473,7 +2475,7 @@ export class WorkerPage implements OnInit, OnDestroy {
       }
       await this.runMutation(
         key,
-        () => this.api.nagulWorkerReview(review.id),
+        () => this.workerApi.nagulWorkerReview(review.id),
         'Не удалось отметить выгул.',
         () => this.clearStoredPublishCredentialPreparation(review.id)
       );
@@ -2485,7 +2487,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     }
     await this.runMutation(
       key,
-      () => this.api.publishWorkerReview(review.id),
+      () => this.workerApi.publishWorkerReview(review.id),
       'Не удалось отметить публикацию.',
       () => this.clearStoredPublishCredentialPreparation(review.id)
     );
@@ -3120,7 +3122,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const board = await firstValueFrom(this.api.getWorkerBoard({
+      const board = await firstValueFrom(this.workerApi.getWorkerBoard({
         section,
         keyword: this.keyword(),
         pageNumber: this.pageNumber(),
@@ -3647,7 +3649,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     if (this.readStoredDate(storageKey) === today) {
       return;
     }
-    this.api.getWorkerOverdueOrders().subscribe({
+    this.workerApi.getWorkerOverdueOrders().subscribe({
       next: (summary) => {
         this.writeStoredDate(storageKey, today);
         const normalized = { ...summary, statuses: summary.statuses ?? [] };

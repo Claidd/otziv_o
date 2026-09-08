@@ -18,6 +18,10 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class LeadDtoTransfer {
+    @jakarta.validation.Valid
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private LeadCommandIdentity command;
+
     @NotBlank
     @Size(max = 20)
     @Pattern(regexp = "[+0-9()\\-\\s]{5,20}")

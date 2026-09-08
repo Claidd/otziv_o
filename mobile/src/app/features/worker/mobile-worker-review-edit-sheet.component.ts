@@ -1,10 +1,12 @@
+import { OrderReviewsApi } from '../../core/order-reviews.api';
+import { ManagerReviewActionsApi } from '../../core/manager-review-actions.api';
+import { ManagerOrdersApi } from '../../core/manager-orders.api';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IonModal } from '@ionic/angular/standalone';
 import { firstValueFrom } from 'rxjs';
 import {
-  ApiService,
   OrderDetailsPayload,
   OrderReviewItem,
   ReviewUpdateRequest,
@@ -195,10 +197,12 @@ import { safeHttpsOrInternalUrl } from '../../shared/external-navigation';
   `]
 })
 export class MobileWorkerReviewEditSheetComponent {
+  private readonly orderReviewsApi = inject(OrderReviewsApi);
+  private readonly managerReviewActionsApi = inject(ManagerReviewActionsApi);
+  private readonly managerOrdersApi = inject(ManagerOrdersApi);
   safeMediaUrl(value: unknown): string {
     return safeHttpsOrInternalUrl(value) ?? '';
   }
-  private readonly api = inject(ApiService);
   private readonly confirm = inject(MobileConfirmService);
   private loadVersion = 0;
 
@@ -285,7 +289,7 @@ export class MobileWorkerReviewEditSheetComponent {
     this.error.set(null);
     try {
       const request = this.canOnlyUnsetVigul() ? { ...draft, vigul: Boolean(review.vigul && draft.vigul) } : draft;
-      await firstValueFrom(this.api.updateManagerOrderReview(review.orderId, review.id, request));
+      await firstValueFrom(this.orderReviewsApi.updateManagerOrderReview(review.orderId, review.id, request));
       this.changed.emit();
       this.closed.emit();
     } catch (error) {
@@ -312,7 +316,7 @@ export class MobileWorkerReviewEditSheetComponent {
     this.deleting.set(true);
     this.error.set(null);
     try {
-      await firstValueFrom(this.api.deleteManagerOrderReview(review.orderId, review.id));
+      await firstValueFrom(this.orderReviewsApi.deleteManagerOrderReview(review.orderId, review.id));
       this.changed.emit();
       this.closed.emit();
     } catch (error) {
@@ -330,7 +334,7 @@ export class MobileWorkerReviewEditSheetComponent {
     this.assigningAccount.set(true);
     this.error.set(null);
     try {
-      const updated = await firstValueFrom(this.api.assignManagerOrderReviewNewAccount(review.orderId, review.id, this.activitySource()));
+      const updated = await firstValueFrom(this.managerReviewActionsApi.assignManagerOrderReviewNewAccount(review.orderId, review.id, this.activitySource()));
       this.applyReview(updated);
       this.changed.emit();
     } catch (error) {
@@ -351,7 +355,7 @@ export class MobileWorkerReviewEditSheetComponent {
     this.uploading.set(true);
     this.error.set(null);
     try {
-      const updated = await firstValueFrom(this.api.uploadManagerOrderReviewPhoto(review.orderId, review.id, file));
+      const updated = await firstValueFrom(this.orderReviewsApi.uploadManagerOrderReviewPhoto(review.orderId, review.id, file));
       this.applyReview(updated);
       this.changed.emit();
     } catch (error) {
@@ -369,7 +373,7 @@ export class MobileWorkerReviewEditSheetComponent {
     this.currentReview.set(null);
     this.draft.set(null);
     try {
-      const details = await firstValueFrom(this.api.getManagerOrderDetails(target.orderId));
+      const details = await firstValueFrom(this.managerOrdersApi.getManagerOrderDetails(target.orderId));
       if (version !== this.loadVersion || this.targetReview()?.id !== target.id) {
         return;
       }

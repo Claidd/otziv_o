@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
@@ -112,6 +112,8 @@ $backupReadiness = Get-RepositoryText 'infrastructure/scripts/security/check-bac
 $backupConfigImporter = Get-RepositoryText 'infrastructure/scripts/security/import-prod-backup-config.ps1'
 $gitleaksConfig = Get-RepositoryText '.gitleaks.toml'
 $qualityWorkflow = Get-RepositoryText '.github/workflows/quality-gates.yml'
+$monitoringCompose = Get-RepositoryText 'compose.monitoring.yaml'
+$publisherDockerfile = Get-RepositoryText 'infrastructure/monitoring/Dockerfile'
 $dependencyWorkflow = Get-RepositoryText '.github/workflows/dependency-audit.yml'
 $sqlGuardWorkflow = Get-RepositoryText '.github/workflows/sql-injection-guard.yml'
 $legacyWhatsAppDockerfile = Get-RepositoryText 'Dockerfile2.whatsapp'
@@ -368,11 +370,11 @@ Assert-TextMatch $productionCompose 'image:\s*\$\{APP_IMAGE:\?APP_IMAGE must be 
 Assert-TextMatch $productionCompose 'image:\s*\$\{WEB_IMAGE:\?WEB_IMAGE must be an immutable release tag or digest\}' 'Production web image must require an explicit immutable release identifier.'
 Assert-TextMatch $productionCompose 'image:\s*\$\{WHATSAPP_IMAGE:\?WHATSAPP_IMAGE must be an explicit deployment tag\}' 'Production WhatsApp image must require an explicit deployment tag.'
 Assert-TextMatch $productionCompose 'image:\s*\$\{EXTERNAL_REVIEW_WORKER_IMAGE:\?EXTERNAL_REVIEW_WORKER_IMAGE must be an explicit deployment tag or digest\}' 'Production external review worker image must require an explicit release identifier.'
-Assert-TextMatch $productionCompose 'prom/prometheus@sha256:[0-9a-f]{64}' 'Prometheus image must be pinned by digest.'
-Assert-TextMatch $productionCompose 'grafana/loki@sha256:[0-9a-f]{64}' 'Loki image must be pinned by digest.'
-Assert-TextMatch $productionCompose 'grafana/tempo@sha256:[0-9a-f]{64}' 'Tempo image must be pinned by digest.'
-Assert-TextMatch $productionCompose 'grafana/alloy@sha256:[0-9a-f]{64}' 'Alloy image must be pinned by digest.'
-Assert-TextMatch $productionCompose 'grafana/grafana@sha256:[0-9a-f]{64}' 'Grafana image must be pinned by digest.'
+# Component-bound exact defaults: original source or verified publication + anonymous pull.
+$reviewedImageCheck = & node (Join-Path $repoRoot 'infrastructure/runtime-security/reviewed-image-defaults.mjs') $repoRoot 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $violations.Add('Reviewed upstream defaults must match their original component pin or paired immutable publication evidence; database defaults remain on hold.')
+}
 Assert-ComposeEnvironmentVariable $productionCompose 'TELEGRAM_BOT_LINK_SECRET' ':-' 'Production Compose must pass the Telegram bot link secret.'
 Assert-ComposeEnvironmentVariable $productionCompose 'MAX_BOT_LINK_SECRET' ':-' 'Production Compose must pass the MAX bot link secret.'
 Assert-TextMatch $productionCompose 'MAX_BOT_WEBHOOK_HMAC_REQUIRED:\s*\$\{MAX_BOT_WEBHOOK_HMAC_REQUIRED:-false\}' 'MAX webhook HMAC must remain disabled because the official contract only sends X-Max-Bot-Api-Secret.'
@@ -491,9 +493,9 @@ Assert-TextMatch $localSecretScan 'jks\|keystore' 'The staged scan must reject J
 Assert-TextMatch $gitleaksConfig 'mobile/android/keystore\\\.properties' 'The dir scan may skip only the ignored local Android signing-properties path.'
 $pinnedWorkflowSet = $secretWorkflow + $qualityWorkflow + $dependencyWorkflow + $sqlGuardWorkflow
 Assert-TextNotMatch $pinnedWorkflowSet 'actions/(checkout|upload-artifact|setup-node|setup-java)@v[0-9]' 'CI actions must use immutable commit pins, not mutable major tags.'
-Assert-TextMatch $pinnedWorkflowSet 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' 'CI checkout must retain its reviewed immutable pin.'
-Assert-TextMatch $pinnedWorkflowSet 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020' 'CI setup-node must retain its reviewed v4.4.0 immutable pin.'
-Assert-TextMatch $pinnedWorkflowSet 'actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9' 'CI setup-java must retain its reviewed v4.8.0 immutable pin.'
+Assert-TextMatch $pinnedWorkflowSet 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' 'CI checkout must retain its reviewed immutable pin.'
+Assert-TextMatch $pinnedWorkflowSet 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020' 'CI setup-node must retain its reviewed v7.0.0 immutable pin.'
+Assert-TextMatch $pinnedWorkflowSet 'actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c' 'CI setup-java must retain its reviewed v6.0.0 immutable pin.'
 Assert-TextMatch $maxWebhookRegistration 'https://platform-api2\.max\.ru' 'MAX webhook registration must use the current MAX API endpoint.'
 Assert-TextMatch $productionProperties 'MAX_BOT_API_BASE_URL:https://platform-api2\.max\.ru' 'Backend production properties must use the current MAX API endpoint.'
 Assert-TextMatch $productionProperties 'backup\.enabled=\$\{BACKUP_ENABLED:false\}' 'Backend production backup automation must fail closed outside Compose as well.'
@@ -511,7 +513,11 @@ Assert-TextMatch $whatsAppDockerfile '(?m)^USER node\s*$' 'The WhatsApp runtime 
 Assert-TextMatch $whatsAppDockerfile '(?m)^\s*chromium-sandbox \\\r?$' 'The WhatsApp runtime image must install Chromium''s sandbox helper explicitly.'
 Assert-TextNotMatch $whatsAppGateway '(?m)^[^/\r\n]*--no-sandbox' 'WhatsApp Chromium must not disable the browser sandbox.'
 Assert-TextNotMatch $whatsAppGateway '(?m)^[^/\r\n]*--disable-setuid-sandbox' 'WhatsApp Chromium must not disable the setuid sandbox.'
-Assert-TextMatch $productionCompose '(?ms)^\s{2}whatsapp_lika:.*?cap_drop:\s*\n\s*- ALL\s*\n\s*cap_add:\s*\n\s*- SYS_ADMIN\s*\n\s*- SYS_CHROOT' 'WhatsApp must admit only the two capabilities needed by Chromium''s namespace sandbox.'
+foreach ($gateway in @('whatsapp_lika', 'whatsapp_vika')) {
+    $gatewayBlock = [regex]::Match($productionCompose, '(?ms)^  ' + $gateway + ':.*?(?=^  [a-zA-Z0-9_-]+:|\z)').Value
+    Assert-TextMatch $gatewayBlock 'cap_drop:\s*\n\s*- ALL' 'WhatsApp must retain the tested cap-drop ALL sandbox boundary.'
+    Assert-TextNotMatch $gatewayBlock 'cap_add:' 'WhatsApp runtime must not regain host capabilities; the reviewed namespace seccomp profile is sufficient.'
+}
 Assert-TextMatch $deploy 'WhatsApp Chromium sandbox preflight failed; existing gateway containers were not stopped' 'Production deploy must validate Chromium sandbox compatibility before stopping existing gateways.'
 Assert-TextMatch $deploy '(?m)^compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --user 0 --entrypoint chown app ' 'The one-shot app ownership migration must regain CAP_CHOWN after the service drops all capabilities.'
 Assert-TextMatch $deploy '(?m)^compose run --rm --no-deps --interactive=false -T --cap-add CHOWN --cap-add DAC_READ_SEARCH --user 0 --entrypoint sh whatsapp_lika ' 'The one-shot WhatsApp ownership migration must regain CAP_CHOWN and narrowly bypass read/search checks for legacy mode-0700 session trees.'
@@ -611,6 +617,14 @@ Assert-TextNotMatch $frontendSilentCheckSsoHtml '<script(?:\s[^>]*)?>\s*[^<\s]' 
 Assert-TextMatch $frontendSilentCheckSsoScript 'window\.parent\.postMessage\(window\.location\.href,\s*window\.location\.origin\)' 'Keycloak silent SSO callback script must return the callback URL to its same-origin parent.'
 Assert-DigestPinnedDockerfileBases $whatsAppDockerfile 'Dockerfile.whatsapp'
 Assert-DigestPinnedDockerfileBases $externalReviewWorkerDockerfile 'backend/external-review-worker/Dockerfile'
+Assert-DigestPinnedDockerfileBases $publisherDockerfile 'infrastructure/monitoring/Dockerfile'
+Assert-TextNotMatch $productionCompose '(?m)^\s+-\s+SYS_ADMIN\s*$' 'Production WhatsApp must use the tested Chromium namespace sandbox without host SYS_ADMIN.'
+Assert-TextMatch $monitoringCompose 'profiles:\s*\[monitor-signals\]' 'Signal publication must remain an explicit deployment profile.'
+Assert-TextMatch $monitoringCompose 'MONITOR_SIGNALS_BIND_ADDRESS:-127\.0\.0\.1' 'Signal publication must default to a loopback host listener.'
+Assert-TextMatch $monitoringCompose 'create_host_path:\s*false' 'Monitoring evidence/config mounts must not create missing directories.'
+Assert-TextNotMatch $monitoringCompose 'docker\.sock|privileged:\s*true|SYS_ADMIN' 'The publisher must not receive a Docker socket or privileged host capabilities.'
+Assert-TextMatch $qualityWorkflow 'check-deploy-release-contract\.ps1' 'CI must exercise release lineage regression guards.'
+Assert-TextMatch $dependencyWorkflow 'dependency-gate:' 'Conditional dependency jobs require an always-present aggregate gate.'
 Assert-DigestPinnedComposeImages $productionCompose 'docker-compose.yaml'
 Assert-DigestPinnedComposeImages $localCompose 'compose.prod-local.yaml'
 Assert-DigestPinnedComposeImages $developmentCompose 'compose.yaml'

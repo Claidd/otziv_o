@@ -1,0 +1,10 @@
+{
+  "formatVersion": 1,
+  "latestPublished": "android-73",
+  "minimumSupported": null,
+  "declaredMinimumVersionCode": 0,
+  "minimumStatus": "No concrete tested minimum established by public metadata; 0 is not a real client artifact.",
+  "entries": [
+    "android-73"
+  ]
+}

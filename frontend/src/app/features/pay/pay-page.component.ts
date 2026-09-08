@@ -1,3 +1,4 @@
+import { ClientContractError } from '@otziv/client-common/billing-payments';
 import { Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -14,7 +15,6 @@ import {
   PaymentsApi,
   PublicPaymentLink,
   PublicSbpBank,
-  TbankPaymentPageMode,
   type PaymentMethod
 } from '../../core/payments.api';
 import { LatestRouteRequest } from '../../core/latest-route-request';
@@ -79,7 +79,7 @@ export class PayPageComponent {
     : this.manualTransferDestination().paymentTitle);
   readonly manualTransferDestinationLabel = computed(() => this.manualTransferDestination().fieldLabel);
   readonly statusLabel = computed(() => this.statusText(this.payment()?.status));
-  readonly paymentPageMode = computed<TbankPaymentPageMode>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
+  readonly paymentPageMode = computed<string>(() => this.payment()?.paymentPageMode ?? 'SBP_PRIMARY');
   readonly sbpBankSelectionSupported = computed(() => this.payment()?.sbpBankSelectionSupported !== false);
   readonly lockedTochkaPaymentMethod = computed<PaymentMethod | null>(() => {
     const payment = this.payment();
@@ -525,6 +525,7 @@ export class PayPageComponent {
         if (!this.isActiveRoute(routeTicket)) {
           return;
         }
+        if (err instanceof ClientContractError) this.payment.set(null);
         this.error.set(apiErrorMessage(err, 'Не удалось открыть платежную ссылку.'));
         this.loading.set(false);
       }
@@ -563,9 +564,13 @@ export class PayPageComponent {
         this.applyPayment(payment, true);
         this.refreshingPayment.set(false);
       },
-      error: () => {
+      error: (error) => {
         if (!this.isActiveRoute(routeTicket)) {
           return;
+        }
+        if (error instanceof ClientContractError) {
+          this.payment.set(null);
+          this.error.set('Данные платежа изменились. Обновите страницу перед оплатой.');
         }
         this.refreshingPayment.set(false);
       }

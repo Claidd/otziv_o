@@ -1,0 +1,783 @@
+{
+  "schema": "otziv-npm-override-review-v1",
+  "observedAt": "2026-09-07T14:28:13.272Z",
+  "mode": "Read-only graph review; package manifests/locks unchanged",
+  "scopes": [
+    {
+      "scope": "frontend",
+      "packageSha256": "5803f0638d769afec39a5e3076c9c249247b914b3c1684242eff69707ff8d282",
+      "lockSha256": "3f0274d34804ed1b16f4a98b1e9b1202cb504bb4205ece0c7d80318de3aff89d",
+      "audit": {
+        "scope": "frontend",
+        "observedAt": "2026-09-07T14:26:08.0902700Z",
+        "command": "npm audit --json",
+        "exitCode": 0,
+        "lockSha256": "3f0274d34804ed1b16f4a98b1e9b1202cb504bb4205ece0c7d80318de3aff89d",
+        "report": ".codex-tmp/remediation-completion-20260907/frontend-npm-audit-final.json",
+        "reportSha256": "937b49a43840f83be0669365a0955c81d4d14377919e388233d7252a327ac027",
+        "findings": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 0
+        },
+        "dependencyCounts": {
+          "prod": 12,
+          "dev": 564,
+          "optional": 127,
+          "peer": 3,
+          "peerOptional": 0,
+          "total": 575
+        }
+      },
+      "evidence": [
+        {
+          "path": ".codex-tmp/remediation-completion-20260907/client-snapshot/web-client-completion-runtime-v2.log",
+          "sha256": "2d7f162ce589b2a0b1ade68a559078e8c2d18a687c2278be67d678c2f50fc45b"
+        },
+        {
+          "path": ".codex-tmp/remediation-completion-20260907/client-snapshot/web-client-completion-build-v2.log",
+          "sha256": "3df66262591eee99008a82be75698bcbb0fab8dcd4a3ba3bb06068b68139c70e"
+        }
+      ],
+      "overrides": [
+        {
+          "selector": "@modelcontextprotocol/sdk",
+          "pin": "1.30.0",
+          "selected": "1.30.0",
+          "purpose": "Maintain CLI MCP dependency on the reviewed v1 patch line instead of its exact 1.26.0 parent pin. Precise 1.30.0 advisory attribution is not established by this review.",
+          "primarySource": "https://www.npmjs.com/package/@modelcontextprotocol/sdk?activeTab=versions",
+          "parents": [
+            {
+              "path": "node_modules/@angular/cli",
+              "parentVersion": "21.2.19",
+              "declaredRange": "1.26.0",
+              "resolvedPath": "node_modules/@modelcontextprotocol/sdk",
+              "resolvedVersion": "1.30.0",
+              "satisfiesOriginalRange": false,
+              "installedVersion": "1.30.0",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "EXPLICIT_RANGE_OVERRIDE_TESTED_WITH_LIMITS",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "@hono/node-server",
+          "pin": "2.0.12",
+          "selected": "2.0.12",
+          "purpose": "Pin the SDK HTTP adapter to the reviewed 2.x patch. 2.0.12 release describes foreign Response header copying; this review does not claim that exact patch is a CVE fix.",
+          "primarySource": "https://github.com/honojs/node-server/releases/tag/v2.0.12",
+          "parents": [
+            {
+              "path": "node_modules/@modelcontextprotocol/sdk",
+              "parentVersion": "1.30.0",
+              "declaredRange": "^1.19.9 || ^2.0.5",
+              "resolvedPath": "node_modules/@hono/node-server",
+              "resolvedVersion": "2.0.12",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "2.0.12",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "@angular/build > undici",
+          "pin": "7.29.0",
+          "selected": "7.29.0",
+          "purpose": "Retain published v7 HTTP header/cookie/retry security fixes without forcing node-gyp across its major range.",
+          "primarySource": "https://github.com/nodejs/undici/releases/tag/v7.29.0",
+          "parents": [
+            {
+              "path": "node_modules/@angular/build",
+              "parentVersion": "21.2.19",
+              "declaredRange": "7.28.0",
+              "resolvedPath": "node_modules/undici",
+              "resolvedVersion": "7.29.0",
+              "satisfiesOriginalRange": false,
+              "installedVersion": "7.29.0",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "EXPLICIT_RANGE_OVERRIDE_TESTED_WITH_LIMITS",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "jsdom > undici",
+          "pin": "7.29.0",
+          "selected": "7.29.0",
+          "purpose": "Retain published v7 HTTP header/cookie/retry security fixes without forcing node-gyp across its major range.",
+          "primarySource": "https://github.com/nodejs/undici/releases/tag/v7.29.0",
+          "parents": [
+            {
+              "path": "node_modules/jsdom",
+              "parentVersion": "28.1.0",
+              "declaredRange": "^7.21.0",
+              "resolvedPath": "node_modules/undici",
+              "resolvedVersion": "7.29.0",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "7.29.0",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "node-gyp > undici",
+          "pin": "6.28.0",
+          "selected": "6.28.0",
+          "purpose": "Retain published v6 HTTP header/cookie/retry security fixes without forcing node-gyp across its major range.",
+          "primarySource": "https://github.com/nodejs/undici/releases/tag/v6.28.0",
+          "parents": [
+            {
+              "path": "node_modules/node-gyp",
+              "parentVersion": "12.4.0",
+              "declaredRange": "^6.25.0",
+              "resolvedPath": "node_modules/node-gyp/node_modules/undici",
+              "resolvedVersion": "6.28.0",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "6.28.0",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "hono",
+          "pin": "4.12.34",
+          "selected": "4.12.34",
+          "purpose": "Retain published SSR/CORS/language/proxy security fixes in the CLI dependency tree. Actual application reachability is not asserted.",
+          "primarySource": "https://github.com/honojs/hono/releases/tag/v4.12.34",
+          "parents": [
+            {
+              "path": "node_modules/@modelcontextprotocol/sdk",
+              "parentVersion": "1.30.0",
+              "declaredRange": "^4.11.4",
+              "resolvedPath": "node_modules/hono",
+              "resolvedVersion": "4.12.34",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "4.12.34",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "ip-address",
+          "pin": "10.4.0",
+          "selected": "10.4.0",
+          "purpose": "Retain reviewed address-parser version; 10.4.0 adds Address6 byte-array validation. Dormant where no lockfile node exists.",
+          "primarySource": "https://github.com/beaugunderson/ip-address/releases/tag/v10.4.0",
+          "parents": [
+            {
+              "path": "node_modules/express-rate-limit",
+              "parentVersion": "8.5.2",
+              "declaredRange": "^10.2.0",
+              "resolvedPath": "node_modules/ip-address",
+              "resolvedVersion": "10.4.0",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "10.4.0",
+              "developmentOnly": true
+            },
+            {
+              "path": "node_modules/socks",
+              "parentVersion": "2.8.9",
+              "declaredRange": "^10.1.1",
+              "resolvedPath": "node_modules/ip-address",
+              "resolvedVersion": "10.4.0",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "10.4.0",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        }
+      ]
+    },
+    {
+      "scope": "mobile",
+      "packageSha256": "9ca51dea90f7c52b1a114a23c9e7a8a96017bf54d93301252f25e178d013f8cc",
+      "lockSha256": "dd18a097ef6df07cda214cf1a1cac9fe2752681b47f56da8e389b549fc007bd5",
+      "audit": {
+        "scope": "mobile",
+        "observedAt": "2026-09-07T14:26:08.1646744Z",
+        "command": "npm audit --json",
+        "exitCode": 0,
+        "lockSha256": "dd18a097ef6df07cda214cf1a1cac9fe2752681b47f56da8e389b549fc007bd5",
+        "report": ".codex-tmp/remediation-completion-20260907/mobile-npm-audit-final.json",
+        "reportSha256": "de02451c1a0333974c344b35313b37a130847136174e9e9304a3a3d5e694e3da",
+        "findings": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 0
+        },
+        "dependencyCounts": {
+          "prod": 33,
+          "dev": 627,
+          "optional": 135,
+          "peer": 4,
+          "peerOptional": 0,
+          "total": 668
+        }
+      },
+      "evidence": [
+        {
+          "path": ".codex-tmp/remediation-completion-20260907/client-snapshot/mobile-client-completion-runtime-v3.log",
+          "sha256": "969a633620deea9f49cfefa2651f463fe3d1f7cdbf0080b804ced1e476d4ea9e"
+        },
+        {
+          "path": ".codex-tmp/remediation-completion-20260907/client-snapshot/mobile-client-completion-unit-v2.log",
+          "sha256": "b076f93d80459653402404204d8e319ff8c608df97021278d6294a92a8c77588"
+        },
+        {
+          "path": ".codex-tmp/remediation-completion-20260907/order-details-reconciliation-targeted-v3.log",
+          "sha256": "049dab27537d47b1418c8644dbaa10f9c75d4ac9f7beac1a004aef1f6d6118b4"
+        },
+        {
+          "path": ".codex-tmp/remediation-completion-20260907/order-details-reconciliation-build.log",
+          "sha256": "4764e196cf2787e3707d19a2663810c2d8a7d8e04fab74c0232220e18e644573"
+        }
+      ],
+      "overrides": [
+        {
+          "selector": "@modelcontextprotocol/sdk",
+          "pin": "1.30.0",
+          "selected": "1.30.0",
+          "purpose": "Maintain CLI MCP dependency on the reviewed v1 patch line instead of its exact 1.26.0 parent pin. Precise 1.30.0 advisory attribution is not established by this review.",
+          "primarySource": "https://www.npmjs.com/package/@modelcontextprotocol/sdk?activeTab=versions",
+          "parents": [
+            {
+              "path": "node_modules/@angular/cli",
+              "parentVersion": "21.2.19",
+              "declaredRange": "1.26.0",
+              "resolvedPath": "node_modules/@modelcontextprotocol/sdk",
+              "resolvedVersion": "1.30.0",
+              "satisfiesOriginalRange": false,
+              "installedVersion": "1.30.0",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "EXPLICIT_RANGE_OVERRIDE_TESTED_WITH_LIMITS",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "@hono/node-server",
+          "pin": "2.0.12",
+          "selected": "2.0.12",
+          "purpose": "Pin the SDK HTTP adapter to the reviewed 2.x patch. 2.0.12 release describes foreign Response header copying; this review does not claim that exact patch is a CVE fix.",
+          "primarySource": "https://github.com/honojs/node-server/releases/tag/v2.0.12",
+          "parents": [
+            {
+              "path": "node_modules/@modelcontextprotocol/sdk",
+              "parentVersion": "1.30.0",
+              "declaredRange": "^1.19.9 || ^2.0.5",
+              "resolvedPath": "node_modules/@hono/node-server",
+              "resolvedVersion": "2.0.12",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "2.0.12",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "@angular/build > undici",
+          "pin": "7.29.0",
+          "selected": "7.29.0",
+          "purpose": "Retain published v7 HTTP header/cookie/retry security fixes without forcing node-gyp across its major range.",
+          "primarySource": "https://github.com/nodejs/undici/releases/tag/v7.29.0",
+          "parents": [
+            {
+              "path": "node_modules/@angular/build",
+              "parentVersion": "21.2.19",
+              "declaredRange": "7.28.0",
+              "resolvedPath": "node_modules/undici",
+              "resolvedVersion": "7.29.0",
+              "satisfiesOriginalRange": false,
+              "installedVersion": "7.29.0",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "EXPLICIT_RANGE_OVERRIDE_TESTED_WITH_LIMITS",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "jsdom > undici",
+          "pin": "7.29.0",
+          "selected": "7.29.0",
+          "purpose": "Retain published v7 HTTP header/cookie/retry security fixes without forcing node-gyp across its major range.",
+          "primarySource": "https://github.com/nodejs/undici/releases/tag/v7.29.0",
+          "parents": [
+            {
+              "path": "node_modules/jsdom",
+              "parentVersion": "28.1.0",
+              "declaredRange": "^7.21.0",
+              "resolvedPath": "node_modules/undici",
+              "resolvedVersion": "7.29.0",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "7.29.0",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "node-gyp > undici",
+          "pin": "6.28.0",
+          "selected": "6.28.0",
+          "purpose": "Retain published v6 HTTP header/cookie/retry security fixes without forcing node-gyp across its major range.",
+          "primarySource": "https://github.com/nodejs/undici/releases/tag/v6.28.0",
+          "parents": [
+            {
+              "path": "node_modules/node-gyp",
+              "parentVersion": "12.4.0",
+              "declaredRange": "^6.25.0",
+              "resolvedPath": "node_modules/node-gyp/node_modules/undici",
+              "resolvedVersion": "6.28.0",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "6.28.0",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "hono",
+          "pin": "4.12.34",
+          "selected": "4.12.34",
+          "purpose": "Retain published SSR/CORS/language/proxy security fixes in the CLI dependency tree. Actual application reachability is not asserted.",
+          "primarySource": "https://github.com/honojs/hono/releases/tag/v4.12.34",
+          "parents": [
+            {
+              "path": "node_modules/@modelcontextprotocol/sdk",
+              "parentVersion": "1.30.0",
+              "declaredRange": "^4.11.4",
+              "resolvedPath": "node_modules/hono",
+              "resolvedVersion": "4.12.34",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "4.12.34",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "ip-address",
+          "pin": "10.4.0",
+          "selected": "10.4.0",
+          "purpose": "Retain reviewed address-parser version; 10.4.0 adds Address6 byte-array validation. Dormant where no lockfile node exists.",
+          "primarySource": "https://github.com/beaugunderson/ip-address/releases/tag/v10.4.0",
+          "parents": [
+            {
+              "path": "node_modules/express-rate-limit",
+              "parentVersion": "8.5.2",
+              "declaredRange": "^10.2.0",
+              "resolvedPath": "node_modules/ip-address",
+              "resolvedVersion": "10.4.0",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "10.4.0",
+              "developmentOnly": true
+            },
+            {
+              "path": "node_modules/socks",
+              "parentVersion": "2.8.9",
+              "declaredRange": "^10.1.1",
+              "resolvedPath": "node_modules/ip-address",
+              "resolvedVersion": "10.4.0",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "10.4.0",
+              "developmentOnly": true
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Client build-toolchain maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        }
+      ]
+    },
+    {
+      "scope": "whatsapp",
+      "packageSha256": "684c97873998715e1a7c3878ee78a69d6c42cf9cceb4c0c8081cfbf5fd7cbc3c",
+      "lockSha256": "8ac0c52b4de2ccc77972785ae35d7017bee3ccc818bc6dd7e15d0547f242d11c",
+      "audit": {
+        "scope": "whatsapp",
+        "observedAt": "2026-09-07T14:26:08.1349008Z",
+        "command": "npm audit --json",
+        "exitCode": 0,
+        "lockSha256": "8ac0c52b4de2ccc77972785ae35d7017bee3ccc818bc6dd7e15d0547f242d11c",
+        "report": ".codex-tmp/remediation-completion-20260907/whatsapp-npm-audit-final.json",
+        "reportSha256": "1d97dcd8f3fea1aaa0ff8d9459412da89c4ac501a830d8887f7e9cff647d863b",
+        "findings": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 0
+        },
+        "dependencyCounts": {
+          "prod": 140,
+          "dev": 0,
+          "optional": 88,
+          "peer": 0,
+          "peerOptional": 0,
+          "total": 227
+        }
+      },
+      "evidence": [
+        {
+          "path": ".codex-tmp/remediation-completion-20260907/whatsapp-tests-v1.log",
+          "sha256": "cd7fc152b0b3ad97f48e8268cc5510600937afb1d891e6d9bc335fa4fc4877e7"
+        },
+        {
+          "path": ".codex-tmp/remediation-completion-20260907/whatsapp-image-smoke.log",
+          "sha256": "077d2dcb1b8dab7ea1e3793106ece1a75b7d35f7b583eb2dcb9dd46f389046b6"
+        }
+      ],
+      "overrides": [
+        {
+          "selector": "body-parser",
+          "pin": "1.20.6",
+          "selected": "1.20.6",
+          "purpose": "Retain invalid body-limit validation fix GHSA-v422-hmwv-36x6 / CVE-2026-12590 without switching Express major.",
+          "primarySource": "https://github.com/expressjs/body-parser/blob/master/HISTORY.md",
+          "parents": [
+            {
+              "path": "node_modules/express",
+              "parentVersion": "4.22.2",
+              "declaredRange": "~1.20.5",
+              "resolvedPath": "node_modules/body-parser",
+              "resolvedVersion": "1.20.6",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "1.20.6",
+              "developmentOnly": false
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Integration runtime maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "brace-expansion",
+          "pin": "2.1.4",
+          "selected": "2.1.4",
+          "purpose": "Retain reviewed 2.x version in archive/glob transitive tree. Exact 2.1.4 advisory attribution is not established by this review.",
+          "primarySource": "https://github.com/juliangruber/brace-expansion/releases/tag/v2.1.4",
+          "parents": [
+            {
+              "path": "node_modules/minimatch",
+              "parentVersion": "9.0.9",
+              "declaredRange": "^2.0.2",
+              "resolvedPath": "node_modules/brace-expansion",
+              "resolvedVersion": "2.1.4",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "2.1.4",
+              "developmentOnly": false
+            },
+            {
+              "path": "node_modules/readdir-glob/node_modules/minimatch",
+              "parentVersion": "5.1.9",
+              "declaredRange": "^2.0.1",
+              "resolvedPath": "node_modules/brace-expansion",
+              "resolvedVersion": "2.1.4",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "2.1.4",
+              "developmentOnly": false
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Integration runtime maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "ip-address",
+          "pin": "10.4.0",
+          "selected": "10.4.0",
+          "purpose": "Retain reviewed address-parser version; 10.4.0 adds Address6 byte-array validation. Dormant where no lockfile node exists.",
+          "primarySource": "https://github.com/beaugunderson/ip-address/releases/tag/v10.4.0",
+          "parents": [],
+          "dormant": true,
+          "reviewDisposition": "REMOVAL_CANDIDATE_NO_GRAPH_EFFECT",
+          "ownerRole": "Integration runtime maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Remove in a reviewed package/lock housekeeping change, verify node set/integrities unchanged and repeat npm audit; not removed by this read-only review.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "js-yaml",
+          "pin": "4.3.1",
+          "selected": "4.3.1",
+          "purpose": "Historical security override; no current lockfile node or parent exists. It currently changes no installed resolution.",
+          "primarySource": null,
+          "parents": [],
+          "dormant": true,
+          "reviewDisposition": "REMOVAL_CANDIDATE_NO_GRAPH_EFFECT",
+          "ownerRole": "Integration runtime maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Remove in a reviewed package/lock housekeeping change, verify node set/integrities unchanged and repeat npm audit; not removed by this read-only review.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "qs",
+          "pin": "6.16.0",
+          "selected": "6.16.0",
+          "purpose": "Retain GHSA-4mjr-xmp4-gh2g and GHSA-x5fp-wj9c-mxmx fixes. Parent ~6.15.1 excludes 6.16.0.",
+          "primarySource": "https://github.com/ljharb/qs/security/advisories/GHSA-4mjr-xmp4-gh2g",
+          "parents": [
+            {
+              "path": "node_modules/body-parser",
+              "parentVersion": "1.20.6",
+              "declaredRange": "~6.15.1",
+              "resolvedPath": "node_modules/qs",
+              "resolvedVersion": "6.16.0",
+              "satisfiesOriginalRange": false,
+              "installedVersion": "6.16.0",
+              "developmentOnly": false
+            },
+            {
+              "path": "node_modules/express",
+              "parentVersion": "4.22.2",
+              "declaredRange": "~6.15.1",
+              "resolvedPath": "node_modules/qs",
+              "resolvedVersion": "6.16.0",
+              "satisfiesOriginalRange": false,
+              "installedVersion": "6.16.0",
+              "developmentOnly": false
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "EXPLICIT_RANGE_OVERRIDE_TESTED_WITH_LIMITS",
+          "ownerRole": "Integration runtime maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "whatsapp-web.js > puppeteer",
+          "pin": "$puppeteer",
+          "selected": "25.10.0",
+          "purpose": "Explicit supported-local migration from wwebjs exact 24.38.0 to 25.10.0 removes the older browser download graph; owned compatibility adapter and real Chromium lifecycle probe are required. Live account acceptance remains open.",
+          "primarySource": "https://github.com/puppeteer/puppeteer/releases/tag/puppeteer-v25.0.0",
+          "parents": [
+            {
+              "path": "node_modules/whatsapp-web.js",
+              "parentVersion": "1.34.7",
+              "declaredRange": "24.38.0",
+              "resolvedPath": "node_modules/puppeteer",
+              "resolvedVersion": "25.10.0",
+              "satisfiesOriginalRange": false,
+              "installedVersion": "25.10.0",
+              "developmentOnly": false
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "EXPLICIT_RANGE_OVERRIDE_TESTED_WITH_LIMITS",
+          "ownerRole": "Integration runtime maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        }
+      ]
+    },
+    {
+      "scope": "backend/external-review-worker",
+      "packageSha256": "f19c36e2583ea539e8c57bc3f9991b6379cca8901c2ae71f50af20f20aea829b",
+      "lockSha256": "f4250e91a5225c198f14de09573167815f82378b81705361b58b91b1eb4ad537",
+      "audit": {
+        "scope": "backend/external-review-worker",
+        "observedAt": "2026-09-07T14:26:08.4236501Z",
+        "command": "npm audit --json",
+        "exitCode": 0,
+        "lockSha256": "f4250e91a5225c198f14de09573167815f82378b81705361b58b91b1eb4ad537",
+        "report": ".codex-tmp/remediation-completion-20260907/external-review-worker-npm-audit-final.json",
+        "reportSha256": "1cb3f5078b098e75680210893e04a699bf4db1f8bfff90ca055c34d6f2dd72d1",
+        "findings": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 0
+        },
+        "dependencyCounts": {
+          "prod": 88,
+          "dev": 0,
+          "optional": 1,
+          "peer": 0,
+          "peerOptional": 0,
+          "total": 88
+        }
+      },
+      "evidence": [
+        {
+          "path": ".codex-tmp/remediation-completion-20260907/worker-tests-v1.log",
+          "sha256": "8c65c037f8ece01045ae80b60ff1857ab245a65633018033c7040215e2e10814"
+        },
+        {
+          "path": ".codex-tmp/remediation-completion-20260907/worker-image-smoke.log",
+          "sha256": "625fb6980cbf7114989000ee86694d7d98dbda0013c0ab5907c2e300eca5ddad"
+        }
+      ],
+      "overrides": [
+        {
+          "selector": "body-parser",
+          "pin": "1.20.6",
+          "selected": "1.20.6",
+          "purpose": "Retain invalid body-limit validation fix GHSA-v422-hmwv-36x6 / CVE-2026-12590 without switching Express major.",
+          "primarySource": "https://github.com/expressjs/body-parser/blob/master/HISTORY.md",
+          "parents": [
+            {
+              "path": "node_modules/express",
+              "parentVersion": "4.22.2",
+              "declaredRange": "~1.20.5",
+              "resolvedPath": "node_modules/body-parser",
+              "resolvedVersion": "1.20.6",
+              "satisfiesOriginalRange": true,
+              "installedVersion": "1.20.6",
+              "developmentOnly": false
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "IN_RANGE_SECURITY_OR_BASELINE_PIN",
+          "ownerRole": "Integration runtime maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        },
+        {
+          "selector": "qs",
+          "pin": "6.16.0",
+          "selected": "6.16.0",
+          "purpose": "Retain GHSA-4mjr-xmp4-gh2g and GHSA-x5fp-wj9c-mxmx fixes. Parent ~6.15.1 excludes 6.16.0.",
+          "primarySource": "https://github.com/ljharb/qs/security/advisories/GHSA-4mjr-xmp4-gh2g",
+          "parents": [
+            {
+              "path": "node_modules/body-parser",
+              "parentVersion": "1.20.6",
+              "declaredRange": "~6.15.1",
+              "resolvedPath": "node_modules/qs",
+              "resolvedVersion": "6.16.0",
+              "satisfiesOriginalRange": false,
+              "installedVersion": "6.16.0",
+              "developmentOnly": false
+            },
+            {
+              "path": "node_modules/express",
+              "parentVersion": "4.22.2",
+              "declaredRange": "~6.15.1",
+              "resolvedPath": "node_modules/qs",
+              "resolvedVersion": "6.16.0",
+              "satisfiesOriginalRange": false,
+              "installedVersion": "6.16.0",
+              "developmentOnly": false
+            }
+          ],
+          "dormant": false,
+          "reviewDisposition": "EXPLICIT_RANGE_OVERRIDE_TESTED_WITH_LIMITS",
+          "ownerRole": "Integration runtime maintainer",
+          "assignedPerson": null,
+          "removalCondition": "Parent dependency floor manages an equal or newer reviewed compatible release, followed by lock/clean install, relevant tests/build/runtime smoke and audit.",
+          "riskAcceptance": null,
+          "acceptanceExpiry": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "schema": "otziv-mysql-additive-source-binding-v1",
+  "result": "PASS",
+  "files": [
+    {
+      "path": "infrastructure/runtime-security/mysql-upgrade-rehearsal.mjs",
+      "beforeSha256": "14f33ec47bf0d596ba1a93e974aaeab8303fae9ceae56e9cd0e0016960ad282c",
+      "afterSha256": "730cecd70f78dfd2dc5b7104c5438ec3cd78668644b8e2ce2ace997e8f1be7ce",
+      "changed": true
+    },
+    {
+      "path": "infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs",
+      "beforeSha256": "00a8ae2092e39a75b9b9dd59270fded97afec659cf916c9f30754bd832cdfd29",
+      "afterSha256": "d06fe976d0561393b97ae936d5807270e678ac4fc9b7418382f8a48677798b52",
+      "changed": true
+    },
+    {
+      "path": "infrastructure/recovery/process.mjs",
+      "beforeSha256": "f3910105086cb2e75dc731f527d5de0338ae987b4bb238bc7d87a867a05b64fc",
+      "afterSha256": "f3910105086cb2e75dc731f527d5de0338ae987b4bb238bc7d87a867a05b64fc",
+      "changed": false
+    },
+    {
+      "path": "infrastructure/recovery/docker-environment.mjs",
+      "beforeSha256": "d5a865db01a3d6a838a0a9b0b2cc348dc52ad432146d04e29f1f9ac30a70eedc",
+      "afterSha256": "d5a865db01a3d6a838a0a9b0b2cc348dc52ad432146d04e29f1f9ac30a70eedc",
+      "changed": false
+    }
+  ],
+  "checks": [
+    {
+      "name": "upgrade_checker_complete_gate",
+      "comparison": "NONE",
+      "sha256": "a9b55b99fd65fd6b1713cf555096a8390263bae220e78b7d6e3fa1fa654d0ba4",
+      "result": "PASS"
+    },
+    {
+      "name": "graceful_app_stop_gate",
+      "comparison": "NONE",
+      "sha256": "013317f7796a3c9bee0eb37903ad7dfb1fb5d0285f2cf175aa4ed7bf43f7239f",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_resume_eligibility",
+      "comparison": "NONE",
+      "sha256": "c49503b048f82e2f7ec62da0bcb1bee187bf422951d46acf00312e6ef6911843",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_resume_resources",
+      "comparison": "NONE",
+      "sha256": "020570ce186b7bf414c888df27fccb16129fb1de1d1baa6c62d17a01d18f7173",
+      "result": "PASS"
+    },
+    {
+      "name": "clone_config_import",
+      "comparison": "NONE",
+      "sha256": "19ff8c6d843cbb46225fd920d2488a3aaaec05b10a828ac7fcd31bc074e3342e",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_definer_preparation",
+      "comparison": "NONE",
+      "sha256": "20b280ecadeeba1d7e3f1682a50c538296521c737be2b10d5443eb226db25940",
+      "result": "PASS"
+    },
+    {
+      "name": "upgrade_checker_invocation",
+      "comparison": "NONE",
+      "sha256": "b2cdee7bb9b2e4ed2142a7933211f8b2504d60f760ec726b70be905b73a0e373",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_hardened_branch",
+      "comparison": "NONE",
+      "sha256": "4939f62a44027e7e4b14bede4197449ca8eaaadcdd7e73584f55161bb60accaf",
+      "result": "PASS"
+    },
+    {
+      "name": "same_snapshot_queries_and_checks",
+      "comparison": "NONE",
+      "sha256": "8e7f849c19f3a24aa1d2b99dde2ae60faca468dcfa056c72eebbf05ddc7714e0",
+      "result": "PASS"
+    },
+    {
+      "name": "published_identity_and_account_policy",
+      "comparison": "LEADING_WHITESPACE_ONLY",
+      "sha256": "3193c356dcbd6cdfcec489d53594123e4c09f08e93f86ee838f1aa28797a7466",
+      "result": "PASS"
+    },
+    {
+      "name": "actual_account_backup_helpers",
+      "comparison": "LEADING_WHITESPACE_ONLY",
+      "sha256": "377c6a059ef9674ed22d6930a739273cd1945f3ea561e97cc4165396ea5ce05f",
+      "result": "PASS"
+    },
+    {
+      "name": "actual_published_restart_and_restore",
+      "comparison": "LEADING_WHITESPACE_ONLY",
+      "sha256": "6d9d48081d848865779fcb4f02de7b07ed5cf07465c038965526f9caf4a1dc98",
+      "result": "PASS"
+    },
+    {
+      "name": "original_eleven_tests_preserved",
+      "comparison": "LEADING_WHITESPACE_ONLY",
+      "sha256": "744fa741e10ccba8b2044848918f9182e7f3ea4c3680ea61d5f9b78d172658e5",
+      "result": "PASS"
+    }
+  ],
+  "scope": "Specific unchanged executable blocks, original 11 tests and byte-identical process helpers; not a claim of whole-program semantic equivalence. New mode guards are tested separately and actual combined branch is rerun."
+}

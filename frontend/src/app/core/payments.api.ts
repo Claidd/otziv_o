@@ -1,38 +1,12 @@
+import { decodePublicPaymentLink, guardPublicCommonInvoice } from '@otziv/client-common/billing-payments';
+import type { PublicPaymentLink } from '@otziv/client-common/billing-payments';
+export type { PublicPaymentLink } from '@otziv/client-common/billing-payments';
 import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
 import { SKIP_AUTH_REDIRECT_ON_401, SKIP_AUTH_TOKEN } from './auth-http-context';
 
-export interface PublicPaymentLink {
-  token: string;
-  provider?: 'T_BANK' | 'TOCHKA' | string | null;
-  sbpBankSelectionSupported?: boolean | null;
-  orderId?: number | null;
-  companyTitle: string;
-  filialTitle: string;
-  serviceTitle: string;
-  amount: number;
-  amountKopecks: number;
-  description: string;
-  payerEmail?: string | null;
-  status: string;
-  paymentMethod?: PaymentMethod;
-  expiresAt: string;
-  payable: boolean;
-  paymentPageMode?: TbankPaymentPageMode;
-  tpayEnabled?: boolean;
-  sberpayEnabled?: boolean;
-  mirpayEnabled?: boolean;
-  manualPaymentType?: ManualPaymentType | string | null;
-  manualPhone?: string | null;
-  manualRecipientName?: string | null;
-  manualBankName?: string | null;
-  manualPaymentUrl?: string | null;
-  manualPaymentButtonLabel?: string | null;
-  manualComment?: string | null;
-  receiptStatus?: PaymentReceiptStatus | string | null;
-}
 
 export interface PublicPaymentInitResponse {
   paymentUrl: string;
@@ -470,17 +444,17 @@ export class PaymentsApi {
   constructor(private readonly http: HttpClient) {}
 
   getPublicPaymentLink(token: string): Observable<PublicPaymentLink> {
-    return this.http.get<PublicPaymentLink>(
+    return this.http.get<unknown>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}`,
       { context: this.publicContext }
-    );
+    ).pipe(map(decodePublicPaymentLink));
   }
 
   getPublicCommonInvoice(token: string): Observable<PublicCommonInvoice> {
     return this.http.get<PublicCommonInvoice>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/group/${encodeURIComponent(token)}`,
       { context: this.publicContext }
-    );
+    ).pipe(map(guardPublicCommonInvoice));
   }
 
   initPublicPayment(
@@ -618,7 +592,7 @@ export class PaymentsApi {
       `${appEnvironment.apiBaseUrl}/api/payments/public/group/${encodeURIComponent(token)}/reported-paid`,
       {},
       { context: this.publicContext }
-    );
+    ).pipe(map(guardPublicCommonInvoice));
   }
 
   closeAdminManualPaymentLinkAsUnpaid(

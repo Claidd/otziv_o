@@ -1,3 +1,5 @@
+import { inject } from '@angular/core';
+import { ManagerManualPaymentsApi } from '../core/manager-manual-payments.api';
 import { Component, Input, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -13,7 +15,7 @@ import {
 } from '@ionic/angular/standalone';
 import { firstValueFrom } from 'rxjs';
 import {
-  ApiService,
+  type ApiService,
   type ManagerManualCardPaymentResult,
   type ManualCardPaymentConfirmationRequest,
   type ManualCardPaymentContext,
@@ -56,6 +58,7 @@ export interface MobileManualCardPaymentOutcome {
   styleUrl: './mobile-manual-card-payment-dialog.component.scss'
 })
 export class MobileManualCardPaymentDialogComponent implements OnInit {
+  private readonly managerManualPaymentsApi = inject(ManagerManualPaymentsApi);
   @Input({ required: true }) context!: ManualCardPaymentContext;
   @Input() defaultReason = '';
 
@@ -97,9 +100,7 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
     return selected.anomalyWarning?.trim() || this.context.anomalyWarning?.trim() || '';
   });
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly modalController: ModalController
+  constructor(private readonly modalController: ModalController
   ) {}
 
   ngOnInit(): void {
@@ -168,7 +169,7 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
     this.error.set(null);
     try {
       const apiResult = await firstValueFrom(
-        this.api.confirmManagerManualCardPayment(this.context.orderId, request)
+        this.managerManualPaymentsApi.confirmManagerManualCardPayment(this.context.orderId, request)
       );
       const outcome: MobileManualCardPaymentOutcome = {
         context: this.context,
@@ -191,7 +192,7 @@ export class MobileManualCardPaymentDialogComponent implements OnInit {
     const draftReason = this.reason();
     const draftReceiptUrl = this.receiptUrl();
     try {
-      const context = await firstValueFrom(this.api.getManagerManualCardPaymentContext(this.context.orderId));
+      const context = await firstValueFrom(this.managerManualPaymentsApi.getManagerManualCardPaymentContext(this.context.orderId));
       const candidates = context.candidates ?? [];
       if (!candidates.length || candidates.some(candidate => !mobileManualCardRecipientKey(candidate))) {
         throw new Error('Сервер не вернул безопасный список получателей. Оплата не изменена.');

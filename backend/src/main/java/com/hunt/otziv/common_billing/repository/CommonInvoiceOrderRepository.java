@@ -24,6 +24,14 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         Long getAccountId();
     }
 
+    interface CurrentOrderInvoiceView {
+        Long getOrderId();
+
+        Long getInvoiceId();
+
+        CommonInvoiceStatus getInvoiceStatus();
+    }
+
     Optional<CommonInvoiceOrder> findByOrder_IdAndActiveMembershipTrue(Long orderId);
 
     boolean existsByOrder_Id(Long orderId);
@@ -62,6 +70,21 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
           AND item.activeMembership = TRUE
     """)
     Optional<CommonInvoiceOrder> findByOrderIdWithInvoice(@Param("orderId") Long orderId);
+
+    /** The current membership only: historical predecessor invoices must not replace the successor. */
+    @Query("""
+        SELECT item.order.id AS orderId,
+               invoice.id AS invoiceId,
+               invoice.status AS invoiceStatus
+        FROM CommonInvoiceOrder item
+        JOIN item.invoice invoice
+        JOIN invoice.account account
+        WHERE item.order.id IN :orderIds
+          AND item.activeMembership = TRUE
+    """)
+    List<CurrentOrderInvoiceView> findCurrentInvoiceBindingsByOrderIds(
+            @Param("orderIds") Collection<Long> orderIds
+    );
 
     @Query("""
         SELECT item

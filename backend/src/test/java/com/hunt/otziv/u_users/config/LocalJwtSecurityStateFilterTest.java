@@ -31,6 +31,13 @@ class LocalJwtSecurityStateFilterTest {
 
     @Mock private UserRepository userRepository;
     @Mock private ObjectProvider<MeterRegistry> meterRegistryProvider;
+    @Mock private com.hunt.otziv.u_users.service.UserSessionSecurityService sessionSecurity;
+
+    @org.junit.jupiter.api.BeforeEach
+    void compatibleSessionMode() {
+        org.mockito.Mockito.lenient().when(sessionSecurity.verify(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new com.hunt.otziv.u_users.service.UserSessionSecurityService.Decision(true, false, "off"));
+    }
 
     @AfterEach
     void clearContext() {
@@ -39,7 +46,7 @@ class LocalJwtSecurityStateFilterTest {
 
     @Test
     void inactiveLocalUserRevokesOtherwiseValidJwt() throws Exception {
-        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider);
+        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider, sessionSecurity);
         User user = user("alice", "sub-1", false, 2L, "ROLE_MANAGER");
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
         SecurityContextHolder.getContext().setAuthentication(token("alice", "sub-1", 2L, "ROLE_MANAGER"));
@@ -53,7 +60,7 @@ class LocalJwtSecurityStateFilterTest {
 
     @Test
     void inactiveLocalUserFallsBackToAnonymousOnPublicCapabilityPage() throws Exception {
-        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider);
+        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider, sessionSecurity);
         User user = user("alice", "sub-1", false, 2L, "ROLE_MANAGER");
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
         SecurityContextHolder.getContext().setAuthentication(token("alice", "sub-1", 2L, "ROLE_MANAGER"));
@@ -71,7 +78,7 @@ class LocalJwtSecurityStateFilterTest {
 
     @Test
     void staleJwtRolesAreReplacedWithCanonicalLocalRoles() throws Exception {
-        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider);
+        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider, sessionSecurity);
         User user = user("alice", "sub-1", true, 4L, "ROLE_WORKER");
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
         SecurityContextHolder.getContext().setAuthentication(token("alice", "sub-1", 4L, "ROLE_ADMIN"));
@@ -90,7 +97,7 @@ class LocalJwtSecurityStateFilterTest {
 
     @Test
     void mismatchedAuthEpochRevokesJwt() throws Exception {
-        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider);
+        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider, sessionSecurity);
         User user = user("alice", "sub-1", true, 9L, "ROLE_MANAGER");
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
         SecurityContextHolder.getContext().setAuthentication(token("alice", "sub-1", 8L, "ROLE_MANAGER"));
@@ -103,7 +110,7 @@ class LocalJwtSecurityStateFilterTest {
 
     @Test
     void exactConfiguredServiceAccountBypassesHumanLocalStateLookup() throws Exception {
-        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider);
+        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider, sessionSecurity);
         ReflectionTestUtils.setField(
                 filter,
                 "localStateExemptClientIds",
@@ -126,7 +133,7 @@ class LocalJwtSecurityStateFilterTest {
 
     @Test
     void serviceAccountPrefixIsNotEnoughForExemption() throws Exception {
-        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider);
+        LocalJwtSecurityStateFilter filter = new LocalJwtSecurityStateFilter(userRepository, meterRegistryProvider, sessionSecurity);
         ReflectionTestUtils.setField(filter, "localStateExemptClientIds", "otziv-smoke-ai-admin");
         when(userRepository.findByUsername("service-account-otziv-smoke-ai-admin-extra"))
                 .thenReturn(Optional.empty());
@@ -150,6 +157,37 @@ class LocalJwtSecurityStateFilterTest {
                 .claim("auth_epoch", authEpoch)
                 .build();
         return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority(role)), username);
+    }
+
+    @Test
+    void missingEpochKeepsCompatibilityButMalformedPresentClaimIsRejected() throws Exception {
+        var filter = new LocalJwtSecurityStateFilter(userRepository,meterRegistryProvider,sessionSecurity);
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user("alice","sub-1",true,1,"ROLE_CLIENT")));
+        Jwt missing = Jwt.withTokenValue("synthetic").header("alg","RS256").subject("sub-1")
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(missing,List.of(),"alice"));
+        var chain = new MockFilterChain();
+        filter.doFilter(new MockHttpServletRequest("GET","/api/me"),new MockHttpServletResponse(),chain);
+        assertThat(chain.getRequest()).isNotNull();
+        Jwt malformed = Jwt.withTokenValue("synthetic").header("alg","RS256").subject("sub-1")
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).claim("auth_epoch",1.5).build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(malformed,List.of(),"alice"));
+        var response = new MockHttpServletResponse();
+        filter.doFilter(new MockHttpServletRequest("GET","/api/me"),response,new MockFilterChain());
+        assertThat(response.getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    void issuerOutageReturns503WithoutReportingRevokedSession() throws Exception {
+        var filter = new LocalJwtSecurityStateFilter(userRepository,meterRegistryProvider,sessionSecurity);
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user("alice","sub-1",true,1,"ROLE_CLIENT")));
+        when(sessionSecurity.verify(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new com.hunt.otziv.u_users.service.UserSessionSecurityService.Decision(false,true,"authority_unavailable"));
+        SecurityContextHolder.getContext().setAuthentication(token("alice","sub-1",1,"ROLE_CLIENT"));
+        var response = new MockHttpServletResponse();
+        filter.doFilter(new MockHttpServletRequest("GET","/api/me"),response,new MockFilterChain());
+        assertThat(response.getStatus()).isEqualTo(503);
+        assertThat(response.getHeader("Retry-After")).isEqualTo("5");
     }
 
     private JwtAuthenticationToken serviceAccountToken(String clientId) {

@@ -1,5 +1,6 @@
 package com.hunt.otziv.bad_reviews.service;
 
+import org.springframework.security.core.Authentication;
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
@@ -27,11 +28,17 @@ public interface BadReviewTaskService {
 
     BadReviewTask completeTask(Long taskId);
 
+    BadReviewTask completeTask(Long taskId, Authentication authentication);
+
     BadReviewTask getTask(Long taskId);
 
     BadReviewTask updateTask(Long taskId, String taskText, LocalDate scheduledDate);
 
+    BadReviewTask updateTask(Long taskId, String taskText, LocalDate scheduledDate, Authentication authentication);
+
     BadReviewTask reassignTask(Long taskId, Worker worker);
+
+    BadReviewTask reassignTask(Long taskId, Worker worker, Authentication authentication);
 
     BadReviewTask cancelTask(Long taskId);
 
@@ -41,7 +48,11 @@ public interface BadReviewTaskService {
 
     BadReviewTask changeTaskBot(Long taskId);
 
+    BadReviewTask changeTaskBot(Long taskId, Authentication authentication);
+
     BadReviewTask deactivateAndChangeTaskBot(Long taskId, Long botId);
+
+    BadReviewTask deactivateAndChangeTaskBot(Long taskId, Long botId, Authentication authentication);
 
     List<BadReviewTask> getTasksByOrderId(Long orderId);
 

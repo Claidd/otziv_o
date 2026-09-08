@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
@@ -25,6 +26,13 @@ export function loadTsModule(relativePath) {
   const module = { exports: {} };
   moduleCache.set(filename, module);
   const require = (specifier) => {
+    if (specifier.startsWith('@otziv/client-common/')) {
+      const entry = specifier.slice('@otziv/client-common/'.length);
+      const allowed = ['manual-payment-recipient-summary', 'manual-payment-task-visibility', 'order-editor', 'billing-payments'];
+      if (!allowed.includes(entry)) throw new Error(`Unknown client-common export: ${entry}`);
+      const resolved = createRequire(filename).resolve(specifier);
+      return loadTsModule(path.relative(projectRoot, resolved));
+    }
     if (specifier.startsWith('.')) {
       const resolved = path.resolve(path.dirname(filename), specifier);
       const withExtension = fs.existsSync(resolved) ? resolved : `${resolved}.ts`;

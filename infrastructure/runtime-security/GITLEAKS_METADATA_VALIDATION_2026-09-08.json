@@ -1,0 +1,551 @@
+{
+  "schema": "otziv-public-metadata-scan-validation-v1",
+  "recordedAt": "2026-09-08T04:24:20.124452+00:00",
+  "result": "LOCAL_CANDIDATE_VALIDATED_HOSTED_C9_NOT_ASSERTED",
+  "proofFreezeSha256": "c429db526a78366d7c7c2c98fc93d6a171d0f462f16eee2eac8e2c7c8d478bda",
+  "source": {
+    "version": "C8",
+    "shortCommit": "88bbc0589930",
+    "publicationReceiptSha256": "634e835e8bea84bdb11c416b5f0c02fab284d6433bf1c6a9d74fa9887f0b7f64"
+  },
+  "engine": {
+    "version": "8.30.1",
+    "image": "ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+    "network": "none"
+  },
+  "configuration": {
+    "beforeGitBlobSha256": "f59e8fa8193126bd21deea9886167cdebbfa9de1f46d6fad3b93995aaaafa69a",
+    "afterSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+    "addedBlocks": 4,
+    "perPathExactPublicValues": 74,
+    "detector": "sourcegraph-access-token",
+    "condition": "AND",
+    "regexTarget": "secret",
+    "priorRulesAndAllowlistsUnchanged": true,
+    "scope": [
+      {
+        "path": "infrastructure/runtime-security/proofs/c7-published/grafana/anonymous/registry-attestation-0-payload-0.json",
+        "exactSecretValueCount": 1,
+        "targetRules": [
+          "sourcegraph-access-token"
+        ],
+        "condition": "AND",
+        "regexTarget": "secret",
+        "pathAndEachSecretFullyAnchored": true
+      },
+      {
+        "path": "infrastructure/runtime-security/proofs/c7-published/grafana/publication/registry-attestation-0-payload-0.json",
+        "exactSecretValueCount": 1,
+        "targetRules": [
+          "sourcegraph-access-token"
+        ],
+        "condition": "AND",
+        "regexTarget": "secret",
+        "pathAndEachSecretFullyAnchored": true
+      },
+      {
+        "path": "infrastructure/runtime-security/proofs/c7-published/grafana/publication/vulnerabilities.json",
+        "exactSecretValueCount": 37,
+        "targetRules": [
+          "sourcegraph-access-token"
+        ],
+        "condition": "AND",
+        "regexTarget": "secret",
+        "pathAndEachSecretFullyAnchored": true
+      },
+      {
+        "path": "infrastructure/runtime-security/proofs/c7-published/grafana/publication/vulnerabilities.sbom.cdx.json",
+        "exactSecretValueCount": 35,
+        "targetRules": [
+          "sourcegraph-access-token"
+        ],
+        "condition": "AND",
+        "regexTarget": "secret",
+        "pathAndEachSecretFullyAnchored": true
+      }
+    ]
+  },
+  "classification": {
+    "counts": {
+      "actualFindings": 167,
+      "rawActualSecretAndMatchBoundToExactScalar": 139,
+      "decodedGroups": 2,
+      "decodedFindings": 28,
+      "decodedUniqueOriginsPerGroup": 14,
+      "unclassifiedActualSecrets": 0,
+      "perPathPublicValues": 74
+    },
+    "algorithmContexts": {
+      "SPDX package verification SHA-1": 94,
+      "OCI image revision LABEL command": 1,
+      "OCI revision label": 2,
+      "Trivy package SHA-1": 33,
+      "Public GitHub commit URL": 2,
+      "CycloneDX OCI revision property": 2,
+      "CycloneDX SHA-1": 33
+    },
+    "decodedGroups": [
+      {
+        "path": "infrastructure/runtime-security/proofs/c7-published/grafana/anonymous/registry-attestation-0-payload-0.json",
+        "findings": 14,
+        "uniqueJsonOrigins": 14,
+        "percentTriplets": 23,
+        "actualDecodedOccurrencesMappedBackToExactOriginalScalar": true,
+        "inventedPerFindingColumns": false
+      },
+      {
+        "path": "infrastructure/runtime-security/proofs/c7-published/grafana/publication/registry-attestation-0-payload-0.json",
+        "findings": 14,
+        "uniqueJsonOrigins": 14,
+        "percentTriplets": 23,
+        "actualDecodedOccurrencesMappedBackToExactOriginalScalar": true,
+        "inventedPerFindingColumns": false
+      }
+    ],
+    "mappingSha256": "ce185ddb598c0700ab08fce88b7028ebe1ad50a06cdb3877096dfd94258847c2",
+    "independentReviewSha256": "edd468f257512f405281283d62b3b6ade4a78a86f2f8ef1fd9e31898dc142a37",
+    "preliminaryMappingSuperseded": "Location-only mapping was rejected for 28 percent-decoded findings; final evidence verifies actual values and grouped origin sets without invented individual columns."
+  },
+  "originalArtifacts": [
+    {
+      "path": "infrastructure/runtime-security/proofs/c7-published/grafana/anonymous/registry-attestation-0-payload-0.json",
+      "sha256": "1c267ff7a46d48176ff21795a823f76741e0b229cb881de7e9a8e4b91344c7a9",
+      "bytes": 1602062
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c7-published/grafana/publication/registry-attestation-0-payload-0.json",
+      "sha256": "1c267ff7a46d48176ff21795a823f76741e0b229cb881de7e9a8e4b91344c7a9",
+      "bytes": 1602062
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c7-published/grafana/publication/vulnerabilities.json",
+      "sha256": "e0c812c8326244f448c43a20f674671833e08a79f02793ffd263c7ea1fefa255",
+      "bytes": 450174
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/c7-published/grafana/publication/vulnerabilities.sbom.cdx.json",
+      "sha256": "974112bd26165c02f76fd50e53b611a5899f2ba3deed634fc39bab5825e38331",
+      "bytes": 568760
+    }
+  ],
+  "completeSourceScans": [
+    {
+      "scope": "C8 complete working tree",
+      "mode": "dir",
+      "exitCode": 0,
+      "findings": 0,
+      "elapsedSeconds": 104.848,
+      "receiptSha256": "b335074253afb1051fbad51817201b7da43a4dcd9f696c7e10793f70039b868e",
+      "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "logSha256": "9518fb728bc034357e7145ac39300d26950f3e3a84c8a0338d48eadab8d7dc02"
+    },
+    {
+      "scope": "C7 to C8 complete push range",
+      "mode": "git",
+      "exitCode": 0,
+      "findings": 0,
+      "elapsedSeconds": 291.808,
+      "receiptSha256": "4a322d035fab6b675dd58c6c75aef57987a04eb062a4666a8a8985d58eb94950",
+      "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "logSha256": "8a8a5a295ff1ebdbf9247e99b28ab1ea6f18bc92f59d956f6f7479298d2fd5fa"
+    },
+    {
+      "scope": "main to C8 complete PR range",
+      "mode": "git",
+      "exitCode": 0,
+      "findings": 0,
+      "elapsedSeconds": 324.527,
+      "receiptSha256": "7ff6e49e5c3669ebeedc74ead830778cba4e06c6da9842c1b51d6776977202b7",
+      "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "logSha256": "cfb73f4c743c3cf067bd8166c331afeb32907379c3683cbdb939397f4c3ebbb4"
+    }
+  ],
+  "controls": {
+    "passed": 26,
+    "baselineDetection": 2,
+    "candidatePublicMetadataAllowed": 2,
+    "negativeDetection": 22,
+    "reportSha256": "aef34dd7b17a3005a5821124c0a8a13eee31fabe7fcf99960d1161237d207a9b",
+    "checks": [
+      {
+        "case": "baseline-all-public",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 74,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "f59e8fa8193126bd21deea9886167cdebbfa9de1f46d6fad3b93995aaaafa69a",
+        "reportSha256": "707e080fa73b2def801bff3815978e7b544efd238fe715cfab82a8aa5c3a16e4",
+        "logSha256": "f48acaf9f4df5b2027e25acecf257ef84eab7833c9c07b0ccf29a795914c9a57"
+      },
+      {
+        "case": "baseline-all-public",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 74,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "f59e8fa8193126bd21deea9886167cdebbfa9de1f46d6fad3b93995aaaafa69a",
+        "reportSha256": "13c8d026bfc3ef278cfa346c0d24671a390e80b2c2d4729d9c22d009f259b283",
+        "logSha256": "a340051362297dc3c2b8c4d4e8b7cbac7765aaf7abecd4d066ffb5d6cbc8cde3"
+      },
+      {
+        "case": "candidate-all-public",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": false,
+        "findings": 0,
+        "rules": [],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "logSha256": "a2a4ce08f095e099864460ccfa7cab91143192fd8dbce0867943bff768035f0b"
+      },
+      {
+        "case": "candidate-all-public",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": false,
+        "findings": 0,
+        "rules": [],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "logSha256": "e9dd8ac9083b821876c833016166d7c769ec8bf40e9a3eafc9c47194cd52d8e4"
+      },
+      {
+        "case": "case-changed-value",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "1cb5faa9e73be69e0cffe82120dd23f97cc521de1e4433d7bc12f36a87d55439",
+        "logSha256": "e01fbce273f535cbff8ad5222d3514605b5fb1e4767a67d5b80889070cc33286"
+      },
+      {
+        "case": "case-changed-value",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "b5ed91317f41acbe2e294e4d84a62ceac7cdd5f50714e0581b4ab5c3d0380acd",
+        "logSha256": "89e6f68480fc602c89d8d78f3905671a6b68b598202265e27ddfd72b083a358c"
+      },
+      {
+        "case": "changed-public-value",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "b0ff05d9cf6f2985b88b1db5f3d337241dbf0570b2d6209b84bc3ebd52b1e08f",
+        "logSha256": "f6204c50d1f242b8d3e75bca4d0f88b4e13294a1121a579840791a8d569c46a9"
+      },
+      {
+        "case": "changed-public-value",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "0b5ec932803c54bf4cc4d05c1e6860ac75bb1ff6b0662eaf11b4b1f72b678404",
+        "logSha256": "2f9f9513c59701d874d25b5b393eb99cbe3f7112713539be8e3a1f7d16ae31dd"
+      },
+      {
+        "case": "different-detector-same-public-value",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "otziv-independent-control"
+        ],
+        "decodedFinding": false,
+        "configSha256": "ab1922941e6e964acbeead03ff1d6b5b518cceb85a67bc42c95614f63dff44fb",
+        "reportSha256": "7d0cd3a3cccbefa298da926520f277693ce72c983937dc605a3ad2deae40d0ee",
+        "logSha256": "8367be8543245abe18f3d950f59cb0a120b878a4c7083eeb9394e4f879f8fedf"
+      },
+      {
+        "case": "different-detector-same-public-value",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "otziv-independent-control"
+        ],
+        "decodedFinding": false,
+        "configSha256": "ab1922941e6e964acbeead03ff1d6b5b518cceb85a67bc42c95614f63dff44fb",
+        "reportSha256": "20fbb84cd93b7d8bde75faf3bd790f69f8b8fc2fccb62824b6db6de3cd66feb2",
+        "logSha256": "2fbdc4c8af114640586db0fff426bd78cd9c860598681a41d82357210c3ae1ee"
+      },
+      {
+        "case": "different-secret-same-path",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "7ca3803555c4ffe35dd5036c22e2defe046636bd65abcb20c5dcb5d59800b698",
+        "logSha256": "261ca6dd2f4b18044877c80e7f475b1b5828fb10373abb9ebd91c9ca29dea4b0"
+      },
+      {
+        "case": "different-secret-same-path",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "e4831c2ef372453df0f8582ea8832b38e99596a049dd5773e5627087716190e1",
+        "logSha256": "8ffa0fa1c2d1d49fbe51624eac8f9d95bf3ea4db0de7dce4dad3bb4d71c65fc7"
+      },
+      {
+        "case": "percent-encoded-credential-same-path",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": true,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "a75c152f55f5d687a9569054687860a9d8daf5bf139985c732c06e2f64ab4992",
+        "logSha256": "c5a3ffa1892dc255e0d4a91e640cf33b09f123567f6b46ad666c19de30c1ec7d"
+      },
+      {
+        "case": "percent-encoded-credential-same-path",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": true,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "13345d6c7067a747c88795d2f26551ff4f4f8494fdca2069bdd7f6925be09601",
+        "logSha256": "6fcaafd2f62354fbf21f0c36f18f35495eb331c0aa260289bf16e5f4ecfaba44"
+      },
+      {
+        "case": "prefixed-local-token",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "6a0b00e76eddf88f154074cfcc2a8211ee5440db8cec712be36655e54a779284",
+        "logSha256": "38a18b7376028b4392c8fdb05c981a2f44912961a9bbdb535e474880f9305af8"
+      },
+      {
+        "case": "prefixed-local-token",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "bed57161a0ad914c681d9cd4b2ddaeec432348c799434e36f1d15245064384cc",
+        "logSha256": "83c3ce76540bcac5f89b20dd7f7e1c31fc649d012dd28781d7ba800b398a756c"
+      },
+      {
+        "case": "prefixed-modern-token",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "e3847439b829da11cb333a69b8c0358a4cc6b3bc63f6466e16adbe209bb946b7",
+        "logSha256": "288d30781cb992d7ee9c15edae86ba69762c560e4db8631cd8dd387429a9f306"
+      },
+      {
+        "case": "prefixed-modern-token",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "52987f08b3085c9163a24f4fa3d15fca67aad4ed5097be4b18187b93691cc2b2",
+        "logSha256": "3f9771948fd251730ba07efe9c2bf52cab349b8d749f36abf8378d68b94310c7"
+      },
+      {
+        "case": "same-value-other-path",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "5c45d41e6045f5133bb025513c1b414c41922ad0a4f7c8d8c9ed1dec71ec3a18",
+        "logSha256": "45111d7bd3859502d137856f92617a1808129fc067ce01c56a5334f935d5ad90"
+      },
+      {
+        "case": "same-value-other-path",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "fd66f3df84748c0583ed0f61d7d8f6cdf3d9b5d3b1e4d263f4f430a5c8c437c0",
+        "logSha256": "e7efe695d4d8745dd7e7826caf089377926f4bc1d2142b7ed1f78fafb6d7b513"
+      },
+      {
+        "case": "same-value-prefixed-path",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "e49e99b3e9224eefba286a1e0470ef198ceeb2acfbc98c309904e7c9717a19c7",
+        "logSha256": "64d32784dbe0e48b80a03cc14e8b7f4418b84471eeeab62decdf99386c212698"
+      },
+      {
+        "case": "same-value-prefixed-path",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "873f6701e22186d626af5dc9c4e1087a09c87f0e27b48b6cc37376fc5a8f9628",
+        "logSha256": "35fa956dbe33f2d2754782668867c138ad3d0183dce805d37673c8eda629452a"
+      },
+      {
+        "case": "unbound-credential-same-line",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "61106236738d4b087251bd480704f9530a7174c6c8b25052863e5a2457da0d8f",
+        "logSha256": "f8a306705e22197b9a25f5972ae2e5546c9c085b9e57eb9c5c59d41b4abfaf7f"
+      },
+      {
+        "case": "unbound-credential-same-line",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 1,
+        "rules": [
+          "sourcegraph-access-token"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "407182f311b3a0e60cee9327a06cc3185baec2f89dfe18d5b531362136187db1",
+        "logSha256": "3cce4dbfd570abb2d4a78c1b275bc8d39f448ff13696351d37c7c2f509c45d44"
+      },
+      {
+        "case": "project-secret-detectors-same-line",
+        "mode": "dir",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 2,
+        "rules": [
+          "otziv-hardcoded-secret-literal",
+          "otziv-sensitive-env-assignment"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "1d0443b669ac5b402410ba95a17c358200bdf909f2bd73b6f471a0d1a465d480",
+        "logSha256": "e79f0a9879e7d51725bf526fc8079d548c44894eadf6fda53f60b8bfa5d52598"
+      },
+      {
+        "case": "project-secret-detectors-same-line",
+        "mode": "git",
+        "result": "PASS",
+        "expectedDetection": true,
+        "findings": 2,
+        "rules": [
+          "otziv-hardcoded-secret-literal",
+          "otziv-sensitive-env-assignment"
+        ],
+        "decodedFinding": false,
+        "configSha256": "1c5e8bebd1c20abb5c3f2a09823b841f612af4eb8d1944cb57e1873c577805bd",
+        "reportSha256": "2151352d71beb23e86d1db08b8d54c9da8c35aecfc4c956240f2c2ff1d46d1a7",
+        "logSha256": "da7b0a1a8d7119100e55f16b62aa3d72268b505da683233de3daa8c3667c7ea0"
+      }
+    ],
+    "preliminaryExpectationCorrections": "Two preliminary extra generic-api-key-only expectations failed despite detections; retained raw reports prove no missed unbound token. Final named project-detector controls use and verify actual project rules.",
+    "configurationChangedForFailedExpectations": false
+  },
+  "c8HostedSnapshot": {
+    "at": "2026-09-08T04:10:45Z",
+    "expected": 20,
+    "success": 16,
+    "failure": 3,
+    "notObserved": 1,
+    "observationSha256": "9590dab0ad96b186c5047bd394922048eb165683f65b3c10c5cdb9d0019ffbae",
+    "externalGitGuardian": "neutral"
+  },
+  "limits": [
+    "C9 hosted results require a separate exact-head observation after publication.",
+    "No application, Docker runtime or original OCI artifact bytes change in this correction.",
+    "No history rewrite, detector disablement, decode disablement or directory-wide exclusion.",
+    "No dependency exception, stopped advisory work, production deployment, merge or server-side branch enforcement is asserted."
+  ]
+}

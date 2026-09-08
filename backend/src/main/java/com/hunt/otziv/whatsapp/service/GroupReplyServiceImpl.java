@@ -43,6 +43,7 @@ public class GroupReplyServiceImpl implements GroupReplyService {
     private final WhatsAppGroupCompanyLinker groupCompanyLinker;
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
     private final WhatsAppService whatsAppService;
+    private final com.hunt.otziv.whatsapp.api.WhatsAppBusinessOperations businessOperations;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
 
     @Override
@@ -53,6 +54,11 @@ public class GroupReplyServiceImpl implements GroupReplyService {
                     reply == null ? null : reply.getGroupId(),
                     reply == null ? null : reply.getMessage());
             return;
+        }
+        if(!Boolean.TRUE.equals(reply.getSystemGenerated())&&!hasText(reply.getMessageId())
+                &&publicationProgressPreferenceService.isPreferenceCommand(reply.getMessage())) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "messageId is required for a WhatsApp preference command");
         }
         log.info("WhatsApp group reply received: groupId={}, groupNamePresent={}, from={}, messageLength={}",
                 reply.getGroupId(), hasText(reply.getGroupName()), maskPhone(reply.getFrom()), textLength(reply.getMessage()));
@@ -141,7 +147,13 @@ public class GroupReplyServiceImpl implements GroupReplyService {
             log.warn("WhatsApp preference response skipped: clientId or groupId is empty");
             return;
         }
-        whatsAppService.sendMessageToGroup(reply.getClientId(), reply.getGroupId(), message);
+        if (!hasText(reply.getMessageId())) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "messageId is required for a WhatsApp preference command");
+        }
+        var frozen=businessOperations.freezeForDispatch(WhatsAppOperationKey.of("group-preference-response-v1", reply.getClientId(), reply.getMessageId()),
+                reply.getClientId(),"send-group",reply.getGroupId(),message);
+        whatsAppService.sendMessageToGroup(frozen.clientId(),frozen.destination(),frozen.message(),frozen.operationId());
     }
 
     private static int textLength(String value) {

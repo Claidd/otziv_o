@@ -451,7 +451,16 @@ public class TelegramService extends TelegramLongPollingBot {
                         ? null
                         : managerReportReviewTelegramServiceProvider.getIfAvailable();
         if (managerReportReviewTelegramService != null) {
-            Optional<String> reviewAnswer = managerReportReviewTelegramService.handle(callbackQuery);
+            Optional<String> reviewAnswer;
+            try {
+                reviewAnswer = managerReportReviewTelegramService.handle(callbackQuery);
+            } catch (org.springframework.web.server.ResponseStatusException exception) {
+                if (!exception.getStatusCode().is4xxClientError()) throw exception;
+                answerCallback(callbackQuery.getId(), exception.getReason() == null
+                        ? "Не удалось применить решение. Откройте актуальную карточку спора"
+                        : exception.getReason());
+                return;
+            }
             if (reviewAnswer.isPresent()) {
                 log.info("Manager report review Telegram callback handled answer='{}'", reviewAnswer.get());
                 answerCallback(callbackQuery.getId(), reviewAnswer.get());
@@ -1026,6 +1035,42 @@ public class TelegramService extends TelegramLongPollingBot {
         }
         return sendSingleMessageResult(chatId, text, parseMode, markup)
                 .map(Message::getMessageId);
+    }
+
+    /**
+     * One network attempt for durable delivery intents. An empty result is ambiguous:
+     * callers must reconcile it instead of automatically sending the intent again.
+     */
+    public Optional<Integer> sendMessageOnceWithInlineKeyboardMessageId(
+            long chatId,
+            String text,
+            String parseMode,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        if (!sendingEnabled || !looksLikeTelegramBotToken(getBotToken()) || !hasText(text)) {
+            return Optional.empty();
+        }
+        SendMessage request = new SendMessage();
+        request.setChatId(String.valueOf(chatId));
+        request.setText(text);
+        request.setDisableWebPagePreview(true);
+        if (hasText(parseMode)) {
+            request.setParseMode(parseMode);
+        }
+        if (keyboard != null && !keyboard.isEmpty()) {
+            InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+            markup.setKeyboard(keyboard);
+            request.setReplyMarkup(markup);
+        }
+        try {
+            return Optional.ofNullable(executeTelegramMessage(request))
+                    .map(Message::getMessageId)
+                    .filter(id -> id > 0);
+        } catch (TelegramApiException e) {
+            log.warn("Telegram delivery attempt has no confirmed result; automatic resend suppressed ({})",
+                    e.getClass().getSimpleName());
+            return Optional.empty();
+        }
     }
 
     public Optional<Integer> sendProtectedMessageWithInlineKeyboardMessageId(

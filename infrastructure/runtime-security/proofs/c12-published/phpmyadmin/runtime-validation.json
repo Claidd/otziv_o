@@ -1,0 +1,193 @@
+{
+  "schema": "otziv-c12-pma-published-runtime-validation-v1",
+  "result": "PASS_WITH_DOCUMENTED_COMPATIBILITY_LIMITS",
+  "completedAt": "2026-09-08T09:05:36.806050+00:00",
+  "publication": {
+    "repository": "Claidd/otziv_o",
+    "branch": "codex/architecture-remediation-20260907",
+    "head": "0f715d08cf4b56ea7788594d5b9aa9295f9d1761",
+    "run": "34206243823",
+    "attempt": "1",
+    "manifestSet": "c12-phpmyadmin",
+    "manifestSha256": "c649c20cef9417905bff3f3bc58f2163edf925a53971eb01ecb6d90d729034b4",
+    "reference": "ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835",
+    "oci": {
+      "index": "sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835",
+      "amd64Manifest": "sha256:e57a215c4dbf6b5cb7ea8e9489d583efcc899b4469b69cb3777f99195a6861f1",
+      "config": "sha256:71667e317195ee7292187a1e87dfe5ed52b5f513b016d42466fb580c8d4a284d"
+    },
+    "collectionReceiptSha256": "4b9835f16f5b4a925aba819c74bdac9c922b082a366c10534901c8da6531a3f5",
+    "publicationReceiptSha256": "01ceaa8945af92c33db9710b4940ec82e4e9c97ef2c546c7813dd8d29e3c1945",
+    "anonymousReceiptSha256": "3068d918ee89970c18a30c1ff0f89408d80d3e1434fe00f977400081825a28be",
+    "publicationArchive": {
+      "bytes": 155852,
+      "sha256": "b16967cb35bdbe477968051b3dbfc5d02093c6fbd3b542d6f5c845d8e461739c"
+    },
+    "anonymousArchive": {
+      "bytes": 114394,
+      "sha256": "371c0026d56ced527911c08974675085d860d8fd64a2734b8ac6351c46e58b42"
+    },
+    "pairedVerification": "PASS",
+    "unresolvedRiskReview": "NONE"
+  },
+  "hostedScan": {
+    "newLocalScanPerformed": false,
+    "rawReportSha256": "2f1d9b952d7deefeb08a4bfcd96f5990856a155b3a9fb9dd7d23cc0a22fb498c",
+    "high": 0,
+    "critical": 0,
+    "medium": 2,
+    "adjudicated": 0,
+    "rawReportModified": false
+  },
+  "runtime": {
+    "httpChecks": 75,
+    "configSessionChecks": 24,
+    "allPassed": true,
+    "ownedRuntimeCleanup": "PASS",
+    "inventoryChecks": 56,
+    "sourceDataUsed": false,
+    "syntheticDatabaseOnly": true,
+    "cases": [
+      "gzip, bzip2 and ZIP actual SQL HTTP import",
+      "gzip and ZIP actual HTTP export and re-import",
+      "Unicode browse and Windows-1251 import",
+      "original/custom 8080 Apache ports and prefork/PHP module parity",
+      "persistent custom configuration and FILE environment inputs",
+      "secret/session permissions and generated-secret persistence",
+      "cookie-authenticated session and token survive restart and C7 fallback",
+      "actual TCPDF output"
+    ]
+  },
+  "runtimeIdentity": {
+    "localCandidateReference": "sha256:2d8b0ba2ef2ead6d3e2e564c76ce20284ca5333610e5a217a6e250c0bc52898a",
+    "appRegularFiles": 4275,
+    "publishedAgainstLocalAppTree": "Exact bytes and full file/directory metadata",
+    "runtimeApkCount": 98,
+    "runtimeApkPayloadHashes": "All identical to retained signed payloads in local v11",
+    "iconvModuleSha256": "e99c0d80445e7f3cc9820e957ecc783864b3b6a51c78e1c62da7cdbdd5f627e7",
+    "iconvBinary": "Byte-identical to local v11",
+    "iconvSourceAbiAndBuilderClosure": "Exact retained stable records",
+    "phpModules": 41,
+    "apache": "mod_php/prefork; original module set retained",
+    "hostedBuildIconvChecks": 9,
+    "launchSettings": "Unchanged against local v11, excluding provenance labels"
+  },
+  "sourceBinding": {
+    "candidateRecipeCommit": "0f715d08cf4b56ea7788594d5b9aa9295f9d1761",
+    "manifestSha256": "c649c20cef9417905bff3f3bc58f2163edf925a53971eb01ecb6d90d729034b4",
+    "dockerfileSha256": "514bd99b51fd6003a5026b1f417a94ee0032c75e568cc38efdbcaa199f57df09",
+    "measurementHarness": "HTTP75/config24 copied byte-for-byte from frozen local proof; wrappers bind only the published digest",
+    "originalProofFreezeSha256": "66bed05137dd466b1f474fc1f1c0c2e1f6bdbe7410c0213f075b70dfd8ca1067",
+    "consumedFiles": {
+      "apachectl": "de65830a3a79fddff738fe5adf434b585127ccd6c18953c5da347feb5c0a3f7a",
+      "build-iconv.sh": "9602fe44d2caf810c025d78c247e3ef6f73e5b2e2b54be5c8adf74633e8ba844",
+      "Dockerfile": "514bd99b51fd6003a5026b1f417a94ee0032c75e568cc38efdbcaa199f57df09",
+      "envvars": "2699001b412b0c9db3bf71915833632e4e66cfaddccb25044b200d9398c0f6df",
+      "httpd.conf": "1c88271361b605df1d5af7fb8b553fa731ce3dbd48ee9778b37e50b490dab6d9",
+      "iconv-build-packages.lock": "ab0b6b9b5969d4c088df0c4412de1350b9825f64fc8c114d748362dcfc4d21bc",
+      "iconv-proof.php": "4bac2dd83a298f7cde3a43edd786d72ca8a232900671a724e912ac68799a4ab0",
+      "packages.lock": "c519cc06e9b0171c323dcfd03d7b5dcd7b0f5707718889287033a1212a80a722",
+      "ports.conf": "c6f0738612c0670bb77f54ed630b6f1f6c97ef2b627ad70bf4bcf858d056c26f",
+      "site.conf": "7c8b6967253e3a67f283336cd11db3c1d468da78887d99d0aaa06c11934c500c"
+    }
+  },
+  "limitations": [
+    "GNU libiconv and glibc differ for some lossy ASCII transliterations; cafe accent maps differently. Actual Cyrillic conversion and shared EURss conversion pass.",
+    "phpMyAdmin 5.2.3 supports bzip2 import but not bzip2 export; no new export feature claimed.",
+    "C7 html root directory ownership/mode differs from Alpine; complete metadata equality here compares published Alpine against local Alpine v11.",
+    "Independent build logs/timestamps are retained without claiming byte identity. Runtime binary, APK payloads and application parity are measured.",
+    "Alpine community PHP maintenance cadence requires continuing version and advisory monitoring.",
+    "This is isolated local validation. No production or default image activation, release approval, or risk acceptance is asserted."
+  ],
+  "privateRetainedEvidence": {
+    "base": "c12-pma-published-runtime",
+    "selfContainedPublicRawArchive": false,
+    "files": [
+      {
+        "path": "execution-input.json",
+        "bytes": 8376,
+        "sha256": "bfba00f2cadb89b88ea4231a7ca73ed818e7a902461d4d6e09a639e946cc172e"
+      },
+      {
+        "path": "execution-result.json",
+        "bytes": 1330,
+        "sha256": "7e2eab1e4c0c186b0ec08180ee80b718cf057bc7f87b595a9b2cbe3d07c4ac13"
+      },
+      {
+        "path": "published-inventory-proof.json",
+        "bytes": 7938,
+        "sha256": "7002695e652d7d82c0e071b631ab210df0609dd1f291100ddfc470d3e57b1e62"
+      },
+      {
+        "path": "inventory-final/result.json",
+        "bytes": 2086,
+        "sha256": "a22706f9f811bd84031619aa71ef9337011cfeae5af9682f2e98f3bd7664019a"
+      },
+      {
+        "path": "inventory-final/application-inventory.json",
+        "bytes": 2475156,
+        "sha256": "c0974408dc8c9bf734c92f46b1e5c4ba9bd754f52d4a34daafdec89555cef607"
+      },
+      {
+        "path": "runtime-published-http/proof.json",
+        "bytes": 23378,
+        "sha256": "4aae7d52c640955a8c67ddd62c7822745f5cc46d717cac2b0a733af1fa1696b0"
+      },
+      {
+        "path": "runtime-published-config/proof.json",
+        "bytes": 7302,
+        "sha256": "e9a32b97ddd05c3cb1c5b09527909730700da8e2dc29cbc4353af1a4c20f2df5"
+      },
+      {
+        "path": "encoding-comparison.json",
+        "bytes": 1248,
+        "sha256": "28f19e2ec2472e69ab2d81337eef1543d8659628b8d84ef074039496c388c810"
+      },
+      {
+        "path": "prepared-freeze.json",
+        "bytes": 2328,
+        "sha256": "3e6deac78973f354bb42cd048f8ac51841e46040e42a1fab92612d4c3da7fe1f"
+      },
+      {
+        "path": "harness-inputs.json",
+        "bytes": 2642,
+        "sha256": "036a2dec33deff5d751d469799ec8222e3da9bac2de18fc8737f4c3599e58679"
+      },
+      {
+        "path": "run-published.py",
+        "bytes": 13590,
+        "sha256": "1ba8d1df6a17e96cb8b3ff7c8b72d4087c3c23348092a9fbf2fb46ba6887bd19"
+      },
+      {
+        "path": "compare-published-inventory.py",
+        "bytes": 7082,
+        "sha256": "1816b5e3e56bad10017c3d536ccf8c3065a95425fe63cec37e82d9ac6a68b599"
+      },
+      {
+        "path": "runtime-proof.py",
+        "bytes": 16087,
+        "sha256": "f1c7d558688a9ce22afa45ba61cb988babd3b114418e895223d22fcdbfcaf041"
+      },
+      {
+        "path": "config-session-proof.py",
+        "bytes": 8175,
+        "sha256": "bc8cef6789d7eb7c8ebb6a814f24559b90c1b5dbc0826e7a6f6c9d38f44c3a44"
+      },
+      {
+        "path": "final-inventory.py",
+        "bytes": 3818,
+        "sha256": "83cfb6e2415c73f883e11a628d68012c833f8163936482f12e688f74db423173"
+      },
+      {
+        "path": "encoding-comparison.py",
+        "bytes": 1979,
+        "sha256": "dccf56cf86d3ac0657aa0cb6cad84dac7c03c876f60d9ffb7400a52145bbb64e"
+      },
+      {
+        "path": "candidate-final-vulnerabilities.json",
+        "bytes": 201888,
+        "sha256": "2f1d9b952d7deefeb08a4bfcd96f5990856a155b3a9fb9dd7d23cc0a22fb498c"
+      }
+    ]
+  }
+}

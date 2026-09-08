@@ -1,0 +1,70 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "nginx",
+  "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+  "run": "34178760576",
+  "attempt": "1",
+  "runner": "GitHub Actions 1000001356",
+  "startedAt": "2026-09-08T02:45:31.601Z",
+  "sourcePublicationSha256": "ef4b78f72af2ccc82e706a858e20aabc6dd4437699781a707ae7bc2f2e43a942",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:025c28f7afbcc84d8d836840afb7cb2e8e44f2b4930131c4bbb539380fd8185f",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:3fb3a435d57408d6290be79289ce831e1159fc5419dfbf54802f6d05e5b49705",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:025c28f7afbcc84d8d836840afb7cb2e8e44f2b4930131c4bbb539380fd8185f",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:3fb3a435d57408d6290be79289ce831e1159fc5419dfbf54802f6d05e5b49705",
+        "size": 2000
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:7ae9743dd8d6699a204b6348e2baeaf273c989af01e77fbc5f9a0c12ec3328e0",
+        "size": 13118
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:64e309e81fba90ad5f46f9407ca3bda04e2b1f2501f2c5446c5b53e98ab6ec06",
+        "size": 1111
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:e19703861ac631a5e75b7688658b51d6afbfc49b442e02ebae84eeb66ea66540",
+        "size": 946718
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:a05ea1db50da425bf3ff2645f650d42e6eaf4a5bb0586e60815b70d3cdb8d7a2",
+        "size": 14253
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:7ae9743dd8d6699a204b6348e2baeaf273c989af01e77fbc5f9a0c12ec3328e0",
+  "platform": "linux/amd64",
+  "labels": {
+    "com.otziv.publication.revision": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "nginx",
+    "com.otziv.security.patch": "Official nginx1.30.4 stable; same Alpine3.24 branch package updates",
+    "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-09-08T02:45:41.384Z"
+}

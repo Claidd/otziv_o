@@ -1,0 +1,696 @@
+{
+  "schema": "otziv-hosted-ci-review-v1",
+  "recordedAt": "2026-09-07T20:18:49.061736+00:00",
+  "commit": "0b03150369037ab087bc627534e8c945102ccb27",
+  "runId": 34156192193,
+  "runUrl": "https://github.com/Claidd/otziv_o/actions/runs/34156192193",
+  "scope": "Completed C3 push workflow baseline before subsequent advisory, issuer and browser corrections. It is not the result of the later commit.",
+  "counts": {
+    "success": 20,
+    "failure": 18
+  },
+  "jobs": [
+    {
+      "id": 101848466689,
+      "name": "Mobile web (unit and production build)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:37:32Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466689"
+    },
+    {
+      "id": 101848466826,
+      "name": "Monitoring candidate (tempo)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:43:05Z",
+      "completed_at": "2026-09-07T19:52:27Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466826"
+    },
+    {
+      "id": 101848466858,
+      "name": "Built integration image (observer)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:20Z",
+      "completed_at": "2026-09-07T19:37:16Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466858"
+    },
+    {
+      "id": 101848466860,
+      "name": "Built integration image (publisher)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:37:12Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466860"
+    },
+    {
+      "id": 101848466868,
+      "name": "Built integration image (backend)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:38:55Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466868"
+    },
+    {
+      "id": 101848466872,
+      "name": "Built web and mobile browser scenarios",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:37:42Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466872"
+    },
+    {
+      "id": 101848466875,
+      "name": "Inventory pinned upstream images",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:36:37Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466875"
+    },
+    {
+      "id": 101848466880,
+      "name": "WhatsApp gateway (unit)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:36:38Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466880"
+    },
+    {
+      "id": 101848466906,
+      "name": "Monitoring candidate (loki)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:43:04Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466906"
+    },
+    {
+      "id": 101848466908,
+      "name": "Backend (full Testcontainers suite)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:52:08Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466908"
+    },
+    {
+      "id": 101848466909,
+      "name": "Repository contracts",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:37:22Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466909"
+    },
+    {
+      "id": 101848466916,
+      "name": "External review worker (syntax and health)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:55Z",
+      "completed_at": "2026-09-07T19:37:28Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466916"
+    },
+    {
+      "id": 101848466943,
+      "name": "Monitoring candidate (alloy)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:42:02Z",
+      "completed_at": "2026-09-07T19:59:16Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466943"
+    },
+    {
+      "id": 101848466971,
+      "name": "Built integration image (web)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:37:23Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466971"
+    },
+    {
+      "id": 101848466978,
+      "name": "Issuer security generation (real Keycloak and PostgreSQL)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:36:33Z",
+      "completed_at": "2026-09-07T19:37:42Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466978"
+    },
+    {
+      "id": 101848466992,
+      "name": "Built integration image (worker)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:40Z",
+      "completed_at": "2026-09-07T19:37:50Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466992"
+    },
+    {
+      "id": 101848466998,
+      "name": "Android native tests, lint and debug assembly",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:20Z",
+      "completed_at": "2026-09-07T19:39:55Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848466998"
+    },
+    {
+      "id": 101848467030,
+      "name": "Monitoring candidate (grafana)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:52:29Z",
+      "completed_at": "2026-09-07T20:02:49Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848467030"
+    },
+    {
+      "id": 101848467040,
+      "name": "Monitoring candidate (prometheus)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:27Z",
+      "completed_at": "2026-09-07T19:42:00Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848467040"
+    },
+    {
+      "id": 101848467043,
+      "name": "Built integration image (whatsapp)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:37:37Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848467043"
+    },
+    {
+      "id": 101848467051,
+      "name": "Shared client package and compatibility fixtures",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:18Z",
+      "completed_at": "2026-09-07T19:36:49Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848467051"
+    },
+    {
+      "id": 101848467169,
+      "name": "Frontend (unit and production build)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:36:51Z",
+      "completed_at": "2026-09-07T19:37:52Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848467169"
+    },
+    {
+      "id": 101848536579,
+      "name": "Pinned upstream image (grafana-tempo-eacdf7cd3e)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:38:57Z",
+      "completed_at": "2026-09-07T19:39:27Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536579"
+    },
+    {
+      "id": 101848536592,
+      "name": "Pinned upstream image (grafana-loki-29ec725d37)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:39:32Z",
+      "completed_at": "2026-09-07T19:40:17Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536592"
+    },
+    {
+      "id": 101848536611,
+      "name": "Pinned upstream image (minio-minio-fc16a461c7)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:39:29Z",
+      "completed_at": "2026-09-07T19:40:12Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536611"
+    },
+    {
+      "id": 101848536625,
+      "name": "Pinned upstream image (node-dc8b119ea9)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:40:06Z",
+      "completed_at": "2026-09-07T19:40:37Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536625"
+    },
+    {
+      "id": 101848536631,
+      "name": "Pinned upstream image (grafana-grafana-2d8f28439f)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:36:58Z",
+      "completed_at": "2026-09-07T19:37:47Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536631"
+    },
+    {
+      "id": 101848536635,
+      "name": "Pinned upstream image (nginx-e1e08def68)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:39:37Z",
+      "completed_at": "2026-09-07T19:40:04Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536635"
+    },
+    {
+      "id": 101848536642,
+      "name": "Pinned upstream image (prom-prometheus-a8482dc26f)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:40:19Z",
+      "completed_at": "2026-09-07T19:40:57Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536642"
+    },
+    {
+      "id": 101848536646,
+      "name": "Pinned upstream image (minio-mc-61f87a4bee)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:39:04Z",
+      "completed_at": "2026-09-07T19:39:32Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536646"
+    },
+    {
+      "id": 101848536662,
+      "name": "Pinned upstream image (certbot-certbot-ca5671f150)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:37:08Z",
+      "completed_at": "2026-09-07T19:38:02Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536662"
+    },
+    {
+      "id": 101848536676,
+      "name": "Pinned upstream image (postgres-aca3723006)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:40:18Z",
+      "completed_at": "2026-09-07T19:41:02Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536676"
+    },
+    {
+      "id": 101848536681,
+      "name": "Pinned upstream image (mysql-d494426c1f)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:39:34Z",
+      "completed_at": "2026-09-07T19:40:16Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536681"
+    },
+    {
+      "id": 101848536685,
+      "name": "Pinned upstream image (phpmyadmin-c9cdf5d6aa)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:40:14Z",
+      "completed_at": "2026-09-07T19:41:00Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536685"
+    },
+    {
+      "id": 101848536715,
+      "name": "Pinned upstream image (grafana-alloy-55e0abbcef)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:38:01Z",
+      "completed_at": "2026-09-07T19:38:54Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536715"
+    },
+    {
+      "id": 101848536717,
+      "name": "Pinned upstream image (amir20-dozzle-63b8e42cb2)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-07T19:38:53Z",
+      "completed_at": "2026-09-07T19:39:24Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848536717"
+    },
+    {
+      "id": 101848537252,
+      "name": "Pinned upstream image (quay-io-keycloak-keycloak-61bd1127b1)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T19:40:39Z",
+      "completed_at": "2026-09-07T19:41:44Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101848537252"
+    },
+    {
+      "id": 101853381220,
+      "name": "Upstream image security gate",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-09-07T20:02:53Z",
+      "completed_at": "2026-09-07T20:02:56Z",
+      "html_url": "https://github.com/Claidd/otziv_o/actions/runs/34156192193/job/101853381220"
+    }
+  ],
+  "backend": {
+    "tests": 4712,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 15,
+    "executedAndPassed": 4697,
+    "financialCteEvidenceTests": 1,
+    "packagedJarHigh": 0,
+    "packagedJarCritical": 0
+  },
+  "failureClassification": {
+    "upstreamPinnedImagesWithActualBlockingVulnerabilities": 14,
+    "grafanaCandidateActualBlockingFalseMatchCandidates": {
+      "high": 2,
+      "critical": 0,
+      "acceptedExceptions": 0,
+      "storageChecksPassed": 12
+    },
+    "browserSandboxProbe": "Missing --enable-automation for CDP command-line introspection; bounded subsequent probe-only fix has separate causal proof",
+    "issuerBuild": "Parallel Quarkus descriptor snapshot races actual Keycloak entity registration; subsequent annotation-only graph ordering fix has separate runtime proof",
+    "upstreamAggregate": "Fails because required scans failed; no bypass"
+  },
+  "subsequentLocalProofs": [
+    "infrastructure/runtime-security/BACKEND_ADVISORY_VALIDATION_2026-09-08.json",
+    "infrastructure/runtime-security/ISSUER_ORDERING_VALIDATION_2026-09-08.json"
+  ],
+  "dependencyAudit": "See MAVEN_HOSTED_AUDIT_2026-09-08.json: authenticated C2/C3 completed and failed configured CVSS threshold",
+  "evidence": [
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c3-push-jobs-checkpoint3.json",
+      "sha256": "535003419957942b3791b677847ab4613bd6332fead28a32ebe5adb5834b2f08"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c3-upstream-and-backend-final-safe.json",
+      "sha256": "a3f5eacdd430cc48c4b626e23f91ab7cd44efbc612d76060c5d0db24236d2147"
+    },
+    {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c3-cdp-causal-proof.json",
+      "sha256": "ad55f5b4364062d55b4d86664b3e9983427fbd3bf95f84eee6d69c8ef3424f9b"
+    }
+  ],
+  "nextCommitHostedResult": "PENDING",
+  "branchProtectionChanged": false,
+  "riskAcceptance": null,
+  "productionDeployment": false,
+  "requiredPrChecks": {
+    "expectedCount": 20,
+    "emittedCount": 20,
+    "applicationId": 15368,
+    "success": 17,
+    "failure": 3,
+    "noMissingNamesOrTriggers": true,
+    "rows": [
+      {
+        "name": "Repository contracts",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477815,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477815"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Backend (full Testcontainers suite)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477584,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477584"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Issuer security generation (real Keycloak and PostgreSQL)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477925,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477925"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Frontend (unit and production build)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477780,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477780"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Mobile web (unit and production build)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477899,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477899"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "WhatsApp gateway (unit)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477802,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477802"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "External review worker (syntax and health)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477722,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477722"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Built web and mobile browser scenarios",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477871,
+            "conclusion": "failure",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477871"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Android native tests, lint and debug assembly",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477843,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477843"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Shared client package and compatibility fixtures",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477935,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477935"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Built integration image (backend)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477907,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477907"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Built integration image (web)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477882,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477882"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Built integration image (worker)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477829,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477829"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Built integration image (whatsapp)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477949,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477949"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Built integration image (observer)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477965,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477965"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Built integration image (publisher)",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848477852,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101848477852"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "Dependency audit gate",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101849087770,
+            "conclusion": "failure",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195253/job/101849087770"
+          }
+        ],
+        "emittedCount": 1
+      },
+      {
+        "name": "Upstream image security gate",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101853712425,
+            "conclusion": "failure",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195262/job/101853712425"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "gitleaks",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848404842,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195256/job/101848404842"
+          }
+        ],
+        "emittedCount": 2
+      },
+      {
+        "name": "SQL injection guard",
+        "observedAppIds": [
+          15368
+        ],
+        "pr": [
+          {
+            "id": 101848405311,
+            "conclusion": "success",
+            "url": "https://github.com/Claidd/otziv_o/actions/runs/34156195265/job/101848405311"
+          }
+        ],
+        "emittedCount": 2
+      }
+    ],
+    "issuerPrSucceededWhilePushFailedOnSameHead": true,
+    "evidence": {
+      "path": ".codex-tmp/remediation-final-gaps-20260907/hosted-quality-ci/c3-required-check-emission-review.json",
+      "sha256": "19d041c1a3b9e149e4c403fbb07af74592aa05875ba05e468d126c4e7d75df99"
+    }
+  }
+}

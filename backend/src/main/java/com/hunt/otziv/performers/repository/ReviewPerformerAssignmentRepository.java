@@ -15,6 +15,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ReviewPerformerAssignmentRepository extends CrudRepository<ReviewPerformerAssignment, Long> {
 
+    @Query("SELECT a.id FROM ReviewPerformerAssignment a WHERE a.status = com.hunt.otziv.performers.model.PerformerAssignmentStatus.CREATED ORDER BY a.createdAt, a.id")
+    List<Long> findQueuedIds(Pageable pageable);
+
     boolean existsByReviewId(Long reviewId);
 
     Optional<ReviewPerformerAssignment> findByReviewId(Long reviewId);

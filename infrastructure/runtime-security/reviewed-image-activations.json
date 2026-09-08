@@ -1,0 +1,173 @@
+{
+  "schema": "otziv-reviewed-image-activations-v1",
+  "images": [
+    {
+      "component": "alloy",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/alloy/publication/publication.json",
+        "sha256": "330e7275330b622d2a7c07459a4c5a06c0e82b01bd6ad7e4d749e6dceb9c7e29"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/alloy/anonymous/anonymous-download.json",
+        "sha256": "36bdc1107cd37e64b5e877f68ab02e642b353f81d36539871af7d34a82635a41"
+      },
+      "securityReassessment": {
+        "report": {
+          "path": "infrastructure/runtime-security/proofs/c12-alloy/vulnerabilities.json",
+          "sha256": "f68a6b04986287053ac2dd8f9d4248120f5e3c07b01eeefc725392e70fe0108a"
+        },
+        "adjudication": {
+          "path": "infrastructure/runtime-security/proofs/c12-alloy/adjudications.json",
+          "sha256": "49f63d2b4e99c3dea5989abbce966ddb9ace2bcff7e44d11028d9f40e9b39172"
+        },
+        "summary": {
+          "path": "infrastructure/runtime-security/proofs/c12-alloy/summary.json",
+          "sha256": "638b3afbb727238da69dea652612e9bc7be39b86432c327b43e9262f72fbf3e2"
+        }
+      }
+    },
+    {
+      "component": "certbot",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:74afe2ca053c338fe4d14ed36397b4ccea286efc52a3db4fc5a5c07289a9c360",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/certbot/publication/publication.json",
+        "sha256": "10f316bcc8ca1c91b3d8aed982ef02d2c242b55541c48537a8a014bb9d7b132b"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/certbot/anonymous/anonymous-download.json",
+        "sha256": "36ae7bc578278be5b3384b160ce1910fb7003229ff0bc38c5ec14db2ead0f6d1"
+      }
+    },
+    {
+      "component": "grafana",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:b13b0abc6fb26fb7b1e55190411f8b6a5d1894fb7a6c27df2352cb5a3adb54ae",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/grafana/publication/publication.json",
+        "sha256": "29578d30b660972052f9c3cdb6205270abd22459ef35deb6f166258476ed7006"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/grafana/anonymous/anonymous-download.json",
+        "sha256": "05ae5bbfc2df7747706218925e5eb6b35864559c97422d03f9298780f468ee01"
+      }
+    },
+    {
+      "component": "keycloak",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:93dd42a5379a80fc0673bc1d0c5601d3b35009c8250394b1e2b45082388c82cc",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/keycloak/publication/publication.json",
+        "sha256": "86b2fff2a14865ead12cc83f5b9558de55e11bfc454cb7f790b835e6f2ea02df"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/keycloak/anonymous/anonymous-download.json",
+        "sha256": "b5527ffefbcdb0fb4c75e71b5dcb7aac7742164b4563f618dfc58b733202020a"
+      }
+    },
+    {
+      "component": "loki",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:afb2d631c2d294ca23fb0ed3f98c9d601a0e72b5d702f5cde2b9522bf8a1ded0",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/loki/publication/publication.json",
+        "sha256": "50ca82b2e2a08bd4d5b9d6280a1d75c5e757c94b14ac5c5cb11fa82e23fdf090"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/loki/anonymous/anonymous-download.json",
+        "sha256": "11be83a9d6b04dd4ef18eab823da33dca12e1077d8e683592ca6dc29e5f38310"
+      }
+    },
+    {
+      "component": "nginx",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:025c28f7afbcc84d8d836840afb7cb2e8e44f2b4930131c4bbb539380fd8185f",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/nginx/publication/publication.json",
+        "sha256": "ef4b78f72af2ccc82e706a858e20aabc6dd4437699781a707ae7bc2f2e43a942"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/nginx/anonymous/anonymous-download.json",
+        "sha256": "233669328be0438903ed8a3d3d412a9db3bfdd927b00df1b5e2e360f59daf2c5"
+      }
+    },
+    {
+      "component": "node",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:8917049917dc110930957c5d59cff66489d9a3e486ffdfe7b2221c40acc0f14c",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/node/publication/publication.json",
+        "sha256": "3564898d800ceed2c89274acd3f68835173a22fabd0ebb6db26c00f7de0d183d"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/node/anonymous/anonymous-download.json",
+        "sha256": "425a705a621681088283bbe07ac7c51f9ea62158353f6194a3d3607a4b54dc96"
+      }
+    },
+    {
+      "component": "phpmyadmin",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:0d805ad3b104f2a377b6e39f3e30e5707d8c6875a155a40d2c01e4ad608b5835",
+      "commit": "0f715d08cf4b56ea7788594d5b9aa9295f9d1761",
+      "run": "34206243823",
+      "attempt": "1",
+      "manifest": {
+        "path": "infrastructure/runtime-security/reviewed-images-c12-phpmyadmin.json",
+        "sha256": "c649c20cef9417905bff3f3bc58f2163edf925a53971eb01ecb6d90d729034b4"
+      },
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/publication/publication.json",
+        "sha256": "01ceaa8945af92c33db9710b4940ec82e4e9c97ef2c546c7813dd8d29e3c1945"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c12-published/phpmyadmin/anonymous/anonymous-download.json",
+        "sha256": "3068d918ee89970c18a30c1ff0f89408d80d3e1434fe00f977400081825a28be"
+      }
+    },
+    {
+      "component": "prometheus",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:431b45903443dcef3c973e16d4ad76670a5d0f6a61dd8a1cfe15b1fa6dd8334d",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/prometheus/publication/publication.json",
+        "sha256": "3036d6a89d05b9d1b4c1592292cee123b773a93154cd6923cf467aca260a39bb"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/prometheus/anonymous/anonymous-download.json",
+        "sha256": "83392279671f18a543d8a1586502c74e4c51930948dcb37a4afd9b0c1259da88"
+      }
+    },
+    {
+      "component": "tempo",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:82c90ef48d1d1e009b7847fc1a398995758e8dcaa89e7ea90992b599b935f15b",
+      "commit": "2cd29a17f5ae7c8d7e00d332379c7ac887d5b52f",
+      "run": "34178760576",
+      "attempt": "1",
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/tempo/publication/publication.json",
+        "sha256": "8aeefafb27cbb04de58171575127567f84197b290c1508cf9e264ef2a31af5f7"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c7-published/tempo/anonymous/anonymous-download.json",
+        "sha256": "9287c393f8cae6a70a9e06324ce912b52bc3276f85477aa96ccbd9a74beabfd5"
+      }
+    }
+  ]
+}

@@ -1,5 +1,17 @@
+import { ManagerOrdersApi } from '../core/manager-orders.api';
+import { ManagerReviewActionsApi } from '../core/manager-review-actions.api';
+import { ManagerReviewTasksApi } from '../core/manager-review-tasks.api';
+import { WorkerApi } from '../core/worker.api';
+import { OrderReviewNotesFacade } from './order-details/order-review-notes.facade';
+import { OrderReviewsApi } from '../core/order-reviews.api';
+import { OrderReviewEditorFacade } from './order-details/order-review-editor.facade';
+import { ReviewPublicationFacade } from './order-details/review-publication.facade';
+import { OrderPaymentApi } from '../core/order-payment.api';
+import { OrderPaymentFacade } from './order-details/order-payment.facade';
+import { OrderCompanyReportApi } from '../core/order-company-report.api';
+import { OrderCompanyReportFacade } from './order-details/order-company-report.facade';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, effect, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject, computed, effect, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -12,7 +24,7 @@ import {
 } from '@ionic/angular/standalone';
 import { Observable, Subscription, finalize, firstValueFrom } from 'rxjs';
 import {
-  ApiService,
+  type ApiService,
   BadReviewTaskItem,
   CompanyDeepReportState,
   ManagerPaymentLinkResponse,
@@ -29,6 +41,7 @@ import {
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
+import { PageWriteTracker } from '../core/page-write-tracker';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
@@ -45,8 +58,6 @@ type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answe
 type BadReviewTaskCopyKind = 'botLogin' | 'botPassword';
 type RecoveryTaskCopyKind = 'botLogin' | 'botPassword';
 type ReviewEditableField = 'text' | 'answer';
-type ReviewCredentialCopyState = { botId?: number | null; botLoginAt?: number; botPasswordAt?: number };
-type StoredReviewCredentialCopyState = ReviewCredentialCopyState & { reviewId: number; updatedAt: number };
 type ReviewTextEditState = {
   review: OrderReviewItem;
   field: ReviewEditableField;
@@ -61,40 +72,6 @@ type RecoveryTaskDraft = {
   recoveryAnswer: string;
   scheduledDate: string | null;
 };
-type CompanyReportFact = {
-  label?: string | null;
-  value?: string | null;
-  evidence?: string | null;
-  confidence?: string | null;
-};
-type CompanyReportSource = {
-  title?: string | null;
-  url?: string | null;
-  note?: string | null;
-  type?: string | null;
-  confidence?: string | null;
-};
-type CompanyReportSection = {
-  id: string;
-  title: string;
-  body: string;
-  html: string;
-};
-type CompanyReport = {
-  city?: string | null;
-  provider?: string | null;
-  model?: string | null;
-  reportMarkdown?: string | null;
-  sections?: Array<{ title?: string | null; body?: string | null }> | null;
-  sources?: CompanyReportSource[] | null;
-  warnings?: string[] | null;
-  reviewIdeas?: string[] | null;
-  factSnapshot?: {
-    confirmedFacts?: CompanyReportFact[] | null;
-    uncertainFacts?: CompanyReportFact[] | null;
-  } | null;
-  createdAt?: string | null;
-};
 
 const HIDDEN_PUBLISH_ORDER_STATUSES = new Set(['Новый', 'На проверке', 'В проверку', 'В прверку', 'Коррекция']);
 const REVIEW_AI_ORDER_STATUSES = new Set(['новый', 'в проверку', 'в проврку', 'в прверку', 'на проверке', 'на провере', 'коррекция']);
@@ -102,6 +79,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
 @Component({
   selector: 'app-order-details-mobile',
+  providers: [PageWriteTracker],
   imports: [FormsModule, IonContent, IonModal, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileReviewCardShellComponent],
   template: `
     <div class="ion-page">
@@ -2254,18 +2232,21 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
   `]
 })
 export class OrderDetailsPage implements OnInit, OnDestroy {
+  private readonly writes = inject(PageWriteTracker);
+  private pageVisible = true;
+  private readonly reconciliationSubscription = this.writes.reconciliationRequired.subscribe(() => {
+    this.loadDetails(undefined, true);
+    this.companyReportFacade.reconcileIfVisible();
+  });
+  private readonly managerOrdersApi = inject(ManagerOrdersApi);
+  private readonly managerReviewActionsApi = inject(ManagerReviewActionsApi);
+  private readonly managerReviewTasksApi = inject(ManagerReviewTasksApi);
+  private readonly workerApi = inject(WorkerApi);
   private routeSubscription?: Subscription;
   private detailsLoadSubscription?: Subscription;
-  private companyReportLoadSubscription?: Subscription;
   private detailsLoadGeneration = 0;
-  private companyReportLoadGeneration = 0;
   private readonly orderRouteGuard = new RouteEpochGuard();
   private reviewStripCleanup?: () => void;
-  private publishCredentialWaitTimer: ReturnType<typeof setInterval> | null = null;
-  private readonly reviewPublishCredentialStorageKey = 'otziv-mobile-order-details-worker-all-publish-prep:v1';
-  private readonly reviewPublishCredentialMaxAgeMs = 60 * 60 * 1000;
-  private readonly publishCredentialWaitMs = 150_000;
-  private readonly publishCredentialWaitSafetyBufferMs = 2_000;
   private errorHideTimer: ReturnType<typeof setTimeout> | null = null;
   private reviewDrag: {
     pointerId: number;
@@ -2293,50 +2274,86 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   readonly mutationKey = signal<string | null>(null);
   readonly copiedKey = signal<string | null>(null);
   readonly activeReviewIndex = signal(0);
-  readonly editingFieldKey = signal<string | null>(null);
-  readonly reviewFieldDrafts = signal<Record<string, string>>({});
+  private readonly reviewNotesFacade = new OrderReviewNotesFacade({
+    writes: this.writes,
+    api: inject(OrderReviewsApi), details: () => this.details(), error: this.error, mutationKey: this.mutationKey,
+    capture: () => this.captureOrderRoute(), accepts: ticket => this.isActiveOrderRoute(ticket),
+    isMutating: key => this.isMutating(key), applyReview: review => this.applyUpdatedReview(review),
+    patchOrderNote: (id, note) => this.patchOrderNote(id, note), patchCompanyNote: (id, note) => this.patchCompanyNote(id, note),
+    focusInline: id => this.focusInlineReviewText(id), blur: () => this.blurActiveControl(), errorMessage: (error, fallback) => this.errorMessage(error, fallback)
+  });
+  readonly editingFieldKey = this.reviewNotesFacade.editingFieldKey;
+  readonly reviewFieldDrafts = this.reviewNotesFacade.reviewFieldDrafts;
   readonly expandedReviewIds = signal<Record<number, boolean>>({});
-  readonly noteOpenId = signal<number | null>(null);
-  readonly reviewNoteDrafts = signal<Record<number, string>>({});
-  readonly reviewSideNoteDrafts = signal<Record<string, string>>({});
-  readonly copiedReviewCredentials = signal<Record<number, ReviewCredentialCopyState>>({});
-  readonly reviewPublishWaitNow = signal(Date.now());
+  readonly noteOpenId = this.reviewNotesFacade.noteOpenId;
+  readonly reviewNoteDrafts = this.reviewNotesFacade.reviewNoteDrafts;
+  readonly reviewSideNoteDrafts = this.reviewNotesFacade.reviewSideNoteDrafts;
+  private readonly publicationFacade = new ReviewPublicationFacade({
+    openedFromWorkerAll: () => this.openedFromWorkerAll(), details: () => this.details(),
+    needsRepair: review => this.reviewNeedsAccountRepair(review), repairTitle: review => this.accountRepairTitle(review),
+    isMutating: key => this.isMutating(key), hasTemplateBot: review => this.reviewHasTemplateBot(review)
+  });
+  readonly copiedReviewCredentials = this.publicationFacade.copiedReviewCredentials;
+  readonly reviewPublishWaitNow = this.publicationFacade.reviewPublishWaitNow;
   readonly openedFromWorkerAll = signal(false);
-  readonly companyReportVisible = signal(false);
-  readonly companyReportLoading = signal(false);
-  readonly companyReportError = signal<string | null>(null);
-  readonly companyReportState = signal<CompanyDeepReportState | null>(null);
-  readonly tbankStatus = signal<TbankPaymentStatus | null>(null);
-  readonly paymentLink = signal<ManagerPaymentLinkResponse | null>(null);
-  readonly paymentRouteVisible = signal(false);
-  readonly paymentRouteContextLoading = signal(false);
-  readonly paymentRouteChanging = signal(false);
-  readonly paymentRouteContext = signal<PaymentRouteChangeContext | null>(null);
-  readonly hasReadyCompanyReport = computed(() => !!this.companyReportState()?.latestJob?.report);
-  readonly companyReportBusy = computed(() => this.companyReportLoading() || !!this.companyReportState()?.activeJob);
-  readonly companyReport = computed(() => (this.companyReportState()?.latestJob?.report ?? null) as CompanyReport | null);
-  readonly companyReportSections = computed(() => this.buildCompanyReportSections(this.companyReport()));
-  readonly companyReportReviewIdeas = computed(() => this.cleanStringList(this.companyReport()?.reviewIdeas).slice(0, 12));
-  readonly companyReportWarnings = computed(() => this.cleanStringList(this.companyReport()?.warnings));
-  readonly companyReportSources = computed(() => (this.companyReport()?.sources ?? [])
-    .filter((source): source is CompanyReportSource => !!source && Boolean(this.cleanText(source.title) || this.cleanText(source.url) || this.cleanText(source.note)))
-    .map((source) => ({ ...source, url: safeHttpsExternalUrl(source.url) ?? '' }))
-    .slice(0, 10));
-  readonly companyReportConfirmedFacts = computed(() => (this.companyReport()?.factSnapshot?.confirmedFacts ?? [])
-    .filter((fact): fact is CompanyReportFact => !!fact && Boolean(this.cleanText(fact.label) || this.cleanText(fact.value) || this.cleanText(fact.evidence)))
-    .slice(0, 8));
+  private readonly companyReportFacade = new OrderCompanyReportFacade({
+    writes: this.writes,
+    api: inject(OrderCompanyReportApi), orderId: () => this.orderId(),
+    capture: () => this.captureOrderRoute(), accepts: ticket => this.isActiveOrderRoute(ticket),
+    canRefresh: () => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']),
+    errorMessage: (error, fallback) => this.errorMessage(error, fallback)
+  });
+  readonly companyReportVisible = this.companyReportFacade.companyReportVisible;
+  readonly companyReportLoading = this.companyReportFacade.companyReportLoading;
+  readonly companyReportError = this.companyReportFacade.companyReportError;
+  readonly companyReportState = this.companyReportFacade.companyReportState;
+  private readonly paymentFacade = new OrderPaymentFacade({
+    writes: this.writes,
+    api: inject(OrderPaymentApi), orderId: () => this.orderId(), hasDetails: () => !!this.details(),
+    capture: () => this.captureOrderRoute(), accepts: ticket => this.isActiveOrderRoute(ticket),
+    canManage: () => this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']),
+    confirm: options => this.confirm.confirm(options), toast: options => this.toastController.create(options),
+    copy: (value, ticket) => this.copyText(value, 'payment-link', ticket), reload: () => this.loadDetails(),
+    error: this.error, mutationKey: this.mutationKey, errorMessage: (error, fallback) => this.errorMessage(error, fallback)
+  });
+  readonly tbankStatus = this.paymentFacade.tbankStatus;
+  readonly paymentLink = this.paymentFacade.paymentLink;
+  readonly paymentRouteVisible = this.paymentFacade.paymentRouteVisible;
+  readonly paymentRouteContextLoading = this.paymentFacade.paymentRouteContextLoading;
+  readonly paymentRouteChanging = this.paymentFacade.paymentRouteChanging;
+  readonly paymentRouteContext = this.paymentFacade.paymentRouteContext;
+  readonly hasReadyCompanyReport = this.companyReportFacade.hasReadyCompanyReport;
+  readonly companyReportBusy = this.companyReportFacade.companyReportBusy;
+  readonly companyReport = this.companyReportFacade.companyReport;
+  readonly companyReportSections = this.companyReportFacade.companyReportSections;
+  readonly companyReportReviewIdeas = this.companyReportFacade.companyReportReviewIdeas;
+  readonly companyReportWarnings = this.companyReportFacade.companyReportWarnings;
+  readonly companyReportSources = this.companyReportFacade.companyReportSources;
+  readonly companyReportConfirmedFacts = this.companyReportFacade.companyReportConfirmedFacts;
   readonly reviewsExpanded = signal(false);
-  readonly reviewEdit = signal<OrderReviewItem | null>(null);
-  readonly reviewEditInitialField = signal<ReviewEditableField | null>(null);
-  readonly reviewEditDraft = signal<ReviewUpdateRequest | null>(null);
-  readonly reviewEditSaving = signal(false);
-  readonly reviewEditDeleting = signal(false);
-  readonly reviewEditUploading = signal(false);
-  readonly reviewEditError = signal<string | null>(null);
-  readonly reviewTextEdit = signal<ReviewTextEditState | null>(null);
-  readonly reviewTextEditValue = signal('');
-  readonly reviewTextEditSaving = signal(false);
-  readonly reviewTextEditError = signal<string | null>(null);
+  private readonly reviewEditorFacade = new OrderReviewEditorFacade({
+    writes: this.writes,
+    api: inject(OrderReviewsApi), details: this.details, error: this.error, activeReviewIndex: this.activeReviewIndex,
+    editingFieldKey: this.editingFieldKey, capture: () => this.captureOrderRoute(), accepts: ticket => this.isActiveOrderRoute(ticket),
+    confirm: options => this.confirm.confirm(options),
+    pickImage: name => this.media.pickImageFile(name), prepareImage: (file, name) => this.media.prepareImageFile(file, name),
+    nativePhotoPickerAvailable: () => this.media.nativePhotoPickerAvailable,
+    fieldValue: (review, field) => this.reviewFieldValue(review, field), sourceValue: (review, field) => this.reviewFieldSourceValue(review, field),
+    applyReview: review => this.applyUpdatedReview(review), clearDrafts: id => this.clearReviewDrafts(id),
+    focusText: () => this.focusReviewTextEditor(), scrollField: field => this.scrollReviewEditFieldIntoView(field), blur: () => this.blurActiveControl(),
+    errorMessage: (error, fallback) => this.errorMessage(error, fallback)
+  });
+  readonly reviewEdit = this.reviewEditorFacade.reviewEdit;
+  readonly reviewEditInitialField = this.reviewEditorFacade.reviewEditInitialField;
+  readonly reviewEditDraft = this.reviewEditorFacade.reviewEditDraft;
+  readonly reviewEditSaving = this.reviewEditorFacade.reviewEditSaving;
+  readonly reviewEditDeleting = this.reviewEditorFacade.reviewEditDeleting;
+  readonly reviewEditUploading = this.reviewEditorFacade.reviewEditUploading;
+  readonly reviewEditError = this.reviewEditorFacade.reviewEditError;
+  readonly reviewTextEdit = this.reviewEditorFacade.reviewTextEdit;
+  readonly reviewTextEditValue = this.reviewEditorFacade.reviewTextEditValue;
+  readonly reviewTextEditSaving = this.reviewEditorFacade.reviewTextEditSaving;
+  readonly reviewTextEditError = this.reviewEditorFacade.reviewTextEditError;
   readonly badReviewTaskDrafts = signal<Record<number, BadReviewTaskDraft>>({});
   readonly savedBadReviewTaskId = signal<number | null>(null);
   readonly recoveryTaskDrafts = signal<Record<number, RecoveryTaskDraft>>({});
@@ -2362,9 +2379,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     + this.recoveryTasks().length
   );
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly auth: AuthService,
+  constructor(private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly confirm: MobileConfirmService,
@@ -2407,6 +2422,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       this.loadTbankStatus();
     }
     this.routeSubscription.add(this.route.paramMap.subscribe((params) => {
+      if (!this.pageVisible) return;
       const rawCompanyId = params.get('companyId');
       const rawOrderId = params.get('orderId');
       const companyId = Number(rawCompanyId);
@@ -2437,7 +2453,31 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }));
   }
 
+  ionViewWillLeave(): void {
+    this.pageVisible = false;
+    this.writes.leave();
+    this.paymentFacade.stopStatusRead();
+    this.orderRouteGuard.change(null);
+    this.cancelOrderRouteReads();
+    this.clearReviewPublishWaitTimer();
+    this.clearErrorHideTimer();
+  }
+
+  ionViewWillEnter(): void {
+    this.pageVisible = true;
+    this.loadTbankStatus();
+    const params = this.route.snapshot.paramMap;
+    const companyId = Number(params.get('companyId'));
+    const orderId = Number(params.get('orderId'));
+    const company = Number.isSafeInteger(companyId) && companyId > 0 ? companyId : null;
+    if (Number.isSafeInteger(orderId) && orderId > 0) this.activateOrderRoute(`order:${company ?? ''}:${orderId}`, company, orderId);
+  }
+
   ngOnDestroy(): void {
+    this.pageVisible = false;
+    this.writes.destroy();
+    this.reconciliationSubscription.unsubscribe();
+    this.paymentFacade.stopStatusRead();
     this.orderRouteGuard.destroy();
     this.cancelOrderRouteReads();
     this.routeSubscription?.unsubscribe();
@@ -2451,7 +2491,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.loadDetails(() => event.target.complete());
   }
 
-  loadDetails(done?: () => void): void {
+  loadDetails(done?: () => void, preserveDrafts = false): void {
     const orderId = this.orderId();
     if (!orderId) {
       done?.();
@@ -2467,9 +2507,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     const loadGeneration = ++this.detailsLoadGeneration;
     this.detailsLoadSubscription?.unsubscribe();
     this.detailsLoadSubscription = undefined;
-    this.loading.set(true);
-    this.error.set(null);
-    const subscription = this.api.getManagerOrderDetails(orderId).pipe(
+    if (!preserveDrafts) {
+      this.loading.set(true);
+      this.error.set(null);
+    }
+    const subscription = this.managerOrdersApi.getManagerOrderDetails(orderId).pipe(
       finalize(() => {
         if (loadGeneration === this.detailsLoadGeneration && this.isActiveOrderRoute(routeTicket)) {
           this.detailsLoadSubscription = undefined;
@@ -2483,19 +2525,21 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
           return;
         }
         this.details.set(details);
-        this.selectRequestedReview(details);
-        this.reviewFieldDrafts.set({});
-        this.reviewNoteDrafts.set({});
-        this.reviewSideNoteDrafts.set({});
-        this.badReviewTaskDrafts.set({});
+        if (!preserveDrafts) {
+          this.selectRequestedReview(details);
+          this.reviewFieldDrafts.set({});
+          this.reviewNoteDrafts.set({});
+          this.reviewSideNoteDrafts.set({});
+          this.badReviewTaskDrafts.set({});
+          this.recoveryTaskDrafts.set({});
+          this.editingFieldKey.set(null);
+          this.noteOpenId.set(null);
+        }
         this.applyServerReviewPublishCredentialPreparation(details.credentialPreparation);
         this.refreshReviewPublishWaitTimer();
-        this.recoveryTaskDrafts.set({});
-        this.editingFieldKey.set(null);
-        this.noteOpenId.set(null);
       },
       error: (err) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
+        if (!this.isActiveOrderRoute(routeTicket) || preserveDrafts) {
           return;
         }
         this.error.set(this.errorMessage(err, 'Не удалось загрузить детали заказа'));
@@ -2512,6 +2556,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     if (!this.orderRouteGuard.change(routeKey)) {
       return;
     }
+    if (this.pageVisible) this.writes.enter(routeKey);
 
     this.cancelOrderRouteReads();
     this.clearOrderRouteState();
@@ -2574,13 +2619,12 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   private cancelOrderRouteReads(): void {
     this.detailsLoadGeneration += 1;
-    this.companyReportLoadGeneration += 1;
+    this.companyReportFacade.closeCompanyReport();
+    this.paymentFacade.deactivate();
+    this.reviewEditorFacade.deactivate();
     const detailsSubscription = this.detailsLoadSubscription;
-    const companyReportSubscription = this.companyReportLoadSubscription;
     this.detailsLoadSubscription = undefined;
-    this.companyReportLoadSubscription = undefined;
     detailsSubscription?.unsubscribe();
-    companyReportSubscription?.unsubscribe();
     this.loading.set(false);
     this.companyReportLoading.set(false);
   }
@@ -2883,221 +2927,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       + index;
   }
 
-  reviewFieldValue(review: OrderReviewItem, field: ReviewEditableField): string {
-    const key = this.reviewFieldKey(review, field);
-    return this.reviewFieldDrafts()[key] ?? this.reviewFieldSourceValue(review, field);
-  }
-
-  setReviewFieldDraft(review: OrderReviewItem, field: ReviewEditableField, value: string): void {
-    const key = this.reviewFieldKey(review, field);
-    this.reviewFieldDrafts.update((drafts) => ({ ...drafts, [key]: value }));
-  }
-
-  startReviewFieldEdit(review: OrderReviewItem, field: ReviewEditableField): void {
-    if (!this.details()?.canEditReviews) {
-      return;
-    }
-
-    const key = this.reviewFieldKey(review, field);
-    this.editingFieldKey.set(key);
-    this.reviewFieldDrafts.update((drafts) => key in drafts ? drafts : {
-      ...drafts,
-      [key]: this.reviewFieldSourceValue(review, field)
-    });
-  }
-
-  startReviewTextInlineEdit(review: OrderReviewItem): void {
-    this.startReviewFieldEdit(review, 'text');
-    window.setTimeout(() => this.focusInlineReviewText(review.id), 40);
-  }
-
-  cancelReviewFieldEdit(review: OrderReviewItem, field: ReviewEditableField): void {
-    const key = this.reviewFieldKey(review, field);
-    this.editingFieldKey.set(null);
-    this.reviewFieldDrafts.update((drafts) => {
-      const next = { ...drafts };
-      delete next[key];
-      return next;
-    });
-    this.blurActiveControl();
-  }
-
-  saveReviewField(review: OrderReviewItem, field: ReviewEditableField): void {
-    if (!this.canSaveReviewField(review, field)) {
-      return;
-    }
-
-    const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
-      return;
-    }
-
-    const value = this.reviewFieldValue(review, field);
-    const key = this.saveFieldMutationKey(review, field);
-    this.mutationKey.set(key);
-    const request = field === 'text'
-      ? this.api.updateManagerOrderReviewText(review.orderId, review.id, value)
-      : this.api.updateManagerOrderReviewAnswer(review.orderId, review.id, value);
-
-    request.subscribe({
-      next: (updatedReview) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.applyUpdatedReview(updatedReview);
-        this.mutationKey.set(null);
-        this.cancelReviewFieldEdit(updatedReview, field);
-        this.blurActiveControl();
-      },
-      error: (err) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.error.set(this.errorMessage(err, 'Не удалось сохранить отзыв'));
-        this.mutationKey.set(null);
-      }
-    });
-  }
-
-  canSaveReviewField(review: OrderReviewItem, field: ReviewEditableField): boolean {
-    if (this.isMutating(this.saveFieldMutationKey(review, field))) {
-      return false;
-    }
-
-    const value = this.reviewFieldValue(review, field);
-    if (field === 'text' && !value.trim()) {
-      return false;
-    }
-
-    return value !== this.reviewFieldSourceValue(review, field);
-  }
-
-  isReviewFieldEditing(review: OrderReviewItem, field: ReviewEditableField): boolean {
-    return this.editingFieldKey() === this.reviewFieldKey(review, field);
-  }
-
-  saveFieldMutationKey(review: OrderReviewItem, field: ReviewEditableField): string {
-    return `save-${field}-${review.id}`;
-  }
-
-  openReviewTextEdit(review: OrderReviewItem, field: ReviewEditableField): void {
-    if (!this.details()?.canEditReviews) {
-      this.error.set('Редактирование отзывов недоступно для этого заказа.');
-      return;
-    }
-
-    if (this.reviewTextEditSaving()) {
-      return;
-    }
-
-    this.editingFieldKey.set(null);
-    this.reviewTextEdit.set({ review, field });
-    this.reviewTextEditValue.set(this.reviewFieldValue(review, field));
-    this.reviewTextEditError.set(null);
-    window.setTimeout(() => this.focusReviewTextEditor(), 150);
-  }
-
-  closeReviewTextEdit(): void {
-    if (this.reviewTextEditSaving()) {
-      return;
-    }
-
-    this.reviewTextEdit.set(null);
-    this.reviewTextEditValue.set('');
-    this.reviewTextEditError.set(null);
-    this.blurActiveControl();
-  }
-
-  setReviewTextEditValue(value: string): void {
-    this.reviewTextEditValue.set(value);
-  }
-
-  reviewTextEditTitle(): string {
-    return this.reviewTextEdit()?.field === 'answer' ? 'Ответ или замечание' : 'Текст отзыва';
-  }
-
-  reviewTextEditLabel(): string {
-    return this.reviewTextEdit()?.field === 'answer' ? 'Ответ на отзыв или замечание' : 'Текст отзыва';
-  }
-
-  reviewTextEditPlaceholder(): string {
-    return this.reviewTextEdit()?.field === 'answer'
-      ? 'Впишите ответ на отзыв или внутреннее замечание'
-      : 'Впишите текст отзыва';
-  }
-
-  reviewTextEditNote(): string {
-    const state = this.reviewTextEdit();
-    if (!state) {
-      return 'Редактор';
-    }
-
-    const title = state.review.companyTitle || this.details()?.companyTitle || 'Компания';
-    return `${title} · #${state.review.id}`;
-  }
-
-  canSaveReviewTextEdit(): boolean {
-    const state = this.reviewTextEdit();
-    if (!state || this.reviewTextEditSaving()) {
-      return false;
-    }
-
-    const value = this.reviewTextEditValue();
-    if (state.field === 'text' && !value.trim()) {
-      return false;
-    }
-
-    return value !== this.reviewFieldSourceValue(state.review, state.field);
-  }
-
-  saveReviewTextEdit(): void {
-    const state = this.reviewTextEdit();
-    if (!state) {
-      return;
-    }
-
-    const value = this.reviewTextEditValue();
-    if (state.field === 'text' && !value.trim()) {
-      this.reviewTextEditError.set('Заполните текст отзыва.');
-      return;
-    }
-
-    if (!this.canSaveReviewTextEdit()) {
-      this.closeReviewTextEdit();
-      return;
-    }
-
-    const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
-      return;
-    }
-
-    this.reviewTextEditSaving.set(true);
-    this.reviewTextEditError.set(null);
-    const request = state.field === 'text'
-      ? this.api.updateManagerOrderReviewText(state.review.orderId, state.review.id, value)
-      : this.api.updateManagerOrderReviewAnswer(state.review.orderId, state.review.id, value);
-
-    request.subscribe({
-      next: (updatedReview) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.applyUpdatedReview(updatedReview);
-        this.clearReviewDrafts(updatedReview.id);
-        this.reviewTextEditSaving.set(false);
-        this.closeReviewTextEdit();
-      },
-      error: (err) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.reviewTextEditError.set(this.errorMessage(err, 'Не удалось сохранить отзыв.'));
-        this.reviewTextEditSaving.set(false);
-      }
-    });
-  }
-
   toggleReviewText(review: OrderReviewItem): void {
     this.expandedReviewIds.update((items) => ({
       ...items,
@@ -3111,312 +2940,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   shouldShowTextToggle(review: OrderReviewItem): boolean {
     return this.reviewFieldValue(review, 'text').length > 210;
-  }
-
-  toggleReviewNote(review: OrderReviewItem): void {
-    this.noteOpenId.update((id) => id === review.id ? null : review.id);
-    this.reviewNoteDrafts.update((drafts) => review.id in drafts ? drafts : {
-      ...drafts,
-      [review.id]: review.comment ?? ''
-    });
-    this.reviewSideNoteDrafts.update((drafts) => ({
-      ...drafts,
-      [this.reviewSideNoteKey(review, 'order')]: drafts[this.reviewSideNoteKey(review, 'order')] ?? (review.orderComments ?? ''),
-      [this.reviewSideNoteKey(review, 'company')]: drafts[this.reviewSideNoteKey(review, 'company')] ?? (review.commentCompany ?? '')
-    }));
-  }
-
-  reviewNoteValue(review: OrderReviewItem): string {
-    return this.reviewNoteDrafts()[review.id] ?? review.comment ?? '';
-  }
-
-  setReviewNoteDraft(review: OrderReviewItem, value: string): void {
-    this.reviewNoteDrafts.update((drafts) => ({ ...drafts, [review.id]: value }));
-  }
-
-  isReviewNoteChanged(review: OrderReviewItem): boolean {
-    return this.reviewNoteValue(review) !== (review.comment ?? '');
-  }
-
-  reviewSideNoteValue(review: OrderReviewItem, field: ReviewSideNoteField): string {
-    return this.reviewSideNoteDrafts()[this.reviewSideNoteKey(review, field)]
-      ?? (field === 'order' ? review.orderComments ?? '' : review.commentCompany ?? '');
-  }
-
-  setReviewSideNoteDraft(review: OrderReviewItem, field: ReviewSideNoteField, value: string): void {
-    this.reviewSideNoteDrafts.update((drafts) => ({
-      ...drafts,
-      [this.reviewSideNoteKey(review, field)]: value
-    }));
-  }
-
-  isReviewSideNoteChanged(review: OrderReviewItem, field: ReviewSideNoteField): boolean {
-    return this.reviewSideNoteValue(review, field) !== (field === 'order' ? review.orderComments ?? '' : review.commentCompany ?? '');
-  }
-
-  isAnyReviewNoteChanged(review: OrderReviewItem): boolean {
-    return this.isReviewNoteChanged(review)
-      || this.isReviewSideNoteChanged(review, 'order')
-      || this.isReviewSideNoteChanged(review, 'company');
-  }
-
-  reviewNotesMutationKey(review: OrderReviewItem): string {
-    return `save-notes-${review.id}`;
-  }
-
-  async saveAllReviewNotes(review: OrderReviewItem): Promise<void> {
-    const key = this.reviewNotesMutationKey(review);
-    if (!this.isAnyReviewNoteChanged(review) || this.isMutating(key)) {
-      return;
-    }
-
-    const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
-      return;
-    }
-    const updateReviewNote = this.isReviewNoteChanged(review);
-    const updateOrderNote = this.isReviewSideNoteChanged(review, 'order');
-    const updateCompanyNote = this.isReviewSideNoteChanged(review, 'company');
-    const reviewComment = this.reviewNoteValue(review);
-    const orderComments = this.reviewSideNoteValue(review, 'order');
-    const companyComments = this.reviewSideNoteValue(review, 'company');
-
-    this.mutationKey.set(key);
-    try {
-      if (updateReviewNote) {
-        const updatedReview = await firstValueFrom(
-          this.api.updateManagerOrderReviewNote(review.orderId, review.id, reviewComment)
-        );
-        if (this.isActiveOrderRoute(routeTicket)) {
-          this.applyUpdatedReview(updatedReview);
-        }
-      }
-
-      if (updateOrderNote) {
-        await firstValueFrom(this.api.updateManagerOrderNote(review.orderId, orderComments));
-        if (this.isActiveOrderRoute(routeTicket)) {
-          this.patchOrderNote(review.orderId, orderComments);
-        }
-      }
-
-      if (updateCompanyNote) {
-        await firstValueFrom(this.api.updateManagerOrderCompanyNote(review.orderId, companyComments));
-        if (this.isActiveOrderRoute(routeTicket)) {
-          this.patchCompanyNote(review.companyId, companyComments);
-        }
-      }
-
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.clearReviewNoteDrafts(review.id);
-        this.noteOpenId.set(null);
-      }
-    } catch (err) {
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.error.set(this.errorMessage(err, 'Не удалось сохранить заметки'));
-      }
-    } finally {
-      if (this.isActiveOrderRoute(routeTicket) && this.mutationKey() === key) {
-        this.mutationKey.set(null);
-      }
-    }
-  }
-
-  openReviewEdit(review: OrderReviewItem, initialField: ReviewEditableField | null = null): void {
-    if (!this.details()?.canEditReviews) {
-      this.error.set('Редактирование отзывов недоступно для этого заказа.');
-      return;
-    }
-
-    if (this.reviewEditSaving() || this.reviewEditDeleting() || this.reviewEditUploading()) {
-      return;
-    }
-
-    this.reviewEdit.set(review);
-    this.reviewEditInitialField.set(initialField);
-    this.reviewEditDraft.set(this.reviewEditDraftFromReview(review));
-    this.reviewEditError.set(null);
-    this.reviewEditUploading.set(false);
-
-    if (initialField) {
-      window.setTimeout(() => this.scrollReviewEditFieldIntoView(initialField), 120);
-    }
-  }
-
-  closeReviewEdit(): void {
-    if (this.reviewEditSaving() || this.reviewEditDeleting() || this.reviewEditUploading()) {
-      return;
-    }
-
-    this.reviewEdit.set(null);
-    this.reviewEditInitialField.set(null);
-    this.reviewEditDraft.set(null);
-    this.reviewEditError.set(null);
-    this.reviewEditUploading.set(false);
-  }
-
-  setReviewEditField<K extends keyof ReviewUpdateRequest>(field: K, value: ReviewUpdateRequest[K]): void {
-    this.reviewEditDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
-  }
-
-  emptyToNull(value: unknown): string | null {
-    const text = String(value ?? '').trim();
-    return text ? text : null;
-  }
-
-  canSaveReviewEdit(): boolean {
-    const draft = this.reviewEditDraft();
-    return Boolean(draft?.text.trim());
-  }
-
-  saveReviewEdit(): void {
-    const review = this.reviewEdit();
-    const draft = this.reviewEditDraft();
-    if (!review || !draft || !this.canSaveReviewEdit()) {
-      this.reviewEditError.set('Заполните текст отзыва.');
-      return;
-    }
-
-    const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
-      return;
-    }
-
-    this.reviewEditSaving.set(true);
-    this.reviewEditError.set(null);
-    this.api.updateManagerOrderReview(review.orderId, review.id, this.normalizedReviewEditDraft(draft)).subscribe({
-      next: (updatedReview) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.applyUpdatedReview(updatedReview);
-        this.clearReviewDrafts(updatedReview.id);
-        this.reviewEditSaving.set(false);
-        this.closeReviewEdit();
-      },
-      error: (err) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.reviewEditError.set(this.errorMessage(err, 'Отзыв не сохранен.'));
-        this.reviewEditSaving.set(false);
-      }
-    });
-  }
-
-  async deleteReviewEdit(): Promise<void> {
-    const review = this.reviewEdit();
-    if (!review || !this.details()?.canDeleteReviews) {
-      return;
-    }
-
-    const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
-      return;
-    }
-
-    const confirmed = await this.confirm.confirm({
-      title: 'Удалить отзыв',
-      message: 'Удалить отзыв?',
-      confirmText: 'Удалить',
-      danger: true
-    });
-    if (!confirmed || !this.isActiveOrderRoute(routeTicket)) {
-      return;
-    }
-
-    this.reviewEditDeleting.set(true);
-    this.reviewEditError.set(null);
-    this.api.deleteManagerOrderReview(review.orderId, review.id).subscribe({
-      next: (details) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.details.set(details);
-        this.activeReviewIndex.set(Math.min(this.activeReviewIndex(), Math.max(0, details.reviews.length - 1)));
-        this.clearReviewDrafts(review.id);
-        this.reviewEditDeleting.set(false);
-        this.closeReviewEdit();
-      },
-      error: (err) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.reviewEditError.set(this.errorMessage(err, 'Отзыв не удален.'));
-        this.reviewEditDeleting.set(false);
-      }
-    });
-  }
-
-  uploadReviewPhoto(event: Event): void {
-    const review = this.reviewEdit();
-    const input = event.target as HTMLInputElement | null;
-    const file = input?.files?.[0];
-    if (!review || !file || this.reviewEditUploading()) {
-      return;
-    }
-
-    void this.uploadReviewPhotoFile(review, file, input);
-  }
-
-  async pickNativeReviewPhoto(event: Event): Promise<void> {
-    if (!this.media.nativePhotoPickerAvailable || this.reviewEditUploading()) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    const review = this.reviewEdit();
-    if (!review) {
-      return;
-    }
-
-    const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
-      return;
-    }
-
-    const file = await this.media.pickImageFile(`review-${review.id}`);
-    if (file) {
-      await this.uploadReviewPhotoFile(review, file, null, routeTicket);
-    }
-  }
-
-  private async uploadReviewPhotoFile(
-    review: OrderReviewItem,
-    file: File,
-    input?: HTMLInputElement | null,
-    existingRouteTicket?: RouteEpochTicket
-  ): Promise<void> {
-    const routeTicket = existingRouteTicket ?? this.captureOrderRoute();
-    if (!routeTicket || !this.isActiveOrderRoute(routeTicket)) {
-      return;
-    }
-    this.reviewEditUploading.set(true);
-    this.reviewEditError.set(null);
-    try {
-      const preparedFile = await this.media.prepareImageFile(file, `review-${review.id}`);
-      const updatedReview = await firstValueFrom(this.api.uploadManagerOrderReviewPhoto(review.orderId, review.id, preparedFile));
-      if (!this.isActiveOrderRoute(routeTicket)) {
-        return;
-      }
-      this.applyUpdatedReview(updatedReview);
-      this.reviewEdit.set(updatedReview);
-      this.reviewEditDraft.update((draft) => draft ? {
-        ...draft,
-        url: updatedReview.url || updatedReview.urlPhoto || ''
-      } : this.reviewEditDraftFromReview(updatedReview));
-    } catch (err) {
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.reviewEditError.set(this.errorMessage(err, 'Фото отзыва не загрузилось.'));
-      }
-    } finally {
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.reviewEditUploading.set(false);
-      }
-      if (input && this.isActiveOrderRoute(routeTicket)) {
-        input.value = '';
-      }
-    }
   }
 
   hasReviewNote(review: OrderReviewItem): boolean {
@@ -3467,7 +2990,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     let value = values[kind] ?? '';
     if (kind === 'botLogin' || kind === 'botPassword') {
       try {
-        const response = await firstValueFrom(this.api.revealManagerOrderReviewCredential(
+        const response = await firstValueFrom(this.managerReviewActionsApi.revealManagerOrderReviewCredential(
           review.orderId,
           review.id,
           kind === 'botLogin' ? 'login' : 'password',
@@ -3504,7 +3027,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runReviewMutation(
       `bot-${review.id}`,
-      () => this.api.changeManagerOrderReviewBot(review.orderId, review.id, this.orderDetailsActivitySource()),
+      () => this.managerReviewActionsApi.changeManagerOrderReviewBot(review.orderId, review.id, this.orderDetailsActivitySource()),
       'Не удалось сменить аккаунт'
     );
   }
@@ -3516,7 +3039,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runReviewMutation(
       `ai-text-${review.id}`,
-      () => this.api.changeManagerOrderReviewText(review.orderId, review.id),
+      () => this.managerReviewActionsApi.changeManagerOrderReviewText(review.orderId, review.id),
       'Не удалось изменить текст отзыва'
     );
   }
@@ -3532,7 +3055,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runReviewMutation(
       `new-account-${review.id}`,
-      () => this.api.assignManagerOrderReviewNewAccount(review.orderId, review.id, this.orderDetailsActivitySource()),
+      () => this.managerReviewActionsApi.assignManagerOrderReviewNewAccount(review.orderId, review.id, this.orderDetailsActivitySource()),
       'Не удалось назначить новый аккаунт'
     );
   }
@@ -3563,7 +3086,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runReviewMutation(
       `block-${review.id}`,
-      () => this.api.deactivateManagerOrderReviewBot(review.orderId, review.id, review.botId!, this.orderDetailsActivitySource()),
+      () => this.managerReviewActionsApi.deactivateManagerOrderReviewBot(review.orderId, review.id, review.botId!, this.orderDetailsActivitySource()),
       'Не удалось заблокировать аккаунт',
       routeTicket
     );
@@ -3587,7 +3110,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runDetailsMutation(
       `publish-${review.id}`,
-      () => this.api.publishManagerOrderReview(review.orderId, review.id, this.orderDetailsActivitySource()),
+      () => this.managerReviewActionsApi.publishManagerOrderReview(review.orderId, review.id, this.orderDetailsActivitySource()),
       'Не удалось опубликовать отзыв',
       () => this.clearReviewPublishCredentialPreparation(review.id)
     );
@@ -3623,83 +3146,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     return this.restrictedWorkerOrderDetailsMode()
       ? 'В этих деталях заказа логин и пароль недоступны'
       : 'Скопировать';
-  }
-
-  reviewPublishActionLocked(review: OrderReviewItem): boolean {
-    if (!this.openedFromWorkerAll() || review.publish) {
-      return false;
-    }
-
-    if (this.reviewNeedsAccountRepair(review)) {
-      return false;
-    }
-
-    const copied = this.copiedReviewCredentials()[review.id];
-    if (!copied?.botLoginAt || !copied.botPasswordAt || copied.botId !== (review.botId ?? null)) {
-      return true;
-    }
-
-    return this.reviewPublishWaitLeftSeconds(review) > 0;
-  }
-
-  reviewPublishActionTitle(review: OrderReviewItem): string {
-    if (!review.publish && this.reviewNeedsAccountRepair(review)) {
-      return this.accountRepairTitle(review);
-    }
-
-    if (!this.openedFromWorkerAll() || review.publish) {
-      return 'Действие с отзывом';
-    }
-
-    const copied = this.copiedReviewCredentials()[review.id];
-    if (!copied || copied.botId !== (review.botId ?? null)) {
-      return 'Сначала скопируйте логин и пароль аккаунта.';
-    }
-
-    if (!copied.botLoginAt || !copied.botPasswordAt) {
-      const missing = [
-        !copied.botLoginAt ? 'логин' : '',
-        !copied.botPasswordAt ? 'пароль' : ''
-      ].filter(Boolean).join(', ');
-      return `Скопируйте ${missing}.`;
-    }
-
-    const left = this.reviewPublishWaitLeftSeconds(review);
-    return left > 0
-      ? `После копирования логина и пароля подождите еще ${left} сек.`
-      : 'Действие с отзывом';
-  }
-
-  reviewPublishActionLabel(review: OrderReviewItem): string {
-    if (review.publish) {
-      return 'ОПУБЛИКОВАНО';
-    }
-
-    if (this.isMutating('publish-' + review.id)) {
-      return 'ПУБЛИКУЮ...';
-    }
-
-    if (!this.reviewNeedsAccountRepair(review)) {
-      return 'ОПУБЛИКОВАТЬ';
-    }
-
-    return this.reviewHasTemplateBot(review) ? 'НУЖЕН ВЫГУЛ' : 'СМЕНИТЕ АККАУНТ';
-  }
-
-  private reviewPublishWaitLeftSeconds(review: OrderReviewItem): number {
-    if (!this.openedFromWorkerAll() || review.publish) {
-      return 0;
-    }
-
-    const copied = this.copiedReviewCredentials()[review.id];
-    if (!copied?.botLoginAt || !copied.botPasswordAt || copied.botId !== (review.botId ?? null)) {
-      return 0;
-    }
-
-    const readyAt = Math.max(copied.botLoginAt, copied.botPasswordAt)
-      + this.publishCredentialWaitMs
-      + this.publishCredentialWaitSafetyBufferMs;
-    return Math.max(0, Math.ceil((readyAt - this.reviewPublishWaitNow()) / 1000));
   }
 
   private orderDetailsActivitySource(): WorkerActivitySource {
@@ -3757,7 +3203,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     const fieldKey = this.reviewFieldKey(review, 'text');
     this.runDetailsMutation(
       `review-help-${review.id}`,
-      () => this.api.createManagerReviewHelpDraftForCard(orderId, review.id),
+      () => this.managerReviewActionsApi.createManagerReviewHelpDraftForCard(orderId, review.id),
       'Не удалось подготовить AI-текст',
       () => {
         this.reviewFieldDrafts.update((drafts) => {
@@ -3799,7 +3245,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runDetailsMutation(
       `recovery-create-${review.id}`,
-      () => this.api.createManagerReviewRecoveryTask(review.orderId, review.id),
+      () => this.managerReviewTasksApi.createManagerReviewRecoveryTask(review.orderId, review.id),
       'Не удалось создать восстановление'
     );
   }
@@ -3883,7 +3329,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runDetailsMutation(
       `bad-task-save-${task.id}`,
-      () => this.api.updateManagerBadReviewTask(orderId, task.id, {
+      () => this.managerReviewTasksApi.updateManagerBadReviewTask(orderId, task.id, {
         taskText: draft.taskText,
         scheduledDate: draft.scheduledDate
       }),
@@ -3913,7 +3359,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
     try {
-      const response = await firstValueFrom(this.api.revealManagerBadReviewTaskCredential(
+      const response = await firstValueFrom(this.managerReviewTasksApi.revealManagerBadReviewTaskCredential(
         orderId,
         task.id,
         kind === 'botLogin' ? 'login' : 'password',
@@ -3938,7 +3384,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runDetailsMutation(
       `bad-task-change-bot-${task.id}`,
-      () => this.api.changeManagerBadReviewTaskBot(orderId, task.id),
+      () => this.managerReviewTasksApi.changeManagerBadReviewTaskBot(orderId, task.id),
       'Не удалось сменить аккаунт плохой задачи'
     );
   }
@@ -3956,7 +3402,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
     try {
-      const response = await firstValueFrom(this.api.revealManagerRecoveryTaskCredential(
+      const response = await firstValueFrom(this.managerReviewTasksApi.revealManagerRecoveryTaskCredential(
         orderId,
         task.id,
         kind === 'botLogin' ? 'login' : 'password',
@@ -3984,7 +3430,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runRecoveryBotMutation(
       `recovery-change-bot-${task.id}`,
-      () => this.api.changeWorkerRecoveryTaskBot(task.id),
+      () => this.workerApi.changeWorkerRecoveryTaskBot(task.id),
       'Не удалось сменить аккаунт восстановления'
     );
   }
@@ -4011,7 +3457,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runRecoveryBotMutation(
       `recovery-block-bot-${task.id}`,
-      () => this.api.deactivateWorkerRecoveryTaskBot(task.id, task.botId!),
+      () => this.workerApi.deactivateWorkerRecoveryTaskBot(task.id, task.botId!),
       'Не удалось заблокировать аккаунт восстановления',
       routeTicket
     );
@@ -4039,7 +3485,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runDetailsMutation(
       `bad-task-complete-${task.id}`,
-      () => this.api.completeManagerBadReviewTask(orderId, task.id),
+      () => this.managerReviewTasksApi.completeManagerBadReviewTask(orderId, task.id),
       'Не удалось отметить плохую задачу',
       undefined,
       routeTicket
@@ -4069,7 +3515,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runDetailsMutation(
       `bad-task-cancel-${task.id}`,
-      () => this.api.cancelManagerBadReviewTask(orderId, task.id),
+      () => this.managerReviewTasksApi.cancelManagerBadReviewTask(orderId, task.id),
       'Не удалось убрать плохую задачу из счета',
       undefined,
       routeTicket
@@ -4138,7 +3584,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runDetailsMutation(
       `recovery-save-${task.id}`,
-      () => this.api.updateManagerReviewRecoveryTask(orderId, task.id, {
+      () => this.managerReviewTasksApi.updateManagerReviewRecoveryTask(orderId, task.id, {
         recoveryText: draft.recoveryText,
         recoveryAnswer: draft.recoveryAnswer,
         scheduledDate: draft.scheduledDate
@@ -4178,7 +3624,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runDetailsMutation(
       `recovery-complete-${task.id}`,
-      () => this.api.completeManagerReviewRecoveryTask(orderId, task.id),
+      () => this.managerReviewTasksApi.completeManagerReviewRecoveryTask(orderId, task.id),
       'Не удалось отметить восстановление',
       undefined,
       routeTicket
@@ -4208,7 +3654,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runDetailsMutation(
       `recovery-delete-${task.id}`,
-      () => this.api.deleteManagerReviewRecoveryTask(orderId, task.id),
+      () => this.managerReviewTasksApi.deleteManagerReviewRecoveryTask(orderId, task.id),
       'Не удалось удалить восстановление',
       () => this.clearRecoveryTaskDraft(task.id),
       routeTicket
@@ -4223,7 +3669,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runDetailsMutation(
       `recovery-notified-${batch.id}`,
-      () => this.api.markManagerRecoveryClientNotified(orderId, batch.id),
+      () => this.managerReviewTasksApi.markManagerRecoveryClientNotified(orderId, batch.id),
       'Не удалось отметить уведомление клиента',
       () => dispatchMobileRecoveryClientNotified({ orderId, batchId: batch.id })
     );
@@ -4246,7 +3692,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
-    this.runDetailsMutation('add-review', () => this.api.addManagerOrderReview(orderId), 'Не удалось добавить отзыв');
+    this.runDetailsMutation('add-review', () => this.managerReviewActionsApi.addManagerOrderReview(orderId), 'Не удалось добавить отзыв');
   }
 
   createHelpDrafts(): void {
@@ -4255,7 +3701,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
-    this.runDetailsMutation('help-all', () => this.api.createManagerReviewHelpDrafts(orderId), 'Не удалось создать подсказки');
+    this.runDetailsMutation('help-all', () => this.managerReviewActionsApi.createManagerReviewHelpDrafts(orderId), 'Не удалось создать подсказки');
   }
 
   sendToCheck(): void {
@@ -4276,7 +3722,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
 
     this.mutationKey.set('send-check');
-    this.api.updateManagerOrderStatus(orderId, 'В проверку').subscribe({
+    this.writes.track(this.managerOrdersApi.updateManagerOrderStatus(orderId, 'В проверку')).subscribe({
       next: () => {
         if (!this.isActiveOrderRoute(routeTicket)) {
           return;
@@ -4325,345 +3771,39 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     void this.router.navigate(['/tabs/review-check', detailsId]);
   }
 
-  openCompanyReport(): void {
-    const orderId = this.orderId();
-    if (!orderId || this.companyReportLoading()) {
-      return;
-    }
+  openCompanyReport(): void { return this.companyReportFacade.openCompanyReport(); }
 
-    const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
-      return;
-    }
+  closeCompanyReport(): void { return this.companyReportFacade.closeCompanyReport(); }
 
-    const loadGeneration = ++this.companyReportLoadGeneration;
-    this.companyReportLoadSubscription?.unsubscribe();
-    this.companyReportLoadSubscription = undefined;
+  canRefreshCompanyReport(): boolean { return this.companyReportFacade.canRefreshCompanyReport(); }
 
-    this.companyReportVisible.set(true);
-    this.companyReportLoading.set(true);
-    this.companyReportError.set(null);
-    const subscription = this.api.getManagerOrderCompanyReport(orderId).pipe(
-      finalize(() => {
-        if (loadGeneration === this.companyReportLoadGeneration && this.isActiveOrderRoute(routeTicket)) {
-          this.companyReportLoadSubscription = undefined;
-        }
-      })
-    ).subscribe({
-      next: (state) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.companyReportState.set(state);
-        this.companyReportLoading.set(false);
-        if (!state.latestJob?.report && !state.activeJob && state.canStart) {
-          this.startCompanyReport();
-        }
-      },
-      error: (err) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.companyReportError.set(this.errorMessage(err, 'Не удалось проверить отчет о компании'));
-        this.companyReportLoading.set(false);
-      }
-    });
-    if (!subscription.closed
-        && loadGeneration === this.companyReportLoadGeneration
-        && this.isActiveOrderRoute(routeTicket)) {
-      this.companyReportLoadSubscription = subscription;
-    }
-  }
+  canShowPaymentLinkAction(): boolean{ return this.paymentFacade.canShowPaymentLinkAction(); }
 
-  closeCompanyReport(): void {
-    this.companyReportVisible.set(false);
-  }
+  paymentLinkModeLabel(): string{ return this.paymentFacade.paymentLinkModeLabel(); }
 
-  canRefreshCompanyReport(): boolean {
-    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
-  }
+  canManagePaymentRoute(): boolean{ return this.paymentFacade.canManagePaymentRoute(); }
 
-  canShowPaymentLinkAction(): boolean {
-    const status = this.tbankStatus();
-    return !!this.details()
-      && !!status?.managerUiEnabled
-      && !!status.paymentLinksEnabled
-      && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
-  }
+  paymentRouteTargetActive(target: PaymentRouteChangeTarget): boolean{ return this.paymentFacade.paymentRouteTargetActive(target); }
 
-  paymentLinkModeLabel(): string {
-    return 'Банковский счёт';
-  }
+  copyCurrentPaymentLink(link: ManagerPaymentLinkResponse): void{ return this.paymentFacade.copyCurrentPaymentLink(link); }
 
-  canManagePaymentRoute(): boolean {
-    return !!this.details() && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
-  }
+  async openPaymentRouteChange(): Promise<void>{ return this.paymentFacade.openPaymentRouteChange(); }
 
-  paymentRouteTargetActive(target: PaymentRouteChangeTarget): boolean {
-    return target !== 'OWNER_TBANK' && this.paymentRouteContext()?.configuredMode === target;
-  }
+  closePaymentRouteChange(): void{ return this.paymentFacade.closePaymentRouteChange(); }
 
-  copyCurrentPaymentLink(link: ManagerPaymentLinkResponse): void {
-    const routeTicket = this.captureOrderRoute();
-    if (routeTicket) {
-      void this.copyText(link.copyText || link.url, 'payment-link', routeTicket);
-    }
-  }
+  async changePaymentRoute(target: PaymentRouteChangeTarget): Promise<void>{ return this.paymentFacade.changePaymentRoute(target); }
 
-  async openPaymentRouteChange(): Promise<void> {
-    const orderId = this.orderId();
-    const routeTicket = this.captureOrderRoute();
-    if (!orderId || !routeTicket || !this.canManagePaymentRoute() || this.paymentRouteContextLoading()) {
-      return;
-    }
-    this.paymentRouteVisible.set(true);
-    this.paymentRouteContextLoading.set(true);
-    this.paymentRouteContext.set(null);
-    this.error.set(null);
-    try {
-      const context = await firstValueFrom(this.api.getManagerOrderPaymentRouteChangeContext(orderId));
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.paymentRouteContext.set(context);
-      }
-    } catch (error) {
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.error.set(this.errorMessage(error, 'Не удалось проверить текущего получателя оплаты'));
-        this.paymentRouteVisible.set(false);
-      }
-    } finally {
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.paymentRouteContextLoading.set(false);
-      }
-    }
-  }
+  async markPaperInvoiceIssued(): Promise<void>{ return this.paymentFacade.markPaperInvoiceIssued(); }
 
-  closePaymentRouteChange(): void {
-    if (this.paymentRouteChanging()) {
-      return;
-    }
-    this.paymentRouteVisible.set(false);
-    this.paymentRouteContext.set(null);
-  }
+  createPaymentLink(): void{ return this.paymentFacade.createPaymentLink(); }
 
-  async changePaymentRoute(target: PaymentRouteChangeTarget): Promise<void> {
-    const orderId = this.orderId();
-    const context = this.paymentRouteContext();
-    const routeTicket = this.captureOrderRoute();
-    if (!orderId || !context?.canChange || !routeTicket || this.paymentRouteChanging()
-      || this.paymentRouteTargetActive(target)) {
-      return;
-    }
-    const targetLabel = this.paymentRouteTargetLabel(target);
-    const confirmed = await this.confirm.confirm({
-      title: 'Сменить получателя оплаты',
-      message: `Переключить заказ на «${targetLabel}»? Продолжайте только если клиент ещё не оплатил: прежний маршрут будет закрыт, а клиенту запланировано обновлённое сообщение.`,
-      confirmText: 'Сменить',
-      danger: true
-    });
-    if (!confirmed || !this.isActiveOrderRoute(routeTicket)) {
-      return;
-    }
-    this.paymentRouteChanging.set(true);
-    this.error.set(null);
-    try {
-      const response = await firstValueFrom(this.api.changeManagerOrderPaymentRoute(orderId, {
-        expectedPaymentLinkId: context.paymentLinkId,
-        target,
-        confirmedUnpaid: true,
-        expectedTargetPaymentProfileId: target === 'OWNER_TBANK'
-          ? context.expectedTargetPaymentProfileId ?? null
-          : null
-      }));
-      if (!this.isActiveOrderRoute(routeTicket)) {
-        return;
-      }
-      this.paymentLink.set(null);
-      this.paymentRouteVisible.set(false);
-      this.paymentRouteContext.set(null);
-      this.loadDetails();
-      await this.presentPaymentRouteSuccessToast(
-        response.clientNotificationScheduled
-          ? `Получатель изменён. Сообщение клиенту запланировано.`
-          : 'Получатель изменён.',
-        routeTicket
-      );
-    } catch (error) {
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.error.set(this.errorMessage(error, 'Не удалось сменить получателя оплаты'));
-      }
-    } finally {
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.paymentRouteChanging.set(false);
-      }
-    }
-  }
+  private loadTbankStatus(): void{ return this.paymentFacade.loadTbankStatus(); }
 
-  async markPaperInvoiceIssued(): Promise<void> {
-    const orderId = this.orderId();
-    const routeTicket = this.captureOrderRoute();
-    const context = this.paymentRouteContext();
-    if (!orderId || !routeTicket || !context || context.configuredMode !== 'OWNER_PAPER_INVOICE'
-      || context.paymentLinkId == null || context.paperInvoiceIssued || this.paymentRouteChanging()) {
-      return;
-    }
-    this.paymentRouteChanging.set(true);
-    this.error.set(null);
-    try {
-      await firstValueFrom(this.api.markManagerOrderPaperInvoiceIssued(orderId));
-      if (!this.isActiveOrderRoute(routeTicket)) {
-        return;
-      }
-      this.paymentRouteContext.update((current) => current ? { ...current, paperInvoiceIssued: true } : current);
-      await this.presentPaymentRouteSuccessToast('Отправка счёта отмечена. Автонапоминания могут продолжить работу.', routeTicket);
-    } catch (error) {
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.error.set(this.errorMessage(error, 'Не удалось отметить отправку счёта'));
-      }
-    } finally {
-      if (this.isActiveOrderRoute(routeTicket)) {
-        this.paymentRouteChanging.set(false);
-      }
-    }
-  }
+  refreshCompanyReport(): void { return this.companyReportFacade.refreshCompanyReport(); }
 
-  private paymentRouteTargetLabel(target: PaymentRouteChangeTarget): string {
-    switch (target) {
-      case 'EMPLOYEE_REQUISITES':
-        return 'Реквизиты сотрудника';
-      case 'OWNER_PAPER_INVOICE':
-        return 'Бумажный счёт владельца';
-      default:
-        return 'Банковская ссылка владельца';
-    }
-  }
+  companyReportStatus(): string { return this.companyReportFacade.companyReportStatus(); }
 
-  private async presentPaymentRouteSuccessToast(message: string, routeTicket: RouteEpochTicket): Promise<void> {
-    const toast = await this.toastController.create({
-      message,
-      duration: 3500,
-      position: 'top',
-      color: 'success',
-      icon: 'checkmark-circle'
-    });
-    if (this.isActiveOrderRoute(routeTicket)) {
-      await toast.present();
-    }
-  }
-
-  createPaymentLink(): void {
-    const orderId = this.orderId();
-    if (!orderId || !this.canShowPaymentLinkAction() || this.isMutating('payment-link')) {
-      return;
-    }
-
-    const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
-      return;
-    }
-
-    this.mutationKey.set('payment-link');
-    this.error.set(null);
-    this.api.createManagerOrderPaymentLink(orderId).subscribe({
-      next: (response) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.paymentLink.set(response);
-        this.mutationKey.set(null);
-        void this.copyText(response.copyText || response.url, 'payment-link', routeTicket);
-      },
-      error: (err) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.error.set(this.errorMessage(err, 'Не удалось создать ссылку на оплату'));
-        this.mutationKey.set(null);
-      }
-    });
-  }
-
-  private loadTbankStatus(): void {
-    const subscription = this.api.getTbankStatus().subscribe({
-      next: (status) => this.tbankStatus.set(status),
-      error: () => this.tbankStatus.set(null)
-    });
-    this.routeSubscription?.add(subscription);
-  }
-
-  refreshCompanyReport(): void {
-    const orderId = this.orderId();
-    if (!orderId || this.companyReportLoading()) {
-      return;
-    }
-
-    if (!this.canRefreshCompanyReport()) {
-      this.companyReportVisible.set(true);
-      this.companyReportError.set('Обновлять отчет может только владелец или администратор.');
-      return;
-    }
-
-    const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
-      return;
-    }
-
-    this.companyReportVisible.set(true);
-    this.companyReportLoading.set(true);
-    this.companyReportError.set(null);
-    this.api.refreshManagerOrderCompanyReport(orderId).subscribe({
-      next: (state) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.companyReportState.set(state);
-        this.companyReportLoading.set(false);
-      },
-      error: (err) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.companyReportError.set(this.errorMessage(err, 'Не удалось обновить отчет о компании'));
-        this.companyReportLoading.set(false);
-      }
-    });
-  }
-
-  companyReportStatus(): string {
-    const state = this.companyReportState();
-    if (!state) {
-      return 'Отчет еще не проверялся.';
-    }
-    if (state.activeJob) {
-      return 'Отчет готовится в фоне. Можно продолжать работать с отзывами.';
-    }
-    if (state.latestJob?.report) {
-      return 'Отчет о компании готов.';
-    }
-    return state.unavailableReason || 'Готового отчета пока нет.';
-  }
-
-  companyReportCompletedAt(): string {
-    const value = this.companyReportState()?.latestJob?.completedAt
-      ?? this.companyReport()?.createdAt
-      ?? this.companyReportState()?.latestJob?.updatedAt
-      ?? '';
-    if (!value) {
-      return '';
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return String(value).slice(0, 16).replace('T', ' ');
-    }
-
-    return new Intl.DateTimeFormat('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
-  }
+  companyReportCompletedAt(): string { return this.companyReportFacade.companyReportCompletedAt(); }
 
   canShowPublishButton(details: OrderDetailsPayload, review: OrderReviewItem): boolean {
     return review.publish || !HIDDEN_PUBLISH_ORDER_STATUSES.has((details.status ?? '').trim());
@@ -4811,23 +3951,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     return this.mutationKey() !== null;
   }
 
-  private reviewEditDraftFromReview(review: OrderReviewItem): ReviewUpdateRequest {
-    return {
-      text: review.text ?? '',
-      answer: review.answer ?? '',
-      comment: review.comment ?? '',
-      created: review.created || null,
-      changed: review.changed || null,
-      publishedDate: review.publishedDate || null,
-      publish: !!review.publish,
-      vigul: !!review.vigul,
-      botName: review.botFio ?? '',
-      botPassword: '',
-      productId: review.productId ?? null,
-      url: review.url || review.urlPhoto || ''
-    };
-  }
-
   private scrollReviewEditFieldIntoView(field: ReviewEditableField): void {
     const fieldName = field === 'answer' ? 'reviewEditAnswer' : 'reviewEditText';
     const element = document.querySelector<HTMLElement>(`.review-edit-sheet [name="${fieldName}"]`);
@@ -4861,37 +3984,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     const element = document.activeElement;
     if (element instanceof HTMLElement) {
       element.blur();
-    }
-  }
-
-  private normalizedReviewEditDraft(draft: ReviewUpdateRequest): ReviewUpdateRequest {
-    return {
-      ...draft,
-      text: draft.text.trim(),
-      answer: draft.answer.trim(),
-      comment: draft.comment.trim(),
-      created: this.emptyToNull(draft.created),
-      changed: this.emptyToNull(draft.changed),
-      publishedDate: this.emptyToNull(draft.publishedDate),
-      botName: draft.botName.trim(),
-      botPassword: draft.botPassword.trim(),
-      url: draft.url.trim()
-    };
-  }
-
-  private clearReviewDrafts(reviewId: number): void {
-    this.reviewFieldDrafts.update((drafts) => {
-      const next = { ...drafts };
-      delete next[`${reviewId}-text`];
-      delete next[`${reviewId}-answer`];
-      return next;
-    });
-    this.clearReviewNoteDrafts(reviewId);
-    if (this.noteOpenId() === reviewId) {
-      this.noteOpenId.set(null);
-    }
-    if (this.editingFieldKey()?.startsWith(`${reviewId}-`)) {
-      this.editingFieldKey.set(null);
     }
   }
 
@@ -4958,301 +4050,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
   }
 
-  startCompanyReport(): void {
-    const orderId = this.orderId();
-    if (!orderId) {
-      return;
-    }
-
-    const routeTicket = this.captureOrderRoute();
-    if (!routeTicket) {
-      return;
-    }
-
-    this.companyReportLoading.set(true);
-    this.api.startManagerOrderCompanyReport(orderId).subscribe({
-      next: (state) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.companyReportState.set(state);
-        this.companyReportLoading.set(false);
-      },
-      error: (err) => {
-        if (!this.isActiveOrderRoute(routeTicket)) {
-          return;
-        }
-        this.companyReportError.set(this.errorMessage(err, 'Не удалось запустить отчет о компании'));
-        this.companyReportLoading.set(false);
-      }
-    });
-  }
-
-  private buildCompanyReportSections(report: CompanyReport | null): CompanyReportSection[] {
-    if (!report) {
-      return [];
-    }
-
-    const explicitSections = (report.sections ?? [])
-      .map((section) => ({
-        title: this.cleanText(section.title),
-        body: this.cleanReportBody(section.body)
-      }))
-      .filter((section) => section.body)
-      .map((section, index) => this.createCompanyReportSection(section.title || `Раздел ${index + 1}`, section.body, index));
-    if (explicitSections.length) {
-      return explicitSections;
-    }
-
-    return this.sectionsFromMarkdown(report.reportMarkdown);
-  }
-
-  private sectionsFromMarkdown(markdown?: string | null): CompanyReportSection[] {
-    const text = this.cleanReportBody(markdown);
-    if (!text) {
-      return [];
-    }
-
-    const sections: CompanyReportSection[] = [];
-    let title = 'Кратко';
-    let body: string[] = [];
-    for (const rawLine of text.split(/\r?\n/)) {
-      const line = rawLine.trimEnd();
-      const heading = line.match(/^#{1,4}\s+(.+)$/);
-      if (heading) {
-        this.pushCompanyReportSection(sections, title, body.join('\n'));
-        title = this.cleanMarkdownText(heading[1]);
-        body = [];
-        continue;
-      }
-      body.push(line);
-    }
-    this.pushCompanyReportSection(sections, title, body.join('\n'));
-
-    return sections.length ? sections : [this.createCompanyReportSection('Отчет', text, 0)];
-  }
-
-  private pushCompanyReportSection(sections: CompanyReportSection[], title: string, body: string): void {
-    const cleanBody = this.cleanReportBody(body);
-    if (!cleanBody) {
-      return;
-    }
-
-    sections.push(this.createCompanyReportSection(this.cleanText(title) || `Раздел ${sections.length + 1}`, cleanBody, sections.length));
-  }
-
-  private createCompanyReportSection(title: string, body: string, index: number): CompanyReportSection {
-    const cleanBody = this.cleanReportBody(body);
-    const cleanTitle = this.cleanText(title) || 'Раздел';
-    return {
-      id: `company-report-section-${index}-${this.companyReportSectionSlug(cleanTitle)}`,
-      title: cleanTitle,
-      body: cleanBody,
-      html: this.renderCompanyReportMarkdown(cleanBody)
-    };
-  }
-
-  private companyReportSectionSlug(title: string): string {
-    return title
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-zа-яё0-9-]/g, '')
-      .slice(0, 40) || 'section';
-  }
-
-  private renderCompanyReportMarkdown(markdown?: string | null): string {
-    const text = this.cleanReportBody(markdown);
-    if (!text) {
-      return '';
-    }
-
-    const html: string[] = [];
-    const paragraph: string[] = [];
-    const listItems: string[] = [];
-    const tableRows: string[][] = [];
-    let listTag: 'ul' | 'ol' | null = null;
-
-    const flushParagraph = () => {
-      if (!paragraph.length) {
-        return;
-      }
-      html.push(`<p>${this.renderInlineReportMarkdown(paragraph.join(' '))}</p>`);
-      paragraph.length = 0;
-    };
-
-    const flushList = () => {
-      if (!listTag || !listItems.length) {
-        return;
-      }
-      html.push(`<${listTag}>${listItems.map((item) => `<li>${item}</li>`).join('')}</${listTag}>`);
-      listItems.length = 0;
-      listTag = null;
-    };
-
-    const flushTable = () => {
-      if (!tableRows.length) {
-        return;
-      }
-
-      const separatorIndex = tableRows.findIndex((row) => this.isMarkdownTableSeparator(row));
-      const hasHeader = separatorIndex === 1 && tableRows.length > 2;
-      const headerRow = hasHeader ? tableRows[0] : null;
-      const bodyRows = tableRows
-        .filter((row, index) => !this.isMarkdownTableSeparator(row) && (!hasHeader || index !== 0));
-
-      if (!headerRow && bodyRows.length < 2) {
-        paragraph.push(...tableRows.map((row) => row.join(' | ')));
-      } else {
-        const bodyHtml = bodyRows
-          .map((row, rowIndex) => {
-            const title = this.cleanText(row[0]) || `Строка ${rowIndex + 1}`;
-            const tone = `tone-${(rowIndex % 4) + 1}`;
-            const fieldsSource = row.length > 1 ? row.slice(1) : row;
-            const labelsSource = row.length > 1 ? headerRow?.slice(1) : headerRow;
-            const fields = fieldsSource
-              .map((cell, index) => {
-                const label = labelsSource?.[index] || `Поле ${index + 1}`;
-                return `<div class="company-report-table-field"><span class="company-report-table-label">${this.renderInlineReportMarkdown(label)}</span><p class="company-report-table-value">${this.renderInlineReportMarkdown(cell || '-')}</p></div>`;
-              })
-              .join('');
-            if (!fieldsSource.length) {
-              return `<article class="company-report-table-card ${tone}"><h5>${this.renderInlineReportMarkdown(title)}</h5></article>`;
-            }
-            return `<article class="company-report-table-card ${tone}"><h5>${this.renderInlineReportMarkdown(title)}</h5>${fields}</article>`;
-          })
-          .join('');
-        html.push(`<div class="company-report-table-stack">${bodyHtml}</div>`);
-      }
-
-      tableRows.length = 0;
-    };
-
-    for (const rawLine of text.split(/\r?\n/)) {
-      const line = rawLine.trim();
-      if (!line) {
-        flushParagraph();
-        flushList();
-        flushTable();
-        continue;
-      }
-
-      if (this.isMarkdownTableLine(line)) {
-        flushParagraph();
-        flushList();
-        tableRows.push(this.parseMarkdownTableRow(line));
-        continue;
-      }
-
-      flushTable();
-
-      const heading = line.match(/^#{2,5}\s+(.+)$/);
-      if (heading) {
-        flushParagraph();
-        flushList();
-        html.push(`<h4>${this.renderInlineReportMarkdown(heading[1])}</h4>`);
-        continue;
-      }
-
-      if (this.isReportSubheadingLine(line)) {
-        flushParagraph();
-        flushList();
-        html.push(`<h5 class="company-report-subheading">${this.renderInlineReportMarkdown(line.replace(/:$/, ''))}</h5>`);
-        continue;
-      }
-
-      const unordered = line.match(/^[-*]\s+(.+)$/);
-      if (unordered) {
-        flushParagraph();
-        if (listTag && listTag !== 'ul') {
-          flushList();
-        }
-        listTag = 'ul';
-        listItems.push(this.renderInlineReportMarkdown(unordered[1]));
-        continue;
-      }
-
-      const ordered = line.match(/^\d+[.)]\s+(.+)$/);
-      if (ordered) {
-        flushParagraph();
-        if (listTag && listTag !== 'ol') {
-          flushList();
-        }
-        listTag = 'ol';
-        listItems.push(this.renderInlineReportMarkdown(ordered[1]));
-        continue;
-      }
-
-      flushList();
-      paragraph.push(line);
-    }
-
-    flushParagraph();
-    flushList();
-    flushTable();
-
-    return html.join('');
-  }
-
-  private renderInlineReportMarkdown(value?: string | null): string {
-    return this.escapeHtml(this.cleanText(value))
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/__(.+?)__/g, '<strong>$1</strong>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>');
-  }
-
-  private parseMarkdownTableRow(line: string): string[] {
-    return line
-      .replace(/^\|/, '')
-      .replace(/\|$/, '')
-      .split('|')
-      .map((cell) => this.cleanText(cell));
-  }
-
-  private isMarkdownTableLine(line: string): boolean {
-    const trimmed = line.trim();
-    return trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.includes('|');
-  }
-
-  private isMarkdownTableSeparator(row: string[]): boolean {
-    return row.length > 0 && row.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s/g, '')));
-  }
-
-  private isReportSubheadingLine(line: string): boolean {
-    const text = this.cleanMarkdownText(line);
-    return text.endsWith(':') && text.length <= 90 && !text.includes('|');
-  }
-
-  private escapeHtml(value: string): string {
-    return value
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  private cleanReportBody(value?: string | null): string {
-    return this.cleanText(value)
-      .replace(/\r\n/g, '\n')
-      .replace(/\n{3,}/g, '\n\n');
-  }
-
-  private cleanMarkdownText(value?: string | null): string {
-    return this.cleanText(value)
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/__(.*?)__/g, '$1')
-      .replace(/`([^`]+)`/g, '$1');
-  }
-
-  private cleanStringList(values?: Array<string | null | undefined> | null): string[] {
-    return (values ?? [])
-      .map((value) => this.cleanText(value))
-      .filter((value, index, items) => !!value && items.indexOf(value) === index);
-  }
-
-  private cleanText(value?: unknown): string {
-    return typeof value === 'string' ? value.trim() : '';
-  }
+  startCompanyReport(): void { return this.companyReportFacade.startCompanyReport(); }
 
   private sendToCheckBlockReason(): string | null {
     if (this.hasPendingReviewFieldChanges()) {
@@ -5263,20 +4061,6 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       .filter((review) => this.isInvalidReviewText(this.reviewFieldSourceValue(review, 'text')))
       .length ?? 0;
     return invalid > 0 ? `Нельзя отправить на проверку: есть пустые отзывы или заготовка "${PLACEHOLDER_REVIEW_TEXT}" (${invalid}).` : null;
-  }
-
-  private hasPendingReviewFieldChanges(): boolean {
-    const details = this.details();
-    if (!details) {
-      return false;
-    }
-
-    return Object.entries(this.reviewFieldDrafts()).some(([key, value]) => {
-      const match = /^(\d+)-(text|answer)$/.exec(key);
-      const review = match ? details.reviews.find((item) => item.id === Number(match[1])) : null;
-      const field = match?.[2] as ReviewEditableField | undefined;
-      return !!review && !!field && value !== this.reviewFieldSourceValue(review, field);
-    });
   }
 
   private isInvalidReviewText(value: string): boolean {
@@ -5302,7 +4086,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.mutationKey.set(key);
     this.error.set(null);
-    request().subscribe({
+    this.writes.track(request()).subscribe({
       next: (details) => {
         if (!this.isActiveOrderRoute(routeTicket)) {
           return;
@@ -5334,7 +4118,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
     this.mutationKey.set(key);
     this.error.set(null);
-    request().subscribe({
+    this.writes.track(request()).subscribe({
       next: (review) => {
         if (!this.isActiveOrderRoute(routeTicket)) {
           return;
@@ -5369,7 +4153,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.mutationKey.set(key);
     this.error.set(null);
-    request().subscribe({
+    this.writes.track(request()).subscribe({
       next: () => {
         if (!this.isActiveOrderRoute(routeTicket)) {
           return;
@@ -5422,242 +4206,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     } : details);
   }
 
-  private reviewFieldKey(review: OrderReviewItem, field: ReviewEditableField): string {
-    return `${review.id}-${field}`;
-  }
-
-  private reviewSideNoteKey(review: OrderReviewItem, field: ReviewSideNoteField): string {
-    return `${review.id}-${field}`;
-  }
-
-  private clearReviewNoteDrafts(reviewId: number): void {
-    this.reviewNoteDrafts.update((drafts) => {
-      const next = { ...drafts };
-      delete next[reviewId];
-      return next;
-    });
-    this.reviewSideNoteDrafts.update((drafts) => {
-      const next = { ...drafts };
-      delete next[`${reviewId}-order`];
-      delete next[`${reviewId}-company`];
-      return next;
-    });
-  }
-
-  private reviewFieldSourceValue(review: OrderReviewItem, field: ReviewEditableField): string {
-    return field === 'text' ? review.text ?? '' : review.answer ?? '';
-  }
-
   private hasText(value?: string | null): boolean {
     return !!(value ?? '').trim();
-  }
-
-  private refreshReviewPublishWaitTimer(): void {
-    this.reviewPublishWaitNow.set(Date.now());
-    if (!this.hasActiveReviewPublishWait()) {
-      this.clearReviewPublishWaitTimer();
-      return;
-    }
-
-    if (this.publishCredentialWaitTimer) {
-      return;
-    }
-
-    this.publishCredentialWaitTimer = setInterval(() => {
-      this.reviewPublishWaitNow.set(Date.now());
-      if (!this.hasActiveReviewPublishWait()) {
-        this.clearReviewPublishWaitTimer();
-      }
-    }, 1000);
-  }
-
-  private hasActiveReviewPublishWait(): boolean {
-    if (!this.openedFromWorkerAll()) {
-      return false;
-    }
-
-    return (this.details()?.reviews ?? []).some((review) => this.reviewPublishWaitLeftSeconds(review) > 0);
-  }
-
-  private clearReviewPublishWaitTimer(): void {
-    if (!this.publishCredentialWaitTimer) {
-      return;
-    }
-
-    clearInterval(this.publishCredentialWaitTimer);
-    this.publishCredentialWaitTimer = null;
-  }
-
-  private restoreReviewPublishCredentialPreparation(): void {
-    const stored = this.readStoredReviewPublishCredentialPreparation();
-    if (!stored) {
-      return;
-    }
-
-    this.copiedReviewCredentials.set({
-      [stored.reviewId]: {
-        botId: stored.botId ?? null,
-        botLoginAt: stored.botLoginAt,
-        botPasswordAt: stored.botPasswordAt
-      }
-    });
-    this.refreshReviewPublishWaitTimer();
-  }
-
-  private applyServerReviewPublishCredentialPreparation(preparation?: WorkerCredentialPreparation | null): void {
-    if (!this.openedFromWorkerAll() || !preparation) {
-      this.clearReviewPublishCredentialPreparation();
-      return;
-    }
-
-    if ((preparation.scope ?? '').toUpperCase() !== 'PUBLISH') {
-      this.clearReviewPublishCredentialPreparation();
-      return;
-    }
-
-    const reviewId = Number(preparation.reviewId);
-    const botId = preparation.botId === null || preparation.botId === undefined ? null : Number(preparation.botId);
-    if (!Number.isFinite(reviewId) || reviewId <= 0 || (botId !== null && !Number.isFinite(botId))) {
-      this.clearReviewPublishCredentialPreparation();
-      return;
-    }
-
-    this.copiedReviewCredentials.set({
-      [reviewId]: {
-        botId,
-        ...this.serverReviewCredentialCopyState(preparation)
-      }
-    });
-
-    const review = this.details()?.reviews?.find((item) => item.id === reviewId);
-    if (review) {
-      this.storeReviewPublishCredentialPreparation(review);
-    }
-  }
-
-  private serverReviewCredentialCopyState(preparation: WorkerCredentialPreparation): Omit<ReviewCredentialCopyState, 'botId'> {
-    const loginCopied = typeof preparation.loginCopied === 'boolean'
-      ? preparation.loginCopied
-      : Boolean(preparation.loginCopiedAt);
-    const passwordCopied = typeof preparation.passwordCopied === 'boolean'
-      ? preparation.passwordCopied
-      : Boolean(preparation.passwordCopiedAt);
-
-    if (!loginCopied && !passwordCopied) {
-      return {};
-    }
-
-    const now = Date.now();
-    if (loginCopied && passwordCopied) {
-      const remainingSeconds = Math.max(0, Number(preparation.remainingSeconds ?? 0));
-      const lastCopyAt = preparation.ready === true
-        ? now - this.publishCredentialWaitMs - this.publishCredentialWaitSafetyBufferMs
-        : now - this.publishCredentialWaitMs + remainingSeconds * 1000;
-      return {
-        botLoginAt: lastCopyAt,
-        botPasswordAt: lastCopyAt
-      };
-    }
-
-    return {
-      botLoginAt: loginCopied ? now : undefined,
-      botPasswordAt: passwordCopied ? now : undefined
-    };
-  }
-
-  private storeReviewPublishCredentialPreparation(review: OrderReviewItem): void {
-    const copied = this.copiedReviewCredentials()[review.id];
-    if (!copied) {
-      this.removeSessionStorageItem(this.reviewPublishCredentialStorageKey);
-      return;
-    }
-
-    this.setSessionStorageItem(this.reviewPublishCredentialStorageKey, JSON.stringify({
-      reviewId: review.id,
-      botId: copied.botId ?? null,
-      botLoginAt: copied.botLoginAt,
-      botPasswordAt: copied.botPasswordAt,
-      updatedAt: Date.now()
-    } satisfies StoredReviewCredentialCopyState));
-  }
-
-  private clearReviewPublishCredentialPreparation(reviewId?: number): void {
-    const current = this.copiedReviewCredentials();
-    if (reviewId === undefined || current[reviewId]) {
-      this.copiedReviewCredentials.set({});
-      this.clearReviewPublishWaitTimer();
-    }
-
-    const stored = this.readStoredReviewPublishCredentialPreparation(false);
-    if (reviewId === undefined || stored?.reviewId === reviewId) {
-      this.removeSessionStorageItem(this.reviewPublishCredentialStorageKey);
-    }
-  }
-
-  private readStoredReviewPublishCredentialPreparation(clearExpired = true): StoredReviewCredentialCopyState | null {
-    const raw = this.getSessionStorageItem(this.reviewPublishCredentialStorageKey);
-    if (!raw) {
-      return null;
-    }
-
-    try {
-      const value = JSON.parse(raw) as Partial<StoredReviewCredentialCopyState>;
-      const reviewId = Number(value.reviewId);
-      const updatedAt = Number(value.updatedAt);
-      const botLoginAt = value.botLoginAt === undefined ? undefined : Number(value.botLoginAt);
-      const botPasswordAt = value.botPasswordAt === undefined ? undefined : Number(value.botPasswordAt);
-      if (
-        !Number.isFinite(reviewId) ||
-        reviewId <= 0 ||
-        !Number.isFinite(updatedAt) ||
-        (botLoginAt !== undefined && !Number.isFinite(botLoginAt)) ||
-        (botPasswordAt !== undefined && !Number.isFinite(botPasswordAt))
-      ) {
-        this.removeSessionStorageItem(this.reviewPublishCredentialStorageKey);
-        return null;
-      }
-
-      if (clearExpired && Date.now() - updatedAt > this.reviewPublishCredentialMaxAgeMs) {
-        this.removeSessionStorageItem(this.reviewPublishCredentialStorageKey);
-        return null;
-      }
-
-      const botId = value.botId === null || value.botId === undefined ? null : Number(value.botId);
-      return {
-        reviewId,
-        botId: Number.isFinite(botId) ? botId : null,
-        botLoginAt,
-        botPasswordAt,
-        updatedAt
-      };
-    } catch {
-      this.removeSessionStorageItem(this.reviewPublishCredentialStorageKey);
-      return null;
-    }
-  }
-
-  private getSessionStorageItem(key: string): string | null {
-    try {
-      return window.sessionStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  }
-
-  private setSessionStorageItem(key: string, value: string): void {
-    try {
-      window.sessionStorage.setItem(key, value);
-    } catch {
-      // Storage can be blocked; the current page still keeps the state in memory.
-    }
-  }
-
-  private removeSessionStorageItem(key: string): void {
-    try {
-      window.sessionStorage.removeItem(key);
-    } catch {
-      // This only affects UI state restoration.
-    }
   }
 
   private async copyText(value: string, key: string, routeTicket: RouteEpochTicket): Promise<boolean> {
@@ -5708,4 +4258,85 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     return fallback;
   }
+
+  reviewPublishActionLocked(review: OrderReviewItem): boolean{ return this.publicationFacade.reviewPublishActionLocked(review); }
+
+  reviewPublishActionTitle(review: OrderReviewItem): string{ return this.publicationFacade.reviewPublishActionTitle(review); }
+
+  private refreshReviewPublishWaitTimer(): void{ return this.publicationFacade.refreshReviewPublishWaitTimer(); }
+
+  private clearReviewPublishWaitTimer(): void{ return this.publicationFacade.clearReviewPublishWaitTimer(); }
+
+  private restoreReviewPublishCredentialPreparation(): void{ return this.publicationFacade.restoreReviewPublishCredentialPreparation(); }
+
+  private applyServerReviewPublishCredentialPreparation(preparation?: WorkerCredentialPreparation | null): void{ return this.publicationFacade.applyServerReviewPublishCredentialPreparation(preparation); }
+
+  private clearReviewPublishCredentialPreparation(reviewId?: number): void{ return this.publicationFacade.clearReviewPublishCredentialPreparation(reviewId); }
+  reviewPublishActionLabel(review: OrderReviewItem): string { return this.publicationFacade.reviewPublishActionLabel(review); }
+
+  openReviewTextEdit(review: OrderReviewItem, field: ReviewEditableField): void{ return this.reviewEditorFacade.openReviewTextEdit(review, field); }
+
+  closeReviewTextEdit(): void{ return this.reviewEditorFacade.closeReviewTextEdit(); }
+
+  setReviewTextEditValue(value: string): void{ return this.reviewEditorFacade.setReviewTextEditValue(value); }
+
+  reviewTextEditTitle(): string{ return this.reviewEditorFacade.reviewTextEditTitle(); }
+
+  reviewTextEditLabel(): string{ return this.reviewEditorFacade.reviewTextEditLabel(); }
+
+  reviewTextEditPlaceholder(): string{ return this.reviewEditorFacade.reviewTextEditPlaceholder(); }
+
+  reviewTextEditNote(): string{ return this.reviewEditorFacade.reviewTextEditNote(); }
+
+  canSaveReviewTextEdit(): boolean{ return this.reviewEditorFacade.canSaveReviewTextEdit(); }
+
+  saveReviewTextEdit(): void{ return this.reviewEditorFacade.saveReviewTextEdit(); }
+
+  openReviewEdit(review: OrderReviewItem, initialField: ReviewEditableField | null = null): void{ return this.reviewEditorFacade.openReviewEdit(review, initialField); }
+
+  closeReviewEdit(): void{ return this.reviewEditorFacade.closeReviewEdit(); }
+
+  setReviewEditField<K extends keyof ReviewUpdateRequest>(field: K, value: ReviewUpdateRequest[K]): void{ return this.reviewEditorFacade.setReviewEditField(field, value); }
+
+  emptyToNull(value: unknown): string | null{ return this.reviewEditorFacade.emptyToNull(value); }
+
+  canSaveReviewEdit(): boolean{ return this.reviewEditorFacade.canSaveReviewEdit(); }
+
+  saveReviewEdit(): void{ return this.reviewEditorFacade.saveReviewEdit(); }
+
+  async deleteReviewEdit(): Promise<void>{ return this.reviewEditorFacade.deleteReviewEdit(); }
+
+  uploadReviewPhoto(event: Event): void{ return this.reviewEditorFacade.uploadReviewPhoto(event); }
+
+  async pickNativeReviewPhoto(event: Event): Promise<void>{ return this.reviewEditorFacade.pickNativeReviewPhoto(event); }
+
+  private reviewEditDraftFromReview(review: OrderReviewItem): ReviewUpdateRequest{ return this.reviewEditorFacade.reviewEditDraftFromReview(review); }
+
+  reviewFieldValue(review: OrderReviewItem, field: ReviewEditableField): string{ return this.reviewNotesFacade.reviewFieldValue(review, field); }
+
+  isReviewFieldEditing(review: OrderReviewItem, field: ReviewEditableField): boolean{ return this.reviewNotesFacade.isReviewFieldEditing(review, field); }
+
+  toggleReviewNote(review: OrderReviewItem): void{ return this.reviewNotesFacade.toggleReviewNote(review); }
+
+  reviewNoteValue(review: OrderReviewItem): string{ return this.reviewNotesFacade.reviewNoteValue(review); }
+
+  setReviewNoteDraft(review: OrderReviewItem, value: string): void{ return this.reviewNotesFacade.setReviewNoteDraft(review, value); }
+
+  reviewSideNoteValue(review: OrderReviewItem, field: ReviewSideNoteField): string{ return this.reviewNotesFacade.reviewSideNoteValue(review, field); }
+
+  setReviewSideNoteDraft(review: OrderReviewItem, field: ReviewSideNoteField, value: string): void{ return this.reviewNotesFacade.setReviewSideNoteDraft(review, field, value); }
+
+  isAnyReviewNoteChanged(review: OrderReviewItem): boolean{ return this.reviewNotesFacade.isAnyReviewNoteChanged(review); }
+
+  reviewNotesMutationKey(review: OrderReviewItem): string{ return this.reviewNotesFacade.reviewNotesMutationKey(review); }
+
+  async saveAllReviewNotes(review: OrderReviewItem): Promise<void>{ return this.reviewNotesFacade.saveAllReviewNotes(review); }
+
+  private clearReviewDrafts(reviewId: number): void{ return this.reviewNotesFacade.clearReviewDrafts(reviewId); }
+
+  private reviewFieldKey(review: OrderReviewItem, field: ReviewEditableField): string{ return this.reviewNotesFacade.reviewFieldKey(review, field); }
+
+  private reviewFieldSourceValue(review: OrderReviewItem, field: ReviewEditableField): string{ return this.reviewNotesFacade.reviewFieldSourceValue(review, field); }
+
+  private hasPendingReviewFieldChanges(): boolean{ return this.reviewNotesFacade.hasPendingReviewFieldChanges(); }
 }

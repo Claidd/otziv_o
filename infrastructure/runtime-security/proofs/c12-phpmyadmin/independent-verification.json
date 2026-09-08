@@ -1,0 +1,1448 @@
+{
+  "schema": "otziv-c12-pma-independent-offline-verification-v1",
+  "observedAt": "2026-09-08T08:24:16.119519+00:00",
+  "result": "PASS_WITH_DOCUMENTED_COMPATIBILITY_LIMITS",
+  "checks": [
+    {
+      "name": "exact owner freeze",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/apachectl",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/build-iconv.sh",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/Dockerfile",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/envvars",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/httpd.conf",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/iconv-build-packages.lock",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/iconv-proof.php",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/packages.lock",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/packages.requested",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/ports.conf",
+      "passed": true
+    },
+    {
+      "name": "frozen file candidate/site.conf",
+      "passed": true
+    },
+    {
+      "name": "frozen file public/component-comparison.json",
+      "passed": true
+    },
+    {
+      "name": "frozen file public/README.md",
+      "passed": true
+    },
+    {
+      "name": "frozen file public/validation.json",
+      "passed": true
+    },
+    {
+      "name": "frozen file integration-manifest.json",
+      "passed": true
+    },
+    {
+      "name": "frozen file final-scan-execution.json",
+      "passed": true
+    },
+    {
+      "name": "frozen file runtime-final-v11/proof.json",
+      "passed": true
+    },
+    {
+      "name": "frozen file runtime-contracts-v1/proof.json",
+      "passed": true
+    },
+    {
+      "name": "frozen file encoding-comparison.json",
+      "passed": true
+    },
+    {
+      "name": "frozen file inventory-final/result.json",
+      "passed": true
+    },
+    {
+      "name": "frozen file build-v11-result.json",
+      "passed": true
+    },
+    {
+      "name": "frozen file build-v11-source.json",
+      "passed": true
+    },
+    {
+      "name": "frozen file runtime-proof.py",
+      "passed": true
+    },
+    {
+      "name": "frozen file config-session-proof.py",
+      "passed": true
+    },
+    {
+      "name": "frozen file run-final-scan.py",
+      "passed": true
+    },
+    {
+      "name": "frozen file final-inventory.py",
+      "passed": true
+    },
+    {
+      "name": "frozen file finish-proof.py",
+      "passed": true
+    },
+    {
+      "name": "frozen file freeze-final.py",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding build-v11-result.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding build-v11-source.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding build-v11.log",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding final-scan-execution.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding candidate-final-vulnerabilities.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding candidate-final-vulnerabilities.sbom.cdx.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding candidate-final-vulnerabilities.triage.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding candidate-final-vulnerabilities.adjudications.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding candidate-final-vulnerabilities.scanner.log",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding runtime-final-v11/proof.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding runtime-contracts-v1/proof.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/result.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/application-inventory.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding encoding-comparison.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding iconv-source/php-release.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding iconv-source/php-8.3.33.tar.xz",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding iconv-source/php83-APKBUILD",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding iconv-source/gnu-libiconv-APKBUILD",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding iconv-source/builder-packages.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/apk-installed-database",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/apk-payload-sha256.txt",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding final-iconv.so",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/build-apk-database",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/build-apk-payload-sha256.txt",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/build-identity.txt",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/compatibility.json",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/compiler.txt",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/configure.log",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/elf-dynamic.txt",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/loaded-libraries.txt",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/make.log",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/module.sha256",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/official-extension-files.sha256",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/php-abi-configure-options.txt",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/PHP-LICENSE",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/phpize.log",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/unchanged-source.log",
+      "passed": true
+    },
+    {
+      "name": "public evidence binding inventory-final/apk-evidence/iconv-build/upstream-tests.log",
+      "passed": true
+    },
+    {
+      "name": "14 additive integration paths",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/apachectl",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/build-iconv.sh",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/Dockerfile",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/envvars",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/httpd.conf",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/iconv-build-packages.lock",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/iconv-proof.php",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/packages.lock",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/packages.requested",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/ports.conf",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/site.conf",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/README.md",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/VALIDATION_2026-09-08.json",
+      "passed": true
+    },
+    {
+      "name": "integration source infrastructure/runtime-security/builds/phpmyadmin-alpine/COMPONENT_COMPARISON_2026-09-08.json",
+      "passed": true
+    },
+    {
+      "name": "10 build-consumed integration files",
+      "passed": true
+    },
+    {
+      "name": "exact local COPY input contract",
+      "passed": true
+    },
+    {
+      "name": "no unchecked APK trust bypass",
+      "passed": true
+    },
+    {
+      "name": "context text LF apachectl",
+      "passed": true
+    },
+    {
+      "name": "context text LF build-iconv.sh",
+      "passed": true
+    },
+    {
+      "name": "context text LF Dockerfile",
+      "passed": true
+    },
+    {
+      "name": "context text LF envvars",
+      "passed": true
+    },
+    {
+      "name": "context text LF httpd.conf",
+      "passed": true
+    },
+    {
+      "name": "context text LF iconv-build-packages.lock",
+      "passed": true
+    },
+    {
+      "name": "context text LF iconv-proof.php",
+      "passed": true
+    },
+    {
+      "name": "context text LF packages.lock",
+      "passed": true
+    },
+    {
+      "name": "context text LF packages.requested",
+      "passed": true
+    },
+    {
+      "name": "context text LF ports.conf",
+      "passed": true
+    },
+    {
+      "name": "context text LF site.conf",
+      "passed": true
+    },
+    {
+      "name": "context text LF README.md",
+      "passed": true
+    },
+    {
+      "name": "context text LF validation.json",
+      "passed": true
+    },
+    {
+      "name": "context text LF component-comparison.json",
+      "passed": true
+    },
+    {
+      "name": "actual full raw zero H/C",
+      "passed": true
+    },
+    {
+      "name": "two lower severity findings retained",
+      "passed": true
+    },
+    {
+      "name": "APK and Composer full package inventories",
+      "passed": true
+    },
+    {
+      "name": "exact scan OCI configuration",
+      "passed": true
+    },
+    {
+      "name": "exact scan Alpine release",
+      "passed": true
+    },
+    {
+      "name": "saved image archive SHA",
+      "passed": true
+    },
+    {
+      "name": "saved OCI index identity",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:2d8b0ba2ef2ead6d3e2e564c76ce20284ca5333610e5a217a6e250c0bc52898a",
+      "passed": true
+    },
+    {
+      "name": "one actual linux amd64 platform",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:69bc3b4c448be19bdbd9e0ea731f8458321999b420e483523d0c6c7970d7e951",
+      "passed": true
+    },
+    {
+      "name": "manifest binds config",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:bf8db4ecfa93d77104a4a8b99de30b6b942c9ec28214fa2d07f303021e405a03",
+      "passed": true
+    },
+    {
+      "name": "raw scan exact image config",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:55afa1ecc21d2bb5e5045f32dafee56272ffd89860bac26f6c32123439af26a4",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:bb96b461c15292329735e033d5648f3b9b4219bf29323610a6d9886fb2b05013",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:6f83c51f336fc74f8feb6959dccd226319903203a826099611cd347bd2867aa8",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:ca84de0623d6a1a6065fcc4ebe16295d57daf28f3dbe24a21c576592fb662334",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:e1528fbdc40cd9e8a7aa021dadef545bf16f88c790cd397ae04d45faabe07b6c",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:a613e13a6cb9e15f73bfe94e3dd5f016b78efe19955e305466f3795cf925d487",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:566555d5b1511f83875ebc3b05cadb48422c4901091e4b092b78cce20a1f8af6",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:9813e056f7c6b059ce7a95233ae327d53f233a951b727c28ed1d265dea25186c",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:8ce1efd1e79e9e1782c779b5b5560cb99a38b90555888a5069096692347c13dd",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:b50f39c835f60e849478afa372775aabd1d981f64c453558ec2afada5e42a4f1",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:41883ea67b1deabeb06833c33cbad0339c8ddc227be28ab83ffb032bb72a884e",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:654bdaf9bb2a0cc042d9552ebabb1e23ffa9e7615309f317f520707ee4a7987b",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:8629e5922118cd104a8c9fd46987be0b14e79cf65dd1bccf8c93fbff9a7da7f2",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:aba91c6b2cdd9de217a73162f5e7a403a1f55ac5cfd5db2885bacfae0d73ea69",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:153d09fac1934f3c99057045a885694060e5f8a97232be2e6f7c2fc029fa51ea",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:040e02533d7e23e12c6aefca2e456b8010585846792ac07a0984619e646eba5c",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:93c726066f4f8aee0d8d41ff2ed58bf92084575bdd10e64aaa20ac09c11035e7",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:ecad6201757d14b98591d60331b043fd38034f51a18901f921ab99424ef3a341",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:fb724ce923159cb0206c48d4412e2ba70361c198683920625b596a1b941b04ef",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:82a5f7a80039e3b16da0030a7e6c3505e69d085652df52c84e34ad17fd4c999f",
+      "passed": true
+    },
+    {
+      "name": "OCI blob sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv binary",
+      "passed": true
+    },
+    {
+      "name": "image runtime APK evidence apk-installed-database",
+      "passed": true
+    },
+    {
+      "name": "image runtime APK evidence apk-payload-sha256.txt",
+      "passed": true
+    },
+    {
+      "name": "actual final installed DB retained",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance build-apk-database",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance build-apk-payload-sha256.txt",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance build-identity.txt",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance compatibility.json",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance compiler.txt",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance configure.log",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance elf-dynamic.txt",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance loaded-libraries.txt",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance make.log",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance module.sha256",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance official-extension-files.sha256",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance php-abi-configure-options.txt",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance PHP-LICENSE",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance phpize.log",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance unchanged-source.log",
+      "passed": true
+    },
+    {
+      "name": "actual image iconv provenance upstream-tests.log",
+      "passed": true
+    },
+    {
+      "name": "98 actual APK payload hashes",
+      "passed": true
+    },
+    {
+      "name": "runtime full lock closure",
+      "passed": true
+    },
+    {
+      "name": "builder full lock closure",
+      "passed": true
+    },
+    {
+      "name": "runtime no builder or APK-owned iconv collision",
+      "passed": true
+    },
+    {
+      "name": "PHP distribution APK versions exact ABI",
+      "passed": true
+    },
+    {
+      "name": "separate uploadprogress version retained",
+      "passed": true
+    },
+    {
+      "name": "official PHP release SHA and Docker ADD checksum",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strrpos.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug48147.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/gh17047.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strpos-charset-length-cve-2007-4840.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug78069.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_set_encoding-charset-length-cve-2007-4840.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug51250.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./php_iconv.h",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_ini_encoding.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_stream_filter_delimiter.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strpos_basic.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_substr-charset-length-cve-2007-4783.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug37176.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug52211.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv004.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strrpos_error2.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/gh7980.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug66828.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_basic_001.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_mime_encode_001.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strpos_variation5.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_stream_filter.txt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_mime_decode.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug72320.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/translit-utf8.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_mime_encode.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./CREDITS",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strlen_basic.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug69840.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_mime_decode_headers.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug37773.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strpos.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug48289.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strlen-charset-length-cve-2007-4840.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_substr_error2.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/eucjp2sjis.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./iconv_arginfo.h",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./php_iconv.def",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strpos_error_001.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug74230.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/eucjp2utf8.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strpos_error2.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_substr.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/Quotes.UTF-8.data",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./config.m4",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug52941.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/translit-failure.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strlen_error2.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug76249.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug53891.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv001.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_get_encoding_basic.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_stream_filter.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/ob_iconv_handler-charset-length-cve-2007-4840.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_default_charset.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_substr_basic.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug53304.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strrpos-charset-length-cve-2007-4840.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/ob_iconv_handler.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/eucjp2iso2022jp.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv-charset-length-cve-2007-4840.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug68180.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strlen.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug55146.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_basic.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug60494.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug63839.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug78069.data",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_mime_decode-charset-length-cve-2007-4840.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./iconv.stub.php",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_mime_decode_headers-charset-length-cve-2007-4840.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./iconv.c",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/gh7953.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_substr_out_of_bounds.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./config.w32",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_basic_001-win32.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_strrpos_basic.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug79200.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv003.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv002.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/bug77147.phpt",
+      "passed": true
+    },
+    {
+      "name": "official untouched iconv ./tests/iconv_encoding_basic.phpt",
+      "passed": true
+    },
+    {
+      "name": "retained PHP license exact",
+      "passed": true
+    },
+    {
+      "name": "82 official files verified",
+      "passed": true
+    },
+    {
+      "name": "retained upstream test counts",
+      "passed": true
+    },
+    {
+      "name": "retained nine iconv controls",
+      "passed": true
+    },
+    {
+      "name": "GNU iconv ELF and loaded link proof",
+      "passed": true
+    },
+    {
+      "name": "same full member names var_www_html",
+      "passed": true
+    },
+    {
+      "name": "all regular bytes and metadata var_www_html",
+      "passed": true
+    },
+    {
+      "name": "only documented root directory metadata difference var_www_html",
+      "passed": true
+    },
+    {
+      "name": "same full member names etc_phpmyadmin",
+      "passed": true
+    },
+    {
+      "name": "all regular bytes and metadata etc_phpmyadmin",
+      "passed": true
+    },
+    {
+      "name": "only documented root directory metadata difference etc_phpmyadmin",
+      "passed": true
+    },
+    {
+      "name": "same full member names docker-entrypoint.sh",
+      "passed": true
+    },
+    {
+      "name": "all regular bytes and metadata docker-entrypoint.sh",
+      "passed": true
+    },
+    {
+      "name": "only documented root directory metadata difference docker-entrypoint.sh",
+      "passed": true
+    },
+    {
+      "name": "same full member names usr_local_bin_apache2-foreground",
+      "passed": true
+    },
+    {
+      "name": "all regular bytes and metadata usr_local_bin_apache2-foreground",
+      "passed": true
+    },
+    {
+      "name": "only documented root directory metadata difference usr_local_bin_apache2-foreground",
+      "passed": true
+    },
+    {
+      "name": "4275 actual regular app files",
+      "passed": true
+    },
+    {
+      "name": "runtime exact candidate runtime-final-v11/proof.json",
+      "passed": true
+    },
+    {
+      "name": "runtime checks and cleanup runtime-final-v11/proof.json",
+      "passed": true
+    },
+    {
+      "name": "runtime runner binding runtime-final-v11/proof.json",
+      "passed": true
+    },
+    {
+      "name": "runtime exact candidate runtime-contracts-v1/proof.json",
+      "passed": true
+    },
+    {
+      "name": "runtime checks and cleanup runtime-contracts-v1/proof.json",
+      "passed": true
+    },
+    {
+      "name": "runtime runner binding runtime-contracts-v1/proof.json",
+      "passed": true
+    },
+    {
+      "name": "explicit lossy ASCII distinction",
+      "passed": true
+    },
+    {
+      "name": "actual shared CP1251 and EURss",
+      "passed": true
+    },
+    {
+      "name": "immutable C7 manifest",
+      "passed": true
+    },
+    {
+      "name": "root prepared C12 manifest identity",
+      "passed": true
+    },
+    {
+      "name": "named one-component publication set",
+      "passed": true
+    },
+    {
+      "name": "original C7 three-service mapping unchanged",
+      "passed": true
+    },
+    {
+      "name": "C12 exact candidate source recipe",
+      "passed": true
+    }
+  ],
+  "checkCount": 273,
+  "rawSeverityCounts": {
+    "MEDIUM": 2
+  },
+  "rawPackageCounts": {
+    "alpine": 98,
+    "node-pkg": 1,
+    "composer-vendor": 58
+  },
+  "applicationParity": [
+    {
+      "tree": "var_www_html",
+      "members": 5112,
+      "regularFiles": 4275,
+      "differences": [
+        {
+          "member": "html",
+          "source": {
+            "type": "5",
+            "mode": "0o555",
+            "uid": 33,
+            "gid": 33,
+            "linkname": "",
+            "sha256": null
+          },
+          "candidate": {
+            "type": "5",
+            "mode": "0o2755",
+            "uid": 0,
+            "gid": 33,
+            "linkname": "",
+            "sha256": null
+          }
+        }
+      ]
+    },
+    {
+      "tree": "etc_phpmyadmin",
+      "members": 4,
+      "regularFiles": 2,
+      "differences": []
+    },
+    {
+      "tree": "docker-entrypoint.sh",
+      "members": 1,
+      "regularFiles": 1,
+      "differences": []
+    },
+    {
+      "tree": "usr_local_bin_apache2-foreground",
+      "members": 1,
+      "regularFiles": 1,
+      "differences": []
+    }
+  ],
+  "sourceEvidence": {
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\freeze.json": {
+      "sha256": "66bed05137dd466b1f474fc1f1c0c2e1f6bdbe7410c0213f075b70dfd8ca1067",
+      "bytes": 4526
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\apachectl": {
+      "sha256": "de65830a3a79fddff738fe5adf434b585127ccd6c18953c5da347feb5c0a3f7a",
+      "bytes": 119
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\build-iconv.sh": {
+      "sha256": "9602fe44d2caf810c025d78c247e3ef6f73e5b2e2b54be5c8adf74633e8ba844",
+      "bytes": 2354
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\Dockerfile": {
+      "sha256": "514bd99b51fd6003a5026b1f417a94ee0032c75e568cc38efdbcaa199f57df09",
+      "bytes": 3974
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\envvars": {
+      "sha256": "2699001b412b0c9db3bf71915833632e4e66cfaddccb25044b200d9398c0f6df",
+      "bytes": 228
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\httpd.conf": {
+      "sha256": "1c88271361b605df1d5af7fb8b553fa731ce3dbd48ee9778b37e50b490dab6d9",
+      "bytes": 2504
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\iconv-build-packages.lock": {
+      "sha256": "ab0b6b9b5969d4c088df0c4412de1350b9825f64fc8c114d748362dcfc4d21bc",
+      "bytes": 1396
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\iconv-proof.php": {
+      "sha256": "4bac2dd83a298f7cde3a43edd786d72ca8a232900671a724e912ac68799a4ab0",
+      "bytes": 1350
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\packages.lock": {
+      "sha256": "c519cc06e9b0171c323dcfd03d7b5dcd7b0f5707718889287033a1212a80a722",
+      "bytes": 2018
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\packages.requested": {
+      "sha256": "0875a9d209475540f7e94ba3e68898d4f50c6b8af7f8ed839c34f23e912f13fb",
+      "bytes": 789
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\ports.conf": {
+      "sha256": "c6f0738612c0670bb77f54ed630b6f1f6c97ef2b627ad70bf4bcf858d056c26f",
+      "bytes": 10
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate\\site.conf": {
+      "sha256": "7c8b6967253e3a67f283336cd11db3c1d468da78887d99d0aaa06c11934c500c",
+      "bytes": 133
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\public\\component-comparison.json": {
+      "sha256": "bcba6753bf4986ba1a4b2ca4e2fb7de95845110d936880bd3c3f08264aed66cd",
+      "bytes": 1494
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\public\\README.md": {
+      "sha256": "4796dd8236d73b1adf8dd785ee0dc9a4eed736466e312a1a45bf1e43993e73bb",
+      "bytes": 4633
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\public\\validation.json": {
+      "sha256": "86fa783665dc472a4070ed0a406c78cd5ee56201ead6f73238df5d9e749cb24c",
+      "bytes": 17820
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\integration-manifest.json": {
+      "sha256": "6a2b9596a3eb906b64e31b21832d8c31bc5b4b5a98a0952fab5f92f1d9c6ca41",
+      "bytes": 6060
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\final-scan-execution.json": {
+      "sha256": "edfe1ba44255977eb08fb27975fa990f214fe907b23530b0253f6488f253c94d",
+      "bytes": 358
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\runtime-final-v11\\proof.json": {
+      "sha256": "05adafd4bc3e8c253c0ad2e28ebeff75a6e9cb61f81e70e6259dc0a90c688e36",
+      "bytes": 23348
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\runtime-contracts-v1\\proof.json": {
+      "sha256": "eed3987128fa7a276d5716ee72e7e861497567325282cf86bb9e14bb9f604d5e",
+      "bytes": 7272
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\encoding-comparison.json": {
+      "sha256": "73703ca408cddcb6f035455d5af9059aab0dd98c7f4d3acf89f269014bab2b1a",
+      "bytes": 1218
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\result.json": {
+      "sha256": "46565bfbc0c443ba1a9ff176e526681375d0004319b2defad9882a1c776a34d2",
+      "bytes": 2047
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\build-v11-result.json": {
+      "sha256": "3c62d6573bb801b1ea5acec24cc68e0e989f78338990cc887aa996c2042f7b1c",
+      "bytes": 1313
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\build-v11-source.json": {
+      "sha256": "288e34920d7d3ce0b6939b8f403442fe98ea4de7edff5480ce7269adb663363a",
+      "bytes": 1069
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\runtime-proof.py": {
+      "sha256": "f1c7d558688a9ce22afa45ba61cb988babd3b114418e895223d22fcdbfcaf041",
+      "bytes": 16087
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\config-session-proof.py": {
+      "sha256": "bc8cef6789d7eb7c8ebb6a814f24559b90c1b5dbc0826e7a6f6c9d38f44c3a44",
+      "bytes": 8175
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\run-final-scan.py": {
+      "sha256": "43b1bd89860ae6c556b826008096705e60981901c44e19e67006a82ee7d56dc4",
+      "bytes": 1310
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\final-inventory.py": {
+      "sha256": "83cfb6e2415c73f883e11a628d68012c833f8163936482f12e688f74db423173",
+      "bytes": 3818
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\finish-proof.py": {
+      "sha256": "01e7e74e3641c2b9a7aa87928d14be13a6d4afafc6cf35874bf82e55670a394f",
+      "bytes": 10262
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\freeze-final.py": {
+      "sha256": "21f4ba0c687f7635504d8f44d594efe21dd68c03297100f09a9e8c755b49fb42",
+      "bytes": 2752
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\build-v11.log": {
+      "sha256": "eadb51ee3dfff589c4fc7b77bc2daf84e56a501f778f99497725808e7fe3c8f4",
+      "bytes": 9527
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate-final-vulnerabilities.json": {
+      "sha256": "3dd9e9cb1e920577b5a70ca1fc990642e54cc5e8774e88c74c636f82ecefc498",
+      "bytes": 219043
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate-final-vulnerabilities.sbom.cdx.json": {
+      "sha256": "852e4ee92b0e6fb292f2fcadd9c75a9498719bae1868eb0524c57f2769e29ce3",
+      "bytes": 252865
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate-final-vulnerabilities.triage.json": {
+      "sha256": "0120812653056d9a1c56b8b8ac34627a512eb90ab211cebfdc83abab7d352b97",
+      "bytes": 363
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate-final-vulnerabilities.adjudications.json": {
+      "sha256": "67b8d9dc2f43325fdd1a4877805b468f4e5fce2563808c0b2115dd60cdfeee30",
+      "bytes": 838
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\candidate-final-vulnerabilities.scanner.log": {
+      "sha256": "038c38c49a5d8b2d79da5cbf52f5d0c87377c633d6bddab403b2b147653335f2",
+      "bytes": 18844
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\application-inventory.json": {
+      "sha256": "c0974408dc8c9bf734c92f46b1e5c4ba9bd754f52d4a34daafdec89555cef607",
+      "bytes": 2475156
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\iconv-source\\php-release.json": {
+      "sha256": "820afa34f21a437628561bbc4881d710d7cbe519ba5b35f13937b06ae4225aff",
+      "bytes": 618
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\iconv-source\\php-8.3.33.tar.xz": {
+      "sha256": "e293ed620cec74651bb4a071317892a478aa6840fab22db45c72d77cd42f9676",
+      "bytes": 12613000
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\iconv-source\\php83-APKBUILD": {
+      "sha256": "e7fbe9f9546dba3165ec232988325cbd5ad77ac28a6e740262a9f35261d549fb",
+      "bytes": 19433
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\iconv-source\\gnu-libiconv-APKBUILD": {
+      "sha256": "f1de5e4cf6633f1e255f31cc9fa13974985fcf274d5a85757bf1b7c7d441c4fb",
+      "bytes": 1585
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\iconv-source\\builder-packages.json": {
+      "sha256": "3dc63e2dead1322c455e9b60cf64b2173174bd375ee099b3011da05f1b59b2ef",
+      "bytes": 13861
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\apk-installed-database": {
+      "sha256": "73808986d2672acca5d084bea0c8fc2f67d48b330fff15c562e3a0a0f09d27b3",
+      "bytes": 93227
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\apk-payload-sha256.txt": {
+      "sha256": "aab24b58d09d8b30bed6da7a2d4ad54584573587436523197958538907893d7a",
+      "bytes": 8878
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\final-iconv.so": {
+      "sha256": "e99c0d80445e7f3cc9820e957ecc783864b3b6a51c78e1c62da7cdbdd5f627e7",
+      "bytes": 64296
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\build-apk-database": {
+      "sha256": "42f1ae466aaab72edd347351d8c327734cd04522945905a9963d68d32ce86cf5",
+      "bytes": 275031
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\build-apk-payload-sha256.txt": {
+      "sha256": "55f32a892357332f9f2824321a2e509580fc39ab75dd5452ed06fe26bac8ba57",
+      "bytes": 6226
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\build-identity.txt": {
+      "sha256": "69c43852cb8a3c1b6b3d9aaf045dac95b196b26143bcb241450913ba81d36b58",
+      "bytes": 293
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\compatibility.json": {
+      "sha256": "6a320cd1b0624069bf375d93814c9a0e1e121b369af754c7fef6709f63d1db60",
+      "bytes": 307
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\compiler.txt": {
+      "sha256": "26a61ac72afc022fca79cd7cca401f0fdd36399aa7fb0e5be04184baa42b6c7b",
+      "bytes": 228
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\configure.log": {
+      "sha256": "9c14db6faeb522af6ccc1f624a331b9e4bd2545a8fe269b169c311760633e303",
+      "bytes": 3823
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\elf-dynamic.txt": {
+      "sha256": "f699cb8aab2c9a7e78d2850f3ecce6c38814b54fd90f32d5eab0422146bb40ad",
+      "bytes": 1412
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\loaded-libraries.txt": {
+      "sha256": "c77360f8ab71f46f5e901c6627c064f9e3c2bc96d74f358270752d603a78cc06",
+      "bytes": 6138
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\make.log": {
+      "sha256": "14d056569935f2a0d5ce8e1d5761ee12c15ff2bf54e5fa2d6f5244c709455464",
+      "bytes": 3097
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\module.sha256": {
+      "sha256": "a37799d76a6858b8cab60067031fef0accb342d585e2a987fef6ba3b9f840dea",
+      "bytes": 80
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\official-extension-files.sha256": {
+      "sha256": "37ae15f159b442803f7919a4df3e9bcc5fbe2db579ce047239f55ce0dd099466",
+      "bytes": 7814
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\php-abi-configure-options.txt": {
+      "sha256": "333ade43fa00516f266da2718b90fe977edfa1646f0e1117537a090dfce9acb2",
+      "bytes": 2124
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\PHP-LICENSE": {
+      "sha256": "b42e4df5e50e6ecda1047d503d6d91d71032d09ed1027ba1ef29eed26f890c5a",
+      "bytes": 3204
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\phpize.log": {
+      "sha256": "f47db068b9f77106125a634dd833d12dbe8e580883db0df6888badb92a0b0cf3",
+      "bytes": 120
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\unchanged-source.log": {
+      "sha256": "7f31c001d8cd6d9a3e5d0caff2b2dde41efb56cb13f9b0c839d0d306031964a8",
+      "bytes": 2730
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\apk-evidence\\iconv-build\\upstream-tests.log": {
+      "sha256": "28362399234018a292ef01a531fd8716f9624dac798e1d1a34a73e7c25a7c0db",
+      "bytes": 12383
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\candidate-image.tar": {
+      "sha256": "0c74feb3d10c1794f8577f9106a858e8f6ec5d0d4e0fcf50a6bf82e405179e86",
+      "bytes": 69245440
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\source-var_www_html.tar": {
+      "sha256": "997b3039064904b6c8f9e2f2c78a0a4077a7039d75c9aa932822b7bae5a49c82",
+      "bytes": 59852288
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\candidate-var_www_html.tar": {
+      "sha256": "7da5ce208e4ccf80190655965b06eac3c1d0fb6876ca6600e862938fefc09856",
+      "bytes": 59852288
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\source-etc_phpmyadmin.tar": {
+      "sha256": "47c1b3d74cee2b6588a7ccad4a70b2eb61a0b81eb10c61631418430baed7eb19",
+      "bytes": 13824
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\candidate-etc_phpmyadmin.tar": {
+      "sha256": "47c1b3d74cee2b6588a7ccad4a70b2eb61a0b81eb10c61631418430baed7eb19",
+      "bytes": 13824
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\source-docker-entrypoint.sh.tar": {
+      "sha256": "c01502f06d9344b1f86805d5e090299fb76e3c2cda645b2a8644cf6b3908050e",
+      "bytes": 4096
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\candidate-docker-entrypoint.sh.tar": {
+      "sha256": "c01502f06d9344b1f86805d5e090299fb76e3c2cda645b2a8644cf6b3908050e",
+      "bytes": 4096
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\source-usr_local_bin_apache2-foreground.tar": {
+      "sha256": "6343860058d2ef832881dde883ecd7becc80dfa652a89b0ab92a1f6ed482481e",
+      "bytes": 3072
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-alpine\\inventory-final\\candidate-usr_local_bin_apache2-foreground.tar": {
+      "sha256": "6343860058d2ef832881dde883ecd7becc80dfa652a89b0ab92a1f6ed482481e",
+      "bytes": 3072
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\finalization-20260907\\publication\\worktree\\infrastructure\\runtime-security\\reviewed-images.json": {
+      "sha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+      "bytes": 40047
+    },
+    "E:\\Works\\Projects\\otziv\\.codex-tmp\\security-closure-20260908\\c12-pma-publication-prepared\\reviewed-images-c12-phpmyadmin.json": {
+      "sha256": "c649c20cef9417905bff3f3bc58f2163edf925a53971eb01ecb6d90d729034b4",
+      "bytes": 1221
+    }
+  },
+  "operations": {
+    "network": 0,
+    "subprocess": 0,
+    "builds": 0,
+    "scans": 0,
+    "imageExecutions": 0,
+    "sharedWrites": 0
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "schema": "otziv-c12-alloy-actual-scan-execution-v1",
+  "startedAt": "2026-09-08T07:29:35.084929+00:00",
+  "completedAt": "2026-09-08T07:32:05.877302+00:00",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:a4ce96701d88e336791d1cca7745f5a87060a9834d8f4dd391de2a2072f57852",
+  "exitCode": 0,
+  "sourceHashes": {
+    "scan.mjs": "b797fa39600820e968b895533333176f37c5694ee869c8621043bf8d553b086f",
+    "grafana-tempo-adjudication.mjs": "1cc234bd44c3280043dcef3be29e372095691a0f7a91e524dfd67fbb3555dc05",
+    "go-binary-inspection.mjs": "c67072bad8c104d2e222170b7e33d5e2cd0b9a1ae13ca079959f8c9dd753d3e1",
+    "alloy-daemon-adjudication.mjs": "7824c3dfc255c288522d7f7af0a00452ceb9a4c47a84f0ee5ed150db1909ef98",
+    "adjudications/alloy-daemon/review.json": "cdda7bfda718a0abb91a556a39b700b5bf4c93d8ef4439eca6cd088ff7670b07"
+  },
+  "files": {
+    "execution.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "execution.stdout": {
+      "sha256": "638b3afbb727238da69dea652612e9bc7be39b86432c327b43e9262f72fbf3e2",
+      "bytes": 483
+    },
+    "vulnerabilities.adjudications.json": {
+      "sha256": "49f63d2b4e99c3dea5989abbce966ddb9ace2bcff7e44d11028d9f40e9b39172",
+      "bytes": 2554
+    },
+    "vulnerabilities.json": {
+      "sha256": "f68a6b04986287053ac2dd8f9d4248120f5e3c07b01eeefc725392e70fe0108a",
+      "bytes": 1303052
+    },
+    "vulnerabilities.sbom.cdx.json": {
+      "sha256": "2bb4a28321346e7649ca1f15f6b21b3c9e28e4dd0db36781f5d802fecf00c909",
+      "bytes": 1464094
+    },
+    "vulnerabilities.scanner.log": {
+      "sha256": "2a240a618a57e3e222b6af90ef5c140f8b88d65d9f71b8cbdfe1cf2d34aa6dd0",
+      "bytes": 18872
+    },
+    "vulnerabilities.triage.json": {
+      "sha256": "593ced63a9d41e174c4e68729ec8af514a210eb71091f5b8cdbbf7611473282e",
+      "bytes": 1806
+    }
+  },
+  "summary": {
+    "schema": "otziv-vulnerability-scan-v1",
+    "artifactCount": 2,
+    "high": 2,
+    "critical": 0,
+    "unfixedHighOrCritical": 2,
+    "blockingFixedHighOrCritical": 0,
+    "adjudicatedFixedHighOrCritical": 0,
+    "effectiveBlockingFixedHighOrCritical": 0,
+    "result": "PASS",
+    "adjudicatedAbsentFixedHighOrCritical": 0,
+    "adjudicatedAbsentUnfixedHighOrCritical": 2,
+    "effectiveUnfixedHighOrCritical": 0,
+    "unresolvedRiskReview": "NONE",
+    "scannerImage": "aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969"
+  }
+}

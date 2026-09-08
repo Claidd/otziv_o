@@ -94,13 +94,14 @@ public class PaymentRouteChangeNotificationWorker {
                     : company == null ? null : company.getManager();
             String message = "По вашей просьбе способ оплаты изменен. Используйте новые реквизиты.\n\n"
                     + payment.copyText();
-            boolean sent = notificationService.sendInformationalMessageToClientChat(
+            boolean sent = notificationService.sendInformationalForOccurrence(
                     order,
                     manager == null ? null : manager.getClientId(),
                     company == null ? null : company.getGroupId(),
                     message,
                     "Новые реквизиты оплаты",
-                    payment.telegramCopyTransferNumber()
+                    payment.telegramCopyTransferNumber(),
+                    "payment-link:"+delivery.paymentLinkId()
             );
             if (!sent) {
                 failAndNotify(delivery, "Активный клиентский чат недоступен");

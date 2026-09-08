@@ -1,0 +1,19 @@
+{
+  "schema": "otziv-signals-publisher-v1",
+  "bindAddress": "0.0.0.0",
+  "port": 9444,
+  "tlsCertFile": "/etc/otziv-monitor/tls/server-chain.pem",
+  "tlsKeyFile": "/etc/otziv-monitor/tls/server-key.pem",
+  "intervalMs": 30000,
+  "sourceTimeoutMs": 10000,
+  "maxSourceAgeSeconds": 120,
+  "privateHttpHosts": ["app", "external-review-worker", "whatsapp_lika", "whatsapp_vika"],
+  "backend": {"alias": "backend", "enabled": true, "url": "http://app:8080/api/internal/monitoring/runtime", "tokenEnv": "BACKEND_MONITOR_TOKEN"},
+  "taskSources": [
+    {"alias": "worker", "kind": "worker", "enabled": true, "url": "http://external-review-worker:3097/api/internal/task-metrics", "tokenEnv": "WORKER_MONITOR_TOKEN"},
+    {"alias": "whatsapp_lika", "kind": "whatsapp", "enabled": true, "url": "http://whatsapp_lika:3000/internal/task-metrics", "tokenEnv": "WHATSAPP_MONITOR_TOKEN"},
+    {"alias": "whatsapp_vika", "kind": "whatsapp", "enabled": true, "url": "http://whatsapp_vika:3000/internal/task-metrics", "tokenEnv": "WHATSAPP_MONITOR_TOKEN"}
+  ],
+  "mysqlReceiptsFile": "/evidence/mysql/backup-evidence.jsonl",
+  "postgresReceiptsFile": "/evidence/postgres/receipts.jsonl"
+}

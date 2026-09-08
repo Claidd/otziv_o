@@ -193,7 +193,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals("Live-отправка выключена настройкой; сообщение не отправлено", attempt.getErrorMessage());
         assertEquals("message", attempt.getMessagePreview());
 
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), anyString());
         verify(attemptRepository, never()).countByStatusAndAttemptedAtGreaterThanEqual(any(), any());
         verify(appSettingService, never()).setString(eq(AppSettingService.CLIENT_MESSAGES_PAUSED_UNTIL), anyString());
 
@@ -224,7 +224,7 @@ class ScheduledClientMessageServiceTest {
         LocalDateTime now = LocalDateTime.of(2026, 5, 25, 10, 20);
 
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
-        when(messageSender.send(eq(company), eq("client-20"), any(), eq("message")))
+        when(messageSender.sendWithOperationId(eq(company), eq("client-20"), any(), eq("message"), org.mockito.ArgumentMatchers.isNull(), anyString()))
                 .thenReturn(ClientMessageSendResult.failed("whatsapp_group_missing", "Для WhatsApp-группы не задан groupId"));
         when(appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
@@ -283,7 +283,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals("archive_reorder_blocked", attemptCaptor.getValue().getErrorCode());
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
         assertNull(state.getNextAttemptAt());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), anyString());
         verify(stateRepository).save(state);
     }
 
@@ -437,7 +437,7 @@ class ScheduledClientMessageServiceTest {
                 ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
         )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
         when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(messageSender.send(eq(company), eq("whatsapp_vika"), eq("group-20"), eq("message")))
+        when(messageSender.sendWithOperationId(eq(company), eq("whatsapp_vika"), eq("group-20"), eq("message"), org.mockito.ArgumentMatchers.isNull(), anyString()))
                 .thenReturn(ClientMessageSendResult.failed(
                         "whatsapp_not_ready",
                         "WhatsApp API вернул HTTP 503. Ответ: {\"status\":\"not_ready\",\"authenticated\":false,\"state\":\"qr\"}"
@@ -491,7 +491,7 @@ class ScheduledClientMessageServiceTest {
                 ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
         )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
         when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(messageSender.send(eq(company), eq("whatsapp_lika"), eq("group-21"), eq("message")))
+        when(messageSender.sendWithOperationId(eq(company), eq("whatsapp_lika"), eq("group-21"), eq("message"), org.mockito.ArgumentMatchers.isNull(), anyString()))
                 .thenReturn(ClientMessageSendResult.failed(
                         "not_ready",
                         "WhatsApp API вернул HTTP 503. Ответ: {\"status\":\"not_ready\",\"authenticated\":true,\"state\":\"authenticated\",\"hasQr\":false,\"message\":\"WhatsApp client is not ready\"}"
@@ -554,7 +554,7 @@ class ScheduledClientMessageServiceTest {
         TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
                 .fromFrozenTransferNumber("89001234567")
                 .orElseThrow();
-        when(messageSender.send(eq(company), eq("client-15"), eq("group-15"), anyString(), eq(copyButton)))
+        when(messageSender.sendWithOperationId(eq(company), eq("client-15"), eq("group-15"), anyString(), eq(copyButton), anyString()))
                 .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
         when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1300));
@@ -572,10 +572,7 @@ class ScheduledClientMessageServiceTest {
                 now
         );
 
-        verify(messageSender).send(
-                eq(company), eq("client-15"), eq("group-15"),
-                org.mockito.ArgumentMatchers.contains("89001234567"), eq(copyButton)
-        );
+        verify(messageSender).sendWithOperationId(eq(company), eq("client-15"), eq("group-15"), org.mockito.ArgumentMatchers.contains("89001234567"), eq(copyButton), anyString());
         verify(orderStatusTransitionService).changeStatusForOrder(15L, "Напоминание");
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
         assertNull(state.getNextAttemptAt());
@@ -623,7 +620,7 @@ class ScheduledClientMessageServiceTest {
                 now
         );
 
-        verify(messageSender, never()).send(any(), any(), any(), anyString());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), anyString(), org.mockito.ArgumentMatchers.isNull(), anyString());
         assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
         assertEquals("review_recovery_active", state.getLastErrorCode());
         assertEquals(now.plusMinutes(10), state.getNextAttemptAt());
@@ -666,13 +663,13 @@ class ScheduledClientMessageServiceTest {
         )).thenReturn(ScheduledClientMessageService.DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT);
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1300));
-        when(messageSender.send(eq(company), eq("client-15"), eq("group-15"), anyString()))
+        when(messageSender.sendWithOperationId(eq(company), eq("client-15"), eq("group-15"), anyString(), org.mockito.ArgumentMatchers.isNull(), anyString()))
                 .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
 
         ReflectionTestUtils.invokeMethod(service, "sendReviewRecoveryNotice", state, company, now);
 
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
-        verify(messageSender).send(eq(company), eq("client-15"), eq("group-15"), messageCaptor.capture());
+        verify(messageSender).sendWithOperationId(eq(company), eq("client-15"), eq("group-15"), messageCaptor.capture(), org.mockito.ArgumentMatchers.isNull(), anyString());
         assertTrue(messageCaptor.getValue().contains("Все отзывы по заказу №15 восстановлены"));
         verify(reviewRecoveryTaskService).markClientNotifiedAutomatically(55L);
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
@@ -717,14 +714,14 @@ class ScheduledClientMessageServiceTest {
         )).thenReturn(ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_TEXT);
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1300));
-        when(messageSender.send(eq(company), eq("client-16"), eq("group-16"), anyString()))
+        when(messageSender.sendWithOperationId(eq(company), eq("client-16"), eq("group-16"), anyString(), org.mockito.ArgumentMatchers.isNull(), anyString()))
                 .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
         when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         ReflectionTestUtils.invokeMethod(service, "sendClientTextReminder", state, company, now);
 
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
-        verify(messageSender).send(eq(company), eq("client-16"), eq("group-16"), messageCaptor.capture());
+        verify(messageSender).sendWithOperationId(eq(company), eq("client-16"), eq("group-16"), messageCaptor.capture(), org.mockito.ArgumentMatchers.isNull(), anyString());
         assertTrue(messageCaptor.getValue().contains("заказу №16"));
         assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
         assertNotNull(state.getNextAttemptAt());
@@ -800,7 +797,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
         assertNull(state.getNextAttemptAt());
         verify(stateRepository).save(state);
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), anyString());
         verify(paymentLinkService, never()).createForOrderInNewTransaction(any());
     }
 
@@ -895,7 +892,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
         assertNull(state.getNextAttemptAt());
         verify(orderRepository).save(order);
-        verify(messageSender, never()).send(any(), any(), any(), anyString());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), anyString(), org.mockito.ArgumentMatchers.isNull(), anyString());
     }
 
     @Test
@@ -1056,7 +1053,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
         assertEquals("common_billing_linked", attemptCaptor.getValue().getErrorCode());
         verify(stateRepository, org.mockito.Mockito.atLeastOnce()).save(state);
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), anyString());
         verify(orderStatusTransitionService, never()).changeStatusForOrder(any(), any());
     }
 
@@ -1153,7 +1150,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals("common_billing_linked", attemptCaptor.getValue().getErrorCode());
         verify(stateRepository, org.mockito.Mockito.atLeastOnce()).save(state);
         verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageWithTransfer(any());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), anyString());
         verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewAutoBan(any());
     }
 
@@ -1688,6 +1685,7 @@ class ScheduledClientMessageServiceTest {
                 .companyId(24L)
                 .orderId(14L)
                 .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode(ClientMessageStateSafety.TRANSACTION_IN_PROGRESS)
                 .build();
         Order order = new Order();
         order.setId(14L);
@@ -1701,7 +1699,16 @@ class ScheduledClientMessageServiceTest {
         when(orderRepository.findByIdForMutation(14L)).thenReturn(java.util.Optional.of(order));
         when(badReviewTaskService.getSummaryForOrder(14L))
                 .thenReturn(new BadReviewTaskSummary(2, 0, 2, 0, BigDecimal.valueOf(600), BigDecimal.ZERO));
-        when(orderStatusTransitionService.changeStatusForOrder(14L, "Бан")).thenReturn(true);
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.BAD_REVIEW_AUTO_BAN, "bad-review-auto-ban:order:14"))
+                .thenReturn(java.util.Optional.of(state));
+        PaymentInvoiceRetryScheduler scheduler = new PaymentInvoiceRetryScheduler(
+                stateRepository, appSettingService, new ClientMessageSlotPlanner());
+        when(orderStatusTransitionService.changeStatusForOrder(14L, "Бан")).thenAnswer(invocation -> {
+            // Exercise the real nested cancellation and its in-flight guard.
+            scheduler.cancelBadReviewAutoBanInNewTransaction(14L, "Заказ переведен в Бан");
+            return true;
+        });
 
         ReflectionTestUtils.invokeMethod(service, "autoBanAfterBadReviews", state, now);
 
@@ -1716,8 +1723,10 @@ class ScheduledClientMessageServiceTest {
         verify(stateRepository, org.mockito.Mockito.atLeastOnce()).save(state);
     }
 
-    @Test
-    void badReviewDeliveryPersistsTokenAndFinalizesAfterExternalSend() {
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.NullSource
+    @ValueSource(strings = {"operation_unknown", "operation_running", "operation_payload_conflict"})
+    void badReviewDeliveryPersistsTokenAndPreservesAmbiguousOutcome(String outcome) {
         ScheduledClientMessageState state = ScheduledClientMessageState.builder()
                 .id(501L)
                 .scenario(ClientMessageScenario.BAD_REVIEW_INVOICE)
@@ -1757,7 +1766,7 @@ class ScheduledClientMessageServiceTest {
             Supplier<?> work = invocation.getArgument(0);
             return work.get();
         });
-        org.mockito.Mockito.doAnswer(invocation -> {
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
             invocation.<Runnable>getArgument(0).run();
             return null;
         }).when(transactionRunner).runInNewTransaction(any(Runnable.class));
@@ -1771,22 +1780,55 @@ class ScheduledClientMessageServiceTest {
         TelegramTransferCopyButton copyButton = TelegramTransferCopyButton
                 .fromFrozenTransferNumber("2202208238396676")
                 .orElseThrow();
-        when(messageSender.send(company, "client-20", "group-20", "К оплате: 1300 руб.", copyButton))
-                .thenReturn(ClientMessageSendResult.sent("whatsapp"));
+        when(messageSender.sendWithOperationId(eq(company), eq("client-20"), eq("group-20"), eq("К оплате: 1300 руб."), eq(copyButton), anyString()))
+                .thenReturn(outcome == null ? ClientMessageSendResult.sent("whatsapp") : ClientMessageSendResult.failed(outcome, "requires verification"));
 
         service.deliverBadReviewInvoiceImmediately(7L, 50L);
 
-        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
-        assertEquals("SENT", state.getDeliveryStatus());
+        assertEquals(outcome == null ? ScheduledMessageStateStatus.DONE : ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals(outcome == null ? "SENT" : "UNKNOWN", state.getDeliveryStatus());
+        if (outcome != null) {
+            assertNull(state.getNextAttemptAt());
+            assertEquals(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN, state.getLastErrorCode());
+        }
         assertNotNull(state.getDeliveryToken());
         assertEquals(7L, state.getDeliveryTaskId());
         org.mockito.InOrder deliveryOrder = inOrder(transactionRunner, messageSender);
         deliveryOrder.verify(transactionRunner, times(2)).callInNewTransaction(any());
-        deliveryOrder.verify(messageSender).send(
-                company, "client-20", "group-20", "К оплате: 1300 руб.", copyButton
-        );
+        deliveryOrder.verify(messageSender).sendWithOperationId(eq(company), eq("client-20"), eq("group-20"), eq("К оплате: 1300 руб."), eq(copyButton), anyString());
         deliveryOrder.verify(transactionRunner).callInNewTransaction(any());
-        deliveryOrder.verify(transactionRunner).runInNewTransaction(any(Runnable.class));
+        if (outcome == null) deliveryOrder.verify(transactionRunner).runInNewTransaction(any(Runnable.class));
+        else verify(transactionRunner, never()).runInNewTransaction(any(Runnable.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void unsuccessfulAutoBanKeepsJobActiveForRetry(boolean throwsException) throws Exception {
+        LocalDateTime now = LocalDateTime.of(2026, 9, 6, 12, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(94L).scenario(ClientMessageScenario.BAD_REVIEW_AUTO_BAN)
+                .targetType(ClientMessageTargetType.ORDER).targetKey("bad-review-auto-ban:order:14")
+                .orderId(14L).status(ScheduledMessageStateStatus.ACTIVE).build();
+        Order order = new Order();
+        order.setId(14L);
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED, true))
+                .thenReturn(true);
+        when(orderRepository.findByIdForMutation(14L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(14L))
+                .thenReturn(new BadReviewTaskSummary(2, 0, 2, 0, BigDecimal.valueOf(600), BigDecimal.ZERO));
+        when(orderStatusTransitionService.changeStatusForOrder(14L, "Бан")).thenAnswer(invocation -> {
+            if (throwsException) throw new IllegalStateException("Статус не сохранён");
+            return false;
+        });
+        ReflectionTestUtils.invokeMethod(service, "autoBanAfterBadReviews", state, now);
+
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertNotNull(state.getNextAttemptAt());
+        assertEquals(1, state.getConsecutiveFailures());
+        ArgumentCaptor<ScheduledClientMessageAttempt> attempts = ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attempts.capture());
+        assertEquals(ScheduledMessageAttemptStatus.FAILED, attempts.getValue().getStatus());
     }
 
     @Test
@@ -1817,7 +1859,7 @@ class ScheduledClientMessageServiceTest {
         service.deliverBadReviewInvoiceImmediately(11L, 56L);
 
         verify(stateRepository, never()).lockActiveState(any(), any(), any(), anyString(), anyString());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), anyString());
     }
 
     @Test
@@ -1866,7 +1908,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals("bad_review_invoice_disabled", state.getLastErrorCode());
         assertNotNull(state.getNextAttemptAt());
         assertNull(state.getLockedUntil());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), anyString());
     }
 
     @Test
@@ -1889,7 +1931,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
         assertNotNull(state.getNextAttemptAt());
         verify(stateRepository, never()).findByScenarioAndTargetKey(any(), anyString());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), anyString());
     }
 
     @Test
@@ -1922,7 +1964,7 @@ class ScheduledClientMessageServiceTest {
         assertNull(prepared);
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
         verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessageWithTransfer(any());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), anyString());
     }
 
     @Test
@@ -1964,7 +2006,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals("payment_instruction_failed", state.getLastErrorCode());
         assertNotNull(state.getNextAttemptAt());
         assertNull(state.getLockedUntil());
-        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(messageSender, never()).sendWithOperationId(any(), any(), any(), any(), org.mockito.ArgumentMatchers.isNull(), anyString());
         verify(paymentIssueReminderService).notifyOrderIssueAfterCommit(
                 eq(54L),
                 eq(PaymentIssueReminderService.SOURCE_PAYMENT_FAIL_CLOSED),

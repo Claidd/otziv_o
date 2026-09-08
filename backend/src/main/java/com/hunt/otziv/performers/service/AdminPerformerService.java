@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -47,6 +48,7 @@ public class AdminPerformerService {
     private final KeycloakAdminClient keycloakAdminClient;
     private final UserAuthEpochService authEpochService;
     private final ContractorPaymentProfileService contractorPaymentProfileService;
+    private final PerformerMutationLockService mutationLocks;
 
     @Transactional(readOnly = true)
     public AdminPerformerControlResponse control() {
@@ -72,8 +74,7 @@ public class AdminPerformerService {
         if (status == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Статус не передан");
         }
-        PerformerProfile performer = performerProfileRepository.findById(performerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Исполнитель не найден"));
+        PerformerProfile performer = mutationLocks.profile(performerId);
         PerformerProfileStatus previousStatus = performer.getStatus();
         LocalDateTime now = LocalDateTime.now();
 
@@ -157,8 +158,10 @@ public class AdminPerformerService {
 
     @Transactional
     public PerformerAssignmentResponse verifyAssignment(Long assignmentId, AdminPerformerVerifyAssignmentRequest request) {
-        ReviewPerformerAssignment assignment = assignmentRepository.findByIdForDetails(assignmentId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Задание не найдено"));
+        ReviewPerformerAssignment assignment = mutationLocks.assignment(assignmentId);
+        if (assignment.getStatus() == PerformerAssignmentStatus.PAID) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Оплаченное задание уже завершено");
+        }
         if (assignment.getReview() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "У задания нет отзыва");
         }
@@ -182,8 +185,7 @@ public class AdminPerformerService {
 
     @Transactional
     public PerformerAssignmentResponse uploadManagerConfirmationScreenshot(Long assignmentId, MultipartFile file) {
-        ReviewPerformerAssignment assignment = assignmentRepository.findByIdForDetails(assignmentId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Задание не найдено"));
+        ReviewPerformerAssignment assignment = mutationLocks.assignment(assignmentId);
         String url = screenshotStorage.store(
                 file,
                 assignment.getId(),
@@ -201,7 +203,7 @@ public class AdminPerformerService {
         return new AdminPerformerManualRunResponse(created, 0, 0, 0);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AdminPerformerManualRunResponse runSchedulerOnce() {
         int created = assignmentService.createDueAssignments();
         int expired = assignmentService.expireOffers();

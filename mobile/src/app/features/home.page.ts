@@ -1,4 +1,6 @@
-import { Component, computed, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
+import { ManualPaymentTasksApi } from '../core/manual-payment-tasks.api';
+import { DictionariesApi } from '../core/dictionaries.api';
+import { inject, Component, computed, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationStart, ParamMap, Router, RouterLink } from '@angular/router';
 import { IonContent, IonModal, ToastController } from '@ionic/angular/standalone';
@@ -2496,6 +2498,8 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
   `]
 })
 export class HomePage implements OnInit, OnDestroy {
+  private readonly manualPaymentTasksApi = inject(ManualPaymentTasksApi);
+  private readonly dictionariesApi = inject(DictionariesApi);
   @ViewChild('sectionModal') private sectionModal?: IonModal;
 
   private routeSubscription?: Subscription;
@@ -2817,7 +2821,7 @@ export class HomePage implements OnInit, OnDestroy {
           break;
         }
         case 'dictionaries': {
-          const summary = await firstValueFrom(this.api.getDictionarySummary(this.canManageAllDictionaries()));
+          const summary = await firstValueFrom(this.dictionariesApi.getDictionarySummary(this.canManageAllDictionaries()));
           if (requestId !== this.reloadEpoch) {
             return;
           }
@@ -3045,7 +3049,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualPaymentSaving.set(true);
     this.manualPaymentMessage.set(null);
     try {
-      const settings = await firstValueFrom(this.api.updateManagerManualPaymentSettings({
+      const settings = await firstValueFrom(this.manualPaymentTasksApi.updateManagerManualPaymentSettings({
         manualPaymentType,
         manualPhone,
         manualRecipientName,
@@ -3213,7 +3217,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualTaskSaving.set(true);
     this.manualTaskMessage.set(null);
     try {
-      const task = await firstValueFrom(this.api.createManagerManualPaymentTask({
+      const task = await firstValueFrom(this.manualPaymentTasksApi.createManagerManualPaymentTask({
         operationKey: this.manualTaskOperationKey.current(),
         manualPaymentType: this.manualTaskPaymentType(),
         manualPhone: this.manualTaskPhone().trim(),
@@ -3252,7 +3256,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualTaskMutatingId.set(task.id);
     this.manualTaskMessage.set(null);
     try {
-      const updated = await firstValueFrom(this.api.updateManagerManualPaymentTaskStatus(task.id, status));
+      const updated = await firstValueFrom(this.manualPaymentTasksApi.updateManagerManualPaymentTaskStatus(task.id, status));
       this.manualPaymentTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
     } catch (error) {
       const message = this.errorMessage(error);
@@ -3274,7 +3278,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualTaskMutatingId.set(task.id);
     this.manualTaskMessage.set(null);
     try {
-      const updated = await firstValueFrom(this.api.updateManagerManualPaymentTask(task.id, {
+      const updated = await firstValueFrom(this.manualPaymentTasksApi.updateManagerManualPaymentTask(task.id, {
         manualPaymentType: this.manualTaskEditPaymentType(),
         manualPhone: this.manualTaskEditPhone().trim(),
         manualRecipientName: this.manualTaskEditRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
@@ -3787,7 +3791,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualPaymentLoading.set(true);
     this.manualPaymentMessage.set(null);
     try {
-      const settings = await firstValueFrom(this.api.getManagerManualPaymentSettings({ forceRefresh }));
+      const settings = await firstValueFrom(this.manualPaymentTasksApi.getManagerManualPaymentSettings({ forceRefresh }));
       if (requestId !== this.reloadEpoch) {
         return;
       }
@@ -3815,7 +3819,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualTaskLoading.set(true);
     this.manualTaskMessage.set(null);
     try {
-      const tasks = await firstValueFrom(this.api.getManagerManualPaymentTasks({ forceRefresh }));
+      const tasks = await firstValueFrom(this.manualPaymentTasksApi.getManagerManualPaymentTasks({ forceRefresh }));
       if (requestId !== this.reloadEpoch) {
         return;
       }
@@ -3917,7 +3921,7 @@ export class HomePage implements OnInit, OnDestroy {
     }
     this.manualTaskAccountingTargetsLoading.set(true);
     try {
-      const options = await firstValueFrom(this.api.getManagerManualPaymentTaskAccountingTargets(amount));
+      const options = await firstValueFrom(this.manualPaymentTasksApi.getManagerManualPaymentTaskAccountingTargets(amount));
       if (epoch !== this.manualTaskAccountingPreviewEpoch) return;
       const normalized = options ?? [];
       this.manualTaskAccountingTargets.set(normalized);
@@ -3949,7 +3953,7 @@ export class HomePage implements OnInit, OnDestroy {
     }
     this.manualTaskEditAccountingTargetsLoading.set(true);
     try {
-      const options = await firstValueFrom(this.api.getManagerManualPaymentTaskAccountingTargets(amount, task.id));
+      const options = await firstValueFrom(this.manualPaymentTasksApi.getManagerManualPaymentTaskAccountingTargets(amount, task.id));
       if (epoch !== this.manualTaskEditAccountingPreviewEpoch) return;
       const normalized = options ?? [];
       const restored = normalized.find(option => option.key === previousKey)

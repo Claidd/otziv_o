@@ -58,42 +58,10 @@ function createInternalAuthMiddleware({
   };
 }
 
-function createConcurrencyMiddleware(configuredLimit, slotTimeoutMs = 600000) {
-  const parsed = Number.parseInt(String(configuredLimit || ""), 10);
-  const limit = Number.isFinite(parsed) ? Math.max(1, Math.min(parsed, 64)) : 16;
-  let active = 0;
-
-  return (req, res, next) => {
-    if (active >= limit) {
-      res.set("Retry-After", "1");
-      res.status(429).json({ status: "error", code: "gateway_busy" });
-      return;
-    }
-    active += 1;
-    let released = false;
-    let timer;
-    const release = () => {
-      if (!released) {
-        released = true;
-        if (timer) {
-          clearTimeout(timer);
-        }
-        active -= 1;
-      }
-    };
-    timer = setTimeout(release, Math.max(30000, Number(slotTimeoutMs) || 600000));
-    timer.unref();
-    res.once("finish", release);
-    res.once("close", release);
-    next();
-  };
-}
-
 module.exports = {
   INTERNAL_AUTH_HEADER,
   boundedBodyBytes,
   constantTimeMatches,
-  createConcurrencyMiddleware,
   createInternalAuthMiddleware,
   parseBoolean,
 };

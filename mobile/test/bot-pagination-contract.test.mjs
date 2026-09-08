@@ -1,9 +1,10 @@
+import { apiTransportSource } from './api-source.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
 const read = (relativeUrl) => readFileSync(new URL(relativeUrl, import.meta.url), 'utf8');
-const api = read('../src/app/core/api.service.ts');
+const api = apiTransportSource();
 const dictionaries = read('../src/app/shared/mobile-dictionaries.component.ts');
 
 test('dictionary totals use the dedicated bot count instead of a truncated list', () => {

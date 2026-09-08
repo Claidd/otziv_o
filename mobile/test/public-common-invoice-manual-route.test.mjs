@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { apiTransportSource } from './api-source.mjs';
 
 const pageSource = source('src/app/features/public-pay-group.page.ts');
-const apiSource = source('src/app/core/api.service.ts');
+const apiSource = apiTransportSource();
 const bankRouteSource = source('src/app/shared/bank-payment-source.ts');
 
 test('mobile common invoice models every public routing field returned by the backend', () => {

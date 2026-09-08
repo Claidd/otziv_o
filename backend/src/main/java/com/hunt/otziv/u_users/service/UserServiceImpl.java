@@ -49,6 +49,7 @@ public class UserServiceImpl implements UserService {
     private final ImageRepository imageRepository;
     private final ImageService imageService;
     private final UserAuthEpochService authEpochService;
+    private final jakarta.persistence.EntityManager entityManager;
     private final KeycloakAdminClient keycloakAdminClient;
     private final ContractorPaymentProfileService contractorPaymentProfileService;
 
@@ -73,10 +74,11 @@ public class UserServiceImpl implements UserService {
     }
 
     private User requireLockedUserWithAssignments(String username) {
-        userRepository.lockByUsername(username)
+        User locked = userRepository.lockByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException(
                         String.format("Пользователь '%s' не найден", username)
                 ));
+        entityManager.refresh(locked, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         return requireUserWithAssignments(username);
     }
 

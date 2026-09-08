@@ -1,0 +1,9 @@
+{
+  "schema": "otziv-image-adjudication-v1",
+  "rawReportSha256": "59b7a5eb02d5ce7d7ed23a20044749f2235a62aed12ba8887ef985dfb39ed4b5",
+  "imageConfigId": "sha256:b534b8f7a094402a949e022d13fafbf91ff447bf8aaf67d51c122f052e2848fb",
+  "immutableImageId": "sha256:b534b8f7a094402a949e022d13fafbf91ff447bf8aaf67d51c122f052e2848fb",
+  "rawReportModified": false,
+  "decisions": [],
+  "status": "NOT_APPLICABLE"
+}

@@ -1307,6 +1307,20 @@ class OrderStatusTransitionServiceTest {
         verify(orderRepository, never()).save(order);
     }
 
+    @Test void explicitStatusActorIsUsedByBusinessAuditDespiteAmbientAdministrator() throws Exception {
+        Order order=order(991L,"Архив");
+        var actor=new org.springframework.security.authentication.TestingAuthenticationToken("manager-a",null,"ROLE_MANAGER");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.TestingAuthenticationToken("admin-b",null,"ROLE_ADMIN"));
+        when(orderRepository.findByIdForMutation(991L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Новый")).thenReturn(OrderStatus.builder().title("Новый").build());
+        try {
+            assertTrue(service().changeStatusForOrder(991L,"Новый",actor));
+            verify(businessAuditService).recordSafely(same(actor),eq("order_status_changed"),eq("order"),eq(991L),eq(991L),
+                    isNull(),eq("Архив"),eq("Новый"),eq("requestedStatus=Новый"));
+        } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
+    }
+
     private OrderStatusTransitionService service() {
         return new OrderStatusTransitionService(
                 orderRepository,

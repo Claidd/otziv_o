@@ -29,6 +29,9 @@ public class Filial {
     @Column(name = "filial_url")
     private String url;
 
+    @Column(name = "two_gis_organization_id", length = 32)
+    private String twoGisOrganizationId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "city_id")
     @ToString.Exclude

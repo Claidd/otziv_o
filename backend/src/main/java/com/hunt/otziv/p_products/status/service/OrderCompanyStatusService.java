@@ -1,7 +1,7 @@
 package com.hunt.otziv.p_products.status.service;
 
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyRecordOperations;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
@@ -37,7 +37,7 @@ public class OrderCompanyStatusService {
     private static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
     private static final String STATUS_COMPANY_BAN = "Бан";
 
-    private final CompanyService companyService;
+    private final CompanyRecordOperations companyService;
     private final CompanyStatusService companyStatusService;
     private final NextOrderRequestService nextOrderRequestService;
 

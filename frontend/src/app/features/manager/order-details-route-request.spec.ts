@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { Observable, Subject, of } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
+import { WorkerAccountActionCooldownService } from '../../core/worker-account-action-cooldown.service';
 import {
   CompanyDeepReportState,
   ManagerApi,
@@ -45,6 +46,7 @@ describe('OrderDetailsComponent route reads', () => {
     await TestBed.configureTestingModule({
       imports: [OrderDetailsComponent],
       providers: [
+        { provide: WorkerAccountActionCooldownService, useValue: { locked: signal(false), title: signal('') } },
         provideRouter([]),
         {
           provide: ActivatedRoute,

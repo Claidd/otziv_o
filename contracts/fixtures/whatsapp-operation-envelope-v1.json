@@ -1,0 +1,153 @@
+[
+  {
+    "name": "basic",
+    "clientId": "fixture-client",
+    "groupId": "12345678@g.us",
+    "message": "hello",
+    "destination": "12345678@g.us",
+    "hash": "361734ad9927ce1b45aa0abf9d491b67d7a5ac902c80b82a8edfbfa6ea92c3b6"
+  },
+  {
+    "name": "bare-group",
+    "clientId": "fixture-client",
+    "groupId": "12345678",
+    "message": "hello",
+    "destination": "12345678@g.us",
+    "hash": "361734ad9927ce1b45aa0abf9d491b67d7a5ac902c80b82a8edfbfa6ea92c3b6"
+  },
+  {
+    "name": "hyphen-group",
+    "clientId": "fixture-client",
+    "groupId": "12345678-987654321",
+    "message": "hello",
+    "destination": "12345678-987654321@g.us",
+    "hash": "fe199e46f36a43450763c98ffd6027f829506b366d4719517dcc47a2ded76521"
+  },
+  {
+    "name": "unicode",
+    "clientId": "fixture-client",
+    "groupId": "12345678@g.us",
+    "message": "Здравствуйте! 🚀 ё",
+    "destination": "12345678@g.us",
+    "hash": "1af7c429dbc9f99e9592f18b7e8684d7e5a61c334e1aaf1644dd47afa706e0fa"
+  },
+  {
+    "name": "json-escapes",
+    "clientId": "fixture-client",
+    "groupId": "12345678@g.us",
+    "message": "a\"\\\b\t\n\f\r\u0000\u001f z",
+    "destination": "12345678@g.us",
+    "hash": "1b52e4ae72bacb5fa611c7f7085f01b4254279e9864c9f887183d04a2b030452"
+  },
+  {
+    "name": "js-whitespace",
+    "clientId": "fixture-client",
+    "groupId": "﻿  12345678@g.us　",
+    "message": "       hello﻿\r\n",
+    "destination": "12345678@g.us",
+    "hash": "361734ad9927ce1b45aa0abf9d491b67d7a5ac902c80b82a8edfbfa6ea92c3b6"
+  },
+  {
+    "name": "non-js-whitespace",
+    "clientId": "fixture-client",
+    "groupId": "12345678@g.us",
+    "message": "\u001f᠎​hello​\u001f",
+    "destination": "12345678@g.us",
+    "hash": "ef23505079e40cc146236cde77686a4acc5dc9cf1df22b6dca703acb2e9cf02e"
+  },
+  {
+    "name": "internal-line-separators",
+    "clientId": "fixture-client",
+    "groupId": "12345678@g.us",
+    "message": "a b c",
+    "destination": "12345678@g.us",
+    "hash": "275c4f88087a933e6352f51f367e75f8b7aff33250166ebaafd6053d5d5bc3ce"
+  },
+  {
+    "name": "lone-surrogates",
+    "clientId": "fixture-client",
+    "groupId": "12345678@g.us",
+    "message": "\ud800x\udfff",
+    "destination": "12345678@g.us",
+    "hash": "9598c981e3ce122cfc1ec7079cf6151f2ae0f8e8f43cccde2105453d1d7025e2"
+  },
+  {
+    "name": "client-not-trimmed",
+    "clientId": " fixture-🚀\ud800 ",
+    "groupId": "12345678@g.us",
+    "message": "hello",
+    "destination": "12345678@g.us",
+    "hash": "80a5e31f0b86a7b9afc9019dcf72019a51b60b8c86a3de0a505af251e6bd9305"
+  },
+  {
+    "name": "maximum-group",
+    "clientId": "fixture-client",
+    "groupId": "11111111111111111111111111111111111111111111111111111111111111111111111111111111@g.us",
+    "message": "hello",
+    "destination": "11111111111111111111111111111111111111111111111111111111111111111111111111111111@g.us",
+    "hash": "d3bbaee49a1fe7797b4768303746bbe4d42a3dac93754ce7f9c7e3f6e55f6a56"
+  },
+  {
+    "name": "too-short",
+    "clientId": "fixture-client",
+    "groupId": "1234567@g.us",
+    "message": "hello",
+    "invalid": true
+  },
+  {
+    "name": "too-long",
+    "clientId": "fixture-client",
+    "groupId": "111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "message": "hello",
+    "invalid": true
+  },
+  {
+    "name": "phone-address",
+    "clientId": "fixture-client",
+    "groupId": "12345678@c.us",
+    "message": "hello",
+    "invalid": true
+  },
+  {
+    "name": "empty-message",
+    "clientId": "fixture-client",
+    "groupId": "12345678@g.us",
+    "message": "﻿ \n",
+    "invalid": true
+  },
+  {
+    "name": "missing-client",
+    "clientId": null,
+    "groupId": "12345678@g.us",
+    "message": "hello",
+    "invalid": true
+  },
+  {
+    "name": "missing-group",
+    "clientId": "fixture-client",
+    "groupId": null,
+    "message": "hello",
+    "invalid": true
+  },
+  {
+    "name": "missing-message",
+    "clientId": "fixture-client",
+    "groupId": "12345678@g.us",
+    "message": null,
+    "invalid": true
+  },
+  {
+    "name": "malformed-group",
+    "clientId": "fixture-client",
+    "groupId": "12345678--987654321",
+    "message": "hello",
+    "invalid": true
+  },
+  {
+    "name": "uppercase-server",
+    "clientId": "fixture-client",
+    "groupId": "12345678@G.US",
+    "message": "hello",
+    "invalid": true
+  }
+]

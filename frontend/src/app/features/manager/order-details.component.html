@@ -389,7 +389,7 @@
               <button
                 type="button"
                 (click)="changeBot(review)"
-                [disabled]="reviewAccountActionLocked(review) || isMutating('bot-' + review.id)"
+                [disabled]="accountActionCooldown.locked() || reviewAccountActionLocked(review) || isMutating('bot-' + review.id)"
                 [title]="reviewAccountActionTitle(review)"
               >
                 {{ isMutating('bot-' + review.id) ? '...' : 'смена' }}
@@ -397,7 +397,7 @@
               <button
                 type="button"
                 (click)="deactivateBot(review)"
-                [disabled]="reviewAccountActionLocked(review) || !review.botId || review.botId === 1 || isMutating('block-' + review.id)"
+                [disabled]="accountActionCooldown.locked() || reviewAccountActionLocked(review) || !review.botId || review.botId === 1 || isMutating('block-' + review.id)"
                 [title]="reviewAccountActionTitle(review)"
               >
                 {{ isMutating('block-' + review.id) ? '...' : 'блок' }}
@@ -823,7 +823,8 @@
                     type="button"
                     class="bad-review-task-action bad-review-task-action--bot"
                     (click)="changeBadReviewTaskBot(task)"
-                    [disabled]="!canEditBadReviewTask(task) || isMutating('bad-task-change-bot-' + task.id)"
+                    [disabled]="accountActionCooldown.locked() || !canEditBadReviewTask(task) || isMutating('bad-task-change-bot-' + task.id)"
+                    [title]="accountActionCooldown.locked() ? accountActionCooldown.title() : 'Сменить аккаунт'"
                   >
                     {{ isMutating('bad-task-change-bot-' + task.id) ? '...' : 'смена' }}
                   </button>
@@ -1139,7 +1140,8 @@
                   type="button"
                   class="bad-review-task-action bad-review-task-action--bot"
                   (click)="changeBadReviewTaskBot(task)"
-                  [disabled]="!canEditBadReviewTask(task) || isMutating('bad-task-change-bot-' + task.id)"
+                  [disabled]="accountActionCooldown.locked() || !canEditBadReviewTask(task) || isMutating('bad-task-change-bot-' + task.id)"
+                  [title]="accountActionCooldown.locked() ? accountActionCooldown.title() : 'Сменить аккаунт'"
                 >
                   {{ isMutating('bad-task-change-bot-' + task.id) ? '...' : 'смена' }}
                 </button>
@@ -1559,7 +1561,8 @@
                     type="button"
                     class="secondary review-new-account"
                     (click)="assignReviewNewAccount()"
-                    [disabled]="reviewEditBusy()"
+                    [disabled]="reviewEditBusy() || accountActionCooldown.locked()"
+                    [title]="accountActionCooldown.locked() ? accountActionCooldown.title() : 'Назначить новый аккаунт'"
                   >
                     {{ reviewEditNewAccountSaving() ? 'Назначаю...' : 'Новый аккаунт' }}
                   </button>

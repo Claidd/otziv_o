@@ -1,9 +1,11 @@
+import { PublicPaymentsApi } from '../core/public-payments.api';
+import { watchPublicPaymentNavigation } from './public-payment-navigation-lifecycle';
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/standalone';
 import { Subscription } from 'rxjs';
-import { ApiService, PublicCommonInvoice } from '../core/api.service';
+import { type ApiService, PublicCommonInvoice } from '../core/api.service';
 import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
 import { manualTransferDestinationPresentation } from '../shared/manual-transfer-destination';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
@@ -149,9 +151,14 @@ import { isBankPaymentRoute } from '../shared/bank-payment-source';
   `]
 })
 export class PublicPayGroupPage implements OnDestroy {
+  private readonly publicPaymentsApi = inject(PublicPaymentsApi);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly routeEpoch = new RouteEpochGuard();
+  private viewActive = true;
+  private routeToken: string | null = null;
   private routeSubscription?: Subscription;
+  private navigationSubscription?: Subscription;
   private invoiceLoadSubscription?: Subscription;
 
   readonly token = signal('');
@@ -200,19 +207,36 @@ export class PublicPayGroupPage implements OnDestroy {
       && !this.reportingPaid()
   ));
 
-  constructor(
-    private readonly api: ApiService,
-    private readonly externalLink: MobileExternalLinkService
+  constructor(private readonly externalLink: MobileExternalLinkService
   ) {
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
-      this.activateInvoiceRoute(params.get('token'));
+      this.routeToken = params.get('token');
+      if (this.viewActive) this.activateInvoiceRoute(this.routeToken);
     });
+    this.navigationSubscription = watchPublicPaymentNavigation(this.router, true,
+      () => this.routeToken, () => this.viewActive,
+      () => this.ionViewWillLeave(), () => this.ionViewWillEnter());
+  }
+
+  ionViewWillLeave(): void {
+    // IonRouterOutlet caches this component, so leaving must invalidate late callbacks.
+    this.viewActive = false;
+    this.routeEpoch.change(null);
+    this.cancelRouteRead();
+  }
+
+  ionViewWillEnter(): void {
+    if (this.viewActive) return;
+    this.viewActive = true;
+    this.activateInvoiceRoute(this.routeToken);
   }
 
   ngOnDestroy(): void {
+    this.viewActive = false;
     this.routeEpoch.destroy();
     this.cancelRouteRead();
     this.routeSubscription?.unsubscribe();
+    this.navigationSubscription?.unsubscribe();
   }
 
   @HostListener('window:pageshow') onPageShow(): void { this.refreshAfterReturn(); }
@@ -236,14 +260,14 @@ export class PublicPayGroupPage implements OnDestroy {
     this.submitting.set(true);
     this.error.set('');
     this.message.set('');
-    this.api.initPublicCommonInvoicePayment(token, this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent()).subscribe({
+    this.publicPaymentsApi.initPublicCommonInvoicePayment(token, this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent()).subscribe({
       next: (response) => {
         if (!this.isActiveRoute(routeTicket)) {
           return;
         }
         this.submitting.set(false);
         if (response.paymentUrl) {
-          void this.externalLink.openPayment(response.paymentUrl, 'payment').then((opened) => {
+          void this.externalLink.openPayment(response.paymentUrl, 'payment', () => this.isActiveRoute(routeTicket)).then((opened) => {
             if (this.isActiveRoute(routeTicket) && !opened) {
               this.error.set('Банк вернул недопустимую ссылку оплаты. Переход отменен.');
             }
@@ -278,7 +302,7 @@ export class PublicPayGroupPage implements OnDestroy {
     this.reportingPaid.set(true);
     this.error.set('');
     this.message.set('');
-    this.api.reportPublicCommonInvoicePaid(token).subscribe({
+    this.publicPaymentsApi.reportPublicCommonInvoicePaid(token).subscribe({
       next: (invoice) => {
         if (!this.isActiveRoute(routeTicket)) {
           return;
@@ -325,7 +349,7 @@ export class PublicPayGroupPage implements OnDestroy {
       this.error.set('Ссылка оплаты не настроена. Обратитесь к менеджеру.');
       return;
     }
-    void this.externalLink.openPayment(target, 'manual').then((opened) => {
+    void this.externalLink.openPayment(target, 'manual', () => this.isActiveRoute(routeTicket)).then((opened) => {
       if (this.isActiveRoute(routeTicket) && !opened) {
         this.error.set('Ссылка оплаты имеет недопустимый формат. Переход отменен.');
       }
@@ -351,7 +375,7 @@ export class PublicPayGroupPage implements OnDestroy {
     this.invoiceLoadSubscription?.unsubscribe();
     this.invoiceLoadSubscription = undefined;
     this.loading.set(true);
-    const subscription = this.api.getPublicCommonInvoice(token).subscribe({
+    const subscription = this.publicPaymentsApi.getPublicCommonInvoice(token).subscribe({
       next: (invoice) => {
         if (!this.isActiveRoute(routeTicket)) {
           return;
@@ -375,7 +399,7 @@ export class PublicPayGroupPage implements OnDestroy {
   private refreshAfterReturn(): void {
     const current = this.invoice();
     const now = Date.now();
-    if (now - this.lastReturnRefreshAt < 1200 || this.loading() || this.refreshing() || !this.token() || !current || ['PAID', 'UNPAID', 'DISABLED'].includes(current.status)) {
+    if (!this.viewActive || now - this.lastReturnRefreshAt < 1200 || this.loading() || this.refreshing() || !this.token() || !current || ['PAID', 'UNPAID', 'DISABLED'].includes(current.status)) {
       return;
     }
     this.lastReturnRefreshAt = now;
@@ -388,7 +412,7 @@ export class PublicPayGroupPage implements OnDestroy {
     }
     this.invoiceLoadSubscription?.unsubscribe();
     this.invoiceLoadSubscription = undefined;
-    const subscription = this.api.getPublicCommonInvoice(token).subscribe({
+    const subscription = this.publicPaymentsApi.getPublicCommonInvoice(token).subscribe({
       next: (invoice) => {
         if (!this.isActiveRoute(routeTicket)) {
           return;

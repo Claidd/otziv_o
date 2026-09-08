@@ -19,9 +19,13 @@ public record WhatsAppSendResult(String status, String code, String error, Strin
         return new WhatsAppSendResult("error", code, error, null);
     }
 
+    public static WhatsAppSendResult unknown(String code, String reason) {
+        return new WhatsAppSendResult("unknown", code, reason, null);
+    }
+
     public static WhatsAppSendResult parse(String rawBody) {
         if (rawBody == null || rawBody.isBlank()) {
-            return error("empty_response", "WhatsApp API вернул пустой ответ");
+            return unknown("operation_unknown", "WhatsApp API вернул пустой ответ");
         }
 
         String trimmed = rawBody.trim();
@@ -42,12 +46,10 @@ public record WhatsAppSendResult(String status, String code, String error, Strin
                 return new WhatsAppSendResult(status, code, error, rawBody);
             }
         } catch (JsonProcessingException ignored) {
-            if (trimmed.toLowerCase().contains("\"status\":\"ok\"")) {
-                return ok(rawBody);
-            }
+            // A fragment in an invalid response does not prove delivery.
         }
 
-        return new WhatsAppSendResult("unknown", "unknown_response", trimmed, rawBody);
+        return new WhatsAppSendResult("unknown", "operation_unknown", "WhatsApp API вернул некорректный ответ", rawBody);
     }
 
     public boolean isOk() {

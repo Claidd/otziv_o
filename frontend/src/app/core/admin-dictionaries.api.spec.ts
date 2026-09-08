@@ -1,8 +1,14 @@
 import { HttpClient } from '@angular/common/http';
+import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { appEnvironment } from './app-environment';
 import { AdminDictionariesApi } from './admin-dictionaries.api';
+
+function createApi(http: Partial<HttpClient>): AdminDictionariesApi {
+  TestBed.configureTestingModule({ providers: [{ provide: HttpClient, useValue: http }] });
+  return TestBed.inject(AdminDictionariesApi);
+}
 
 describe('AdminDictionariesApi bot browser endpoints', () => {
   let get: ReturnType<typeof vi.fn>;
@@ -12,7 +18,7 @@ describe('AdminDictionariesApi bot browser endpoints', () => {
   beforeEach(() => {
     get = vi.fn().mockReturnValue(of({}));
     post = vi.fn().mockReturnValue(of({}));
-    api = new AdminDictionariesApi({ get, post } as unknown as HttpClient);
+    api = createApi({ get, post } as unknown as HttpClient);
   });
 
   it('loads browser display data from the safe metadata endpoint', () => {
@@ -70,5 +76,24 @@ describe('AdminDictionariesApi bot browser endpoints', () => {
     expect(params.get('size')).toBe('100');
     expect(get).toHaveBeenNthCalledWith(2, `${appEnvironment.apiBaseUrl}/api/admin/bots/count`);
     expect(get).toHaveBeenNthCalledWith(3, `${appEnvironment.apiBaseUrl}/api/admin/bots/37`);
+  });
+});
+
+describe('AdminDictionariesApi specialist account action settings', () => {
+  it('loads and updates the duration and independent timer switch', () => {
+    const get = vi.fn().mockReturnValue(of({ enabled: true, cooldownSeconds: 60 }));
+    const put = vi.fn().mockReturnValue(of({ enabled: true, cooldownSeconds: 180 }));
+    const api = createApi({ get, put } as unknown as HttpClient);
+    const endpoint = `${appEnvironment.apiBaseUrl}/api/admin/dictionaries/worker-account-action-settings`;
+
+    api.getWorkerAccountActionSettings();
+    api.updateWorkerAccountActionSettings({ enabled: true, cooldownSeconds: 180 });
+    api.updateWorkerAccountActionSettings({ enabled: false, cooldownSeconds: 180 });
+    api.updateWorkerAccountActionSettings({ enabled: true, cooldownSeconds: 0 });
+
+    expect(get).toHaveBeenCalledWith(endpoint);
+    expect(put).toHaveBeenNthCalledWith(1, endpoint, { enabled: true, cooldownSeconds: 180 });
+    expect(put).toHaveBeenNthCalledWith(2, endpoint, { enabled: false, cooldownSeconds: 180 });
+    expect(put).toHaveBeenNthCalledWith(3, endpoint, { enabled: true, cooldownSeconds: 0 });
   });
 });

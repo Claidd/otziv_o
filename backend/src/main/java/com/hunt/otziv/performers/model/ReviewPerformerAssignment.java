@@ -70,6 +70,10 @@ public class ReviewPerformerAssignment {
     @Column(name = "publish_available_at")
     private LocalDateTime publishAvailableAt;
 
+    @Builder.Default
+    @Column(name = "publication_generation", nullable = false)
+    private long publicationGeneration = 0;
+
     @Column(name = "published_claimed_at")
     private LocalDateTime publishedClaimedAt;
 

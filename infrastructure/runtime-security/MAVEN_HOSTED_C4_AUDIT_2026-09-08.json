@@ -1,0 +1,900 @@
+{
+  "observedAt": "2026-09-07T20:44:15.627671+00:00",
+  "head": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+  "runId": 34159670709,
+  "url": "https://github.com/Claidd/otziv_o/actions/runs/34159670709",
+  "conclusion": "FAILURE_CVSS_GE_7",
+  "mavenJobId": 101858797962,
+  "tokenPreflight": "PASS existing hosted step continued; no token read by reviewer",
+  "NVDAnalyzerCompleted": "2026-09-07T20:33:37.7071387Z",
+  "SonatypeAnalyzerCompleted": "2026-09-07T20:33:44.8924263Z",
+  "cacheRestored": "Linux-dependency-check-13-public-v1-34156195253-1",
+  "cacheSaved": "Linux-dependency-check-13-public-v1-34159670709-1",
+  "npmJobs": "5/5 PASS",
+  "counts": {
+    "dependencyEntries": 490,
+    "vulnerableEntries": 25,
+    "pairs": 46,
+    "uniqueAdvisories": 24,
+    "severities": {
+      "LOW": 3,
+      "HIGH": 17,
+      "MEDIUM": 19,
+      "CRITICAL": 7
+    },
+    "sources": {
+      "OSSINDEX": 14,
+      "NVD": 32
+    },
+    "reportedSuppressedPairs": 39
+  },
+  "classification": {
+    "RUNTIME_LOWER_SEVERITY_RETAINED": {
+      "entries": 7,
+      "pairs": 9,
+      "highCritical": 0
+    },
+    "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED": {
+      "entries": 13,
+      "pairs": 18,
+      "highCritical": 13
+    },
+    "SHADED_TEST_TRANSPORT_UNRESOLVED": {
+      "entries": 1,
+      "pairs": 2,
+      "highCritical": 1
+    },
+    "SITE_JETTY_UNRESOLVED": {
+      "entries": 3,
+      "pairs": 16,
+      "highCritical": 9
+    },
+    "KOTLIN_JDK_WRONG_ARTIFACT_REVIEW": {
+      "entries": 1,
+      "pairs": 1,
+      "highCritical": 1
+    }
+  },
+  "fixedRuntimeVersions": [
+    {
+      "packageUrl": "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.21.6",
+      "sha256": "62134a98de12d0a421cd2f5b9854c8e63f10f524b0341e66cfd31a4326f6a329",
+      "projects": [
+        "otziv_o:compile"
+      ],
+      "activeFindings": 0
+    },
+    {
+      "packageUrl": "pkg:maven/tools.jackson.core/jackson-databind@3.1.6",
+      "sha256": "f0ff64eaa9f1c4bca9d720cd70c542297b0b19fc8ad08531bc55e36c8eab8e4b",
+      "projects": [
+        "otziv_o:compile"
+      ],
+      "activeFindings": 0
+    },
+    {
+      "packageUrl": "pkg:maven/org.jsoup/jsoup@1.23.2",
+      "sha256": "e9d8c856856680427f096d156f02a414289985c930998fcb519ce5be39b42003",
+      "projects": [
+        "otziv_o:compile"
+      ],
+      "activeFindings": 0
+    }
+  ],
+  "currentRemaining": [
+    {
+      "fileName": "HdrHistogram-2.2.2.jar",
+      "sha256": "22d1d4316c4ec13a68b559e98c8256d69071593731da96136640f864fa14fad8",
+      "packageUrls": [
+        "pkg:maven/org.hdrhistogram/HdrHistogram@2.2.2"
+      ],
+      "projectReferences": [
+        "otziv_o:runtime"
+      ],
+      "classification": "RUNTIME_LOWER_SEVERITY_RETAINED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-14683",
+          "severity": "LOW",
+          "source": "OSSINDEX"
+        },
+        {
+          "name": "CVE-2026-14686",
+          "severity": "LOW",
+          "source": "OSSINDEX"
+        }
+      ]
+    },
+    {
+      "fileName": "LatencyUtils-2.0.3.jar",
+      "sha256": "a32a9ffa06b2f4e01c5360f8f9df7bc5d9454a5d373cd8f361347fa5a57165ec",
+      "packageUrls": [
+        "pkg:maven/org.latencyutils/LatencyUtils@2.0.3"
+      ],
+      "projectReferences": [
+        "otziv_o:runtime"
+      ],
+      "classification": "RUNTIME_LOWER_SEVERITY_RETAINED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-82596",
+          "severity": "LOW",
+          "source": "OSSINDEX"
+        }
+      ]
+    },
+    {
+      "fileName": "commons-beanutils-1.9.4.jar",
+      "sha256": "7d938c81789028045c08c065e94be75fc280527620d5bd62b519d5838532368a",
+      "packageUrls": [
+        "pkg:maven/commons-beanutils/commons-beanutils@1.9.4"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2025-48734",
+          "severity": "HIGH",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "commons-lang3-3.16.0.jar",
+      "sha256": "08709dd74d602b705ce4017d26544210056a4ba583d5b20c09373406fe7a00f8",
+      "packageUrls": [
+        "pkg:maven/org.apache.commons/commons-lang3@3.16.0"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2025-48924",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "docker-java-transport-zerodep-3.7.1.jar (shaded: org.apache.httpcomponents.client5:httpclient5:5.5.1)",
+      "sha256": "f381d1bde581bb36992f14674a9ac88f7362b3e35c48a99805bc56e1df931647",
+      "packageUrls": [
+        "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.1"
+      ],
+      "projectReferences": [
+        "otziv_o:test"
+      ],
+      "classification": "SHADED_TEST_TRANSPORT_UNRESOLVED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-71290",
+          "severity": "CRITICAL",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-64607",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "httpclient5-5.5.2.jar",
+      "sha256": "5aec3f3447ec816e593e380b59fbe3e42083318af6b215bc177386f7742f6146",
+      "packageUrls": [
+        "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.5.2"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-71290",
+          "severity": "CRITICAL",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-64607",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "httpclient5-5.6.3.jar",
+      "sha256": "80712ff129210d7c73d9fcc1195cbee5c3c34744965c7a05ea107b3648922f18",
+      "packageUrls": [
+        "pkg:maven/org.apache.httpcomponents.client5/httpclient5@5.6.3"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-71290",
+          "severity": "CRITICAL",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "httpcore5-5.3.6.jar",
+      "sha256": "8fb4528d3e970aca440523a1bd698a389fa710ecfea4c5c6096698b86d1669ce",
+      "packageUrls": [
+        "pkg:maven/org.apache.httpcomponents.core5/httpcore5@5.3.6"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-54399",
+          "severity": "HIGH",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-54428",
+          "severity": "HIGH",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "jackson-databind-2.22.1.jar",
+      "sha256": "7dcd7e53bec1f56c7ad278bd1ca0840bebcc595d61ce44d6a8439abb75b965b2",
+      "packageUrls": [
+        "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.22.1"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-68497",
+          "severity": "HIGH",
+          "source": "OSSINDEX"
+        },
+        {
+          "name": "CVE-2026-19032",
+          "severity": "MEDIUM",
+          "source": "OSSINDEX"
+        }
+      ]
+    },
+    {
+      "fileName": "jackson-databind-3.1.5.jar",
+      "sha256": "3a2338d996fd3056791df8d335fa9ba8a62a706ed4245ecf81b3e583df37d08a",
+      "packageUrls": [
+        "pkg:maven/tools.jackson.core/jackson-databind@3.1.5"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-68497",
+          "severity": "HIGH",
+          "source": "OSSINDEX"
+        },
+        {
+          "name": "CVE-2026-19032",
+          "severity": "MEDIUM",
+          "source": "OSSINDEX"
+        }
+      ]
+    },
+    {
+      "fileName": "jetty-http-9.4.58.v20250814.jar",
+      "sha256": "8f49b8583fc8dbbfe3a0ba80a04c97df64ebabca2981b56ee403c989aba9d4da",
+      "packageUrls": [
+        "pkg:maven/org.eclipse.jetty/jetty-http@9.4.58.v20250814"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "SITE_JETTY_UNRESOLVED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-2332",
+          "severity": "CRITICAL",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-10050",
+          "severity": "HIGH",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-5795",
+          "severity": "HIGH",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2025-11143",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2024-6763",
+          "severity": "MEDIUM",
+          "source": "OSSINDEX"
+        },
+        {
+          "name": "CVE-2026-6790",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "jetty-io-9.4.58.v20250814.jar",
+      "sha256": "f55b2cc7c05244fd7b1773e99979b740002b0186e45b8a688243d89c7006fe21",
+      "packageUrls": [
+        "pkg:maven/org.eclipse.jetty/jetty-io@9.4.58.v20250814"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "SITE_JETTY_UNRESOLVED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-2332",
+          "severity": "CRITICAL",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-10050",
+          "severity": "HIGH",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-5795",
+          "severity": "HIGH",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2025-11143",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-6790",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "jetty-server-9.4.58.v20250814.jar",
+      "sha256": "608dbd3e1c4184374f02c70704e5d1c9daaded45e6a31d07824f40dac6083ba9",
+      "packageUrls": [
+        "pkg:maven/org.eclipse.jetty/jetty-server@9.4.58.v20250814"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "SITE_JETTY_UNRESOLVED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-2332",
+          "severity": "CRITICAL",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-10050",
+          "severity": "HIGH",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-5795",
+          "severity": "HIGH",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2025-11143",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        },
+        {
+          "name": "CVE-2026-6790",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "jsoup-1.22.1.jar",
+      "sha256": "cfd3298d8720cddfb0545109ccc6ea0ef39eff7e9c40a10ad95c93a65f01c916",
+      "packageUrls": [
+        "pkg:maven/org.jsoup/jsoup@1.22.1"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-75140",
+          "severity": "HIGH",
+          "source": "OSSINDEX"
+        },
+        {
+          "name": "CVE-2026-71497",
+          "severity": "MEDIUM",
+          "source": "OSSINDEX"
+        }
+      ]
+    },
+    {
+      "fileName": "jsoup-1.23.1.jar",
+      "sha256": "8b15e2b28eeb1e0a88a9b7dab4dc0c23524491c56959785dea22f7846897b668",
+      "packageUrls": [
+        "pkg:maven/org.jsoup/jsoup@1.23.1"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-75140",
+          "severity": "HIGH",
+          "source": "OSSINDEX"
+        }
+      ]
+    },
+    {
+      "fileName": "kotlin-stdlib-jdk7-2.2.21.jar",
+      "sha256": "b785922f11e6d91a6dd1d75cb0aef1ce37b83f8de0e3a2139139dfb823bb8a2c",
+      "packageUrls": [
+        "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@2.2.21"
+      ],
+      "projectReferences": [
+        "otziv_o:compile"
+      ],
+      "classification": "KOTLIN_JDK_WRONG_ARTIFACT_REVIEW",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-53914",
+          "severity": "CRITICAL",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "logback-classic-1.5.38.jar",
+      "sha256": "afb439c61fa287c9e1925523b13baab03617e724406a389d48b61c2c3e46b700",
+      "packageUrls": [
+        "pkg:maven/ch.qos.logback/logback-classic@1.5.38"
+      ],
+      "projectReferences": [
+        "otziv_o:compile"
+      ],
+      "classification": "RUNTIME_LOWER_SEVERITY_RETAINED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-19880",
+          "severity": "MEDIUM",
+          "source": "OSSINDEX"
+        }
+      ]
+    },
+    {
+      "fileName": "opentelemetry-api-1.55.0.jar",
+      "sha256": "387b4bf98631fc2ede9470879a8ff28dd8c5cb2d3dcf5b6ef77f5ee2bdb7b4f1",
+      "packageUrls": [
+        "pkg:maven/io.opentelemetry/opentelemetry-api@1.55.0"
+      ],
+      "projectReferences": [
+        "otziv_o:compile"
+      ],
+      "classification": "RUNTIME_LOWER_SEVERITY_RETAINED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-45292",
+          "severity": "MEDIUM",
+          "source": "OSSINDEX"
+        }
+      ]
+    },
+    {
+      "fileName": "opentelemetry-extension-trace-propagators-1.55.0.jar",
+      "sha256": "27861a2b49b3acf3166f489426808032c3addd9c082999f74a110eb7ac6985ce",
+      "packageUrls": [
+        "pkg:maven/io.opentelemetry/opentelemetry-extension-trace-propagators@1.55.0"
+      ],
+      "projectReferences": [
+        "otziv_o:runtime"
+      ],
+      "classification": "RUNTIME_LOWER_SEVERITY_RETAINED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-45292",
+          "severity": "MEDIUM",
+          "source": "OSSINDEX"
+        },
+        {
+          "name": "CVE-2026-54285",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "opentelemetry-instrumentation-api-incubator-2.1.0-alpha.jar",
+      "sha256": "4eae68272790153fabbfdc08741e7f3909af43adeb6ea4a30dd8a53d3bac4cd7",
+      "packageUrls": [
+        "pkg:maven/io.opentelemetry.instrumentation/opentelemetry-instrumentation-api-incubator@2.1.0-alpha"
+      ],
+      "projectReferences": [
+        "otziv_o:compile"
+      ],
+      "classification": "RUNTIME_LOWER_SEVERITY_RETAINED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-54285",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "opentelemetry-sdk-1.55.0.jar",
+      "sha256": "d63231ea6fd33e0457c776a9aa8ae7ba778379b03119228ec56a5c8c16f9480e",
+      "packageUrls": [
+        "pkg:maven/io.opentelemetry/opentelemetry-sdk@1.55.0"
+      ],
+      "projectReferences": [
+        "otziv_o:compile"
+      ],
+      "classification": "RUNTIME_LOWER_SEVERITY_RETAINED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2026-54285",
+          "severity": "MEDIUM",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "plexus-utils-3.5.1.jar",
+      "sha256": "86e0255d4c879c61b4833ed7f13124e8bb679df47debb127326e7db7dd49a07b",
+      "packageUrls": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@3.5.1"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2025-67030",
+          "severity": "HIGH",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "plexus-utils-3.6.0.jar",
+      "sha256": "27ef130e32c236090e408fb5498d94cb9ea26d14070fb1c8985d607b62d098d1",
+      "packageUrls": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@3.6.0"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2025-67030",
+          "severity": "HIGH",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "plexus-utils-4.0.1.jar",
+      "sha256": "96b9cc44439191d2d0635974e2d44e768736b4fb2abcb65f94cd95e41912fa8b",
+      "packageUrls": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@4.0.1"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2025-67030",
+          "severity": "HIGH",
+          "source": "NVD"
+        }
+      ]
+    },
+    {
+      "fileName": "plexus-utils-4.0.2.jar",
+      "sha256": "8957274e75fe2c278b1428dd16a0daeee1dd38152cb6eff816177ac28fccb697",
+      "packageUrls": [
+        "pkg:maven/org.codehaus.plexus/plexus-utils@4.0.2"
+      ],
+      "projectReferences": [
+        "otziv_o (plugins)"
+      ],
+      "classification": "PUBLISHED_PLUGIN_POM_ACTUAL_REALM_FIXED",
+      "vulnerabilities": [
+        {
+          "name": "CVE-2025-67030",
+          "severity": "HIGH",
+          "source": "NVD"
+        }
+      ]
+    }
+  ],
+  "scopeNotes": [
+    "Raw C4 report is unmodified and remains blocking; no risk acceptance.",
+    "Published plugin-POM classification uses independently retained actual plugin realm/causal proof; declared old artifacts are not scanner-exempt.",
+    "22 reviewed C2 exact pairs are absent from active C4 results. Post-suppression bundling changes representative entries: suppressed count39 is not 35+22. Two Spring entries are related artifacts without per-artifact suppressed rows; no claim of22 individual hosted rule-hit logs.",
+    "Kotlin jdk7/jdk8 were already related to reflect in C3 with the same hashes; C4 changed the representative after the reflect correction.",
+    "Current Sonatype account usage was not read. Last parent UI observation60.9/500 credits609requests belongs to earlier C2/C3 time, not C4 cost."
+  ],
+  "evidence": {
+    "dependency-check-report.json": "191016b378d821b4da87bc86c1dd9d08d7fb5c871b24882f271432bd6b5ed1b5",
+    "provenance.json": "5bb22b1f6bf1e42e40c8c9bc9a6a1cc1387302dad196983493bd8baf320b94fd",
+    "maven-safe-excerpts.json": "0423a3d1fc95f6e8d1134bd212f1103bd9fe454ce22d64326300c9c3ec57b0dc",
+    "jobs-current.json": "87bd9207e01d61b1984d9ac1a9c8c9d5f81b0e9aead00051c27ec5a81b0d6e3d",
+    "exact-rule-observation.json": "8fc13e0b84c14c9258edb014c8b4a757fc12db8f717ea0c9e82a0aa22d0776f5",
+    "kotlin-jdk-artifact-review.json": "74031adff0b8d0ae17710102fd952407ae888461c9edf60e63430e0f1902bdae"
+  },
+  "kotlinCorrection": {
+    "status": "APPLIED_AFTER_REVIEW",
+    "reviewedArtifacts": [
+      {
+        "packageUrl": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@2.2.21",
+        "sha256": "b785922f11e6d91a6dd1d75cb0aef1ce37b83f8de0e3a2139139dfb823bb8a2c",
+        "matchesC4Artifact": true,
+        "bytes": 945,
+        "entries": [
+          "META-INF/",
+          "META-INF/MANIFEST.MF",
+          "META-INF/versions/",
+          "META-INF/versions/9/",
+          "META-INF/versions/9/module-info.class"
+        ],
+        "classCount": 1,
+        "classNames": [
+          "META-INF/versions/9/module-info.class"
+        ],
+        "kaptClassNames": [],
+        "objectInputStreamReferences": 0,
+        "scope": "read-only exact cached artifact content; not a suppression approval"
+      },
+      {
+        "packageUrl": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@2.2.21",
+        "sha256": "c62275c50ee591ca2f82c7ba42696b791600c25844f47e84bd9460302a0d5238",
+        "matchesC4Artifact": true,
+        "bytes": 951,
+        "entries": [
+          "META-INF/",
+          "META-INF/MANIFEST.MF",
+          "META-INF/versions/",
+          "META-INF/versions/9/",
+          "META-INF/versions/9/module-info.class"
+        ],
+        "classCount": 1,
+        "classNames": [
+          "META-INF/versions/9/module-info.class"
+        ],
+        "kaptClassNames": [],
+        "objectInputStreamReferences": 0,
+        "scope": "read-only exact cached artifact content; not a suppression approval"
+      }
+    ],
+    "rules": [
+      {
+        "packageUrl": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk7@2.2.21",
+        "cve": "CVE-2026-53914"
+      },
+      {
+        "packageUrl": "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@2.2.21",
+        "cve": "CVE-2026-53914"
+      }
+    ],
+    "engineProof": {
+      "result": "PASS",
+      "engine": "ODC13 actual XSD/parser, SuppressionRule.process, DependencyBundlingAnalyzer.evaluateDependencies",
+      "checks": 129,
+      "existingRulesUnchanged": 19,
+      "newRules": 2,
+      "newExactArtifactAdvisoryPairs": 2,
+      "C4rawRepresentativePairs": 46,
+      "C4rawHighCriticalPairs": 24,
+      "counterfactualRetainedPairs": 45,
+      "counterfactualRetainedHighCritical": 23,
+      "bothSourcesTested": true,
+      "actualBundlingBeforeParentOnlyAfterTested": true,
+      "liveAuditInvoked": false
+    },
+    "primarySource": {
+      "CNA": "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/53xxx/CVE-2026-53914.json",
+      "vendorFix": "https://github.com/JetBrains/kotlin/commit/bf51df665b458fda7c3eaf436c4d88dc119d7ec6",
+      "vendorIssues": "https://www.jetbrains.com/privacy-security/issues-fixed/",
+      "commit": "bf51df665b458fda7c3eaf436c4d88dc119d7ec6",
+      "changedPaths": [
+        "plugins/kapt/kapt-base/src/org/jetbrains/kotlin/kapt/base/KaptContext.kt",
+        "plugins/kapt/kapt-base/src/org/jetbrains/kotlin/kapt/base/incremental/cache.kt",
+        "plugins/kapt/kapt-base/test/org/jetbrains/kotlin/kapt/base/test/incremental/InheritedAnnotationTest.kt",
+        "plugins/kapt/kapt-base/test/org/jetbrains/kotlin/kapt/base/test/incremental/JavaClassCacheManagerTest.kt",
+        "plugins/kapt/kapt-base/test/org/jetbrains/kotlin/kapt/base/test/incremental/ReferencedContantsTest.kt",
+        "plugins/kapt/kapt-base/test/org/jetbrains/kotlin/kapt/base/test/incremental/TestComplexIncrementalAptCache.kt",
+        "plugins/kapt/kapt-base/test/org/jetbrains/kotlin/kapt/base/test/incremental/TestSimpleIncrementalAptCache.kt"
+      ],
+      "CNA_product": "Kotlin"
+    },
+    "bundlingObservation": {
+      "C3Representative": "kotlin-reflect-2.2.21.jar",
+      "C3Related": [
+        "kotlin-stdlib-jdk7-2.2.21.jar",
+        "kotlin-stdlib-jdk8-2.2.21.jar"
+      ],
+      "C4Representative": "kotlin-stdlib-jdk7-2.2.21.jar",
+      "C4Related": [
+        "kotlin-stdlib-jdk8-2.2.21.jar"
+      ],
+      "artifactHashesUnchanged": true,
+      "inference": "Same artifacts, changed representative after exact reflect correction; two explicit selectors are necessary because suppression precedes bundling and does not inherit through related dependencies."
+    },
+    "rootXmlSha256Before": "027819a84fe08ad10d4a6ce99694250ddc083cd4ca010dc03d2879d03f741fb6",
+    "rootPomSha256Unchanged": "46a1a8160f7cced473772e44518bfb5b173860f1fe76cbc0702540b325d6ea00",
+    "counterfactualNotHostedRescan": true,
+    "application": {
+      "appliedAt": "2026-09-07T20:51:29.456768+00:00",
+      "rootApproval": "exact two tested Kotlin package/version/CVE rules only",
+      "oldXmlSha256": "027819a84fe08ad10d4a6ce99694250ddc083cd4ca010dc03d2879d03f741fb6",
+      "appliedXmlSha256": "3ea113a86e395ae7ca030421e53865e628d53a1e76ebc320ffdee5be8132f374",
+      "pomSha256Unchanged": "46a1a8160f7cced473772e44518bfb5b173860f1fe76cbc0702540b325d6ea00",
+      "rawC4ReportSha256Unchanged": "191016b378d821b4da87bc86c1dd9d08d7fb5c871b24882f271432bd6b5ed1b5",
+      "newRules": 2,
+      "existingRulesUnchanged": 19,
+      "scope": "XML/docs/proof only; no application dependency or source change"
+    },
+    "appliedEngineProof": {
+      "result": "PASS",
+      "engine": "ODC13 actual XSD/parser, SuppressionRule.process, DependencyBundlingAnalyzer.evaluateDependencies",
+      "checks": 129,
+      "existingRulesUnchanged": 19,
+      "newRules": 2,
+      "newExactArtifactAdvisoryPairs": 2,
+      "C4rawRepresentativePairs": 46,
+      "C4rawHighCriticalPairs": 24,
+      "counterfactualRetainedPairs": 45,
+      "counterfactualRetainedHighCritical": 23,
+      "bothSourcesTested": true,
+      "actualBundlingBeforeParentOnlyAfterTested": true,
+      "liveAuditInvoked": false
+    }
+  },
+  "publicScope": "C4 hosted result and subsequently applied independently tested correction; immutable C2/C3 and C4 raw reports preserved; POM unchanged.",
+  "proofArtifacts": [
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/dependency-check-report.json",
+      "sha256": "191016b378d821b4da87bc86c1dd9d08d7fb5c871b24882f271432bd6b5ed1b5",
+      "bytes": 6368108
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/dependency-check-report.html",
+      "sha256": "e99bbf8f58870e11f8490184510117fc222fd6d4dc7722fd15821ee9c734c260",
+      "bytes": 5302887
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/provenance.json",
+      "sha256": "5bb22b1f6bf1e42e40c8c9bc9a6a1cc1387302dad196983493bd8baf320b94fd",
+      "bytes": 681
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/maven-safe-excerpts.json",
+      "sha256": "0423a3d1fc95f6e8d1134bd212f1103bd9fe454ce22d64326300c9c3ec57b0dc",
+      "bytes": 13445
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/review-summary.json",
+      "sha256": "f93e439a850e3082e5e4f25eebaa876479bac7edb1108f31b67e089b0a025a72",
+      "bytes": 19944
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/exact-rule-observation.json",
+      "sha256": "8fc13e0b84c14c9258edb014c8b4a757fc12db8f717ea0c9e82a0aa22d0776f5",
+      "bytes": 19284
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/kotlin-jdk-artifact-review.json",
+      "sha256": "74031adff0b8d0ae17710102fd952407ae888461c9edf60e63430e0f1902bdae",
+      "bytes": 1778
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/kotlin-primary-fix.json",
+      "sha256": "a070145d324f795180c42147c3fc283d12697e991d1bd287b0dffcdfb9e79870",
+      "bytes": 21221
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/CVE-2026-53914.json",
+      "sha256": "70c57768334f288feb0b394b3a3e07416135280704fc5cd8fc11f88bc32af239",
+      "bytes": 4769
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/odc13-DependencyBundlingAnalyzer.java",
+      "sha256": "3b451e6dc3d5cbf5de211ff71c91da832bfdef5461805e98fe75ef5e1eb9f7b3",
+      "bytes": 29116
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/C4KotlinSuppressionProof.java",
+      "sha256": "7b9de4895f5e5243e5d17b6343c99a899084241c552610123e3b384a46901496",
+      "bytes": 8280
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/kotlin-suppression-engine-proof.json",
+      "sha256": "f65f870c799663b0a7fbd63c7f28a3397f1105f611bf8a4934565ab1b659ffd7",
+      "bytes": 445
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/kotlin-suppression-engine-proof.log",
+      "sha256": "5431574053b6d89115e9f4609de238e1bed26df2fefd238e479f9b20d2e4c5a9",
+      "bytes": 446
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/proposed-suppressions.xml",
+      "sha256": "3ea113a86e395ae7ca030421e53865e628d53a1e76ebc320ffdee5be8132f374",
+      "bytes": 19469
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/proposed-suppressions.patch",
+      "sha256": "3be8b0115f18113d6197d8bc2c21bf7c9149ff77299bc7dc02f233d1aed91b9a",
+      "bytes": 1860
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/kotlin-application-evidence.json",
+      "sha256": "0712691d8f49e25361ac96ba8b485a54c9d9cab5da6f711c844028ee1b4ed3d6",
+      "bytes": 636
+    },
+    {
+      "path": "infrastructure/runtime-security/proofs/C4KotlinSuppressionProof.java",
+      "sha256": "7b9de4895f5e5243e5d17b6343c99a899084241c552610123e3b384a46901496",
+      "bytes": 8280
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/aggregate-check-identity.json",
+      "sha256": "d9c37ae6901261bdcb1679f64ba1ee7cb3e03b6a1dfe04922f3e2f52955bac70",
+      "bytes": 440
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/kotlin-applied-engine-proof.json",
+      "sha256": "f65f870c799663b0a7fbd63c7f28a3397f1105f611bf8a4934565ab1b659ffd7",
+      "bytes": 445
+    },
+    {
+      "path": ".codex-tmp/finalization-20260907/hosted-dependency-audit/c4-report/kotlin-applied-engine-proof.log",
+      "sha256": "5431574053b6d89115e9f4609de238e1bed26df2fefd238e479f9b20d2e4c5a9",
+      "bytes": 446
+    }
+  ],
+  "aggregateCheckIdentity": {
+    "observedAt": "2026-09-07T20:52:36.7526246Z",
+    "jobId": 101859272915,
+    "name": "Dependency audit gate",
+    "status": "completed",
+    "conclusion": "failure",
+    "headSha": "c990a5bf0988c9d367c70504f6c4f530e956e3ab",
+    "checkRunId": 101859272915,
+    "checkName": "Dependency audit gate",
+    "appId": 15368,
+    "appSlug": "github-actions",
+    "url": "https://github.com/Claidd/otziv_o/actions/runs/34159670709/job/101859272915"
+  }
+}

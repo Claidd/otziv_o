@@ -230,9 +230,48 @@ public class WorkerRiskTelegramCallbackService {
                         "reason", assessment.reason(),
                         "model", assessment.model(),
                         "inputTokens", assessment.inputTokens(),
-                        "outputTokens", assessment.outputTokens()
+                        "outputTokens", assessment.outputTokens(),
+                        "assessmentAvailable", assessment.assessmentAvailable()
                 )
         );
+
+        if (!assessment.assessmentAvailable()) {
+            // A provider failure is not a failed worker attempt or evidence of a violation.
+            incident.setExplanationAttemptCount(attempt - 1);
+            incident.setResponseDueAt(null);
+            incident.setExplanationReminderAt(null);
+            if (incident.getSectionRestrictedAt() != null
+                    && incident.getSectionRestrictionReleasedAt() == null) {
+                incident.setSectionRestrictionReleasedAt(LocalDateTime.now());
+                riskEventService.record(
+                        incident, WorkerRiskEventType.SPECIALIST_SECTION_RELEASED,
+                        incident.getWorkerExplanationByUserId(), "WORKER", "telegram",
+                        Map.of("reason", "explanation-assessment-unavailable")
+                );
+            }
+            incidentRepository.save(incident);
+            riskEventService.record(
+                    incident, WorkerRiskEventType.MANUAL_REVIEW_REQUIRED,
+                    null, "SYSTEM", assessment.provider(),
+                    Map.of("reason", assessment.reason(), "assessmentAvailable", false,
+                            "attemptCount", incident.getExplanationAttemptCount())
+            );
+            personalReminderService.deleteSystemReminderBySource(worker, SOURCE_MANAGER_WARNING, incident.getId());
+            syncManagerControlRiskExplanation(worker, incident);
+            telegramService.sendMessage(chatId,
+                    "🟡 ПОЯСНЕНИЕ СОХРАНЕНО"
+                            + "\nАвтоматическая проверка временно недоступна. Пояснение передано менеджеру на проверку."
+                            + "\nПовторять ответ не требуется. Попытка не израсходована, срок ответа остановлен."
+                            + "\nКод запроса: risk-" + incident.getId());
+            updateOriginalRiskTelegramMessage(
+                    incident, "🟡 ПОЯСНЕНИЕ СОХРАНЕНО", "нужна проверка менеджера",
+                    "\n\nАвтоматическая проверка временно недоступна."
+                            + "\nОтвет получен: " + formatTelegramTime(incident.getWorkerExplanationAt())
+                            + "\nПояснение:\n" + html(clean(incident.getWorkerExplanation()))
+            );
+            notifyReviewersAboutExplanation(worker, incident);
+            return true;
+        }
 
         int maxClarifications = Math.max(0, Math.min(3, appSettingService.getInt(
                 AppSettingService.WORKER_RISK_EXPLANATION_MAX_CLARIFICATIONS,

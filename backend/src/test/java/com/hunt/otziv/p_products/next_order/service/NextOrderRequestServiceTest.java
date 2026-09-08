@@ -2,7 +2,7 @@ package com.hunt.otziv.p_products.next_order.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
-import com.hunt.otziv.c_companies.service.CompanyService;
+import com.hunt.otziv.c_companies.api.CompanyRecordOperations;
 import com.hunt.otziv.c_companies.service.CompanyStatusService;
 import com.hunt.otziv.common_billing.service.CommonBillingNextOrderFailureMarker;
 import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestedEvent;
@@ -49,7 +49,7 @@ class NextOrderRequestServiceTest {
     private OrderRepository orderRepository;
 
     @Mock
-    private CompanyService companyService;
+    private CompanyRecordOperations companyService;
 
     @Mock
     private CompanyStatusService companyStatusService;

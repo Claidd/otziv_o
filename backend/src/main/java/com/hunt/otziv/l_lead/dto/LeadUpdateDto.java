@@ -17,6 +17,10 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class LeadUpdateDto {
+    @jakarta.validation.Valid
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private LeadCommandIdentity command;
+
     @Positive
     private Long leadId;
     @NotBlank

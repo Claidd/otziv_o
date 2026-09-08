@@ -1,7 +1,14 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { AdminTaxonomyApi } from './admin-taxonomy.api';
+import { AdminProductsApi } from './admin-products.api';
+import { AdminCommunicationTextsApi } from './admin-communication-texts.api';
+import { AdminClientMessageSettingsApi } from './admin-client-message-settings.api';
+import { AdminCitiesApi } from './admin-cities.api';
+import { AdminGamificationApi } from './admin-gamification.api';
+import { AdminWorkSettingsApi } from './admin-work-settings.api';
+import { AdminAccountsApi } from './admin-accounts.api';
+import { AdminMessageMonitorApi } from './admin-message-monitor.api';
+import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { appEnvironment } from './app-environment';
 
 export interface DictionaryOption {
   id: number;
@@ -474,6 +481,11 @@ export interface AdminClientMessageArchiveDiagnostics {
   blockedByOpenRequest: number;
 }
 
+export interface AdminWorkerAccountActionSettings {
+  enabled: boolean;
+  cooldownSeconds: number;
+}
+
 export interface AdminClientMessageArchiveOfferToday {
   plannedToday: number;
   queuedNow: number;
@@ -774,399 +786,188 @@ export type ClientMessageSettingsRequest = AdminClientMessageSettings;
 
 @Injectable({ providedIn: 'root' })
 export class AdminDictionariesApi {
-  private readonly baseUrl = `${appEnvironment.apiBaseUrl}/api/admin`;
+  private readonly taxonomyApi = inject(AdminTaxonomyApi);
+  private readonly productsApi = inject(AdminProductsApi);
+  private readonly communicationTextsApi = inject(AdminCommunicationTextsApi);
+  private readonly clientMessageSettingsApi = inject(AdminClientMessageSettingsApi);
 
-  constructor(private readonly http: HttpClient) {}
+  private readonly citiesApi = inject(AdminCitiesApi);
+  private readonly gamificationApi = inject(AdminGamificationApi);
 
-  getCategories(keyword = ''): Observable<AdminCategory[]> {
-    return this.http.get<AdminCategory[]>(`${this.baseUrl}/categories`, {
-      params: this.keywordParams(keyword)
-    });
-  }
+  private readonly workSettingsApi = inject(AdminWorkSettingsApi);
 
-  createCategory(request: TitleRequest): Observable<AdminCategory> {
-    return this.http.post<AdminCategory>(`${this.baseUrl}/categories`, request);
-  }
+  private readonly accountsApi = inject(AdminAccountsApi);
 
-  updateCategory(id: number, request: TitleRequest): Observable<AdminCategory> {
-    return this.http.put<AdminCategory>(`${this.baseUrl}/categories/${id}`, request);
-  }
+  private readonly messageMonitorApi = inject(AdminMessageMonitorApi);
 
-  deleteCategory(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/categories/${id}`);
-  }
+  getCategories(keyword = ''): Observable<AdminCategory[]> { return this.taxonomyApi.getCategories(keyword); }
 
-  getSubCategories(keyword = '', categoryId?: number | null): Observable<AdminSubCategory[]> {
-    let params = this.keywordParams(keyword);
-    if (categoryId != null) {
-      params = params.set('categoryId', String(categoryId));
-    }
+  createCategory(request: TitleRequest): Observable<AdminCategory> { return this.taxonomyApi.createCategory(request); }
 
-    return this.http.get<AdminSubCategory[]>(`${this.baseUrl}/subcategories`, { params });
-  }
+  updateCategory(id: number, request: TitleRequest): Observable<AdminCategory> { return this.taxonomyApi.updateCategory(id, request); }
 
-  createSubCategory(request: SubCategoryRequest): Observable<AdminSubCategory> {
-    return this.http.post<AdminSubCategory>(`${this.baseUrl}/subcategories`, request);
-  }
+  deleteCategory(id: number): Observable<void> { return this.taxonomyApi.deleteCategory(id); }
 
-  updateSubCategory(id: number, request: SubCategoryRequest): Observable<AdminSubCategory> {
-    return this.http.put<AdminSubCategory>(`${this.baseUrl}/subcategories/${id}`, request);
-  }
+  getSubCategories(keyword = '', categoryId?: number | null): Observable<AdminSubCategory[]> { return this.taxonomyApi.getSubCategories(keyword, categoryId); }
 
-  deleteSubCategory(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/subcategories/${id}`);
-  }
+  createSubCategory(request: SubCategoryRequest): Observable<AdminSubCategory> { return this.taxonomyApi.createSubCategory(request); }
 
-  getCities(keyword = ''): Observable<AdminCity[]> {
-    return this.http.get<AdminCity[]>(`${this.baseUrl}/cities`, {
-      params: this.keywordParams(keyword)
-    });
-  }
+  updateSubCategory(id: number, request: SubCategoryRequest): Observable<AdminSubCategory> { return this.taxonomyApi.updateSubCategory(id, request); }
 
-  createCity(request: CityRequest): Observable<AdminCity> {
-    return this.http.post<AdminCity>(`${this.baseUrl}/cities`, request);
-  }
+  deleteSubCategory(id: number): Observable<void> { return this.taxonomyApi.deleteSubCategory(id); }
 
-  updateCity(id: number, request: CityRequest): Observable<AdminCity> {
-    return this.http.put<AdminCity>(`${this.baseUrl}/cities/${id}`, request);
-  }
+  getCities(keyword = ''): Observable<AdminCity[]> { return this.citiesApi.getCities(keyword); }
+  createCity(request: CityRequest): Observable<AdminCity> { return this.citiesApi.createCity(request); }
+  updateCity(id: number, request: CityRequest): Observable<AdminCity> { return this.citiesApi.updateCity(id, request); }
+  deleteCity(id: number): Observable<void> { return this.citiesApi.deleteCity(id); }
+  rebuildCityDistances(minCityId = 150): Observable<CityDistanceRebuildResponse> { return this.citiesApi.rebuildCityDistances(minCityId); }
+  rebuildCityDistancesForCity(id: number): Observable<CityDistanceRebuildResponse> { return this.citiesApi.rebuildCityDistancesForCity(id); }
+  importCityCoordinates(file: File): Observable<CityCoordinateImportResponse> { return this.citiesApi.importCityCoordinates(file); }
 
-  deleteCity(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/cities/${id}`);
-  }
+  getProducts(keyword = ''): Observable<ProductsResponse> { return this.productsApi.getProducts(keyword); }
 
-  rebuildCityDistances(minCityId = 150): Observable<CityDistanceRebuildResponse> {
-    return this.http.post<CityDistanceRebuildResponse>(
-      `${this.baseUrl}/cities/distances/rebuild`,
-      {},
-      { params: new HttpParams().set('minCityId', String(minCityId)) }
-    );
-  }
+  createProduct(request: ProductRequest): Observable<AdminProduct> { return this.productsApi.createProduct(request); }
 
-  rebuildCityDistancesForCity(id: number): Observable<CityDistanceRebuildResponse> {
-    return this.http.post<CityDistanceRebuildResponse>(`${this.baseUrl}/cities/${id}/distances/rebuild`, {});
-  }
+  updateProduct(id: number, request: ProductRequest): Observable<AdminProduct> { return this.productsApi.updateProduct(id, request); }
 
-  importCityCoordinates(file: File): Observable<CityCoordinateImportResponse> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return this.http.post<CityCoordinateImportResponse>(`${this.baseUrl}/cities/coordinates/import`, formData);
-  }
+  deleteProduct(id: number): Observable<void> { return this.productsApi.deleteProduct(id); }
 
-  getProducts(keyword = ''): Observable<ProductsResponse> {
-    return this.http.get<ProductsResponse>(`${this.baseUrl}/products`, {
-      params: this.keywordParams(keyword)
-    });
-  }
+  getBots(keyword = '', page = 0, size = 50): Observable<BotsResponse> { return this.accountsApi.getBots(keyword, page, size); }
 
-  createProduct(request: ProductRequest): Observable<AdminProduct> {
-    return this.http.post<AdminProduct>(`${this.baseUrl}/products`, request);
-  }
+  getBot(id: number): Observable<AdminBot> { return this.accountsApi.getBot(id); }
 
-  updateProduct(id: number, request: ProductRequest): Observable<AdminProduct> {
-    return this.http.put<AdminProduct>(`${this.baseUrl}/products/${id}`, request);
-  }
+  getBotCount(): Observable<BotCountResponse> { return this.accountsApi.getBotCount(); }
 
-  deleteProduct(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/products/${id}`);
-  }
+  getBotCityUnblockedCount(cityId: number): Observable<BotCityUnblockedCountResponse> { return this.accountsApi.getBotCityUnblockedCount(cityId); }
 
-  getBots(keyword = '', page = 0, size = 50): Observable<BotsResponse> {
-    const params = this.keywordParams(keyword)
-      .set('page', String(page))
-      .set('size', String(size));
-    return this.http.get<BotsResponse>(`${this.baseUrl}/bots`, {
-      params
-    });
-  }
+  createBot(request: BotRequest): Observable<AdminBot> { return this.accountsApi.createBot(request); }
 
-  getBot(id: number): Observable<AdminBot> {
-    return this.http.get<AdminBot>(`${this.baseUrl}/bots/${id}`);
-  }
+  updateBot(id: number, request: BotRequest): Observable<AdminBot> { return this.accountsApi.updateBot(id, request); }
 
-  getBotCount(): Observable<BotCountResponse> {
-    return this.http.get<BotCountResponse>(`${this.baseUrl}/bots/count`);
-  }
+  deleteBot(id: number): Observable<void> { return this.accountsApi.deleteBot(id); }
 
-  getBotCityUnblockedCount(cityId: number): Observable<BotCityUnblockedCountResponse> {
-    const params = new HttpParams().set('cityId', String(cityId));
-    return this.http.get<BotCityUnblockedCountResponse>(`${this.baseUrl}/bots/unblocked-count`, {
-      params
-    });
-  }
-
-  createBot(request: BotRequest): Observable<AdminBot> {
-    return this.http.post<AdminBot>(`${this.baseUrl}/bots`, request);
-  }
-
-  updateBot(id: number, request: BotRequest): Observable<AdminBot> {
-    return this.http.put<AdminBot>(`${this.baseUrl}/bots/${id}`, request);
-  }
-
-  deleteBot(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/bots/${id}`);
-  }
-
-  importBots(file: File, cityId?: number | null): Observable<BotImportResponse> {
-    const formData = new FormData();
-    formData.append('file', file);
-    const params = cityId == null ? undefined : new HttpParams().set('cityId', String(cityId));
-    return this.http.post<BotImportResponse>(`${this.baseUrl}/bots/import`, formData, { params });
-  }
+  importBots(file: File, cityId?: number | null): Observable<BotImportResponse> { return this.accountsApi.importBots(file, cityId); }
 
   openBotBrowser(botId: number): Observable<BotBrowserOpenResponse> {
-    return this.http.post<BotBrowserOpenResponse>(
-      `${appEnvironment.apiBaseUrl}/api/bots/${botId}/browser/open`,
-      { heartbeatSupported: true }
-    );
+    return this.accountsApi.openBotBrowser(botId);
   }
 
   getBotBrowserMetadata(botId: number): Observable<BotBrowserMetadata> {
-    return this.http.get<BotBrowserMetadata>(
-      `${appEnvironment.apiBaseUrl}/api/bots/${botId}/browser/metadata`
-    );
+    return this.accountsApi.getBotBrowserMetadata(botId);
   }
 
   heartbeatBotBrowser(botId: number, sessionId: string): Observable<void> {
-    return this.http.post<void>(
-      `${appEnvironment.apiBaseUrl}/api/bots/${botId}/browser/sessions/${encodeURIComponent(sessionId)}/heartbeat`,
-      {}
-    );
+    return this.accountsApi.heartbeatBotBrowser(botId, sessionId);
   }
 
   closeBotBrowser(botId: number, sessionId?: string | null): Observable<void> {
-    const path = sessionId
-      ? `/api/bots/${botId}/browser/sessions/${encodeURIComponent(sessionId)}/close`
-      : `/api/bots/${botId}/browser/close`;
-    return this.http.post<void>(
-      `${appEnvironment.apiBaseUrl}${path}`,
-      {}
-    );
+    return this.accountsApi.closeBotBrowser(botId, sessionId);
   }
 
-  getPromoTexts(keyword = ''): Observable<AdminPromoText[]> {
-    return this.http.get<AdminPromoText[]>(`${this.baseUrl}/promo-texts`, {
-      params: this.keywordParams(keyword)
-    });
-  }
+  getPromoTexts(keyword = ''): Observable<AdminPromoText[]> { return this.communicationTextsApi.getPromoTexts(keyword); }
 
-  getPromoTextManagement(keyword = ''): Observable<PromoTextManagementResponse> {
-    return this.http.get<PromoTextManagementResponse>(`${this.baseUrl}/promo-texts/management`, {
-      params: this.keywordParams(keyword)
-    });
-  }
+  getPromoTextManagement(keyword = ''): Observable<PromoTextManagementResponse> { return this.communicationTextsApi.getPromoTextManagement(keyword); }
 
-  createPromoText(request: PromoTextRequest): Observable<AdminPromoText> {
-    return this.http.post<AdminPromoText>(`${this.baseUrl}/promo-texts`, request);
-  }
+  createPromoText(request: PromoTextRequest): Observable<AdminPromoText> { return this.communicationTextsApi.createPromoText(request); }
 
-  updatePromoText(id: number, request: PromoTextRequest): Observable<AdminPromoText> {
-    return this.http.put<AdminPromoText>(`${this.baseUrl}/promo-texts/${id}`, request);
-  }
+  updatePromoText(id: number, request: PromoTextRequest): Observable<AdminPromoText> { return this.communicationTextsApi.updatePromoText(id, request); }
 
-  savePromoTextAssignment(request: PromoTextAssignmentRequest): Observable<PromoTextAssignment> {
-    return this.http.put<PromoTextAssignment>(`${this.baseUrl}/promo-text-assignments`, request);
-  }
+  savePromoTextAssignment(request: PromoTextAssignmentRequest): Observable<PromoTextAssignment> { return this.communicationTextsApi.savePromoTextAssignment(request); }
 
-  resetPromoTextAssignment(managerId: number, section: string, buttonKey: string): Observable<void> {
-    return this.http.delete<void>(
-      `${this.baseUrl}/promo-text-assignments/${managerId}/${section}/${buttonKey}`
-    );
-  }
+  resetPromoTextAssignment(managerId: number, section: string, buttonKey: string): Observable<void> { return this.communicationTextsApi.resetPromoTextAssignment(managerId, section, buttonKey); }
 
-  getManagerTexts(keyword = ''): Observable<AdminManagerText[]> {
-    return this.http.get<AdminManagerText[]>(`${this.baseUrl}/manager-texts`, {
-      params: this.keywordParams(keyword)
-    });
-  }
+  getManagerTexts(keyword = ''): Observable<AdminManagerText[]> { return this.communicationTextsApi.getManagerTexts(keyword); }
 
-  updateManagerText(managerId: number, request: ManagerTextRequest): Observable<AdminManagerText> {
-    return this.http.put<AdminManagerText>(`${this.baseUrl}/manager-texts/${managerId}`, request);
-  }
+  updateManagerText(managerId: number, request: ManagerTextRequest): Observable<AdminManagerText> { return this.communicationTextsApi.updateManagerText(managerId, request); }
 
-  getNagulSettings(): Observable<AdminNagulSettings> {
-    return this.http.get<AdminNagulSettings>(`${this.baseUrl}/settings/nagul`);
-  }
+  getNagulSettings(): Observable<AdminNagulSettings> { return this.workSettingsApi.getNagulSettings(); }
 
-  updateNagulSettings(request: NagulSettingsRequest): Observable<AdminNagulSettings> {
-    return this.http.put<AdminNagulSettings>(`${this.baseUrl}/settings/nagul`, request);
-  }
+  getWorkerAccountActionSettings(): Observable<AdminWorkerAccountActionSettings> { return this.workSettingsApi.getWorkerAccountActionSettings(); }
 
-  getWorkerCellularAccessSettings(): Observable<AdminWorkerCellularAccessSettings> {
-    return this.http.get<AdminWorkerCellularAccessSettings>(
-      `${this.baseUrl}/settings/worker-cellular-access`
-    );
-  }
+  updateWorkerAccountActionSettings(request: AdminWorkerAccountActionSettings): Observable<AdminWorkerAccountActionSettings> { return this.workSettingsApi.updateWorkerAccountActionSettings(request); }
+
+  updateNagulSettings(request: NagulSettingsRequest): Observable<AdminNagulSettings> { return this.workSettingsApi.updateNagulSettings(request); }
+
+  getWorkerCellularAccessSettings(): Observable<AdminWorkerCellularAccessSettings> { return this.workSettingsApi.getWorkerCellularAccessSettings(); }
 
   updateWorkerCellularAccessSettings(
     request: WorkerCellularAccessSettingsRequest
-  ): Observable<AdminWorkerCellularAccessSettings> {
-    return this.http.put<AdminWorkerCellularAccessSettings>(
-      `${this.baseUrl}/settings/worker-cellular-access`,
-      request
-    );
-  }
+  ): Observable<AdminWorkerCellularAccessSettings> { return this.workSettingsApi.updateWorkerCellularAccessSettings(request); }
 
-  getTelegramReportSettings(): Observable<AdminTelegramReportScheduleSettings> {
-    return this.http.get<AdminTelegramReportScheduleSettings>(`${this.baseUrl}/settings/telegram-reports`);
-  }
+  getTelegramReportSettings(): Observable<AdminTelegramReportScheduleSettings> { return this.workSettingsApi.getTelegramReportSettings(); }
 
   updateTelegramReportSettings(
     request: TelegramReportScheduleSettingsRequest
-  ): Observable<AdminTelegramReportScheduleSettings> {
-    return this.http.put<AdminTelegramReportScheduleSettings>(`${this.baseUrl}/settings/telegram-reports`, request);
-  }
+  ): Observable<AdminTelegramReportScheduleSettings> { return this.workSettingsApi.updateTelegramReportSettings(request); }
 
-  getWhatsAppGroupSyncSettings(): Observable<AdminWhatsAppGroupSyncSettings> {
-    return this.http.get<AdminWhatsAppGroupSyncSettings>(`${this.baseUrl}/settings/whatsapp-group-sync`);
-  }
+  getWhatsAppGroupSyncSettings(): Observable<AdminWhatsAppGroupSyncSettings> { return this.workSettingsApi.getWhatsAppGroupSyncSettings(); }
 
   updateWhatsAppGroupSyncSettings(
     request: WhatsAppGroupSyncSettingsRequest
-  ): Observable<AdminWhatsAppGroupSyncSettings> {
-    return this.http.put<AdminWhatsAppGroupSyncSettings>(`${this.baseUrl}/settings/whatsapp-group-sync`, request);
-  }
+  ): Observable<AdminWhatsAppGroupSyncSettings> { return this.workSettingsApi.updateWhatsAppGroupSyncSettings(request); }
 
-  runWhatsAppGroupSync(): Observable<AdminWhatsAppGroupSyncSettings> {
-    return this.http.post<AdminWhatsAppGroupSyncSettings>(`${this.baseUrl}/settings/whatsapp-group-sync/run`, {});
-  }
+  runWhatsAppGroupSync(): Observable<AdminWhatsAppGroupSyncSettings> { return this.workSettingsApi.runWhatsAppGroupSync(); }
 
-  getClientPublicationProgressReportSettings(): Observable<AdminClientPublicationProgressReportSettings> {
-    return this.http.get<AdminClientPublicationProgressReportSettings>(
-      `${this.baseUrl}/settings/client-publication-progress-reports`
-    );
-  }
+  getClientPublicationProgressReportSettings(): Observable<AdminClientPublicationProgressReportSettings> { return this.workSettingsApi.getClientPublicationProgressReportSettings(); }
 
   updateClientPublicationProgressReportSettings(
     request: ClientPublicationProgressReportSettingsRequest
-  ): Observable<AdminClientPublicationProgressReportSettings> {
-    return this.http.put<AdminClientPublicationProgressReportSettings>(
-      `${this.baseUrl}/settings/client-publication-progress-reports`,
-      request
-    );
-  }
+  ): Observable<AdminClientPublicationProgressReportSettings> { return this.workSettingsApi.updateClientPublicationProgressReportSettings(request); }
 
-  getGamificationSettings(): Observable<AdminGamificationSettings> {
-    return this.http.get<AdminGamificationSettings>(`${this.baseUrl}/gamification/settings`);
-  }
+  getGamificationSettings(): Observable<AdminGamificationSettings> { return this.gamificationApi.getGamificationSettings(); }
 
-  updateGamificationSettings(request: AdminGamificationSettingsRequest): Observable<AdminGamificationSettings> {
-    return this.http.put<AdminGamificationSettings>(`${this.baseUrl}/gamification/settings`, request);
-  }
+  updateGamificationSettings(request: AdminGamificationSettingsRequest): Observable<AdminGamificationSettings> { return this.gamificationApi.updateGamificationSettings(request); }
 
-  getGamificationEvents(limit = 50): Observable<AdminGamificationEvent[]> {
-    return this.http.get<AdminGamificationEvent[]>(`${this.baseUrl}/gamification/events`, {
-      params: { limit }
-    });
-  }
+  getGamificationEvents(limit = 50): Observable<AdminGamificationEvent[]> { return this.gamificationApi.getGamificationEvents(limit); }
 
-  getGamificationProgress(days = 1): Observable<AdminGamificationProgress> {
-    return this.http.get<AdminGamificationProgress>(`${this.baseUrl}/gamification/progress`, {
-      params: { days }
-    });
-  }
+  getGamificationProgress(days = 1): Observable<AdminGamificationProgress> { return this.gamificationApi.getGamificationProgress(days); }
 
-  getGamificationRules(): Observable<AdminGamificationRulesResponse> {
-    return this.http.get<AdminGamificationRulesResponse>(`${this.baseUrl}/gamification/rules`);
-  }
+  getGamificationRules(): Observable<AdminGamificationRulesResponse> { return this.gamificationApi.getGamificationRules(); }
 
-  updateGamificationRules(request: AdminGamificationRulesRequest): Observable<AdminGamificationRulesResponse> {
-    return this.http.put<AdminGamificationRulesResponse>(`${this.baseUrl}/gamification/rules`, request);
-  }
+  updateGamificationRules(request: AdminGamificationRulesRequest): Observable<AdminGamificationRulesResponse> { return this.gamificationApi.updateGamificationRules(request); }
 
-  getGamificationScorePreview(days = 1): Observable<AdminGamificationScorePreview> {
-    return this.http.get<AdminGamificationScorePreview>(`${this.baseUrl}/gamification/score-preview`, {
-      params: { days }
-    });
-  }
+  getGamificationScorePreview(days = 1): Observable<AdminGamificationScorePreview> { return this.gamificationApi.getGamificationScorePreview(days); }
 
-  getGamificationScoreLedger(days = 1): Observable<AdminGamificationScoreLedger> {
-    return this.http.get<AdminGamificationScoreLedger>(`${this.baseUrl}/gamification/score-ledger`, {
-      params: { days }
-    });
-  }
+  getGamificationScoreLedger(days = 1): Observable<AdminGamificationScoreLedger> { return this.gamificationApi.getGamificationScoreLedger(days); }
 
-  rebuildGamificationScoreLedger(days = 1): Observable<AdminGamificationScoreLedgerRebuild> {
-    return this.http.post<AdminGamificationScoreLedgerRebuild>(
-      `${this.baseUrl}/gamification/score-ledger/rebuild`,
-      {},
-      { params: { days } }
-    );
-  }
+  rebuildGamificationScoreLedger(days = 1): Observable<AdminGamificationScoreLedgerRebuild> { return this.gamificationApi.rebuildGamificationScoreLedger(days); }
 
-  backfillGamificationEvents(days = 1): Observable<AdminGamificationBackfill> {
-    return this.http.post<AdminGamificationBackfill>(
-      `${this.baseUrl}/gamification/events/backfill`,
-      {},
-      { params: { days } }
-    );
-  }
+  backfillGamificationEvents(days = 1): Observable<AdminGamificationBackfill> { return this.gamificationApi.backfillGamificationEvents(days); }
 
-  getGamificationBalances(days = 1): Observable<AdminGamificationBalances> {
-    return this.http.get<AdminGamificationBalances>(`${this.baseUrl}/gamification/balances`, {
-      params: { days }
-    });
-  }
+  getGamificationBalances(days = 1): Observable<AdminGamificationBalances> { return this.gamificationApi.getGamificationBalances(days); }
 
-  getClientMessageSettings(): Observable<AdminClientMessageSettings> {
-    return this.http.get<AdminClientMessageSettings>(`${this.baseUrl}/settings/client-messages`);
-  }
+  getClientMessageSettings(): Observable<AdminClientMessageSettings> { return this.clientMessageSettingsApi.getClientMessageSettings(); }
 
-  updateClientMessageSettings(request: ClientMessageSettingsRequest): Observable<AdminClientMessageSettings> {
-    return this.http.put<AdminClientMessageSettings>(`${this.baseUrl}/settings/client-messages`, request);
-  }
+  updateClientMessageSettings(request: ClientMessageSettingsRequest): Observable<AdminClientMessageSettings> { return this.clientMessageSettingsApi.updateClientMessageSettings(request); }
 
   getClientMessageMonitor(): Observable<AdminClientMessageMonitor> {
-    return this.http.get<AdminClientMessageMonitor>(`${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor`);
+    return this.messageMonitorApi.getClientMessageMonitor();
   }
 
   getClientMessageMaintenancePreview(): Observable<AdminClientMessageMaintenancePreview> {
-    return this.http.get<AdminClientMessageMaintenancePreview>(
-      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/maintenance-preview`
-    );
+    return this.messageMonitorApi.getClientMessageMaintenancePreview();
   }
 
   applyClientMessageMaintenance(action: 'company-statuses' | 'payment-overdue' | 'missing-bad-tasks' | 'archive-offers' | 'publication-dates' | 'publication-completed'): Observable<AdminMaintenanceApplyResponse> {
-    return this.http.post<AdminMaintenanceApplyResponse>(
-      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/maintenance/${action}`,
-      {}
-    );
+    return this.messageMonitorApi.applyClientMessageMaintenance(action);
   }
 
   updateClientMessageMonitorSettings(enabled: boolean): Observable<AdminClientMessageMonitorSettings> {
-    return this.http.put<AdminClientMessageMonitorSettings>(
-      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor`,
-      { enabled }
-    );
+    return this.messageMonitorApi.updateClientMessageMonitorSettings(enabled);
   }
 
   retryClientMessageNow(stateId: number): Observable<AdminClientMessageMonitor> {
-    return this.http.post<AdminClientMessageMonitor>(
-      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor/${stateId}/retry-now`,
-      {}
-    );
+    return this.messageMonitorApi.retryClientMessageNow(stateId);
   }
 
   disableClientMessageCandidate(stateId: number): Observable<AdminClientMessageMonitor> {
-    return this.http.post<AdminClientMessageMonitor>(
-      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor/${stateId}/disable`,
-      {}
-    );
+    return this.messageMonitorApi.disableClientMessageCandidate(stateId);
   }
 
   markClientMessageCandidateDone(stateId: number): Observable<AdminClientMessageMonitor> {
-    return this.http.post<AdminClientMessageMonitor>(
-      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor/${stateId}/done`,
-      {}
-    );
+    return this.messageMonitorApi.markClientMessageCandidateDone(stateId);
   }
 
-  runSharedChatLinkSync(): Observable<AdminSharedChatLinkSyncResponse> {
-    return this.http.post<AdminSharedChatLinkSyncResponse>(`${this.baseUrl}/settings/shared-chat-links/sync`, {});
-  }
+  runSharedChatLinkSync(): Observable<AdminSharedChatLinkSyncResponse> { return this.workSettingsApi.runSharedChatLinkSync(); }
 
-  private keywordParams(keyword: string): HttpParams {
-    const value = keyword.trim();
-    return value ? new HttpParams().set('keyword', value) : new HttpParams();
-  }
 }

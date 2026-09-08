@@ -1,0 +1,58 @@
+{
+  "schema": "otziv-provenance-fixture-v1",
+  "captured": "2026-09-07T22:58:01Z",
+  "buildkit": "moby/buildkit@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8",
+  "sbomGenerator": "docker/buildkit-syft-scanner@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9",
+  "buildx": "v0.36.1-desktop.1",
+  "method": "Clean synthetic Git repository; FROM scratch; COPY source.txt /source.txt; local OCI export; no push",
+  "sourceText": "Public provenance fixture only.\n",
+  "expected": {
+    "source": "https://github.com/example/provenance-fixture.git",
+    "commit": "c4b09619c26c0b0f0c03a1f7b65214ab532affaf",
+    "context": ".",
+    "dockerfile": "Dockerfile",
+    "dockerfileSha256": "a4f9bc4f60ec49eac8564267e4364c6d0352ebf8db27fcfd9806a8275e055e12"
+  },
+  "indexDigest": "sha256:44d5accfe5a2ca30cf259fa63c22c9616a84c9e814981ccfb25d104034e81c41",
+  "result": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:fea19fd72c7f1f9e9e8410d4340e6c39a40f79c02c589d4d8f3ca5d3498d7dc4",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:44d5accfe5a2ca30cf259fa63c22c9616a84c9e814981ccfb25d104034e81c41",
+        "size": 856
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:fea19fd72c7f1f9e9e8410d4340e6c39a40f79c02c589d4d8f3ca5d3498d7dc4",
+        "size": 476
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:0cb9688ff38899f9f65f61298e3366fbe5237ffb0a7a64c5e71c71a9fd6a46d8",
+        "size": 444
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:150ec12f82d6dbc92afa9d23fbb2f6cda639df8528ecf312dfd18c8e2f1a07f2",
+        "size": 1107
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:b2711775da845c74d5f71ee3958b7756e44615abf29ad31c5f4c13b5ceba6def",
+        "size": 1064
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:10549fe85fb5e7d062b440d6474443be3508551f2b367e3f2629fd134ca8f648",
+        "size": 3422
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  }
+}

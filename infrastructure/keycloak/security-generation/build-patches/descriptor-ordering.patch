@@ -1,0 +1,8 @@
+--- quarkus-3.33.3.1/extensions/hibernate-orm/deployment/src/main/java/io/quarkus/hibernate/orm/deployment/HibernateOrmProcessor.java
++++ otziv/extensions/hibernate-orm/deployment/src/main/java/io/quarkus/hibernate/orm/deployment/HibernateOrmProcessor.java
+@@ -455,4 +455,5 @@
+     @BuildStep
++    @Consume(AdditionalJpaModelBuildItem.class)
+     public void contributePersistenceXmlToJpaModel(
+             BuildProducer<JpaModelPersistenceUnitContributionBuildItem> jpaModelPuContributions,
+             List<PersistenceXmlDescriptorBuildItem> persistenceXmlDescriptors) {

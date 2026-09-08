@@ -1,0 +1,27 @@
+[Unit]
+Description=Authenticated TLS publisher of observed Otziv runtime and backup signals
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=otziv-monitor
+Group=otziv-monitor
+EnvironmentFile=/etc/otziv-monitor/publisher-secrets.env
+ExecStart=/usr/bin/node /opt/otziv/infrastructure/monitoring/publisher.mjs /etc/otziv-monitor/publisher.json
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=256M
+TasksMax=32
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

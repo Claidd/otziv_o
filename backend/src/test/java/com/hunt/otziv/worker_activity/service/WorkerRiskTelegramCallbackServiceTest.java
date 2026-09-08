@@ -568,6 +568,60 @@ class WorkerRiskTelegramCallbackServiceTest {
         );
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 2})
+    void technicalFailurePreservesAttemptBudgetAndReleasesResponseRestriction(int previousAttempts) {
+        WorkerRiskIncident incident = incident();
+        incident.setResolutionAction(WorkerRiskResolutionAction.EXPLANATION_REQUESTED);
+        incident.setExplanationRequestedAt(java.time.LocalDateTime.now().minusHours(4));
+        incident.setExplanationPromptedAt(java.time.LocalDateTime.now());
+        incident.setResponseDueAt(java.time.LocalDateTime.now().minusHours(1));
+        incident.setSectionRestrictedAt(java.time.LocalDateTime.now().minusMinutes(30));
+        incident.setExplanationAttemptCount(previousAttempts);
+        incident.setSlaDeliveryClaimToken("old-claim");
+        incident.setSlaDeliveryClaimKind("OVERDUE");
+        incident.setSlaDeliveryClaimedAt(java.time.LocalDateTime.now());
+        incident.setTelegramNotificationChatId(999L);
+        incident.setTelegramNotificationMessageId(10);
+        User worker = user(2L, "worker", 888L, "ROLE_WORKER");
+        worker.setWorkerTelegramGroupChatId(-100123L);
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(worker);
+        when(userService.findByChatId(888L)).thenReturn(Optional.of(worker));
+        when(explanationQualityService.assess(any(), any())).thenReturn(
+                new WorkerRiskExplanationQualityService.Result(
+                        WorkerRiskExplanationQuality.NEEDS_REVIEW, BigDecimal.ZERO,
+                        "DeepSeek вернул пустой текст, finish_reason=length.", "", "deepseek", "test", 100, 700, false));
+        String answer = "Скопировала логин, пароль, оказался заблокирован, отправила в блок";
+
+        for (int repeat = 0; repeat < 2; repeat++) {
+            assertEquals(true, service.handleWorkerGroupTextMessage(
+                    -100123L, 888L, "Код запроса: risk-77", true, answer));
+            assertEquals(previousAttempts, incident.getExplanationAttemptCount());
+        }
+        assertEquals(answer, incident.getWorkerExplanation());
+        assertEquals(WorkerRiskIncidentStatus.OPEN, incident.getStatus());
+        assertEquals(WorkerRiskExplanationQuality.NEEDS_REVIEW, incident.getExplanationQuality());
+        assertNull(incident.getExplanationAcceptedAt());
+        assertNull(incident.getResponseDueAt());
+        assertNull(incident.getExplanationReminderAt());
+        assertNull(incident.getSlaDeliveryClaimToken());
+        assertNull(incident.getSlaDeliveryClaimKind());
+        assertNull(incident.getSlaDeliveryClaimedAt());
+        assertNotNull(incident.getSectionRestrictionReleasedAt());
+        assertEquals(0, incident.getPenaltyPoints());
+        verify(telegramService, times(2)).sendMessage(eq(-100123L), contains("ПОЯСНЕНИЕ СОХРАНЕНО"));
+        verify(telegramService, never()).sendMessage(anyLong(), contains("ОТВЕТ НЕ ПРИНЯТ"));
+        verify(telegramService, never()).sendMessage(anyLong(), contains("finish_reason"));
+        verify(telegramService, never()).sendForceReplyMessage(anyLong(), any());
+        verify(telegramService, times(2)).editMessageText(eq(999L), eq(10),
+                contains("нужна проверка менеджера"), eq("HTML"), any());
+        verify(riskEventService, never()).record(any(),
+                eq(com.hunt.otziv.worker_activity.model.WorkerRiskEventType.CLARIFICATION_REQUESTED),
+                any(), any(), any(), any());
+        verify(managerControlConcreteItemRepository, times(2)).findByEntityTypeAndEntityId("RISK", 77L);
+    }
+
     @Test
     void verifiedCallbackDeletesOpenRiskReminder() {
         WorkerRiskIncident incident = incident();

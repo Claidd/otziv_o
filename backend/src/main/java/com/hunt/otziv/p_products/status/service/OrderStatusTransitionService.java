@@ -143,6 +143,16 @@ public class OrderStatusTransitionService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
+    public boolean changeStatusForOrder(Long id,String title,org.springframework.security.core.Authentication actor) throws Exception {
+        return changeStatusForOrderInternal(id,title,false,false,false,false,actor,true);
+    }
+
+    @Transactional
+    public boolean changeStatusForPrivilegedOrder(Long id,String title,org.springframework.security.core.Authentication actor) throws Exception {
+        return changeStatusForOrderInternal(id,title,false,true,false,false,actor,true);
+    }
+
+    @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
         return changeStatusForOrderInternal(orderID, title, false, false, false);
     }
@@ -197,6 +207,13 @@ public class OrderStatusTransitionService {
             boolean restoredArchiveOrigin,
             boolean allowPaymentReturnReminder
     ) throws Exception {
+        return changeStatusForOrderInternal(orderID,title,allowCommonBillingFinancialStatus,allowBanWithPendingBadTasks,
+                restoredArchiveOrigin,allowPaymentReturnReminder,null,false);
+    }
+
+    private boolean changeStatusForOrderInternal(Long orderID,String title,boolean allowCommonBillingFinancialStatus,
+            boolean allowBanWithPendingBadTasks,boolean restoredArchiveOrigin,boolean allowPaymentReturnReminder,
+            org.springframework.security.core.Authentication actor,boolean explicitActor) throws Exception {
         try {
             orderAggregateMutationLockService.lock(orderID);
             Order order = orderRepository.findByIdForMutation(orderID)
@@ -205,7 +222,7 @@ public class OrderStatusTransitionService {
             ensureSupportedTargetStatus(title);
             String oldStatus = safeStatusTitle(order);
             if (safeString(oldStatus).equals(safeString(title))) {
-                recordStatusAudit(order, oldStatus, oldStatus, title, false);
+                recordStatusAudit(order, oldStatus, oldStatus, title, false,actor,explicitActor);
                 return true;
             }
             ensureCommonBillingStatusTransitionAllowed(order, title, allowCommonBillingFinancialStatus);
@@ -218,6 +235,11 @@ public class OrderStatusTransitionService {
                 );
             }
             synchronizeAndRequireCompleteCounter(order, title);
+            // Only a post-cutover lineage may advance; legacy generation zero remains quarantined.
+            long previousMessageGeneration = order.getClientMessageGeneration();
+            if (previousMessageGeneration > 0) {
+                order.setClientMessageGeneration(Math.addExact(previousMessageGeneration, 1));
+            }
             boolean changed = switch (title) {
                 case STATUS_PAYMENT -> handlePaymentStatus(order);
                 case STATUS_ARCHIVE -> handleArchiveStatus(order);
@@ -235,7 +257,10 @@ public class OrderStatusTransitionService {
                         : handleSimpleStatus(order, STATUS_REMINDER);
                 default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Недопустимый статус заказа");
             };
-            recordStatusAudit(order, oldStatus, safeStatusTitle(order), title, changed);
+            if (!changed) {
+                order.setClientMessageGeneration(previousMessageGeneration);
+            }
+            recordStatusAudit(order, oldStatus, safeStatusTitle(order), title, changed,actor,explicitActor);
             return changed;
 
         } catch (ResponseStatusException e) {
@@ -360,10 +385,23 @@ public class OrderStatusTransitionService {
         );
     }
 
-    private void recordStatusAudit(Order order, String oldStatus, String newStatus, String requestedStatus, boolean changed) {
+    private void recordStatusAudit(Order order, String oldStatus, String newStatus, String requestedStatus, boolean changed,org.springframework.security.core.Authentication actor,boolean explicitActor) {
         if (!changed || safeString(oldStatus).equals(safeString(newStatus))) {
             return;
         }
+        if(explicitActor) {
+        businessAuditService.recordSafely(
+                actor,
+                "order_status_changed",
+                "order",
+                order.getId(),
+                order.getId(),
+                null,
+                oldStatus,
+                newStatus,
+                "requestedStatus=" + requestedStatus
+        );
+        } else {
         businessAuditService.recordSafely(
                 "order_status_changed",
                 "order",
@@ -374,6 +412,7 @@ public class OrderStatusTransitionService {
                 newStatus,
                 "requestedStatus=" + requestedStatus
         );
+        }
         eventPublisher.publishEvent(new OrderStatusChangedEvent(
                 order.getId(),
                 oldStatus,
