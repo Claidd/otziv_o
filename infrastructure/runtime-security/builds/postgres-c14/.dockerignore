@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!*.sh
+!*.txt
+!*.patch
+!*.py
+!*.json

@@ -1,0 +1,17 @@
+{
+  "result": "PASS",
+  "originalInBoundsStateResetExit": 42,
+  "fixedInBoundsStateResetExit": 0,
+  "originalUnlzhSha256": "ae315a02ac93b8f4fa38f920c6699e3224d581d83dca1663934d18bafe841eec",
+  "fixedUnlzhSha256": "79e3b46c49192717210fe89068705401864b3aa85d0dcce2304759e31a1b8756",
+  "patches": [
+    {
+      "file": "gzip-63dbf6b.patch",
+      "sha256": "6c9448ef05935ef874a8570b32d9d8c6d24e60a72b1c3b085908dce58e942e35"
+    },
+    {
+      "file": "gzip-e7378c2.patch",
+      "sha256": "de7bb5c805e24517d9e2d4e99f0e51ed75abce004db96124e91ec0f9830d5bfc"
+    }
+  ]
+}

@@ -30,8 +30,13 @@ test('actual Compose models cover database, issuer, monitoring and optional upst
   const rows = await repositoryInventory();
   const reviewed = await validateRepositoryDefaults(process.cwd(), rows);
   assert.equal(new Set(reviewed.map(item => item.component)).size, 14);
-  for (const component of ['minio', 'mc']) assert.ok(reviewed.some(item => item.component === component), component);
-  for (const repository of ['amir20/dozzle', 'minio/minio', 'minio/mc'])
-    assert.ok(rows.some(row => row.image.startsWith(repository + '@')), repository);
+  for (const [component, service] of [['minio', 'minio'], ['mc', 'minio-init']]) {
+    const checks = reviewed.filter(item => item.component === component);
+    assert.deepEqual(checks.map(item => [item.path, item.service]), [['compose.prod-local.yaml', service]]);
+    assert.ok(rows.some(row => row.image === checks[0].reference && row.references.some(reference =>
+      reference.path === 'compose.prod-local.yaml' && reference.service === service)), component);
+    assert.ok(['EXACT_ORIGINAL_SOURCE', 'PAIRED_PUBLICATION_AND_ANONYMOUS_EVIDENCE'].includes(checks[0].mode));
+  }
+  assert.ok(rows.some(row => row.image.startsWith('amir20/dozzle@')), 'amir20/dozzle');
   assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
 });

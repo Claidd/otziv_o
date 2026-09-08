@@ -1,0 +1,71 @@
+{
+  "schema": "otziv-c14-postgres-context-v1",
+  "files": {
+    "infrastructure/runtime-security/builds/postgres-c14/.dockerignore": {
+      "sha256": "90819643ff313240414b60a7316a4dfd709ae189febca4c04c979e4e13f0c604",
+      "gitBlob": "e1922a7e5937ad3da715243897754eaf7597857b",
+      "bytes": 50,
+      "physicalLF": true
+    },
+    "infrastructure/runtime-security/builds/postgres-c14/.gitattributes": {
+      "sha256": "a79691a93b46e49ce460c26ef22afcc03d6eca1e63bf2edbc20e96159510f6c9",
+      "gitBlob": "fcadb2cf97913f58a2523f535336e725c6b59d1f",
+      "bytes": 14,
+      "physicalLF": true
+    },
+    "infrastructure/runtime-security/builds/postgres-c14/assemble-runtime.py": {
+      "sha256": "8e641c0c7211b5515cd1f218af4d52f4dd42e9a00016dd9e9b1b959899dc3886",
+      "gitBlob": "d101bec65d8a0360dfb225ea167b1f31955ef3a2",
+      "bytes": 11373,
+      "physicalLF": true
+    },
+    "infrastructure/runtime-security/builds/postgres-c14/build-upstream.sh": {
+      "sha256": "fb521fc6dc7c5100e7a671a3b878d1e7da94bf9234a367be4c121e4694cd0d8b",
+      "gitBlob": "2d46f619eff49ec39c7b2a34eed1be1b4687d8c0",
+      "bytes": 4535,
+      "physicalLF": true
+    },
+    "infrastructure/runtime-security/builds/postgres-c14/Dockerfile": {
+      "sha256": "ae177dbdb62c801d00426ff32e5cbe98f5cd6db34c178eec837275b41d98f3c4",
+      "gitBlob": "eeb356c336ac64ac2751559cdcb15a8ce6655732",
+      "bytes": 3112,
+      "physicalLF": true
+    },
+    "infrastructure/runtime-security/builds/postgres-c14/expected-removals.txt": {
+      "sha256": "8d2c1c414a2658572933889847f439de8e0a464b2e75417f87a48a2727138b4f",
+      "gitBlob": "c10959f85a0bbdd696731820ebcc33350a603ea3",
+      "bytes": 139,
+      "physicalLF": true
+    },
+    "infrastructure/runtime-security/builds/postgres-c14/gzip-63dbf6b.patch": {
+      "sha256": "6c9448ef05935ef874a8570b32d9d8c6d24e60a72b1c3b085908dce58e942e35",
+      "gitBlob": "f0cb2d77e508837fc06aff827fb25a4aeb67c878",
+      "bytes": 2087,
+      "physicalLF": true
+    },
+    "infrastructure/runtime-security/builds/postgres-c14/gzip-e7378c2.patch": {
+      "sha256": "de7bb5c805e24517d9e2d4e99f0e51ed75abce004db96124e91ec0f9830d5bfc",
+      "gitBlob": "3a518ca5f9e5ba740672f030963654ba92910433",
+      "bytes": 2084,
+      "physicalLF": true
+    },
+    "infrastructure/runtime-security/builds/postgres-c14/gzip-fixes.py": {
+      "sha256": "921718f5d2702f30e128247a00560546ae30d8d51234b6d6cf93a1a2cf4cdc15",
+      "gitBlob": "78cbdc490ac67064709452a16d1a2c0a641df2dc",
+      "bytes": 2593,
+      "physicalLF": true
+    },
+    "infrastructure/runtime-security/builds/postgres-c14/prune.sh": {
+      "sha256": "8fd7f7a8148183dd358763839d83cd2c1bb60e779fbc1067e7cac4b0a8821bdf",
+      "gitBlob": "a400ebd854ebdeb26e99feca81d9f1d27d269910",
+      "bytes": 1687,
+      "physicalLF": true
+    },
+    "infrastructure/runtime-security/builds/postgres-c14/upstream-components.json": {
+      "sha256": "91de93e3876e5349df47dc09f2e272bf018ac781ecaccdbb48491f71ae448dab",
+      "gitBlob": "601b992cf8291618f7e6abc4f4caf179f2b03d23",
+      "bytes": 2079,
+      "physicalLF": true
+    }
+  }
+}

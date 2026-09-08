@@ -1,0 +1,6 @@
+WITH vals(id,v) AS (VALUES (1,'a'),(2,'A'),(3,'b'),(4,'B'),(5,'z'),(6,'Z'),(7,'aa'),(8,'a-a'),(9,'a_a'),(10,'1'),(11,'2'),(12,'10'),(13,'é'),(14,'é'),(15,'É'),(16,'e'),(17,'E'),(18,'ä'),(19,'Ä'),(20,'ß'),(21,'ss'),(22,'SS'),(23,'İ'),(24,'I'),(25,'ı'),(26,'i'),(27,'ё'),(28,'е'),(29,'Ё'),(30,'Е'),(31,'я'),(32,'Я'),(33,'а'),(34,'А'),(35,'Ω'),(36,'ω'),(37,'Σ'),(38,'σ'),(39,'ς'),(40,'中'),(41,'日')) SELECT jsonb_build_object(
+'order',(SELECT jsonb_agg(id ORDER BY v,convert_to(v,'UTF8')) FROM vals),
+'case',(SELECT jsonb_agg(jsonb_build_object('id',id,'lower',lower(v),'upper',upper(v)) ORDER BY id) FROM vals),
+'equalities',(SELECT jsonb_agg(jsonb_build_object('left',a.id,'right',b.id,'equal',a.v=b.v) ORDER BY a.id,b.id) FROM vals a CROSS JOIN vals b WHERE a.id<b.id),
+'encoding',current_setting('server_encoding'),
+'locale',(SELECT jsonb_build_object('collate',datcollate,'ctype',datctype,'provider',datlocprovider,'recordedVersion',datcollversion,'actualVersion',pg_database_collation_actual_version(oid)) FROM pg_database WHERE datname=current_database()));

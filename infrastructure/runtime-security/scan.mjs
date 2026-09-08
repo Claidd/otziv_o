@@ -5,8 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { run, startProcess } from '../recovery/process.mjs';
 import { assertLocalDocker } from '../recovery/drill.mjs';
 import { buildTriage } from './triage-report.mjs';
-import { adjudicateGrafanaImage, effectiveScanSummary } from './grafana-tempo-adjudication.mjs';
-import { adjudicateAlloyImage, effectiveAlloySummary } from './alloy-daemon-adjudication.mjs';
+import { adjudicateGrafanaImage } from './grafana-tempo-adjudication.mjs';
+import { adjudicateAlloyImage } from './alloy-daemon-adjudication.mjs';
+import { adjudicatePostgresImage } from './postgres-c14-adjudication.mjs';
+import { combinedScanSummary } from './scan-verdict.mjs';
 
 export const TRIVY_IMAGE = 'aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969'; // 0.74.0
 
@@ -89,8 +91,10 @@ export async function scan(kind, source, output) {
     // unresolved vendor findings remain explicit release risks, never implicit exemptions.
     const adjudication = kind === 'image' ? await adjudicateGrafanaImage(report, reportBytes, immutableImageId, scratch) : null;
     const alloy = kind === 'image' ? await adjudicateAlloyImage(report, reportBytes, immutableImageId, scratch) : null;
-    if (adjudication) await writeFile(destination.replace(/\.json$/, '') + '.adjudications.json', JSON.stringify({ ...adjudication, alloy }, null, 2) + '\n');
-    return { ...effectiveAlloySummary(effectiveScanSummary(summary, adjudication), alloy), scannerImage: TRIVY_IMAGE };
+    const postgres = kind === 'image' ? await adjudicatePostgresImage(report, reportBytes, immutableImageId, scratch) : null;
+    if (adjudication) await writeFile(destination.replace(/\.json$/, '') + '.adjudications.json',
+      JSON.stringify({ ...adjudication, alloy, ...(postgres?.status !== 'NOT_APPLICABLE' && postgres ? { postgres } : {}) }, null, 2) + '\n');
+    return { ...combinedScanSummary(summary, { grafana: adjudication, alloy, postgres }), scannerImage: TRIVY_IMAGE };
   } finally {
     // local is the exact fresh directory returned by mkdtemp, never a configured parent.
     await rm(local, { recursive: true, force: true });

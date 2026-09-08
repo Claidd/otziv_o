@@ -327,13 +327,15 @@ jobs:
       - name: Build and scan reviewed database candidates
         run: |
           docker build -t otziv-mysql-ci infrastructure/mysql
-          docker build -t otziv-postgres-ci infrastructure/postgres
+          docker build -t otziv-postgres-ci infrastructure/runtime-security/builds/postgres-c14
           node infrastructure/runtime-security/scan.mjs image otziv-mysql-ci "$RUNNER_TEMP/mysql-vulnerabilities.json"
           node infrastructure/runtime-security/scan.mjs image otziv-postgres-ci "$RUNNER_TEMP/postgres-vulnerabilities.json"
       - name: Verify PostgreSQL minor upgrade and separate backup rollback
         run: |
           docker pull postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
           node infrastructure/postgres/upgrade-proof.mjs otziv-postgres-ci "$RUNNER_TEMP/postgres-upgrade"
+          node infrastructure/runtime-security/proofs/c14-postgres/continuity.mjs otziv-postgres-ci "$RUNNER_TEMP/postgres-continuity"
+          node infrastructure/runtime-security/proofs/c14-postgres/tcp-contract.mjs otziv-postgres-ci "$RUNNER_TEMP/postgres-tcp"
       - name: Reject provisioning configuration drift and inherited claim conflicts
         run: node --test infrastructure/keycloak/security-generation/provision.test.mjs
       - name: Exercise provisioning, browser PKCE, immutable refresh, external mutations and rollback on journal failure
@@ -373,6 +375,8 @@ jobs:
             ${{ runner.temp }}/issuer-vulnerabilities*
             ${{ runner.temp }}/paired-recovery/proof.json
             ${{ runner.temp }}/postgres-upgrade/proof.json
+            ${{ runner.temp }}/postgres-continuity/**
+            ${{ runner.temp }}/postgres-tcp/**
             ${{ runner.temp }}/mysql-vulnerabilities*
             ${{ runner.temp }}/postgres-vulnerabilities*
           if-no-files-found: warn

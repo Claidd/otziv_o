@@ -1,0 +1,125 @@
+{
+  "schema": "otziv-c14-postgres-continuity-v1",
+  "owner": "otziv-c14-postgres-a7f008f7-0895-4793-b5ee-86e60dbc1200",
+  "production": false,
+  "startedAt": "2026-09-08T14:14:38.046Z",
+  "scope": "Synthetic data only; no source stack or existing volume access",
+  "checks": [
+    {
+      "name": "source_fixture_has_1000_relational_json_rows",
+      "passed": true
+    },
+    {
+      "name": "source_locale_is_utf8_libc_en_us_2_41",
+      "passed": true
+    },
+    {
+      "name": "clean_stop_before_exclusive_same_volume_upgrade",
+      "passed": true
+    },
+    {
+      "name": "same_volume_data_schema_privileges_and_xml_preserved",
+      "passed": true
+    },
+    {
+      "name": "all_original_available_extensions_preserved",
+      "passed": true
+    },
+    {
+      "name": "all_41_unicode_order_case_and_820_equality_controls_identical",
+      "passed": true
+    },
+    {
+      "name": "llvm_jit_explicitly_unavailable",
+      "passed": true
+    },
+    {
+      "name": "select_grant_preserved",
+      "passed": true
+    },
+    {
+      "name": "write_denied_for_read_only_role",
+      "passed": true
+    },
+    {
+      "name": "casefold_unique_index_still_rejects_existing_identity",
+      "passed": true
+    },
+    {
+      "name": "ordinary_indexed_json_query_unchanged",
+      "passed": true
+    },
+    {
+      "name": "sql_xml_xpath_and_utf8_content_work",
+      "passed": true
+    },
+    {
+      "name": "malformed_xml_is_rejected_and_server_survives",
+      "passed": true
+    },
+    {
+      "name": "new_identity_and_json_writes_work",
+      "passed": true
+    },
+    {
+      "name": "candidate_restart_preserves_old_and_new_rows",
+      "passed": true
+    },
+    {
+      "name": "restart_preserves_collation_and_case_controls",
+      "passed": true
+    },
+    {
+      "name": "unchanged_official_entrypoint_initializes_fresh_cluster_and_gzip_sql",
+      "passed": true
+    },
+    {
+      "name": "rollback_uses_separate_fresh_volume",
+      "passed": true
+    },
+    {
+      "name": "original_backup_restores_exact_baseline",
+      "passed": true
+    },
+    {
+      "name": "new_candidate_backup_restores_to_original_17_10",
+      "passed": true
+    },
+    {
+      "name": "logical_rollback_keeps_post_upgrade_write_and_original_case_semantics",
+      "passed": true
+    }
+  ],
+  "failures": [],
+  "resources": {
+    "cpu": 1,
+    "memoryMiB": 512,
+    "network": "none",
+    "publishedPorts": 0
+  },
+  "scriptSha256": "32280c2f8d91f5c9aa44eef638e59fa483d725760458ce331ab816dc7529b770",
+  "unicodeScriptSha256": "91e786d984f4da83212ab2314d64a39e507f9485b300f619d96ea7eefa5d97fa",
+  "images": {
+    "source": {
+      "reference": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "id": "sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+      "repoDigests": [
+        "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d"
+      ]
+    },
+    "candidate": {
+      "reference": "otziv-c14-postgres:source-runtime-v6",
+      "id": "sha256:ebf646d4a2ed114de7138af57159508770872d10b35ce56f3f5a9193c87f719e",
+      "repoDigests": [
+        "otziv-c14-postgres@sha256:ebf646d4a2ed114de7138af57159508770872d10b35ce56f3f5a9193c87f719e"
+      ]
+    }
+  },
+  "sourceVersion": "17.10 (Debian 17.10-1.pgdg13+1)",
+  "preUpgradeBackupSha256": "5015067ef6159626ae9a71967eb232897f184e547c765c5a1608d563fe456907",
+  "candidateVersion": "17.11",
+  "postUpgradeBackupSha256": "f222421bcabb16d7c393d829ef736cfe65d970544284509f2f7122c0a2f796ed",
+  "result": "PASS",
+  "cleanup": "PASS",
+  "finishedAt": "2026-09-08T14:15:13.121Z"
+}
