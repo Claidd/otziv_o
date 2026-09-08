@@ -106,3 +106,7 @@ try {
         Remove-Item -LiteralPath $resolvedFixture -Recurse -Force
     }
 }
+
+# The failure fixture deliberately leaves a failed native Git exit code.
+# GitHub's pwsh runner forwards LASTEXITCODE even after handled failures.
+exit 0
