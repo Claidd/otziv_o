@@ -4718,6 +4718,10 @@ try {
 
     Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("ps"))
     Write-Host "Local prod-like smoke passed: $BaseUrl"
+    if (-not $SkipLocalLoginCredentialSync) {
+        Write-Host "Local login: $($localLoginConfiguration.Username). Use the stored local password from the external prod-local env."
+        Write-Host 'To copy the password without printing it, run infrastructure/scripts/local/copy-local-keycloak-login.ps1 with the same -EnvFile.'
+    }
 } catch {
     if (-not $NoLogs) {
         Write-Host ""

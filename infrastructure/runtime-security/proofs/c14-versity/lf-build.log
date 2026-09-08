@@ -1,0 +1,42 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.29kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
+#2 DONE 1.7s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/3] FROM ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
+#4 resolve ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 1.01kB done
+#5 DONE 0.0s
+
+#6 [2/3] COPY runtime-apk.lock /usr/share/otziv-build/versity/runtime-apk.lock
+#6 CACHED
+
+#7 [3/3] RUN mkdir -p /usr/share/otziv-build/versity     && sha256sum /usr/local/bin/versitygw > /usr/share/otziv-build/versity/binary.before.sha256     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.before.lock     && apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0     && apk info -vv | sort > /usr/share/otziv-build/versity/apk.after.lock     && test "$(sha256sum /usr/share/otziv-build/versity/apk.after.lock | cut -d ' ' -f 1)" = "$(sha256sum /usr/share/otziv-build/versity/runtime-apk.lock | cut -d ' ' -f 1)"     && sha256sum -c /usr/share/otziv-build/versity/binary.before.sha256     && cp /etc/apk/repositories /usr/share/otziv-build/versity/repositories.txt
+#7 CACHED
+
+#8 exporting to image
+#8 exporting layers done
+#8 exporting manifest sha256:00ac6ebacc9f3d5fb2273ebf6b06d4309c09ab6e0d74d74b495fe8f3605b39b5
+#8 exporting manifest sha256:00ac6ebacc9f3d5fb2273ebf6b06d4309c09ab6e0d74d74b495fe8f3605b39b5 done
+#8 exporting config sha256:3a9c4905bd44d29665849aa1258d1442660f9bc8e050898a7b5888582366b191 done
+#8 exporting attestation manifest sha256:b34c87cf21b9591629c71c183b3dc776c1f2f5a7a2124c2a22d519430f2d7dd3 0.0s done
+#8 exporting manifest list sha256:d8d54f2db3478fde37ac6e7a2d44e7fa09fdfbb05e644bb8034be019827cc44e 0.0s done
+#8 naming to docker.io/library/otziv-c14-versity-lf-candidate:latest done
+#8 unpacking to docker.io/library/otziv-c14-versity-lf-candidate:latest 0.0s done
+#8 DONE 0.2s
+
+#9 resolving provenance for metadata file
+#9 DONE 0.0s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/swaa32x37bfo9ci323djgb6dy

@@ -17,7 +17,7 @@ on:
           - baseline
           - c12-phpmyadmin
           - c14-mc
-          - c14-minio
+          - c14-local-s3
           - c14-postgres
   pull_request:
   push:

@@ -1,0 +1,98 @@
+{
+  "schema": "otziv-anonymous-download-v1",
+  "component": "mc",
+  "commit": "ba8d6e8e7b6be313dfc27ffab61d953daade060e",
+  "run": "34233188127",
+  "attempt": "1",
+  "manifestSet": "c14-mc",
+  "manifestPath": "infrastructure/runtime-security/reviewed-images-c14-mc.json",
+  "runner": "GitHub Actions 1000002219",
+  "startedAt": "2026-09-08T13:49:28.286Z",
+  "sourcePublicationSha256": "fa1ec21fb2e0bf6736f8fe9e4a2e73ff935824bc3a0cc290a3079783c68a6497",
+  "result": "PASS",
+  "accountCredentialsUsed": false,
+  "dockerCredentialHelpersAvailable": false,
+  "dockerTransport": "unix:///var/run/docker.sock",
+  "reference": "ghcr.io/claidd/otziv-security@sha256:d163502c0d23dd3d76ec9fab63d9697317c9a2aaa39d1a3d783a70044bb803c0",
+  "imageAbsentBeforePull": true,
+  "daemonVersion": "\"28.0.4\"",
+  "attestationEvidence": {
+    "schema": "otziv-registry-evidence-v1",
+    "imageManifestDigest": "sha256:4d764bc9a2a02f4cb570c7ec64c0827d640a51a0c9dbf841b55897fb8ad0b2dd",
+    "predicates": [
+      "https://slsa.dev/provenance/v1",
+      "https://spdx.dev/Document"
+    ],
+    "artifacts": [
+      {
+        "file": "registry-index.json",
+        "digest": "sha256:d163502c0d23dd3d76ec9fab63d9697317c9a2aaa39d1a3d783a70044bb803c0",
+        "size": 857
+      },
+      {
+        "file": "registry-amd64-manifest.json",
+        "digest": "sha256:4d764bc9a2a02f4cb570c7ec64c0827d640a51a0c9dbf841b55897fb8ad0b2dd",
+        "size": 1437
+      },
+      {
+        "file": "registry-amd64-config.json",
+        "digest": "sha256:7019698d09d0fd6d38c9800a453806ebb788b9bbaa9e7555bb6d41d50670b308",
+        "size": 9378
+      },
+      {
+        "file": "registry-attestation-0.json",
+        "digest": "sha256:77d92c296cc942894c07b07bfdd8fa74434c99ef902f815fe4bfee4180336c03",
+        "size": 1112
+      },
+      {
+        "file": "registry-attestation-0-payload-0.json",
+        "digest": "sha256:716a57363a1152653ce799a9ca27403c656d3f3a852e6506a25449ec907aab44",
+        "size": 1129996
+      },
+      {
+        "file": "registry-attestation-0-payload-1.json",
+        "digest": "sha256:c5d57585db61d9db7541aa2a6b042dc49a813effbd511c7ecdd1c46b2b91c825",
+        "size": 32032
+      }
+    ],
+    "sourceBinding": "LOCAL_GIT_METADATA_CHECKED_AGAINST_CLEAN_CHECKOUT_NOT_INDEPENDENT_SOURCE_AUTHENTICATION"
+  },
+  "pullExitCode": 0,
+  "imageId": "sha256:7019698d09d0fd6d38c9800a453806ebb788b9bbaa9e7555bb6d41d50670b308",
+  "platform": "linux/amd64",
+  "labels": {
+    "architecture": "x86_64",
+    "build-date": "2026-08-31T08:53:29Z",
+    "com.otziv.corresponding-source": "/usr/share/otziv-build/mc/corresponding-source.tar.gz",
+    "com.otziv.publication.revision": "ba8d6e8e7b6be313dfc27ffab61d953daade060e",
+    "com.otziv.publication.source": "https://github.com/Claidd/otziv_o",
+    "com.otziv.reviewed-component": "mc",
+    "com.otziv.upstream.archived": "true",
+    "com.redhat.component": "ubi9-minimal-container",
+    "com.redhat.license_terms": "https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI",
+    "cpe": "cpe:/a:redhat:enterprise_linux:9::appstream",
+    "description": "The Universal Base Image Minimal is a stripped down image that uses microdnf as a package manager. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.",
+    "distribution-scope": "public",
+    "io.buildah.version": "1.44.0",
+    "io.k8s.description": "The Universal Base Image Minimal is a stripped down image that uses microdnf as a package manager. This base image is freely redistributable, but Red Hat only supports Red Hat technologies through subscriptions for Red Hat products. This image is maintained by Red Hat and updated regularly.",
+    "io.k8s.display-name": "Red Hat Universal Base Image 9 Minimal",
+    "io.openshift.expose-services": "",
+    "io.openshift.tags": "minimal rhel9",
+    "maintainer": "Red Hat, Inc.",
+    "name": "ubi9/ubi-minimal",
+    "org.opencontainers.image.created": "2026-08-31T08:53:29Z",
+    "org.opencontainers.image.licenses": "AGPL-3.0-or-later",
+    "org.opencontainers.image.revision": "77f82e18b5401a65958f1619df6ebb994634bd88",
+    "org.opencontainers.image.source": "https://github.com/Claidd/otziv_o",
+    "org.opencontainers.image.version": "RELEASE.2025-11-06T16-25-29Z.otziv-c14.1",
+    "release": "1788166357",
+    "summary": "Provides the latest release of the minimal Red Hat Universal Base Image 9.",
+    "url": "https://catalog.redhat.com/en/search?searchType=containers",
+    "vcs-ref": "3c32d7c63d617fc21bc66bb65a893d8db99096da",
+    "vcs-type": "git",
+    "vendor": "Red Hat, Inc.",
+    "version": "9.8"
+  },
+  "publicDownloadReadiness": "VERIFIED_ANONYMOUS_DIGEST_PULL",
+  "finishedAt": "2026-09-08T13:49:37.021Z"
+}

@@ -1,0 +1,58 @@
+{
+  "buildx.build.provenance": {
+    "builder": {
+      "id": ""
+    },
+    "buildType": "https://mobyproject.org/buildkit@v1",
+    "materials": [
+      {
+        "uri": "pkg:docker/ghcr.io/versity/versitygw?digest=sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499"
+        }
+      }
+    ],
+    "invocation": {
+      "configSource": {
+        "entryPoint": "Dockerfile"
+      },
+      "parameters": {
+        "frontend": "dockerfile.v0",
+        "locals": [
+          {
+            "name": "context"
+          },
+          {
+            "name": "dockerfile"
+          }
+        ],
+        "root": {
+          "configSource": {
+            "path": "Dockerfile"
+          },
+          "request": {
+            "args": {
+              "vcs:localdir:context": "infrastructure\\runtime-security\\builds\\versity-c14",
+              "vcs:localdir:dockerfile": "infrastructure\\runtime-security\\builds\\versity-c14",
+              "vcs:revision": "3458e56f29ec0288925f2a4795105fe863da5158",
+              "vcs:source": "https://github.com/Claidd/otziv_o.git"
+            }
+          }
+        },
+        "compatibilityVersion": 30
+      },
+      "environment": {
+        "dockerfileVersion": "1.26.0",
+        "platform": "linux/amd64"
+      }
+    }
+  },
+  "buildx.build.ref": "desktop-linux/desktop-linux/swaa32x37bfo9ci323djgb6dy",
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.oci.image.index.v1+json",
+    "digest": "sha256:d8d54f2db3478fde37ac6e7a2d44e7fa09fdfbb05e644bb8034be019827cc44e",
+    "size": 856
+  },
+  "containerimage.digest": "sha256:d8d54f2db3478fde37ac6e7a2d44e7fa09fdfbb05e644bb8034be019827cc44e",
+  "image.name": "docker.io/library/otziv-c14-versity-lf-candidate:latest"
+}

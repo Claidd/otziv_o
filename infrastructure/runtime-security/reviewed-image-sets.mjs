@@ -11,8 +11,9 @@ const RELEASE_SETS = Object.freeze({
   'c12-phpmyadmin': { component: 'phpmyadmin', path: C12_PATH, context: C12_CONTEXT, dockerfile: C12_CONTEXT + '/Dockerfile' },
   'c14-mc': { component: 'mc', path: 'infrastructure/runtime-security/reviewed-images-c14-mc.json',
     context: 'infrastructure/runtime-security/builds/minio', dockerfile: 'infrastructure/runtime-security/builds/minio/mc.Dockerfile' },
-  'c14-minio': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c14-minio.json',
-    context: 'infrastructure/runtime-security/builds/minio', dockerfile: 'infrastructure/runtime-security/builds/minio/server.Dockerfile' },
+  // Keep the historical service identity while replacing its local S3 implementation.
+  'c14-local-s3': { component: 'minio', path: 'infrastructure/runtime-security/reviewed-images-c14-local-s3.json',
+    context: 'infrastructure/runtime-security/builds/versity-c14', dockerfile: 'infrastructure/runtime-security/builds/versity-c14/Dockerfile' },
   'c14-postgres': { component: 'postgres', path: 'infrastructure/runtime-security/reviewed-images-c14-postgres.json',
     context: 'infrastructure/runtime-security/builds/postgres-c14', dockerfile: 'infrastructure/runtime-security/builds/postgres-c14/Dockerfile' },
 });

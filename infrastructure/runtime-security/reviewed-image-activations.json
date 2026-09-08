@@ -168,6 +168,25 @@
         "path": "infrastructure/runtime-security/proofs/c7-published/tempo/anonymous/anonymous-download.json",
         "sha256": "9287c393f8cae6a70a9e06324ce912b52bc3276f85477aa96ccbd9a74beabfd5"
       }
+    },
+    {
+      "component": "mc",
+      "reference": "ghcr.io/claidd/otziv-security@sha256:d163502c0d23dd3d76ec9fab63d9697317c9a2aaa39d1a3d783a70044bb803c0",
+      "commit": "ba8d6e8e7b6be313dfc27ffab61d953daade060e",
+      "run": "34233188127",
+      "attempt": "1",
+      "manifest": {
+        "path": "infrastructure/runtime-security/reviewed-images-c14-mc.json",
+        "sha256": "30562dfdfdf6df471464bc93eb2550bd47b2c9ee5ad3c105b7e217203f2b80df"
+      },
+      "publication": {
+        "path": "infrastructure/runtime-security/proofs/c14-mc-published/publication/publication.json",
+        "sha256": "fa1ec21fb2e0bf6736f8fe9e4a2e73ff935824bc3a0cc290a3079783c68a6497"
+      },
+      "anonymous": {
+        "path": "infrastructure/runtime-security/proofs/c14-mc-published/anonymous/anonymous-download.json",
+        "sha256": "0b41d4db4417405644bbdaa1d9b295c9e90752395a3bb67bc4cc934af5b87fd4"
+      }
     }
   ]
 }

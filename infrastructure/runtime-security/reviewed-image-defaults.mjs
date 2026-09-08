@@ -77,6 +77,45 @@ export async function resolveActivationManifest(image, entry, manifestBytes, pro
   return { image: publicationImage, manifestBytes: loaded.bytes, manifestSet: selected.name };
 }
 
+export async function validateUnadjudicatedActivationScan(publication, publicationPath, read) {
+  assert.ok(['mc', 'minio'].includes(publication.component), 'activation_raw_scan_component');
+  const directory = dirname(publicationPath).replaceAll('\\', '/');
+  const [rawBytes, receiptBytes, triageBytes] = await Promise.all([
+    read(directory + '/vulnerabilities.json'), read(directory + '/vulnerabilities.adjudications.json'),
+    read(directory + '/vulnerabilities.triage.json')]);
+  const raw = JSON.parse(rawBytes), receipt = JSON.parse(receiptBytes), triage = JSON.parse(triageBytes);
+  // These fields are already emitted by scan.mjs. Do not rewrite historical
+  // publication receipts or invent a security.imageId/raw-hash field in them.
+  assert.equal(receipt.schema, 'otziv-image-adjudication-v1', 'activation_raw_scan_receipt_schema');
+  assert.equal(receipt.rawReportSha256, sha256(rawBytes), 'activation_raw_scan_hash');
+  assert.equal(receipt.imageConfigId, publication.imageId, 'activation_raw_scan_receipt_image');
+  assert.ok([publication.imageId, publication.reference.split('@')[1]].includes(receipt.immutableImageId), 'activation_raw_scan_inspected_image');
+  assert.equal(receipt.rawReportModified, false, 'activation_raw_scan_modified');
+  assert.equal(receipt.status, 'NOT_APPLICABLE', 'activation_raw_scan_adjudication');
+  assert.deepEqual(receipt.decisions, [], 'activation_raw_scan_adjudication');
+  assert.equal(triage.schema, 'otziv-runtime-triage-v1', 'activation_raw_scan_triage_schema');
+  assert.equal(triage.reportSHA256, sha256(rawBytes), 'activation_raw_scan_triage_hash');
+  assert.equal(triage.imageId, publication.imageId, 'activation_raw_scan_triage_image');
+  assert.equal(raw.Metadata?.ImageID, publication.imageId, 'activation_raw_scan_image');
+  assert.equal(triage.scanCreatedAt, raw.CreatedAt, 'activation_raw_scan_created_at');
+  const actual = summarizeReport(raw);
+  assert.ok(raw.Results.some(result => result.Class === 'os-pkgs' && result.Packages?.length > 0)
+    && raw.Results.some(result => result.Type === 'gobinary' && result.Packages?.length > 0), 'activation_raw_scan_coverage');
+  const summary = publication.security;
+  for (const [key, value] of Object.entries(actual)) assert.equal(summary[key], value, 'activation_raw_scan_summary_' + key);
+  // Neither local S3 candidate has a reviewed exception. Raw HIGH/CRITICAL
+  // findings cannot be hidden behind a successful presentation summary.
+  assert.equal(actual.high + actual.critical, 0, 'activation_raw_scan_findings');
+  assert.deepEqual(triage.findings, [], 'activation_raw_scan_triage_findings');
+  for (const key of ['adjudicatedFixedHighOrCritical', 'effectiveBlockingFixedHighOrCritical',
+    'adjudicatedAbsentFixedHighOrCritical', 'adjudicatedAbsentUnfixedHighOrCritical', 'effectiveUnfixedHighOrCritical']) {
+    assert.equal(summary[key], 0, 'activation_raw_scan_effective_counts');
+  }
+  assert.equal(summary.result, 'PASS', 'activation_raw_scan_failed');
+  assert.equal(summary.unresolvedRiskReview, 'NONE', 'activation_raw_scan_unresolved');
+  assert.equal(summary.scannerImage, TRIVY_IMAGE, 'activation_raw_scan_scanner');
+}
+
 export async function validateActivation(image, entry, manifestBytes, read) {
   assert.equal(entry.component, image.component, 'activation_component_mismatch');
   assert.match(entry.commit || '', /^[a-f0-9]{40}$/, 'activation_commit_missing');
@@ -94,6 +133,9 @@ export async function validateActivation(image, entry, manifestBytes, read) {
   const anonymous = await proof(entry.anonymous);
   const identity = { commit: entry.commit, run: entry.run, attempt: entry.attempt };
   const digest = validatePublication(publication.value, identity, publicationImage, sha256(selected.manifestBytes), selected.manifestSet);
+  if (['mc', 'minio'].includes(publicationImage.component)) {
+    await validateUnadjudicatedActivationScan(publication.value, entry.publication.path, read);
+  }
   if (requiresKeycloakDependencyProof(publicationImage)) {
     const checked = checkKeycloakRuntimeDependencies(
       await read(dirname(entry.publication.path).replaceAll('\\', '/') + '/vulnerabilities.json'), publication.value.imageId);

@@ -10,15 +10,15 @@ import { resolveActivationManifest, validateReviewedDefaults } from './reviewed-
 const baselineBytes = await readFile(new URL('./reviewed-images.json', import.meta.url));
 const baseline = JSON.parse(baselineBytes);
 const definitions = [
-  ['mc', 'infrastructure/runtime-security/builds/minio', 'mc.Dockerfile'],
-  ['minio', 'infrastructure/runtime-security/builds/minio', 'server.Dockerfile'],
-  ['postgres', 'infrastructure/runtime-security/builds/postgres-c14', 'Dockerfile'],
+  ['mc', 'infrastructure/runtime-security/builds/minio', 'mc.Dockerfile', 'c14-mc'],
+  ['minio', 'infrastructure/runtime-security/builds/versity-c14', 'Dockerfile', 'c14-local-s3'],
+  ['postgres', 'infrastructure/runtime-security/builds/postgres-c14', 'Dockerfile', 'c14-postgres'],
 ];
 const bytes = value => Buffer.from(JSON.stringify(value));
 
-function candidate(component, context, dockerfile) {
+function candidate(component, context, dockerfile, publicationSet) {
   const original = [...baseline.images, ...supplementalReviewedSources()].find(item => item.component === component);
-  return { schema: baseline.schema, repository: baseline.repository, publicationSet: 'c14-' + component,
+  return { schema: baseline.schema, repository: baseline.repository, publicationSet,
     baselineManifestSha256: BASELINE_MANIFEST_SHA256, images: [{ component, context,
       dockerfile: context + '/' + dockerfile, dockerfileSha256: 'a'.repeat(64), platform: 'linux/amd64',
       sourceBeforeRef: original.sourceBeforeRef, defaultReferencesBefore: structuredClone(original.defaultReferencesBefore),
@@ -26,7 +26,7 @@ function candidate(component, context, dockerfile) {
 }
 
 for (const definition of definitions) {
-  const [component] = definition, name = 'c14-' + component;
+  const [component, , , name] = definition;
   test(name + ' validates a single fixed publication component and original service coverage', () => {
     const manifest = candidate(...definition);
     const selected = reviewedImageSet(name);
@@ -56,7 +56,7 @@ for (const definition of definitions) {
   test(name + ' publication receipt cannot be substituted into a different set', () => {
     const receipt = { manifestSet: name, manifestPath: reviewedImageSet(name).path };
     assert.throws(() => assertPublicationSet(receipt, 'baseline'), /manifest_set_mismatch/);
-    const other = component === 'mc' ? 'c14-minio' : 'c14-mc';
+    const other = component === 'mc' ? 'c14-local-s3' : 'c14-mc';
     assert.throws(() => assertPublicationSet(receipt, other), /manifest_set_mismatch/);
   });
 }
@@ -93,5 +93,5 @@ test('new publication sets preserve C7 bytes and have no implicit database activ
   await assert.rejects(validateReviewedDefaults(rows, baselineBytes, undefined,
     async () => { throw Error('database_change_must_be_rejected_before_proof'); }), /database_coordinated_transition_required/);
   const workflow = await readFile(new URL('../../.github/workflows/quality-gates.yml', import.meta.url), 'utf8');
-  for (const [component] of definitions) assert.match(workflow, new RegExp('          - c14-' + component + '\\r?\\n'));
+  for (const [, , , name] of definitions) assert.match(workflow, new RegExp('          - ' + name + '\\r?\\n'));
 });
