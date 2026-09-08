@@ -1,0 +1,3378 @@
+{
+  "schema": "issuer-whole-opt-final-java-inventory-v1",
+  "imageId": "sha256:d773e1d0de1ef972ba01443a8217d23d6060d2b20d474b3ff84ae2dc840baa54",
+  "scope": "All JAR files under /opt/keycloak recursively",
+  "jarCount": 476,
+  "allJarPathsPreserved": true,
+  "changedJarPathsFromServerOnlyCandidate": [
+    "/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar",
+    "/opt/keycloak/lib/quarkus/generated-bytecode.jar",
+    "/opt/keycloak/lib/quarkus/transformed-bytecode.jar",
+    "/opt/keycloak/providers/otziv-security-generation.jar"
+  ],
+  "rebuiltArchivePayloadComparison": [
+    {
+      "path": "/opt/keycloak/lib/quarkus/generated-bytecode.jar",
+      "entries": 1908,
+      "changedPayloadEntries": [
+        "META-INF/keycloak-persisted.properties",
+        "com/hunt/otziv/issuer/SecurityGenerationEntity$HibernateProxy.class",
+        "io/quarkus/runner/recorded/ArcProcessor$initializeContainer643029769.class",
+        "io/quarkus/runner/recorded/ArcProcessor$setupExecutor1831044820.class",
+        "io/quarkus/runner/recorded/BlockingOperationControlBuildStep$blockingOP558072755.class",
+        "io/quarkus/runner/recorded/DataSourcesExcludedFromHealthChecksProcessor$produceBean1426500354.class",
+        "io/quarkus/runner/recorded/HibernateOrmCdiProcessor$generateJpaConfigBean819074305.class",
+        "io/quarkus/runner/recorded/HibernateOrmProcessor$build1311493863.class",
+        "io/quarkus/runner/recorded/HttpBinderProcessor$enableHttpBinders55378937.class",
+        "io/quarkus/runner/recorded/HttpSecurityProcessor$initBasicAuth285971087.class",
+        "io/quarkus/runner/recorded/JacksonProcessor$jacksonSupport1304410591.class",
+        "io/quarkus/runner/recorded/KeycloakProcessor$configureKeycloakSessionFactory1939554146.class",
+        "io/quarkus/runner/recorded/KeycloakProcessor$configureManagementInterface1889426056.class",
+        "io/quarkus/runner/recorded/KeycloakProcessor$filterAllManagementRequests452126209.class",
+        "io/quarkus/runner/recorded/KeycloakProcessor$filterAllRequests561667388.class",
+        "io/quarkus/runner/recorded/LiquibaseProcessor$configure1103454684.class",
+        "io/quarkus/runner/recorded/LoggingJsonProcessor$setUpSocketFormatter280384652.class",
+        "io/quarkus/runner/recorded/LoggingResourceProcessor$setupLoggingRuntimeInit1072790680.class",
+        "io/quarkus/runner/recorded/MicrometerProcessor$createRootRegistry1392014435.class",
+        "io/quarkus/runner/recorded/MutinyProcessor$runtimeInit1954432886.class",
+        "io/quarkus/runner/recorded/ObservabilityProcessor$preAuthFailureFilter417866889.class",
+        "io/quarkus/runner/recorded/PrometheusRegistryProcessor$createPrometheusRoute1795006667.class",
+        "io/quarkus/runner/recorded/ResteasyReactiveProcessor$setupDeployment944680882.class",
+        "io/quarkus/runner/recorded/ResteasyReactiveProcessor$setupEndpoints239807676.class",
+        "io/quarkus/runner/recorded/SmallRyeContextPropagationProcessor$build1909893707.class",
+        "io/quarkus/runner/recorded/SyntheticBeansProcessor$initRuntime975230615.class",
+        "io/quarkus/runner/recorded/SyntheticBeansProcessor$initStatic1190120725.class",
+        "io/quarkus/runner/recorded/ThreadPoolSetup$createExecutor2117483448.class",
+        "io/quarkus/runner/recorded/ValueRegistryProcessor$valueRegistry295811999.class",
+        "io/quarkus/runner/recorded/VertxBinderProcessor$build1514299033.class",
+        "io/quarkus/runner/recorded/VertxCoreProcessor$build216427889.class",
+        "io/quarkus/runner/recorded/VertxCoreProcessor$createVertxContextHandlers911410617.class",
+        "io/quarkus/runner/recorded/VertxCoreProcessor$createVertxThreadFactory1036986175.class",
+        "io/quarkus/runner/recorded/VertxCoreProcessor$dontPropagateCdiContext731300267.class",
+        "io/quarkus/runner/recorded/VertxCoreProcessor$eventLoopCount141325562.class",
+        "io/quarkus/runner/recorded/VertxCoreProcessor$ioThreadDetector1463825589.class",
+        "io/quarkus/runner/recorded/VertxHttpProcessor$bodyHandler1176441513.class",
+        "io/quarkus/runner/recorded/VertxHttpProcessor$finalizeRouter1664818879.class",
+        "io/quarkus/runner/recorded/VertxHttpProcessor$initializeRouter1170558285.class",
+        "io/quarkus/runner/recorded/VertxHttpProcessor$openSocket1873327713.class",
+        "io/quarkus/runner/recorded/VertxHttpProcessor$preinitializeRouter1141331088.class",
+        "io/quarkus/runner/recorded/VertxProcessor$build1135732207.class",
+        "io/quarkus/runner/recorded/VertxProcessor$currentContextFactory166049300.class",
+        "io/quarkus/runner/recorded/VirtualThreadsProcessor$setup1414761027.class",
+        "org/keycloak/authentication/jpa/AuthenticationSessionEntity$HibernateProxy.class",
+        "org/keycloak/authentication/jpa/RootAuthenticationSessionEntity$HibernateProxy.class",
+        "org/keycloak/authorization/jpa/entities/PermissionTicketEntity$HibernateProxy.class",
+        "org/keycloak/authorization/jpa/entities/PolicyEntity$HibernateProxy.class",
+        "org/keycloak/authorization/jpa/entities/ResourceAttributeEntity$HibernateProxy.class",
+        "org/keycloak/authorization/jpa/entities/ResourceEntity$HibernateProxy.class",
+        "org/keycloak/authorization/jpa/entities/ResourceServerEntity$HibernateProxy.class",
+        "org/keycloak/authorization/jpa/entities/ScopeEntity$HibernateProxy.class",
+        "org/keycloak/cluster/jpa/ClusterEventEntity$HibernateProxy.class",
+        "org/keycloak/events/jpa/AdminEventEntity$HibernateProxy.class",
+        "org/keycloak/events/jpa/EventEntity$HibernateProxy.class",
+        "org/keycloak/loginfailures/jpa/LoginFailureEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/AuthenticationExecutionEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/AuthenticationFlowEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/AuthenticatorConfigEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/ClientAttributeEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/ClientEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/ClientInitialAccessEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/ClientScopeAttributeEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/ClientScopeClientMappingEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/ClientScopeEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/ClientScopeRoleMappingEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/ComponentConfigEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/ComponentEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/CompositeRoleEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/CredentialEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/DefaultClientScopeRealmMappingEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/FederatedIdentityEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/GroupAttributeEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/GroupEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/GroupRoleMappingEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/IdentityProviderEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/IdentityProviderMapperEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/IssuedVerifiableCredentialEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/MigrationModelEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/OrganizationDomainEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/OrganizationEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/OrganizationInvitationEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/OutboxEntryEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/ProtocolMapperEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/RealmAttributeEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/RealmEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/RealmLocalizationTextsEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/RequiredActionProviderEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/RequiredCredentialEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/RevokedTokenEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/RoleAttributeEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/RoleEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/UserAttributeEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/UserConsentClientScopeEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/UserConsentEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/UserEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/UserFederationMapperEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/UserFederationProviderEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/UserGroupMembershipEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/UserRequiredActionEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/UserRoleMappingEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/entities/UserVerifiableCredentialEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/session/PersistentClientSessionEntity$HibernateProxy.class",
+        "org/keycloak/models/jpa/session/PersistentUserSessionEntity$HibernateProxy.class",
+        "org/keycloak/models/workflow/WorkflowStateEntity$HibernateProxy.class",
+        "org/keycloak/singleobject/jpa/SingleUseObjectEntity$HibernateProxy.class",
+        "org/keycloak/storage/configuration/jpa/entity/ServerConfigEntity$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/BrokerLinkEntity$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/FederatedUser$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/FederatedUserAttributeEntity$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/FederatedUserConsentClientScopeEntity$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/FederatedUserConsentEntity$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/FederatedUserCredentialEntity$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/FederatedUserGroupMembershipEntity$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/FederatedUserIssuedVerifiableCredentialEntity$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/FederatedUserRequiredActionEntity$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/FederatedUserRoleMappingEntity$HibernateProxy.class",
+        "org/keycloak/storage/jpa/entity/FederatedUserVerifiableCredentialEntity$HibernateProxy.class"
+      ],
+      "equalPayloadEntries": 1790
+    },
+    {
+      "path": "/opt/keycloak/lib/quarkus/transformed-bytecode.jar",
+      "entries": 238,
+      "changedPayloadEntries": [],
+      "equalPayloadEntries": 238
+    },
+    {
+      "path": "/opt/keycloak/providers/otziv-security-generation.jar",
+      "entries": 30,
+      "changedPayloadEntries": [],
+      "equalPayloadEntries": 30
+    }
+  ],
+  "all467RegisteredVendorLibraryJarsByteIdenticalToServerOnlyCandidate": true,
+  "comparisonQualification": "The CLI was intentionally rebuilt. Provider and transformed archives changed ZIP metadata only; all payload entries are byte-identical. Quarkus generated-bytecode was re-augmented from frozen inputs and has changed generated class bytes and timestamps; no byte or semantic identity assertion is made for that generated archive. Actual startup/protocol/recovery tests verify the new augmentation.",
+  "knownDependenciesAllFixed": true,
+  "affectedClassFingerprints": [
+    {
+      "jar": "/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar",
+      "class": "com/fasterxml/jackson/databind/ext/CoreXMLDeserializers$Std.class",
+      "sha256": "390beaaba014265b9ee5245cba86a498ae255039730ed71005b0b5851cb6fcf6",
+      "matchesReviewedFixedClass": true
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-databind-2.21.5.jar",
+      "class": "com/fasterxml/jackson/databind/ext/CoreXMLDeserializers$Std.class",
+      "sha256": "390beaaba014265b9ee5245cba86a498ae255039730ed71005b0b5851cb6fcf6",
+      "matchesReviewedFixedClass": true
+    }
+  ],
+  "observations": [
+    {
+      "jar": "/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar",
+      "artifactId": "jackson-core",
+      "groupId": "com.fasterxml.jackson.core",
+      "version": "2.21.6"
+    },
+    {
+      "jar": "/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar",
+      "artifactId": "jackson-databind",
+      "groupId": "com.fasterxml.jackson.core",
+      "version": "2.21.6"
+    },
+    {
+      "jar": "/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar",
+      "version": "2.21.6",
+      "groupId": "com.fasterxml.jackson.datatype",
+      "artifactId": "jackson-datatype-jdk8"
+    },
+    {
+      "jar": "/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar",
+      "version": "2.21.6",
+      "groupId": "com.fasterxml.jackson.datatype",
+      "artifactId": "jackson-datatype-jsr310"
+    },
+    {
+      "jar": "/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar",
+      "artifactId": "jackson-dataformat-yaml",
+      "groupId": "com.fasterxml.jackson.dataformat",
+      "version": "2.21.6"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/boot/org.eclipse.parsson.parsson-1.1.7.jar",
+      "artifactId": "parsson",
+      "groupId": "org.eclipse.parsson",
+      "version": "1.1.9"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-annotations-2.21.jar",
+      "artifactId": "jackson-annotations",
+      "groupId": "com.fasterxml.jackson.core",
+      "version": "2.21"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-core-2.21.5.jar",
+      "artifactId": "jackson-core",
+      "groupId": "com.fasterxml.jackson.core",
+      "version": "2.21.6"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-databind-2.21.5.jar",
+      "artifactId": "jackson-databind",
+      "groupId": "com.fasterxml.jackson.core",
+      "version": "2.21.6"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.dataformat.jackson-dataformat-cbor-2.21.5.jar",
+      "artifactId": "jackson-dataformat-cbor",
+      "groupId": "com.fasterxml.jackson.dataformat",
+      "version": "2.21.6"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.dataformat.jackson-dataformat-yaml-2.21.5.jar",
+      "artifactId": "jackson-dataformat-yaml",
+      "groupId": "com.fasterxml.jackson.dataformat",
+      "version": "2.21.6"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.datatype.jackson-datatype-jdk8-2.21.5.jar",
+      "version": "2.21.6",
+      "groupId": "com.fasterxml.jackson.datatype",
+      "artifactId": "jackson-datatype-jdk8"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.datatype.jackson-datatype-jsr310-2.21.5.jar",
+      "version": "2.21.6",
+      "groupId": "com.fasterxml.jackson.datatype",
+      "artifactId": "jackson-datatype-jsr310"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.jakarta.rs.jackson-jakarta-rs-base-2.21.5.jar",
+      "groupId": "com.fasterxml.jackson.jakarta.rs",
+      "artifactId": "jackson-jakarta-rs-base",
+      "version": "2.21.6"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.jakarta.rs.jackson-jakarta-rs-yaml-provider-2.21.5.jar",
+      "groupId": "com.fasterxml.jackson.jakarta.rs",
+      "artifactId": "jackson-jakarta-rs-yaml-provider",
+      "version": "2.21.6"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.module.jackson-module-jakarta-xmlbind-annotations-2.21.5.jar",
+      "version": "2.21.6",
+      "groupId": "com.fasterxml.jackson.module",
+      "artifactId": "jackson-module-jakarta-xmlbind-annotations"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.module.jackson-module-parameter-names-2.21.5.jar",
+      "version": "2.21.6",
+      "groupId": "com.fasterxml.jackson.module",
+      "artifactId": "jackson-module-parameter-names"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/io.vertx.vertx-auth-common-4.5.31.jar",
+      "artifactId": "vertx-auth-common",
+      "groupId": "io.vertx",
+      "version": "4.5.31"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/io.vertx.vertx-bridge-common-4.5.31.jar",
+      "artifactId": "vertx-bridge-common",
+      "groupId": "io.vertx",
+      "version": "4.5.31"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/io.vertx.vertx-codegen-4.5.31.jar",
+      "artifactId": "vertx-codegen",
+      "groupId": "io.vertx",
+      "version": "4.5.31"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/io.vertx.vertx-core-4.5.31.jar",
+      "artifactId": "vertx-core",
+      "groupId": "io.vertx",
+      "version": "4.5.31"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/io.vertx.vertx-grpc-4.5.31.jar",
+      "artifactId": "vertx-grpc",
+      "groupId": "io.vertx",
+      "version": "4.5.31"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/io.vertx.vertx-grpc-client-4.5.31.jar",
+      "artifactId": "vertx-grpc-client",
+      "groupId": "io.vertx",
+      "version": "4.5.31"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/io.vertx.vertx-grpc-common-4.5.31.jar",
+      "artifactId": "vertx-grpc-common",
+      "groupId": "io.vertx",
+      "version": "4.5.31"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/io.vertx.vertx-grpc-server-4.5.31.jar",
+      "artifactId": "vertx-grpc-server",
+      "groupId": "io.vertx",
+      "version": "4.5.31"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/io.vertx.vertx-web-4.5.31.jar",
+      "artifactId": "vertx-web",
+      "groupId": "io.vertx",
+      "version": "4.5.31"
+    },
+    {
+      "jar": "/opt/keycloak/lib/lib/main/io.vertx.vertx-web-common-4.5.31.jar",
+      "artifactId": "vertx-web-common",
+      "groupId": "io.vertx",
+      "version": "4.5.31"
+    }
+  ],
+  "providerJarSha256": "30c3ab782f32654d75ee635289d630836e5d6175aba0cdc1b74ee7185bd70cbe",
+  "embeddedProviderPomSha256": "cca9f8a9060423e5c9c5c3bf061e7a4528e3cba0c41560e74b35e322baa0c28a",
+  "inventory": [
+    {
+      "path": "/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar",
+      "sha256": "ee991a6b52d8ba10cd4548410d74f950c40db06dcbfc945f4ae7e327a9cb873d",
+      "bytes": 6960325,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.core/jackson-core/pom.properties",
+          "artifactId": "jackson-core",
+          "groupId": "com.fasterxml.jackson.core",
+          "version": "2.21.6"
+        },
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.core/jackson-databind/pom.properties",
+          "artifactId": "jackson-databind",
+          "groupId": "com.fasterxml.jackson.core",
+          "version": "2.21.6"
+        },
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.datatype/jackson-datatype-jdk8/pom.properties",
+          "version": "2.21.6",
+          "groupId": "com.fasterxml.jackson.datatype",
+          "artifactId": "jackson-datatype-jdk8"
+        },
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310/pom.properties",
+          "version": "2.21.6",
+          "groupId": "com.fasterxml.jackson.datatype",
+          "artifactId": "jackson-datatype-jsr310"
+        },
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml/pom.properties",
+          "artifactId": "jackson-dataformat-yaml",
+          "groupId": "com.fasterxml.jackson.dataformat",
+          "version": "2.21.6"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/bin/client/lib/bcprov-jdk18on-1.84.jar",
+      "sha256": "64d6c5a6121fcd927152dd182cbed39afe0fda641a970d9bcc0c9cb1858b2731",
+      "bytes": 8919063,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/bin/client/lib/keycloak-crypto-default-26.7.3.jar",
+      "sha256": "35c0b153585ebda3aff4277093ef379e53dc36dbb369b20c70aaab6ab97211f8",
+      "bytes": 50231,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/bin/client/lib/keycloak-crypto-fips1402-26.7.3.jar",
+      "sha256": "59c55761af3a428ce56b1d97b77b0237febd6f06b71c184c19caf7a2997503b9",
+      "bytes": 53372,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/app/keycloak.jar",
+      "sha256": "7c65ed659cbc83e21ef976dd2f5be2dff0fbdcba9b6f51867f9194356beeb97e",
+      "bytes": 2573,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.quarkus.quarkus-bootstrap-runner-3.33.3.1.jar",
+      "sha256": "65feb84688f8100a00a9a5814fa1111455f9483a0d2b22330d18183919089d85",
+      "bytes": 90272,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.quarkus.quarkus-classloader-commons-3.33.3.1.jar",
+      "sha256": "3d018c7d21563c4bc7f90361b0d1848ecdc84a9f455d0ae341904bcf08c3c0b7",
+      "bytes": 7470,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.quarkus.quarkus-development-mode-spi-3.33.3.1.jar",
+      "sha256": "42551f115470ac97a8da4ee1b3538ea55520a416c56932e33cfb3ec63ff3cace",
+      "bytes": 53995,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.quarkus.quarkus-value-registry-3.33.3.1.jar",
+      "sha256": "5ae84a7160f69f547134a4cfe18a47bc62063972ffb88400857dd66a3e5f21ce",
+      "bytes": 10533,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.quarkus.quarkus-vertx-latebound-mdc-provider-3.33.3.1.jar",
+      "sha256": "9cd8709170438c5969911826488a93222caf188b4cdbcd962e93113f7b541a50",
+      "bytes": 9908,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.smallrye.common.smallrye-common-constraint-2.16.0.jar",
+      "sha256": "9ce104ceb2284024fcf8d427ad2abcbb533e6afedf517a2b8727269f6a5920a6",
+      "bytes": 13613,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.smallrye.common.smallrye-common-cpu-2.16.0.jar",
+      "sha256": "ba5aa8ab220aefd3b27a751238224605038c33506e849460f01d1ffc16d32227",
+      "bytes": 16751,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.smallrye.common.smallrye-common-expression-2.16.0.jar",
+      "sha256": "b147d5b053dbeeb8f9bdcae9b147f8d04cce0cd75ae40ce4c11f4b4c5c9d9f5a",
+      "bytes": 21548,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.smallrye.common.smallrye-common-function-2.16.0.jar",
+      "sha256": "076afd0f0b4c8498a85f58c8ecda03485d65789fcfb23a4a4503f3f54c02b70f",
+      "bytes": 63507,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.smallrye.common.smallrye-common-io-2.16.0.jar",
+      "sha256": "c84500f4ef263a0175028d0df12ccb26c5a480bcd4304147963cd506ff527252",
+      "bytes": 12519,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.smallrye.common.smallrye-common-net-2.16.0.jar",
+      "sha256": "e604abbe1ff2b628fe8fdf6e925d9c5c41d5ff217f2b6c9533ca6ccfa8ff8709",
+      "bytes": 34716,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.smallrye.common.smallrye-common-os-2.16.0.jar",
+      "sha256": "e2ad8823365c70ed2ac65d18a48a3e907816c679096d716634489f1e76fc7b96",
+      "bytes": 9550,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/io.smallrye.common.smallrye-common-ref-2.16.0.jar",
+      "sha256": "9b4168cb99abf89674259c807b9f1a61af1c0cfb4e3b2df338ba630cb524d531",
+      "bytes": 16419,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/jakarta.json.jakarta.json-api-2.1.3.jar",
+      "sha256": "bc934142805ea1d794f1440563965a3861a2a9fb7414ecd3fe44f26500734414",
+      "bytes": 48629,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/org.crac.crac-1.5.0.jar",
+      "sha256": "f4426e1641c8f0fa2f025a4cd7c40c285abaf265930e6717adfcaef03d034850",
+      "bytes": 13361,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/org.eclipse.parsson.parsson-1.1.7.jar",
+      "sha256": "03dc4dc834a928730d52a50952de0f30c35e0daf048889132be19ee1e5053a6c",
+      "bytes": 126630,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/org.eclipse.parsson/parsson/pom.properties",
+          "artifactId": "parsson",
+          "groupId": "org.eclipse.parsson",
+          "version": "1.1.9"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/org.jboss.logging.jboss-logging-3.6.2.Final.jar",
+      "sha256": "f423e07bffce73bf2b6cc872f30981c06fe9cfd5a86a0b4f5fbdd11cfe0148e0",
+      "bytes": 62962,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/boot/org.jboss.logmanager.jboss-logmanager-3.2.1.Final.jar",
+      "sha256": "9e5aaa5f4ca8953a647cd48dba1d0c178dae986662ed310a3dd9405c6bf72687",
+      "bytes": 810615,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.arc.arc-processor-3.33.3.1.jar",
+      "sha256": "9d8f3f56cea42749eba027cb27418609493fe69ee05e4e1fe64e1682f4629249",
+      "bytes": 798161,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.gizmo.gizmo-1.10.1.jar",
+      "sha256": "59b8d44767e19a707a63bf9cdd88fb8fb7e0a3310b9bb6f2ee8cef264473bbbe",
+      "bytes": 188092,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.gizmo.gizmo2-2.1.1.jar",
+      "sha256": "777af2f3b98bbc238938e95c0679c5a1473ec86513e1b88c36901a30c58c9b8e",
+      "bytes": 564254,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.http.quarkus-http-core-5.5.0.jar",
+      "sha256": "e0947a0a2af88dbf3d789174ff58eb4f408fce36f4f83d4d40818868e2042cc7",
+      "bytes": 921136,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.http.quarkus-http-http-core-5.5.0.jar",
+      "sha256": "70890ac330e8d6ac1709d49f6c7c19f909bacb2debf5aad9fd57fb7d70c27fe4",
+      "bytes": 38350,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.http.quarkus-http-servlet-5.5.0.jar",
+      "sha256": "03151a51c31eb81df5614940f316c92071fa059940e76b4e138754c557a51144",
+      "bytes": 500628,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-agroal-deployment-3.33.3.1.jar",
+      "sha256": "d555ec8c6b85db73d7a67d4aa5333095ea6c82e02795ee5b7c10fc2bd83e2d47",
+      "bytes": 48391,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-agroal-spi-3.33.3.1.jar",
+      "sha256": "863e9ab3598a59de511d35284e7f5db2299ed2bc82c0a2ed80b275e620b10204",
+      "bytes": 10506,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-arc-deployment-3.33.3.1.jar",
+      "sha256": "dfbb16e961a1c156a1834bcf9930ac74f6a9784a348f67f939afccb2bd29a92a",
+      "bytes": 338687,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-arc-test-supplement-3.33.3.1.jar",
+      "sha256": "16369d03f3de217ead4d5a5713f31b48b5138970e6f7e49aa5e7f99dfdae9227",
+      "bytes": 12019,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-arc-test-supplement-decorator-3.33.3.1.jar",
+      "sha256": "9d05f4051396c822a4f9210c7b3847c28af8a7c45637b20b12b5ba9fc6136552",
+      "bytes": 8368,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-assistant-deployment-spi-3.33.3.1.jar",
+      "sha256": "932e9053a03695f2addc0d3aa6480c32eb9808a8c263f8308ff107c3aadbab4c",
+      "bytes": 11160,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-assistant-dev-3.33.3.1.jar",
+      "sha256": "dc6da3383ffa3a16c0fa5959e441a52c33832cdb4240ce3d58c18fd7c5b02b67",
+      "bytes": 8973,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-bootstrap-app-model-3.33.3.1.jar",
+      "sha256": "d224693bedd3b1f2e0ed8fe3cdcce90450f81c79918f97f87db67d987fe14747",
+      "bytes": 244848,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-bootstrap-core-3.33.3.1.jar",
+      "sha256": "068224841281bb318c26fe4cb4829ab2da26639348fabad038780e3b3d41518e",
+      "bytes": 127212,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-bootstrap-json-3.33.3.1.jar",
+      "sha256": "bad5d5cc179612e0e26b003dd71b78552e938294104641a84a7977c8ea22727d",
+      "bytes": 32937,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-builder-3.33.3.1.jar",
+      "sha256": "63ebc1ac2a917eb1a4e982ce97540df5e852568549332b61d440ba191f199c6e",
+      "bytes": 93284,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-caffeine-deployment-3.33.3.1.jar",
+      "sha256": "055ceb07b80b65a1c23ae2bd90c5a6dd124f90671fe472f9e47cd19c1fed3654",
+      "bytes": 15852,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-class-change-agent-3.33.3.1.jar",
+      "sha256": "237e044c8f30db8bfb5c253ad0f59645f449904ff85b257c1a9669a4548f574a",
+      "bytes": 7412,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-core-deployment-3.33.3.1.jar",
+      "sha256": "f7bdf7bfe98cfddf603cd91ba9b4e2769c0f4125e8fe7a52831ce9ab9fd31fbe",
+      "bytes": 1615166,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-credentials-deployment-3.33.3.1.jar",
+      "sha256": "f5e6e6adb5be8bc5952c2ba8f0f99cdea56039991aa834fd2c85dd8b2e405642",
+      "bytes": 9278,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-datasource-deployment-3.33.3.1.jar",
+      "sha256": "5eceb89542854559c4194fd5d26b06837f0d99126e15644b9106aaf6951ef64b",
+      "bytes": 26535,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-datasource-deployment-spi-3.33.3.1.jar",
+      "sha256": "c51b9634e8651e1e484436bb0fea60e089ccbca765258ca70d781b10e95a082b",
+      "bytes": 23640,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-devui-deployment-spi-3.33.3.1.jar",
+      "sha256": "5b3b202b3dc7a0f49acdb1313cb92cfe451ad2757fe622002ba985549d069fe1",
+      "bytes": 65472,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-grpc-common-deployment-3.33.3.1.jar",
+      "sha256": "a55b847fee572d887b250b9627347dd33bb1007886c166c0f9f42057475ee4a6",
+      "bytes": 12824,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-hibernate-orm-deployment-3.33.3.1.jar",
+      "sha256": "1de7ffe93ce7afb15815b89fec596e96be77ed4b6d72541867ca8a1079885020",
+      "bytes": 220236,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-hibernate-orm-deployment-spi-3.33.3.1.jar",
+      "sha256": "42a778c7491267a83e30419ba6a1cb0fb3103667112e621867b7d9f711c82747",
+      "bytes": 9747,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-hibernate-validator-deployment-3.33.3.1.jar",
+      "sha256": "cd8432c95321c9e00701d55e4d3d8094dc4dd6618a9c779e4bca648d956914ca",
+      "bytes": 40882,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-hibernate-validator-spi-3.33.3.1.jar",
+      "sha256": "0348e2f718c984421e9e2e7d91fcd7bc987ccc102e336a62d4b2c90cde92a365",
+      "bytes": 9116,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-jackson-deployment-3.33.3.1.jar",
+      "sha256": "e021219a7bbed299c3f29c80378d82d8d6832470d5c3d1f6140f30bc129394e1",
+      "bytes": 22492,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-jackson-spi-3.33.3.1.jar",
+      "sha256": "b4a88e74b398080011c7e62f13ef86934448a2372b7bec3432fa395e10c9f29e",
+      "bytes": 9747,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-jaxrs-spi-deployment-3.33.3.1.jar",
+      "sha256": "72c70768eff9de06ae3c77f09046c8a33deabf8a197043ef66e3dd5c549417b8",
+      "bytes": 7104,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-jdbc-h2-deployment-3.33.3.1.jar",
+      "sha256": "3b89856fc668b6498e511d9f01d91184a5100121022984308ef31a62a5038029",
+      "bytes": 11391,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-jdbc-mariadb-deployment-3.33.3.1.jar",
+      "sha256": "78fb9da4da56ed15b6bb0e322ebabe4082b464a768ffb409a15ca26daf258e0f",
+      "bytes": 10244,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-jdbc-mssql-deployment-3.33.3.1.jar",
+      "sha256": "021dae4e2b6e5f6081a5e7d50487520e215f7618b56c76e76b11e3ba2ad2cd51",
+      "bytes": 10303,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-jdbc-mysql-deployment-3.33.3.1.jar",
+      "sha256": "9e605937777d186dfc26f6f0adcbdeb7a1cdae0977f35ff441706d1ad5173fde",
+      "bytes": 12867,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-jdbc-oracle-deployment-3.33.3.1.jar",
+      "sha256": "97ddf5d3007c6b197681cf364c2e685cd1949cbe8f4b6e7251cefa7d9af61e22",
+      "bytes": 13851,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-jdbc-postgresql-deployment-3.33.3.1.jar",
+      "sha256": "65be94c2760163a41d0e0cc8d7c4b1fe77c31036414ef0f8c1084f17fa817785",
+      "bytes": 10827,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-jsonp-deployment-3.33.3.1.jar",
+      "sha256": "ebfb88b524c3fd687d7453c29de640dfe022cbe4d1092ba29a029b4d57b8ee1f",
+      "bytes": 9927,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-kubernetes-service-binding-spi-3.33.3.1.jar",
+      "sha256": "052aa20b2b48e5ff3d7438cedb4816eb4e29fd2b307f7e7e6cf46223b7eb252a",
+      "bytes": 8635,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-kubernetes-spi-3.33.3.1.jar",
+      "sha256": "d4de500aa6578f193a5be3703ed388f80992f53e9486fbf3abddffa6e79a9122",
+      "bytes": 43345,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-logging-json-deployment-3.33.3.1.jar",
+      "sha256": "5256b629f46c33f987cc05a7110b4b30b647eeeb895ae60bd77f428afc8cf2b7",
+      "bytes": 10675,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-micrometer-deployment-3.33.3.1.jar",
+      "sha256": "e4f657dd8bb92e78e4d38a1026cad870b60f848cc647e74ac1ee4e7dc7069021",
+      "bytes": 59329,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-micrometer-opentelemetry-deployment-3.33.3.1.jar",
+      "sha256": "47775ef63ffa5cfddb29d34c2bf3903c44b52281326569845fa504d5a5b583a3",
+      "bytes": 16679,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-micrometer-registry-prometheus-deployment-3.33.3.1.jar",
+      "sha256": "9ad223399ff6112e2ec2f0699fda57fc5ea117bb4acb0d55be9f5f08d4b78384",
+      "bytes": 8900,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-mutiny-deployment-3.33.3.1.jar",
+      "sha256": "245949c3c97e5b5705b4fc741da839fbd207355557cfc3695278d5b59f072e19",
+      "bytes": 16740,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-narayana-jta-deployment-3.33.3.1.jar",
+      "sha256": "fa9917f23dcb00f20de59dc3cbd5da89d7d5f165bf275fee7f761a3b414d69b2",
+      "bytes": 18841,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-netty-deployment-3.33.3.1.jar",
+      "sha256": "c6fe1bc01c0f1fddd38d3d2755a0d20799f8d3f6b1ec96ba3b5c9fd263648020",
+      "bytes": 37991,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-opentelemetry-deployment-3.33.3.1.jar",
+      "sha256": "650d7478909c7d480c41b9ca2fcae658013c2ae83e0208413fa1730b9978b454",
+      "bytes": 62368,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-panache-common-3.33.3.1.jar",
+      "sha256": "42f6a93bdeeec4911338c149502589928305ac559084eabfaed8145ae2bf2330",
+      "bytes": 14588,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-panache-common-deployment-3.33.3.1.jar",
+      "sha256": "c0d9d0e67d6a717e2205b1b3c7b7761085c7fcd57bcc0d299cb17f22131d4cd4",
+      "bytes": 63955,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-panache-hibernate-common-3.33.3.1.jar",
+      "sha256": "08e266b17ecd1bf845097e8475a5d14a0615c26666f4000e7949f30e0ddd33dd",
+      "bytes": 10444,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-panache-hibernate-common-deployment-3.33.3.1.jar",
+      "sha256": "b50dc61469be25e8dd849cce21fccfbc6b560eaca2f1c20a9b05a784e2ad5eb7",
+      "bytes": 16702,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-reactive-datasource-spi-3.33.3.1.jar",
+      "sha256": "4a1fb9ec15c373ede8176dbb0f1ce6c8d1235945832abe0f3e6b57f806e19510",
+      "bytes": 7257,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-rest-common-deployment-3.33.3.1.jar",
+      "sha256": "4a64c6cebd83da25bd9c5642a97e86e318e4b9674148c75e9fde51dcf5fec3e8",
+      "bytes": 41874,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-rest-deployment-3.33.3.1.jar",
+      "sha256": "b3b0a6ed7605e5cea1f042056401cd9b5cec05290de1005194b3d7fc89c97521",
+      "bytes": 160605,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-rest-jackson-common-deployment-3.33.3.1.jar",
+      "sha256": "10a484fd0f78b9708f3bfd6c99845edda73e2e9372824087e1a2b3f4430bf2e6",
+      "bytes": 7835,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-rest-jackson-deployment-3.33.3.1.jar",
+      "sha256": "9bb5a6fe0583f894686d8df6b2ae238fd0b27ddf58da5fe8ec3e53dea092241a",
+      "bytes": 66436,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-rest-server-spi-deployment-3.33.3.1.jar",
+      "sha256": "72cdeea6a83cad96416f93129c30a58743ebd940fa7ec3c6450f33cc65522a1f",
+      "bytes": 15168,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-rest-spi-deployment-3.33.3.1.jar",
+      "sha256": "ae676ce7479f58a45da9109b2100756128f2dbac38b34dc8e2dba2e7e8e4f5cc",
+      "bytes": 33097,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-resteasy-common-spi-3.33.3.1.jar",
+      "sha256": "2fe767c62869bdcd2e1a393fc6b51cc7a74a00feb6982e2f5cf71783f064c673",
+      "bytes": 13570,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-resteasy-server-common-spi-3.33.3.1.jar",
+      "sha256": "ff327e62a28cc360fb30c66a9782411556472a5b80f386a7fcdb117d3477b0c4",
+      "bytes": 9301,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-security-spi-3.33.3.1.jar",
+      "sha256": "5b1c1247edd053757b889e67599f9043e748d5c4833b9de9830904ca0f0259c8",
+      "bytes": 41455,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-smallrye-context-propagation-deployment-3.33.3.1.jar",
+      "sha256": "e8a27efcc4cc20fc0e08a4d8feb89c6a6adad1933b89dc4a15406a5eba2f887e",
+      "bytes": 23088,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-smallrye-context-propagation-spi-3.33.3.1.jar",
+      "sha256": "f11fccbd6340ddf58d4f092b010c291b00bb2d4aa15b6bc9b3c9275779dca766",
+      "bytes": 7437,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-smallrye-health-deployment-3.33.3.1.jar",
+      "sha256": "197ec5f4462fba8c1bd1ef69a28046ba484fe2aafa00cbfdf3e196d2cb0f00b6",
+      "bytes": 39107,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-smallrye-health-dev-3.33.3.1.jar",
+      "sha256": "38a632261efe46e878c78eeabb7dd48e57c3c1f96d0cea03cd9a9613991979de",
+      "bytes": 10954,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-smallrye-health-spi-3.33.3.1.jar",
+      "sha256": "949e7a6303368f16e1c9fa63ebf0916397acef3dbdf8f7b7650c3a4f5ceda09d",
+      "bytes": 7333,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-smallrye-openapi-common-deployment-3.33.3.1.jar",
+      "sha256": "3eeadb15e17b2646f081fccbf47e7356e823726aff9595c0ea3c80c4f672fbd1",
+      "bytes": 21944,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-smallrye-openapi-deployment-3.33.3.1.jar",
+      "sha256": "aebec4d9f31d6f69df10690a369ae11a98c90c62ec830898c699d522e5f54f25",
+      "bytes": 91163,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-smallrye-openapi-dev-3.33.3.1.jar",
+      "sha256": "e76c6d49dcf72cc6b4b8aab27cc58eba3c896fe373659d662c6149bdf4384ae3",
+      "bytes": 9524,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-smallrye-openapi-spi-3.33.3.1.jar",
+      "sha256": "ec0cc04c675048994160a64a26b6e60cc49f8f9a88da43277e73d4c0461496df",
+      "bytes": 9464,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-swagger-ui-deployment-3.33.3.1.jar",
+      "sha256": "fc1b6a2d2659b2f3cc3a13513d8a34d562a9739914615451f9871c22452de915",
+      "bytes": 31467,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-tls-registry-deployment-3.33.3.1.jar",
+      "sha256": "1269a5e8fad50a38ce228f1fb7e34b011b1d722a2e032b0b544b3a92f179cab7",
+      "bytes": 15649,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-tls-registry-deployment-spi-3.33.3.1.jar",
+      "sha256": "3f8dcbc34b7ed9e1b2a316eb7ea7119eb2343db945bde9cb7b7bf8cbd0523b51",
+      "bytes": 7750,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-undertow-spi-3.33.3.1.jar",
+      "sha256": "c50c643f97c75db0c47ae8e84bc113c2040061cff189c07a4e71001454de0789",
+      "bytes": 27130,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-vertx-deployment-3.33.3.1.jar",
+      "sha256": "ffaa1a1e12928a6dc5fe8c43fc84a39a0db623fa17c20421ea3b962a50ed3ac6",
+      "bytes": 55613,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-vertx-deployment-spi-3.33.3.1.jar",
+      "sha256": "ac7c02b88b6ad0dc22ac3cc210b167539b42e254d8bd39dbc9f3bcf8ddd5e8e7",
+      "bytes": 7134,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-vertx-http-deployment-3.33.3.1.jar",
+      "sha256": "c93e80fe88295173875e368f040c8738277de774ed39ad705fec12d99fe4eaa8",
+      "bytes": 147199,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-vertx-http-deployment-spi-3.33.3.1.jar",
+      "sha256": "4f70eff9368a387f94705c263a51e89c6c0f944adf6f1981cbdd76eded41e735",
+      "bytes": 17579,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.quarkus-virtual-threads-deployment-3.33.3.1.jar",
+      "sha256": "49c32170c2b7cc1ace621dc00652356ec98536bfa0255b4dbf5ab241b8ef00a6",
+      "bytes": 10828,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.resteasy.reactive.resteasy-reactive-common-processor-3.33.3.1.jar",
+      "sha256": "58563bd68782acf4ac6c6608feaf55f5f9ecb6fcf2fe7858d7f23782bdd28757",
+      "bytes": 130177,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.quarkus.resteasy.reactive.resteasy-reactive-processor-3.33.3.1.jar",
+      "sha256": "29a21b53aaff06cb951197b2e414e7bdf09ffcf8d559b4f49cb1292fee916fef",
+      "bytes": 154798,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.smallrye.classfile.jdk-classfile-backport-26.jar",
+      "sha256": "2eb2741b04c632ca361fb7dc947e993785639e76233129e84b2c85d618ae12ca",
+      "bytes": 967151,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.smallrye.common.smallrye-common-process-2.16.0.jar",
+      "sha256": "c4c64f7b2629a4c3ff4f70c7eaf44799e93c03db39cc42fda49dea9b84b4b060",
+      "bytes": 82531,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.smallrye.common.smallrye-common-resource-2.16.0.jar",
+      "sha256": "00fefb18cf87306ad8427d444c8f098de5c64c82183579b0b7d7c14f28308413",
+      "bytes": 30431,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.smallrye.jandex-gizmo2-3.5.3.jar",
+      "sha256": "0a6a879b4a1e5254780e3a0920cde576e3b419864ae30085be4a67114238062d",
+      "bytes": 17652,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.smallrye.smallrye-health-ui-4.3.0.jar",
+      "sha256": "391746a1a7de310c4fd4207840d618d22d80de58bd0c2e1aec36f2755e5c3a2f",
+      "bytes": 85153,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.smallrye.smallrye-open-api-jaxrs-4.2.4.jar",
+      "sha256": "4b749e84754abd638245f89d561d597ffec91e73eefaccd9e8cec322d05a1eae",
+      "bytes": 36277,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.smallrye.smallrye-open-api-spring-4.2.4.jar",
+      "sha256": "d3a4bb698f1dcd6123fc9d0582dab1cca539c1baad71aae2a059ab1d1eddcacb",
+      "bytes": 24694,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.smallrye.smallrye-open-api-ui-4.2.4.jar",
+      "sha256": "f1412f61960576e70061902729bd15a6cc8b9ec68079190cea73495efbce2efd",
+      "bytes": 1328261,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/io.smallrye.smallrye-open-api-vertx-4.2.4.jar",
+      "sha256": "b0eb3dee61f6e1a577f12f8e7573f0e91295a3e8631a2ca3c3d1951947c0ad90",
+      "bytes": 20756,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/jakarta.servlet.jakarta.servlet-api-6.0.0.jar",
+      "sha256": "c034eb1afb158987dbb53a5fea0cadf611c8dae8daadd59c44d9d5ab70129cef",
+      "bytes": 347613,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/net.bytebuddy.byte-buddy-agent-1.17.8.jar",
+      "sha256": "5b17113e66e77ca6f8af07ff367c216df964a980f0e9f11e3b1aa793253aa64f",
+      "bytes": 366535,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/org.aesh.aesh-2.8.2.jar",
+      "sha256": "8c1e17fd1ab9d3a736bdee7fbd649e174f7dc26c1ceeac6e9ea596a9d63fcffd",
+      "bytes": 362016,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/org.aesh.readline-2.6.3.jar",
+      "sha256": "34c961857dbf7931aa67cde0a0feb28d68224f061611dfdf11d391f5d7eedb72",
+      "bytes": 335233,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/org.apache.commons.commons-compress-1.28.0.jar",
+      "sha256": "e1522945218456f3649a39bc4afd70ce4bd466221519dba7d378f2141a4642ca",
+      "bytes": 1117221,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/org.graalvm.sdk.nativeimage-23.1.2.jar",
+      "sha256": "b20c00823c194cadcafc8e853b96a5754e641b467dc56634e738d756b308ad9a",
+      "bytes": 217197,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/org.graalvm.sdk.word-23.1.2.jar",
+      "sha256": "2ae7a71ff3f53f61d1d7360a6152f67ce3902ae86ca22b30b70208dc0cf4e039",
+      "bytes": 22242,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/org.jline.jansi-4.2.1.jar",
+      "sha256": "9e234698c7545ea5e89f7007b403ba3597c52d25d85aff645f33cf0602b3a2b4",
+      "bytes": 664147,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/deployment/org.keycloak.keycloak-quarkus-server-deployment-26.7.3.jar",
+      "sha256": "b85902ee2e345d869cbd7e40655b108c3ff7e8b05b24db41ae6e9f3a9827c362",
+      "bytes": 37874,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.aayushatharva.brotli4j.brotli4j-1.23.0.jar",
+      "sha256": "5fcf13ad78d07319cc507465dcf61cbc3efee9f45c9ae1c42a9902414696bc0b",
+      "bytes": 47251,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.aayushatharva.brotli4j.native-linux-x86_64-1.23.0.jar",
+      "sha256": "c504e243961c4229d8e486ca8f87b757ad9a033dda471061c0134c050ddcaa7c",
+      "bytes": 443633,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.aayushatharva.brotli4j.service-1.23.0.jar",
+      "sha256": "7f298d44dbb7688419f0179ee1dfa0e4436633272b05d38a5faf3a2b8d08697b",
+      "bytes": 3367,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.apicatalog.titanium-json-ld-1.3.3.jar",
+      "sha256": "779de1d88f173486f0ea9f1b4b7779970ac21a7ad49b2a0370f5f99b6dfef72c",
+      "bytes": 291324,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.classmate-1.7.1.jar",
+      "sha256": "cc3299e5df4fc24180e69477c890d07d38db79dd2decc0ef20e74a986897c0a1",
+      "bytes": 68227,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-annotations-2.21.jar",
+      "sha256": "53ca085f4a150f703f49e1aabd935bd03b43e1ea3d55d135438292af22cef56b",
+      "bytes": 82104,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.core/jackson-annotations/pom.properties",
+          "artifactId": "jackson-annotations",
+          "groupId": "com.fasterxml.jackson.core",
+          "version": "2.21"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-core-2.21.5.jar",
+      "sha256": "36111c3a4372cd5c2be6f4ec44a050382487920f3fc38ca3015c9c1678bd7c56",
+      "bytes": 594296,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.core/jackson-core/pom.properties",
+          "artifactId": "jackson-core",
+          "groupId": "com.fasterxml.jackson.core",
+          "version": "2.21.6"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.core.jackson-databind-2.21.5.jar",
+      "sha256": "62134a98de12d0a421cd2f5b9854c8e63f10f524b0341e66cfd31a4326f6a329",
+      "bytes": 1707967,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.core/jackson-databind/pom.properties",
+          "artifactId": "jackson-databind",
+          "groupId": "com.fasterxml.jackson.core",
+          "version": "2.21.6"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.dataformat.jackson-dataformat-cbor-2.21.5.jar",
+      "sha256": "1682391f5deb36acbd34702eeeecd9f2f450c8e468504de05784a27aabdef5e3",
+      "bytes": 73711,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.dataformat/jackson-dataformat-cbor/pom.properties",
+          "artifactId": "jackson-dataformat-cbor",
+          "groupId": "com.fasterxml.jackson.dataformat",
+          "version": "2.21.6"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.dataformat.jackson-dataformat-yaml-2.21.5.jar",
+      "sha256": "e5a4ea8c86f9f8d068bb280b69be5c450f263343b4bf1d81be8586d4e8d5c698",
+      "bytes": 61422,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.dataformat/jackson-dataformat-yaml/pom.properties",
+          "artifactId": "jackson-dataformat-yaml",
+          "groupId": "com.fasterxml.jackson.dataformat",
+          "version": "2.21.6"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.datatype.jackson-datatype-jdk8-2.21.5.jar",
+      "sha256": "ffcb606cc9fec4ad22c096fdc101bf1b6eb17b5f53c741ab306632ecdf4a438e",
+      "bytes": 36039,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.datatype/jackson-datatype-jdk8/pom.properties",
+          "version": "2.21.6",
+          "groupId": "com.fasterxml.jackson.datatype",
+          "artifactId": "jackson-datatype-jdk8"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.datatype.jackson-datatype-jsr310-2.21.5.jar",
+      "sha256": "1d82027afe574c63e24df72eb109f98de02dff3bb5adf81f0174b27088490067",
+      "bytes": 136877,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.datatype/jackson-datatype-jsr310/pom.properties",
+          "version": "2.21.6",
+          "groupId": "com.fasterxml.jackson.datatype",
+          "artifactId": "jackson-datatype-jsr310"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.jakarta.rs.jackson-jakarta-rs-base-2.21.5.jar",
+      "sha256": "4e8da867d765d2911d3484ef2f10d7a6f10ac45e1eda6b50c8505d0b4f997b0e",
+      "bytes": 33213,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.jakarta.rs/jackson-jakarta-rs-base/pom.properties",
+          "groupId": "com.fasterxml.jackson.jakarta.rs",
+          "artifactId": "jackson-jakarta-rs-base",
+          "version": "2.21.6"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.jakarta.rs.jackson-jakarta-rs-yaml-provider-2.21.5.jar",
+      "sha256": "cc0c924b7b534d99bfe7038f6727dabb8b945eddb7832754b9e9b36ee43a0847",
+      "bytes": 15581,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.jakarta.rs/jackson-jakarta-rs-yaml-provider/pom.properties",
+          "groupId": "com.fasterxml.jackson.jakarta.rs",
+          "artifactId": "jackson-jakarta-rs-yaml-provider",
+          "version": "2.21.6"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.module.jackson-module-jakarta-xmlbind-annotations-2.21.5.jar",
+      "sha256": "9fe4f941ba14dfa49b6120a0f2c307b06bfd60bce797f9cfed72a2abca8befdf",
+      "bytes": 32338,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.module/jackson-module-jakarta-xmlbind-annotations/pom.properties",
+          "version": "2.21.6",
+          "groupId": "com.fasterxml.jackson.module",
+          "artifactId": "jackson-module-jakarta-xmlbind-annotations"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.fasterxml.jackson.module.jackson-module-parameter-names-2.21.5.jar",
+      "sha256": "24f5c6f75fad85d7e2e3f600ef4832a839def8a2bf1e6f2fc5a0577cef54e01d",
+      "bytes": 10186,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/com.fasterxml.jackson.module/jackson-module-parameter-names/pom.properties",
+          "version": "2.21.6",
+          "groupId": "com.fasterxml.jackson.module",
+          "artifactId": "jackson-module-parameter-names"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.github.ben-manes.caffeine.caffeine-3.2.3.jar",
+      "sha256": "ca70c90a5d1ce1511880ce9c93d4ad22108f61111d3daf91eb52762b571bd179",
+      "bytes": 1020615,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.github.hypfvieh.dbus-java-core-5.2.0.jar",
+      "sha256": "9dfadd65bdfec2154ccf23039f9ae6239dc625735b933653d9403e11c2c9cf10",
+      "bytes": 385860,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.github.hypfvieh.dbus-java-transport-native-unixsocket-5.2.0.jar",
+      "sha256": "efeb82fecd6e176e5e9f63fb6d6775f19c194584bf001fd579a1a5b560bbf061",
+      "bytes": 8048,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.github.ua-parser.uap-java-1.6.1.jar",
+      "sha256": "ff3e1eb9d807df8bc197950de5d555d1892a7ceed0fdff75b3eb2aa78bbe51c5",
+      "bytes": 62677,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.google.api.grpc.proto-google-common-protos-2.65.1.jar",
+      "sha256": "a37b117a271adc145c67c7de40f1fd62621e6398c22217c942ce26b618a93adf",
+      "bytes": 2749056,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.google.code.gson.gson-2.13.2.jar",
+      "sha256": "dd0ce1b55a3ed2080cb70f9c655850cda86c206862310009dcb5e5c95265a5e0",
+      "bytes": 289901,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.google.errorprone.error_prone_annotations-2.47.0.jar",
+      "sha256": "5364bc6f22e72e98195e406a58d3ba1c09ffa11dea0729592cb870dc2de4056d",
+      "bytes": 20254,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.google.guava.guava-33.5.0-jre.jar",
+      "sha256": "1e301f0c52ac248b0b14fdc3d12283c77252d4d6f48521d572e7d8c4c2cc4ac7",
+      "bytes": 3017283,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.google.protobuf.protobuf-java-4.33.2.jar",
+      "sha256": "c5b582aa127fb62c5fc3077329d522dfb7930b4e9a625c08760b681b2ba5aab7",
+      "bytes": 1886420,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.google.zxing.core-3.4.0.jar",
+      "sha256": "65004806a669234c698fbe0755258100375fb01fe93b538455f3903713d4a50d",
+      "bytes": 539901,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.google.zxing.javase-3.4.0.jar",
+      "sha256": "7aeef746a544effcd9e499214d9f315e69c3a835e7c81abfb703be79f859a6d7",
+      "bytes": 36826,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.googlecode.owasp-java-html-sanitizer.java10-shim-20260101.1.jar",
+      "sha256": "9c20befbc7003af4dee3970fd1f9d01f252d2be9835235509038419fcb68da1d",
+      "bytes": 3876,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.googlecode.owasp-java-html-sanitizer.java8-shim-20260101.1.jar",
+      "sha256": "b5d5b10afd2ab1899bd9a859d1d7b59b49e438dab18a7c95d85ac71c1329932a",
+      "bytes": 11507,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.googlecode.owasp-java-html-sanitizer.owasp-java-html-sanitizer-20260101.1.jar",
+      "sha256": "f313f1d6ae849a18f5122dbef8126dc379ec86cef2dcf8192b478170c7eaf155",
+      "bytes": 244172,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.h2database.h2-2.4.240.jar",
+      "sha256": "b5226b45e9a457b648986e1b248ded80e0a2d13dea63eb250901a287f30ab91f",
+      "bytes": 2682809,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.microsoft.sqlserver.mssql-jdbc-13.2.1.jre11.jar",
+      "sha256": "e36f5237c1267983e5b88dc2169f6b9d7e50eceec6dc1ca31018e3877e14af66",
+      "bytes": 1547706,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.mysql.mysql-connector-j-9.6.0.jar",
+      "sha256": "66df1d453789dc8cb759a7dc17f58646893bf28483f262328650f170472a6ead",
+      "bytes": 2602989,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.opencsv.opencsv-5.11.2.jar",
+      "sha256": "690daad9014f23afd3ab6f1b0c45a5e0b738ac37a8d2e810e196193aab521245",
+      "bytes": 241705,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.sun.istack.istack-commons-runtime-3.0.10.jar",
+      "sha256": "85239e7fff2463b7d8a9c3962f78ee3e2c6db9455c724f29281e2c5f663e22be",
+      "bytes": 29931,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.sun.xml.messaging.saaj.saaj-impl-2.0.1.jar",
+      "sha256": "9ed4294e7947088a3644b4d9aa726a2eb510585b50faec308d737046ba0fda90",
+      "bytes": 457087,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.webauthn4j.webauthn4j-core-0.30.3.RELEASE.jar",
+      "sha256": "22630b3a6d8d73483461e7eb10cef306f01ae9b8f4360bf77652db4f3c543e99",
+      "bytes": 563095,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/com.webauthn4j.webauthn4j-util-0.30.3.RELEASE.jar",
+      "sha256": "21720b52cca6fa0c5ccf5ace9d9061cc1ae7130ec169ed81cffa0def7ce4b6d2",
+      "bytes": 912,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/commons-codec.commons-codec-1.21.0.jar",
+      "sha256": "4da851cb6abfb98bfe9eb77c5e5fc47f5414fa28b94e21b7fd9a646705dc167f",
+      "bytes": 402494,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/commons-io.commons-io-2.21.0.jar",
+      "sha256": "7d643a2afea8b058b762aa6fb90e5b256f6c729739f8b3784c3370ddc609e88d",
+      "bytes": 585274,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/info.picocli.picocli-4.7.7.jar",
+      "sha256": "f86e30fffd10d2b13b8caa8d4b237a7ee61f2ffccf5b1941de718b765d235bf8",
+      "bytes": 417640,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.agroal.agroal-api-3.0.1.jar",
+      "sha256": "39d2446e439963f2556add24891c2db9d1fcfbefb79d2c9b112e0d843a508603",
+      "bytes": 66126,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.agroal.agroal-narayana-3.0.1.jar",
+      "sha256": "ed57f1b2cf6b201f16b8dead3abd9274decb2cea527b943321ea2d57b2d5a8eb",
+      "bytes": 21011,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.agroal.agroal-pool-3.0.1.jar",
+      "sha256": "5333a2b77541ba172649de223d9c67418d6819c268d4f2790ec7aea76205710e",
+      "bytes": 133403,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.grpc.grpc-api-1.81.0.jar",
+      "sha256": "3e6a659ba3edcdac730c857b27725e2e4d985c2241055e8326eb4fe0f9573d53",
+      "bytes": 341888,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.grpc.grpc-context-1.81.0.jar",
+      "sha256": "05de695306f90ded01d41b083b7500eb13dc53763097ac8c5b0264842df06679",
+      "bytes": 292,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.grpc.grpc-core-1.81.0.jar",
+      "sha256": "3ffe1a91dedf0603269ce597469bf82f93477b12968a9e0d80fbd407e5ba6e99",
+      "bytes": 655070,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.grpc.grpc-netty-1.81.0.jar",
+      "sha256": "d76542efc61631ff23dcf0790edfe5bb02eea286d4f974a80f3d2be38cb90cd0",
+      "bytes": 310041,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.grpc.grpc-protobuf-1.81.0.jar",
+      "sha256": "d274af74b76a7846194e0279708d48900c19070f069241a4034bacd42918df1d",
+      "bytes": 5203,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.grpc.grpc-protobuf-lite-1.81.0.jar",
+      "sha256": "1bf6294b09925cc6aa82b1fd8750650010e45e0c88972670bdc3135c74aaab4c",
+      "bytes": 7814,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.grpc.grpc-stub-1.81.0.jar",
+      "sha256": "963e75cc63c3659ee8e4cb956436cefdd511761f4e85a674caeeb3052744e39d",
+      "bytes": 61813,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.grpc.grpc-util-1.81.0.jar",
+      "sha256": "5ef3f554329ebc18b7ca65de15289acf723a26b8c0bd4e502f41e41abe5a347f",
+      "bytes": 108747,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.micrometer.micrometer-commons-1.16.6.jar",
+      "sha256": "45aff76226830db257f4bc39a5bcff83d633e572fee9dc4e45cfa12af9a0a49a",
+      "bytes": 51749,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.micrometer.micrometer-core-1.16.6.jar",
+      "sha256": "1957ef2deaffbc1fb98cebfd0f5b3109ecf19c994d7e5378598c20747ba8d68b",
+      "bytes": 910984,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.micrometer.micrometer-observation-1.16.6.jar",
+      "sha256": "4c0826d5e7c8522a8e111470b4e77f77b0a10f520eb5502ddd143fdbcedb2340",
+      "bytes": 83925,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.micrometer.micrometer-registry-prometheus-simpleclient-1.16.6.jar",
+      "sha256": "5f665369724caa8ffbb3f83a492b02d1de17a1420758e4a55debcb6ee2bd5e2a",
+      "bytes": 45408,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-buffer-4.1.136.Final.jar",
+      "sha256": "c88f13fc41156fde5df918c7b240038dfbe97ac57576163f208630391789b5d5",
+      "bytes": 358894,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-codec-4.1.136.Final.jar",
+      "sha256": "2de4fc13005c7740b46427a47ee04265a19779c147d53e583f441889b1148159",
+      "bytes": 359692,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-codec-dns-4.1.136.Final.jar",
+      "sha256": "89bddc4ec42756c41a0195a50a1323a324836162b6712a843c3de5c29096c93b",
+      "bytes": 68662,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-codec-haproxy-4.1.136.Final.jar",
+      "sha256": "841be7fc6f1c929ecc63c70a909e0df085b4e80e44680acf46708f0e93e68037",
+      "bytes": 38542,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-codec-http-4.1.136.Final.jar",
+      "sha256": "ffd1e1b19a533bc6e47ef2cbc1290374ff4a7cb53a280defa3df392538214948",
+      "bytes": 691676,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-codec-http2-4.1.136.Final.jar",
+      "sha256": "14f67ae095c056b062aa0ee2c7b01f6b78004cf3620a6e9061bcb637f079387a",
+      "bytes": 505309,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-codec-socks-4.1.136.Final.jar",
+      "sha256": "341f47dbaac667a6e7e6cad4114218025f9755ced641bb0740fb69e34d29b421",
+      "bytes": 121091,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-common-4.1.136.Final.jar",
+      "sha256": "e2f73be7ec359b46583ad875521137000eff520bafd320e730846ec9974f3be6",
+      "bytes": 739329,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-handler-4.1.136.Final.jar",
+      "sha256": "54bb1a59f46a3aefd117942e6acee09e555b756776bad731fc06159d89c2da28",
+      "bytes": 588584,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-handler-proxy-4.1.136.Final.jar",
+      "sha256": "47400551f0444dea33629ee0c52d4e30856b2ddf00b12adf1881902957e74cf2",
+      "bytes": 25839,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-resolver-4.1.136.Final.jar",
+      "sha256": "e64972fec474f5b9bd086b738154d190a923e82c4923ac550aff4f5ea9e98600",
+      "bytes": 37907,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-resolver-dns-4.1.136.Final.jar",
+      "sha256": "9c05a9b18b5d54fcc1569c48b93958019cf3dde5ae7011f8a46451ee05e7daff",
+      "bytes": 188774,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-tcnative-classes-2.0.78.Final.jar",
+      "sha256": "3ca66d8c6c0f003242f954cc1822a32445109ac25b8582840ba3d8e3c92f0a3e",
+      "bytes": 37390,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-transport-4.1.136.Final.jar",
+      "sha256": "b92881ea925721ed42fee5122a42b8bce4b84da737dbc3ca2d84dfaca52c28b6",
+      "bytes": 521981,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-transport-classes-epoll-4.1.136.Final.jar",
+      "sha256": "f6a0b631b98667f131daf4ca07a9cae1072d58e259dcbc0f8c6a053d843449c6",
+      "bytes": 147744,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-transport-native-epoll-4.1.136.Final-linux-aarch_64.jar",
+      "sha256": "f264cf4bcc1e97ad148cd4f0d8777eacf404cd4ed80830de3f8a2359f60edc38",
+      "bytes": 42853,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-transport-native-epoll-4.1.136.Final-linux-x86_64.jar",
+      "sha256": "c3956f90241582bbbad5612c3159cffeb7c3533324759f3c3bd778ca9b176cae",
+      "bytes": 41141,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.netty.netty-transport-native-unix-common-4.1.136.Final.jar",
+      "sha256": "7e014c9b13defd9d254d4e5a5edd8ab6dde17533e1152f99699a6b28b2967a8a",
+      "bytes": 44329,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.instrumentation.opentelemetry-apache-httpclient-4.3-2.23.0-alpha.jar",
+      "sha256": "20fbbfb83c4e2446339cd85817caeb49e20a822fa9bc12fd6f467445f98f2905",
+      "bytes": 14922,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.instrumentation.opentelemetry-instrumentation-annotations-2.23.0.jar",
+      "sha256": "1df2d2e7e05fac5a1a7b76f5fbdd868949717c2da5628698a639ddb9a93b6554",
+      "bytes": 2863,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.instrumentation.opentelemetry-instrumentation-annotations-support-2.23.0-alpha.jar",
+      "sha256": "be0ae8530db1c87f3e4b5ac161de6145bcb804f59387b40853d8aff2f4c9815f",
+      "bytes": 33599,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.instrumentation.opentelemetry-instrumentation-api-2.23.0.jar",
+      "sha256": "c6b86acc7ccb2a6a0979ae73ae686ea4ac8a24e656912bc169216bcfd87f44b1",
+      "bytes": 239640,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.instrumentation.opentelemetry-instrumentation-api-incubator-2.23.0-alpha.jar",
+      "sha256": "4f068fad9ea65cb1f2213ca50ba154878e7e12c87291f2f2182137e26ab25c31",
+      "bytes": 182575,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.instrumentation.opentelemetry-jdbc-2.23.0-alpha.jar",
+      "sha256": "d72f573219ef3c6b6129b492673e1b238e223071fcb1269a7dce1b1ad8905efd",
+      "bytes": 108043,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.instrumentation.opentelemetry-micrometer-1.5-2.23.0-alpha.jar",
+      "sha256": "787813be47c4572be966d8114ba483abd593f2d442003f18ef375bcb1e0f3e94",
+      "bytes": 45682,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.instrumentation.opentelemetry-runtime-telemetry-java17-2.23.0-alpha.jar",
+      "sha256": "4489144d20e9ea67405e340f399b840db6a89dcbf1ecd85ee7a8beef81629667",
+      "bytes": 55807,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.instrumentation.opentelemetry-runtime-telemetry-java8-2.23.0-alpha.jar",
+      "sha256": "71df1c056b9dca5c41077c70d4028a0f4b45c2b089509727fcfd8672afb5504e",
+      "bytes": 38693,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-api-1.57.0.jar",
+      "sha256": "88bbfc3fcc81af3299e7f69cddcc9672e410ffcf7435e8b50a474cf2e454b410",
+      "bytes": 159493,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-api-incubator-1.57.0-alpha.jar",
+      "sha256": "1e2fe498522d00b674d42b9db8819f46d455bd541937fbd44a5a920b8bb6e91e",
+      "bytes": 88499,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-common-1.57.0.jar",
+      "sha256": "bec7709546fa12afe2921d369859d5c0d9766ff9a7e286f441241b8e65c15789",
+      "bytes": 2137,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-context-1.57.0.jar",
+      "sha256": "dc3c6b64970c245f760e8af5233d4862f829c88a0a1f013578035a7390dcd290",
+      "bytes": 49584,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-exporter-common-1.57.0.jar",
+      "sha256": "4ba0aba874a88aaaee6209144b5f1485eb4867c2b3ea90372367ed611fad1bb4",
+      "bytes": 143620,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-exporter-otlp-1.57.0.jar",
+      "sha256": "29433b7d7ba22a9d17702e98d6acd71f7a774543283ba5e131e605517723a897",
+      "bytes": 84174,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-exporter-otlp-common-1.57.0.jar",
+      "sha256": "b3d7f8bfaa74c2dad9809e51a122b45f458dcba86884b8964e4cfba66d3646e1",
+      "bytes": 224564,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-sdk-1.57.0.jar",
+      "sha256": "9fcde781eee79516a9a0e1a159ae0fa0432e85ea6ee7cdfc5144e5a1f3e929ed",
+      "bytes": 6769,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-sdk-common-1.57.0.jar",
+      "sha256": "3ee09309d6ba5310169019b0c976f2e2ba1da32eaf3f0731f1684cc2f03aff7a",
+      "bytes": 76103,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-sdk-extension-autoconfigure-1.57.0.jar",
+      "sha256": "17f91454a3125cd596816f7e3920ca6cdfff5377c23d8a012e5accbeb73981d3",
+      "bytes": 49122,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-sdk-extension-autoconfigure-spi-1.57.0.jar",
+      "sha256": "aed5ef968aaeb77e6db4993b430573bedda0bee2df1fb62f66c0e239b149551c",
+      "bytes": 18398,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-sdk-logs-1.57.0.jar",
+      "sha256": "b56ffd6ad94650c6fb61a4f25c7cbdfeba36d742d4e47e541cc34c3c0c233703",
+      "bytes": 66851,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-sdk-metrics-1.57.0.jar",
+      "sha256": "e7420d33d86a29491c1d120bd632cc7cfcce49977a99654982f6d83c9c974142",
+      "bytes": 330647,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-sdk-trace-1.57.0.jar",
+      "sha256": "5aa99314bb2fb530eff0c2407a4f0f4452c85353a43a6ec199dd5c2f9b3d8268",
+      "bytes": 129857,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.semconv.opentelemetry-semconv-1.37.0.jar",
+      "sha256": "693ad6f04f29b4b593a04adef5f575d28b3a91ea3449ab5b1e1e2e5c6efc6cdc",
+      "bytes": 18454,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.opentelemetry.semconv.opentelemetry-semconv-incubating-1.37.0-alpha.jar",
+      "sha256": "0ce785cab9b23fd3d64bab3c86d7c60572325df85184b759d6069ca9f316fc09",
+      "bytes": 175871,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.perfmark.perfmark-api-0.27.0.jar",
+      "sha256": "c7b478503ec524e55df19b424d46d27c8a68aeb801664fadd4f069b71f52d0f6",
+      "bytes": 6954,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.prometheus.simpleclient-0.16.0.jar",
+      "sha256": "22c374f237f7bc4fdb1f0ec2da379c0ba00e69ad2ffe8b6ade543d73062d377f",
+      "bytes": 90482,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.prometheus.simpleclient_common-0.16.0.jar",
+      "sha256": "eba6ec26ce7e40cbb8725e05fb83247a9f4f44945b9e7522e3375dde67b9f059",
+      "bytes": 8011,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.prometheus.simpleclient_tracer_common-0.16.0.jar",
+      "sha256": "e84a784ac8e24f182ee62da80b6b5c8140774b75bfa4bf9cc3d3b8390db625f6",
+      "bytes": 3405,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.prometheus.simpleclient_tracer_otel-0.16.0.jar",
+      "sha256": "a2a84c59bef3796bb7f9c6f2ae8b7de8b905313ef28180ac3de7ff61dd68df3f",
+      "bytes": 4338,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.prometheus.simpleclient_tracer_otel_agent-0.16.0.jar",
+      "sha256": "7ad2bb40df74a772d9f5445a3d03579b49d6b37a47d5e90f6cf3f59ecf41ad06",
+      "bytes": 4611,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.arc.arc-3.33.3.1.jar",
+      "sha256": "4c98a39f808a0b4e293d8cb4f96a2ec94ae63b25ffa6d1271df9f93e293146ab",
+      "bytes": 284685,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-agroal-3.33.3.1.jar",
+      "sha256": "65b9b9c21d251752c2691234d87e21528d6de4c71e96f49ba4cabaf614ebba33",
+      "bytes": 58062,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-arc-3.33.3.1.jar",
+      "sha256": "90180ba53996ddd3ddb6f7a087b87bf0fe5f55a612e8c327e5b0cdbec7a37027",
+      "bytes": 69359,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-caffeine-3.33.3.1.jar",
+      "sha256": "2c8c5e0287f8153100a2c3af3780dd80c2cb0924683b85a7c0b91b66e9cff4a6",
+      "bytes": 9744,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-core-3.33.3.1.jar",
+      "sha256": "3a12ed9f9c936fe69b99b3e4f437349f4941926f004fe78322ebc6f7ad8378e0",
+      "bytes": 549611,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-credentials-3.33.3.1.jar",
+      "sha256": "00fd02afdf24b94a4d94296f28261c77f9de89f2007011401bb48fda07728646",
+      "bytes": 8470,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-datasource-3.33.3.1.jar",
+      "sha256": "aa5faca397ff3673a23e5333b10da0d052ec30716ff4c1b36c809eea28288323",
+      "bytes": 22746,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-datasource-common-3.33.3.1.jar",
+      "sha256": "0fa07b2c4970e8b7746b46d327000056e14dc54db362530c692bce53d0c47bfb",
+      "bytes": 11888,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-devservices-3.33.3.1.jar",
+      "sha256": "d1f2960e424bc8903f6f55ab2f0fe88ae66af7727627b2e1c9dadbed985617d2",
+      "bytes": 11742,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-fs-util-1.4.2.jar",
+      "sha256": "a6034133b21de4e3aee4bc9e250f8416abfbdc0c86e6e0737f766415c3866169",
+      "bytes": 72690,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-grpc-common-3.33.3.1.jar",
+      "sha256": "08c9b63f2016941a1c783969d7b310f71ffc36351ba664cbfa72eb448871d0b4",
+      "bytes": 18613,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-hibernate-orm-3.33.3.1.jar",
+      "sha256": "96a0d6d5f14e0518ecb6da6be9fd9c4d0d6f554cf621b60eeb77da65b6eb1e0c",
+      "bytes": 305672,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-hibernate-validator-3.33.3.1.jar",
+      "sha256": "20bf763d82f2bc45c4d1fa1b460016866d9a6bb1d51a71fc4ff776e50a9eea71",
+      "bytes": 72809,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-jackson-3.33.3.1.jar",
+      "sha256": "b8efe2ba84c3bf48957216e4e5d2bb26ea9bcea213bd0e13e2b87951b520426e",
+      "bytes": 22501,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-jdbc-h2-3.33.3.1.jar",
+      "sha256": "a7a4847fcf1631517b4e00a46c1261236bf91e15a98713b0d7df4df81814cc34",
+      "bytes": 15609,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-jdbc-mariadb-3.33.3.1.jar",
+      "sha256": "080746d796d3e2aaa04c261318907c54221303d1eeb272af1544860717c98032",
+      "bytes": 14901,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-jdbc-mssql-3.33.3.1.jar",
+      "sha256": "a81113896d4088bdfa00c0c4633cd39b9c9c376f36dafa3ede52aa110ae33e57",
+      "bytes": 17004,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-jdbc-mysql-3.33.3.1.jar",
+      "sha256": "d1d2e049b0b5f220a8ab1bdc71e88068d188977344cb36d6c0aaa5985830be00",
+      "bytes": 16745,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-jdbc-oracle-3.33.3.1.jar",
+      "sha256": "74af79dd49bf4bd7b0f6ba9022796de07b5a49996d193140f48a4378003b363d",
+      "bytes": 15800,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-jdbc-postgresql-3.33.3.1.jar",
+      "sha256": "1b583f1885192d1aec2019bd5443a8676c555e6ecbeceae2c785c23416ac5d7b",
+      "bytes": 24472,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-jsonp-3.33.3.1.jar",
+      "sha256": "17e26ffeafcf12a437aa47b96c5458796488788c876ed11b20f0ac156a506642",
+      "bytes": 7543,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-logging-json-3.33.3.1.jar",
+      "sha256": "976ca0f8915510915b5536e5a61770a197e413bd219be44fc1a63650f5553a6d",
+      "bytes": 30290,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-micrometer-3.33.3.1.jar",
+      "sha256": "bd6dc14db404cc0d403664493239df3919ec94442235331f5bab54977e46243a",
+      "bytes": 224962,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-micrometer-opentelemetry-3.33.3.1.jar",
+      "sha256": "76e68f7304769250743f084680e76ab74b720cd9c2dcc4471546088ed741eafa",
+      "bytes": 10690,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-micrometer-registry-prometheus-3.33.3.1.jar",
+      "sha256": "04997bf46d6719c3a969108efbc6e8ba0b66cac9a40093a1defdcdedb64fcfd0",
+      "bytes": 6945,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-mutiny-3.33.3.1.jar",
+      "sha256": "70bb7883e71b547a4b414a484b84d6b1940ca51f665a99936344d34b622ed806",
+      "bytes": 12845,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-narayana-jta-3.33.3.1.jar",
+      "sha256": "ccaf0ab96079619ead02eb274364f7abc5f04415612368c56173e47d2a467a88",
+      "bytes": 88234,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-netty-3.33.3.1.jar",
+      "sha256": "5ec0919801a8501c765eeafc828122b15fd7afb5d9f83d44a72de570595a6131",
+      "bytes": 64850,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-opentelemetry-3.33.3.1.jar",
+      "sha256": "fb435e60b17809cfb1e413aaa793bcf96fb839e5e5f7e81734d7f7840492e1e8",
+      "bytes": 335809,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-rest-3.33.3.1.jar",
+      "sha256": "eb961da2ea88d1008e3b7027dfce932a7e171a4795b88b83e13acc8ffc6607e0",
+      "bytes": 133577,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-rest-common-3.33.3.1.jar",
+      "sha256": "09bb11175b6aaab48941ab2b4bb59703e2ccae084cdb4dd58a6498cff853936f",
+      "bytes": 21166,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-rest-jackson-3.33.3.1.jar",
+      "sha256": "b483c9ecb816c54953cfc38089c0f53b3e2942e49a2856f540a7524f60bb4db8",
+      "bytes": 67191,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-rest-jackson-common-3.33.3.1.jar",
+      "sha256": "1f7b55f8c80d1a91c1dda2e6fd45fbc9dbeb7d358d04b11cf3b8f2133675f2eb",
+      "bytes": 13670,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-security-runtime-spi-3.33.3.1.jar",
+      "sha256": "272cea8da13f2aa068287004a2a275d4780e22cacfa5853d10a9e275f8654638",
+      "bytes": 28756,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-smallrye-context-propagation-3.33.3.1.jar",
+      "sha256": "e7b37229270640ffc93f05b59a06e6ac3ba7e1cbf2649e3490dc272dc4bf942a",
+      "bytes": 18238,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-smallrye-health-3.33.3.1.jar",
+      "sha256": "41ae76413247737b657033e77bd67c609432d9267dc5b63beed8e64fabc715f4",
+      "bytes": 32975,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-smallrye-openapi-3.33.3.1.jar",
+      "sha256": "6e61b1ce00347a0b07015fec8f9c9fc9fb81cd3ac54efa403fa18bf1da8dcf31",
+      "bytes": 47774,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-swagger-ui-3.33.3.1.jar",
+      "sha256": "604b9fbbf33845abcdf7c3e3bec8af2144bb15eee890e8a7c92a5e7e7857fa8b",
+      "bytes": 11021,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-tls-registry-3.33.3.1.jar",
+      "sha256": "ca4b01441b95fed0b3d430772efbb2e4571bb52fb079fba587d09f813b990328",
+      "bytes": 88679,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-tls-registry-spi-3.33.3.1.jar",
+      "sha256": "5b44acbf12b497eb8d45d2f0dcf31842d2402e25ed5304fd637ed04995e38ff4",
+      "bytes": 9430,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-transaction-annotations-3.33.3.1.jar",
+      "sha256": "a1449f7baa9fe432076fa39eddfb3e92e7a363beaf220cb9d6d258316a63d137",
+      "bytes": 6807,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-vertx-3.33.3.1.jar",
+      "sha256": "3d6c524d2ed59c85b220d984056679928fd5c9c946d62aa70dd179b6c8b95157",
+      "bytes": 146996,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-vertx-http-3.33.3.1.jar",
+      "sha256": "9e456242448afc50358dac87c3e3b88228e57ec34068d88010753238e0e59076",
+      "bytes": 745680,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-virtual-threads-3.33.3.1.jar",
+      "sha256": "7578b06359608dd63f102c3d4ab5b1b022c08064c68f50850e437850e45f5fa2",
+      "bytes": 24845,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.quarkus-websockets-next-spi-3.33.3.1.jar",
+      "sha256": "957b137ef945698c38633f4f1cb60eb0de0c45bec9af937bebc99fbc4959b7cd",
+      "bytes": 11745,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.resteasy.reactive.resteasy-reactive-3.33.3.1.jar",
+      "sha256": "69e76f651f757413df84e2f2c20ec864da0fcd61ad63b8f5cbbe8fadfbc3667f",
+      "bytes": 550084,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.resteasy.reactive.resteasy-reactive-common-3.33.3.1.jar",
+      "sha256": "ee369e0801f6d3157a0ade1f8041e67517e84bfd95b6c3a8c1eac3f7a913d05f",
+      "bytes": 322850,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.resteasy.reactive.resteasy-reactive-common-types-3.33.3.1.jar",
+      "sha256": "e41e0b7c42b9a523ac11a8bf5d2cc4acef97207ae54540b65cdf9600767423a4",
+      "bytes": 7098,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.resteasy.reactive.resteasy-reactive-jackson-3.33.3.1.jar",
+      "sha256": "333762d011072849e748e44a282a091dd702d79031a3e51922bf395bc5909dfc",
+      "bytes": 10486,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.resteasy.reactive.resteasy-reactive-vertx-3.33.3.1.jar",
+      "sha256": "4096757720978db2fc604e418deba45b342b697a30bfa86b8d8599cf2133383c",
+      "bytes": 50345,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.security.quarkus-security-2.3.2.jar",
+      "sha256": "9176a0e5b88d7b29ab28b5137d5702d44a248da3d7e7fa80f1b89d4ec64f929a",
+      "bytes": 22419,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.quarkus.vertx.utils.quarkus-vertx-utils-3.33.3.1.jar",
+      "sha256": "94c3c25251bbd956e65b9912a09290430aa005d92c1c0769b1f28c4cbc27db3e",
+      "bytes": 22828,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.reactivex.rxjava3.rxjava-3.1.12.jar",
+      "sha256": "1808a433ef55dcc2965523e512ab914a5d0d727228a2683ed7559d7cccf44e37",
+      "bytes": 2665456,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.setl.rdf-urdna-1.1.jar",
+      "sha256": "c57a2ae551bd301f84faf1010251d96510a40e2b00d883e86cdd2d0dfa6f01ae",
+      "bytes": 20247,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.certs.smallrye-private-key-pem-parser-0.9.3.jar",
+      "sha256": "c00012f3e911e6dbc06059bc7d524a0437150739c32becbb259b78ecf1e75807",
+      "bytes": 19983,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.common.smallrye-common-annotation-2.16.0.jar",
+      "sha256": "ba207442047f6dc4d34c04c24660783337e01f4a19ec90bbfd5362edd0c53738",
+      "bytes": 11228,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.common.smallrye-common-classloader-2.16.0.jar",
+      "sha256": "f009559ef63327a9f070e164449a30a19ec0427fa22af98846eafa9bea04bf1c",
+      "bytes": 10958,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.common.smallrye-common-vertx-context-2.16.0.jar",
+      "sha256": "21c49d8f53f13ea0d5fe1e04df9098662a7301a6464785c421ad70174612c42d",
+      "bytes": 7243,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.config.smallrye-config-3.16.0.jar",
+      "sha256": "70524e786e691af7f88cfc5e40f5289f5fa30b8f79c979df0ca4f10b03d826b4",
+      "bytes": 36117,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.config.smallrye-config-common-3.16.0.jar",
+      "sha256": "13287dfd39c7149483656eb23e41b9517c610e8a00283c7074d788d025331f92",
+      "bytes": 14994,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.config.smallrye-config-core-3.16.0.jar",
+      "sha256": "1e8b1beb6cc7ac048cb56fda27a6c3742a1d97e72c99e4eb2498d2dd152d3c51",
+      "bytes": 382291,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.config.smallrye-config-source-keystore-3.16.0.jar",
+      "sha256": "cf6fe2697bb11e894682d2ec28a94952b5ecde84d5841e567c8d647ae1ecc372",
+      "bytes": 15347,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.config.smallrye-config-validator-3.16.0.jar",
+      "sha256": "cb287d3a88ad6be642b2cbbbd0315c7248dd609c254299ebbf02a7693027b68d",
+      "bytes": 9363,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.jandex-3.5.3.jar",
+      "sha256": "45c2bf6d360cd9d4cb836273af712c5f9734e04b592030c12ac04601e60578a3",
+      "bytes": 405025,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.mutiny-3.1.1.jar",
+      "sha256": "cf8ece4400e1e8b05656a28ba8ef59038147c5539ddc493e3c3016a76ee2a8b8",
+      "bytes": 921990,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.mutiny-smallrye-context-propagation-3.1.1.jar",
+      "sha256": "6ff915c658e8f14bdd59425e697c2bf3c7e409a09f9eb68446af32157f5152e1",
+      "bytes": 21189,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.mutiny-zero-flow-adapters-1.1.1.jar",
+      "sha256": "7e2576e235bcd277c52d67e11d70d1922040bc1b769883d985d68c60597a1ab2",
+      "bytes": 14478,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-auth-common-3.21.6.jar",
+      "sha256": "9c7a87f23536e6126bb11621f53f310cba35277e3ef11ce660efdeb5dd772d60",
+      "bytes": 41755,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-bridge-common-3.21.6.jar",
+      "sha256": "74be8e8871ab43aa3c00e5bb8586bad550741f72b555bb9cb46436c709b7b73b",
+      "bytes": 6527,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-core-3.21.6.jar",
+      "sha256": "08532f133b398e0fa83f09b02092ee065c8e615b1f1f571d9baaf3212f360a8d",
+      "bytes": 341624,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-runtime-3.21.6.jar",
+      "sha256": "ec82f42bb78c1de9049e01826f2823771a34aab115b4d5abc429fccb8f85704e",
+      "bytes": 28526,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-uri-template-3.21.6.jar",
+      "sha256": "b7229ad2802b82a3778aa9370f7357eeb43308c2fc6ab4aca7c4eacb29990703",
+      "bytes": 7899,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-web-3.21.6.jar",
+      "sha256": "72571608458fdb8db83c038190a5cf475046e6e2f1617f9789a108279a9aa593",
+      "bytes": 149762,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-web-common-3.21.6.jar",
+      "sha256": "46ae80e531414734227487db2c85c33386d29e219f271ae0501ececc90f67fe4",
+      "bytes": 19027,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.smallrye-reactive-converter-api-3.0.3.jar",
+      "sha256": "8f47b3cbdef72c5875836011beb02f485918febbb73c15d51738c566eb669253",
+      "bytes": 6001,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.smallrye-reactive-converter-mutiny-3.0.3.jar",
+      "sha256": "5255e5e77d38b0bc166511c3ce7af3a97cf1edeaa19d2946102f929d99273111",
+      "bytes": 7670,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.reactive.vertx-mutiny-generator-3.21.6.jar",
+      "sha256": "84a5a28fada687cb9bd9ec3103be1fed0f447070b9f4577968089a11741a30f6",
+      "bytes": 95991,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.smallrye-context-propagation-2.3.0.jar",
+      "sha256": "bc7d83a626d92d223c9f479c24c80e09df4c801781134ace9d826803b8f8eaff",
+      "bytes": 90414,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.smallrye-context-propagation-api-2.3.0.jar",
+      "sha256": "da0bc273588cefb478e98c4e137f65cc394a54253e35684d5d917060fdc4147c",
+      "bytes": 8739,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.smallrye-context-propagation-jta-2.3.0.jar",
+      "sha256": "40fdf6411e8cd7cdb493d1fdcf884d9304b72db58bc4efd077dfc960f8f1684a",
+      "bytes": 7755,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.smallrye-context-propagation-storage-2.3.0.jar",
+      "sha256": "0fb685500b833b819c934147f0d2f0ab00397df196442aa3fa0b1a6d962dedd0",
+      "bytes": 8493,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.smallrye-fault-tolerance-vertx-6.10.1.jar",
+      "sha256": "f0c4165284893f4477c8b12b2702f1f6f8e4b0a43019bfe98e1d0fe54ad73ff2",
+      "bytes": 9452,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.smallrye-health-4.3.0.jar",
+      "sha256": "7c87ac1db8410ffc286a00e8eadeb60992c7edfa300178ebab0ecfd0781d3ec4",
+      "bytes": 36507,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.smallrye-health-api-4.3.0.jar",
+      "sha256": "a91809158320220877f436a9365ad61f98e0cfe53fa62d95d3eb5a88535dbc67",
+      "bytes": 8034,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.smallrye-health-provided-checks-4.3.0.jar",
+      "sha256": "5ee4c0a40df05ff06216b6761f45d6f9d4caa96cf55345da4be16fd8d89dc863",
+      "bytes": 15976,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.smallrye-open-api-core-4.2.4.jar",
+      "sha256": "a4265049543a12f73971c3b87cd370fda3522b32ef81ad418b0e281bed9ca2ad",
+      "bytes": 633084,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.smallrye.smallrye-open-api-model-4.2.4.jar",
+      "sha256": "52b10d7ce18f765a771211a4606d874692f4f9d90d18ef99e38c12f4bf6fa215",
+      "bytes": 33694,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.vertx.vertx-auth-common-4.5.31.jar",
+      "sha256": "ca50cb70de4f27205dea350fd59c72fb8475b5fe786c19614cea71234d38c5d1",
+      "bytes": 133612,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/io.vertx/vertx-auth-common/pom.properties",
+          "artifactId": "vertx-auth-common",
+          "groupId": "io.vertx",
+          "version": "4.5.31"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.vertx.vertx-bridge-common-4.5.31.jar",
+      "sha256": "35dcc0680e11a72d6e84d37c67279bdbb78be0b2a585bef2336547371758f737",
+      "bytes": 10923,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/io.vertx/vertx-bridge-common/pom.properties",
+          "artifactId": "vertx-bridge-common",
+          "groupId": "io.vertx",
+          "version": "4.5.31"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.vertx.vertx-codegen-4.5.31.jar",
+      "sha256": "15fcb6d72ab33e3361bb9a6a23fa082a195f6fdb1697c50409218193368d2685",
+      "bytes": 204253,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/io.vertx/vertx-codegen/pom.properties",
+          "artifactId": "vertx-codegen",
+          "groupId": "io.vertx",
+          "version": "4.5.31"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.vertx.vertx-core-4.5.31.jar",
+      "sha256": "0402e5f4bfc26a33e56af25139dbd515dc8d7701975a0a329e1687f1b98ef89d",
+      "bytes": 1684397,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/io.vertx/vertx-core/pom.properties",
+          "artifactId": "vertx-core",
+          "groupId": "io.vertx",
+          "version": "4.5.31"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.vertx.vertx-grpc-4.5.31.jar",
+      "sha256": "a986945027763fa5333d7614e5d681bd6ec7861c20ef79282315e332ac30051e",
+      "bytes": 33129,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/io.vertx/vertx-grpc/pom.properties",
+          "artifactId": "vertx-grpc",
+          "groupId": "io.vertx",
+          "version": "4.5.31"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.vertx.vertx-grpc-client-4.5.31.jar",
+      "sha256": "2de30aef2300428b187e750704eea39702fbb62eaec3632cc09b2e1d42153609",
+      "bytes": 29990,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/io.vertx/vertx-grpc-client/pom.properties",
+          "artifactId": "vertx-grpc-client",
+          "groupId": "io.vertx",
+          "version": "4.5.31"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.vertx.vertx-grpc-common-4.5.31.jar",
+      "sha256": "7df9621883d5d839c8fabae967c36c55bfd133b89312843b6c1271132892a8a3",
+      "bytes": 41298,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/io.vertx/vertx-grpc-common/pom.properties",
+          "artifactId": "vertx-grpc-common",
+          "groupId": "io.vertx",
+          "version": "4.5.31"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.vertx.vertx-grpc-server-4.5.31.jar",
+      "sha256": "9772188c3a0d67b45a8e4c7149d7f3ffe760d65648ae05c85508d9b58e6bfa29",
+      "bytes": 30697,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/io.vertx/vertx-grpc-server/pom.properties",
+          "artifactId": "vertx-grpc-server",
+          "groupId": "io.vertx",
+          "version": "4.5.31"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.vertx.vertx-web-4.5.31.jar",
+      "sha256": "ad6a2dd5a1bafeb40f235e67d1e2f63c89fab78adf6684e002b52dc9c614a2d8",
+      "bytes": 363585,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/io.vertx/vertx-web/pom.properties",
+          "artifactId": "vertx-web",
+          "groupId": "io.vertx",
+          "version": "4.5.31"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/io.vertx.vertx-web-common-4.5.31.jar",
+      "sha256": "000056cb34c7cbf015dfd1a8d7a0559c1c4392d0ca14d6ab85018b9f438e510c",
+      "bytes": 31964,
+      "relevantPomMetadata": [
+        {
+          "entry": "META-INF/maven/io.vertx/vertx-web-common/pom.properties",
+          "artifactId": "vertx-web-common",
+          "groupId": "io.vertx",
+          "version": "4.5.31"
+        }
+      ]
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.activation.jakarta.activation-api-2.1.4.jar",
+      "sha256": "c9db52100ce6c8aac95cc39075f95720d2e561b11f8051b81c121ad4effd7004",
+      "bytes": 67380,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.annotation.jakarta.annotation-api-3.0.0.jar",
+      "sha256": "b01f55552284cfb149411e64eabca75e942d26d2e1786b32914250e4330afaa2",
+      "bytes": 26378,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.el.jakarta.el-api-6.0.1.jar",
+      "sha256": "7e84b5bed49de32b79cc5e85d90b6f5adb1a953ac67283adbb41c1e297f9c605",
+      "bytes": 93369,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.enterprise.jakarta.enterprise.cdi-api-4.1.0.jar",
+      "sha256": "c42c808f17925129a0800f618febe050d966e181a4c7384c8a5e7a0283d68699",
+      "bytes": 159576,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.enterprise.jakarta.enterprise.lang-model-4.1.0.jar",
+      "sha256": "bb56f571f60d2862b2387d5468fe8f5540f8094727283ed991f89082708095ee",
+      "bytes": 27518,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.inject.jakarta.inject-api-2.0.1.jar",
+      "sha256": "f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c",
+      "bytes": 10681,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.interceptor.jakarta.interceptor-api-2.2.0.jar",
+      "sha256": "d240d72b4dd38a2e431c804079810010cb97903678fa5f987fb7434878b04398",
+      "bytes": 24005,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.mail.jakarta.mail-api-2.1.1.jar",
+      "sha256": "1d69d8aaa6ab704d4ce3bd156cd5542060849a409b1e0463163d8508356857cc",
+      "bytes": 237460,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.persistence.jakarta.persistence-api-3.2.0.jar",
+      "sha256": "be8a26b0e75c84c1b7600f759256fbc68d60333d89ec0ce3f784fc3ffa09aa8c",
+      "bytes": 195939,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.resource.jakarta.resource-api-2.1.0.jar",
+      "sha256": "4d26ad86a5f72cd2f9c4a31cc4524f7bf3ec0ff74416f081f8642b7ce8041067",
+      "bytes": 65231,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.transaction.jakarta.transaction-api-2.0.1.jar",
+      "sha256": "50c0a7c760c13ae6c042acf182b28f0047413db95b4636fb8879bcffab5ba875",
+      "bytes": 28607,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.validation.jakarta.validation-api-3.1.1.jar",
+      "sha256": "63ce00156388c365f3ac1be71fcfaf114682fc0c452020b5df6e7ec236e142ab",
+      "bytes": 106136,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.ws.rs.jakarta.ws.rs-api-3.1.0.jar",
+      "sha256": "6b3b3628b8b4aedda0d24c3354335e985497d8ef3c510b8f3028e920d5b8663d",
+      "bytes": 154815,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.xml.bind.jakarta.xml.bind-api-4.0.5.jar",
+      "sha256": "5e489b6c874c4119e003ff1403db523ee3a8959ec499f3de29e77245efccf216",
+      "bytes": 131219,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/jakarta.xml.soap.jakarta.xml.soap-api-3.0.0.jar",
+      "sha256": "33124e98d724b69e1673a61675c205b58c372605f4254d455b12b37398219a37",
+      "bytes": 37299,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/net.bytebuddy.byte-buddy-1.17.8.jar",
+      "sha256": "2b5ddc8c1f4234bdb7cb45338a8e10a13e0e3ca473e91d5d821d681127ea8ba1",
+      "bytes": 9018553,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/net.java.dev.jna.jna-5.8.0.jar",
+      "sha256": "930273cc1c492f25661ea62413a6da3fd7f6e01bf1c4dcc0817fc8696a7b07ac",
+      "bytes": 1729586,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.antlr.antlr4-runtime-4.13.2.jar",
+      "sha256": "dd3e8a13a2d669bf84fb8d834de35ce4875f27157698d206241ec8488aadcaf7",
+      "bytes": 326307,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.apache.commons.commons-collections4-4.5.0.jar",
+      "sha256": "00f93263c267be201b8ae521b44a7137271b16688435340bf629db1bac0a5845",
+      "bytes": 898652,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.apache.commons.commons-lang3-3.20.0.jar",
+      "sha256": "69e5c9fa35da7a51a5fd2099dfe56a2d8d32cf233e2f6d770e796146440263f4",
+      "bytes": 713862,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.apache.httpcomponents.httpclient-4.5.14.jar",
+      "sha256": "c8bc7e1c51a6d4ce72f40d2ebbabf1c4b68bfe76e732104b04381b493478e9d6",
+      "bytes": 785639,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.apache.httpcomponents.httpcore-4.4.16.jar",
+      "sha256": "6c9b3dd142a09dc468e23ad39aad6f75a0f2b85125104469f026e52a474e464f",
+      "bytes": 327891,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.apache.santuario.xmlsec-3.0.6.jar",
+      "sha256": "395eccc3496063ac7b1d6af2422a11670ee5ded807f51542818eccd5fbb5e20c",
+      "bytes": 1197468,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.bouncycastle.bcpkix-jdk18on-1.84.jar",
+      "sha256": "c87f16ed9e5ec61bc94151e9f3646ac44e50cd448121ce84367fa4b7ec7ec1bb",
+      "bytes": 1165716,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.bouncycastle.bcprov-jdk18on-1.84.jar",
+      "sha256": "64d6c5a6121fcd927152dd182cbed39afe0fda641a970d9bcc0c9cb1858b2731",
+      "bytes": 8919063,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.bouncycastle.bcutil-jdk18on-1.84.jar",
+      "sha256": "b374e16963421fb9cfb01cc20d7ad8fd2f8b8188e3eef0ec0a8965e245f7619a",
+      "bytes": 707499,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.eclipse.angus.angus-activation-2.0.3.jar",
+      "sha256": "a6bd35c538cf90fff941ad6258c40c08fca0b5c9c3f536c657114f27ce0527a7",
+      "bytes": 26729,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.eclipse.angus.angus-mail-2.0.5.jar",
+      "sha256": "b4d8c30d35f455def6c7a05fe595a1e62ea2b80cac3efec1e9ccf4118b23168a",
+      "bytes": 501288,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.eclipse.microprofile.config.microprofile-config-api-3.1.1.jar",
+      "sha256": "0d4eaa7e17730e153b1e0613104a989af7d7a0d4ba4d19c84c71862bff993773",
+      "bytes": 17943,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.eclipse.microprofile.context-propagation.microprofile-context-propagation-api-1.3.jar",
+      "sha256": "69ccc04487e87779d4970aa50c673cc34a9df080c1c0e8d8eab2e8b46f825cf4",
+      "bytes": 16291,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.eclipse.microprofile.health.microprofile-health-api-4.0.1.jar",
+      "sha256": "b89ca4b6c4f7a044250d31c0673f6bc221e40fd669fc5871dbad5e5a0769ca47",
+      "bytes": 16543,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.eclipse.microprofile.openapi.microprofile-openapi-api-4.1.1.jar",
+      "sha256": "1e333f5bd206245e7a4d0a3dd5f2bab1820fc3b950b77e96008fcdb7b77d9150",
+      "bytes": 113358,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.eclipse.microprofile.reactive-streams-operators.microprofile-reactive-streams-operators-api-3.0.1.jar",
+      "sha256": "2eb30081f2674e674c6587592747a81a4d92d2da1a735be5f645901de60f9f8d",
+      "bytes": 42477,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.freemarker.freemarker-2.3.32.jar",
+      "sha256": "04d65ec1bde6cea20e3495d5e78ef96ab774d9936434861d3254bd88e7e94f92",
+      "bytes": 1736381,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.glassfish.expressly.expressly-6.0.0.jar",
+      "sha256": "86ee67c7040278bac5204b571f738b8b859f014ceb5f896bd935bacbdaf33cb9",
+      "bytes": 173181,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.glassfish.jaxb.jaxb-core-4.0.8.jar",
+      "sha256": "a6a7cc786517910bc32b9c244be59fc6505e4d4bd0007b30b59971a826dc90d7",
+      "bytes": 139562,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.glassfish.jaxb.jaxb-runtime-4.0.8.jar",
+      "sha256": "bd28a86e25faf0e8e5084c7508aa133e04ba63ae1e530e5b658577c8a54cdd94",
+      "bytes": 922318,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.glassfish.jaxb.txw2-4.0.8.jar",
+      "sha256": "cb5db9b27cd43e45bca919ac3b7f13eebba3e0916c942a52f4f37fea74ba7dfc",
+      "bytes": 73274,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.hdrhistogram.HdrHistogram-2.2.2.jar",
+      "sha256": "22d1d4316c4ec13a68b559e98c8256d69071593731da96136640f864fa14fad8",
+      "bytes": 177206,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.hibernate.local-cache.quarkus-local-cache-0.5.0.jar",
+      "sha256": "a354385a0411ed4662e5e2b748c3e723a7fcdb66754fd72f18dec171cface689",
+      "bytes": 67433,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.hibernate.models.hibernate-models-1.0.1.jar",
+      "sha256": "bdb42c4979001742ebc098f3b206dd1057dc93be55c50a31c3f027d3eed06412",
+      "bytes": 217761,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.hibernate.orm.hibernate-community-dialects-7.2.19.Final.jar",
+      "sha256": "687a81aef5ece6ad8cb25f9a31e5a77c759ef9aba3d437e7289755467c675398",
+      "bytes": 807302,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.hibernate.orm.hibernate-core-7.2.19.Final.jar",
+      "sha256": "92a8428e630c35375aa888587ff200bb83ac6c6004449346ec083db73e36c986",
+      "bytes": 14459756,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.hibernate.orm.hibernate-graalvm-7.2.19.Final.jar",
+      "sha256": "868e7d5b145d01e540e9202bb423afaff5e1d8aa486603ee408e4d1f305f6c52",
+      "bytes": 8343,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.hibernate.validator.hibernate-validator-9.1.0.Final.jar",
+      "sha256": "4dea20c780d12e8ad6e1fe7d695460af74f8668df9eb58910991919194412188",
+      "bytes": 1404084,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.infinispan.infinispan-api-16.0.14.jar",
+      "sha256": "6a7e17bdccb7d9578fb268c894793ea6d0fd0d9c77aa5b4b6243263e6e019759",
+      "bytes": 122955,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.infinispan.infinispan-cachestore-remote-16.0.14.jar",
+      "sha256": "a1cd00c8c7a46c7285dbe9fd8f4029c5761c2c887f1ba79b8fd74eff11ea0fff",
+      "bytes": 146352,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.infinispan.infinispan-client-hotrod-16.0.14.jar",
+      "sha256": "7aa1ced17854064b0a0927925b4cc800c6362ac94e5a15eddaeb2f26212dd79d",
+      "bytes": 796169,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.infinispan.infinispan-commons-16.0.14.jar",
+      "sha256": "524263cf28153814de25858eb95e00d36184279acc30e9cfba743f9397254daa",
+      "bytes": 850072,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.infinispan.infinispan-core-16.0.14.jar",
+      "sha256": "0c54e6a5655f23909e40ae1c1335481c4332b9269543bd38fd3030e5f06ded35",
+      "bytes": 5981853,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.infinispan.infinispan-counter-api-16.0.14.jar",
+      "sha256": "4bfda70b4e04fb1816112ebab01836eb72214f8369bc768058296d3494e6465b",
+      "bytes": 29304,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.infinispan.infinispan-multimap-16.0.14.jar",
+      "sha256": "ead0e3f0e18533def8f96267af329ce41ee9b107033b510def8651db122be7fc",
+      "bytes": 261162,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.infinispan.protostream.protostream-6.0.7.jar",
+      "sha256": "fa630f97729bd321b1feb457b3bf5ad938dfe32bef1095010ffc51ee810ce4b6",
+      "bytes": 553384,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.infinispan.protostream.protostream-types-6.0.7.jar",
+      "sha256": "e05cefff474b59796e765f72f47a59fbc9bb25c91ef3b8051eb2620a61a9c731",
+      "bytes": 160090,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jboss.invocation.jboss-invocation-2.0.0.Final.jar",
+      "sha256": "ef9beb3bff85930710b367b6f84d40bf72128898ca6ccdf3775537793b74b067",
+      "bytes": 75789,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jboss.jboss-transaction-spi-8.0.0.Final.jar",
+      "sha256": "07e4e62ceae075a8c11a715d89b19992c879f505b48be6b2727f5be798562ae1",
+      "bytes": 32407,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jboss.logging.commons-logging-jboss-logging-2.0.0.Final.jar",
+      "sha256": "ce4088809c7512228cb34b54686223dec45532b97366a36830f82926b58a4c6c",
+      "bytes": 18899,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jboss.narayana.jta.narayana-jta-7.3.3.Final.jar",
+      "sha256": "02acd3d1c8adbf558cba4ab10e816097fa783e1b0f77eef1ce05321e03b4b1dd",
+      "bytes": 1087220,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jboss.narayana.jts.narayana-jts-integration-7.3.3.Final.jar",
+      "sha256": "5a88eead14ad4cd2a2142fe7ab618cda20450de1f7d6e9c4092395fcdde478f5",
+      "bytes": 49418,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jboss.slf4j.slf4j-jboss-logmanager-2.0.2.Final.jar",
+      "sha256": "ba469a975e9d1e79f34a8baa1a0afa8b01bbd8cf080537c0e0899476d31db84b",
+      "bytes": 14764,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jboss.threads.jboss-threads-3.9.2.jar",
+      "sha256": "ac0fd044686122014143267d3688245852ca07c6c4474320c9172062a5af6634",
+      "bytes": 132694,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jctools.jctools-core-4.0.5.jar",
+      "sha256": "d65e5f38bcd0984e26f87187687f1f70dd52740c4d5e046f8d104e01ab5db95f",
+      "bytes": 493530,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jgroups.jgroups-5.5.5.Final.jar",
+      "sha256": "4a6580b472b71451304d1c522d10d497d36a7e4402ec93fd537b892331a0ae4b",
+      "bytes": 2473781,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jspecify.jspecify-1.0.0.jar",
+      "sha256": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab",
+      "bytes": 3819,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.jvnet.staxex.stax-ex-2.0.1.jar",
+      "sha256": "5fd7292ace0d39c264f6ba4f2cfcd92cc72453e5fb13561fb0e5570405fe9455",
+      "bytes": 38475,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-account-ui-26.7.3.jar",
+      "sha256": "865d073b629258209be27ace173199f61bc8e0997c2511b79792d2caceadadeb",
+      "bytes": 2906021,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-admin-ui-26.7.3.jar",
+      "sha256": "693a7ae0072c5603dd1b42ddf8b7bdd216ec058185b9df3257c7965d8fffb666",
+      "bytes": 6446173,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-admin-v2-api-26.7.3.jar",
+      "sha256": "20027710533f7ad3006ef3d0f6db03be0473bc0cf678935de6160af4b1ff5e2e",
+      "bytes": 38228,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-admin-v2-services-26.7.3.jar",
+      "sha256": "36be353b24b9be2712c959c39ae2120195c5f72e314b44cec957f13c7171c5c9",
+      "bytes": 142197,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-authz-policy-common-26.7.3.jar",
+      "sha256": "a8f31f4e26551b05635d1c6462454176c3337caa24f7c11c7dc97f51b481c93e",
+      "bytes": 92763,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-authzen-services-26.7.3.jar",
+      "sha256": "4de35679d2cb8f7c929a9839343059a2154b873b8e07e548fd754710c58519e7",
+      "bytes": 31078,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-common-26.7.3.jar",
+      "sha256": "3efe76b71318bb6a313644de022f452c1b7f4de62998a64c8da9c74de0241128",
+      "bytes": 200717,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-config-api-26.7.3.jar",
+      "sha256": "59bd5b12e73fcbee7c42cd13b1a44ef58904de510e6dde4639d27e07d2194fa3",
+      "bytes": 89476,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-core-26.7.3.jar",
+      "sha256": "1e87be2515b29de06924247e70f6ca3a5945a481289d1ba4b181b11ebdfd6f71",
+      "bytes": 569423,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-crypto-default-26.7.3.jar",
+      "sha256": "35c0b153585ebda3aff4277093ef379e53dc36dbb369b20c70aaab6ab97211f8",
+      "bytes": 50231,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-crypto-fips1402-26.7.3.jar",
+      "sha256": "59c55761af3a428ce56b1d97b77b0237febd6f06b71c184c19caf7a2997503b9",
+      "bytes": 53372,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-ipatuura-federation-26.7.3.jar",
+      "sha256": "51dd7ff2a528d8edd4dce72d343d3afe37d55d9892138e09de60d14d42aeea98",
+      "bytes": 32352,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-kerberos-federation-26.7.3.jar",
+      "sha256": "685923174fedf091cbb1c65df07009b7af61c3a81e1c197a92c1ba7866280ece",
+      "bytes": 27906,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-ldap-federation-26.7.3.jar",
+      "sha256": "bcf64d998554cc3b5e230153b48f3fb88338887469d0c0e7cb5dce2cefc84092",
+      "bytes": 327295,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-infinispan-26.7.3.jar",
+      "sha256": "a4a0e2148c9795bf12f365932a0e6e2f4fb25c1339d8cc2b08bf5e66b8541652",
+      "bytes": 1249517,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-jpa-26.7.3.jar",
+      "sha256": "9bc1906093b0d1c049a93d594ae0a45286618bd6f7f7c2810e4e54f9d17850e3",
+      "bytes": 1027558,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-26.7.3.jar",
+      "sha256": "0e8a28347e0b77a758c6125a866ca7f681c91fe02416be20ba35a72a34f12415",
+      "bytes": 63972,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-private-26.7.3.jar",
+      "sha256": "bc50fbd743d2c5dc5f7c68c0fccbdece69e3d26639e81ff6c180fe3734f22859",
+      "bytes": 268748,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-model-storage-services-26.7.3.jar",
+      "sha256": "ccd54b0bfafa1003649c4196b59fb62e1b5effd92cf5e344e76beb94ce741f2d",
+      "bytes": 56656,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-quarkus-server-26.7.3.jar",
+      "sha256": "2eab74348809dc2e90a6660a6581a14a52e04800efa832f325ea2d9768973823",
+      "bytes": 453996,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-rest-admin-ui-ext-26.7.3.jar",
+      "sha256": "094f73528cebda03d11851196f9dd0371ef6095554997c540e3d6f0cba41ea48",
+      "bytes": 68691,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-saml-core-26.7.3.jar",
+      "sha256": "484d5e0df556e52abc0dea831c65fb361751f1acf92a055dfdb1bd4f9f6f843e",
+      "bytes": 583407,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-saml-core-public-26.7.3.jar",
+      "sha256": "d4eec27bb3edf2e5aca359b1c579d342f2fcf49f0cac3eae6cf152a8e3f64080",
+      "bytes": 254404,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-scim-core-26.7.3.jar",
+      "sha256": "9473b85e0b1987128a8980d0a1a9fef58a03e363fe38937c93093880fbb84506",
+      "bytes": 111158,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-scim-model-26.7.3.jar",
+      "sha256": "7c30acef90bcef587388839f4c2fa354deae99f6e6f2feead7fe01a6a1efb267",
+      "bytes": 59984,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-scim-services-26.7.3.jar",
+      "sha256": "393c9afeb6baeb30305aef5dcdf87cb412155fdde2c55bcfa96038365335c725",
+      "bytes": 17663,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-server-spi-26.7.3.jar",
+      "sha256": "674d3b223c4660157d2add3d9a3b5add4345a646a8517e922507b688eb74c964",
+      "bytes": 328027,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-server-spi-private-26.7.3.jar",
+      "sha256": "b2ea7aab2eaba5f046c81b61cbbaf2c35f24180c6b85d126aa57a1cb7d05741e",
+      "bytes": 934705,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-services-26.7.3.jar",
+      "sha256": "245127ecae84d509522ec01aefdc7b13aaa577ff645498bac43debc981ef0630",
+      "bytes": 4544168,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-ssf-core-26.7.3.jar",
+      "sha256": "145792db706005ec574b60c9b38ea7d2354a9acb5db14c8203ec9919c60a1991",
+      "bytes": 75014,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-ssf-services-26.7.3.jar",
+      "sha256": "c5b4c5cca1dac4d7e31399123d92c8a05a126eec669161937b6bff08bd4453a2",
+      "bytes": 28251,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-ssf-transmitter-26.7.3.jar",
+      "sha256": "27d1f4052bed475f2c3cef7659b585c7f1b1799893f37c368d8d21337c8cf6c3",
+      "bytes": 214608,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-sssd-federation-26.7.3.jar",
+      "sha256": "092dfede5c4e2b9a153e1da202fed6eb1a37e4f59ab0e7ebf4082e5c58aa4efe",
+      "bytes": 429069,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-themes-26.7.3.jar",
+      "sha256": "32189fbfb6da000a9be7836169790ddf7400ebe68c1b06b8ac31f220fed9f829",
+      "bytes": 2317751,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.keycloak.keycloak-themes-vendor-26.7.3.jar",
+      "sha256": "12c8ad49264ec998b2339500b364f80715fec0218fea1a1899fbb6ce218f2351",
+      "bytes": 15413675,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.latencyutils.LatencyUtils-2.0.3.jar",
+      "sha256": "a32a9ffa06b2f4e01c5360f8f9df7bc5d9454a5d373cd8f361347fa5a57165ec",
+      "bytes": 29779,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.liquibase.liquibase-core-4.33.0.jar",
+      "sha256": "729691fdd26761f6264e4332a6a657e907c626863da8b4a0bf3bd22dbeebdc6b",
+      "bytes": 3211978,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.locationtech.jts.jts-core-1.19.0.jar",
+      "sha256": "dbb8644cf324123d06c27aa982f570811e10b4cb1f2aef893b00de237d33efc0",
+      "bytes": 1103721,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.mariadb.jdbc.mariadb-java-client-3.5.9.jar",
+      "sha256": "11e3bb5bbf8ef0e806ae4d6c5d5033fedf7262cc777f0190bde8a2f3c8e6bd8d",
+      "bytes": 785411,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.openjdk.nashorn.nashorn-core-15.4.jar",
+      "sha256": "6f816e84dfd63a81d4eaa7829c08337bbaff3ec683ff3bf6bbd90d017a00dc6f",
+      "bytes": 2167292,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.ow2.asm.asm-9.9.1.jar",
+      "sha256": "6f3828a215c920059a5efa2fb55c233d6c54ec5cadca99ce1b1bdd10077c7ddd",
+      "bytes": 126252,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.ow2.asm.asm-analysis-9.9.1.jar",
+      "sha256": "6260bffc8ec008dd1b713702c7994e2c94d188a3da5bef9e87278a16df6a7522",
+      "bytes": 35170,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.ow2.asm.asm-commons-9.9.1.jar",
+      "sha256": "c2319e014ce7199f2b7f7d56d6bb991863168c3f4b6cd6c9f542a4937ef7ef88",
+      "bytes": 75010,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.ow2.asm.asm-tree-9.9.1.jar",
+      "sha256": "0f3555096b720b820bbacab0b515589bee0200bee099bda14c561738ae837ba1",
+      "bytes": 51963,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.ow2.asm.asm-util-9.9.1.jar",
+      "sha256": "c5ebbbeaf68126af094b42fa4800f59bc4413abd02d95b9aefad722cd257e207",
+      "bytes": 94643,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.postgresql.postgresql-42.7.13.jar",
+      "sha256": "6e0e4cc2d8cae902084f8a2b18728b073a6fd9d1f87c9d8bff8f298c18185b93",
+      "bytes": 1220948,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.reactivestreams.reactive-streams-1.0.4.jar",
+      "sha256": "f75ca597789b3dac58f61857b9ac2e1034a68fa672db35055a8fb4509e325f28",
+      "bytes": 11640,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.slf4j.slf4j-api-2.0.17.jar",
+      "sha256": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "bytes": 69908,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.snakeyaml.snakeyaml-engine-2.6.jar",
+      "sha256": "2652199af40c9aa2f1782400d2dfbbf4e5226208c4e05ddd4059c3d6d9cd1505",
+      "bytes": 292124,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.twitter4j.twitter4j-core-4.1.2.jar",
+      "sha256": "72602281c06d97e92c63ce84bd93d007642fa0bff852f63df12fd123b990b1f2",
+      "bytes": 327679,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.common.wildfly-common-1.5.4.Final-format-001.jar",
+      "sha256": "9884f791f815d0fed8c51771af71164afd48f96e621f26009f9ebe791c053f1b",
+      "bytes": 307126,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-asn1-2.8.4.Final.jar",
+      "sha256": "64d1497bbc8db40a6670aa4afd994824f623c0bcea1793a845854cd2b129e8b2",
+      "bytes": 37437,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-auth-2.8.4.Final.jar",
+      "sha256": "99d4b3b160462b92bbf0145aba15aa73a5f55c67daf5fbdb102ef81de51c9ccf",
+      "bytes": 13712,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-auth-server-2.8.4.Final.jar",
+      "sha256": "218a83653edd8641a557866b4cae75f465a06a86fe04c064363b6a53c6a25f39",
+      "bytes": 280018,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-base-2.8.4.Final.jar",
+      "sha256": "8592f165204257a0362f2245afcc145b88717ca547670d8efc2bf97a45191371",
+      "bytes": 31935,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-credential-2.8.4.Final.jar",
+      "sha256": "b13e94dd2319886ea2126692c44c4823531e9f36635467062b19c738be55de6b",
+      "bytes": 138862,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-http-2.8.4.Final.jar",
+      "sha256": "a3f92b9ef88b7528afe7fdf42d0b9ff9b419d49033d6f0265bbfafe113f7c1ae",
+      "bytes": 34615,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-keystore-2.8.4.Final.jar",
+      "sha256": "54bf42ad820cf02d9d8ce7974d3a067746268af669706c986fad1973aeeb8fc6",
+      "bytes": 48216,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-mechanism-2.8.4.Final.jar",
+      "sha256": "a78c22f22d2d286854c5f60ca05d958a708a7a2f4288881b30a5088dece4555d",
+      "bytes": 38878,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-mechanism-digest-2.8.4.Final.jar",
+      "sha256": "b7fa81af414af1b2f309792bde8b557b70194ded96ede5091a40ec8d5f7d1c24",
+      "bytes": 12754,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-mechanism-gssapi-2.8.4.Final.jar",
+      "sha256": "6b9cec364859d9816794ac11f9ddb3a08fb946625515b8cbfb2d88e867e50e71",
+      "bytes": 18050,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-mechanism-oauth2-2.8.4.Final.jar",
+      "sha256": "d3d151db3c57113149678e3cb1315e90fece2f5cd5b2e717716bee09b4420a60",
+      "bytes": 9334,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-mechanism-scram-2.8.4.Final.jar",
+      "sha256": "dd9176592894d1fcda9d776e364bf1ef428e1c8960157a0cea5ee8318ee619c0",
+      "bytes": 25642,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-password-impl-2.8.4.Final.jar",
+      "sha256": "95d9843470d3d46d179e94e6fd5ab921abd6f760ca2d08cb0572c5408297da43",
+      "bytes": 102841,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-permission-2.8.4.Final.jar",
+      "sha256": "625f49352ef7bb31c8cfc28000bfb56d6395a855dcef580e442114cbc752bb28",
+      "bytes": 62914,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-provider-util-2.8.4.Final.jar",
+      "sha256": "50eb9b8faec72443d547e670b0c7d8975175e2808708309ac8c9c5daea83c036",
+      "bytes": 15454,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-sasl-2.8.4.Final.jar",
+      "sha256": "eb9639aeceffdd1ad274f286221af91ed01d150cbc641b6365b543a7a402f692",
+      "bytes": 164061,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-sasl-digest-2.8.4.Final.jar",
+      "sha256": "af8c9003901f8150ccec0c728e8df55edae6411dd4da2ef788ece4a2e7ef6c21",
+      "bytes": 36821,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-sasl-external-2.8.4.Final.jar",
+      "sha256": "a79141c7d5fc1c1c06e7ad7505cd6b4f7da6404867fe873a26f7ba49e9c24593",
+      "bytes": 11621,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-sasl-gs2-2.8.4.Final.jar",
+      "sha256": "9507b5a30cbc3be26d9761a4cf0474c8a5f1fecb8a68ea54a62074197781b41b",
+      "bytes": 24663,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-sasl-gssapi-2.8.4.Final.jar",
+      "sha256": "d09e051bb13218e9ff81c4761c1b1c07f6f26ee2be1f4e79de54455e30f01318",
+      "bytes": 27997,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-sasl-oauth2-2.8.4.Final.jar",
+      "sha256": "d0bcb08b70f6b6548ca309e2897e5577bb05993c19fc496ffde02e7e7009ced9",
+      "bytes": 10930,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-sasl-plain-2.8.4.Final.jar",
+      "sha256": "bf9dc79b5fa4dbfb629e1d015d1d9e96ff2be33872ff93e4e64ab32251c09a86",
+      "bytes": 13586,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-sasl-scram-2.8.4.Final.jar",
+      "sha256": "56efc66ed1e328fe42fa1b1ba2f04bbcb5f4705a44547387d188d27064f84feb",
+      "bytes": 16729,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-security-manager-action-2.8.4.Final.jar",
+      "sha256": "4f7f159228fb74d964ce63e5ff33788d7a1436b4af19d8ed32137067d5eb6c6a",
+      "bytes": 19704,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-ssl-2.8.4.Final.jar",
+      "sha256": "3e26e339c730d58d0bb06796612169e239d92e77f1d83b400325c83e63017d6a",
+      "bytes": 179184,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-util-2.8.4.Final.jar",
+      "sha256": "b5608a2f8ae6e744126621c7a3e97c79ff0cfbdc37dabc1b152fe9b3359fc72a",
+      "bytes": 35705,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-x500-2.8.4.Final.jar",
+      "sha256": "9a47152290a8839418c10ca6af52f6517138446d046fc73fad5749bc92ab3068",
+      "bytes": 37010,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-x500-cert-2.8.4.Final.jar",
+      "sha256": "050bc15807856602cb4055470379401bebd16a99ca769b13332a396f5047d86b",
+      "bytes": 68358,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.wildfly.security.wildfly-elytron-x500-cert-util-2.8.4.Final.jar",
+      "sha256": "cb0b69656defca413a031c580d28599895d1d8da1a175ed309d595781787a276",
+      "bytes": 8289,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/lib/main/org.yaml.snakeyaml-2.0.jar",
+      "sha256": "880c9d896e4b74a06c549c15ca496450165d6909fa15d7e662bee8f6a66d7afa",
+      "bytes": 334803,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/quarkus/generated-bytecode.jar",
+      "sha256": "ea18222d408ba838f038d0a93cb267a0d930148bbb447087ddab4e158965b650",
+      "bytes": 2350310,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/quarkus/transformed-bytecode.jar",
+      "sha256": "d7afe9b4345b371af9d1efc995c8ee7c957108fb1c068703bb992e507b3062e9",
+      "bytes": 722671,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/lib/quarkus-run.jar",
+      "sha256": "fd96c9c8d84256229f3b78b714a181aa4f1bdc5813506caedf461db3bde1eb79",
+      "bytes": 728,
+      "relevantPomMetadata": []
+    },
+    {
+      "path": "/opt/keycloak/providers/otziv-security-generation.jar",
+      "sha256": "30c3ab782f32654d75ee635289d630836e5d6175aba0cdc1b74ee7185bd70cbe",
+      "bytes": 20190,
+      "relevantPomMetadata": []
+    }
+  ]
+}

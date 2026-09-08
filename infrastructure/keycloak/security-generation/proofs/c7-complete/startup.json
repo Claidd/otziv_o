@@ -1,0 +1,32 @@
+{
+  "schema": "otziv-issuer-image-startup-v1",
+  "startedAt": "2026-09-08T01:31:05.443Z",
+  "production": false,
+  "image": "sha256:d773e1d0de1ef972ba01443a8217d23d6060d2b20d474b3ff84ae2dc840baa54",
+  "checks": [
+    {
+      "name": "start_imports_and_serves_real_postgres_realm",
+      "passed": true
+    },
+    {
+      "name": "start_has_no_missing_classpath_error",
+      "passed": true
+    },
+    {
+      "name": "start-dev_imports_and_serves_real_postgres_realm",
+      "passed": true
+    },
+    {
+      "name": "start-dev_has_no_missing_classpath_error",
+      "passed": true
+    }
+  ],
+  "imageId": "sha256:d773e1d0de1ef972ba01443a8217d23d6060d2b20d474b3ff84ae2dc840baa54",
+  "postgresImage": {
+    "reference": "sha256:84631285605c9dea134ddb89a1986ba30bcdfef1f16a5c1664b06bb6f9303097",
+    "id": "sha256:84631285605c9dea134ddb89a1986ba30bcdfef1f16a5c1664b06bb6f9303097"
+  },
+  "result": "PASS",
+  "cleanup": "PASS",
+  "finishedAt": "2026-09-08T01:32:22.894Z"
+}

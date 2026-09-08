@@ -284,4 +284,30 @@ Exact package/version and listed CVE only; no risk acceptance.</notes>
     <packageUrl>pkg:maven/org.jetbrains.kotlin/kotlin-stdlib-jdk8@2.2.21</packageUrl>
     <cve>CVE-2026-53914</cve>
   </suppress>
+  <suppress>
+    <notes>Apache CNA identifies CVE-2023-37895 in jackrabbit-webapp, jackrabbit-standalone and jackrabbit-standalone-components; CVE-2025-58782 identifies jackrabbit-core and jackrabbit-jcr-commons. This exact jackrabbit-webdav test dependency is a distinct Maven artifact. Its 265 classes contain no RMI, RemoteBindingServlet or BeanUtils references. This is component identity correction, not test-scope or reachability acceptance.
+Artifact SHA-256: 1d876e7419e223dd90e921b3c122d0164b33c0e4f060b07aa761fcb0eb7bb5c8
+Primary evidence:
+https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2023/37xxx/CVE-2023-37895.json
+https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2025/58xxx/CVE-2025-58782.json
+https://repo.maven.apache.org/maven2/org/apache/jackrabbit/jackrabbit-webdav/2.14.4/jackrabbit-webdav-2.14.4.pom
+Repository evidence: infrastructure/runtime-security/proofs/C7_MAVEN_ADVISORY_PROOF.json (Apache CNA affected artifacts and exact archive class inventory).
+Reviewed PURL: pkg:maven/org.apache.jackrabbit/jackrabbit-webdav@2.14.4
+Exact SHA1 and two named CVEs only; affected sibling artifact bytes and other advisories remain in scope. The ODC schema permits one artifact selector, so PURL and SHA256 are provenance evidence, not additional XML selectors.</notes>
+    <sha1>8b44cca2d95f7c8ec54126a400d77464194ad481</sha1>
+    <cve>CVE-2023-37895</cve>
+    <cve>CVE-2025-58782</cve>
+  </suppress>
+  <suppress>
+    <notes>Keycloak 26.7.3 officially fixes CVE-2026-18215. The exact JAR matching the hosted report was inspected with javap: the configured tenant is compared with the token tenant and mismatch throws before superclass token exchange. This is a stale affected-version match, not acceptance of a runtime vulnerability.
+Primary evidence: https://www.keycloak.org/2026/08/keycloak-2673-released
+Fix: https://github.com/keycloak/keycloak/pull/51849
+Artifact: keycloak-services-26.7.3.jar
+PURL: pkg:maven/org.keycloak/keycloak-services@26.7.3
+SHA-256: 245127ecae84d509522ec01aefdc7b13aaa577ff645498bac43debc981ef0630
+Repository evidence: infrastructure/runtime-security/proofs/C7_MAVEN_ADVISORY_PROOF.json and infrastructure/runtime-security/proofs/C7_KEYCLOAK_TENANT_GUARD.javap.txt (tenant guard before superclass exchange).
+Only the exact SHA-1 and listed CVE are selected. No other artifact, version or advisory is excluded.</notes>
+    <sha1>009f7fb99f26ba5b43d4a72d7b53f9504c2f1bee</sha1>
+    <cve>CVE-2026-18215</cve>
+  </suppress>
 </suppressions>

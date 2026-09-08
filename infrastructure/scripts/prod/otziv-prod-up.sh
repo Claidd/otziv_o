@@ -70,6 +70,14 @@ compose_args=(
   -f "$compose_file"
   --env-file "$env_file"
 )
+# Guard the full reconciliation too: dependency startup must never perform a
+# database upgrade merely because a tag or deployment default changed.
+database_guard_temp="$(mktemp "$deploy_path/.self-heal-db-images.XXXXXXXX")"
+trap 'rm -f -- "$database_guard_temp"' EXIT
+chmod 600 "$database_guard_temp"
+"${compose[@]}" "${compose_args[@]}" config --format json \
+  | python3 "$deploy_path/infrastructure/scripts/prod/database_image_guard.py" > "$database_guard_temp"
+compose_args+=(-f "$database_guard_temp")
 if [[ "$external_review_enabled" == "true" ]]; then
   "${compose[@]}" "${compose_args[@]}" --profile external-review up -d
 else

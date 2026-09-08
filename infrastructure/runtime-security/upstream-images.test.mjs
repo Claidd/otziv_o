@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { inventory, repositoryInventory } from './upstream-images.mjs';
+import { validateRepositoryDefaults } from './reviewed-image-defaults.mjs';
 
 const digest = 'a'.repeat(64);
 const doc = text => ({ path: 'fixture.yaml', text: 'services:\n' + text });
@@ -27,8 +28,9 @@ test('empty inventory cannot silently pass a release scan', () => {
 });
 test('actual Compose models cover database, issuer, monitoring and optional upstreams', async () => {
   const rows = await repositoryInventory();
-  for (const repository of ['mysql', 'postgres', 'quay.io/keycloak/keycloak', 'prom/prometheus', 'grafana/grafana',
-    'grafana/loki', 'grafana/tempo', 'grafana/alloy', 'amir20/dozzle', 'minio/minio', 'minio/mc', 'phpmyadmin', 'certbot/certbot'])
+  const reviewed = await validateRepositoryDefaults(process.cwd(), rows);
+  assert.equal(new Set(reviewed.map(item => item.component)).size, 12);
+  for (const repository of ['amir20/dozzle', 'minio/minio', 'minio/mc'])
     assert.ok(rows.some(row => row.image.startsWith(repository + '@')), repository);
   assert.equal(new Set(rows.map(row => row.id)).size, rows.length);
 });

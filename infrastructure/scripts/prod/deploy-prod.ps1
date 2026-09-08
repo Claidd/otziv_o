@@ -1018,6 +1018,7 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\rollout-docker-observer.sh",
     "infrastructure\scripts\prod\create-pre-deploy-db-backup.sh",
     "infrastructure\scripts\prod\otziv-prod-up.sh",
+    "infrastructure\scripts\prod\database_image_guard.py",
     "infrastructure\scripts\prod\register-max-webhook.sh",
     "infrastructure\scripts\prod\init-letsencrypt.sh",
     "infrastructure\scripts\prod\renew-letsencrypt.sh",
@@ -1724,6 +1725,8 @@ release_payload_complete="0"
 mobile_storage_owner_needs_restore="0"
 active_env_temp=""
 active_systemd_unit_stage=""
+database_guard_temp=""
+database_image_override=""
 
 assert_self_heal_stopped() {
   for unit in "`$self_heal_timer" "`$self_heal_service"; do
@@ -1824,6 +1827,9 @@ deploy_cleanup() {
   fi
   rm -f -- "`$bundle_path" "`$rollout_script_path" || true
   rmdir -- "`$deploy_bundle_dir" 2>/dev/null || true
+  if [ -n "`$database_guard_temp" ]; then
+    rm -f -- "`$database_guard_temp" || true
+  fi
   if [ -n "`$active_env_temp" ]; then
     rm -f -- "`$active_env_temp" || true
   fi
@@ -1934,14 +1940,25 @@ unset COMPOSE_ENV_FILES COMPOSE_DISABLE_ENV_FILE
 compose_project_name="otziv-prod"
 
 compose() {
+  local database_override_args=()
+  if [ -n "`$database_image_override" ]; then
+    database_override_args=(-f "`$database_image_override")
+  fi
   if docker compose version >/dev/null 2>&1; then
-    docker compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
+    docker compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`${database_override_args[@]}" "`$@"
   elif command -v docker-compose >/dev/null 2>&1; then
-    docker-compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`$@"
+    docker-compose --project-name "`$compose_project_name" --project-directory "`$remote_path" -f "`$remote_path/docker-compose.yaml" --env-file "`$remote_path/`$env_file" "`${database_override_args[@]}" "`$@"
   else
     echo "Docker Compose is not installed. Install docker-compose or the Docker Compose plugin." >&2
     exit 1
   fi
+}
+
+guard_database_images() {
+  database_guard_temp="`$(mktemp "`$remote_path/.deploy-db-images.XXXXXXXX")"
+  chmod 600 "`$database_guard_temp"
+  compose config --format json | python3 infrastructure/scripts/prod/database_image_guard.py > "`$database_guard_temp"
+  database_image_override="`$database_guard_temp"
 }
 
 require_compose_service() {
@@ -2940,6 +2957,8 @@ chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 chmod +x infrastructure/scripts/prod/create-pre-deploy-db-backup.sh || true
 chmod +x infrastructure/scripts/prod/register-max-webhook.sh || true
+# Refuse database image/storage changes before any rollout startup or retry.
+guard_database_images
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
 assert_compose_service_image app "`$app_image"

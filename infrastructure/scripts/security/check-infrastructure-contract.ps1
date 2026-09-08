@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
@@ -370,11 +370,11 @@ Assert-TextMatch $productionCompose 'image:\s*\$\{APP_IMAGE:\?APP_IMAGE must be 
 Assert-TextMatch $productionCompose 'image:\s*\$\{WEB_IMAGE:\?WEB_IMAGE must be an immutable release tag or digest\}' 'Production web image must require an explicit immutable release identifier.'
 Assert-TextMatch $productionCompose 'image:\s*\$\{WHATSAPP_IMAGE:\?WHATSAPP_IMAGE must be an explicit deployment tag\}' 'Production WhatsApp image must require an explicit deployment tag.'
 Assert-TextMatch $productionCompose 'image:\s*\$\{EXTERNAL_REVIEW_WORKER_IMAGE:\?EXTERNAL_REVIEW_WORKER_IMAGE must be an explicit deployment tag or digest\}' 'Production external review worker image must require an explicit release identifier.'
-Assert-TextMatch $productionCompose 'prom/prometheus@sha256:[0-9a-f]{64}' 'Prometheus image must be pinned by digest.'
-Assert-TextMatch $productionCompose 'grafana/loki@sha256:[0-9a-f]{64}' 'Loki image must be pinned by digest.'
-Assert-TextMatch $productionCompose 'grafana/tempo@sha256:[0-9a-f]{64}' 'Tempo image must be pinned by digest.'
-Assert-TextMatch $productionCompose 'grafana/alloy@sha256:[0-9a-f]{64}' 'Alloy image must be pinned by digest.'
-Assert-TextMatch $productionCompose 'grafana/grafana@sha256:[0-9a-f]{64}' 'Grafana image must be pinned by digest.'
+# Component-bound exact defaults: original source or verified publication + anonymous pull.
+$reviewedImageCheck = & node (Join-Path $repoRoot 'infrastructure/runtime-security/reviewed-image-defaults.mjs') $repoRoot 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $violations.Add('Reviewed upstream defaults must match their original component pin or paired immutable publication evidence; database defaults remain on hold.')
+}
 Assert-ComposeEnvironmentVariable $productionCompose 'TELEGRAM_BOT_LINK_SECRET' ':-' 'Production Compose must pass the Telegram bot link secret.'
 Assert-ComposeEnvironmentVariable $productionCompose 'MAX_BOT_LINK_SECRET' ':-' 'Production Compose must pass the MAX bot link secret.'
 Assert-TextMatch $productionCompose 'MAX_BOT_WEBHOOK_HMAC_REQUIRED:\s*\$\{MAX_BOT_WEBHOOK_HMAC_REQUIRED:-false\}' 'MAX webhook HMAC must remain disabled because the official contract only sends X-Max-Bot-Api-Secret.'

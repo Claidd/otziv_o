@@ -3,9 +3,20 @@
 Dockerfile сохраняет Keycloak 26.7.3 и provider этого каталога, использует
 Temurin 21 JRE на Ubuntu 22.04 и собирает PostgreSQL, health и metrics.
 [Keycloak поддерживает Java 21](https://www.keycloak.org/server/supported-configurations).
-Оба базовых образа закреплены digest; обновления Ubuntu устанавливаются при
+Базовые образы закреплены digest; обновления Ubuntu устанавливаются при
 сборке. Для выпуска сохраняйте итоговый image ID, SBOM и результаты сканирования:
 пакетный репозиторий может измениться между сборками одного Dockerfile.
+
+Provider компилируется и проходит `mvn verify` внутри отдельной стадии Docker
+на Maven 3.9.15 и Java 21. Контекст содержит `pom.xml` и `src`, а готовый JAR
+копируется из этой стадии. Сборка образа не создаёт `target` в Git checkout:
+публикация проверяет чистоту всего дерева, включая исключённые из Git файлы,
+и требует точного коммита без суффикса `-dirty` в provenance Buildx.
+
+В дистрибутиве также заменены полные vendor JAR Jackson 2.21.6 и Parsson 1.1.9.
+Каждый `ADD --checksum` проверяет SHA-256 неизменённого артефакта Maven Central.
+Их исходные имена файлов сохранены для сериализованного classpath Quarkus;
+фактическую версию определяют содержимое JAR и контрольная сумма.
 
 Вместо исходного Microsoft JDBC 13.2.1 используется полный неизменённый vendor
 artifact 13.4.0.jre11 из Maven Central. Docker `ADD --checksum` проверяет SHA-256

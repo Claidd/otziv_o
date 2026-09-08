@@ -1,0 +1,172 @@
+{
+  "schema": "otziv-issuer-partial-candidate-evidence-v1",
+  "recordedAtUtc": "2026-09-08T01:19:52.117104+00:00",
+  "status": "PARTIAL_VALIDATED_UNRESOLVED_BUNDLED_CLI_VULNERABILITY",
+  "imageIndexDigest": "sha256:73f6667a8062cfe7a17d67354a52d6bcd196f18a26bd01dd0faba7be1fbc0562",
+  "imagePlatformManifestDigest": "sha256:c6502998ad22f8a1790dd88de9d140ac607eb4933909fc57e479374b2865a14f",
+  "imageConfigDigest": "sha256:9683153a64b2f0b0e6d196e4664994294cda5d2a288adbcc669f9e39087cb3e1",
+  "providerPomSha256": "cca9f8a9060423e5c9c5c3bf061e7a4528e3cba0c41560e74b35e322baa0c28a",
+  "providerJarSha256": "8d9370c0ca5f8e26dae934339fca3c771becfbd48bf9a75d1cc84170e5ab61bf",
+  "checks": {
+    "providerTestsJava21": {
+      "passed": 11,
+      "failed": 0
+    },
+    "sameBehavioralTestsOnPriorProvider": {
+      "passed": 7,
+      "failed": 4
+    },
+    "serverImageCausalRegressions": {
+      "passed": 5,
+      "failed": 0
+    },
+    "ordinaryStartAndStartDev": {
+      "passed": 4
+    },
+    "issuerProtocol": {
+      "passed": 20
+    },
+    "pairedFullSystemRecovery": {
+      "passed": 21,
+      "cleanup": "PASS"
+    },
+    "imageScan": {
+      "high": 0,
+      "critical": 0,
+      "adjudications": 0,
+      "knownCveDatabaseCoverageLimit": true
+    },
+    "javaJarInventory": {
+      "scope": "/opt/keycloak recursively",
+      "jars": 476
+    },
+    "providerDockerJarComparison": {
+      "classFilesByteIdentical": 12,
+      "runtimeResourcesCRLFToLFOnly": 6
+    }
+  },
+  "unresolved": [
+    {
+      "advisory": "CVE-2026-68497",
+      "location": "/opt/keycloak/bin/client/keycloak-admin-cli-26.7.3.jar",
+      "jarSha256": "1f1935812026b0a5acbdb3717c9685b257f811b133a9bec455f0b2f0110321dc",
+      "affectedEmbeddedDatabindVersion": "2.21.5",
+      "fixedVersion": "2.21.6",
+      "observedOldJacksonModules": [
+        "jackson-core",
+        "jackson-databind",
+        "jackson-datatype-jdk8",
+        "jackson-datatype-jsr310",
+        "jackson-dataformat-yaml"
+      ],
+      "actualImageClassPathProof": {
+        "expectedRejectionAssertionsFail": 2,
+        "ordinaryPositiveControlPasses": 1
+      },
+      "classification": "Confirmed affected library behavior on actual bundled CLI classpath. No end-to-end CLI-command exploitation claimed. Trivy recognizes the old package but this database did not report this CVE.",
+      "nextStep": "Separately owned pinned upstream CLI rebuild and final-image repeat tests; this candidate must not be reported as final issuer advisory closure."
+    }
+  ],
+  "limits": [
+    "No hosted dependency audit rerun in this local proof.",
+    "No image publication, production activation or risk acceptance.",
+    "Paired recovery is an isolated fixture; it does not establish independent production recovery sources or operational RPO/RTO."
+  ],
+  "evidence": [
+    {
+      "path": "integration-freeze/manifest.json",
+      "sha256": "efcaffe57d6ab4f2514871ec8536cff16a0a3c6cad0dd5d63a2a3e58e848e0b6",
+      "bytes": 2168
+    },
+    {
+      "path": "image-build-result.json",
+      "sha256": "e245620e845cbef9ac69b609c602e097f2737225994394afd7d3b2659aa2bb83",
+      "bytes": 1143
+    },
+    {
+      "path": "merged-context-final-inputs.json",
+      "sha256": "ea85e274a48993739499066a0eadac1f9b96430fa0d7a366da552f3ebdd079d4",
+      "bytes": 4652
+    },
+    {
+      "path": "image-source-binding.json",
+      "sha256": "fee110c7ecf4d5330df9e986d99b5eafd22d11f0174d1636145e673856a4f10b",
+      "bytes": 1532
+    },
+    {
+      "path": "image-oci-identity-chain.json",
+      "sha256": "2178c8bc28cdd89ce9b03e5b674de49e8389147e5cc108f6c6dc6149cd2639f6",
+      "bytes": 2929
+    },
+    {
+      "path": "provider-graph-and-causal-proof-v3.json",
+      "sha256": "63e7ad27c83d65b6cb77ab85102a996830c2a1f13a6fa5008f5de9b81d6145fc",
+      "bytes": 46933
+    },
+    {
+      "path": "candidate-effective-policy-verification.json",
+      "sha256": "2894540bbb38cebf6e2f1ba8bca10bed4d132080e90fdd1684d7b0ca0c6a824d",
+      "bytes": 2150
+    },
+    {
+      "path": "runtime-causal-result.json",
+      "sha256": "30f55181ea338e32688907baa7f652f8ead6a3eda4ea310c5662811bdc50339b",
+      "bytes": 1130
+    },
+    {
+      "path": "runtime-library-comparison.json",
+      "sha256": "01d90753de00185ba59351a33ea61e774aa4bc8483fca9750f75624be114e361",
+      "bytes": 204146
+    },
+    {
+      "path": "provider-image-byte-comparison.json",
+      "sha256": "cb7ba92de25c7fe6cfe6f3dc493965d654e5a23880e9435967cd67205fb768b6",
+      "bytes": 2966
+    },
+    {
+      "path": "issuer-startup.json",
+      "sha256": "ebd506eb91a71929b7d96ccf0299835e975a095ac4835b7a127b18999935e1bc",
+      "bytes": 968
+    },
+    {
+      "path": "issuer-protocol.json",
+      "sha256": "5f982745bce332115291f6282bbe2aa4dd5b7a349f0ef1b60706180ea80ad6a7",
+      "bytes": 2589
+    },
+    {
+      "path": "paired-recovery/proof.json",
+      "sha256": "3e22ad922ca0461585b22b0de2ad098b5f7e1f1c7d1eddf06ded39a8e0e0e244",
+      "bytes": 4555
+    },
+    {
+      "path": "issuer-vulnerabilities.json",
+      "sha256": "ae3f8c27fd60a65d97d6cd2a76371853bd51e71971f3f64bfac92fb3b0f357fb",
+      "bytes": 1009066
+    },
+    {
+      "path": "issuer-vulnerabilities.sbom.cdx.json",
+      "sha256": "4288c59837061ad4f390345e4ca2fc2d29ad13a0627914a5bca6dbfbac43475a",
+      "bytes": 994245
+    },
+    {
+      "path": "issuer-vulnerabilities.triage.json",
+      "sha256": "ab7a2b0ee66b2a8405c04c631dd02de1db4304c4df46237cf04961825aab66fe",
+      "bytes": 365
+    },
+    {
+      "path": "whole-opt-java-inventory.json",
+      "sha256": "b916ba9bfee4505f53c48c1b7fb82dae3141135ca23df8abbcb5c71516d2c929",
+      "bytes": 127459
+    },
+    {
+      "path": "cli-shaded-before.stdout.json",
+      "sha256": "93fa9eadd80d94798f2964c8557c9c467fa3621c6d1f086b19f3e3404fd44caf",
+      "bytes": 214
+    },
+    {
+      "path": "cli-shaded-before-result.json",
+      "sha256": "051d5c155d6d05ebce80d915abb9f531c5875c0821538dd6c628c1f3a7caa72a",
+      "bytes": 802
+    }
+  ]
+}

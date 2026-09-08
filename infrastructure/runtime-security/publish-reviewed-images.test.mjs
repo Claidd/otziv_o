@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateManifest, publicationIdentity, publishedReference, attestations, assertCleanSource, REPOSITORY } from './publish-reviewed-images.mjs';
+import { validateManifest, publicationIdentity, publishedReference, attestations, assertCleanSource, assertCleanRepository, assertPublicationPreparation, providerJarDigest, REPOSITORY } from './publish-reviewed-images.mjs';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, writeFile, rm, realpath } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 
@@ -61,7 +61,74 @@ test('manifest scopes components, destinations, build contexts and source pins',
 test('only the bounded Keycloak provider build preparation is accepted', () => {
   const value = manifest(); Object.assign(value.images[0], { component: 'keycloak', context: 'infrastructure/keycloak/security-generation', prepare: { kind: 'keycloak-provider-maven' } });
   assert.equal(validateManifest(value)[0].component, 'keycloak');
+  assert.throws(() => assertPublicationPreparation(value.images[0]), /legacy_host_provider_build_cannot_publish_clean_source/);
+  value.images[0].prepare.kind = 'keycloak-provider-docker-stage';
+  assert.equal(validateManifest(value)[0].component, 'keycloak');
+  assertPublicationPreparation(value.images[0]);
+  assertPublicationPreparation(manifest().images[0]);
   value.images[0].context = 'infrastructure/unrelated'; assert.throws(() => validateManifest(value));
+});
+
+test('whole repository guard rejects actual ignored provider output and ignored files outside the build context', async () => {
+  const fixture = await mkdtemp(join(tmpdir(), 'otziv-publication-ignored-'));
+  const git = args => execFileSync('git', ['-c', 'safe.directory=' + fixture, '-C', fixture, ...args], { encoding: 'utf8', windowsHide: true });
+  try {
+    git(['init', '--quiet']);
+    await mkdir(join(fixture, 'provider'));
+    await writeFile(join(fixture, 'provider', 'pom.xml'), '<project/>\n');
+    await writeFile(join(fixture, '.gitignore'), 'target/\n.cache/\n');
+    git(['add', '.']);
+    git(['-c', 'user.name=Publication fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Ignored output fixture']);
+    const execute = async (command, args) => { assert.equal(command, 'git'); return git(args); };
+    await assertCleanRepository(execute);
+    await mkdir(join(fixture, 'provider', 'target'));
+    await writeFile(join(fixture, 'provider', 'target', 'provider.jar'), 'generated provider fixture');
+    await assertCleanSource(['provider'], execute);
+    await assert.rejects(assertCleanRepository(execute), /reviewed_repository_changed_untracked_or_ignored/);
+    await rm(join(fixture, 'provider', 'target', 'provider.jar'));
+    await assertCleanRepository(execute);
+    await mkdir(join(fixture, '.cache'));
+    await writeFile(join(fixture, '.cache', 'generated'), 'outside build context');
+    await assertCleanSource(['provider'], execute);
+    await assert.rejects(assertCleanRepository(execute), /reviewed_repository_changed_untracked_or_ignored/);
+  } finally {
+    const actual = await realpath(fixture), parent = await realpath(tmpdir());
+    assert.ok(actual.startsWith(resolve(parent) + sep) && actual.includes('otziv-publication-ignored-'));
+    await rm(actual, { recursive: true, force: true });
+  }
+});
+
+test('whole repository guard fails closed when Git cannot report source state', async () => {
+  await assert.rejects(assertCleanRepository(async () => { throw new Error('fixture Git failure'); }), /fixture Git failure/);
+});
+
+test('provider evidence hashes the exact pulled registry digest with a bounded read-only probe', async () => {
+  const reference = REPOSITORY + '@' + digest;
+  const sha = 'd'.repeat(64);
+  assert.equal(await providerJarDigest(reference, async (command, args) => {
+    assert.equal(command, 'docker');
+    assert.deepEqual(args, ['run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+      '--security-opt', 'no-new-privileges:true', '--pids-limit', '32', '--entrypoint', 'sha256sum', reference,
+      '/opt/keycloak/providers/otziv-security-generation.jar']);
+    return sha + '  /opt/keycloak/providers/otziv-security-generation.jar\n';
+  }), sha);
+});
+
+test('provider probe rejects mutable or foreign image references before executing Docker', async () => {
+  for (const reference of [REPOSITORY + ':latest', REPOSITORY + '@latest', 'ghcr.io/other/image@' + digest]) {
+    let called = false;
+    await assert.rejects(providerJarDigest(reference, async () => { called = true; return ''; }));
+    assert.equal(called, false);
+  }
+});
+
+test('provider digest evidence rejects wrong paths, malformed output and failed image reads', async () => {
+  const reference = REPOSITORY + '@' + digest;
+  for (const output of ['', 'd'.repeat(64) + '  /tmp/other.jar\n', 'x'.repeat(64) + '  /opt/keycloak/providers/otziv-security-generation.jar\n',
+    'd'.repeat(64) + '  /opt/keycloak/providers/otziv-security-generation.jar\nextra output']) {
+    await assert.rejects(providerJarDigest(reference, async () => output), /provider_probe_invalid_digest/);
+  }
+  await assert.rejects(providerJarDigest(reference, async () => { throw new Error('fixture image read failure'); }), /fixture image read failure/);
 });
 
 test('a local image configuration ID cannot substitute for a published manifest digest', () => {

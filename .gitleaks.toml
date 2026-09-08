@@ -142,3 +142,23 @@ regexes = [
   '''^\n?\t=>\tk8s\.io/apimachinery\tv0\.35\.0\th1:Z2L3IHvPVv/MJ7xRxHEtk6GoJElaAqDCCU0S6ncYok8=\r?$''',
   '''^\n?\t=>\tk8s\.io/apiserver\tv0\.35\.0\th1:CUGo5o\+7hW9GcAEF3x3usT3fX4f9r8xmgQeCBDaOgX4=\r?$''',
 ]
+
+# Exact public Keycloak source identity and package names retained in reviewed evidence.
+# Each exception is generic-api-key AND one exact path AND one entire reviewed line.
+# Optional leading LF is the pinned Gitleaks location() representation; optional CR
+# permits only the CRLF line terminator. Neither arbitrary values nor other fields match.
+[[allowlists]]
+description = "Reviewed official Keycloak 26.7.3 source commit"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/KEYCLOAK_ADVISORY_VALIDATION_2026\-09\-08\.json$''']
+regexes = ['''^\n?    "officialKeycloakSourceCommit": "6d238b6558037085cc25c915893c3d301a80243e",\r?$''']
+
+[[allowlists]]
+description = "Reviewed public Keycloak FIPS package names in retained C7 server-only scan"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(^|/)infrastructure/runtime\-security/history/c7\-server\-only/vulnerabilities\.json$''']
+regexes = ['''^\n?          "Name": "org\.keycloak:keycloak\-crypto\-fips1402",\r?$''']

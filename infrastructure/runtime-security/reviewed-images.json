@@ -183,12 +183,14 @@
       "sourceBeforeRef": "quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9",
       "candidateBaseRef": "quay.io/keycloak/keycloak@sha256:ff4257d0d64efbe99ed1ddfaf07765cc3c36dc7518bf8324d41961327f441c54",
       "buildImageRefs": [
+        "maven@sha256:527989ca6d3279cc9494d665f617374c428eccd7248dbadf0d03bceaa70b9c5d",
+        "maven@sha256:d6e32a254897415a445654a3c43c30fbc731a4d946cf5c66d1cb9184141c20c1",
         "quay.io/keycloak/keycloak@sha256:ff4257d0d64efbe99ed1ddfaf07765cc3c36dc7518bf8324d41961327f441c54",
         "maven@sha256:9b0bc1420b93f3eafb7401dc3030eac01e773d8d709686d3c4ac351fcf6f9f42",
         "eclipse-temurin:21-jre-jammy@sha256:eebd356ad7358b7094758e5787a6726f332917cfd56feab6457c56dab895cdbf"
       ],
-      "version": "26.7.3 ordering hardened",
-      "dockerfileSha256": "11ba9c67b709968e990f840ccc1787cef5aa410f1c7d4ae383ca7c9d1d391952",
+      "version": "26.7.3-otziv.2",
+      "dockerfileSha256": "382cd652923e2abcec902d87bdfb4d1589a264213e8897d4f415d85e70928a63",
       "historicalLocalImageId": "sha256:537b96f86faa1afdd7502ec6dc38da258cf479568488053581c561bad960cd5e",
       "historicalLocalEvidence": [
         {
@@ -221,7 +223,7 @@
       "publicationStatus": "NOT_PUBLISHED",
       "deploymentStatus": "NOT_ACTIVATED",
       "prepare": {
-        "kind": "keycloak-provider-maven"
+        "kind": "keycloak-provider-docker-stage"
       },
       "unfixedRiskReview": "NONE",
       "activationPreconditions": [
@@ -823,5 +825,10 @@
       "unfixedRiskReview": "NONE",
       "dockerfileHashEncoding": "UTF-8 with CRLF normalized to LF"
     }
-  ]
+  ],
+  "publicationWave": "C7",
+  "previousManifest": {
+    "path": "infrastructure/runtime-security/history/c6/reviewed-images.json",
+    "sha256": "d2703f82c09690f1b1815471f5a8e24e1960bd90217df733498c0c7ed07b03f3"
+  }
 }

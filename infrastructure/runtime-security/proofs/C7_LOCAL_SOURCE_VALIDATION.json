@@ -1,0 +1,80 @@
+{
+  "schema": "otziv-c7-local-source-validation-v1",
+  "result": "PASS",
+  "recordedAt": "2026-09-08T01:39:40.120837+00:00",
+  "manifestSha256": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+  "checks": [
+    {
+      "name": "node-security-recovery-monitoring",
+      "exitCode": 0,
+      "counts": {
+        "tests": 180,
+        "pass": 180,
+        "fail": 0,
+        "skipped": 0
+      },
+      "logSha256": "59513261f0cc2445f54dcc82675e66bfb604d18c880cb9612db94d22c21aa35e"
+    },
+    {
+      "name": "infrastructure-contract",
+      "exitCode": 0,
+      "counts": {},
+      "logSha256": "5cf31cf3e405b9f4007193f5817e86ef198a7ce4270bcf7d9a0db6e56a4dfc09"
+    },
+    {
+      "name": "deploy-release-contract",
+      "exitCode": 0,
+      "counts": {},
+      "logSha256": "81805189df0bb6be46462376cf76ec40bdb037f237995bd81f3bfdde676257ff"
+    },
+    {
+      "name": "actionlint",
+      "exitCode": 0,
+      "counts": {},
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "bootstrap-policy",
+      "exitCode": 0,
+      "counts": {
+        "tests": 27
+      },
+      "logSha256": "1876690f351246ebf7a67da65fa61dd25274acf5c9e72e37c83b0d1deab576e5"
+    },
+    {
+      "name": "database-continuity",
+      "exitCode": 0,
+      "counts": {
+        "tests": 27
+      },
+      "logSha256": "865c7d33cef3d69c5ac652a2c9ec9e2bf460a216052afd6fda62d2c72af7a7ff"
+    }
+  ],
+  "scope": "Local source/contract validation. Raw execution logs are retained in the private workspace; this is not a hosted CI receipt.",
+  "sourceHashes": {
+    ".github/workflows/dependency-audit.yml": "8e4a2c40ecf62e88d9ec6032d0cfff9e81a023d7a27e44448a72fe4e644b895d",
+    ".github/workflows/quality-gates.yml": "6956ae9bb9d8c0cc8e8779cf0e61bf7842d817f9e9d3da59232ceb691602fce2",
+    "infrastructure/monitoring/collector.test.mjs": "5a219c003285d5e7ff6b1e12cbac8168f211f6885bd2acdd6e7b81b26bf57a67",
+    "infrastructure/monitoring/watch.test.mjs": "eca47785645e9b9b4ad79a933402a76008a3ebeb4b8ae81ffdf5a29a58e672ac",
+    "infrastructure/recovery/application-shutdown.test.mjs": "2f8f6b9b9abeafcb0bc0615187dd61b875d7e5b3fffcd3ab9129a7011d75209b",
+    "infrastructure/recovery/docker-environment.test.mjs": "005379444dd4c3ed5bae8c6f5c1396656a49ff62c2afc6876bebb5651111e70a",
+    "infrastructure/recovery/process.test.mjs": "9bc5ac9ef1ca0d0685f531e5461e747beff2b83d0b2e26502e4e3a3b71f73718",
+    "infrastructure/recovery/recovery.test.mjs": "2af1d5d0e9e4174c4300daa277d975e527626c0779d64a736398a0fa1695598b",
+    "infrastructure/recovery/system-bundle.test.mjs": "5edd589689cbf9822db8f279d313da6464dd55766eb442f2408b4bfbca397997",
+    "infrastructure/runtime-security/contracts.test.mjs": "bbed0487732def58d20d42e1b6e84ef3b7335ab3493cbdfc54a16b8688c29e91",
+    "infrastructure/runtime-security/grafana-tempo-adjudication.test.mjs": "05aa0c68aef4dcb364cf395fc803583d951559694efe480750f3a0fa838c860b",
+    "infrastructure/runtime-security/keycloak-runtime-dependencies.test.mjs": "a8c5c21823160b60c64766ca9d71b693822719504eb262e0408808f8781fc68e",
+    "infrastructure/runtime-security/monitoring-release.test.mjs": "5d66f127a0f668144074074e3cec27fd80b95e880cb01b959ae4d4086c1b395b",
+    "infrastructure/runtime-security/monitoring-source.test.mjs": "b3e1e8dc2a62675df09640967dc9f952a238201dba8b90ef7255373361369ce8",
+    "infrastructure/runtime-security/mysql-upgrade-rehearsal.test.mjs": "00a8ae2092e39a75b9b9dd59270fded97afec659cf916c9f30754bd832cdfd29",
+    "infrastructure/runtime-security/publish-reviewed-images.test.mjs": "5d5cea179ee4de90904caa7350080323f7616e60bcf4269f4823cdbe5fcf3534",
+    "infrastructure/runtime-security/registry-evidence.test.mjs": "6d11bf7a3001840d9a7b8a6be2ee479965f046e0c83b9d245c83538ae4feb144",
+    "infrastructure/runtime-security/reviewed-image-defaults.test.mjs": "b624607ea51c992585fcc8ff941fdc896b78934acdcb5db741708e54798c9663",
+    "infrastructure/runtime-security/reviewed-images.json": "d48bdb7d6d869cde5d6f1a7b089491765e3eeaf46e0b0b6bb51b7719b38d3ef2",
+    "infrastructure/runtime-security/scanner-identity.test.mjs": "b7bf0f4554d4a73441b056d249fbc43092580f5c1e41a3fbfe54c9c944d567c8",
+    "infrastructure/runtime-security/triage-report.test.mjs": "1a94719d8e965d872def41511efa28b64ea4acdb2892960c4142ae744b51ff24",
+    "infrastructure/runtime-security/upstream-images.test.mjs": "46c0612cf1f0afca31bbae605d5a593ae9461964e4549e0e87e53864e8c0717a",
+    "infrastructure/runtime-security/verify-anonymous-download.test.mjs": "cee12b1d74a57d1ebeece642aefc5a0ca43503408a8bee71c2a1539d3da30685"
+  },
+  "rootIndexUnchanged": true
+}

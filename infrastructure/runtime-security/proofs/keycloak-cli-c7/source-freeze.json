@@ -1,0 +1,135 @@
+{
+  "schema": "otziv-cli-rebuild-source-freeze-v1",
+  "scope": "TEMP-only six-file recipe proposal; current assembled C7 before this patch, not a publication",
+  "files": [
+    {
+      "path": "infrastructure/keycloak/security-generation/.dockerignore",
+      "beforeSha256": "9da7dcfbe3127dd4239c2c942eb0eb5b4dc250c0b7db0803f424c2cb8b2c1f2a",
+      "afterSha256": "3ab94c082ac279fc89f262b7267c740c6cd08591538f7a9148e666ac68582203",
+      "bytes": 301
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/cli/cli-dependencies.sha256",
+      "beforeSha256": null,
+      "afterSha256": "7f9b5be5fcd763fcaaaab8d9d594898560d18e5059d34e852fe6b3efccaf8fe2",
+      "bytes": 2367
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/cli/CliJacksonProof.java",
+      "beforeSha256": null,
+      "afterSha256": "1f7786465b6682d81c311ee4b0c3a4479e0a2531557c1d74dc9630078bd65cad",
+      "bytes": 2230
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/cli/keycloak-admin-cli.pom.xml",
+      "beforeSha256": null,
+      "afterSha256": "d6d65e0394707b0282c4d9bb36eb56a09a85d1276dd9566b38e752da3a72ad44",
+      "bytes": 10422
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/build-patches/cli/README.md",
+      "beforeSha256": null,
+      "afterSha256": "4ac192e5785db8b0896d513aa53b8e53bb18a30b875bcaa6fd739775b8fa0459",
+      "bytes": 2554
+    },
+    {
+      "path": "infrastructure/keycloak/security-generation/Dockerfile",
+      "beforeSha256": "d2d8f1fd714070bccb311cf321fb22d3d27379b1483b2eee91355e2bdeb1b973",
+      "afterSha256": "382cd652923e2abcec902d87bdfb4d1589a264213e8897d4f415d85e70928a63",
+      "bytes": 9130
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "148fbfb4a631e24572ac4c12b60b1ae340c218e446c346b4a4a2206c766323ab",
+      "bytes": 4722
+    },
+    {
+      "path": "review.patch",
+      "sha256": "593b03af61e0e7d9ca3b85ec5c9c7f8632d5f1091857a52a55f0ae7d84333988",
+      "bytes": 21495
+    },
+    {
+      "path": "source-inventory.json",
+      "sha256": "dd21277611720f1b39fdd64355e769709a024b146d34e4f1ac9feb581be1b1ad",
+      "bytes": 27096
+    },
+    {
+      "path": "source-archive.json",
+      "sha256": "2ef7b85913a81c554c3215c4af50d86fe6300d856fd0d4afe86cd57c55e35a26",
+      "bytes": 266
+    },
+    {
+      "path": "complete-cli-inventory.json",
+      "sha256": "eb937aaee85b715c2c9fc76cb8bc5c590e236194f2d4407089f301681ab93716",
+      "bytes": 2561138
+    },
+    {
+      "path": "bounded-cli-proof.json",
+      "sha256": "ace393aababec1a00e7b33e66cba69289e359914d6554a5e4c7170a6b63b7ec4",
+      "bytes": 1425
+    },
+    {
+      "path": "launcher-proof.json",
+      "sha256": "632e50a1803d8b2a25c2374260ac02e7b549387eef381a79788636fb77ec3668",
+      "bytes": 524
+    },
+    {
+      "path": "cli-commands-proof.json",
+      "sha256": "d8dc44a46c4138ea63103639d0ae6f54f51b346accb7c4ac9488c50ea0dbb565",
+      "bytes": 4491
+    },
+    {
+      "path": "final-context-freeze.json",
+      "sha256": "2a33a4bdf19a6777835aae8677584514bd8cf5fba1e0e249420575ba38c31900",
+      "bytes": 5761
+    },
+    {
+      "path": "run-cli-fixture.py",
+      "sha256": "51e90ec234d66a264979ff8feee0c195b9875f0a8f6ec1f4f26eb36ca02f302f",
+      "bytes": 8285
+    },
+    {
+      "path": "run-bounded-proof.py",
+      "sha256": "e64dde64ed8600dc01bcde1f9620e72719d0e8f144eec0288aac7b2baaa22218",
+      "bytes": 1763
+    },
+    {
+      "path": "inventory.py",
+      "sha256": "dcffbf1f7422d854acd766b8ed4b05ca2d035db6a51a6d43a6c565e9923a3b26",
+      "bytes": 5610
+    },
+    {
+      "path": "cli-build-java17.log",
+      "sha256": "e390ed68c4c4fec23255f01febc3ce0d29348e376e25f7eb22ec68f9e1b4b9d1",
+      "bytes": 39869
+    },
+    {
+      "path": "build-java17-metadata.json",
+      "sha256": "bd0016e83ce9013e4a11dd73aaec714aa3cdd68117093bb723a7e53eac41480a",
+      "bytes": 1260
+    }
+  ],
+  "checks": {
+    "vendorAndBaselineIdenticalPayloads": 3964,
+    "unchangedKeycloakClasses": 466,
+    "verifiedPatchedJacksonClasses": 1216,
+    "eachOriginalAndPatchedUnitRun": {
+      "tests": 145,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "actualCliCommands": 27,
+    "boundedPatchedChecks": 8,
+    "boundedOriginalExpectedFailureChecks": 7,
+    "patchRoundtrip": "PASS"
+  },
+  "integration": {
+    "newFirstBuildImageRef": "maven@sha256:527989ca6d3279cc9494d665f617374c428eccd7248dbadf0d03bceaa70b9c5d",
+    "newDockerfileSha256": "382cd652923e2abcec902d87bdfb4d1589a264213e8897d4f415d85e70928a63",
+    "manifestAndCurrentActivationHashMustBeReviewedTogether": true,
+    "fullFinalImageAcceptance": "owned by clients/root; do not substitute local JAR proof"
+  }
+}

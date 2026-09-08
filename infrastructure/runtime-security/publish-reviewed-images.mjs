@@ -6,6 +6,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run } from '../recovery/process.mjs';
 import { scan } from './scan.mjs';
+import { checkKeycloakRuntimeDependencies } from './keycloak-runtime-dependencies.mjs';
 import { gitSource, SOURCE_REPOSITORY, takePublicationRegistryReader, verifyRegistryEvidence } from './registry-evidence.mjs';
 
 export const REPOSITORY = 'ghcr.io/claidd/otziv-security';
@@ -37,7 +38,7 @@ export function validateManifest(manifest) {
     }
     if (image.prepare) {
       assert.equal(image.component, 'keycloak', 'unexpected_build_preparation');
-      assert.equal(image.prepare.kind, 'keycloak-provider-maven', 'unexpected_build_preparation');
+      assert.ok(['keycloak-provider-maven', 'keycloak-provider-docker-stage'].includes(image.prepare.kind), 'unexpected_build_preparation');
       assert.equal(image.context, 'infrastructure/keycloak/security-generation', 'unexpected_provider_context');
     }
   }
@@ -74,6 +75,28 @@ export function attestations(index) {
 export async function assertCleanSource(paths, execute = run) {
   const status = await execute('git', ['status', '--porcelain=v1', '--untracked-files=all', '--', ...paths]);
   assert.equal(status.trim(), '', 'reviewed_build_context_changed_or_untracked');
+}
+
+export async function assertCleanRepository(execute = run) {
+  // Buildx includes ignored inputs when deciding whether the VCS revision is dirty.
+  // Check that same complete worktree before creating or pushing any build.
+  const status = await execute('git', ['status', '--porcelain=v1', '--ignored', '--untracked-files=all']);
+  assert.equal(status.trim(), '', 'reviewed_repository_changed_untracked_or_ignored');
+}
+
+export function assertPublicationPreparation(image) {
+  if (image.prepare) assert.equal(image.prepare.kind, 'keycloak-provider-docker-stage', 'legacy_host_provider_build_cannot_publish_clean_source');
+}
+
+export async function providerJarDigest(reference, execute = run) {
+  assert.ok(reference.startsWith(REPOSITORY + '@'), 'provider_probe_registry_scope');
+  assert.match(reference.slice(REPOSITORY.length + 1), DIGEST, 'provider_probe_immutable_reference');
+  const output = await execute('docker', ['run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+    '--security-opt', 'no-new-privileges:true', '--pids-limit', '32', '--entrypoint', 'sha256sum', reference,
+    '/opt/keycloak/providers/otziv-security-generation.jar']);
+  const match = /^([a-f0-9]{64})\s+\/opt\/keycloak\/providers\/otziv-security-generation\.jar\s*$/.exec(output);
+  assert.ok(match, 'provider_probe_invalid_digest');
+  return match[1];
 }
 
 async function workspacePath(value) {
@@ -116,11 +139,9 @@ async function publish(component, outputArgument) {
     builder: BUILDKIT, sbomGenerator: SBOM_GENERATOR, result: 'IN_PROGRESS' };
   let created = false;
   try {
-    if (image.prepare) {
-      await publicBuild('bash', [resolve(ROOT, 'backend/mvnw'), '-B', '-ntp', '-f', resolve(context, 'pom.xml'), 'verify']);
-      record.providerJarSha256 = createHash('sha256').update(await readFile(resolve(context, 'target/otziv-security-generation.jar'))).digest('hex');
-    }
+    assertPublicationPreparation(image);
     await assertCleanSource([image.context, image.dockerfile, 'infrastructure/runtime-security/reviewed-images.json']);
+    await assertCleanRepository();
     await run('docker', ['buildx', 'create', '--name', builder, '--driver', 'docker-container', '--driver-opt', 'image=' + BUILDKIT]);
     created = true;
     await publicBuild('docker', ['buildx', 'build', '--builder', builder, '--platform', 'linux/amd64', '--push',
@@ -147,7 +168,13 @@ async function publish(component, outputArgument) {
     assert.equal(actual.Config.Labels?.['com.otziv.publication.revision'], identity.commit, 'registry_source_revision_changed');
     assert.equal(actual.Config.Labels?.['com.otziv.reviewed-component'], component, 'registry_component_changed');
     record.imageId = actual.Id;
+    if (image.prepare) record.providerJarSha256 = await providerJarDigest(record.reference);
     record.security = await scan('image', record.reference, resolve(output, 'vulnerabilities.json'));
+    if (component === 'keycloak') {
+      record.knownRuntimeDependencies = checkKeycloakRuntimeDependencies(
+        await readFile(resolve(output, 'vulnerabilities.json')), record.imageId);
+      await writeFile(resolve(output, 'known-runtime-dependencies.json'), JSON.stringify(record.knownRuntimeDependencies, null, 2) + '\n');
+    }
     record.result = record.security.result;
     if (record.result !== 'PASS') throw new Error('published_candidate_security_gate_failed');
   } catch (error) {

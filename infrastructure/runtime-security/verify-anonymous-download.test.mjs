@@ -224,12 +224,14 @@ test('CLI wires the absolute Docker executable, blank config, empty PATH and loc
   } finally { await removeFixture(root); }
 });
 
-test('workflow waits for all publications and consumes only the same-run component artifact without registry credentials', async () => {
+test('workflow waits for all publications and retains same-run component proofs after an unrelated publication failure', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/quality-gates.yml', import.meta.url), 'utf8');
   const job = workflow.split('  reviewed-image-anonymous-download:')[1]?.split('  repository-contracts:')[0];
   assert.ok(job);
   assert.match(job, /needs: \[reviewed-image-inventory, reviewed-image-publication\]/);
-  assert.match(job, /needs\.reviewed-image-publication\.result == 'success'/);
+  assert.match(job, /!cancelled\(\)/);
+  assert.match(job, /needs\.reviewed-image-inventory\.result == 'success'/);
+  assert.match(job, /\(needs\.reviewed-image-publication\.result == 'success' \|\| needs\.reviewed-image-publication\.result == 'failure'\)/);
   assert.match(job, /inputs\.publish-reviewed-images == true/);
   assert.match(job, /runs-on: ubuntu-24\.04/);
   assert.match(job, /matrix: \$\{\{ fromJSON\(needs\.reviewed-image-inventory\.outputs\.matrix\) \}\}/);

@@ -1,0 +1,204 @@
+{
+  "schema": "otziv-cli-owned-issuer-proof-v1",
+  "result": "PASS",
+  "baseImageId": "sha256:d773e1d0de1ef972ba01443a8217d23d6060d2b20d474b3ff84ae2dc840baa54",
+  "postgresImageId": "sha256:84631285605c9dea134ddb89a1986ba30bcdfef1f16a5c1664b06bb6f9303097",
+  "patchedCliSha256": "ee991a6b52d8ba10cd4548410d74f950c40db06dcbfc945f4ae7e327a9cb873d",
+  "freshContainer": true,
+  "cliOverlay": false,
+  "cliDigestReadFromFinalImage": true,
+  "externalVolumes": false,
+  "databaseStorage": "owned tmpfs",
+  "network": "owned internal Docker network; no published ports",
+  "checks": [
+    {
+      "check": "kcadm_help",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 1250,
+      "stderrBytes": 0
+    },
+    {
+      "check": "kcreg_help",
+      "launcher": "kcreg",
+      "exitCode": 0,
+      "stdoutBytes": 2064,
+      "stderrBytes": 0
+    },
+    {
+      "check": "kcadm_v2_descriptor_help",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 3532,
+      "stderrBytes": 0
+    },
+    {
+      "check": "kcadm_authentication",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 75
+    },
+    {
+      "check": "realm_create_setters",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 16,
+      "stderrBytes": 0
+    },
+    {
+      "check": "realm_list_after_create",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 63,
+      "stderrBytes": 1
+    },
+    {
+      "check": "realm_get_fields_json",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 53,
+      "stderrBytes": 1
+    },
+    {
+      "check": "client_create_json_file",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 37,
+      "stderrBytes": 0
+    },
+    {
+      "check": "client_get_csv_noquotes",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 357,
+      "stderrBytes": 0
+    },
+    {
+      "check": "client_update_setter",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 0
+    },
+    {
+      "check": "client_read_updated",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 1155,
+      "stderrBytes": 1
+    },
+    {
+      "check": "user_create",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 64
+    },
+    {
+      "check": "role_create",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 42
+    },
+    {
+      "check": "role_add",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 0
+    },
+    {
+      "check": "role_read_added",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 433,
+      "stderrBytes": 1
+    },
+    {
+      "check": "role_remove",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 0
+    },
+    {
+      "check": "role_read_removed",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 246,
+      "stderrBytes": 1
+    },
+    {
+      "check": "authentication_failure_nonzero",
+      "launcher": "kcadm",
+      "exitCode": 1,
+      "stdoutBytes": 0,
+      "stderrBytes": 116
+    },
+    {
+      "check": "authentication_retry",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 75
+    },
+    {
+      "check": "read_after_auth_retry",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 33,
+      "stderrBytes": 1
+    },
+    {
+      "check": "registration_authentication",
+      "launcher": "kcreg",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 75
+    },
+    {
+      "check": "registration_create",
+      "launcher": "kcreg",
+      "exitCode": 0,
+      "stdoutBytes": 1517,
+      "stderrBytes": 0
+    },
+    {
+      "check": "registration_get",
+      "launcher": "kcreg",
+      "exitCode": 0,
+      "stdoutBytes": 1517,
+      "stderrBytes": 0
+    },
+    {
+      "check": "registration_update",
+      "launcher": "kcreg",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 0
+    },
+    {
+      "check": "registration_get_updated",
+      "launcher": "kcreg",
+      "exitCode": 0,
+      "stdoutBytes": 1556,
+      "stderrBytes": 0
+    },
+    {
+      "check": "registration_delete",
+      "launcher": "kcreg",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 0
+    },
+    {
+      "check": "fixture_realm_delete",
+      "launcher": "kcadm",
+      "exitCode": 0,
+      "stdoutBytes": 0,
+      "stderrBytes": 0
+    }
+  ]
+}

@@ -100,6 +100,42 @@ class AuditPolicyTest(unittest.TestCase):
         self.change_effective(remove)
         with self.assertRaisesRegex(audit.PolicyError, "dependency override drift"): audit.verify_policy(self.root, self.effective)
 
+    def test_missing_jtidy_replacement_exclusion_is_rejected_in_managed_or_active_model(self):
+        for branch in ("m:build/m:pluginManagement/m:plugins/m:plugin", "m:build/m:plugins/m:plugin"):
+            with self.subTest(branch=branch):
+                self.make_effective()
+                def remove(root):
+                    for plugin in root[0].findall(branch, audit.NS):
+                        if audit.text(plugin, "artifactId") == "maven-plugin-plugin":
+                            for dependency in plugin.findall("m:dependencies/m:dependency", audit.NS):
+                                if audit.text(dependency, "artifactId") == "maven-plugin-tools-generators":
+                                    dependency.remove(dependency.find(Q + "exclusions"))
+                self.change_effective(remove)
+                with self.assertRaisesRegex(audit.PolicyError, "exclusion drift"):
+                    audit.verify_policy(self.root, self.effective)
+
+    def test_widened_jtidy_replacement_exclusion_is_rejected(self):
+        def widen(root):
+            for plugin in root[0].findall("m:build/m:plugins/m:plugin", audit.NS):
+                if audit.text(plugin, "artifactId") == "maven-plugin-plugin":
+                    for dependency in plugin.findall("m:dependencies/m:dependency", audit.NS):
+                        if audit.text(dependency, "artifactId") == "maven-plugin-tools-generators":
+                            dependency.find("m:exclusions/m:exclusion/m:artifactId", audit.NS).text = "*"
+        self.change_effective(widen)
+        with self.assertRaisesRegex(audit.PolicyError, "exclusion drift"):
+            audit.verify_policy(self.root, self.effective)
+
+    def test_jtidy_replacement_cannot_be_removed_while_excluding_original(self):
+        def remove(root):
+            for plugin in root[0].findall("m:build/m:plugins/m:plugin", audit.NS):
+                if audit.text(plugin, "artifactId") == "maven-plugin-plugin":
+                    dependencies = plugin.find(Q + "dependencies")
+                    for dependency in list(dependencies):
+                        if audit.text(dependency, "groupId") == "com.github.jtidy": dependencies.remove(dependency)
+        self.change_effective(remove)
+        with self.assertRaisesRegex(audit.PolicyError, "dependency override drift"):
+            audit.verify_policy(self.root, self.effective)
+
     def test_missing_token_rejects_before_any_maven_or_analyzer_invocation(self):
         with self.assertRaisesRegex(audit.PolicyError, "TOKEN is required"):
             audit.configuration(self.args, {}, require_token=True)

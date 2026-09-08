@@ -96,6 +96,16 @@ def projects_for(root: Path, standalone: str | None = None) -> dict[str, Path]:
     return {"keycloak": path}
 
 
+def verify_dependency_exclusions(plugin, rule: dict, coordinate: str) -> None:
+    dependencies = {key(dep): dep for dep in plugin.findall("m:dependencies/m:dependency", NS)}
+    for dependency, expected in rule.get("dependencyExclusions", {}).items():
+        if dependency not in dependencies or not isinstance(expected, list) or not expected:
+            raise PolicyError("Invalid required dependency exclusion: " + coordinate)
+        actual = [key(item) for item in dependencies[dependency].findall("m:exclusions/m:exclusion", NS)]
+        if len(actual) != len(set(actual)) or sorted(actual) != sorted(expected) or any("*" in item for item in actual):
+            raise PolicyError("Plugin dependency exclusion drift: " + coordinate + " / " + dependency)
+
+
 def verify_policy(root: Path, effective: Path, standalone: str | None = None) -> dict:
     expected_projects = projects_for(root, standalone)
     policy = json.loads((root / "plugin-policy.json").read_text(encoding="utf-8"))
@@ -127,6 +137,7 @@ def verify_policy(root: Path, effective: Path, standalone: str | None = None) ->
                 continue  # standalone does not need to activate or manage unused bootstrap tooling
             if coordinate not in managed or text(managed[coordinate], "version") != rule["version"]:
                 raise PolicyError("Missing or changed managed plugin pin: " + coordinate)
+            verify_dependency_exclusions(managed[coordinate], rule, coordinate)
             actual_dependencies = {key(dep): text(dep, "version") for dep in managed[coordinate].findall("m:dependencies/m:dependency", NS)}
             for dependency, version in rule.get("dependencies", {}).items():
                 if actual_dependencies.get(dependency) != version:
@@ -139,6 +150,7 @@ def verify_policy(root: Path, effective: Path, standalone: str | None = None) ->
             rule = rules[coordinate]
             if text(plugin, "version") != rule["version"]:
                 raise PolicyError("Effective plugin version drift: " + coordinate)
+            verify_dependency_exclusions(plugin, rule, coordinate)
             dependencies = {key(dep): text(dep, "version") for dep in plugin.findall("m:dependencies/m:dependency", NS)}
             for dependency, version in rule.get("dependencies", {}).items():
                 if dependencies.get(dependency) != version:

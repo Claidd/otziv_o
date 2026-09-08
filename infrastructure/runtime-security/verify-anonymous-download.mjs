@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { run } from '../recovery/process.mjs';
 import { BUILDKIT, REPOSITORY, SBOM_GENERATOR, validateManifest } from './publish-reviewed-images.mjs';
 import { checkedJson, createRegistryReader, SOURCE_REPOSITORY, verifyRegistryEvidence } from './registry-evidence.mjs';
+import { checkKeycloakRuntimeDependencies, requiresKeycloakDependencyProof, validateKeycloakDependencyReceipt } from './keycloak-runtime-dependencies.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
@@ -43,6 +44,7 @@ export function validatePublication(publication, identity, image, manifestSha256
   assert.equal(publication.builder, BUILDKIT, 'anonymous_publication_builder_mismatch');
   assert.equal(publication.sbomGenerator, SBOM_GENERATOR, 'anonymous_publication_scanner_mismatch');
   assert.match(publication.imageId || '', DIGEST, 'anonymous_publication_image_id_missing');
+  if (requiresKeycloakDependencyProof(image)) validateKeycloakDependencyReceipt(publication.knownRuntimeDependencies, publication.imageId);
   assert.equal(publication.tag, `${REPOSITORY}:${image.component}-${identity.commit}-${identity.run}-${identity.attempt}`, 'anonymous_publication_tag_identity_mismatch');
   assert.ok(typeof publication.reference === 'string' && publication.reference.startsWith(REPOSITORY + '@'), 'anonymous_publication_registry_scope');
   const digest = publication.reference.slice(REPOSITORY.length + 1);
@@ -78,6 +80,10 @@ export async function verifyAnonymousDownload({ publicationBytes, identity, imag
   try {
     const publication = JSON.parse(Buffer.from(publicationBytes).toString('utf8'));
     const digest = validatePublication(publication, identity, image, manifestSha256);
+    if (requiresKeycloakDependencyProof(image)) {
+      const checked = checkKeycloakRuntimeDependencies(await readPublicationArtifact('vulnerabilities.json'), publication.imageId);
+      assert.deepEqual(checked, publication.knownRuntimeDependencies, 'anonymous_known_dependencies_changed');
+    }
     proof.reference = publication.reference;
     const saved = new Map(), names = new Set();
     assert.ok(Array.isArray(publication.attestationEvidence.artifacts) && publication.attestationEvidence.artifacts.length, 'anonymous_saved_evidence_missing');

@@ -4,3 +4,10 @@ backend/mvnw text eol=lf
 # Generated contracts are compared byte-for-byte by the drift checks.
 contracts/generated/*.json text eol=lf
 shared/client-common/src/*.generated.ts text eol=lf
+
+# Publication evidence is verified against the exact retained bytes.
+infrastructure/runtime-security/reviewed-images.json text eol=lf
+infrastructure/runtime-security/history/** -text
+infrastructure/runtime-security/proofs/** -text
+infrastructure/keycloak/security-generation/proofs/** -text
+infrastructure/runtime-security/KEYCLOAK_ADVISORY_VALIDATION_2026-09-08.json -text
