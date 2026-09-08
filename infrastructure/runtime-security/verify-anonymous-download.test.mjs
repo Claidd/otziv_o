@@ -237,7 +237,7 @@ test('workflow waits for all publications and retains same-run component proofs 
   assert.match(job, /matrix: \$\{\{ fromJSON\(needs\.reviewed-image-inventory\.outputs\.matrix\) \}\}/);
   assert.match(job, /persist-credentials: false/);
   assert.match(job, /actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c/);
-  assert.ok(job.includes('name: reviewed-publication-${{ matrix.component }}'));
-  assert.ok(job.includes('name: anonymous-download-${{ matrix.component }}'));
+  assert.ok(job.includes('name: reviewed-publication-${{ matrix.component }}-attempt-${{ github.run_attempt }}'));
+  assert.ok(job.includes('name: anonymous-download-${{ matrix.component }}-attempt-${{ github.run_attempt }}'));
   assert.doesNotMatch(job, /github-token:|run-id:|packages:|docker login|GHCR_TOKEN|GITHUB_TOKEN/);
 });
