@@ -1,0 +1,410 @@
+[
+  {
+    "name": "dependency-check-maven-13.0.0.jar",
+    "sha256": "627ab0406bde4ae5261a5dc002cd233ddf6a044d6b3b92950188abf1951b4b13"
+  },
+  {
+    "name": "dependency-check-core-13.0.0.jar",
+    "sha256": "698c9958e5e1c12911845ea20a7bc5a1eb3c55cd69e808890d643716da4ed596"
+  },
+  {
+    "name": "pecoff4j-0.4.1.jar",
+    "sha256": "adc97f5795994581235582891f81de218239865dcd972d3b0c808e86b1f058c4"
+  },
+  {
+    "name": "jcs3-slf4j-1.0.5.jar",
+    "sha256": "5b2129a9115d17c9fb65b143f375ab0c15f850248fd5aa0f3307d2cc618df09b"
+  },
+  {
+    "name": "commons-jcs3-core-3.2.1.jar",
+    "sha256": "12c6fe08223820089f60969b6088e6ac5d358aa872de78357585cdacb6c61049"
+  },
+  {
+    "name": "cpe-parser-3.0.1.jar",
+    "sha256": "f98a50dce0a381e08f0f0ac067801c7f4c51dc7f8f1fe7a3c9960c684a809705"
+  },
+  {
+    "name": "semver4j-5.8.0.jar",
+    "sha256": "ca4055d354c9ad37bcb03b932a4bb8288166ec069c75d8ceaff14f8c76197fe6"
+  },
+  {
+    "name": "commons-collections4-4.5.0.jar",
+    "sha256": "00f93263c267be201b8ae521b44a7137271b16688435340bf629db1bac0a5845"
+  },
+  {
+    "name": "commons-compress-1.27.1.jar",
+    "sha256": "293d80f54b536b74095dcd7ea3cf0a29bbfc3402519281332495f4420d370d16"
+  },
+  {
+    "name": "commons-codec-1.17.1.jar",
+    "sha256": "f9f6cb103f2ddc3c99a9d80ada2ae7bf0685111fd6bffccb72033d1da4e6ff23"
+  },
+  {
+    "name": "commons-io-2.22.0.jar",
+    "sha256": "2b9a7b1f726fb86216dbd2c8321eabe0221dbd5b1be81c18e1cb53811b104758"
+  },
+  {
+    "name": "commons-text-1.15.0.jar",
+    "sha256": "58d2da30f058512a1e7f914e39241deca4dff5c27a085b4ed2faa9e7208067f6"
+  },
+  {
+    "name": "commons-dbcp2-2.14.0.jar",
+    "sha256": "459bebb8191906bacfeb73c62fcebc3e8c1e405a54594212b5f148d0567e668a"
+  },
+  {
+    "name": "commons-pool2-2.13.0.jar",
+    "sha256": "488ededfcc481666845265a64dccc322fc8f0205940b4943a53de2d8ed04c48c"
+  },
+  {
+    "name": "jakarta.transaction-api-1.3.3.jar",
+    "sha256": "0b02a194dd04ee2e192dc9da9579e10955dd6e8ac707adfc91d92f119b0e67ab"
+  },
+  {
+    "name": "lucene-core-9.12.3.jar",
+    "sha256": "b64a3f8098a7572034fb30085cdee01b34ec81fb0e5a31b471536af58dc6c01b"
+  },
+  {
+    "name": "lucene-analysis-common-9.12.3.jar",
+    "sha256": "fa571bd7caf0f0b4faf46a72ca004a7836f348c31d92bd522dddcc3d128d287e"
+  },
+  {
+    "name": "lucene-queryparser-9.12.3.jar",
+    "sha256": "5db83a184512fd7a46cf7b34efa997b5f1b28ad1cee26dd665180b19eab0a1b1"
+  },
+  {
+    "name": "lucene-queries-9.12.3.jar",
+    "sha256": "81c8993da5dcca9da5e4041b623f00169868e37988691434b14fc910c700a30c"
+  },
+  {
+    "name": "lucene-sandbox-9.12.3.jar",
+    "sha256": "21cf9ad1bb97265983c698b9c5eb071b1a4a1d4f0f74b98c6e61ad8f04c5c9d7"
+  },
+  {
+    "name": "lucene-facet-9.12.3.jar",
+    "sha256": "688e9b71fecba026e44f0a228cc0e09af3c9aec5e1f5b10e9f102a6730ef7dec"
+  },
+  {
+    "name": "jul-to-slf4j-2.0.18.jar",
+    "sha256": "cbb7d1aaaa9e871eb1a06594abd911bf97027152976edf1edc315be75239204e"
+  },
+  {
+    "name": "jcl-over-slf4j-2.0.18.jar",
+    "sha256": "ec5c36d57d2dbe100f84878f944575cb7871da32c7a115b8d7e0721277045d67"
+  },
+  {
+    "name": "velocity-engine-core-2.4.1.jar",
+    "sha256": "1c19157d1171d560088e485be97c93a7a2f7e9f56e517f0a30273c5c39df6231"
+  },
+  {
+    "name": "h2-2.4.240.jar",
+    "sha256": "29b70e427cc1c40cdc376283adbb0cc62853073797bb5fe5761f81fe73d57ce0"
+  },
+  {
+    "name": "jakarta.json-1.1.9.jar",
+    "sha256": "75b97f4c8dd035aae97a92478fdd7fe961a6ed7c4051b54377152decafa62a57"
+  },
+  {
+    "name": "jackson-datatype-jsr310-2.22.1.jar",
+    "sha256": "85da45b7e5e565418963ff8f0dcb184365b0557c15468933f4318dde5c3ce845"
+  },
+  {
+    "name": "jackson-module-blackbird-2.22.1.jar",
+    "sha256": "f39289def4930c5379e734f2c844d764684fe12b738498980be180dbcab97fc7"
+  },
+  {
+    "name": "jackson-dataformat-yaml-2.22.1.jar",
+    "sha256": "cc3a0e540791a9a1cbcd7584767b84572ffda0b72823856558f47dea69ae8ed1"
+  },
+  {
+    "name": "snakeyaml-2.5.jar",
+    "sha256": "e6682acf1ace77508ef13649cbf4f8d09d2cf5457bdb61d25ffb6ac0233d78dd"
+  },
+  {
+    "name": "retirejs-core-3.0.4.jar",
+    "sha256": "ef429049b1e828bfce0a98869765a7f10d7daf41acb03201fcd3404f424d0c37"
+  },
+  {
+    "name": "compiler-0.9.6.jar",
+    "sha256": "c4d697fd3619cb616cc5e22e9530c8a4fd4a8e9a76953c0655ee627cb2d22318"
+  },
+  {
+    "name": "ossindex-service-client-1.8.2.jar",
+    "sha256": "ef692b99e11e558524036447daedf7cb98285407d4db7af579a5914c265f981b"
+  },
+  {
+    "name": "gson-2.9.0.jar",
+    "sha256": "c96d60551331a196dac54b745aa642cd078ef89b6f267146b705f2c2cbef052d"
+  },
+  {
+    "name": "jaxb-api-2.3.1.jar",
+    "sha256": "88b955a0df57880a26a74708bc34f74dcaf8ebf4e78843a28b50eae945732b06"
+  },
+  {
+    "name": "javax.activation-api-1.2.0.jar",
+    "sha256": "43fdef0b5b6ceb31b0424b208b930c74ab58fac2ceeb7b3f6fd3aeb8b5ca4393"
+  },
+  {
+    "name": "toml4j-0.7.2.jar",
+    "sha256": "f5475e63e7e89e5db62223489aec7a56bd303543772077a17c2cb54c19ca3a20"
+  },
+  {
+    "name": "aho-corasick-double-array-trie-1.2.3.jar",
+    "sha256": "564f0fc690d50702a313510b9a72e9505ace6e81108e84f65de4feb0da244eb8"
+  },
+  {
+    "name": "commons-validator-1.10.1.jar",
+    "sha256": "ed74711a78d793ca37f6075e4a1e93d107233dfd20d0bb17e32bad88d38e56aa"
+  },
+  {
+    "name": "packager-rpm-0.21.0.jar",
+    "sha256": "07d2895d5360e3e29d298d74349577c97610713f17ed442e92db1bcf4a4a6ac2"
+  },
+  {
+    "name": "packager-core-0.21.0.jar",
+    "sha256": "70be2643085e0edba106691211535c9023bdb6fcc2c8348ea43a8438333c43d5"
+  },
+  {
+    "name": "xz-1.9.jar",
+    "sha256": "211b306cfc44f8f96df3a0a3ddaf75ba8c5289eed77d60d72f889bb855f535e5"
+  },
+  {
+    "name": "package-url-java-1.2.0.jar",
+    "sha256": "a5fe3de2603a5812c0358950c53e550fa2c330ca787c5534fc79576c8146abb4"
+  },
+  {
+    "name": "joda-time-2.14.2.jar",
+    "sha256": "6f65df20eed028bc1a2eba1506e27f943203534d099f94e16b6842391afb72f5"
+  },
+  {
+    "name": "ossindex-service-api-1.8.2.jar",
+    "sha256": "61fb04e93cf2991718057956f92534cbf1494ed5e74250b9dfd6c012bc379aa8"
+  },
+  {
+    "name": "javax.ws.rs-api-2.0.1.jar",
+    "sha256": "38607d626f2288d8fbc1b1f8a62c369e63806d9a313ac7cbc5f9d6c94f4b466d"
+  },
+  {
+    "name": "minlog-1.3.1.jar",
+    "sha256": "5d4d632cfbebfe0a7644501cc303570b691406181bee65e9916b921c767d7c72"
+  },
+  {
+    "name": "json-20260522.jar",
+    "sha256": "d671b45e5954211f3566722aa614fbd3b5d46e95f4f9da4dc58c173280bb1799"
+  },
+  {
+    "name": "dependency-check-utils-13.0.0.jar",
+    "sha256": "28b00a6ba5a204334a6fd9261604e4130a68d1132ae79c144ad47ce4e0ec609c"
+  },
+  {
+    "name": "maven-reporting-api-4.0.0.jar",
+    "sha256": "cb2cbde3c9c7288f7398a250dcf3c90cf92714cff301f22b298e1091b5def33c"
+  },
+  {
+    "name": "doxia-sink-api-2.1.0.jar",
+    "sha256": "b465db838dd482a994d32a088bea4bcbaa62cfb8b2853511a9f8c3e769402c74"
+  },
+  {
+    "name": "file-management-3.2.0.jar",
+    "sha256": "32ac469785dd1547ac71437e4c3916c4a56a3d69303cb08d789ecdd0bfd1d6de"
+  },
+  {
+    "name": "plexus-utils-4.0.3.jar",
+    "sha256": "421ff6ed146c53a9d4eaade8f629b52b12af7187101f1bd06c2c64e904019f3c"
+  },
+  {
+    "name": "plexus-xml-3.0.1.jar",
+    "sha256": "c1a510a87a62bd2d74ac1472dd31c3f9e9b0b8b8568f37d77c0f135415bebd05"
+  },
+  {
+    "name": "maven-dependency-tree-3.3.0.jar",
+    "sha256": "a3353f6a82feb950d5e7e64b0cd4ceadea7eb62112e447172e34974a510316f4"
+  },
+  {
+    "name": "maven-common-artifact-filters-3.4.0.jar",
+    "sha256": "931a77aa9dad6c91f10fcfafa70adc7608c004576b4924c74ecbffb27568a880"
+  },
+  {
+    "name": "commons-lang3-3.20.0.jar",
+    "sha256": "69e5c9fa35da7a51a5fd2099dfe56a2d8d32cf233e2f6d770e796146440263f4"
+  },
+  {
+    "name": "open-vulnerability-clients-9.0.6.jar",
+    "sha256": "34028f01a88cf7d032809c581e22bc005740391704b88f8147eeeb358fd75068"
+  },
+  {
+    "name": "jspecify-1.0.1.jar",
+    "sha256": "070d75f261fe4c5b8202508366715f7f2d4660f88c8ef7e6d3575e48c9683b66"
+  },
+  {
+    "name": "jmustache-1.16.jar",
+    "sha256": "3d4b984abd66908f05b38c9c892325cd4785d01ff33922569ff9b90c9ebfc475"
+  },
+  {
+    "name": "packageurl-java-1.5.0.jar",
+    "sha256": "e45551727707acc0c56ac62d56964332ea0f138d6cc3656d988b9369150f5247"
+  },
+  {
+    "name": "maven-core-3.9.15.jar",
+    "sha256": "9cc1a87e4864cf45ee6d896e39499f5ed257e99d3b0adb5a3b5f77299777f8d0"
+  },
+  {
+    "name": "maven-model-3.9.15.jar",
+    "sha256": "591722f628000086c5af93d5a367aaefec2f78476b6f732ad70a05d49942fbfd"
+  },
+  {
+    "name": "maven-settings-3.9.15.jar",
+    "sha256": "8219041d9e23043e349c2b330093be304b0f15b7be7b1ce3be0b09f170fd98af"
+  },
+  {
+    "name": "maven-settings-builder-3.9.15.jar",
+    "sha256": "3614a2331ec4ba14297cfd6834649816b89c1e85ad92148822a756d6204cc33a"
+  },
+  {
+    "name": "plexus-sec-dispatcher-2.0.jar",
+    "sha256": "873139960c4c780176dda580b003a2c4bf82188bdce5bb99234e224ef7acfceb"
+  },
+  {
+    "name": "plexus-cipher-2.0.jar",
+    "sha256": "9a7f1b5c5a9effd61eadfd8731452a2f76a8e79111fac391ef75ea801bea203a"
+  },
+  {
+    "name": "maven-builder-support-3.9.15.jar",
+    "sha256": "905745a1735ddd713c118315384a7b32af33a2b7017c227da12ad342fc08d852"
+  },
+  {
+    "name": "maven-repository-metadata-3.9.15.jar",
+    "sha256": "3d6245c893d452a89f606cf366f50bc84cc91da236f937c85d5f30db4aaeafb8"
+  },
+  {
+    "name": "maven-artifact-3.9.15.jar",
+    "sha256": "f154c31f15ac97c37b9cdf9f8d63cde5053c470d2daf54df7dfd3bb3c9e501c6"
+  },
+  {
+    "name": "maven-plugin-api-3.9.15.jar",
+    "sha256": "ea4ae22e2b86e7b63c674c3b5cdfcb074d2c54237b983d9292f94b6966986938"
+  },
+  {
+    "name": "maven-model-builder-3.9.15.jar",
+    "sha256": "73f653c16e06c62b391c72bb3b68e78eebd07eadb1214a60a60df81ec2c733fc"
+  },
+  {
+    "name": "maven-resolver-provider-3.9.15.jar",
+    "sha256": "194195fb2a0075aded42b6d4632da95d6574877371c17ac7614e894f5bfe9114"
+  },
+  {
+    "name": "maven-resolver-impl-1.9.27.jar",
+    "sha256": "295d48ea2a8bb3aef51888967f105fb6251997d111f13c32d28919fd9b1c951e"
+  },
+  {
+    "name": "maven-resolver-named-locks-1.9.27.jar",
+    "sha256": "b39ecd4da98fdac5068e6f5d16910a71f4e4d48e95e17d107f6603e18f2b3fdf"
+  },
+  {
+    "name": "maven-resolver-api-1.9.27.jar",
+    "sha256": "a895d222283666a7320ddc76615e2e93a41fabd93ce9a6bf9ddee39272bb87b4"
+  },
+  {
+    "name": "maven-resolver-spi-1.9.27.jar",
+    "sha256": "1cab02f45bc58d5f4d8e084eaf032f13ea1a5fc9021d8bd74f8360ebb6593e5a"
+  },
+  {
+    "name": "maven-resolver-util-1.9.27.jar",
+    "sha256": "74a12548f0d6aad13c728666288c1e81201c24bd05bb4e4ec8c1558517b379a7"
+  },
+  {
+    "name": "maven-shared-utils-3.4.2.jar",
+    "sha256": "b613357e1bad4dfc1dead801691c9460f9585fe7c6b466bc25186212d7d18487"
+  },
+  {
+    "name": "org.eclipse.sisu.plexus-1.0.0.jar",
+    "sha256": "865b5300034fc08c790215d7d97f141914c932191bef9338a7dcef589f7536e9"
+  },
+  {
+    "name": "org.eclipse.sisu.inject-1.0.0.jar",
+    "sha256": "3ab8d7bfe68f3b6ec95c1a0a47e628edbc9d76e90634cb0a0ba121fbb11b8e42"
+  },
+  {
+    "name": "asm-9.9.1.jar",
+    "sha256": "6f3828a215c920059a5efa2fb55c233d6c54ec5cadca99ce1b1bdd10077c7ddd"
+  },
+  {
+    "name": "guice-5.1.0-classes.jar",
+    "sha256": "142ad4475e19524d2fe3ac995b3f7cbc962fc726f2edb9dbdccc61feab9b2bf9"
+  },
+  {
+    "name": "aopalliance-1.0.jar",
+    "sha256": "0addec670fedcd3f113c5c8091d783280d23f75e3acb841b61a9cdb079376a08"
+  },
+  {
+    "name": "guava-33.5.0-jre.jar",
+    "sha256": "1e301f0c52ac248b0b14fdc3d12283c77252d4d6f48521d572e7d8c4c2cc4ac7"
+  },
+  {
+    "name": "failureaccess-1.0.3.jar",
+    "sha256": "cbfc3906b19b8f55dd7cfd6dfe0aa4532e834250d7f080bd8d211a3e246b59cb"
+  },
+  {
+    "name": "javax.inject-1.jar",
+    "sha256": "91c77044a50c481636c32d916fd89c9118a72195390452c81065080f957de7ff"
+  },
+  {
+    "name": "plexus-classworlds-2.9.0.jar",
+    "sha256": "1ad3292cd563381e3fd632f3fded1988f9e9b2be7a9f3db63ff4c4cedba13fa5"
+  },
+  {
+    "name": "plexus-interpolation-1.29.jar",
+    "sha256": "088d444dbcedfb384630d8686697ece3c401d6f33c8f8b3aa7259ea1c6996878"
+  },
+  {
+    "name": "plexus-component-annotations-2.2.0.jar",
+    "sha256": "50edb93c73786e62822b4fe1336e22880fdf147191373cf5c911370e16748fcf"
+  },
+  {
+    "name": "slf4j-api-1.7.36.jar",
+    "sha256": "d3ef575e3e4979678dc01bf1dcce51021493b4d11fb7f1be8ad982877c16a1c0"
+  },
+  {
+    "name": "maven-plugin-annotations-3.15.2.jar",
+    "sha256": "979d3cf8f4ac804cc27d2f8a6db07f2149d58ccd59bb3d589cc46bb9a44c0b4b"
+  },
+  {
+    "name": "jackson-core-2.22.2.jar",
+    "sha256": "ff167a6317be15895706c26668f45b898efe40ab8780970658210fe1393d52a6"
+  },
+  {
+    "name": "jackson-databind-2.22.2.jar",
+    "sha256": "d0da14c12b16b5d54719aa172d83b542ff4abeb8b0fb7db476fde8ceece760ca"
+  },
+  {
+    "name": "jackson-annotations-2.22.jar",
+    "sha256": "21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0"
+  },
+  {
+    "name": "jsoup-1.23.2.jar",
+    "sha256": "e9d8c856856680427f096d156f02a414289985c930998fcb519ce5be39b42003"
+  },
+  {
+    "name": "httpclient5-5.6.4.jar",
+    "sha256": "bdef5f8841145cd76c4c605ff301bc840eea0d5292332b7b892a93316c0d8ee1"
+  },
+  {
+    "name": "httpcore5-5.4.3.jar",
+    "sha256": "18bfbbabb478dfb67f31aeaf428c387f3c3df654582e1309f708ee1f3086830a"
+  },
+  {
+    "name": "httpcore5-h2-5.4.3.jar",
+    "sha256": "c7db7026b8e2dea39132b04a6069f6671e2858309b20a146ec5c7dd6ed73a0b6"
+  },
+  {
+    "name": "httpclient5-cache-5.6.4.jar",
+    "sha256": "c425cb6db4863480982899092d1d283f84c0f32914a59bf2de479e69daa8fa11"
+  },
+  {
+    "name": "junit-4.13.2.jar",
+    "sha256": "8e495b634469d64fb8acfa3495a065cbacc8a0fff55ce1e31007be4c16dc57d3"
+  },
+  {
+    "name": "hamcrest-core-1.3.jar",
+    "sha256": "66fdef91e9739348df7a096aa384a5685f4e875584cce89386a7a47251c4d8e9"
+  }
+]

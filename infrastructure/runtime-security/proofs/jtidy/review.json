@@ -1,0 +1,130 @@
+{
+  "schema": "otziv-jtidy-exact-artifact-adjudication-v1",
+  "reviewedAt": "2026-09-08T11:51:23.528858+00:00",
+  "decision": "not_affected_already_fixed_HTML_nesting",
+  "advisory": "CVE-2023-34623",
+  "expiresAt": "2027-01-01T00:00:00Z",
+  "artifact": {
+    "purl": "pkg:maven/com.github.jtidy/jtidy@1.0.5",
+    "sha1": "e57994fdeb7077b11a8ba05c93e3cb89c3ad8ed0",
+    "sha256": "7cea4360710adb44c588e13afdcdc0171fc1a3e61cc4562703ddb1f0a36f0ca4",
+    "centralUrl": "https://repo.maven.apache.org/maven2/com/github/jtidy/jtidy/1.0.5/jtidy-1.0.5.jar"
+  },
+  "source": {
+    "commit": "d2f8dd407899c005c12a9df1b5db807bbc0c79c8",
+    "centralSourcesJarSha256": "92b5ec9601171015a0c90fbddf460eb4a9f205f0b4447793ee6f9b08e261e067",
+    "parserSourceSha256": "d67018876a982190a67ff949c844f8f80f0c1e16a3617319e68961b2a7fa7db0",
+    "guard": "HTML parseTag checks nestingLevel>1000 before Parser.parse(...nestingLevel+1); HTML entry catches ExcessiveNesting",
+    "excludedClaims": [
+      "XML parsing safety",
+      "all recursive parser paths",
+      "arbitrary JVM stack sizes",
+      "all parser defects"
+    ]
+  },
+  "hosted": {
+    "repository": "Claidd/otziv_o",
+    "pr": 2,
+    "head": "dcfc344561c2e2acd9be60559f4973ca36aa2b82",
+    "runId": 34210143979,
+    "runAttempt": 1,
+    "jobId": 102009243409,
+    "artifactId": 10049722566,
+    "artifactZipDigest": "sha256:4d91666270155fb5164c43b62da6804e4425e0cb26d4b01819a99fef9d80eb7d",
+    "downloadDigestVerified": true,
+    "reports": [
+      {
+        "file": "raw-c13/backend__build-support__dependency-audit__target__dependency-check-report.json.gz",
+        "gzipSha256": "4842647c9af79ac257ccce8aaafad97876c58c8a1fbd285b0ff9cc7e824ae65c",
+        "rawSha256": "408ffb867fb6e457d993389e11b8849a3fb211189fbf09f95683d391080d2b05"
+      },
+      {
+        "file": "raw-c13/backend__build-support__site-plugin__target__dependency-check-report.json.gz",
+        "gzipSha256": "e5ca06052d7983449bd9b65712bd8d345e7f1f8b3f74471e64fabd270d794530",
+        "rawSha256": "b620b26b08828ee40b3a20940b8f46c7a14c84454351d40225a576276fbf3390"
+      },
+      {
+        "file": "raw-c13/backend__build-support__target__dependency-check-report.json.gz",
+        "gzipSha256": "e3229125fc0775eae490606150d111769a1792ef1a6709228b3515e5f9babc19",
+        "rawSha256": "7b7089d33cc61e350b2e73acad674fbbedfabdd8a41bef1a79fcac34a5c6eb56"
+      },
+      {
+        "file": "raw-c13/backend__build-support__test-transport__target__dependency-check-report.json.gz",
+        "gzipSha256": "f004e0666eb8058a8e7ca2a580a628302dd06a7457c2472d56b1d7381a17387d",
+        "rawSha256": "5e2111590b2efbf27b1c4dc200e9d3bf9837dc95eb0e019796ec67519e4687db"
+      },
+      {
+        "file": "raw-c13/backend__target__dependency-check-report.json.gz",
+        "gzipSha256": "74fa6ce65ed8e6430120d40a3fd0097c3456d09436888e15c3bcb1d1b5562fb2",
+        "rawSha256": "8a0a0c7733d4be901ee4bdc4e03efe46a0273806f994b6311134bef7adf439c2"
+      },
+      {
+        "file": "raw-c13/infrastructure__keycloak__security-generation__target__dependency-check-report.json.gz",
+        "gzipSha256": "b92985d589c0ca72bb5a11b09d18c41bb64d8cac3003c91269d0815eaa9d0eed",
+        "rawSha256": "4f9882c4c12ab09429876512d3164e38ee50b12c8640c89fb35f889d37bd8797"
+      }
+    ]
+  },
+  "validation": {
+    "actualEngine": "ODC13.0.0 parser and VulnerabilitySuppressionAnalyzer",
+    "engineChecks": 94,
+    "rawOccurrences": 34,
+    "exactCorrectedOccurrences": 2,
+    "retainedOccurrences": 32,
+    "freshJvm": "OpenJDK26.0.1",
+    "oldAndFixedOrdinaryCases": "PASS",
+    "oldExcessiveHtml": "expected StackOverflowError, caught exit42",
+    "fixedExcessiveHtml": "controlled rejection, exit0",
+    "freshAuthenticatedAudit": false,
+    "fullPlanComplete": false
+  },
+  "files": {
+    ".gitattributes": "19ba507cdadc73d354eee3319d7acc4d39cc4de628c0edbbb6cc74ca5c1347fd",
+    "1.0.5-ParserImpl.javap.txt": "97ae1052919df5f2efe5b6a9fdddb61ac74e0561c749fc37aae6695e9afa99e6",
+    "after.xml": "3f98fa7e4d3917ebbfdca407f1a1500290929171d08c8771e4c3879b45c841cc",
+    "before.xml": "c0244e91bae31e0d4912289e40c44788fcbb98db386a5f9cc25c705cbd1c07ab",
+    "engine-classpath.json": "191de252369e891b2d9040e1b8fc4d6302bfb7a17ed0bd88693cdb5a0f1faa94",
+    "execution-records.json": "b98aae6002ff1f1ac492ecae3863b184da6d104ff6486e84960195bede49fd34",
+    "JTidyNestingProof.java": "2672d8f8a7594df577e73ad82f1e7875d3008e03c5584e4d20fee6dc1c17b4e7",
+    "JTidySuppressionProof.java": "e7eff64c0239e1ed4d383bcc13666b4bc8877d1baf87d18b978ee48a0263c9c9",
+    "primary/CVE-2023-34623.json": "d31bf29e17b1d3d3644213f3ecfbea492a7a4a94906b67d5e44d18e25165519f",
+    "primary/ExcessiveNesting.java": "7d2751d8a4d8b2eee1505b7d36b751c9ce2ca2afabd7d021e2a4ae89bcfb4b0f",
+    "primary/jtidy-maven-metadata.xml": "ebc095ccd41381561a8929a6883fe5f0265c0f5f68153ba976aaefe05997dd2c",
+    "primary/Parser.java": "b58e7deb9d30c1d7cfd3e62464eeecb59fbb31e6c5d32a397f41abeaef6db325",
+    "primary/ParserImpl.java": "d67018876a982190a67ff949c844f8f80f0c1e16a3617319e68961b2a7fa7db0",
+    "primary/r938-ParserImpl.java": "0f9266d1d53812c73d17d8bf133686cad135c4170ba1eec9e9b3edd9af086881",
+    "primary/Tidy.java": "beda169b899dc480e30d2c7886293f82ac5b13ffddb03f02de5d4766a77bb51a",
+    "primary/upstream-issue-4.json": "16a963bf55212e96fb232fbfbdf698c2b63d47787f4d09988d25f6d61af42242",
+    "primary/upstream-issue-63-comments.json": "3afec80934f4bbcba11fc1d3de7df99558dd3ef100bf8238b3721655fe4deb80",
+    "primary/upstream-issue-63.json": "87097903e9b76421f5bffa176ae6e85544a084992722e75da8291b221e83065a",
+    "prior-c7-runtime.json": "8a61fe744dc646beabf4e08c8ab2e1355d317aa4a9829032b30cf6829d052853",
+    "r938-ParserImpl.javap.txt": "10b2c7703e152c45f9a3f11128efe725af3b04c7c57259816581cc28c4437222",
+    "raw-c13/backend__build-support__dependency-audit__target__dependency-check-report.json.gz": "4842647c9af79ac257ccce8aaafad97876c58c8a1fbd285b0ff9cc7e824ae65c",
+    "raw-c13/backend__build-support__site-plugin__target__dependency-check-report.json.gz": "e5ca06052d7983449bd9b65712bd8d345e7f1f8b3f74471e64fabd270d794530",
+    "raw-c13/backend__build-support__target__dependency-check-report.json.gz": "e3229125fc0775eae490606150d111769a1792ef1a6709228b3515e5f9babc19",
+    "raw-c13/backend__build-support__test-transport__target__dependency-check-report.json.gz": "f004e0666eb8058a8e7ca2a580a628302dd06a7457c2472d56b1d7381a17387d",
+    "raw-c13/backend__target__dependency-check-report.json.gz": "74fa6ce65ed8e6430120d40a3fd0097c3456d09436888e15c3bcb1d1b5562fb2",
+    "raw-c13/infrastructure__keycloak__security-generation__target__dependency-check-report.json.gz": "b92985d589c0ca72bb5a11b09d18c41bb64d8cac3003c91269d0815eaa9d0eed",
+    "README.md": "91f0a7b57bbe1f862c7bcfa9ed73dac13b872d363511f1b9a0916e464f6ec173",
+    "run-proof.py": "1de95508377ce43883babd37fc48238e41073e393565576ee727146f15746556",
+    "runtime-logs/1.0.5-actual-parser-bytecode.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-logs/1.0.5-actual-parser-bytecode.stdout.log": "97ae1052919df5f2efe5b6a9fdddb61ac74e0561c749fc37aae6695e9afa99e6",
+    "runtime-logs/1.0.5-excessive.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-logs/1.0.5-excessive.stdout.log": "6dcbfbf79b4876f360496245d019834423d98420af2b844874dc90209c8e857c",
+    "runtime-logs/1.0.5-ordinary.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-logs/1.0.5-ordinary.stdout.log": "1986c97d24ed59b6e186c5e9916e1f3f774adbd4b7a879a9f8fc94d66d2ec06a",
+    "runtime-logs/compile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-logs/compile.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-logs/java-version.stderr.log": "2174fb01449a61f0f2a5153d56be8555221be47029f36eb1d0307c19154f463e",
+    "runtime-logs/java-version.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-logs/odc-selector.stderr.log": "c913e1a5703e4c1bb92aa6d824934dff7cc6ca0daba7b8c19c6f3e40478084b9",
+    "runtime-logs/odc-selector.stdout.log": "e3de66b11e256ee87c99a0632c4290a72be04d8db536c19aab6866d19b19ab29",
+    "runtime-logs/r938-actual-parser-bytecode.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-logs/r938-actual-parser-bytecode.stdout.log": "10b2c7703e152c45f9a3f11128efe725af3b04c7c57259816581cc28c4437222",
+    "runtime-logs/r938-excessive.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-logs/r938-excessive.stdout.log": "cec4c9be17c416a529f9efc3e93d169eb07836786183f5869d2ab957fd3e94fa",
+    "runtime-logs/r938-ordinary.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime-logs/r938-ordinary.stdout.log": "1986c97d24ed59b6e186c5e9916e1f3f774adbd4b7a879a9f8fc94d66d2ec06a",
+    "selector-result.json": "93d826e7c0839b445414fd515971859a7acea157418c7b637ee3d6b16dcbf4b9"
+  }
+}

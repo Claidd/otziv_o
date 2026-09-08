@@ -1,0 +1,53 @@
+{
+  "result" : "PASS",
+  "checks" : 94,
+  "engine" : "Unmodified ODC13 SuppressionParser/XSD + VulnerabilitySuppressionAnalyzer",
+  "engineJar" : "dependency-check-core-13.0.0.jar",
+  "engineJarSha256" : "698c9958e5e1c12911845ea20a7bc5a1eb3c55cd69e808890d643716da4ed596",
+  "beforeXmlSha256" : "c0244e91bae31e0d4912289e40c44788fcbb98db386a5f9cc25c705cbd1c07ab",
+  "afterXmlSha256" : "3f98fa7e4d3917ebbfdca407f1a1500290929171d08c8771e4c3879b45c841cc",
+  "artifactSha256" : "7cea4360710adb44c588e13afdcdc0171fc1a3e61cc4562703ddb1f0a36f0ca4",
+  "rawOccurrences" : 34,
+  "correctedOccurrences" : 2,
+  "reports" : [ {
+    "highCriticalAfter" : 0,
+    "correctedOccurrences" : 1,
+    "highCriticalBefore" : 1,
+    "rawOccurrences" : 1,
+    "report" : "backend__build-support__dependency-audit__target__dependency-check-report.json.gz"
+  }, {
+    "highCriticalAfter" : 0,
+    "correctedOccurrences" : 1,
+    "highCriticalBefore" : 1,
+    "rawOccurrences" : 2,
+    "report" : "backend__build-support__site-plugin__target__dependency-check-report.json.gz"
+  }, {
+    "highCriticalAfter" : 0,
+    "correctedOccurrences" : 0,
+    "highCriticalBefore" : 0,
+    "rawOccurrences" : 0,
+    "report" : "backend__build-support__target__dependency-check-report.json.gz"
+  }, {
+    "highCriticalAfter" : 0,
+    "correctedOccurrences" : 0,
+    "highCriticalBefore" : 0,
+    "rawOccurrences" : 0,
+    "report" : "backend__build-support__test-transport__target__dependency-check-report.json.gz"
+  }, {
+    "highCriticalAfter" : 0,
+    "correctedOccurrences" : 0,
+    "highCriticalBefore" : 0,
+    "rawOccurrences" : 9,
+    "report" : "backend__target__dependency-check-report.json.gz"
+  }, {
+    "highCriticalAfter" : 0,
+    "correctedOccurrences" : 0,
+    "highCriticalBefore" : 0,
+    "rawOccurrences" : 22,
+    "report" : "infrastructure__keycloak__security-generation__target__dependency-check-report.json.gz"
+  } ],
+  "sourcesTested" : [ "NVD", "OSSINDEX" ],
+  "negativeCases" : [ "other CVE", "altered actual JAR same PURL", "old r938", "other version", "missing artifact/hash", "expired rule" ],
+  "providerCalls" : 0,
+  "fullAudit" : false
+}

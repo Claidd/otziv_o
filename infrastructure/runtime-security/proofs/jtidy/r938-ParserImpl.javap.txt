@@ -1,0 +1,714 @@
+Compiled from "ParserImpl.java"
+public final class org.w3c.tidy.ParserImpl {
+  public static final org.w3c.tidy.Parser HTML;
+
+  public static final org.w3c.tidy.Parser HEAD;
+
+  public static final org.w3c.tidy.Parser TITLE;
+
+  public static final org.w3c.tidy.Parser SCRIPT;
+
+  public static final org.w3c.tidy.Parser BODY;
+
+  public static final org.w3c.tidy.Parser FRAMESET;
+
+  public static final org.w3c.tidy.Parser INLINE;
+
+  public static final org.w3c.tidy.Parser LIST;
+
+  public static final org.w3c.tidy.Parser DEFLIST;
+
+  public static final org.w3c.tidy.Parser PRE;
+
+  public static final org.w3c.tidy.Parser BLOCK;
+
+  public static final org.w3c.tidy.Parser TABLETAG;
+
+  public static final org.w3c.tidy.Parser COLGROUP;
+
+  public static final org.w3c.tidy.Parser ROWGROUP;
+
+  public static final org.w3c.tidy.Parser ROW;
+
+  public static final org.w3c.tidy.Parser NOFRAMES;
+
+  public static final org.w3c.tidy.Parser SELECT;
+
+  public static final org.w3c.tidy.Parser TEXT;
+
+  public static final org.w3c.tidy.Parser EMPTY;
+
+  public static final org.w3c.tidy.Parser OPTGROUP;
+
+  private org.w3c.tidy.ParserImpl();
+    Code:
+         0: aload_0
+         1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+         4: return
+
+  protected static void parseTag(org.w3c.tidy.Lexer, org.w3c.tidy.Node, short);
+    Code:
+         0: aload_1
+         1: getfield      #2                  // Field org/w3c/tidy/Node.tag:Lorg/w3c/tidy/Dict;
+         4: getfield      #3                  // Field org/w3c/tidy/Dict.model:I
+         7: iconst_1
+         8: iand
+         9: ifeq          20
+        12: aload_0
+        13: iconst_0
+        14: putfield      #4                  // Field org/w3c/tidy/Lexer.waswhite:Z
+        17: goto          38
+        20: aload_1
+        21: getfield      #2                  // Field org/w3c/tidy/Node.tag:Lorg/w3c/tidy/Dict;
+        24: getfield      #3                  // Field org/w3c/tidy/Dict.model:I
+        27: bipush        16
+        29: iand
+        30: ifne          38
+        33: aload_0
+        34: iconst_0
+        35: putfield      #5                  // Field org/w3c/tidy/Lexer.insertspace:Z
+        38: aload_1
+        39: getfield      #2                  // Field org/w3c/tidy/Node.tag:Lorg/w3c/tidy/Dict;
+        42: invokevirtual #6                  // Method org/w3c/tidy/Dict.getParser:()Lorg/w3c/tidy/Parser;
+        45: ifnonnull     49
+        48: return
+        49: aload_1
+        50: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+        53: bipush        7
+        55: if_icmpne     64
+        58: aload_0
+        59: aload_1
+        60: invokestatic  #8                  // Method org/w3c/tidy/Node.trimEmptyElement:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;)V
+        63: return
+        64: aload_1
+        65: getfield      #2                  // Field org/w3c/tidy/Node.tag:Lorg/w3c/tidy/Dict;
+        68: invokevirtual #6                  // Method org/w3c/tidy/Dict.getParser:()Lorg/w3c/tidy/Parser;
+        71: aload_0
+        72: aload_1
+        73: iload_2
+        74: invokeinterface #9,  4            // InterfaceMethod org/w3c/tidy/Parser.parse:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;S)V
+        79: return
+
+  protected static void moveToHead(org.w3c.tidy.Lexer, org.w3c.tidy.Node, org.w3c.tidy.Node);
+    Code:
+         0: aload_2
+         1: invokevirtual #10                 // Method org/w3c/tidy/Node.removeNode:()V
+         4: aload_0
+         5: getfield      #11                 // Field org/w3c/tidy/Lexer.configuration:Lorg/w3c/tidy/Configuration;
+         8: getfield      #12                 // Field org/w3c/tidy/Configuration.tt:Lorg/w3c/tidy/TagTable;
+        11: astore        4
+        13: aload_2
+        14: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+        17: iconst_5
+        18: if_icmpeq     30
+        21: aload_2
+        22: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+        25: bipush        7
+        27: if_icmpne     118
+        30: aload_0
+        31: getfield      #13                 // Field org/w3c/tidy/Lexer.report:Lorg/w3c/tidy/Report;
+        34: aload_0
+        35: aload_1
+        36: aload_2
+        37: bipush        11
+        39: invokevirtual #14                 // Method org/w3c/tidy/Report.warning:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;S)V
+        42: aload_1
+        43: getfield      #2                  // Field org/w3c/tidy/Node.tag:Lorg/w3c/tidy/Dict;
+        46: aload         4
+        48: getfield      #15                 // Field org/w3c/tidy/TagTable.tagHtml:Lorg/w3c/tidy/Dict;
+        51: if_acmpeq     62
+        54: aload_1
+        55: getfield      #16                 // Field org/w3c/tidy/Node.parent:Lorg/w3c/tidy/Node;
+        58: astore_1
+        59: goto          42
+        62: aload_1
+        63: getfield      #17                 // Field org/w3c/tidy/Node.content:Lorg/w3c/tidy/Node;
+        66: astore_3
+        67: aload_3
+        68: ifnull        99
+        71: aload_3
+        72: getfield      #2                  // Field org/w3c/tidy/Node.tag:Lorg/w3c/tidy/Dict;
+        75: aload         4
+        77: getfield      #18                 // Field org/w3c/tidy/TagTable.tagHead:Lorg/w3c/tidy/Dict;
+        80: if_acmpne     91
+        83: aload_3
+        84: aload_2
+        85: invokevirtual #19                 // Method org/w3c/tidy/Node.insertNodeAtEnd:(Lorg/w3c/tidy/Node;)V
+        88: goto          99
+        91: aload_3
+        92: getfield      #20                 // Field org/w3c/tidy/Node.next:Lorg/w3c/tidy/Node;
+        95: astore_3
+        96: goto          67
+        99: aload_2
+       100: getfield      #2                  // Field org/w3c/tidy/Node.tag:Lorg/w3c/tidy/Dict;
+       103: invokevirtual #6                  // Method org/w3c/tidy/Dict.getParser:()Lorg/w3c/tidy/Parser;
+       106: ifnull        130
+       109: aload_0
+       110: aload_2
+       111: iconst_0
+       112: invokestatic  #21                 // Method parseTag:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;S)V
+       115: goto          130
+       118: aload_0
+       119: getfield      #13                 // Field org/w3c/tidy/Lexer.report:Lorg/w3c/tidy/Report;
+       122: aload_0
+       123: aload_1
+       124: aload_2
+       125: bipush        8
+       127: invokevirtual #14                 // Method org/w3c/tidy/Report.warning:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;S)V
+       130: return
+
+  static void moveNodeToBody(org.w3c.tidy.Lexer, org.w3c.tidy.Node);
+    Code:
+         0: aload_1
+         1: invokevirtual #10                 // Method org/w3c/tidy/Node.removeNode:()V
+         4: aload_0
+         5: getfield      #22                 // Field org/w3c/tidy/Lexer.root:Lorg/w3c/tidy/Node;
+         8: aload_0
+         9: getfield      #11                 // Field org/w3c/tidy/Lexer.configuration:Lorg/w3c/tidy/Configuration;
+        12: getfield      #12                 // Field org/w3c/tidy/Configuration.tt:Lorg/w3c/tidy/TagTable;
+        15: invokevirtual #23                 // Method org/w3c/tidy/Node.findBody:(Lorg/w3c/tidy/TagTable;)Lorg/w3c/tidy/Node;
+        18: astore_2
+        19: aload_2
+        20: aload_1
+        21: invokevirtual #19                 // Method org/w3c/tidy/Node.insertNodeAtEnd:(Lorg/w3c/tidy/Node;)V
+        24: return
+
+  public static org.w3c.tidy.Node parseDocument(org.w3c.tidy.Lexer);
+    Code:
+         0: aconst_null
+         1: astore        4
+         3: aload_0
+         4: getfield      #11                 // Field org/w3c/tidy/Lexer.configuration:Lorg/w3c/tidy/Configuration;
+         7: getfield      #12                 // Field org/w3c/tidy/Configuration.tt:Lorg/w3c/tidy/TagTable;
+        10: astore        5
+        12: aload_0
+        13: invokevirtual #24                 // Method org/w3c/tidy/Lexer.newNode:()Lorg/w3c/tidy/Node;
+        16: astore_2
+        17: aload_2
+        18: iconst_0
+        19: putfield      #7                  // Field org/w3c/tidy/Node.type:S
+        22: aload_0
+        23: aload_2
+        24: putfield      #22                 // Field org/w3c/tidy/Lexer.root:Lorg/w3c/tidy/Node;
+        27: aload_0
+        28: iconst_0
+        29: invokevirtual #25                 // Method org/w3c/tidy/Lexer.getToken:(S)Lorg/w3c/tidy/Node;
+        32: dup
+        33: astore_1
+        34: ifnull        195
+        37: aload_2
+        38: aload_1
+        39: invokestatic  #26                 // Method org/w3c/tidy/Node.insertMisc:(Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;)Z
+        42: ifeq          48
+        45: goto          27
+        48: aload_1
+        49: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+        52: iconst_1
+        53: if_icmpne     87
+        56: aload         4
+        58: ifnonnull     72
+        61: aload_2
+        62: aload_1
+        63: invokevirtual #19                 // Method org/w3c/tidy/Node.insertNodeAtEnd:(Lorg/w3c/tidy/Node;)V
+        66: aload_1
+        67: astore        4
+        69: goto          27
+        72: aload_0
+        73: getfield      #13                 // Field org/w3c/tidy/Lexer.report:Lorg/w3c/tidy/Report;
+        76: aload_0
+        77: aload_2
+        78: aload_1
+        79: bipush        8
+        81: invokevirtual #14                 // Method org/w3c/tidy/Report.warning:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;S)V
+        84: goto          27
+        87: aload_1
+        88: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+        91: bipush        6
+        93: if_icmpne     111
+        96: aload_0
+        97: getfield      #13                 // Field org/w3c/tidy/Lexer.report:Lorg/w3c/tidy/Report;
+       100: aload_0
+       101: aload_2
+       102: aload_1
+       103: bipush        8
+       105: invokevirtual #14                 // Method org/w3c/tidy/Report.warning:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;S)V
+       108: goto          27
+       111: aload_1
+       112: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+       115: iconst_5
+       116: if_icmpne     131
+       119: aload_1
+       120: getfield      #2                  // Field org/w3c/tidy/Node.tag:Lorg/w3c/tidy/Dict;
+       123: aload         5
+       125: getfield      #15                 // Field org/w3c/tidy/TagTable.tagHtml:Lorg/w3c/tidy/Dict;
+       128: if_acmpeq     145
+       131: aload_0
+       132: invokevirtual #27                 // Method org/w3c/tidy/Lexer.ungetToken:()V
+       135: aload_0
+       136: ldc           #28                 // String html
+       138: invokevirtual #29                 // Method org/w3c/tidy/Lexer.inferredTag:(Ljava/lang/String;)Lorg/w3c/tidy/Node;
+       141: astore_3
+       142: goto          147
+       145: aload_1
+       146: astore_3
+       147: aload_2
+       148: invokevirtual #30                 // Method org/w3c/tidy/Node.findDocType:()Lorg/w3c/tidy/Node;
+       151: ifnonnull     176
+       154: aload_0
+       155: getfield      #11                 // Field org/w3c/tidy/Lexer.configuration:Lorg/w3c/tidy/Configuration;
+       158: getfield      #31                 // Field org/w3c/tidy/Configuration.bodyOnly:Z
+       161: ifne          176
+       164: aload_0
+       165: getfield      #13                 // Field org/w3c/tidy/Lexer.report:Lorg/w3c/tidy/Report;
+       168: aload_0
+       169: aconst_null
+       170: aconst_null
+       171: bipush        44
+       173: invokevirtual #14                 // Method org/w3c/tidy/Report.warning:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;S)V
+       176: aload_2
+       177: aload_3
+       178: invokevirtual #19                 // Method org/w3c/tidy/Node.insertNodeAtEnd:(Lorg/w3c/tidy/Node;)V
+       181: getstatic     #32                 // Field HTML:Lorg/w3c/tidy/Parser;
+       184: aload_0
+       185: aload_3
+       186: iconst_0
+       187: invokeinterface #9,  4            // InterfaceMethod org/w3c/tidy/Parser.parse:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;S)V
+       192: goto          195
+       195: aload_0
+       196: getfield      #22                 // Field org/w3c/tidy/Lexer.root:Lorg/w3c/tidy/Node;
+       199: aload_0
+       200: getfield      #11                 // Field org/w3c/tidy/Lexer.configuration:Lorg/w3c/tidy/Configuration;
+       203: getfield      #12                 // Field org/w3c/tidy/Configuration.tt:Lorg/w3c/tidy/TagTable;
+       206: invokevirtual #33                 // Method org/w3c/tidy/Node.findHTML:(Lorg/w3c/tidy/TagTable;)Lorg/w3c/tidy/Node;
+       209: ifnonnull     238
+       212: aload_0
+       213: ldc           #28                 // String html
+       215: invokevirtual #29                 // Method org/w3c/tidy/Lexer.inferredTag:(Ljava/lang/String;)Lorg/w3c/tidy/Node;
+       218: astore_3
+       219: aload_0
+       220: getfield      #22                 // Field org/w3c/tidy/Lexer.root:Lorg/w3c/tidy/Node;
+       223: aload_3
+       224: invokevirtual #19                 // Method org/w3c/tidy/Node.insertNodeAtEnd:(Lorg/w3c/tidy/Node;)V
+       227: getstatic     #32                 // Field HTML:Lorg/w3c/tidy/Parser;
+       230: aload_0
+       231: aload_3
+       232: iconst_0
+       233: invokeinterface #9,  4            // InterfaceMethod org/w3c/tidy/Parser.parse:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;S)V
+       238: aload_0
+       239: getfield      #22                 // Field org/w3c/tidy/Lexer.root:Lorg/w3c/tidy/Node;
+       242: aload_0
+       243: getfield      #11                 // Field org/w3c/tidy/Lexer.configuration:Lorg/w3c/tidy/Configuration;
+       246: getfield      #12                 // Field org/w3c/tidy/Configuration.tt:Lorg/w3c/tidy/TagTable;
+       249: invokevirtual #34                 // Method org/w3c/tidy/Node.findTITLE:(Lorg/w3c/tidy/TagTable;)Lorg/w3c/tidy/Node;
+       252: ifnonnull     295
+       255: aload_0
+       256: getfield      #22                 // Field org/w3c/tidy/Lexer.root:Lorg/w3c/tidy/Node;
+       259: aload_0
+       260: getfield      #11                 // Field org/w3c/tidy/Lexer.configuration:Lorg/w3c/tidy/Configuration;
+       263: getfield      #12                 // Field org/w3c/tidy/Configuration.tt:Lorg/w3c/tidy/TagTable;
+       266: invokevirtual #35                 // Method org/w3c/tidy/Node.findHEAD:(Lorg/w3c/tidy/TagTable;)Lorg/w3c/tidy/Node;
+       269: astore        6
+       271: aload_0
+       272: getfield      #13                 // Field org/w3c/tidy/Lexer.report:Lorg/w3c/tidy/Report;
+       275: aload_0
+       276: aload         6
+       278: aconst_null
+       279: bipush        17
+       281: invokevirtual #14                 // Method org/w3c/tidy/Report.warning:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;S)V
+       284: aload         6
+       286: aload_0
+       287: ldc           #36                 // String title
+       289: invokevirtual #29                 // Method org/w3c/tidy/Lexer.inferredTag:(Ljava/lang/String;)Lorg/w3c/tidy/Node;
+       292: invokevirtual #19                 // Method org/w3c/tidy/Node.insertNodeAtEnd:(Lorg/w3c/tidy/Node;)V
+       295: aload_2
+       296: areturn
+
+  public static boolean XMLPreserveWhiteSpace(org.w3c.tidy.Node, org.w3c.tidy.TagTable);
+    Code:
+         0: aload_0
+         1: getfield      #37                 // Field org/w3c/tidy/Node.attributes:Lorg/w3c/tidy/AttVal;
+         4: astore_2
+         5: aload_2
+         6: ifnull        45
+         9: aload_2
+        10: getfield      #38                 // Field org/w3c/tidy/AttVal.attribute:Ljava/lang/String;
+        13: ldc           #39                 // String xml:space
+        15: invokevirtual #40                 // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        18: ifeq          37
+        21: aload_2
+        22: getfield      #41                 // Field org/w3c/tidy/AttVal.value:Ljava/lang/String;
+        25: ldc           #42                 // String preserve
+        27: invokevirtual #40                 // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        30: ifeq          35
+        33: iconst_1
+        34: ireturn
+        35: iconst_0
+        36: ireturn
+        37: aload_2
+        38: getfield      #43                 // Field org/w3c/tidy/AttVal.next:Lorg/w3c/tidy/AttVal;
+        41: astore_2
+        42: goto          5
+        45: aload_0
+        46: getfield      #44                 // Field org/w3c/tidy/Node.element:Ljava/lang/String;
+        49: ifnonnull     54
+        52: iconst_0
+        53: ireturn
+        54: ldc           #45                 // String pre
+        56: aload_0
+        57: getfield      #44                 // Field org/w3c/tidy/Node.element:Ljava/lang/String;
+        60: invokevirtual #46                 // Method java/lang/String.equalsIgnoreCase:(Ljava/lang/String;)Z
+        63: ifne          90
+        66: ldc           #47                 // String script
+        68: aload_0
+        69: getfield      #44                 // Field org/w3c/tidy/Node.element:Ljava/lang/String;
+        72: invokevirtual #46                 // Method java/lang/String.equalsIgnoreCase:(Ljava/lang/String;)Z
+        75: ifne          90
+        78: ldc           #48                 // String style
+        80: aload_0
+        81: getfield      #44                 // Field org/w3c/tidy/Node.element:Ljava/lang/String;
+        84: invokevirtual #46                 // Method java/lang/String.equalsIgnoreCase:(Ljava/lang/String;)Z
+        87: ifeq          92
+        90: iconst_1
+        91: ireturn
+        92: aload_1
+        93: ifnull        109
+        96: aload_1
+        97: aload_0
+        98: invokevirtual #49                 // Method org/w3c/tidy/TagTable.findParser:(Lorg/w3c/tidy/Node;)Lorg/w3c/tidy/Parser;
+       101: getstatic     #50                 // Field PRE:Lorg/w3c/tidy/Parser;
+       104: if_acmpne     109
+       107: iconst_1
+       108: ireturn
+       109: ldc           #51                 // String xsl:text
+       111: aload_0
+       112: getfield      #44                 // Field org/w3c/tidy/Node.element:Ljava/lang/String;
+       115: invokevirtual #46                 // Method java/lang/String.equalsIgnoreCase:(Ljava/lang/String;)Z
+       118: ifeq          123
+       121: iconst_1
+       122: ireturn
+       123: iconst_0
+       124: ireturn
+
+  public static void parseXMLElement(org.w3c.tidy.Lexer, org.w3c.tidy.Node, short);
+    Code:
+         0: aload_1
+         1: aload_0
+         2: getfield      #11                 // Field org/w3c/tidy/Lexer.configuration:Lorg/w3c/tidy/Configuration;
+         5: getfield      #12                 // Field org/w3c/tidy/Configuration.tt:Lorg/w3c/tidy/TagTable;
+         8: invokestatic  #52                 // Method XMLPreserveWhiteSpace:(Lorg/w3c/tidy/Node;Lorg/w3c/tidy/TagTable;)Z
+        11: ifeq          16
+        14: iconst_2
+        15: istore_2
+        16: aload_0
+        17: iload_2
+        18: invokevirtual #25                 // Method org/w3c/tidy/Lexer.getToken:(S)Lorg/w3c/tidy/Node;
+        21: dup
+        22: astore_3
+        23: ifnull        103
+        26: aload_3
+        27: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+        30: bipush        6
+        32: if_icmpne     57
+        35: aload_3
+        36: getfield      #44                 // Field org/w3c/tidy/Node.element:Ljava/lang/String;
+        39: aload_1
+        40: getfield      #44                 // Field org/w3c/tidy/Node.element:Ljava/lang/String;
+        43: invokevirtual #40                 // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        46: ifeq          57
+        49: aload_1
+        50: iconst_1
+        51: putfield      #53                 // Field org/w3c/tidy/Node.closed:Z
+        54: goto          103
+        57: aload_3
+        58: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+        61: bipush        6
+        63: if_icmpne     81
+        66: aload_0
+        67: getfield      #13                 // Field org/w3c/tidy/Lexer.report:Lorg/w3c/tidy/Report;
+        70: aload_0
+        71: aload_1
+        72: aload_3
+        73: bipush        13
+        75: invokevirtual #54                 // Method org/w3c/tidy/Report.error:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;S)V
+        78: goto          16
+        81: aload_3
+        82: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+        85: iconst_5
+        86: if_icmpne     95
+        89: aload_0
+        90: aload_3
+        91: iload_2
+        92: invokestatic  #55                 // Method parseXMLElement:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;S)V
+        95: aload_1
+        96: aload_3
+        97: invokevirtual #19                 // Method org/w3c/tidy/Node.insertNodeAtEnd:(Lorg/w3c/tidy/Node;)V
+       100: goto          16
+       103: aload_1
+       104: getfield      #17                 // Field org/w3c/tidy/Node.content:Lorg/w3c/tidy/Node;
+       107: astore_3
+       108: aload_3
+       109: ifnull        165
+       112: aload_3
+       113: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+       116: iconst_4
+       117: if_icmpne     165
+       120: iload_2
+       121: iconst_2
+       122: if_icmpeq     165
+       125: aload_3
+       126: getfield      #56                 // Field org/w3c/tidy/Node.textarray:[B
+       129: aload_3
+       130: getfield      #57                 // Field org/w3c/tidy/Node.start:I
+       133: baload
+       134: bipush        32
+       136: if_icmpne     165
+       139: aload_3
+       140: dup
+       141: getfield      #57                 // Field org/w3c/tidy/Node.start:I
+       144: iconst_1
+       145: iadd
+       146: putfield      #57                 // Field org/w3c/tidy/Node.start:I
+       149: aload_3
+       150: getfield      #57                 // Field org/w3c/tidy/Node.start:I
+       153: aload_3
+       154: getfield      #58                 // Field org/w3c/tidy/Node.end:I
+       157: if_icmplt     165
+       160: aload_3
+       161: invokestatic  #59                 // Method org/w3c/tidy/Node.discardElement:(Lorg/w3c/tidy/Node;)Lorg/w3c/tidy/Node;
+       164: pop
+       165: aload_1
+       166: getfield      #60                 // Field org/w3c/tidy/Node.last:Lorg/w3c/tidy/Node;
+       169: astore_3
+       170: aload_3
+       171: ifnull        229
+       174: aload_3
+       175: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+       178: iconst_4
+       179: if_icmpne     229
+       182: iload_2
+       183: iconst_2
+       184: if_icmpeq     229
+       187: aload_3
+       188: getfield      #56                 // Field org/w3c/tidy/Node.textarray:[B
+       191: aload_3
+       192: getfield      #58                 // Field org/w3c/tidy/Node.end:I
+       195: iconst_1
+       196: isub
+       197: baload
+       198: bipush        32
+       200: if_icmpne     229
+       203: aload_3
+       204: dup
+       205: getfield      #58                 // Field org/w3c/tidy/Node.end:I
+       208: iconst_1
+       209: isub
+       210: putfield      #58                 // Field org/w3c/tidy/Node.end:I
+       213: aload_3
+       214: getfield      #57                 // Field org/w3c/tidy/Node.start:I
+       217: aload_3
+       218: getfield      #58                 // Field org/w3c/tidy/Node.end:I
+       221: if_icmplt     229
+       224: aload_3
+       225: invokestatic  #59                 // Method org/w3c/tidy/Node.discardElement:(Lorg/w3c/tidy/Node;)Lorg/w3c/tidy/Node;
+       228: pop
+       229: return
+
+  public static org.w3c.tidy.Node parseXMLDocument(org.w3c.tidy.Lexer);
+    Code:
+         0: aload_0
+         1: invokevirtual #24                 // Method org/w3c/tidy/Lexer.newNode:()Lorg/w3c/tidy/Node;
+         4: astore_2
+         5: aload_2
+         6: iconst_0
+         7: putfield      #7                  // Field org/w3c/tidy/Node.type:S
+        10: aconst_null
+        11: astore_3
+        12: aload_0
+        13: getfield      #11                 // Field org/w3c/tidy/Lexer.configuration:Lorg/w3c/tidy/Configuration;
+        16: iconst_1
+        17: putfield      #61                 // Field org/w3c/tidy/Configuration.xmlTags:Z
+        20: aload_0
+        21: iconst_0
+        22: invokevirtual #25                 // Method org/w3c/tidy/Lexer.getToken:(S)Lorg/w3c/tidy/Node;
+        25: dup
+        26: astore_1
+        27: ifnull        141
+        30: aload_1
+        31: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+        34: bipush        6
+        36: if_icmpne     54
+        39: aload_0
+        40: getfield      #13                 // Field org/w3c/tidy/Lexer.report:Lorg/w3c/tidy/Report;
+        43: aload_0
+        44: aconst_null
+        45: aload_1
+        46: bipush        13
+        48: invokevirtual #14                 // Method org/w3c/tidy/Report.warning:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;S)V
+        51: goto          20
+        54: aload_2
+        55: aload_1
+        56: invokestatic  #26                 // Method org/w3c/tidy/Node.insertMisc:(Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;)Z
+        59: ifeq          65
+        62: goto          20
+        65: aload_1
+        66: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+        69: iconst_1
+        70: if_icmpne     102
+        73: aload_3
+        74: ifnonnull     87
+        77: aload_2
+        78: aload_1
+        79: invokevirtual #19                 // Method org/w3c/tidy/Node.insertNodeAtEnd:(Lorg/w3c/tidy/Node;)V
+        82: aload_1
+        83: astore_3
+        84: goto          20
+        87: aload_0
+        88: getfield      #13                 // Field org/w3c/tidy/Lexer.report:Lorg/w3c/tidy/Report;
+        91: aload_0
+        92: aload_2
+        93: aload_1
+        94: bipush        8
+        96: invokevirtual #14                 // Method org/w3c/tidy/Report.warning:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;S)V
+        99: goto          20
+       102: aload_1
+       103: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+       106: bipush        7
+       108: if_icmpne     119
+       111: aload_2
+       112: aload_1
+       113: invokevirtual #19                 // Method org/w3c/tidy/Node.insertNodeAtEnd:(Lorg/w3c/tidy/Node;)V
+       116: goto          20
+       119: aload_1
+       120: getfield      #7                  // Field org/w3c/tidy/Node.type:S
+       123: iconst_5
+       124: if_icmpne     20
+       127: aload_2
+       128: aload_1
+       129: invokevirtual #19                 // Method org/w3c/tidy/Node.insertNodeAtEnd:(Lorg/w3c/tidy/Node;)V
+       132: aload_0
+       133: aload_1
+       134: iconst_0
+       135: invokestatic  #55                 // Method parseXMLElement:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;S)V
+       138: goto          20
+       141: aload_3
+       142: ifnull        165
+       145: aload_0
+       146: aload_3
+       147: invokevirtual #62                 // Method org/w3c/tidy/Lexer.checkDocTypeKeyWords:(Lorg/w3c/tidy/Node;)Z
+       150: ifne          165
+       153: aload_0
+       154: getfield      #13                 // Field org/w3c/tidy/Lexer.report:Lorg/w3c/tidy/Report;
+       157: aload_0
+       158: aload_3
+       159: aconst_null
+       160: bipush        37
+       162: invokevirtual #14                 // Method org/w3c/tidy/Report.warning:(Lorg/w3c/tidy/Lexer;Lorg/w3c/tidy/Node;Lorg/w3c/tidy/Node;S)V
+       165: aload_0
+       166: getfield      #11                 // Field org/w3c/tidy/Lexer.configuration:Lorg/w3c/tidy/Configuration;
+       169: getfield      #63                 // Field org/w3c/tidy/Configuration.xmlPi:Z
+       172: ifeq          181
+       175: aload_0
+       176: aload_2
+       177: invokevirtual #64                 // Method org/w3c/tidy/Lexer.fixXmlDecl:(Lorg/w3c/tidy/Node;)Z
+       180: pop
+       181: aload_2
+       182: areturn
+
+  static void badForm(org.w3c.tidy.Lexer);
+    Code:
+         0: aload_0
+         1: iconst_1
+         2: putfield      #65                 // Field org/w3c/tidy/Lexer.badForm:S
+         5: aload_0
+         6: dup
+         7: getfield      #66                 // Field org/w3c/tidy/Lexer.errors:S
+        10: iconst_1
+        11: iadd
+        12: i2s
+        13: putfield      #66                 // Field org/w3c/tidy/Lexer.errors:S
+        16: return
+
+  static {};
+    Code:
+         0: new           #67                 // class org/w3c/tidy/ParserImpl$ParseHTML
+         3: dup
+         4: invokespecial #68                 // Method org/w3c/tidy/ParserImpl$ParseHTML."<init>":()V
+         7: putstatic     #32                 // Field HTML:Lorg/w3c/tidy/Parser;
+        10: new           #69                 // class org/w3c/tidy/ParserImpl$ParseHead
+        13: dup
+        14: invokespecial #70                 // Method org/w3c/tidy/ParserImpl$ParseHead."<init>":()V
+        17: putstatic     #71                 // Field HEAD:Lorg/w3c/tidy/Parser;
+        20: new           #72                 // class org/w3c/tidy/ParserImpl$ParseTitle
+        23: dup
+        24: invokespecial #73                 // Method org/w3c/tidy/ParserImpl$ParseTitle."<init>":()V
+        27: putstatic     #74                 // Field TITLE:Lorg/w3c/tidy/Parser;
+        30: new           #75                 // class org/w3c/tidy/ParserImpl$ParseScript
+        33: dup
+        34: invokespecial #76                 // Method org/w3c/tidy/ParserImpl$ParseScript."<init>":()V
+        37: putstatic     #77                 // Field SCRIPT:Lorg/w3c/tidy/Parser;
+        40: new           #78                 // class org/w3c/tidy/ParserImpl$ParseBody
+        43: dup
+        44: invokespecial #79                 // Method org/w3c/tidy/ParserImpl$ParseBody."<init>":()V
+        47: putstatic     #80                 // Field BODY:Lorg/w3c/tidy/Parser;
+        50: new           #81                 // class org/w3c/tidy/ParserImpl$ParseFrameSet
+        53: dup
+        54: invokespecial #82                 // Method org/w3c/tidy/ParserImpl$ParseFrameSet."<init>":()V
+        57: putstatic     #83                 // Field FRAMESET:Lorg/w3c/tidy/Parser;
+        60: new           #84                 // class org/w3c/tidy/ParserImpl$ParseInline
+        63: dup
+        64: invokespecial #85                 // Method org/w3c/tidy/ParserImpl$ParseInline."<init>":()V
+        67: putstatic     #86                 // Field INLINE:Lorg/w3c/tidy/Parser;
+        70: new           #87                 // class org/w3c/tidy/ParserImpl$ParseList
+        73: dup
+        74: invokespecial #88                 // Method org/w3c/tidy/ParserImpl$ParseList."<init>":()V
+        77: putstatic     #89                 // Field LIST:Lorg/w3c/tidy/Parser;
+        80: new           #90                 // class org/w3c/tidy/ParserImpl$ParseDefList
+        83: dup
+        84: invokespecial #91                 // Method org/w3c/tidy/ParserImpl$ParseDefList."<init>":()V
+        87: putstatic     #92                 // Field DEFLIST:Lorg/w3c/tidy/Parser;
+        90: new           #93                 // class org/w3c/tidy/ParserImpl$ParsePre
+        93: dup
+        94: invokespecial #94                 // Method org/w3c/tidy/ParserImpl$ParsePre."<init>":()V
+        97: putstatic     #50                 // Field PRE:Lorg/w3c/tidy/Parser;
+       100: new           #95                 // class org/w3c/tidy/ParserImpl$ParseBlock
+       103: dup
+       104: invokespecial #96                 // Method org/w3c/tidy/ParserImpl$ParseBlock."<init>":()V
+       107: putstatic     #97                 // Field BLOCK:Lorg/w3c/tidy/Parser;
+       110: new           #98                 // class org/w3c/tidy/ParserImpl$ParseTableTag
+       113: dup
+       114: invokespecial #99                 // Method org/w3c/tidy/ParserImpl$ParseTableTag."<init>":()V
+       117: putstatic     #100                // Field TABLETAG:Lorg/w3c/tidy/Parser;
+       120: new           #101                // class org/w3c/tidy/ParserImpl$ParseColGroup
+       123: dup
+       124: invokespecial #102                // Method org/w3c/tidy/ParserImpl$ParseColGroup."<init>":()V
+       127: putstatic     #103                // Field COLGROUP:Lorg/w3c/tidy/Parser;
+       130: new           #104                // class org/w3c/tidy/ParserImpl$ParseRowGroup
+       133: dup
+       134: invokespecial #105                // Method org/w3c/tidy/ParserImpl$ParseRowGroup."<init>":()V
+       137: putstatic     #106                // Field ROWGROUP:Lorg/w3c/tidy/Parser;
+       140: new           #107                // class org/w3c/tidy/ParserImpl$ParseRow
+       143: dup
+       144: invokespecial #108                // Method org/w3c/tidy/ParserImpl$ParseRow."<init>":()V
+       147: putstatic     #109                // Field ROW:Lorg/w3c/tidy/Parser;
+       150: new           #110                // class org/w3c/tidy/ParserImpl$ParseNoFrames
+       153: dup
+       154: invokespecial #111                // Method org/w3c/tidy/ParserImpl$ParseNoFrames."<init>":()V
+       157: putstatic     #112                // Field NOFRAMES:Lorg/w3c/tidy/Parser;
+       160: new           #113                // class org/w3c/tidy/ParserImpl$ParseSelect
+       163: dup
+       164: invokespecial #114                // Method org/w3c/tidy/ParserImpl$ParseSelect."<init>":()V
+       167: putstatic     #115                // Field SELECT:Lorg/w3c/tidy/Parser;
+       170: new           #116                // class org/w3c/tidy/ParserImpl$ParseText
+       173: dup
+       174: invokespecial #117                // Method org/w3c/tidy/ParserImpl$ParseText."<init>":()V
+       177: putstatic     #118                // Field TEXT:Lorg/w3c/tidy/Parser;
+       180: new           #119                // class org/w3c/tidy/ParserImpl$ParseEmpty
+       183: dup
+       184: invokespecial #120                // Method org/w3c/tidy/ParserImpl$ParseEmpty."<init>":()V
+       187: putstatic     #121                // Field EMPTY:Lorg/w3c/tidy/Parser;
+       190: new           #122                // class org/w3c/tidy/ParserImpl$ParseOptGroup
+       193: dup
+       194: invokespecial #123                // Method org/w3c/tidy/ParserImpl$ParseOptGroup."<init>":()V
+       197: putstatic     #124                // Field OPTGROUP:Lorg/w3c/tidy/Parser;
+       200: return
+}

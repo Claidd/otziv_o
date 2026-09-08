@@ -1,0 +1,74 @@
+[
+  {
+    "label": "compile",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "elapsedSeconds": 1.158,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "odc-selector",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "elapsedSeconds": 0.849,
+    "stdoutSha256": "e3de66b11e256ee87c99a0632c4290a72be04d8db536c19aab6866d19b19ab29",
+    "stderrSha256": "c913e1a5703e4c1bb92aa6d824934dff7cc6ca0daba7b8c19c6f3e40478084b9"
+  },
+  {
+    "label": "r938-ordinary",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "elapsedSeconds": 0.137,
+    "stdoutSha256": "1986c97d24ed59b6e186c5e9916e1f3f774adbd4b7a879a9f8fc94d66d2ec06a",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "r938-excessive",
+    "exitCode": 42,
+    "expectedExitCode": 42,
+    "elapsedSeconds": 0.162,
+    "stdoutSha256": "cec4c9be17c416a529f9efc3e93d169eb07836786183f5869d2ab957fd3e94fa",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "r938-actual-parser-bytecode",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "elapsedSeconds": 0.232,
+    "stdoutSha256": "10b2c7703e152c45f9a3f11128efe725af3b04c7c57259816581cc28c4437222",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "1.0.5-ordinary",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "elapsedSeconds": 0.136,
+    "stdoutSha256": "1986c97d24ed59b6e186c5e9916e1f3f774adbd4b7a879a9f8fc94d66d2ec06a",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "1.0.5-excessive",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "elapsedSeconds": 0.168,
+    "stdoutSha256": "6dcbfbf79b4876f360496245d019834423d98420af2b844874dc90209c8e857c",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "1.0.5-actual-parser-bytecode",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "elapsedSeconds": 0.233,
+    "stdoutSha256": "97ae1052919df5f2efe5b6a9fdddb61ac74e0561c749fc37aae6695e9afa99e6",
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "label": "java-version",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "elapsedSeconds": 0.05,
+    "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderrSha256": "2174fb01449a61f0f2a5153d56be8555221be47029f36eb1d0307c19154f463e"
+  }
+]

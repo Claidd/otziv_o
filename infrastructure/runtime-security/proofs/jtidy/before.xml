@@ -310,18 +310,4 @@ Only the exact SHA-1 and listed CVE are selected. No other artifact, version or 
     <sha1>009f7fb99f26ba5b43d4a72d7b53f9504c2f1bee</sha1>
     <cve>CVE-2026-18215</cve>
   </suppress>
-  <suppress until="2027-01-01Z">
-    <notes>CVE-2023-34623 describes excessive HTML ParseBlock nesting in net.sf.jtidy:jtidy:r938. The maintainer identifies the numeric r938 versus 1.0.4 version comparison as a false positive. This exact com.github.jtidy:jtidy:1.0.5 Maven Central JAR includes the upstream HTML nesting bound before recursive parser dispatch. Its SHA256 matches both failing C13 hosted build-support report occurrences. Independent source, actual bytecode and bounded old/fixed-binary controls are retained below.
-Artifact SHA-256: 7cea4360710adb44c588e13afdcdc0171fc1a3e61cc4562703ddb1f0a36f0ca4
-Reviewed PURL: pkg:maven/com.github.jtidy/jtidy@1.0.5
-Primary issue and maintainer explanation:
-https://github.com/trajano/jtidy/issues/4
-https://github.com/jtidy/jtidy/issues/63#issuecomment-1693710427
-Immutable upstream source:
-https://github.com/jtidy/jtidy/blob/d2f8dd407899c005c12a9df1b5db807bbc0c79c8/src/main/java/org/w3c/tidy/ParserImpl.java
-Repository evidence: infrastructure/runtime-security/proofs/jtidy/review.json and README.md.
-The decision concerns the reported HTML nesting defect only, not XML parsing, all recursion, or all potential parser defects. Dependency use remains in Maven descriptor generation. Only this archive SHA1 AND this one CVE are selected; other bytes, versions, advisories and the old r938 artifact remain in scope. The rule expires on 2027-01-01 UTC. No runtime risk acceptance, analyzer disabling or threshold change.</notes>
-    <sha1>e57994fdeb7077b11a8ba05c93e3cb89c3ad8ed0</sha1>
-    <cve>CVE-2023-34623</cve>
-  </suppress>
 </suppressions>

@@ -1,0 +1,2 @@
+# Preserve exact frozen inputs, outputs and proof sources across checkout modes.
+* -text
